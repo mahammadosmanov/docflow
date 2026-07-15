@@ -1,0 +1,33 @@
+name: docflow
+description: "DocFlow — desktop document automation (Flutter UI + Python sidecar)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+  cupertino_icons: ^1.0.8
+  file_picker: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # i18n: dort ARB dosyasi RUNTIME'da anahtar->metin olarak cozulur.
+  # (Not: keyler noktali — "op.rfi.process_scans.title" — bu yuzden gen-l10n
+  #  getter'lari kullanilamaz; sidecar zaten anahtari string olarak yolluyor.)
+  assets:
+    - l10n/app_tr.arb
+    - l10n/app_en.arb
+    - l10n/app_ru.arb
+    - l10n/app_az.arb

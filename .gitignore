@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python sidecar
+sidecar/.venv/
+**/__pycache__/
+*.py[cod]
+sidecar/build/
+sidecar/dist/
+sidecar/*.spec
+.mypy_cache/
+.pytest_cache/
+
+# Flutter / Dart
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.idea/
+app/*.iml
+app/l10n/untranslated.json
+
+# CI staging
+staging/
+*.zip

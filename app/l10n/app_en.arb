@@ -1,0 +1,42 @@
+{
+  "@@locale": "en",
+  "app.title": "DocFlow",
+  "action.preview": "Preview",
+  "action.apply": "Apply",
+  "action.undo": "Undo",
+  "action.cancel": "Cancel",
+  "action.browse": "Browse",
+  "ui.warnings": "Warnings",
+  "result.applied": "{count} applied",
+  "@result.applied": { "placeholders": { "count": { "type": "int" } } },
+  "result.failed": "{count} failed",
+  "@result.failed": { "placeholders": { "count": { "type": "int" } } },
+  "plan.empty": "Nothing to do",
+  "plan.summary": "{count} files will be processed",
+  "@plan.summary": { "placeholders": { "count": { "type": "int" } } },
+
+  "op.rfi.process_scans.title": "Process Scans",
+  "op.rfi.process_scans.desc": "Renames and files scanned RFI forms by the RFI number on the first page.",
+
+  "param.source": "Source folder",
+  "param.source.help": "Folder containing the scanned PDFs",
+  "param.dest": "Destination folder",
+  "param.dest.help": "Where RFI folders will be created",
+  "param.keep_original": "Keep originals (copy instead of move)",
+
+  "note.renamed": "Renamed",
+  "note.needs_review": "Will be moved to review",
+  "note.unreadable": "Unreadable — will be moved to review",
+
+  "warn.no_code": "RFI number not found",
+  "warn.low_confidence": "Low confidence — needs review",
+  "warn.unreadable": "File could not be read",
+  "warn.revision_guessed": "Revision number guessed",
+  "warn.no_pdfs": "No PDFs in folder",
+
+  "error.step_failed": "Step failed",
+  "error.undo_failed": "Undo failed",
+  "error.param.required.source": "Source folder is required",
+  "error.param.required.dest": "Destination folder is required",
+  "error.sidecar_down": "Background service is not responding"
+}

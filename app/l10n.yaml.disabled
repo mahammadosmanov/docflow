@@ -1,0 +1,6 @@
+arb-dir: l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: L
+# Eksik ceviri = build uyarisi. Bu dosya bos DEGILSE i18n bozuk demektir.
+untranslated-messages-file: l10n/untranslated.json

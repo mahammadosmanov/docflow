@@ -1,0 +1,39 @@
+{
+  "@@locale": "tr",
+  "app.title": "DocFlow",
+  "action.preview": "Önizle",
+  "action.apply": "Uygula",
+  "action.undo": "Geri al",
+  "action.cancel": "İptal",
+  "action.browse": "Gözat",
+  "ui.warnings": "Uyarılar",
+  "result.applied": "{count} uygulandı",
+  "result.failed": "{count} başarısız",
+  "plan.empty": "Yapılacak bir şey yok",
+  "plan.summary": "{count} dosya işlenecek",
+
+  "op.rfi.process_scans.title": "Taramaları İşle",
+  "op.rfi.process_scans.desc": "Taranmış RFI formlarını ilk sayfadaki RFI numarasına göre adlandırır ve klasörler.",
+
+  "param.source": "Kaynak klasör",
+  "param.source.help": "Taranmış PDF'lerin bulunduğu klasör",
+  "param.dest": "Hedef klasör",
+  "param.dest.help": "RFI klasörlerinin oluşturulacağı yer",
+  "param.keep_original": "Orijinalleri koru (taşımak yerine kopyala)",
+
+  "note.renamed": "Adlandırıldı",
+  "note.needs_review": "İncelemeye taşınacak",
+  "note.unreadable": "Okunamadı — incelemeye taşınacak",
+
+  "warn.no_code": "RFI numarası bulunamadı",
+  "warn.low_confidence": "Düşük güven — kontrol gerekli",
+  "warn.unreadable": "Dosya okunamadı",
+  "warn.revision_guessed": "Revizyon numarası tahmin edildi",
+  "warn.no_pdfs": "Klasörde PDF yok",
+
+  "error.step_failed": "Adım başarısız",
+  "error.undo_failed": "Geri alma başarısız",
+  "error.param.required.source": "Kaynak klasör zorunlu",
+  "error.param.required.dest": "Hedef klasör zorunlu",
+  "error.sidecar_down": "Arka plan servisi yanıt vermiyor"
+}

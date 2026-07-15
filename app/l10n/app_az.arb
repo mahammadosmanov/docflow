@@ -1,0 +1,39 @@
+{
+  "@@locale": "az",
+  "app.title": "DocFlow",
+  "action.preview": "Öncədən bax",
+  "action.apply": "Tətbiq et",
+  "action.undo": "Geri qaytar",
+  "action.cancel": "Ləğv et",
+  "action.browse": "Bax",
+  "ui.warnings": "Xəbərdarlıqlar",
+  "result.applied": "{count} tətbiq edildi",
+  "result.failed": "{count} uğursuz",
+  "plan.empty": "Ediləcək bir şey yoxdur",
+  "plan.summary": "{count} fayl emal ediləcək",
+
+  "op.rfi.process_scans.title": "Skanları emal et",
+  "op.rfi.process_scans.desc": "Skan edilmiş RFI formalarını ilk səhifədəki RFI nömrəsinə görə adlandırır və qovluqlayır.",
+
+  "param.source": "Mənbə qovluğu",
+  "param.source.help": "Skan edilmiş PDF-lərin olduğu qovluq",
+  "param.dest": "Hədəf qovluğu",
+  "param.dest.help": "RFI qovluqlarının yaradılacağı yer",
+  "param.keep_original": "Orijinalları saxla (köçürmək əvəzinə kopyala)",
+
+  "note.renamed": "Adlandırıldı",
+  "note.needs_review": "Yoxlamaya köçürüləcək",
+  "note.unreadable": "Oxunmur — yoxlamaya köçürüləcək",
+
+  "warn.no_code": "RFI nömrəsi tapılmadı",
+  "warn.low_confidence": "Aşağı etibarlılıq — yoxlama lazımdır",
+  "warn.unreadable": "Fayl oxuna bilmədi",
+  "warn.revision_guessed": "Reviziya nömrəsi təxmin edildi",
+  "warn.no_pdfs": "Qovluqda PDF yoxdur",
+
+  "error.step_failed": "Addım uğursuz oldu",
+  "error.undo_failed": "Geri qaytarma uğursuz oldu",
+  "error.param.required.source": "Mənbə qovluğu mütləqdir",
+  "error.param.required.dest": "Hədəf qovluğu mütləqdir",
+  "error.sidecar_down": "Fon xidməti cavab vermir"
+}
