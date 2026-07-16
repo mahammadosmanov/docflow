@@ -168,12 +168,24 @@ class SidecarClient {
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
   }
 
-  Future<ApplyResult> undo(String journalId, {String? destFolder}) async {
+  /// steps verilirse yerel journal'a gerek yok (bulut kaydindan geri alma).
+  Future<ApplyResult> undo(
+    String journalId, {
+    String? destFolder,
+    List<dynamic>? steps,
+  }) async {
     final res = await _callRaw('undo', {
       'journalId': journalId,
       if (destFolder != null && destFolder.isNotEmpty) 'destFolder': destFolder,
+      'steps': ?steps,
     });
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
+  }
+
+  /// Journal kaydini (steps dahil) getir — buluta yollamak icin.
+  Future<Map<String, dynamic>> journalGet(String journalId) async {
+    final res = await _callRaw('journal_get', {'journalId': journalId});
+    return (res as Map).cast<String, dynamic>();
   }
 
   Future<List<HistoryEntry>> historyList({int limit = 50}) async {

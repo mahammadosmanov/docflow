@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
@@ -23,6 +24,7 @@ enum _Stage { list, previewing, preview, applying, result }
 
 class _ReviewScreenState extends State<ReviewScreen> {
   _Stage _stage = _Stage.list;
+  final CloudHistory _cloud = CloudHistory();
   late Future<List<ReviewItem>> _items;
   final Map<String, String> _choice = {}; // path -> keep|put|delete
   Plan? _plan;
@@ -77,6 +79,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _result = r;
         _stage = _Stage.result;
       });
+      // Bulut gecmisi opsiyonel — hata akisi bozmaz.
+      if (_cloud.enabled && r.journalId.isNotEmpty) {
+        try {
+          final j = await widget.client.journalGet(r.journalId);
+          await _cloud.push(
+            opId: 'rfi.review',
+            applied: r.applied,
+            failed: r.failed,
+            journalId: r.journalId,
+            summary: '${r.applied}/${(j['steps'] as List?)?.length ?? r.applied}',
+            steps: (j['steps'] as List?) ?? const [],
+          );
+        } catch (_) {/* yoksay */}
+      }
     } catch (e) {
       setState(() => _stage = _Stage.preview);
       _snack(e.toString());

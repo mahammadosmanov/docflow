@@ -1,12 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
-import '../../core/operations/models.dart';
 
-/// Gecmis: yapilan her apply/undo bir journal kaydidir. Buradan geri alinabilir.
-/// Geri alirken: orijinal konuma VEYA secilen bir klasore. Uzerine yazma yok.
+/// Gecmis: yapilan her apply/undo bir journal kaydidir.
+/// Kaynak: bulut (Supabase) varsa oradan — makineler arasi gorunur; yoksa/hata
+/// halinde yerel journal. Geri alirken orijinal konuma VEYA secilen klasore.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.client});
 
@@ -16,17 +17,74 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
+/// Bulut ve yerel kayitlari tek sekle indirger.
+class _Row {
+  _Row({
+    required this.when,
+    required this.opId,
+    required this.moves,
+    required this.journalId,
+    this.steps,
+    this.cloudId,
+    this.undone = false,
+    this.fromCloud = false,
+  });
+
+  final DateTime? when;
+  final String opId;
+  final int moves;
+  final String journalId;
+  final List<dynamic>? steps; // bulut kaydinda dolu -> yerel journal gerekmez
+  final String? cloudId;
+  final bool undone;
+  final bool fromCloud;
+}
+
 class _HistoryScreenState extends State<HistoryScreen> {
-  late Future<List<HistoryEntry>> _future;
+  final CloudHistory _cloud = CloudHistory();
+  late Future<List<_Row>> _future;
   bool _busy = false;
+  bool _cloudFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.client.historyList();
+    _future = _load();
   }
 
-  void _reload() => setState(() => _future = widget.client.historyList());
+  Future<List<_Row>> _load() async {
+    if (_cloud.enabled) {
+      try {
+        final entries = await _cloud.list();
+        _cloudFailed = false;
+        return entries
+            .map((e) => _Row(
+                  when: e.when,
+                  opId: e.opId,
+                  moves: e.applied,
+                  journalId: e.journalId,
+                  steps: e.steps.isEmpty ? null : e.steps,
+                  cloudId: e.id,
+                  undone: e.undone,
+                  fromCloud: true,
+                ))
+            .toList();
+      } catch (_) {
+        _cloudFailed = true; // buluta ulasilamadi -> yerele dus
+      }
+    }
+    final local = await widget.client.historyList();
+    return local
+        .map((e) => _Row(
+              when: e.when,
+              opId: e.opId,
+              moves: e.moves,
+              journalId: e.journalId,
+            ))
+        .toList();
+  }
+
+  void _reload() => setState(() => _future = _load());
 
   static String _fmt(DateTime? d) {
     if (d == null) return '';
@@ -34,7 +92,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return '${d.year}-${two(d.month)}-${two(d.day)}  ${two(d.hour)}:${two(d.minute)}';
   }
 
-  Future<void> _undo(HistoryEntry e) async {
+  Future<void> _undo(_Row row) async {
     final s = Strings.of(context);
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -71,7 +129,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     setState(() => _busy = true);
     try {
-      final r = await widget.client.undo(e.journalId, destFolder: destFolder);
+      final r = await widget.client.undo(
+        row.journalId,
+        destFolder: destFolder,
+        steps: row.steps, // bulut kaydi -> yerel journal olmasa da calisir
+      );
+      if (r.failed == 0 && row.cloudId != null) {
+        await _cloud.markUndone(row.cloudId!);
+      }
       if (!mounted) return;
       final msg = r.failed == 0
           ? s.count('result.applied', r.applied)
@@ -93,26 +158,38 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final s = Strings.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.t('history.title'))),
+      appBar: AppBar(
+        title: Text(s.t('history.title')),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Icon(
+              _cloud.enabled && !_cloudFailed ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+              size: 20,
+              color: _cloud.enabled && !_cloudFailed ? Colors.green : Colors.grey,
+            ),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: Stack(
             children: [
-              FutureBuilder<List<HistoryEntry>>(
+              FutureBuilder<List<_Row>>(
                 future: _future,
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snap.hasError) return Center(child: Text(snap.error.toString()));
-                  final entries = snap.data ?? [];
-                  if (entries.isEmpty) return Center(child: Text(s.t('history.empty')));
+                  final rows = snap.data ?? [];
+                  if (rows.isEmpty) return Center(child: Text(s.t('history.empty')));
                   return ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                    itemCount: entries.length,
+                    itemCount: rows.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _tile(s, entries[i]),
+                    itemBuilder: (_, i) => _tile(s, rows[i]),
                   );
                 },
               ),
@@ -130,7 +207,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _tile(Strings s, HistoryEntry e) {
+  Widget _tile(Strings s, _Row e) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -138,12 +215,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         side: BorderSide(color: Colors.grey.shade300),
       ),
       child: ListTile(
+        leading: e.fromCloud
+            ? const Icon(Icons.cloud_outlined, size: 18)
+            : const Icon(Icons.sd_storage_outlined, size: 18),
         title: Text(_fmt(e.when), style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('${e.opId}  ·  ${s.count('history.moves', e.moves)}'),
+        subtitle: Text('${e.opId}  ·  ${s.count('history.moves', e.moves)}'
+            '${e.undone ? '  ·  ↩' : ''}'),
         trailing: OutlinedButton.icon(
           icon: const Icon(Icons.undo, size: 18),
           label: Text(s.t('action.undo')),
-          onPressed: _busy ? null : () => _undo(e),
+          onPressed: _busy || e.undone ? null : () => _undo(e),
         ),
       ),
     );

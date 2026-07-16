@@ -5,6 +5,7 @@ from . import ops  # noqa: F401  — @register'lari tetikler
 from . import review as _review
 from .contracts import Plan, Step, Warning
 from .fs.apply import apply_steps as _apply_steps
+from .fs.apply import get_journal as _get_journal
 from .fs.apply import list_history as _list_history
 from .fs.apply import undo as _undo_steps
 from .registry import all_operations, get
@@ -41,11 +42,20 @@ def _apply(p: dict) -> dict:
 
 def _undo(p: dict) -> dict:
     # destFolder verilirse dosyalar orijinal kaynaga degil secilen klasore doner.
-    return _undo_steps(p["journalId"], p.get("destFolder") or None).to_json()
+    # steps verilirse (bulut kaydi) yerel journal'a ihtiyac yok.
+    return _undo_steps(
+        p.get("journalId") or "",
+        p.get("destFolder") or None,
+        p.get("steps"),
+    ).to_json()
 
 
 def _history(p: dict) -> list[dict]:
     return _list_history(int(p.get("limit") or 50))
+
+
+def _journal_get(p: dict) -> dict:
+    return _get_journal(p["journalId"])
 
 
 def _review_scan(p: dict) -> list[dict]:
@@ -73,6 +83,7 @@ def main() -> None:
         "review_scan": _review_scan,
         "review_preview": _review_preview,
         "history_list": _history,
+        "journal_get": _journal_get,
     })
 
 

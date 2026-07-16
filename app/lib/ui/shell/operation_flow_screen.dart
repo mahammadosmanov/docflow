@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
@@ -29,6 +30,7 @@ class OperationFlowScreen extends StatefulWidget {
 
 class _OperationFlowScreenState extends State<OperationFlowScreen> {
   final Map<String, dynamic> _values = {};
+  final CloudHistory _cloud = CloudHistory();
   _Stage _stage = _Stage.form;
   Plan? _plan;
   ApplyResult? _result;
@@ -84,12 +86,30 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         _result = res;
         _stage = _Stage.result;
       });
+      await _syncCloud(widget.op.id, res);
     } catch (e) {
       setState(() => _stage = _Stage.preview);
       _snack(e.toString());
     } finally {
       await _sub?.cancel();
     }
+  }
+
+  /// Gecmisi buluta yolla. Bulut OPSIYONEL: hata uygulamayi etkilemez,
+  /// yerel journal her zaman gercek kaynaktir.
+  Future<void> _syncCloud(String opId, ApplyResult r) async {
+    if (!_cloud.enabled || r.journalId.isEmpty) return;
+    try {
+      final j = await widget.client.journalGet(r.journalId);
+      await _cloud.push(
+        opId: opId,
+        applied: r.applied,
+        failed: r.failed,
+        journalId: r.journalId,
+        summary: '${r.applied}/${(j['steps'] as List?)?.length ?? r.applied}',
+        steps: (j['steps'] as List?) ?? const [],
+      );
+    } catch (_) {/* bulut opsiyonel */}
   }
 
   Future<void> _undo() async {

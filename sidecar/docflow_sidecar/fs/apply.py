@@ -93,17 +93,36 @@ def apply_steps(plan: Plan) -> Result:
     return result
 
 
-def undo(journal_id: str, dest_folder: str | None = None) -> Result:
+def _steps_from_json(raw: list[dict]) -> list[Step]:
+    return [Step(**{k: v for k, v in s.items() if k != "noteKey"} | {"note_key": s.get("noteKey")})
+            for s in raw]
+
+
+def get_journal(journal_id: str) -> dict:
+    """Journal kaydini oku (steps dahil). Bulut gecmisine yollamak icin de kullanilir."""
     hits = list(JOURNAL_DIR.glob(f"*_{journal_id[:8]}.json"))
     if not hits:
         raise KeyError(f"journal bulunamadi: {journal_id}")
+    data: dict = json.loads(hits[0].read_text(encoding="utf-8"))
+    return data
 
-    data = json.loads(hits[0].read_text(encoding="utf-8"))
-    steps = [Step(**{k: v for k, v in s.items() if k != "noteKey"} | {"note_key": s.get("noteKey")})
-             for s in data["steps"]]
 
+def undo(
+    journal_id: str = "",
+    dest_folder: str | None = None,
+    steps: list[dict] | None = None,
+) -> Result:
+    """Geri al. steps verilirse ONU kullanir (bulut kaydindan, baska makinede de
+    calisir); yoksa yerel journal'dan okur. dest_folder ile secilen klasore.
+    """
+    if steps is None:
+        data = get_journal(journal_id)
+        steps = data.get("steps", [])
+        journal_id = data.get("journalId", journal_id)
+
+    step_objs = _steps_from_json(steps)
     result = Result(journal_id=journal_id)
-    for step in reversed(steps):                 # TERS sira
+    for step in reversed(step_objs):             # TERS sira
         try:
             _undo(step, dest_folder)
             result.applied += 1
