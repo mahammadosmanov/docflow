@@ -173,6 +173,19 @@ class SidecarClient {
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
   }
 
+  Future<List<ReviewItem>> reviewScan(String dest) async {
+    final res = await _callRaw('review_scan', {'dest': dest});
+    return (res as List)
+        .cast<Map<String, dynamic>>()
+        .map(ReviewItem.fromJson)
+        .toList();
+  }
+
+  Future<Plan> reviewPreview(String dest, List<Map<String, dynamic>> decisions) async {
+    final res = await _callRaw('review_preview', {'dest': dest, 'decisions': decisions});
+    return Plan.fromJson((res as Map).cast<String, dynamic>());
+  }
+
   Future<void> dispose() async {
     _stopping = true;
     _proc?.stdin.close();

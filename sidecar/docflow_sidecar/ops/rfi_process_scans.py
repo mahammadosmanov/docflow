@@ -26,6 +26,7 @@ from ..contracts import (
 )
 from ..extract import extract_first_page
 from ..fs.apply import apply_steps
+from ..fs.naming import target_for
 from ..registry import register
 from ..rpc import notify
 
@@ -99,11 +100,9 @@ class ProcessScans(Operation):
             winner = files[0]
             wpdf = winner[0]
 
-            # Hedef: {dest}/{code}/ klasoru ZATEN VARSA dosyayi onun icine koy;
-            # yoksa {dest}/{code}.pdf (DUZ). ASLA yeni klasor olusturma.
-            folder = dest / code
-            into_folder = folder.is_dir()
-            target = (folder / f"{code}.pdf") if into_folder else (dest / f"{code}.pdf")
+            # Hedef: var olan {dest}/{code}/ icine ya da DUZ {dest}/{code}.pdf.
+            target = target_for(dest, code)
+            into_folder = target.parent != dest
 
             if target.exists():
                 # Hedef ZATEN VAR -> uzerine ASLA yazma (veri kaybi olur). Bu RFI

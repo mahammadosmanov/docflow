@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from . import ops  # noqa: F401  — @register'lari tetikler
+from . import review as _review
 from .contracts import Plan, Step, Warning
+from .fs.apply import apply_steps as _apply_steps
 from .fs.apply import undo as _undo_steps
 from .registry import all_operations, get
 from .rpc import serve
@@ -28,11 +30,26 @@ def _apply(p: dict) -> dict:
     plan = _PLANS.get(p["planId"])
     if plan is None:
         raise KeyError("plan bulunamadi veya suresi doldu — preview'i tekrarla")
-    return get(plan.op_id).apply(plan).to_json()
+    try:
+        op = get(plan.op_id)
+    except KeyError:
+        # Kayitli operasyona bagli olmayan plan (or. rfi.review) — dogrudan uygula.
+        return _apply_steps(plan).to_json()
+    return op.apply(plan).to_json()
 
 
 def _undo(p: dict) -> dict:
     return _undo_steps(p["journalId"]).to_json()
+
+
+def _review_scan(p: dict) -> list[dict]:
+    return _review.scan(p["dest"])
+
+
+def _review_preview(p: dict) -> dict:
+    plan = _review.preview(p["dest"], p.get("decisions") or [])
+    _PLANS[plan.plan_id] = plan
+    return plan.to_json()
 
 
 def _ping(_: dict) -> dict:
@@ -47,6 +64,8 @@ def main() -> None:
         "preview": _preview,
         "apply": _apply,
         "undo": _undo,
+        "review_scan": _review_scan,
+        "review_preview": _review_preview,
     })
 
 

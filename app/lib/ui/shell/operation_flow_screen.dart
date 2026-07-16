@@ -7,6 +7,7 @@ import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
 import '../../core/settings/settings_store.dart';
 import '../forms/schema_form.dart';
+import 'review_screen.dart';
 
 enum _Stage { form, previewing, preview, applying, result }
 
@@ -107,6 +108,17 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _openReview() {
+    final dest = (_values['dest'] as String?)?.trim();
+    if (dest == null || dest.isEmpty) {
+      _snack(Strings.of(context).t('error.param.required.dest'));
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ReviewScreen(client: widget.client, dest: dest),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = Strings.of(context);
@@ -148,13 +160,20 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           onChanged: () {},
         ),
         const SizedBox(height: 24),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            icon: const Icon(Icons.visibility_outlined),
-            label: Text(s.t('action.preview')),
-            onPressed: _preview,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton.icon(
+              icon: const Icon(Icons.rate_review_outlined),
+              label: Text(s.t('action.review')),
+              onPressed: _openReview,
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.visibility_outlined),
+              label: Text(s.t('action.preview')),
+              onPressed: _preview,
+            ),
+          ],
         ),
       ],
     );
@@ -313,6 +332,11 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
               icon: const Icon(Icons.undo),
               label: Text(s.t('action.undo')),
               onPressed: r.journalId.isEmpty ? null : _undo,
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.rate_review_outlined),
+              label: Text(s.t('action.review')),
+              onPressed: _openReview,
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),

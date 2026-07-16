@@ -173,3 +173,33 @@ class Progress {
   final int total;
   double get fraction => total == 0 ? 0 : done / total;
 }
+
+/// _review/ klasorundeki bir dosya (review_scan ciktisi).
+class ReviewItem {
+  ReviewItem({
+    required this.name,
+    required this.path,
+    required this.code,
+    required this.confidence,
+    required this.target,
+    required this.targetExists,
+  });
+
+  final String name;
+  final String path;
+  final String code; // bos = kod okunamadi -> "Put" devre disi
+  final double confidence;
+  final String? target;
+  final bool targetExists;
+
+  bool get hasCode => code.isNotEmpty;
+
+  factory ReviewItem.fromJson(Map<String, dynamic> j) => ReviewItem(
+        name: j['name'] as String,
+        path: j['path'] as String,
+        code: (j['code'] as String?) ?? '',
+        confidence: (j['confidence'] as num?)?.toDouble() ?? 0.0,
+        target: j['target'] as String?,
+        targetExists: (j['targetExists'] as bool?) ?? false,
+      );
+}
