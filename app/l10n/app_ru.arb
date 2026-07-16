@@ -28,20 +28,16 @@
   "history.undoToFolder": "Отменить в папку…",
   "plan.empty": "Нечего делать",
   "plan.summary": "Будет обработано файлов: {count}",
-
   "op.rfi.process_scans.title": "Обработать сканы",
   "op.rfi.process_scans.desc": "Переименовывает и раскладывает отсканированные формы RFI по номеру RFI с первой страницы.",
-
   "param.source": "Исходная папка",
   "param.source.help": "Папка со сканированными PDF",
   "param.dest": "Целевая папка",
   "param.dest.help": "Где будут созданы папки RFI",
   "param.keep_original": "Сохранить оригиналы (копировать, не перемещать)",
-
   "note.renamed": "Переименовано",
   "note.needs_review": "Будет перемещено на проверку",
   "note.unreadable": "Не читается — будет перемещено на проверку",
-
   "warn.no_code": "Номер RFI не найден",
   "warn.low_confidence": "Низкая уверенность — нужна проверка",
   "warn.unreadable": "Не удалось прочитать файл",
@@ -49,10 +45,23 @@
   "warn.duplicate": "Повторяющийся номер RFI — перемещено на проверку",
   "warn.exists": "Целевой файл уже существует — перемещено на проверку (без перезаписи)",
   "warn.no_pdfs": "В папке нет PDF",
-
   "error.step_failed": "Шаг не выполнен",
   "error.undo_failed": "Не удалось отменить",
   "error.param.required.source": "Исходная папка обязательна",
   "error.param.required.dest": "Целевая папка обязательна",
-  "error.sidecar_down": "Фоновая служба не отвечает"
+  "error.sidecar_down": "Фоновая служба не отвечает",
+  "action.admin": "Панель администратора",
+  "action.retry": "Проверить снова",
+  "auth.email": "Эл. почта",
+  "auth.password": "Пароль",
+  "auth.signIn": "Войти",
+  "auth.signUp": "Создать аккаунт",
+  "auth.signOut": "Выйти",
+  "auth.signupOk": "Аккаунт создан. Попросите администратора одобрить его, затем войдите.",
+  "auth.pending": "Ожидание одобрения",
+  "auth.pendingHelp": "Аккаунт создан, но ещё не одобрен. Администратор должен предоставить доступ.",
+  "admin.title": "Пользователи",
+  "admin.allowed": "Доступ",
+  "admin.admin": "Администратор",
+  "admin.empty": "Пользователей пока нет"
 }

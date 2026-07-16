@@ -55,6 +55,28 @@ class SettingsStore {
     final params = Map<String, dynamic>.from(_data['params'] as Map? ?? {});
     params[opId] = clean;
     _data = {..._data, 'params': params};
+    await _write();
+  }
+
+  /// Generic bolum oku (or. 'session').
+  Map<String, dynamic>? section(String name) {
+    final v = _data[name];
+    return v is Map ? Map<String, dynamic>.from(v) : null;
+  }
+
+  /// Generic bolum yaz; null -> sil (cikis yaparken oturumu temizler).
+  Future<void> saveSection(String name, Map<String, dynamic>? value) async {
+    final next = Map<String, dynamic>.from(_data);
+    if (value == null) {
+      next.remove(name);
+    } else {
+      next[name] = value;
+    }
+    _data = next;
+    await _write();
+  }
+
+  Future<void> _write() async {
     try {
       await _file.parent.create(recursive: true);
       await _file.writeAsString(json.encode(_data));

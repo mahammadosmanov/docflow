@@ -3,16 +3,20 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../auth/auth_service.dart';
+import 'rest.dart';
+
 /// Supabase gecmis senkronu — duz HTTPS (PostgREST). Yeni bagimlilik YOK.
 ///
-/// Anahtar "publishable" tiptedir: istemciye gomulmek icin tasarlanmistir ve
-/// erisim RLS ile sinirlanir. service_role/secret anahtar ASLA buraya konmaz.
-/// --dart-define ile ezilebilir (SUPABASE_URL / SUPABASE_KEY).
-const _defaultUrl = String.fromEnvironment(
+/// history artik SADECE giris yapmis + onaylanmis (allowed) kullanicilara acik;
+/// zorlama sunucuda RLS ile yapilir, istemcideki kontrol sadece UI kolayligi.
+/// Anahtar "publishable" tiptedir (istemciye gomulmek icin tasarlanmis);
+/// service_role/secret anahtar ASLA buraya konmaz.
+const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://ndpkgbfmshceffwhpqoz.supabase.co',
 );
-const _defaultKey = String.fromEnvironment(
+const supabaseKey = String.fromEnvironment(
   'SUPABASE_KEY',
   defaultValue: 'sb_publishable_sK0uEH4t-Hw7LVBpnEaMog_z_2MQwxq',
 );
@@ -28,6 +32,7 @@ class CloudEntry {
     required this.summary,
     required this.steps,
     required this.undone,
+    required this.userEmail,
   });
 
   final String id;
@@ -39,6 +44,7 @@ class CloudEntry {
   final String summary;
   final List<dynamic> steps;
   final bool undone;
+  final String userEmail;
 
   DateTime? get when => DateTime.tryParse(createdAt)?.toLocal();
 
@@ -52,39 +58,33 @@ class CloudEntry {
         summary: (j['summary'] as String?) ?? '',
         steps: (j['steps'] as List?) ?? const [],
         undone: (j['undone'] as bool?) ?? false,
+        userEmail: (j['user_email'] as String?) ?? '',
       );
 }
 
 class CloudHistory {
-  CloudHistory({String? url, String? key})
-      : url = url ?? _defaultUrl,
-        key = key ?? _defaultKey;
+  CloudHistory({required this.auth, String? url, String? key})
+      : url = url ?? supabaseUrl,
+        key = key ?? supabaseKey;
 
+  final AuthService auth;
   final String url;
   final String key;
 
-  bool get enabled => url.isNotEmpty && key.isNotEmpty;
+  /// Bulut ancak giris yapilmis VE onaylanmissa kullanilir.
+  bool get enabled =>
+      url.isNotEmpty && key.isNotEmpty && auth.signedIn && auth.allowed;
 
-  Future<(int, String)> _send(String method, Uri uri,
-      {Object? body, Map<String, String> extra = const {}}) async {
-    final c = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-    try {
-      final req = await c.openUrl(method, uri);
-      req.headers.set('apikey', key);
-      req.headers.set('Authorization', 'Bearer $key');
-      req.headers.set('Content-Type', 'application/json');
-      extra.forEach(req.headers.set);
-      if (body != null) req.write(json.encode(body));
-      final res = await req.close();
-      final text = await res.transform(utf8.decoder).join();
-      return (res.statusCode, text);
-    } finally {
-      c.close(force: true);
-    }
+  Future<Map<String, String>> _headers() async {
+    final token = await auth.validToken();
+    return {
+      'apikey': key,
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
 
-  /// Bir apply/undo sonrasi gecmis kaydi yolla. Basarisizlik uygulamayi ETKILEMEZ
-  /// (bulut opsiyonel; yerel journal her zaman gercek kaynak).
+  /// Apply/undo sonrasi gecmis kaydi. Bulut OPSIYONEL: hata uygulamayi ETKILEMEZ,
+  /// yerel journal her zaman gercek kaynaktir.
   Future<bool> push({
     required String opId,
     required int applied,
@@ -95,9 +95,10 @@ class CloudHistory {
   }) async {
     if (!enabled) return false;
     try {
-      final (code, text) = await _send(
+      final (code, text) = await restSend(
         'POST',
         Uri.parse('$url/rest/v1/history'),
+        headers: {...await _headers(), 'Prefer': 'return=minimal'},
         body: {
           'device': Platform.localHostname,
           'op_id': opId,
@@ -106,8 +107,9 @@ class CloudHistory {
           'journal_id': journalId,
           'summary': summary,
           'steps': steps,
+          'user_id': auth.session?.userId,
+          'user_email': auth.session?.email,
         },
-        extra: {'Prefer': 'return=minimal'},
       );
       if (code >= 200 && code < 300) return true;
       debugPrint('cloud push failed [$code]: $text');
@@ -120,9 +122,10 @@ class CloudHistory {
 
   Future<List<CloudEntry>> list({int limit = 50}) async {
     if (!enabled) return [];
-    final (code, text) = await _send(
+    final (code, text) = await restSend(
       'GET',
       Uri.parse('$url/rest/v1/history?select=*&order=created_at.desc&limit=$limit'),
+      headers: await _headers(),
     );
     if (code < 200 || code >= 300) {
       throw Exception('cloud list [$code]: $text');
@@ -134,11 +137,11 @@ class CloudHistory {
   Future<void> markUndone(String id) async {
     if (!enabled || id.isEmpty) return;
     try {
-      await _send(
+      await restSend(
         'PATCH',
         Uri.parse('$url/rest/v1/history?id=eq.$id'),
+        headers: {...await _headers(), 'Prefer': 'return=minimal'},
         body: {'undone': true},
-        extra: {'Prefer': 'return=minimal'},
       );
     } catch (e) {
       debugPrint('cloud markUndone error (ignored): $e');

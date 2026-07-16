@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
@@ -18,11 +19,13 @@ class OperationFlowScreen extends StatefulWidget {
     required this.client,
     required this.op,
     required this.settings,
+    required this.auth,
   });
 
   final SidecarClient client;
   final OperationDef op;
   final SettingsStore settings;
+  final AuthService auth;
 
   @override
   State<OperationFlowScreen> createState() => _OperationFlowScreenState();
@@ -30,7 +33,7 @@ class OperationFlowScreen extends StatefulWidget {
 
 class _OperationFlowScreenState extends State<OperationFlowScreen> {
   final Map<String, dynamic> _values = {};
-  final CloudHistory _cloud = CloudHistory();
+  late final CloudHistory _cloud = CloudHistory(auth: widget.auth);
   _Stage _stage = _Stage.form;
   Plan? _plan;
   ApplyResult? _result;
@@ -135,7 +138,11 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       return;
     }
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReviewScreen(client: widget.client, dest: dest),
+      builder: (_) => ReviewScreen(
+        client: widget.client,
+        dest: dest,
+        auth: widget.auth,
+      ),
     ));
   }
 

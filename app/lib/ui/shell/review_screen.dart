@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
@@ -11,10 +12,16 @@ import '../../core/operations/models.dart';
 /// Her sey preview -> apply -> journal -> undo'dan gecer. Silme = geri donuslu
 /// cope tasima; Put hedefteki dosyayi cope alip yerine koyar. Uzerine yazma YOK.
 class ReviewScreen extends StatefulWidget {
-  const ReviewScreen({super.key, required this.client, required this.dest});
+  const ReviewScreen({
+    super.key,
+    required this.client,
+    required this.dest,
+    required this.auth,
+  });
 
   final SidecarClient client;
   final String dest;
+  final AuthService auth;
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -24,7 +31,7 @@ enum _Stage { list, previewing, preview, applying, result }
 
 class _ReviewScreenState extends State<ReviewScreen> {
   _Stage _stage = _Stage.list;
-  final CloudHistory _cloud = CloudHistory();
+  late final CloudHistory _cloud = CloudHistory(auth: widget.auth);
   late Future<List<ReviewItem>> _items;
   final Map<String, String> _choice = {}; // path -> keep|put|delete
   Plan? _plan;

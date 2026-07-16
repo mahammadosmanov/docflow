@@ -28,20 +28,16 @@
   "history.undoToFolder": "Bir klasöre geri al…",
   "plan.empty": "Yapılacak bir şey yok",
   "plan.summary": "{count} dosya işlenecek",
-
   "op.rfi.process_scans.title": "Taramaları İşle",
   "op.rfi.process_scans.desc": "Taranmış RFI formlarını ilk sayfadaki RFI numarasına göre adlandırır ve klasörler.",
-
   "param.source": "Kaynak klasör",
   "param.source.help": "Taranmış PDF'lerin bulunduğu klasör",
   "param.dest": "Hedef klasör",
   "param.dest.help": "RFI klasörlerinin oluşturulacağı yer",
   "param.keep_original": "Orijinalleri koru (taşımak yerine kopyala)",
-
   "note.renamed": "Adlandırıldı",
   "note.needs_review": "İncelemeye taşınacak",
   "note.unreadable": "Okunamadı — incelemeye taşınacak",
-
   "warn.no_code": "RFI numarası bulunamadı",
   "warn.low_confidence": "Düşük güven — kontrol gerekli",
   "warn.unreadable": "Dosya okunamadı",
@@ -49,10 +45,23 @@
   "warn.duplicate": "Yinelenen RFI numarası — incelemeye taşındı",
   "warn.exists": "Hedef zaten var — üzerine yazılmadı, incelemeye taşındı",
   "warn.no_pdfs": "Klasörde PDF yok",
-
   "error.step_failed": "Adım başarısız",
   "error.undo_failed": "Geri alma başarısız",
   "error.param.required.source": "Kaynak klasör zorunlu",
   "error.param.required.dest": "Hedef klasör zorunlu",
-  "error.sidecar_down": "Arka plan servisi yanıt vermiyor"
+  "error.sidecar_down": "Arka plan servisi yanıt vermiyor",
+  "action.admin": "Yönetim paneli",
+  "action.retry": "Tekrar denetle",
+  "auth.email": "E-posta",
+  "auth.password": "Parola",
+  "auth.signIn": "Giriş yap",
+  "auth.signUp": "Hesap oluştur",
+  "auth.signOut": "Çıkış yap",
+  "auth.signupOk": "Hesap oluşturuldu. Yöneticiden onaylamasını isteyin, sonra giriş yapın.",
+  "auth.pending": "Onay bekleniyor",
+  "auth.pendingHelp": "Hesabınız var ama henüz onaylanmadı. Yöneticinin erişim vermesi gerekiyor.",
+  "admin.title": "Kullanıcılar",
+  "admin.allowed": "Erişim",
+  "admin.admin": "Yönetici",
+  "admin.empty": "Henüz kullanıcı yok"
 }

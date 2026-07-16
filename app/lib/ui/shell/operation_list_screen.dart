@@ -3,17 +3,25 @@ import 'package:flutter/material.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
+import '../../core/auth/auth_service.dart';
 import '../../core/settings/settings_store.dart';
+import 'admin_panel_screen.dart';
 import 'history_screen.dart';
 import 'operation_flow_screen.dart';
 
 /// Acilis ekrani: list_operations cagirir, operation'lari kart olarak listeler.
 /// Minimalist: tek sutun, bol bosluk (docs/TASKS.md 3.1).
 class OperationListScreen extends StatefulWidget {
-  const OperationListScreen({super.key, required this.client, required this.settings});
+  const OperationListScreen({
+    super.key,
+    required this.client,
+    required this.settings,
+    required this.auth,
+  });
 
   final SidecarClient client;
   final SettingsStore settings;
+  final AuthService auth;
 
   @override
   State<OperationListScreen> createState() => _OperationListScreenState();
@@ -42,12 +50,27 @@ class _OperationListScreenState extends State<OperationListScreen> {
       appBar: AppBar(
         title: Text(s.t('app.title')),
         actions: [
+          // Admin butonu sadece admin'e gorunur; sunucuda RLS zaten zorlar.
+          if (widget.auth.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              tooltip: s.t('action.admin'),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => AdminPanelScreen(auth: widget.auth),
+              )),
+            ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: s.t('action.history'),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => HistoryScreen(client: widget.client),
+              builder: (_) => HistoryScreen(client: widget.client, auth: widget.auth),
             )),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: '${s.t('auth.signOut')} — ${widget.auth.session?.email ?? ''}',
+            // AuthGate dinliyor: signOut -> kapi Login'e doner.
+            onPressed: widget.auth.signOut,
           ),
         ],
       ),
@@ -115,6 +138,7 @@ class _OperationListScreenState extends State<OperationListScreen> {
                 client: widget.client,
                 op: op,
                 settings: widget.settings,
+                auth: widget.auth,
               ),
             ),
           ),

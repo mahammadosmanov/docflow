@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
@@ -9,9 +10,10 @@ import '../../core/l10n/strings.dart';
 /// Kaynak: bulut (Supabase) varsa oradan — makineler arasi gorunur; yoksa/hata
 /// halinde yerel journal. Geri alirken orijinal konuma VEYA secilen klasore.
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, required this.client});
+  const HistoryScreen({super.key, required this.client, required this.auth});
 
   final SidecarClient client;
+  final AuthService auth;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -41,7 +43,7 @@ class _Row {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final CloudHistory _cloud = CloudHistory();
+  late final CloudHistory _cloud = CloudHistory(auth: widget.auth);
   late Future<List<_Row>> _future;
   bool _busy = false;
   bool _cloudFailed = false;

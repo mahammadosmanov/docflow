@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'core/auth/auth_service.dart';
+import 'core/cloud/cloud_history.dart' show supabaseKey, supabaseUrl;
 import 'core/ipc/sidecar_client.dart';
 import 'core/l10n/strings.dart';
 import 'core/settings/settings_store.dart';
-import 'ui/shell/operation_list_screen.dart';
+import 'ui/shell/auth_gate.dart';
 
 // Dev fallback yollari (bu makine). Paketlenmis derlemede kullanilmaz —
 // orada sidecar app exe'sinin yaninda bundle edilir. --dart-define ile ezilebilir.
@@ -58,6 +60,8 @@ _Launch _resolveSidecar() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await SettingsStore.load();
+  final auth = AuthService(url: supabaseUrl, key: supabaseKey, settings: settings);
+  await auth.restore(); // diskteki oturumu geri yukle (varsa)
   final l = _resolveSidecar();
   final client = SidecarClient(
     executable: l.executable,
@@ -65,14 +69,20 @@ Future<void> main() async {
     workingDir: l.workingDir,
     environment: l.environment,
   );
-  runApp(DocFlowApp(client: client, settings: settings));
+  runApp(DocFlowApp(client: client, settings: settings, auth: auth));
 }
 
 class DocFlowApp extends StatelessWidget {
-  const DocFlowApp({super.key, required this.client, required this.settings});
+  const DocFlowApp({
+    super.key,
+    required this.client,
+    required this.settings,
+    required this.auth,
+  });
 
   final SidecarClient client;
   final SettingsStore settings;
+  final AuthService auth;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +109,7 @@ class DocFlowApp extends StatelessWidget {
         }
         return const Locale('en');
       },
-      home: OperationListScreen(client: client, settings: settings),
+      home: AuthGate(auth: auth, client: client, settings: settings),
     );
   }
 }
