@@ -55,11 +55,14 @@ def test_canonical_nfc_dotted_i():
     assert rc.canonical("I\u0307NT") == "\u0130NT"
 
 
-def test_folder_has_no_rev_file_has_rev():
-    code = "AZE-SUN-INT-QMS-RFI-MEC-0107"
-    assert rc.foldername(code) == code
-    assert rc.filename(code, 0) == f"{code}_R0.pdf"
-    assert rc.filename(code, 1) == f"{code}_R1.pdf"
+def test_naming_lives_in_one_place_only():
+    """Adlandirma rfi_code'dan CIKARILDI (eski _R0 kurali). Tek kaynak: fs/naming.
+
+    Bu test bir gerileme bekcisi: biri "pratik olur" diye buraya tekrar bir
+    filename() koyarsa iki celisen kural olusur ve biri sessizce kazanir.
+    """
+    assert not hasattr(rc, "filename")
+    assert not hasattr(rc, "foldername")
 
 
 def test_miss_is_explicit_not_guess():

@@ -32,6 +32,20 @@ from ..rpc import notify
 
 REVIEW_DIR = "_review"
 
+
+def _same_file(a: pathlib.Path, b: pathlib.Path) -> bool:
+    """a ile b AYNI dosya mi? (zaten islenmis dosyayi tekrar islememek icin)
+
+    os.path.samefile SADECE ikisi de varken calisir; hedef yoksa FileNotFoundError
+    atar. Bu yuzden once varlik kontrolu. Yol karsilastirmasi yerine samefile:
+    macOS'ta dosya sistemi case-insensitive ve "A.pdf" ile "a.pdf" ayni dosyadir,
+    ama string olarak esit degildir.
+    """
+    try:
+        return b.exists() and a.samefile(b)
+    except OSError:
+        return False
+
 # Bu esigin altindaki eslesmeler _review'a gider. fuzzy = 0.7-0.9 araligi.
 # Dusurmeden once gercek taramalarda hata oranini ol.
 MIN_CONFIDENCE = 0.80
@@ -100,16 +114,23 @@ class ProcessScans(Operation):
                 mtime = 0.0
             groups.setdefault(m.code, []).append((pdf, mtime, m.confidence, method))
 
-        # 2. GECIS: her RFI numarasi icin EN YENI (mtime) -> {code}.pdf; eskiler
-        # -> _review. Isim = RFI numarasi, suffix YOK; ayni ada iki dosya olamaz.
+        # 2. GECIS: her RFI numarasi icin EN YENI (mtime) -> hedef; eskiler
+        # -> _review. Ad = "RFI No. {code}.pdf"; ayni ada iki dosya olamaz.
         for code, files in groups.items():
             files.sort(key=lambda t: t[1], reverse=True)   # en yeni once
             winner = files[0]
             wpdf = winner[0]
 
-            # Hedef: var olan {dest}/{code}/ icine ya da DUZ {dest}/{code}.pdf.
+            # Hedef: var olan {dest}/{code}/ icine ya da DUZ {dest}/RFI No. {code}.pdf
             target = target_for(dest, code)
             into_folder = target.parent != dest
+
+            if _same_file(wpdf, target):
+                # Dosya ZATEN dogru adda ve dogru yerde — yapacak is yok.
+                # Bu kontrol olmadan (ozellikle source == dest iken) asagidaki
+                # "hedef var" dali devreye girer ve dosyayi KENDI hedefi var diye
+                # _review'e tasir: ikinci calistirmada duzgun arsiv dagilir.
+                continue
 
             if target.exists():
                 # Hedef ZATEN VAR -> uzerine ASLA yazma (veri kaybi olur). Bu RFI

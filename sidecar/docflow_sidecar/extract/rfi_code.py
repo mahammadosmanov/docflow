@@ -172,11 +172,6 @@ def find(text: str) -> RfiMatch:
     return RfiMatch("", "", "", "miss", 0.0)
 
 
-def filename(code: str, rev: int = 0) -> str:
-    """Dosya adi rev ICERIR. Klasor adi icermez — bkz. CLAUDE.md."""
-    return f"{code}_R{rev}.pdf"
-
-
-def foldername(code: str) -> str:
-    """Klasor adi rev ICERMEZ: bir RFI'in tum revizyonlari tek klasorde."""
-    return code
+# NOT: filename()/foldername() buradan KALDIRILDI. Eski "_R0" kuralini kodluyor
+# ve gercek kuralla (fs/naming.py) celisiyorlardi; sadece testler cagiriyordu.
+# Adlandirma TEK yerde: docflow_sidecar/fs/naming.py.
