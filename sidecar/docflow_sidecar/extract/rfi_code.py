@@ -89,6 +89,26 @@ def _levenshtein(a: str, b: str) -> int:
     return prev[-1]
 
 
+def _recover_discipline(disc: str) -> str:
+    """OCR disiplin alaninda harf dusurebilir/ekleyebilir: CIV -> CV, MEC -> MFC.
+
+    -RFI- capasi saglamsa disiplini bilinen kumeye Levenshtein <= 1 ile geri kazan.
+    Belirsizse (esit mesafede birden fazla aday) DOKUNMA — yanlis etiketleme riski.
+    DISCIPLINES bossa (dogrulama kapali) dokunma. Bu capayi GEVSETMEZ: sadece
+    zaten -RFI- ile dogrulanmis bir kodun disiplin alanini onarir.
+    """
+    if not DISCIPLINES or disc in DISCIPLINES:
+        return disc
+    best, best_dist, ties = disc, 99, 0
+    for cand in DISCIPLINES:
+        dist = _levenshtein(disc, cand)
+        if dist < best_dist:
+            best, best_dist, ties = cand, dist, 1
+        elif dist == best_dist:
+            ties += 1
+    return best if best_dist <= 1 and ties == 1 else disc
+
+
 def _build(discipline: str, number: str, method: Method, confidence: float) -> RfiMatch:
     return RfiMatch(
         code=f"{PREFIX}-{discipline}-{number}",
@@ -130,13 +150,23 @@ def find(text: str) -> RfiMatch:
         if segs[4] != "RFI":
             continue
 
-        head, disc, num = "-".join(segs[:4]), segs[5], segs[6]
-        if not (re.fullmatch(r"[A-Z]{3}", disc) and re.fullmatch(r"\d{4}", num)):
+        head, disc_raw, num = "-".join(segs[:4]), segs[5], segs[6]
+        if not re.fullmatch(r"\d{4}", num):
+            continue
+
+        # OCR disiplin harfini dusurebilir (CIV -> CV). Capa (-RFI-) saglam oldugu
+        # icin disiplini bilinen kumeye Levenshtein<=1 ile geri kazanmak guvenli.
+        disc = _recover_discipline(disc_raw)
+        if not re.fullmatch(r"[A-Z]{3}", disc):
             continue
         if DISCIPLINES and disc not in DISCIPLINES:
             continue
+
         d = _levenshtein(head, PREFIX_HEAD)
         if d <= 2:
+            if disc != disc_raw:
+                # Disiplin OCR ile onarildi. Capa tamsa (d==0) yuksek guven.
+                return _build(disc, num, "repaired", 0.90 if d == 0 else round(0.85 - d / 10, 2))
             return _build(disc, num, "fuzzy", round(1 - d / 10, 2))
 
     return RfiMatch("", "", "", "miss", 0.0)

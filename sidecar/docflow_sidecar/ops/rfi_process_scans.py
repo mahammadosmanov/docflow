@@ -60,10 +60,10 @@ class ProcessScans(Operation):
             if p.is_file() and p.suffix.lower() == ".pdf" and not p.name.startswith(".")
         )
 
-        # Ayni RFI birden fazla dosyada -> revizyon. Klasor rev'siz, dosya rev'li.
-        # Rev OCR'dan GELMIYOR (bu kalitede okunamiyor, bkz. CLAUDE.md) —
-        # gorulme sirasina gore artiriyoruz ve plani kullaniciya gosteriyoruz.
-        rev_counter: dict[str, int] = {}
+        # Dosya adi = RFI numarasi, baska hicbir sey (sahibi karari): AZE-...-0064.pdf
+        # Ayni RFI numarasi ikinci kez gelirse ayni ad iki dosyaya verilemez;
+        # suffix (_R0/_R1) YOK, uzerine yazma YOK, tahmin YOK -> _review'a alinir.
+        seen: dict[str, str] = {}  # code -> ilk goruldugu dosya adi
 
         for i, pdf in enumerate(pdfs):
             notify("progress", {"phase": "preview", "done": i, "total": len(pdfs)})
@@ -86,20 +86,25 @@ class ProcessScans(Operation):
                 ))
                 continue
 
-            rev = rev_counter.get(m.code, 0)
-            rev_counter[m.code] = rev + 1
-            if rev > 0:
-                plan.warnings.append(Warning("warn.revision_guessed", m.code))
+            if m.code in seen:
+                # Ayni numara ikinci kez -> ada koyulacak yer yok. _review'a al.
+                plan.warnings.append(Warning("warn.duplicate", pdf.name))
+                plan.steps.append(Step(
+                    "copy" if copy_mode else "move",
+                    str(pdf), str(dest / REVIEW_DIR / pdf.name),
+                    note_key="note.needs_review",
+                    meta={"code": m.code, "reason": "duplicate", "firstFile": seen[m.code]},
+                ))
+                continue
+            seen[m.code] = pdf.name
 
-            folder = dest / m.code                    # klasor: rev YOK
-            target = folder / f"{m.code}_R{rev}.pdf"  # dosya: rev VAR
-
-            plan.steps.append(Step("mkdir", dst=str(folder)))
+            # DUZ yerlesim: {dest}/{code}.pdf — klasor yok, suffix yok.
+            target = dest / f"{m.code}.pdf"
             plan.steps.append(Step(
                 "copy" if copy_mode else "move", str(pdf), str(target),
                 note_key="note.renamed",
                 meta={"code": m.code, "confidence": m.confidence,
-                      "method": m.method, "source": method, "rev": rev},
+                      "method": m.method, "source": method},
             ))
 
         if not pdfs:

@@ -32,6 +32,7 @@
   "warn.low_confidence": "Low confidence — needs review",
   "warn.unreadable": "File could not be read",
   "warn.revision_guessed": "Revision number guessed",
+  "warn.duplicate": "Duplicate RFI number — moved to review",
   "warn.no_pdfs": "No PDFs in folder",
 
   "error.step_failed": "Step failed",

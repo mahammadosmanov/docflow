@@ -29,6 +29,7 @@
   "warn.low_confidence": "Aşağı etibarlılıq — yoxlama lazımdır",
   "warn.unreadable": "Fayl oxuna bilmədi",
   "warn.revision_guessed": "Reviziya nömrəsi təxmin edildi",
+  "warn.duplicate": "Təkrarlanan RFI nömrəsi — yoxlamaya köçürüldü",
   "warn.no_pdfs": "Qovluqda PDF yoxdur",
 
   "error.step_failed": "Addım uğursuz oldu",

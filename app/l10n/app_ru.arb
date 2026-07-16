@@ -29,6 +29,7 @@
   "warn.low_confidence": "Низкая уверенность — нужна проверка",
   "warn.unreadable": "Не удалось прочитать файл",
   "warn.revision_guessed": "Номер ревизии определён предположительно",
+  "warn.duplicate": "Повторяющийся номер RFI — перемещено на проверку",
   "warn.no_pdfs": "В папке нет PDF",
 
   "error.step_failed": "Шаг не выполнен",
