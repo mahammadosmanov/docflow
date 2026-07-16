@@ -24,7 +24,7 @@ from ..contracts import (
     Step,
     Warning,
 )
-from ..extract import find, first_page_text
+from ..extract import extract_first_page
 from ..fs.apply import apply_steps
 from ..registry import register
 from ..rpc import notify
@@ -69,14 +69,12 @@ class ProcessScans(Operation):
             notify("progress", {"phase": "preview", "done": i, "total": len(pdfs)})
 
             try:
-                text, method = first_page_text(str(pdf))
+                m, method = extract_first_page(str(pdf))
             except Exception as e:  # noqa: BLE001 — tek bozuk dosya tarama durdurmaz
                 plan.warnings.append(Warning("warn.unreadable", pdf.name))
                 plan.steps.append(Step("move", str(pdf), str(dest / REVIEW_DIR / pdf.name),
                                        note_key="note.unreadable", meta={"error": str(e)}))
                 continue
-
-            m = find(text)
 
             if not m.ok or m.confidence < MIN_CONFIDENCE:
                 key = "warn.no_code" if not m.ok else "warn.low_confidence"
