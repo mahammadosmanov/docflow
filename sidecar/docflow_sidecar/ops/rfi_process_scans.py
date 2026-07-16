@@ -60,11 +60,11 @@ class ProcessScans(Operation):
             if p.is_file() and p.suffix.lower() == ".pdf" and not p.name.startswith(".")
         )
 
-        # Dosya adi = RFI numarasi, baska hicbir sey (sahibi karari): AZE-...-0064.pdf
-        # Ayni RFI numarasi ikinci kez gelirse ayni ad iki dosyaya verilemez;
-        # suffix (_R0/_R1) YOK, uzerine yazma YOK, tahmin YOK -> _review'a alinir.
-        seen: dict[str, str] = {}  # code -> ilk goruldugu dosya adi
+        kind = "copy" if copy_mode else "move"
 
+        # 1. GECIS: her dosyayi OCR et. Okunamayan/kod yok/dusuk guven -> hemen
+        # _review. Kod bulunanlari koda gore GRUPLA (revizyon ele almak icin).
+        groups: dict[str, list[tuple[pathlib.Path, float, float, str]]] = {}
         for i, pdf in enumerate(pdfs):
             notify("progress", {"phase": "preview", "done": i, "total": len(pdfs)})
 
@@ -86,26 +86,29 @@ class ProcessScans(Operation):
                 ))
                 continue
 
-            if m.code in seen:
-                # Ayni numara ikinci kez -> ada koyulacak yer yok. _review'a al.
-                plan.warnings.append(Warning("warn.duplicate", pdf.name))
-                plan.steps.append(Step(
-                    "copy" if copy_mode else "move",
-                    str(pdf), str(dest / REVIEW_DIR / pdf.name),
-                    note_key="note.needs_review",
-                    meta={"code": m.code, "reason": "duplicate", "firstFile": seen[m.code]},
-                ))
-                continue
-            seen[m.code] = pdf.name
+            try:
+                mtime = pdf.stat().st_mtime
+            except OSError:
+                mtime = 0.0
+            groups.setdefault(m.code, []).append((pdf, mtime, m.confidence, method))
 
-            # DUZ yerlesim: {dest}/{code}.pdf — klasor yok, suffix yok.
-            target = dest / f"{m.code}.pdf"
+        # 2. GECIS: her RFI numarasi icin EN YENI (mtime) -> {code}.pdf; eskiler
+        # -> _review. Isim = RFI numarasi, suffix YOK; ayni ada iki dosya olamaz.
+        for code, files in groups.items():
+            files.sort(key=lambda t: t[1], reverse=True)   # en yeni once
+            winner = files[0]
             plan.steps.append(Step(
-                "copy" if copy_mode else "move", str(pdf), str(target),
+                kind, str(winner[0]), str(dest / f"{code}.pdf"),
                 note_key="note.renamed",
-                meta={"code": m.code, "confidence": m.confidence,
-                      "method": m.method, "source": method},
+                meta={"code": code, "confidence": winner[2], "source": winner[3]},
             ))
+            for older, _mt, _conf, _method in files[1:]:
+                plan.warnings.append(Warning("warn.duplicate", older.name))
+                plan.steps.append(Step(
+                    kind, str(older), str(dest / REVIEW_DIR / older.name),
+                    note_key="note.needs_review",
+                    meta={"code": code, "reason": "older_revision", "kept": winner[0].name},
+                ))
 
         if not pdfs:
             plan.warnings.append(Warning("warn.no_pdfs", str(source)))
