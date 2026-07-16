@@ -27,6 +27,7 @@ Kademeyi degistirmeden once gercek taramalarda `tools/rfi_diag.py <pdf>` ve
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 
 import cv2
@@ -37,11 +38,68 @@ import pytesseract
 
 from .rfi_code import WHITELIST, RfiMatch, find
 
-# Paketlenmis derlemede tesseract binary'si bundle icinde gelir; Flutter tarafi
-# DOCFLOW_TESSERACT ile yolunu verir. Yoksa PATH'teki "tesseract"e dusulur (dev).
-_tess = os.environ.get("DOCFLOW_TESSERACT")
-if _tess:
-    pytesseract.pytesseract.tesseract_cmd = _tess
+class OcrEngineMissing(RuntimeError):
+    """Tesseract bulunamadi. Bu bir DOSYA sorunu degil, KURULUM sorunu.
+
+    Ayri bir tip olmasi sart: cagiran taraf bunu "bu dosya okunamadi"dan ayirmak
+    zorunda. Karistirirsan, eksik bir binary yuzunden butun klasoru _review'e
+    tasiyan bir plan uretirsin (bir kez oldu — asagiya bak)."""
+
+
+# Tesseract'i BUL. PATH'e guvenme.
+#
+# NEDEN: Finder/`open` ile baslatilan GUI uygulamasinin PATH'i
+# /usr/bin:/bin:/usr/sbin:/sbin — Homebrew (/opt/homebrew/bin) YOK. Terminalden
+# `flutter run` ile calistirinca kabuk PATH'i miras alindigi icin her sey
+# calisiyordu; paketlenip cift tiklaninca pytesseract `tesseract`i bulamadi ve
+# HER dosya "okunamadi" oldu. Ayni tuzak Windows'ta PATH'e eklenmemis kurulumda
+# da var. Bu yuzden: once bundle, sonra PATH, sonra bilinen kurulum yerleri.
+_CANDIDATES = (
+    "/opt/homebrew/bin/tesseract",      # macOS Apple Silicon (Homebrew)
+    "/usr/local/bin/tesseract",         # macOS Intel (Homebrew) / elle kurulum
+    "/opt/local/bin/tesseract",         # MacPorts
+    "/usr/bin/tesseract",               # Linux dagitim paketi
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+)
+
+
+def _resolve_tesseract() -> str | None:
+    # 1) Paketlenmis derleme: Flutter tarafi bundle'daki yolu verir.
+    env = os.environ.get("DOCFLOW_TESSERACT")
+    if env and os.path.isfile(env):
+        return env
+    # 2) PATH (terminalden calistirma / PATH'e eklenmis kurulum).
+    found = shutil.which("tesseract")
+    if found:
+        return found
+    # 3) Bilinen yerler — GUI'nin dar PATH'i icin kurtarma.
+    for c in _CANDIDATES:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def _configure_tesseract() -> str | None:
+    path = _resolve_tesseract()
+    if not path:
+        return None
+    pytesseract.pytesseract.tesseract_cmd = path
+    # tessdata binary'nin yanindaysa (Windows bundle) TESSDATA_PREFIX'i ver;
+    # aksi halde tesseract dil dosyalarini bulamaz ve baska bir hata verir.
+    if not os.environ.get("TESSDATA_PREFIX"):
+        tessdata = os.path.join(os.path.dirname(path), "tessdata")
+        if os.path.isdir(tessdata):
+            os.environ["TESSDATA_PREFIX"] = tessdata
+    return path
+
+
+TESSERACT_CMD = _configure_tesseract()
+
+
+def engine_available() -> bool:
+    """Kurulum saglam mi? Cagiran, dosya taramaya BASLAMADAN once sormali."""
+    return TESSERACT_CMD is not None
 
 # Varsayilan tek-atis parametreleri (from_ocr / probe geriye donuk uyumluluk).
 BAND = 0.35
@@ -127,15 +185,24 @@ def extract_first_page(pdf_path: str) -> tuple[RfiMatch, str]:
 
     yontem ornekleri: 'text-layer', 'ocr:dpi300:b0.35:blk31:psm6', 'ocr:miss'.
     Kod bulunamazsa miss RfiMatch doner (op onu _review'a yollar — asla tahmin).
+
+    Tesseract kurulu degilse OcrEngineMissing FIRLATIR (dosya hatasi degil).
     """
     with fitz.open(pdf_path) as doc:
         page = doc[0]
 
+        # Metin katmani OCR'siz calisir: searchable PDF'ler tesseract olmadan da
+        # okunur. O yuzden motor kontrolu OCR'a dusmeden ONCE degil, BURADA.
         text = from_text_layer(page)
         if text is not None:
             m = find(text)
             if m.method in ("strict", "repaired"):
                 return m, "text-layer"
+
+        if not engine_available():
+            raise OcrEngineMissing(
+                "tesseract bulunamadi (PATH ve bilinen kurulum yerleri denendi)"
+            )
 
         gray_cache: dict[int, np.ndarray] = {}
         best = RfiMatch("", "", "", "miss", 0.0)

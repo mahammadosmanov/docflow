@@ -132,5 +132,6 @@
   "prefs.account.saved": "Yadda saxlanıldı",
   "auth.err.emailNotConfirmed": "Bu hesab mövcuddur, lakin e-poçt hələ təsdiqlənməyib. Administrator e-poçt təsdiqini söndürə bilər və ya poçtunuza gələn keçidi açın.",
   "auth.err.rateLimit": "Çox sayda cəhd. Bir neçə dəqiqə gözləyib yenidən yoxlayın.",
-  "auth.err.weakPassword": "Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin."
+  "auth.err.weakPassword": "Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.",
+  "warn.no_ocr": "OCR mühərriki (Tesseract) tapılmadı — heç bir fayla toxunulmadı. Quraşdırın və ya tətbiq paketini yenidən yükləyin."
 }

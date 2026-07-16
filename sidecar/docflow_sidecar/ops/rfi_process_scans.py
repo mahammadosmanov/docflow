@@ -24,7 +24,7 @@ from ..contracts import (
     Step,
     Warning,
 )
-from ..extract import extract_first_page
+from ..extract import OcrEngineMissing, extract_first_page
 from ..fs.apply import apply_steps
 from ..fs.naming import target_for
 from ..registry import register
@@ -71,6 +71,13 @@ class ProcessScans(Operation):
 
             try:
                 m, method = extract_first_page(str(pdf))
+            except OcrEngineMissing:
+                # KURULUM hatasi — dosya hatasi DEGIL. Her dosya icin tekrarlanir,
+                # yani "hepsi okunamadi" gibi gorunur. Plani BOSALT ve tek net
+                # uyariyla don: eksik bir binary yuzunden kullanicinin butun
+                # klasorunu _review'e tasiyan bir plan uretmek KABUL EDILEMEZ.
+                # (Tam olarak bu oldu: 20 dosyanin 20'si "move -> _review".)
+                return Plan(op_id=self.id, warnings=[Warning("warn.no_ocr", "")])
             except Exception as e:  # noqa: BLE001 — tek bozuk dosya tarama durdurmaz
                 plan.warnings.append(Warning("warn.unreadable", pdf.name))
                 plan.steps.append(Step("move", str(pdf), str(dest / REVIEW_DIR / pdf.name),
