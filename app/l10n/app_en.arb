@@ -33,6 +33,7 @@
   "warn.unreadable": "File could not be read",
   "warn.revision_guessed": "Revision number guessed",
   "warn.duplicate": "Duplicate RFI number — moved to review",
+  "warn.exists": "Target already exists — moved to review (not overwritten)",
   "warn.no_pdfs": "No PDFs in folder",
 
   "error.step_failed": "Step failed",

@@ -30,6 +30,7 @@
   "warn.unreadable": "Dosya okunamadı",
   "warn.revision_guessed": "Revizyon numarası tahmin edildi",
   "warn.duplicate": "Yinelenen RFI numarası — incelemeye taşındı",
+  "warn.exists": "Hedef zaten var — üzerine yazılmadı, incelemeye taşındı",
   "warn.no_pdfs": "Klasörde PDF yok",
 
   "error.step_failed": "Adım başarısız",

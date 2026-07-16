@@ -5,15 +5,22 @@ import 'package:flutter/material.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
+import '../../core/settings/settings_store.dart';
 import '../forms/schema_form.dart';
 
 enum _Stage { form, previewing, preview, applying, result }
 
 class OperationFlowScreen extends StatefulWidget {
-  const OperationFlowScreen({super.key, required this.client, required this.op});
+  const OperationFlowScreen({
+    super.key,
+    required this.client,
+    required this.op,
+    required this.settings,
+  });
 
   final SidecarClient client;
   final OperationDef op;
+  final SettingsStore settings;
 
   @override
   State<OperationFlowScreen> createState() => _OperationFlowScreenState();
@@ -28,12 +35,25 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   StreamSubscription<Progress>? _sub;
 
   @override
+  void initState() {
+    super.initState();
+    // Son kez secilen klasorleri/degerleri geri yukle (sadece bu op'un semasi).
+    final saved = widget.settings.paramsFor(widget.op.id);
+    final known = {for (final p in widget.op.params) p.name};
+    saved.forEach((k, v) {
+      if (known.contains(k)) _values[k] = v;
+    });
+  }
+
+  @override
   void dispose() {
     _sub?.cancel();
     super.dispose();
   }
 
   Future<void> _preview() async {
+    // Kullanicinin sectigi klasorleri hatirla (bir sonraki acilista geri gelir).
+    await widget.settings.saveParams(widget.op.id, _values);
     setState(() => _stage = _Stage.previewing);
     try {
       final plan = await widget.client.preview(widget.op.id, _values);

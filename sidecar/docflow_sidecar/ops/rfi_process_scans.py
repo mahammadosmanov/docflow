@@ -97,17 +97,37 @@ class ProcessScans(Operation):
         for code, files in groups.items():
             files.sort(key=lambda t: t[1], reverse=True)   # en yeni once
             winner = files[0]
-            plan.steps.append(Step(
-                kind, str(winner[0]), str(dest / f"{code}.pdf"),
-                note_key="note.renamed",
-                meta={"code": code, "confidence": winner[2], "source": winner[3]},
-            ))
+            wpdf = winner[0]
+
+            # Hedef: {dest}/{code}/ klasoru ZATEN VARSA dosyayi onun icine koy;
+            # yoksa {dest}/{code}.pdf (DUZ). ASLA yeni klasor olusturma.
+            folder = dest / code
+            into_folder = folder.is_dir()
+            target = (folder / f"{code}.pdf") if into_folder else (dest / f"{code}.pdf")
+
+            if target.exists():
+                # Hedef ZATEN VAR -> uzerine ASLA yazma (veri kaybi olur). Bu RFI
+                # zaten islenmis; yeni tarama _review'a gider, kullanici karar verir.
+                plan.warnings.append(Warning("warn.exists", wpdf.name))
+                plan.steps.append(Step(
+                    kind, str(wpdf), str(dest / REVIEW_DIR / wpdf.name),
+                    note_key="note.needs_review",
+                    meta={"code": code, "reason": "target_exists", "target": str(target)},
+                ))
+            else:
+                plan.steps.append(Step(
+                    kind, str(wpdf), str(target),
+                    note_key="note.renamed",
+                    meta={"code": code, "confidence": winner[2], "source": winner[3],
+                          "intoFolder": into_folder},
+                ))
+
             for older, _mt, _conf, _method in files[1:]:
                 plan.warnings.append(Warning("warn.duplicate", older.name))
                 plan.steps.append(Step(
                     kind, str(older), str(dest / REVIEW_DIR / older.name),
                     note_key="note.needs_review",
-                    meta={"code": code, "reason": "older_revision", "kept": winner[0].name},
+                    meta={"code": code, "reason": "older_revision", "kept": wpdf.name},
                 ))
 
         if not pdfs:

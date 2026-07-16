@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/ipc/sidecar_client.dart';
 import 'core/l10n/strings.dart';
+import 'core/settings/settings_store.dart';
 import 'ui/shell/operation_list_screen.dart';
 
 // Dev fallback yollari (bu makine). Paketlenmis derlemede kullanilmaz —
@@ -54,7 +55,9 @@ _Launch _resolveSidecar() {
   return _Launch(_devPython, const ['-m', 'docflow_sidecar'], _devSidecarDir);
 }
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final settings = await SettingsStore.load();
   final l = _resolveSidecar();
   final client = SidecarClient(
     executable: l.executable,
@@ -62,13 +65,14 @@ void main() {
     workingDir: l.workingDir,
     environment: l.environment,
   );
-  runApp(DocFlowApp(client: client));
+  runApp(DocFlowApp(client: client, settings: settings));
 }
 
 class DocFlowApp extends StatelessWidget {
-  const DocFlowApp({super.key, required this.client});
+  const DocFlowApp({super.key, required this.client, required this.settings});
 
   final SidecarClient client;
+  final SettingsStore settings;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +99,7 @@ class DocFlowApp extends StatelessWidget {
         }
         return const Locale('en');
       },
-      home: OperationListScreen(client: client),
+      home: OperationListScreen(client: client, settings: settings),
     );
   }
 }

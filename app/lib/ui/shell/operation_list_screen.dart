@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
+import '../../core/settings/settings_store.dart';
 import 'operation_flow_screen.dart';
 
 /// Acilis ekrani: list_operations cagirir, operation'lari kart olarak listeler.
 /// Minimalist: tek sutun, bol bosluk (docs/TASKS.md 3.1).
 class OperationListScreen extends StatefulWidget {
-  const OperationListScreen({super.key, required this.client});
+  const OperationListScreen({super.key, required this.client, required this.settings});
 
   final SidecarClient client;
+  final SettingsStore settings;
 
   @override
   State<OperationListScreen> createState() => _OperationListScreenState();
@@ -97,7 +99,11 @@ class _OperationListScreenState extends State<OperationListScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => OperationFlowScreen(client: widget.client, op: op),
+              builder: (_) => OperationFlowScreen(
+                client: widget.client,
+                op: op,
+                settings: widget.settings,
+              ),
             ),
           ),
         ),
