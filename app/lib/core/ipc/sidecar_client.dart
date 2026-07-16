@@ -168,9 +168,20 @@ class SidecarClient {
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
   }
 
-  Future<ApplyResult> undo(String journalId) async {
-    final res = await _callRaw('undo', {'journalId': journalId});
+  Future<ApplyResult> undo(String journalId, {String? destFolder}) async {
+    final res = await _callRaw('undo', {
+      'journalId': journalId,
+      if (destFolder != null && destFolder.isNotEmpty) 'destFolder': destFolder,
+    });
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
+  }
+
+  Future<List<HistoryEntry>> historyList({int limit = 50}) async {
+    final res = await _callRaw('history_list', {'limit': limit});
+    return (res as List)
+        .cast<Map<String, dynamic>>()
+        .map(HistoryEntry.fromJson)
+        .toList();
   }
 
   Future<List<ReviewItem>> reviewScan(String dest) async {

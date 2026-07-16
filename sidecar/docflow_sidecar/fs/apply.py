@@ -49,12 +49,27 @@ def _do(step: Step) -> None:
         raise ValueError(f"bilinmeyen adim: {step.kind}")
 
 
-def _undo(step: Step) -> None:
+def _undo(step: Step, dest_folder: str | None = None) -> None:
+    # dest_folder verilirse: dosyalari orijinal kaynaga DEGIL, secilen klasore
+    # geri getir. Dosya adi orijinal kaynak adini korur. Uzerine ASLA yazma.
     if step.kind == "mkdir":
+        if dest_folder is not None:
+            return                                 # yonlendirmede klasorlere dokunma
         p = pathlib.Path(step.dst)
         if p.is_dir() and not any(p.iterdir()):   # sadece BOS klasoru sil
             p.rmdir()
-    elif step.kind in ("move", "rename"):
+        return
+
+    if dest_folder is not None:
+        assert step.src is not None and step.dst is not None
+        target = pathlib.Path(dest_folder) / pathlib.Path(step.src).name
+        if target.exists():
+            raise FileExistsError(str(target))     # uzerine YAZMA
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(step.dst, str(target))         # move/rename/copy -> hepsi klasore
+        return
+
+    if step.kind in ("move", "rename"):
         shutil.move(step.dst, step.src)
     elif step.kind == "copy":
         pathlib.Path(step.dst).unlink(missing_ok=True)
@@ -78,7 +93,7 @@ def apply_steps(plan: Plan) -> Result:
     return result
 
 
-def undo(journal_id: str) -> Result:
+def undo(journal_id: str, dest_folder: str | None = None) -> Result:
     hits = list(JOURNAL_DIR.glob(f"*_{journal_id[:8]}.json"))
     if not hits:
         raise KeyError(f"journal bulunamadi: {journal_id}")
@@ -90,9 +105,34 @@ def undo(journal_id: str) -> Result:
     result = Result(journal_id=journal_id)
     for step in reversed(steps):                 # TERS sira
         try:
-            _undo(step)
+            _undo(step, dest_folder)
             result.applied += 1
         except Exception as e:  # noqa: BLE001
             result.failed += 1
             result.errors.append(Warning("error.undo_failed", f"{step.dst}: {e}"))
     return result
+
+
+def list_history(limit: int = 50) -> list[dict]:
+    """Son journal kayitlarini (en yeni once) ozet olarak dondur — salt-okunur.
+
+    Journal dosya adi ts ile basladigindan leksikografik siralama = kronolojik.
+    """
+    if not JOURNAL_DIR.is_dir():
+        return []
+    out: list[dict] = []
+    for f in sorted(JOURNAL_DIR.glob("*.json"), reverse=True)[:limit]:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 — bozuk tek kayit listeyi bozmaz
+            continue
+        steps = d.get("steps", [])
+        moves = sum(1 for s in steps if s.get("kind") in ("move", "copy", "rename"))
+        out.append({
+            "journalId": d.get("journalId", ""),
+            "opId": d.get("opId", ""),
+            "ts": d.get("ts", ""),
+            "total": len(steps),
+            "moves": moves,
+        })
+    return out

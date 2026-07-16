@@ -4,6 +4,7 @@ import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
 import '../../core/settings/settings_store.dart';
+import 'history_screen.dart';
 import 'operation_flow_screen.dart';
 
 /// Acilis ekrani: list_operations cagirir, operation'lari kart olarak listeler.
@@ -38,7 +39,18 @@ class _OperationListScreenState extends State<OperationListScreen> {
   Widget build(BuildContext context) {
     final s = Strings.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.t('app.title'))),
+      appBar: AppBar(
+        title: Text(s.t('app.title')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: s.t('action.history'),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => HistoryScreen(client: widget.client),
+            )),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),

@@ -20,6 +20,12 @@
   "review.willReplace": "mövcud faylı əvəz edir",
   "note.deleted": "Silindi (səbətə)",
   "note.displaced": "Əvəz edildi — səbətə köçürüldü",
+  "action.history": "Tarixçə",
+  "history.title": "Tarixçə",
+  "history.empty": "Hələ tarixçə yoxdur",
+  "history.moves": "{count} fayl",
+  "history.undoOriginal": "Orijinal yerə geri qaytar",
+  "history.undoToFolder": "Bir qovluğa geri qaytar…",
   "plan.empty": "Ediləcək bir şey yoxdur",
   "plan.summary": "{count} fayl emal ediləcək",
 

@@ -20,6 +20,12 @@
   "review.willReplace": "mevcut dosyayı değiştirir",
   "note.deleted": "Silindi (çöpe)",
   "note.displaced": "Değiştirildi — çöpe taşındı",
+  "action.history": "Geçmiş",
+  "history.title": "Geçmiş",
+  "history.empty": "Henüz geçmiş yok",
+  "history.moves": "{count} dosya",
+  "history.undoOriginal": "Orijinal konuma geri al",
+  "history.undoToFolder": "Bir klasöre geri al…",
   "plan.empty": "Yapılacak bir şey yok",
   "plan.summary": "{count} dosya işlenecek",
 

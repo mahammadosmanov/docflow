@@ -203,3 +203,30 @@ class ReviewItem {
         targetExists: (j['targetExists'] as bool?) ?? false,
       );
 }
+
+/// Bir gecmis kaydi (journal ozeti). history_list ciktisi.
+class HistoryEntry {
+  HistoryEntry({
+    required this.journalId,
+    required this.opId,
+    required this.ts,
+    required this.total,
+    required this.moves,
+  });
+
+  final String journalId;
+  final String opId;
+  final String ts; // ISO-8601 UTC
+  final int total;
+  final int moves;
+
+  DateTime? get when => DateTime.tryParse(ts)?.toLocal();
+
+  factory HistoryEntry.fromJson(Map<String, dynamic> j) => HistoryEntry(
+        journalId: (j['journalId'] as String?) ?? '',
+        opId: (j['opId'] as String?) ?? '',
+        ts: (j['ts'] as String?) ?? '',
+        total: (j['total'] as num?)?.toInt() ?? 0,
+        moves: (j['moves'] as num?)?.toInt() ?? 0,
+      );
+}

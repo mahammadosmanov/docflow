@@ -20,6 +20,12 @@
   "review.willReplace": "заменит существующий файл",
   "note.deleted": "Удалено (в корзину)",
   "note.displaced": "Заменено — перемещено в корзину",
+  "action.history": "История",
+  "history.title": "История",
+  "history.empty": "Истории пока нет",
+  "history.moves": "Файлов: {count}",
+  "history.undoOriginal": "Отменить в исходное место",
+  "history.undoToFolder": "Отменить в папку…",
   "plan.empty": "Нечего делать",
   "plan.summary": "Будет обработано файлов: {count}",
 
