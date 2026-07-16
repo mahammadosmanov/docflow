@@ -7,8 +7,10 @@ import 'core/auth/auth_service.dart';
 import 'core/cloud/cloud_history.dart' show supabaseKey, supabaseUrl;
 import 'core/ipc/sidecar_client.dart';
 import 'core/l10n/strings.dart';
+import 'core/settings/app_prefs.dart';
 import 'core/settings/settings_store.dart';
 import 'ui/shell/auth_gate.dart';
+import 'ui/theme/app_theme.dart';
 
 // Dev fallback yollari (bu makine). Paketlenmis derlemede kullanilmaz —
 // orada sidecar app exe'sinin yaninda bundle edilir. --dart-define ile ezilebilir.
@@ -60,6 +62,7 @@ _Launch _resolveSidecar() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await SettingsStore.load();
+  final prefs = AppPrefs(settings);
   final auth = AuthService(url: supabaseUrl, key: supabaseKey, settings: settings);
   await auth.restore(); // diskteki oturumu geri yukle (varsa)
   final l = _resolveSidecar();
@@ -69,7 +72,7 @@ Future<void> main() async {
     workingDir: l.workingDir,
     environment: l.environment,
   );
-  runApp(DocFlowApp(client: client, settings: settings, auth: auth));
+  runApp(DocFlowApp(client: client, settings: settings, auth: auth, prefs: prefs));
 }
 
 class DocFlowApp extends StatelessWidget {
@@ -78,38 +81,59 @@ class DocFlowApp extends StatelessWidget {
     required this.client,
     required this.settings,
     required this.auth,
+    required this.prefs,
   });
 
   final SidecarClient client;
   final SettingsStore settings;
   final AuthService auth;
+  final AppPrefs prefs;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      onGenerateTitle: (ctx) => Strings.of(ctx).t('app.title'),
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF3B5BDB),
-        visualDensity: VisualDensity.comfortable,
-      ),
-      localizationsDelegates: const [
-        StringsDelegate(),
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: Strings.supported,
-      localeResolutionCallback: (device, supported) {
-        if (device != null) {
-          for (final l in supported) {
-            if (l.languageCode == device.languageCode) return l;
+    // prefs bir ChangeNotifier: dil/tema/font degisince tum agac yeniden kurulur.
+    return ListenableBuilder(
+      listenable: prefs,
+      builder: (context, _) => MaterialApp(
+        onGenerateTitle: (ctx) => Strings.of(ctx).t('app.title'),
+        debugShowCheckedModeBanner: false,
+        themeMode: prefs.themeMode,
+        theme: AppTheme.build(
+          brightness: Brightness.light,
+          font: prefs.font,
+          fontScale: prefs.fontScale,
+          compact: prefs.compact,
+        ),
+        darkTheme: AppTheme.build(
+          brightness: Brightness.dark,
+          font: prefs.font,
+          fontScale: prefs.fontScale,
+          compact: prefs.compact,
+        ),
+        localizationsDelegates: const [
+          StringsDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: Strings.supported,
+        // Ayarlardan secilen dil sistem dilini EZER; null ise sistem dili.
+        locale: prefs.locale,
+        localeResolutionCallback: (device, supported) {
+          if (device != null) {
+            for (final l in supported) {
+              if (l.languageCode == device.languageCode) return l;
+            }
           }
-        }
-        return const Locale('en');
-      },
-      home: AuthGate(auth: auth, client: client, settings: settings),
+          return const Locale('en');
+        },
+        home: AuthGate(
+          auth: auth,
+          client: client,
+          settings: settings,
+          prefs: prefs,
+        ),
+      ),
     );
   }
 }

@@ -7,7 +7,10 @@ import 'dart:io';
 import 'package:docflow/core/auth/auth_service.dart';
 import 'package:docflow/core/l10n/strings.dart';
 import 'package:docflow/core/operations/models.dart';
+import 'package:docflow/core/settings/app_prefs.dart';
 import 'package:docflow/core/settings/settings_store.dart';
+import 'package:docflow/ui/theme/app_theme.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -163,5 +166,142 @@ void main() {
     final u = AppUser.fromJson({'id': 'x', 'email': 'e@x.com'});
     expect(u.allowed, isFalse);
     expect(u.isAdmin, isFalse);
+  });
+
+  // Kullanicinin istegi: MONOKROM. Bunu yorumla degil, olcerek koru — ileride
+  // biri "su uyariyi kirmizi yapalim" derse test patlar.
+  for (final brightness in [Brightness.light, Brightness.dark]) {
+    test('tema (${brightness.name}) tamamen gri: her renkte R==G==B', () {
+      final cs = AppTheme.build(
+        brightness: brightness,
+        font: AppFont.system,
+        fontScale: 1.0,
+        compact: false,
+      ).colorScheme;
+
+      final colors = <String, Color>{
+        'primary': cs.primary,
+        'onPrimary': cs.onPrimary,
+        'primaryContainer': cs.primaryContainer,
+        'secondary': cs.secondary,
+        'surface': cs.surface,
+        'onSurface': cs.onSurface,
+        'onSurfaceVariant': cs.onSurfaceVariant,
+        'surfaceContainer': cs.surfaceContainer,
+        'surfaceContainerHigh': cs.surfaceContainerHigh,
+        'error': cs.error,
+        'onError': cs.onError,
+        'errorContainer': cs.errorContainer,
+        'outline': cs.outline,
+        'outlineVariant': cs.outlineVariant,
+        'inverseSurface': cs.inverseSurface,
+      };
+
+      colors.forEach((name, c) {
+        expect(c.r, closeTo(c.g, 0.001), reason: '$name gri degil (r!=g)');
+        expect(c.g, closeTo(c.b, 0.001), reason: '$name gri degil (g!=b)');
+      });
+    });
+  }
+
+  test('tema: metin ile zemin arasinda gercek kontrast var', () {
+    for (final b in [Brightness.light, Brightness.dark]) {
+      final cs = AppTheme.build(
+        brightness: b,
+        font: AppFont.system,
+        fontScale: 1.0,
+        compact: false,
+      ).colorScheme;
+      // Monokromda okunabilirligin TEK guvencesi bu fark; kaybolursa ekran okunmaz.
+      final diff = (cs.onSurface.computeLuminance() - cs.surface.computeLuminance()).abs();
+      expect(diff, greaterThan(0.5), reason: '${b.name}: kontrast yetersiz');
+    }
+  });
+
+  test('Severity: her seviye FARKLI ikon — anlam renkte degil sekilde', () {
+    final icons = Severity.values.map((s) => s.icon).toSet();
+    expect(icons.length, Severity.values.length);
+    expect(Severity.warn.emphasized, isTrue);
+    expect(Severity.danger.emphasized, isTrue);
+    expect(Severity.info.emphasized, isFalse);
+  });
+
+  test('AppFont: sistem disi secenekler fallback zinciri tasir', () {
+    for (final f in AppFont.values.where((f) => f != AppFont.system)) {
+      expect(f.family, isNotNull);
+      expect(f.fallback, isNotEmpty, reason: '${f.id}: her PC\'de bulunmayabilir');
+    }
+    // Sistem varsayilani: aile YOK -> Flutter platform fontunu secer.
+    expect(AppFont.system.family, isNull);
+  });
+
+  test('AppPrefs: diske yazar, geri okur, olcegi sinirlar', () async {
+    final tmp = await Directory.systemTemp.createTemp('docflow_prefs');
+    final f = File('${tmp.path}/settings.json');
+    try {
+      final p1 = AppPrefs(await SettingsStore.load(file: f));
+      expect(p1.themeMode, ThemeMode.system);
+      expect(p1.localeCode, isNull);
+      expect(p1.fontScale, 1.0);
+
+      await p1.setThemeMode(ThemeMode.dark);
+      await p1.setLocale('az');
+      await p1.setFont(AppFont.mono);
+      await p1.setCompact(true);
+      await p1.setFontScale(9.0); // sacma deger -> sinirlanmali
+
+      expect(p1.fontScale, AppPrefs.maxScale);
+
+      final p2 = AppPrefs(await SettingsStore.load(file: f)); // yeniden okundu
+      expect(p2.themeMode, ThemeMode.dark);
+      expect(p2.localeCode, 'az');
+      expect(p2.locale, const Locale('az'));
+      expect(p2.font, AppFont.mono);
+      expect(p2.compact, isTrue);
+      expect(p2.fontScale, AppPrefs.maxScale);
+
+      await p2.reset();
+      final p3 = AppPrefs(await SettingsStore.load(file: f));
+      expect(p3.themeMode, ThemeMode.system);
+      expect(p3.localeCode, isNull);
+      expect(p3.font, AppFont.system);
+      expect(p3.fontScale, 1.0);
+    } finally {
+      await tmp.delete(recursive: true);
+    }
+  });
+
+  test('AppPrefs: bozuk/bilinmeyen degerler cokme degil varsayilan verir', () async {
+    final tmp = await Directory.systemTemp.createTemp('docflow_prefs_bad');
+    final f = File('${tmp.path}/settings.json');
+    try {
+      await f.writeAsString(json.encode({
+        'prefs': {'theme': 'neon', 'font': 'comic', 'fontScale': 'big', 'locale': 42},
+      }));
+      final p = AppPrefs(await SettingsStore.load(file: f));
+      expect(p.themeMode, ThemeMode.system);
+      expect(p.font, AppFont.system);
+      expect(p.fontScale, 1.0);
+      expect(p.localeCode, isNull);
+    } finally {
+      await tmp.delete(recursive: true);
+    }
+  });
+
+  test('AppPrefs degisiklikte dinleyicileri uyarir (canli tema/dil)', () async {
+    final tmp = await Directory.systemTemp.createTemp('docflow_prefs_notify');
+    try {
+      final p = AppPrefs(await SettingsStore.load(file: File('${tmp.path}/s.json')));
+      var n = 0;
+      p.addListener(() => n++);
+      await p.setThemeMode(ThemeMode.dark);
+      expect(n, 1);
+      await p.setThemeMode(ThemeMode.dark); // ayni deger -> gereksiz rebuild yok
+      expect(n, 1);
+      await p.setFontScale(1.2);
+      expect(n, 2);
+    } finally {
+      await tmp.delete(recursive: true);
+    }
   });
 }

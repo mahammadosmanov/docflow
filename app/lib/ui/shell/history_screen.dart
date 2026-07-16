@@ -5,6 +5,7 @@ import '../../core/auth/auth_service.dart';
 import '../../core/cloud/cloud_history.dart';
 import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
+import '../theme/responsive.dart';
 
 /// Gecmis: yapilan her apply/undo bir journal kaydidir.
 /// Kaynak: bulut (Supabase) varsa oradan — makineler arasi gorunur; yoksa/hata
@@ -159,75 +160,141 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final s = Strings.of(context);
+    final online = _cloud.enabled && !_cloudFailed;
     return Scaffold(
       appBar: AppBar(
         title: Text(s.t('history.title')),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Icon(
-              _cloud.enabled && !_cloudFailed ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-              size: 20,
-              color: _cloud.enabled && !_cloudFailed ? Colors.green : Colors.grey,
+          // Kayitlar buluttan mi yerelden mi geliyor? Kullanici bilsin.
+          Tooltip(
+            message: s.t(online ? 'history.sourceCloud' : 'history.sourceLocal'),
+            child: Chip(
+              avatar: Icon(
+                  online ? Icons.cloud_outlined : Icons.sd_storage_outlined,
+                  size: 14),
+              label: Text(s.t(online ? 'history.cloud' : 'history.local')),
             ),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: s.t('action.retry'),
+            onPressed: _busy ? null : _reload,
+          ),
+          const SizedBox(width: 4),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Stack(
-            children: [
-              FutureBuilder<List<_Row>>(
-                future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snap.hasError) return Center(child: Text(snap.error.toString()));
-                  final rows = snap.data ?? [];
-                  if (rows.isEmpty) return Center(child: Text(s.t('history.empty')));
-                  return ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _tile(s, rows[i]),
-                  );
-                },
-              ),
-              if (_busy)
-                const Positioned.fill(
-                  child: ColoredBox(
-                    color: Color(0x22000000),
-                    child: Center(child: CircularProgressIndicator()),
+      body: Stack(
+        children: [
+          FutureBuilder<List<_Row>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return EmptyState(
+                  icon: Icons.error_outline,
+                  title: s.t('history.title'),
+                  message: snap.error.toString(),
+                  action: FilledButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(s.t('action.retry')),
+                    onPressed: _reload,
                   ),
-                ),
-            ],
+                );
+              }
+              final rows = snap.data ?? [];
+              if (rows.isEmpty) {
+                return EmptyState(
+                  icon: Icons.history_toggle_off,
+                  title: s.t('history.empty'),
+                  message: s.t('history.empty.help'),
+                );
+              }
+              return ListView(
+                children: [
+                  Pane(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < rows.length; i++) ...[
+                          _tile(s, rows[i]),
+                          if (i < rows.length - 1) const SizedBox(height: 8),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-        ),
+          if (_busy)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.1),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
       ),
     );
   }
 
   Widget _tile(Strings s, _Row e) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      child: ListTile(
-        leading: e.fromCloud
-            ? const Icon(Icons.cloud_outlined, size: 18)
-            : const Icon(Icons.sd_storage_outlined, size: 18),
-        title: Text(_fmt(e.when), style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('${e.opId}  ·  ${s.count('history.moves', e.moves)}'
-            '${e.undone ? '  ·  ↩' : ''}'),
-        trailing: OutlinedButton.icon(
-          icon: const Icon(Icons.undo, size: 18),
-          label: Text(s.t('action.undo')),
-          onPressed: _busy || e.undone ? null : () => _undo(e),
+    final t = Theme.of(context);
+    final compact = FormFactor.of(context).isCompact;
+    final undoBtn = OutlinedButton.icon(
+      icon: const Icon(Icons.undo, size: 16),
+      label: Text(s.t(e.undone ? 'history.undone' : 'action.undo')),
+      onPressed: _busy || e.undone ? null : () => _undo(e),
+    );
+
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(e.fromCloud ? Icons.cloud_outlined : Icons.sd_storage_outlined,
+                size: 16),
+            const SizedBox(width: 8),
+            Text(_fmt(e.when),
+                style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            if (e.undone) ...[
+              const SizedBox(width: 8),
+              Chip(label: Text(s.t('history.undone'))),
+            ],
+          ],
         ),
+        const SizedBox(height: 3),
+        Padding(
+          padding: const EdgeInsets.only(left: 24),
+          child: Text('${e.opId}  ·  ${s.count('history.moves', e.moves)}',
+              style: t.textTheme.bodySmall
+                  ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+        ),
+      ],
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  info,
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerRight, child: undoBtn),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: info),
+                  const SizedBox(width: 12),
+                  undoBtn,
+                ],
+              ),
       ),
     );
   }

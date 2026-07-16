@@ -37,7 +37,10 @@ Bunlar tartışmaya açık değil. Bir tanesini bile ihlal eden PR reddedilir.
    Log → `stderr`. Bu, hata ayıklarken en çok zaman kaybettiren tuzak.
 4. **Kullanıcıya görünen hiçbir string koda gömülmez.** Her metin bir i18n anahtarıdır ve
    **dört ARB dosyasının hepsinde** karşılığı olmak zorunda: `tr`, `en`, `ru`, `az`.
-   Eksik çeviri = build hatası (`l10n.yaml` içinde `untranslated-messages-file`).
+   Anahtarlar noktalı (`op.rfi.title`), `gen-l10n` bunu reddediyor → ARB'ler **runtime**
+   yükleniyor (`core/l10n/strings.dart`) ve `l10n.yaml` devre dışı. Yani build seni
+   yakalamaz; **anahtar eşitliğini `flutter test` içindeki i18n testi zorlar**. Çözülemeyen
+   anahtar ekranda anahtarın kendisi olarak görünür (sessiz boşluk yok).
 5. **`az` ve `tr` çevirilerini paylaştırma.** Yakınlar, aynı değiller.
 6. **Her Operation için elle form yazma.** UI, `ParamSchema`'dan üretilir. Yeni bir operation
    eklerken `lib/ui/` altında hiçbir dosyaya dokunmuyor olman lazım. Dokunuyorsan şema
@@ -47,6 +50,17 @@ Bunlar tartışmaya açık değil. Bir tanesini bile ihlal eden PR reddedilir.
    `"İ".lower()` → `i̇` (i + U+0307 combining dot) dosya adı karşılaştırmasını sessizce bozar.
 8. **Yeni Operation = tek Python dosyası + 4 ARB girdisi.** Başka hiçbir yere dokunma.
    Dokunman gerekiyorsa mimari bozulmuş, önce onu konuş.
+9. **Arayüz monokrom.** Palet tek gri skalasıdır (`ui/theme/app_theme.dart`) ve her tonda
+   `R == G == B`. "Neredeyse gri" paletler (Tailwind `zinc` gibi) maviye çalar — bu gerçekten
+   oldu, testi yazana kadar fark edilmedi. `tema tamamen gri` testi bunu ölçer.
+10. **Anlamı renk taşımaz, ikon/kenarlık taşır.** Monokromda hue yok: uyarı ≠ hata ayrımı
+   `Severity` ikonuyla, kalın çerçeveyle ve metinle yapılır. Bu bir estetik tercih değil —
+   uygulama kullanıcının belgelerini taşıyor, "kırmızıya boyayıp" geçmek yok. Yan fayda:
+   renk körü kullanıcı için de aynı derecede okunur.
+11. **Ekranlarda çıplak sabit yok.** Renk → `Theme.of(context).colorScheme`; yazı boyutu →
+   `textTheme` (kullanıcı ölçeği ayarlardan gelir, `fontSize: 13` yazarsan onu ezer);
+   genişlik/boşluk → `ui/theme/responsive.dart` (`FormFactor`, `Pane`). Dar pencere de
+   desteklenen bir durumdur, 1366×768 ofis dizüstüyle 4K masaüstü aynı kodu paylaşır.
 
 ---
 
