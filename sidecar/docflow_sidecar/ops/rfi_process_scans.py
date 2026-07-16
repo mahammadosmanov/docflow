@@ -52,7 +52,13 @@ class ProcessScans(Operation):
         copy_mode = bool(params.get("keep_original"))
 
         plan = Plan(op_id=self.id)
-        pdfs = sorted(source.glob("*.pdf"))
+        # Uzanti buyuk/kucuk harf duyarsiz: glob("*.pdf") "SCAN.PDF"i KACIRIR
+        # (Python fnmatch, dosya sistemi case-insensitive olsa bile case-sensitive).
+        # Gizli/nokta dosyalari (._foo.pdf gibi macOS AppleDouble) atla.
+        pdfs = sorted(
+            p for p in source.iterdir()
+            if p.is_file() and p.suffix.lower() == ".pdf" and not p.name.startswith(".")
+        )
 
         # Ayni RFI birden fazla dosyada -> revizyon. Klasor rev'siz, dosya rev'li.
         # Rev OCR'dan GELMIYOR (bu kalitede okunamiyor, bkz. CLAUDE.md) —
