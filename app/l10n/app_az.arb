@@ -116,5 +116,18 @@
   "review.trashHint": "Silinən fayllar həmişəlik yox, bərpa oluna bilən zibil qutusuna gedir.",
   "step.form": "Tənzimləmələr",
   "step.preview": "Öncədən bax",
-  "step.apply": "Tətbiq et"
+  "step.apply": "Tətbiq et",
+  "action.save": "Yadda saxla",
+  "auth.username": "İstifadəçi adı",
+  "auth.usernameHelp": "3-24 simvol: hərf, rəqəm, nöqtə, tire, alt xətt",
+  "auth.identifier": "İstifadəçi adı və ya e-poçt",
+  "auth.identifierHelp": "Hər ikisi işləyir",
+  "auth.subtitleUp": "Başlamaq üçün hesab yaradın",
+  "auth.err.credentials": "İstifadəçi adı/e-poçt və ya şifrə yanlışdır.",
+  "auth.err.usernameTaken": "Bu istifadəçi adı tutulub.",
+  "auth.err.usernameInvalid": "İstifadəçi adı 3-24 simvol olmalıdır: hərf, rəqəm, nöqtə, tire, alt xətt.",
+  "auth.err.emailTaken": "Bu e-poçt ilə hesab artıq mövcuddur.",
+  "prefs.account": "Hesab",
+  "prefs.account.emailFixed": "dəyişdirilə bilməz",
+  "prefs.account.saved": "Yadda saxlanıldı"
 }

@@ -152,8 +152,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         // Erisim durumu: renk degil, ikon + metin.
         Icon(u.allowed ? Icons.check_circle_outline : Icons.block, size: 18),
         const SizedBox(width: 10),
+        // Kullanici adi varsa onu goster (e-posta altta); yoksa e-postaya dus.
         Flexible(
-          child: Text(u.email,
+          child: Text(u.display,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -173,6 +174,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       padding: const EdgeInsets.only(left: 28, top: 2),
       child: Text(
         [
+          // Kullanici adi gosteriliyorsa e-postayi burada goster — admin kimin
+          // kim oldugunu ayirt edebilmeli.
+          if (u.username != null && u.username!.isNotEmpty) u.email,
           u.createdAt.split('T').first,
           if (!u.allowed) s.t('admin.noAccess'),
         ].join('  ·  '),

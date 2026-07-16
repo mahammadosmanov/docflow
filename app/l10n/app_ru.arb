@@ -116,5 +116,18 @@
   "review.trashHint": "Удалённые файлы попадают в восстановимую корзину, а не удаляются навсегда.",
   "step.form": "Настройки",
   "step.preview": "Просмотр",
-  "step.apply": "Применить"
+  "step.apply": "Применить",
+  "action.save": "Сохранить",
+  "auth.username": "Имя пользователя",
+  "auth.usernameHelp": "3-24 символа: буквы, цифры, точка, дефис, подчёркивание",
+  "auth.identifier": "Имя пользователя или эл. почта",
+  "auth.identifierHelp": "Подходит любое",
+  "auth.subtitleUp": "Создайте аккаунт, чтобы начать",
+  "auth.err.credentials": "Неверное имя пользователя/почта или пароль.",
+  "auth.err.usernameTaken": "Это имя пользователя занято.",
+  "auth.err.usernameInvalid": "Имя пользователя: 3-24 символа — буквы, цифры, точка, дефис, подчёркивание.",
+  "auth.err.emailTaken": "Аккаунт с этой почтой уже существует.",
+  "prefs.account": "Аккаунт",
+  "prefs.account.emailFixed": "нельзя изменить",
+  "prefs.account.saved": "Сохранено"
 }

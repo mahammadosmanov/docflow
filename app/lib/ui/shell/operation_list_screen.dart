@@ -55,19 +55,20 @@ class _OperationListScreenState extends State<OperationListScreen> {
     final s = Strings.of(context);
     final t = Theme.of(context);
     final ff = FormFactor.of(context);
-    final email = widget.auth.session?.email ?? '';
+    // Kullanici adi varsa onu goster; yoksa e-postaya dus.
+    final who = widget.auth.me?.display ?? widget.auth.session?.email ?? '';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(s.t('app.title')),
         actions: [
-          // Dar pencerede e-posta rozetini gizle — aksiyon ikonlari onceliklidir.
-          if (!ff.isCompact && email.isNotEmpty)
+          // Dar pencerede kimlik rozetini gizle — aksiyon ikonlari onceliklidir.
+          if (!ff.isCompact && who.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Chip(
                 avatar: const Icon(Icons.person_outline, size: 14),
-                label: Text(email),
+                label: Text(who),
               ),
             ),
           // Admin butonu sadece admin'e gorunur; sunucuda RLS zaten zorlar.
@@ -86,11 +87,12 @@ class _OperationListScreenState extends State<OperationListScreen> {
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: s.t('prefs.title'),
-            onPressed: () => _push(SettingsScreen(prefs: widget.prefs)),
+            onPressed: () =>
+                _push(SettingsScreen(prefs: widget.prefs, auth: widget.auth)),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: '${s.t('auth.signOut')} — $email',
+            tooltip: '${s.t('auth.signOut')} — $who',
             // AuthGate dinliyor: signOut -> kapi Login'e doner.
             onPressed: widget.auth.signOut,
           ),

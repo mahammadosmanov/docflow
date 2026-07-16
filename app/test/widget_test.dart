@@ -166,6 +166,35 @@ void main() {
     final u = AppUser.fromJson({'id': 'x', 'email': 'e@x.com'});
     expect(u.allowed, isFalse);
     expect(u.isAdmin, isFalse);
+    expect(u.username, isNull);
+  });
+
+  test('AppUser.display: kullanici adi varsa o, yoksa e-posta', () {
+    final withName =
+        AppUser.fromJson({'id': 'x', 'email': 'e@x.com', 'username': 'ali_k'});
+    expect(withName.display, 'ali_k');
+    // username null VEYA bos -> e-postaya dus (bos string ekranda bosluk birakirdi)
+    expect(AppUser.fromJson({'id': 'x', 'email': 'e@x.com'}).display, 'e@x.com');
+    expect(
+      AppUser.fromJson({'id': 'x', 'email': 'e@x.com', 'username': ''}).display,
+      'e@x.com',
+    );
+  });
+
+  // Bu kural sunucudaki public.username_ok ile AYNI olmali; ikisi ayrilirsa
+  // istemci kabul edip sunucu reddeder ve kullanici anlamsiz hata gorur.
+  test('UsernameRule: sunucu kuralini birebir yansitir', () {
+    expect(UsernameRule.ok('ali'), isTrue); // min 3
+    expect(UsernameRule.ok('ali_k.2-x'), isTrue);
+    expect(UsernameRule.ok('a' * 24), isTrue); // max 24
+    expect(UsernameRule.ok('  ali  '), isTrue); // trim edilir
+
+    expect(UsernameRule.ok('al'), isFalse); // kisa
+    expect(UsernameRule.ok('a' * 25), isFalse); // uzun
+    expect(UsernameRule.ok(''), isFalse);
+    expect(UsernameRule.ok('ali k'), isFalse); // bosluk
+    expect(UsernameRule.ok('ali@k'), isFalse); // '@' YASAK: yoksa giriste
+    expect(UsernameRule.ok('alı'), isFalse); // ASCII disi (Turkce 'ı')
   });
 
   // Kullanicinin istegi: MONOKROM. Bunu yorumla degil, olcerek koru — ileride

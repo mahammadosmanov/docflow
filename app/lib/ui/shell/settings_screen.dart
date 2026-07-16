@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/settings/app_prefs.dart';
 import '../theme/responsive.dart';
 
-/// Ayarlar: dil, tema, yazi tipi, yazi boyutu, yogunluk.
+/// Ayarlar: hesap, dil, tema, yazi tipi, yazi boyutu, yogunluk.
 ///
-/// Her degisiklik ANINDA uygulanir ve diske yazilir — "Kaydet" butonu yok,
-/// kullanici sonucu canli gorur. Geri donus icin "Varsayilanlara don" var.
+/// Tercihler ANINDA uygulanir ve diske yazilir — "Kaydet" butonu yok, kullanici
+/// sonucu canli gorur. Kullanici adi istisna: sunucuya gider, dogrulanir ve
+/// reddedilebilir; o yuzden acik bir Kaydet butonu var.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.prefs});
+  const SettingsScreen({super.key, required this.prefs, this.auth});
 
   final AppPrefs prefs;
+
+  /// Giris ekranindan acilinca null — o an hesap yok, Hesap bolumu gizlenir.
+  final AuthService? auth;
 
   static const _locales = <String?, String>{
     null: 'prefs.lang.system',
@@ -35,6 +40,11 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (auth != null && auth!.signedIn)
+                    Section(
+                      title: s.t('prefs.account'),
+                      child: _AccountSection(auth: auth!),
+                    ),
                   Section(
                     title: s.t('prefs.language'),
                     child: RadioGroup<String?>(
@@ -131,6 +141,135 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Hesap: kullanici adini degistir; e-posta salt-okunur.
+///
+/// E-posta neden degistirilemiyor: degistirmek dogrulama akisi (eski+yeni adrese
+/// mail) gerektirir ve yanlis yapilirsa hesabi erisilmez birakir. Ihtiyac
+/// olursa ayri is.
+class _AccountSection extends StatefulWidget {
+  const _AccountSection({required this.auth});
+
+  final AuthService auth;
+
+  @override
+  State<_AccountSection> createState() => _AccountSectionState();
+}
+
+class _AccountSectionState extends State<_AccountSection> {
+  late final TextEditingController _c =
+      TextEditingController(text: widget.auth.me?.username ?? '');
+  bool _busy = false;
+  String? _error;
+  bool _saved = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  bool get _dirty => _c.text.trim() != (widget.auth.me?.username ?? '');
+  bool get _canSave => _dirty && UsernameRule.ok(_c.text) && !_busy;
+
+  Future<void> _save() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _saved = false;
+    });
+    try {
+      await widget.auth.setUsername(_c.text);
+      if (mounted) setState(() => _saved = true);
+    } catch (e) {
+      if (!mounted) return; // await sonrasi context kullanmadan ONCE kontrol et
+      final raw = e.toString();
+      final s = Strings.of(context);
+      setState(() => _error = raw.contains('username_taken')
+          ? s.t('auth.err.usernameTaken')
+          : raw.contains('username_invalid')
+              ? s.t('auth.err.usernameInvalid')
+              : raw);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Strings.of(context);
+    final t = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.alternate_email, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(widget.auth.session?.email ?? '',
+                    style: t.textTheme.bodySmall
+                        ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+              ),
+              Chip(label: Text(s.t('prefs.account.emailFixed'))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _c,
+            enabled: !_busy,
+            decoration: InputDecoration(
+              labelText: s.t('auth.username'),
+              helperText: s.t('auth.usernameHelp'),
+              prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+            ),
+            onChanged: (_) => setState(() => _saved = false),
+            onSubmitted: (_) => _canSave ? _save() : null,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.error_outline, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(_error!,
+                      style: t.textTheme.bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (_saved && !_dirty)
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline, size: 16),
+                    const SizedBox(width: 6),
+                    Text(s.t('prefs.account.saved'), style: t.textTheme.bodySmall),
+                  ],
+                ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _canSave ? _save : null,
+                child: _busy
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(s.t('action.save')),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

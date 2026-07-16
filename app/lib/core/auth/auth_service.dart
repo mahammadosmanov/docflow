@@ -77,6 +77,7 @@ class AppUser {
     required this.allowed,
     required this.isAdmin,
     required this.createdAt,
+    this.username,
   });
 
   final String id;
@@ -85,13 +86,33 @@ class AppUser {
   final bool isAdmin;
   final String createdAt;
 
+  /// Bos olabilir: eski kayitlar ve signup yarisini kaybedenler (bkz. SQL).
+  final String? username;
+
+  /// Ekranda gosterilecek ad — kullanici adi varsa o, yoksa e-posta.
+  String get display => (username != null && username!.isNotEmpty) ? username! : email;
+
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
         id: (j['id'] as String?) ?? '',
         email: (j['email'] as String?) ?? '',
         allowed: (j['allowed'] as bool?) ?? false,
         isAdmin: (j['is_admin'] as bool?) ?? false,
         createdAt: (j['created_at'] as String?) ?? '',
+        username: j['username'] as String?,
       );
+}
+
+/// Kullanici adi kurallari — sunucudaki public.username_ok ile AYNI olmali.
+/// Buradaki kontrol bir kolayliktir; zorlayan sunucudur.
+abstract final class UsernameRule {
+  static const int minLength = 3;
+  static const int maxLength = 24;
+  static final RegExp charset = RegExp(r'^[A-Za-z0-9._-]+$');
+
+  static bool ok(String s) {
+    final v = s.trim();
+    return v.length >= minLength && v.length <= maxLength && charset.hasMatch(v);
+  }
 }
 
 class AuthException implements Exception {
@@ -152,18 +173,79 @@ class AuthService extends ChangeNotifier {
     return 'HTTP $code';
   }
 
-  Future<void> signUp(String email, String password) async {
+  /// Postgres fonksiyonu cagir (PostgREST /rpc). Donus: cozulmus JSON.
+  Future<dynamic> _rpc(
+    String fn,
+    Map<String, dynamic> args, {
+    bool authed = true,
+  }) async {
+    final (code, body) = await restSend(
+      'POST',
+      Uri.parse('$url/rest/v1/rpc/$fn'),
+      headers: authed ? _authHeaders : _anonHeaders,
+      body: args,
+    );
+    if (code < 200 || code >= 300) throw AuthException(_errorFrom(body, code));
+    return body.isEmpty ? null : json.decode(body);
+  }
+
+  /// Kayit ekrani icin: bu kullanici adi alinabilir mi?
+  /// Ag hatasinda TRUE doner — kullaniciyi bos yere engelleme; son sozu
+  /// sunucudaki unique index soyler.
+  Future<bool> usernameAvailable(String username) async {
+    if (!UsernameRule.ok(username)) return false;
+    try {
+      final r = await _rpc('username_available', {'p_username': username.trim()},
+          authed: false);
+      return r == true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> signUp(String email, String password, String username) async {
     final (code, body) = await restSend(
       'POST',
       Uri.parse('$url/auth/v1/signup'),
       headers: _anonHeaders,
-      body: {'email': email, 'password': password},
+      // data -> raw_user_meta_data; handle_new_user trigger'i buradan okur.
+      body: {
+        'email': email,
+        'password': password,
+        'data': {'username': username.trim()},
+      },
     );
     if (code < 200 || code >= 300) throw AuthException(_errorFrom(body, code));
     // E-posta dogrulama aciksa oturum donmez — kullanici yine de giris denemeli.
   }
 
-  Future<void> signIn(String email, String password) async {
+  /// E-posta VEYA kullanici adi ile giris.
+  ///
+  /// Supabase e-posta ile dogrular; kullanici adi girildiyse once sunucuda
+  /// e-postaya cevrilir (email_for_login parolayi da dogrular — bkz. SQL).
+  /// Cozulemezse "kullanici adi yok" ile "parola yanlis" AYNI hatayi verir:
+  /// disaridan hangi adlarin var oldugu anlasilmasin.
+  Future<void> signIn(String identifier, String password) async {
+    final id = identifier.trim();
+    var email = id;
+
+    if (!id.contains('@')) {
+      dynamic resolved;
+      try {
+        resolved = await _rpc('email_for_login',
+            {'p_username': id, 'p_password': password},
+            authed: false);
+      } on AuthException {
+        // Fonksiyon yoksa/bozuksa (SQL calistirilmamis olabilir) e-posta ile
+        // giris hala calisir; kullaniciya anlamli mesaj ver.
+        throw AuthException('invalid_credentials');
+      }
+      if (resolved is! String || resolved.isEmpty) {
+        throw AuthException('invalid_credentials');
+      }
+      email = resolved;
+    }
+
     final (code, body) = await restSend(
       'POST',
       Uri.parse('$url/auth/v1/token?grant_type=password'),
@@ -176,6 +258,13 @@ class AuthService extends ChangeNotifier {
     await settings.saveSection('session', _session!.toJson());
     await loadMe();
     notifyListeners();
+  }
+
+  /// Kendi kullanici adini degistir. Sunucu dogrular (uzunluk/karakter/benzersiz).
+  Future<void> setUsername(String username) async {
+    await validToken();
+    await _rpc('set_username', {'p_username': username.trim()});
+    await loadMe(); // _me tazelensin -> UI hemen yeni adi gosterir
   }
 
   Future<bool> _refresh() async {

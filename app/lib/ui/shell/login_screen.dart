@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
@@ -6,8 +8,12 @@ import '../../core/settings/app_prefs.dart';
 import '../theme/responsive.dart';
 import 'settings_screen.dart';
 
+enum _Mode { signIn, signUp }
+
 /// Giris / kayit. Parola SADECE kullanici tarafindan girilir ve diske yazilmaz;
 /// yalnizca donen oturum token'i saklanir.
+///
+/// Giriste e-posta VEYA kullanici adi kabul edilir (cozumleme AuthService'te).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.auth, required this.prefs});
 
@@ -19,21 +25,60 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController();
+  final _identifier = TextEditingController(); // giris: e-posta VEYA kullanici adi
+  final _email = TextEditingController(); // kayit: e-posta
+  final _username = TextEditingController(); // kayit: kullanici adi
   final _password = TextEditingController();
+
+  _Mode _mode = _Mode.signIn;
   bool _busy = false;
   bool _obscure = true;
   String? _error;
   String? _info;
 
+  // Kullanici adi musaitlik kontrolu (yazarken, gecikmeli).
+  Timer? _debounce;
+  bool _checking = false;
+  bool? _available;
+
   @override
   void dispose() {
+    _debounce?.cancel();
+    _identifier.dispose();
     _email.dispose();
+    _username.dispose();
     _password.dispose();
     super.dispose();
   }
 
-  bool get _valid => _email.text.trim().contains('@') && _password.text.length >= 6;
+  bool get _passwordOk => _password.text.length >= 6;
+
+  bool get _valid => switch (_mode) {
+        _Mode.signIn => _identifier.text.trim().isNotEmpty && _passwordOk,
+        _Mode.signUp => _email.text.trim().contains('@') &&
+            UsernameRule.ok(_username.text) &&
+            _available != false &&
+            _passwordOk,
+      };
+
+  void _onUsernameChanged(String v) {
+    setState(() => _available = null);
+    _debounce?.cancel();
+    if (!UsernameRule.ok(v)) return;
+    // Her tusa basista sunucuya gitme; kullanici duraklayinca sor.
+    _debounce = Timer(const Duration(milliseconds: 450), () async {
+      setState(() => _checking = true);
+      final ok = await widget.auth.usernameAvailable(v);
+      if (mounted && _username.text == v) {
+        setState(() {
+          _available = ok;
+          _checking = false;
+        });
+      } else if (mounted) {
+        setState(() => _checking = false);
+      }
+    });
+  }
 
   Future<void> _run(Future<void> Function() action, {String? info}) async {
     setState(() {
@@ -48,17 +93,43 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _info = info);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = _message(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  /// Sunucu/istisna mesajini i18n anahtarina cevir; bilinmeyeni ham goster.
+  String _message(Object e) {
+    final raw = e.toString();
+    final s = Strings.of(context);
+    if (raw.contains('invalid_credentials') || raw.contains('Invalid login')) {
+      return s.t('auth.err.credentials');
+    }
+    if (raw.contains('username_taken')) return s.t('auth.err.usernameTaken');
+    if (raw.contains('username_invalid')) return s.t('auth.err.usernameInvalid');
+    if (raw.contains('User already registered')) return s.t('auth.err.emailTaken');
+    return raw;
+  }
+
   void _submit() {
-    if (_valid && !_busy) {
-      _run(() => widget.auth.signIn(_email.text.trim(), _password.text));
+    if (!_valid || _busy) return;
+    if (_mode == _Mode.signIn) {
+      _run(() => widget.auth.signIn(_identifier.text, _password.text));
+    } else {
+      _run(
+        () => widget.auth
+            .signUp(_email.text.trim(), _password.text, _username.text.trim()),
+        info: Strings.of(context).t('auth.signupOk'),
+      );
     }
   }
+
+  void _switchMode(_Mode m) => setState(() {
+        _mode = m;
+        _error = null;
+        _info = null;
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -96,23 +167,75 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: t.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.5)),
                 const SizedBox(height: 6),
-                Text(s.t('auth.subtitle'),
+                Text(s.t(_mode == _Mode.signIn ? 'auth.subtitle' : 'auth.subtitleUp'),
                     textAlign: TextAlign.center,
                     style: t.textTheme.bodySmall
                         ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _email,
-                  autofocus: true,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: s.t('auth.email'),
-                    prefixIcon: const Icon(Icons.alternate_email, size: 18),
-                  ),
-                  onChanged: (_) => setState(() {}),
+                const SizedBox(height: 24),
+                SegmentedButton<_Mode>(
+                  segments: [
+                    ButtonSegment(value: _Mode.signIn, label: Text(s.t('auth.signIn'))),
+                    ButtonSegment(value: _Mode.signUp, label: Text(s.t('auth.signUp'))),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: _busy ? null : (v) => _switchMode(v.first),
                 ),
+                const SizedBox(height: 20),
+                if (_mode == _Mode.signIn)
+                  TextField(
+                    controller: _identifier,
+                    autofocus: true,
+                    enabled: !_busy,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: s.t('auth.identifier'),
+                      helperText: s.t('auth.identifierHelp'),
+                      prefixIcon: const Icon(Icons.person_outline, size: 18),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  )
+                else ...[
+                  TextField(
+                    controller: _email,
+                    autofocus: true,
+                    enabled: !_busy,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: s.t('auth.email'),
+                      prefixIcon: const Icon(Icons.alternate_email, size: 18),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _username,
+                    enabled: !_busy,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: s.t('auth.username'),
+                      helperText: s.t('auth.usernameHelp'),
+                      prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+                      suffixIcon: _UsernameStatus(
+                        checking: _checking,
+                        available: _available,
+                        valid: UsernameRule.ok(_username.text),
+                        empty: _username.text.isEmpty,
+                      ),
+                    ),
+                    onChanged: (v) {
+                      _onUsernameChanged(v);
+                      setState(() {});
+                    },
+                  ),
+                  if (_available == false)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: 4),
+                      child: Text(s.t('auth.err.usernameTaken'),
+                          style: t.textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _password,
@@ -120,10 +243,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   enabled: !_busy,
                   decoration: InputDecoration(
                     labelText: s.t('auth.password'),
+                    helperText: s.t('auth.passwordHint'),
                     prefixIcon: const Icon(Icons.lock_outline, size: 18),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                         size: 18,
                       ),
                       tooltip: s.t(_obscure ? 'auth.show' : 'auth.hide'),
@@ -149,29 +275,44 @@ class _LoginScreenState extends State<LoginScreen> {
                           height: 18,
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(s.t('auth.signIn')),
+                      : Text(s.t(_mode == _Mode.signIn ? 'auth.signIn' : 'auth.signUp')),
                 ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _busy || !_valid
-                      ? null
-                      : () => _run(
-                            () => widget.auth.signUp(_email.text.trim(), _password.text),
-                            info: s.t('auth.signupOk'),
-                          ),
-                  child: Text(s.t('auth.signUp')),
-                ),
-                const SizedBox(height: 4),
-                Text(s.t('auth.passwordHint'),
-                    textAlign: TextAlign.center,
-                    style: t.textTheme.bodySmall
-                        ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// Kullanici adi durumu — monokrom: ikon sekli anlatir, renk degil.
+class _UsernameStatus extends StatelessWidget {
+  const _UsernameStatus({
+    required this.checking,
+    required this.available,
+    required this.valid,
+    required this.empty,
+  });
+
+  final bool checking;
+  final bool? available;
+  final bool valid;
+  final bool empty;
+
+  @override
+  Widget build(BuildContext context) {
+    if (empty) return const SizedBox.shrink();
+    if (checking) {
+      return const Padding(
+        padding: EdgeInsets.all(14),
+        child: SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    if (!valid) return const Icon(Icons.error_outline, size: 18);
+    if (available == true) return const Icon(Icons.check_circle_outline, size: 18);
+    if (available == false) return const Icon(Icons.block, size: 18);
+    return const SizedBox.shrink();
   }
 }
 

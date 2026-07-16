@@ -144,5 +144,18 @@
   "review.trashHint": "Deleted files go to recoverable trash, not permanently removed.",
   "step.form": "Settings",
   "step.preview": "Preview",
-  "step.apply": "Apply"
+  "step.apply": "Apply",
+  "action.save": "Save",
+  "auth.username": "Username",
+  "auth.usernameHelp": "3-24 characters: letters, numbers, dot, dash, underscore",
+  "auth.identifier": "Username or email",
+  "auth.identifierHelp": "Either one works",
+  "auth.subtitleUp": "Create an account to get started",
+  "auth.err.credentials": "Wrong username/email or password.",
+  "auth.err.usernameTaken": "That username is taken.",
+  "auth.err.usernameInvalid": "Username must be 3-24 characters: letters, numbers, dot, dash, underscore.",
+  "auth.err.emailTaken": "An account with this email already exists.",
+  "prefs.account": "Account",
+  "prefs.account.emailFixed": "cannot be changed",
+  "prefs.account.saved": "Saved"
 }

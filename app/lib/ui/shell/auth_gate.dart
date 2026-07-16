@@ -79,12 +79,13 @@ class _AuthGateState extends State<AuthGate> {
       appBar: AppBar(
         title: Text(s.t('app.title')),
         actions: [
-          // Onay beklerken de dil/tema degistirilebilmeli — kilitli kalma.
+          // Onay beklerken de dil/tema/kullanici adi degistirilebilmeli.
+          // (Ozellikle kullanici adi: signup yarisini kaybettiyse buradan duzeltir.)
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: s.t('prefs.title'),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => SettingsScreen(prefs: widget.prefs),
+              builder: (_) => SettingsScreen(prefs: widget.prefs, auth: widget.auth),
             )),
           ),
         ],
@@ -113,7 +114,10 @@ class _AuthGateState extends State<AuthGate> {
                   style: t.textTheme.bodyMedium
                       ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
               const SizedBox(height: 14),
-              Chip(label: Text(widget.auth.session?.email ?? '')),
+              Chip(
+                avatar: const Icon(Icons.person_outline, size: 14),
+                label: Text(widget.auth.me?.display ?? widget.auth.session?.email ?? ''),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 14),
                 _ErrorNote(message: _error!),

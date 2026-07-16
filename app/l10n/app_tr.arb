@@ -116,5 +116,18 @@
   "review.trashHint": "Silinen dosyalar geri alınabilir çöpe gider, kalıcı olarak silinmez.",
   "step.form": "Ayarlar",
   "step.preview": "Önizle",
-  "step.apply": "Uygula"
+  "step.apply": "Uygula",
+  "action.save": "Kaydet",
+  "auth.username": "Kullanıcı adı",
+  "auth.usernameHelp": "3-24 karakter: harf, rakam, nokta, tire, alt çizgi",
+  "auth.identifier": "Kullanıcı adı veya e-posta",
+  "auth.identifierHelp": "İkisi de olur",
+  "auth.subtitleUp": "Başlamak için hesap oluştur",
+  "auth.err.credentials": "Kullanıcı adı/e-posta veya parola yanlış.",
+  "auth.err.usernameTaken": "Bu kullanıcı adı alınmış.",
+  "auth.err.usernameInvalid": "Kullanıcı adı 3-24 karakter olmalı: harf, rakam, nokta, tire, alt çizgi.",
+  "auth.err.emailTaken": "Bu e-posta ile bir hesap zaten var.",
+  "prefs.account": "Hesap",
+  "prefs.account.emailFixed": "değiştirilemez",
+  "prefs.account.saved": "Kaydedildi"
 }
