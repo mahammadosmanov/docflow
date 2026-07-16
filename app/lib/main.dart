@@ -101,15 +101,16 @@ class DocFlowApp extends StatelessWidget {
         theme: AppTheme.build(
           brightness: Brightness.light,
           font: prefs.font,
-          fontScale: prefs.fontScale,
           compact: prefs.compact,
         ),
         darkTheme: AppTheme.build(
           brightness: Brightness.dark,
           font: prefs.font,
-          fontScale: prefs.fontScale,
           compact: prefs.compact,
         ),
+        // Yazi boyutu olcegi tema degil, MediaQuery isi (bkz. applyTextScale).
+        builder: (context, child) =>
+            AppTheme.applyTextScale(context, child, prefs.fontScale),
         localizationsDelegates: const [
           StringsDelegate(),
           GlobalMaterialLocalizations.delegate,

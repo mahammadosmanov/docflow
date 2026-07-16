@@ -204,7 +204,6 @@ void main() {
       final cs = AppTheme.build(
         brightness: brightness,
         font: AppFont.system,
-        fontScale: 1.0,
         compact: false,
       ).colorScheme;
 
@@ -238,7 +237,6 @@ void main() {
       final cs = AppTheme.build(
         brightness: b,
         font: AppFont.system,
-        fontScale: 1.0,
         compact: false,
       ).colorScheme;
       // Monokromda okunabilirligin TEK guvencesi bu fark; kaybolursa ekran okunmaz.
@@ -253,6 +251,59 @@ void main() {
     expect(Severity.warn.emphasized, isTrue);
     expect(Severity.danger.emphasized, isTrue);
     expect(Severity.info.emphasized, isFalse);
+  });
+
+  // GERILEME TESTI. Onceki kod olcegi textTheme.apply(fontSizeFactor:) ile
+  // uyguluyordu ve 1.0 disinda HER deger cokuyordu (TextStyle.apply assert'i:
+  // Material 3'te fontSize'i null olan stiller var). Testlerin hepsi 1.0
+  // geciyordu — yani hatayi ureten tek degeri hic denememisler. Kullanici font
+  // degistirince cokme olarak geldi. Tema artik olcek BILMIYOR; yine de her
+  // font/parlaklik kombinasyonunun kurulabildigini burada sabitliyoruz.
+  test('tema: her font x parlaklik kombinasyonu cokmeden kurulur', () {
+    for (final b in [Brightness.light, Brightness.dark]) {
+      for (final f in AppFont.values) {
+        for (final compact in [false, true]) {
+          expect(
+            () => AppTheme.build(brightness: b, font: f, compact: compact),
+            returnsNormally,
+            reason: '${b.name}/${f.id}/compact=$compact',
+          );
+        }
+      }
+    }
+  });
+
+  testWidgets('yazi olcegi uygulanir ve OS olcegiyle CARPILIR', (tester) async {
+    late double scaled;
+    await tester.pumpWidget(
+      MediaQuery(
+        // OS'un erisilebilirlik olcegi 2.0 diyelim.
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: Builder(
+          builder: (outer) => AppTheme.applyTextScale(
+            outer,
+            Builder(builder: (inner) {
+              scaled = MediaQuery.of(inner).textScaler.scale(10);
+              return const SizedBox();
+            }),
+            1.5, // kullanici tercihi
+          ),
+        ),
+      ),
+    );
+    // 10 * 1.5 * 2.0 — kullanici tercihi OS ayarini EZMEZ, uzerine biner.
+    expect(scaled, 30.0);
+  });
+
+  testWidgets('yazi olcegi: null child cokme uretmez', (tester) async {
+    // MaterialApp.builder child'i null verebilir; SizedBox'a dusmeli.
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Builder(builder: (c) => AppTheme.applyTextScale(c, null, 1.2)),
+      ),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   test('AppFont: sistem disi secenekler fallback zinciri tasir', () {

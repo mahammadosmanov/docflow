@@ -98,20 +98,37 @@ abstract final class AppTheme {
           scrim: Color(0x99000000),
         );
 
+  /// Kullanici yazi olcegini uygula. MaterialApp.builder icinde cagrilir.
+  ///
+  /// NEDEN BURADA, TEMADA DEGIL: onceden `textTheme.apply(fontSizeFactor: ...)`
+  /// kullaniliyordu ve 1.0 DISINDA her deger cokuyordu —
+  ///   assert(fontSize != null || (fontSizeFactor == 1.0 && fontSizeDelta == 0.0))
+  /// Material 3 varsayilan TextTheme'inde fontSize'i null olan stil var; apply
+  /// onlarda patliyor. textScaler olcegi CIZIM aninda uygular, null fontSize
+  /// umrunda degil ve isletim sisteminin erisilebilirlik ayariyla da birlesir.
+  static Widget applyTextScale(BuildContext context, Widget? child, double factor) {
+    final mq = MediaQuery.of(context);
+    // OS'un kendi olcegini EZME, uzerine carp: erisilebilirlik ayari korunur.
+    final system = mq.textScaler.scale(1.0);
+    return MediaQuery(
+      data: mq.copyWith(textScaler: TextScaler.linear(factor * system)),
+      child: child ?? const SizedBox.shrink(),
+    );
+  }
+
   static ThemeData build({
     required Brightness brightness,
     required AppFont font,
-    required double fontScale,
     required bool compact,
   }) {
     final cs = _scheme(brightness);
     final base = ThemeData(brightness: brightness, colorScheme: cs, useMaterial3: true);
 
-    // Yazi tipi + boyut carpani tek noktadan; ekranlarda fontSize sabiti YOK.
+    // Yazi tipi tek noktadan; ekranlarda fontSize sabiti YOK.
+    // Boyut olcegi burada DEGIL — bkz. applyTextScale.
     final text = base.textTheme.apply(
       fontFamily: font.family,
       fontFamilyFallback: font.fallback,
-      fontSizeFactor: fontScale,
       bodyColor: cs.onSurface,
       displayColor: cs.onSurface,
     );
