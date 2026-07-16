@@ -26,7 +26,7 @@ from ..contracts import (
 )
 from ..extract import OcrEngineMissing, extract_first_page
 from ..fs.apply import apply_steps
-from ..fs.naming import target_for
+from ..fs.naming import folder_for, target_for
 from ..registry import register
 from ..rpc import notify
 
@@ -121,9 +121,10 @@ class ProcessScans(Operation):
             winner = files[0]
             wpdf = winner[0]
 
-            # Hedef: var olan {dest}/{code}/ icine ya da DUZ {dest}/RFI No. {code}.pdf
+            # Hedef HER ZAMAN {dest}/{code}/RFI No. {code}.pdf
+            folder = folder_for(dest, code)
             target = target_for(dest, code)
-            into_folder = target.parent != dest
+            folder_exists = folder.is_dir()
 
             if _same_file(wpdf, target):
                 # Dosya ZATEN dogru adda ve dogru yerde — yapacak is yok.
@@ -142,11 +143,19 @@ class ProcessScans(Operation):
                     meta={"code": code, "reason": "target_exists", "target": str(target)},
                 ))
             else:
+                # Klasor yoksa ONCE onu olustur. Adim SIRASI onemli: apply
+                # sirayla, undo TERS sirayla calisir — yani geri alirken once
+                # dosya cikar, sonra (bos kalan) klasor silinir.
+                if not folder_exists:
+                    plan.steps.append(Step(
+                        "mkdir", None, str(folder),
+                        note_key="note.folder_created", meta={"code": code},
+                    ))
                 plan.steps.append(Step(
                     kind, str(wpdf), str(target),
                     note_key="note.renamed",
                     meta={"code": code, "confidence": winner[2], "source": winner[3],
-                          "intoFolder": into_folder},
+                          "intoFolder": True, "folderCreated": not folder_exists},
                 ))
 
             for older, _mt, _conf, _method in files[1:]:

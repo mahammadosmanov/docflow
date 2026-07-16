@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from .contracts import Plan, Step, Warning
 from .extract import extract_first_page
-from .fs.naming import target_for
+from .fs.naming import folder_for, target_for
 
 REVIEW_DIR = "_review"
 TRASH_DIR = pathlib.Path.home() / ".docflow" / "trash"
@@ -76,11 +76,18 @@ def preview(dest: str, decisions: list[dict]) -> Plan:
                 plan.warnings.append(Warning("warn.no_code", src.name))
                 continue
             target = target_for(d, code)
+            folder = folder_for(d, code)
             if target.exists():
                 # Yerinden edilen mevcut dosya -> cope (once bosalt, sonra yerlestir).
                 plan.steps.append(Step(
                     "move", str(target), str(_trash_path(target.name)),
                     note_key="note.displaced", meta={"action": "put", "code": code},
+                ))
+            # Klasor yoksa olustur — ana operasyonla AYNI kural (fs/naming.py).
+            if not folder.is_dir():
+                plan.steps.append(Step(
+                    "mkdir", None, str(folder),
+                    note_key="note.folder_created", meta={"action": "put", "code": code},
                 ))
             plan.steps.append(Step(
                 "move", str(src), str(target),

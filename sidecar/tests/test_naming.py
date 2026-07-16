@@ -24,8 +24,9 @@ def test_file_gets_prefix_folder_does_not():
     assert FILE_PREFIX == "RFI No. "
 
 
-def test_flat_target_when_no_folder(tmp_path):
-    assert target_for(tmp_path, CODE) == tmp_path / f"RFI No. {CODE}.pdf"
+def test_target_is_always_inside_the_rfi_folder(tmp_path):
+    """Klasor YOKKEN bile hedef klasorun icidir — klasoru plan olusturur."""
+    assert target_for(tmp_path, CODE) == tmp_path / CODE / f"RFI No. {CODE}.pdf"
 
 
 def test_into_existing_folder_folder_name_stays_bare(tmp_path):
@@ -33,6 +34,12 @@ def test_into_existing_folder_folder_name_stays_bare(tmp_path):
     got = target_for(tmp_path, CODE)
     assert got == tmp_path / CODE / f"RFI No. {CODE}.pdf"
     assert got.parent.name == CODE               # klasor adina onek SIZMADI
+
+
+def test_target_for_does_not_touch_disk(tmp_path):
+    """preview dosya sistemine DOKUNMAZ (kural 1): yol hesabi klasor ACMAZ."""
+    target_for(tmp_path, CODE)
+    assert not (tmp_path / CODE).exists()
 
 
 def test_code_case_never_touched():
@@ -58,18 +65,53 @@ def _plan_for(tmp_path, monkeypatch, filenames, code=CODE):
     )
 
 
-def test_preview_renames_with_prefix(tmp_path, monkeypatch):
+def test_preview_creates_folder_then_moves_into_it(tmp_path, monkeypatch):
+    """Klasor yoksa: once mkdir, sonra move — bu SIRAYLA."""
     src, plan = _plan_for(tmp_path, monkeypatch, ["scan1.pdf"])
-    assert len(plan.steps) == 1
-    assert pathlib.Path(plan.steps[0].dst).name == f"RFI No. {CODE}.pdf"
+    assert [s.kind for s in plan.steps] == ["mkdir", "move"], "mkdir move'dan ONCE"
+    assert pathlib.Path(plan.steps[0].dst).name == CODE          # klasor: onek yok
+    assert pathlib.Path(plan.steps[1].dst).name == f"RFI No. {CODE}.pdf"
+    assert pathlib.Path(plan.steps[1].dst).parent.name == CODE
 
 
-def test_already_named_file_is_left_alone(tmp_path, monkeypatch):
-    """source == dest iken IKINCI calistirma dosyayi _review'e ATMAMALI.
+def test_existing_folder_is_reused_not_recreated(tmp_path, monkeypatch):
+    """Klasor VARSA mkdir adimi URETME — kullanicinin klasoruna dokunma."""
+    src = tmp_path / "in"
+    src.mkdir()
+    (src / CODE).mkdir()                     # source == dest, klasor onceden var
+    (src / "scan1.pdf").write_bytes(b"%PDF-1.4\n")
+
+    from docflow_sidecar.extract.rfi_code import RfiMatch
+
+    monkeypatch.setattr(
+        "docflow_sidecar.ops.rfi_process_scans.extract_first_page",
+        lambda _p: (RfiMatch(CODE, "CIV", "0064", "strict", 1.0), "text-layer"),
+    )
+    plan = get("rfi.process_scans").preview(
+        {"source": str(src), "dest": str(src), "keep_original": False}
+    )
+    assert [s.kind for s in plan.steps] == ["move"], "var olan klasor icin mkdir YOK"
+
+
+def test_already_filed_file_is_left_alone(tmp_path, monkeypatch):
+    """source == dest iken IKINCI calistirma dosyaya DOKUNMAMALI.
 
     Bu kontrol olmadan: hedef == dosyanin kendisi -> "hedef zaten var" dali ->
-    dogru adli dosya _review'e tasinir ve duzgun arsiv dagilir.
+    dogru yerdeki dosya _review'e tasinir ve duzgun arsiv dagilir.
     """
-    src, plan = _plan_for(tmp_path, monkeypatch, [f"RFI No. {CODE}.pdf"])
-    assert plan.steps == [], "zaten dogru adda olan dosyaya dokunulmamali"
+    src = tmp_path / "in"
+    (src / CODE).mkdir(parents=True)
+    (src / CODE / f"RFI No. {CODE}.pdf").write_bytes(b"%PDF-1.4\n")
+
+    from docflow_sidecar.extract.rfi_code import RfiMatch
+
+    monkeypatch.setattr(
+        "docflow_sidecar.ops.rfi_process_scans.extract_first_page",
+        lambda _p: (RfiMatch(CODE, "CIV", "0064", "strict", 1.0), "text-layer"),
+    )
+    # Not: source'ta dosya YOK (klasorun icinde), o yuzden bos plan bekleriz.
+    plan = get("rfi.process_scans").preview(
+        {"source": str(src), "dest": str(src), "keep_original": False}
+    )
+    assert plan.steps == []
     assert not any("_review" in (s.dst or "") for s in plan.steps)

@@ -133,5 +133,6 @@
   "auth.err.emailNotConfirmed": "Bu hesap var ama e-posta henüz doğrulanmamış. Yönetici e-posta doğrulamasını kapatabilir ya da gelen kutuna gönderilen bağlantıyı aç.",
   "auth.err.rateLimit": "Çok fazla deneme. Birkaç dakika bekleyip tekrar dene.",
   "auth.err.weakPassword": "Parola çok zayıf. En az 6 karakter kullan.",
-  "warn.no_ocr": "OCR motoru (Tesseract) bulunamadı — hiçbir dosyaya dokunulmadı. Kur ya da uygulama paketini yeniden yükle."
+  "warn.no_ocr": "OCR motoru (Tesseract) bulunamadı — hiçbir dosyaya dokunulmadı. Kur ya da uygulama paketini yeniden yükle.",
+  "note.folder_created": "Yeni klasör"
 }
