@@ -100,15 +100,35 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Sunucu/istisna mesajini i18n anahtarina cevir; bilinmeyeni ham goster.
+  ///
+  /// Ham GoTrue metni INGILIZCE gelir — kullaniciya oyle gostermek kural 4'u
+  /// deler. Bilinen durumlari burada cevir; bilinmeyeni gizleme (sessiz hata,
+  /// hic hata gostermemekten beter).
   String _message(Object e) {
     final raw = e.toString();
     final s = Strings.of(context);
     if (raw.contains('invalid_credentials') || raw.contains('Invalid login')) {
       return s.t('auth.err.credentials');
     }
+    // E-posta dogrulama acikken: hesap VAR ama giris yapilamaz. Bunu "parola
+    // yanlis" diye gostermek kullaniciyi saatlerce yanlis yere baktirir.
+    if (raw.contains('email_not_confirmed') || raw.contains('Email not confirmed')) {
+      return s.t('auth.err.emailNotConfirmed');
+    }
+    if (raw.contains('over_email_send_rate_limit') ||
+        raw.contains('rate limit') ||
+        raw.contains('too many requests')) {
+      return s.t('auth.err.rateLimit');
+    }
     if (raw.contains('username_taken')) return s.t('auth.err.usernameTaken');
     if (raw.contains('username_invalid')) return s.t('auth.err.usernameInvalid');
-    if (raw.contains('User already registered')) return s.t('auth.err.emailTaken');
+    if (raw.contains('User already registered') ||
+        raw.contains('user_already_exists')) {
+      return s.t('auth.err.emailTaken');
+    }
+    if (raw.contains('weak_password') || raw.contains('Password should be')) {
+      return s.t('auth.err.weakPassword');
+    }
     return raw;
   }
 

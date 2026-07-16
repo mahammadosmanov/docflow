@@ -129,5 +129,8 @@
   "auth.err.emailTaken": "Bu e-posta ile bir hesap zaten var.",
   "prefs.account": "Hesap",
   "prefs.account.emailFixed": "değiştirilemez",
-  "prefs.account.saved": "Kaydedildi"
+  "prefs.account.saved": "Kaydedildi",
+  "auth.err.emailNotConfirmed": "Bu hesap var ama e-posta henüz doğrulanmamış. Yönetici e-posta doğrulamasını kapatabilir ya da gelen kutuna gönderilen bağlantıyı aç.",
+  "auth.err.rateLimit": "Çok fazla deneme. Birkaç dakika bekleyip tekrar dene.",
+  "auth.err.weakPassword": "Parola çok zayıf. En az 6 karakter kullan."
 }

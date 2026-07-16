@@ -129,5 +129,8 @@
   "auth.err.emailTaken": "Bu e-poçt ilə hesab artıq mövcuddur.",
   "prefs.account": "Hesab",
   "prefs.account.emailFixed": "dəyişdirilə bilməz",
-  "prefs.account.saved": "Yadda saxlanıldı"
+  "prefs.account.saved": "Yadda saxlanıldı",
+  "auth.err.emailNotConfirmed": "Bu hesab mövcuddur, lakin e-poçt hələ təsdiqlənməyib. Administrator e-poçt təsdiqini söndürə bilər və ya poçtunuza gələn keçidi açın.",
+  "auth.err.rateLimit": "Çox sayda cəhd. Bir neçə dəqiqə gözləyib yenidən yoxlayın.",
+  "auth.err.weakPassword": "Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin."
 }

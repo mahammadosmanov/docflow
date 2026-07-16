@@ -157,5 +157,8 @@
   "auth.err.emailTaken": "An account with this email already exists.",
   "prefs.account": "Account",
   "prefs.account.emailFixed": "cannot be changed",
-  "prefs.account.saved": "Saved"
+  "prefs.account.saved": "Saved",
+  "auth.err.emailNotConfirmed": "This account exists but the email is not confirmed yet. The admin can turn off email confirmation, or open the link sent to your inbox.",
+  "auth.err.rateLimit": "Too many attempts. Wait a few minutes and try again.",
+  "auth.err.weakPassword": "Password is too weak. Use at least 6 characters."
 }
