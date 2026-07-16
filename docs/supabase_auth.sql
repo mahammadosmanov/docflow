@@ -52,6 +52,17 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- TELAFI: trigger SADECE yeni kayitlarda calisir. Bu dosyayi calistirmadan ONCE
+-- kayit olmus biri varsa (ki oldu — sahibin hesabi bu tablodan once acildi),
+-- auth.users'ta satiri VAR ama app_users'ta YOK. Sonucu sinsi: uygulama
+-- allowed=false okur ve kullanici sonsuza kadar "Onay bekleniyor" ekraninda
+-- kalir; "update app_users set allowed=true" ise SIFIR satir gunceller ve
+-- sessizce basarili gorunur. Bu satir eksikleri doldurur ve dosyayi tekrar
+-- calistirmayi guvenli/onarici yapar.
+insert into public.app_users (id, email)
+select u.id, u.email from auth.users u
+on conflict (id) do nothing;
+
 -- ---------------------------------------------------------------- helpers
 -- Sadece CAGIRANIN kendi durumunu doner (auth.uid()). RLS ozyinelemesini kirar.
 create or replace function public.is_admin()
@@ -158,6 +169,16 @@ alter table public.app_users enable row level security;
 grant usage on schema public to authenticated;
 grant select, update on public.app_users to authenticated;
 
+-- anon'un TABLO yetkisini al. RLS zaten satirlari gizliyor (policy'ler sadece
+-- 'to authenticated'), yani bu tek basina bir acik kapatmiyor — KATMAN ekliyor:
+-- ileride biri 'to' yan tumcesi olmayan bir policy yazarsa RLS tek savunma
+-- olarak kalirdi ve kullanici listesi anon'a acilirdi. Iki kilit, tek anahtar degil.
+-- Not: Supabase yeni public tablolara anon icin varsayilan SELECT verir; bu satir
+-- olmadan app_users anon'a 200 [] doner (404/401 degil) — yani tablo VAR bilgisi
+-- de sizar. username_available/email_for_login SECURITY DEFINER oldugu icin
+-- bundan etkilenmez.
+revoke all on public.app_users from anon;
+
 drop policy if exists app_users_select on public.app_users;
 create policy app_users_select on public.app_users for select to authenticated
   using ( (select auth.uid()) = id or public.is_admin() );
@@ -191,19 +212,31 @@ create policy history_update_allowed on public.history for update to authenticat
   using ( public.is_allowed() ) with check ( public.is_allowed() );
 
 -- ---------------------------------------------------------------- BOOTSTRAP
--- 1) Bu dosyanin TAMAMINI calistir (bir kez).
--- 2) Uygulamayi ac -> "Hesap oluştur" -> rohtolos@gmail.com + kullanici adi + parola.
---    Kayit sonrasi "Onay bekleniyor" ekranini goreceksin. DOGRUSU BU: herkes
---    allowed = false baslar, kendin dahil.
--- 3) Simdi kendini onayla + admin yap:
+-- 1) Bu dosyanin TAMAMINI calistir. Tekrar calistirmak GUVENLI ve onaricidir
+--    (yukaridaki TELAFI insert'i eksik app_users satirlarini doldurur).
+-- 2) Supabase panelinde e-posta dogrulamasi KAPALI olmali:
+--    Authentication -> Sign In / Providers -> Email -> "Confirm email" = OFF.
+--    Gerekce: erisimi zaten admin onayi kontrol ediyor; dahili Supabase mailer
+--    saatte birkac mesajla sinirli ve uretim icin degil — acik birakmak
+--    ekibin kayitlarini ongorulemez sekilde bozar.
+-- 3) Uygulamayi ac -> "Hesap oluştur" -> e-posta + kullanici adi + parola.
+--    "Onay bekleniyor" ekranini goreceksin. DOGRUSU BU: herkes allowed = false
+--    baslar, sahibi dahil.
+-- 4) Kendini onayla + admin yap:
 --
 --   update public.app_users set allowed = true, is_admin = true
 --    where email = 'rohtolos@gmail.com';
 --
--- 4) Uygulamada "Tekrar denetle" -> iceri girersin, arac cubugunda kalkan
+--    SIFIR satir guncellendi mi? O zaman app_users satirin yok (bkz. TELAFI) —
+--    once bu dosyayi tekrar calistir, sonra bu update'i tekrar dene.
+-- 5) Uygulamada "Tekrar denetle" -> iceri girersin, arac cubugunda kalkan
 --    (admin) ikonu belirir.
--- 5) Bundan sonrasi panelden: yeni kisiler kendi kayit olur, sen Erisim'i acarsin.
+-- 6) Bundan sonrasi panelden: yeni kisiler kendi kayit olur, sen Erisim'i acarsin.
 --
 -- Kontrol (kim var, kim onayli):
 --   select email, username, allowed, is_admin, created_at
 --     from public.app_users order by created_at;
+--
+-- auth.users ile app_users ayrismis mi (bos donmeli):
+--   select u.email from auth.users u
+--    where not exists (select 1 from public.app_users a where a.id = u.id);
