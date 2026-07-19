@@ -134,5 +134,6 @@
   "auth.err.rateLimit": "Çok fazla deneme. Birkaç dakika bekleyip tekrar dene.",
   "auth.err.weakPassword": "Parola çok zayıf. En az 6 karakter kullan.",
   "warn.no_ocr": "OCR motoru (Tesseract) bulunamadı — hiçbir dosyaya dokunulmadı. Kur ya da uygulama paketini yeniden yükle.",
-  "note.folder_created": "Yeni klasör"
+  "note.folder_created": "Yeni klasör",
+  "warn.ocr_broken": "OCR her dosyada başarısız oldu — bu bir kurulum sorunu, dosya sorunu değil. Hiçbir şeye dokunulmadı. Ayrıntı:"
 }

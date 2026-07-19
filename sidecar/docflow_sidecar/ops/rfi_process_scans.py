@@ -24,7 +24,7 @@ from ..contracts import (
     Step,
     Warning,
 )
-from ..extract import OcrEngineMissing, extract_first_page
+from ..extract import OcrEngineMissing, diagnostics, extract_first_page
 from ..fs.apply import apply_steps
 from ..fs.naming import folder_for, target_for
 from ..registry import register
@@ -45,6 +45,7 @@ def _same_file(a: pathlib.Path, b: pathlib.Path) -> bool:
         return b.exists() and a.samefile(b)
     except OSError:
         return False
+
 
 # Bu esigin altindaki eslesmeler _review'a gider. fuzzy = 0.7-0.9 araligi.
 # Dusurmeden once gercek taramalarda hata oranini ol.
@@ -80,6 +81,7 @@ class ProcessScans(Operation):
         # 1. GECIS: her dosyayi OCR et. Okunamayan/kod yok/dusuk guven -> hemen
         # _review. Kod bulunanlari koda gore GRUPLA (revizyon ele almak icin).
         groups: dict[str, list[tuple[pathlib.Path, float, float, str]]] = {}
+        failures: list[tuple[pathlib.Path, str]] = []
         for i, pdf in enumerate(pdfs):
             notify("progress", {"phase": "preview", "done": i, "total": len(pdfs)})
 
@@ -91,11 +93,11 @@ class ProcessScans(Operation):
                 # uyariyla don: eksik bir binary yuzunden kullanicinin butun
                 # klasorunu _review'e tasiyan bir plan uretmek KABUL EDILEMEZ.
                 # (Tam olarak bu oldu: 20 dosyanin 20'si "move -> _review".)
-                return Plan(op_id=self.id, warnings=[Warning("warn.no_ocr", "")])
+                return Plan(op_id=self.id,
+                            warnings=[Warning("warn.no_ocr", diagnostics())])
             except Exception as e:  # noqa: BLE001 — tek bozuk dosya tarama durdurmaz
-                plan.warnings.append(Warning("warn.unreadable", pdf.name))
-                plan.steps.append(Step("move", str(pdf), str(dest / REVIEW_DIR / pdf.name),
-                                       note_key="note.unreadable", meta={"error": str(e)}))
+                # Adimi HEMEN ekleme: once hepsinin dusup dusmedigine bakacagiz.
+                failures.append((pdf, f"{type(e).__name__}: {e}"))
                 continue
 
             if not m.ok or m.confidence < MIN_CONFIDENCE:
@@ -113,6 +115,22 @@ class ProcessScans(Operation):
             except OSError:
                 mtime = 0.0
             groups.setdefault(m.code, []).append((pdf, mtime, m.confidence, method))
+
+        # BIRDEN FAZLA dosyanin HEPSI patladiysa sorun dosyalarda degil KURULUMDA
+        # (bozuk Tesseract, eksik dil dosyasi, PDF motoru vs). Boyle bir durumda
+        # butun klasoru _review'e tasiyan bir plan uretmek zarar verir; gercek
+        # hatayi ve teshisi gosterip HICBIR SEYE dokunmadan don.
+        if len(pdfs) > 1 and len(failures) == len(pdfs):
+            return Plan(op_id=self.id, warnings=[
+                Warning("warn.ocr_broken", f"{failures[0][1]}  ||  {diagnostics()}"),
+            ])
+
+        # Tekil basarisizliklar: gercek hata artik GORUNUR (eskiden step.meta
+        # icinde gomuluydu ve kullanici 20 kere ayni anlamsiz satiri goruyordu).
+        for pdf, err in failures:
+            plan.warnings.append(Warning("warn.unreadable", f"{pdf.name} — {err[:200]}"))
+            plan.steps.append(Step("move", str(pdf), str(dest / REVIEW_DIR / pdf.name),
+                                   note_key="note.unreadable", meta={"error": err}))
 
         # 2. GECIS: her RFI numarasi icin EN YENI (mtime) -> hedef; eskiler
         # -> _review. Ad = "RFI No. {code}.pdf"; ayni ada iki dosya olamaz.

@@ -162,5 +162,6 @@
   "auth.err.rateLimit": "Too many attempts. Wait a few minutes and try again.",
   "auth.err.weakPassword": "Password is too weak. Use at least 6 characters.",
   "warn.no_ocr": "OCR engine (Tesseract) not found — no files were touched. Install it, or reinstall the app bundle.",
-  "note.folder_created": "New folder"
+  "note.folder_created": "New folder",
+  "warn.ocr_broken": "OCR failed on every file — this is an installation problem, not a file problem. Nothing was touched. Details:"
 }

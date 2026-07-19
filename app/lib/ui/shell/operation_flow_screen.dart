@@ -493,7 +493,10 @@ class _WarningBox extends StatelessWidget {
           for (final w in warnings)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(
+              // SECILEBILIR: teshis metnini kullanicinin kopyalayip
+              // gonderebilmesi lazim. Kopyalanamayan hata mesaji, destek
+              // isteyen kisiyi ekran fotografi cekmeye zorlar.
+              child: SelectableText(
                 '— ${s.t(w.key)}${w.subject.isEmpty ? '' : '  ${w.subject}'}',
                 style: t.textTheme.bodySmall,
               ),

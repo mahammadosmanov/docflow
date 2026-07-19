@@ -8,6 +8,7 @@ Yani eksik bir binary, kullanicinin butun klasorunu dagitacak bir plan uretti.
 """
 from __future__ import annotations
 
+import os
 import pathlib
 
 import pytest
@@ -89,3 +90,116 @@ def test_resolver_ignores_env_pointing_nowhere(monkeypatch):
     monkeypatch.setenv("DOCFLOW_TESSERACT", "/yok/boyle/bir/yol/tesseract")
     monkeypatch.setattr(ocr_mod.shutil, "which", lambda _n: "/usr/bin/tesseract")
     assert ocr_mod._resolve_tesseract() == "/usr/bin/tesseract"
+
+
+def test_all_files_failing_means_install_problem_not_file_problem(tmp_path, monkeypatch):
+    """HEPSI patlarsa: sifir adim + gercek hata + teshis. Dosyalara DOKUNMA.
+
+    Gercek olay (Windows): Tesseract BULUNDU ama cagri patladi. Eski kod her
+    dosya icin "okunamadi" deyip 20 dosyayi da _review'e tasiyan bir plan
+    uretiyordu; gercek hata step.meta icinde gomulu kaliyor, kullanici 20 kere
+    ayni anlamsiz satiri goruyordu.
+    """
+    src = tmp_path / "in"
+    src.mkdir()
+    for n in ("a.pdf", "b.pdf", "c.pdf"):
+        (src / n).write_bytes(b"%PDF-1.4\n")
+
+    def _boom(_path: str):
+        raise RuntimeError("Error opening data file eng.traineddata")
+
+    monkeypatch.setattr("docflow_sidecar.ops.rfi_process_scans.extract_first_page", _boom)
+
+    plan = get("rfi.process_scans").preview(
+        {"source": str(src), "dest": str(src), "keep_original": False}
+    )
+
+    assert plan.steps == [], "hepsi patladiysa TEK dosya bile tasinmamali"
+    assert [w.key for w in plan.warnings] == ["warn.ocr_broken"]
+    subject = plan.warnings[0].subject
+    assert "eng.traineddata" in subject, "GERCEK hata gorunur olmali"
+    assert "tesseract:" in subject, "teshis bilgisi eklenmeli"
+
+
+def test_single_bad_file_still_moves_and_shows_error(tmp_path, monkeypatch):
+    """Tek dosya patlarsa eski davranis: _review'e git — ama hata artik GORUNUR."""
+    src = tmp_path / "in"
+    src.mkdir()
+    (src / "bozuk.pdf").write_bytes(b"not a pdf")
+
+    def _boom(_path: str):
+        raise RuntimeError("cannot open broken document")
+
+    monkeypatch.setattr("docflow_sidecar.ops.rfi_process_scans.extract_first_page", _boom)
+
+    plan = get("rfi.process_scans").preview(
+        {"source": str(src), "dest": str(src), "keep_original": False}
+    )
+    assert len(plan.steps) == 1
+    assert "_review" in plan.steps[0].dst
+    assert "cannot open broken document" in plan.warnings[0].subject
+
+
+def test_mixed_failure_does_not_trigger_install_verdict(tmp_path, monkeypatch):
+    """Bazilari okunuyorsa kurulum saglamdir — tekil hatalar tekil kalir."""
+    src = tmp_path / "in"
+    src.mkdir()
+    (src / "ok.pdf").write_bytes(b"%PDF-1.4\n")
+    (src / "bad.pdf").write_bytes(b"%PDF-1.4\n")
+
+    from docflow_sidecar.extract.rfi_code import RfiMatch
+
+    def _mixed(path: str):
+        if path.endswith("bad.pdf"):
+            raise RuntimeError("bozuk")
+        return RfiMatch("AZE-SUN-INT-QMS-RFI-CIV-0064", "CIV", "0064", "strict", 1.0), "text-layer"
+
+    monkeypatch.setattr("docflow_sidecar.ops.rfi_process_scans.extract_first_page", _mixed)
+
+    plan = get("rfi.process_scans").preview(
+        {"source": str(src), "dest": str(src), "keep_original": False}
+    )
+    keys = [w.key for w in plan.warnings]
+    assert "warn.ocr_broken" not in keys
+    assert "warn.unreadable" in keys
+    assert any(s.kind == "mkdir" for s in plan.steps), "okunan dosya normal islenmeli"
+
+
+def test_tessdata_found_next_to_exe_windows_bundle(tmp_path, monkeypatch):
+    """Windows bundle: tessdata exe'nin YANINDA -> TESSDATA_PREFIX oraya."""
+    d = tmp_path / "tesseract"
+    (d / "tessdata").mkdir(parents=True)
+    (d / "tessdata" / "eng.traineddata").write_bytes(b"x")
+    exe = d / "tesseract.exe"
+    exe.write_text("")
+    assert ocr_mod._find_tessdata(str(exe)) == str(d / "tessdata")
+
+
+def test_tessdata_found_in_share_homebrew_layout(tmp_path):
+    """Homebrew: exe bin/ altinda, tessdata share/ altinda — yan yana DEGIL."""
+    root = tmp_path / "usr"
+    (root / "bin").mkdir(parents=True)
+    (root / "share" / "tessdata").mkdir(parents=True)
+    (root / "share" / "tessdata" / "eng.traineddata").write_bytes(b"x")
+    exe = root / "bin" / "tesseract"
+    exe.write_text("")
+    assert ocr_mod._find_tessdata(str(exe)) == str(root / "share" / "tessdata")
+
+
+def test_tessdata_absent_returns_none(tmp_path):
+    """Hicbir yerde yoksa None — uydurma yol dondurme."""
+    exe = tmp_path / "tesseract"
+    exe.write_text("")
+    assert ocr_mod._find_tessdata(str(exe)) is None
+
+
+def test_existing_tessdata_prefix_is_not_overridden(tmp_path, monkeypatch):
+    """Kullanici/OS ayarladiysa ona DOKUNMA — onun bilgisi bizimkini ezer."""
+    exe = tmp_path / "tesseract"
+    exe.write_text("")
+    (tmp_path / "tessdata").mkdir()
+    (tmp_path / "tessdata" / "eng.traineddata").write_bytes(b"x")
+    monkeypatch.setenv("TESSDATA_PREFIX", "/kullanicinin/yolu")
+    monkeypatch.setattr(ocr_mod, "_resolve_tesseract", lambda: str(exe))
+    ocr_mod._configure_tesseract()
+    assert os.environ["TESSDATA_PREFIX"] == "/kullanicinin/yolu"

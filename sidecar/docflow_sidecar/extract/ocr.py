@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 
 import cv2
@@ -80,16 +81,43 @@ def _resolve_tesseract() -> str | None:
     return None
 
 
+def _find_tessdata(exe: str) -> str | None:
+    """Dil dosyalarinin klasorunu bul (eng.traineddata iceren).
+
+    NEDEN ARAMA GEREKIYOR: tesseract, TESSDATA_PREFIX yoksa DERLEME ANINDA
+    gomulen yola bakar. Paketlenmis uygulamada bu yol BASKA bir makinenin yolu
+    (or. build sunucusundaki "C:\\Program Files\\Tesseract-OCR\\tessdata") ve
+    kullanicinin bilgisayarinda YOKTUR. Sonuc: tesseract calisir, hicbir sey
+    okuyamaz ve "Error opening data file ..." der — yani her dosya "okunamadi"
+    gorunur. Bu yuzden dil klasorunu biz bulup TESSDATA_PREFIX'i biz veriyoruz.
+
+    Not: Tesseract 4/5 icin TESSDATA_PREFIX tessdata KLASORUNUN KENDISIDIR
+    (3.x'te ust klasordu — surum farki, karistirilmasi kolay).
+    """
+    d = os.path.dirname(os.path.abspath(exe))
+    parent = os.path.dirname(d)
+    for cand in (
+        os.path.join(d, "tessdata"),                 # bundle: exe'nin yaninda
+        os.path.join(parent, "tessdata"),            # kurulum koku
+        os.path.join(parent, "share", "tessdata"),   # Homebrew / *nix
+        os.path.join(parent, "share", "tesseract-ocr", "5", "tessdata"),
+        os.path.join(parent, "share", "tesseract-ocr", "4.00", "tessdata"),
+    ):
+        if os.path.isfile(os.path.join(cand, "eng.traineddata")):
+            return cand
+    return None
+
+
 def _configure_tesseract() -> str | None:
     path = _resolve_tesseract()
     if not path:
         return None
     pytesseract.pytesseract.tesseract_cmd = path
-    # tessdata binary'nin yanindaysa (Windows bundle) TESSDATA_PREFIX'i ver;
-    # aksi halde tesseract dil dosyalarini bulamaz ve baska bir hata verir.
+    # Kullanici/isletim sistemi zaten ayarladiysa DOKUNMA — onun bilgisi bizimkini
+    # ezmeli. Yoksa dil klasorunu bulmaya calis.
     if not os.environ.get("TESSDATA_PREFIX"):
-        tessdata = os.path.join(os.path.dirname(path), "tessdata")
-        if os.path.isdir(tessdata):
+        tessdata = _find_tessdata(path)
+        if tessdata:
             os.environ["TESSDATA_PREFIX"] = tessdata
     return path
 
@@ -100,6 +128,46 @@ TESSERACT_CMD = _configure_tesseract()
 def engine_available() -> bool:
     """Kurulum saglam mi? Cagiran, dosya taramaya BASLAMADAN once sormali."""
     return TESSERACT_CMD is not None
+
+
+def diagnostics() -> str:
+    """OCR kurulumunun TEK SATIRLIK teshisi — kullaniciya gosterilebilir.
+
+    NEDEN VAR: "dosya okunamadi" 20 kez tekrarlandiginda sorun dosyalarda degil
+    kurulumdadir, ama kullanici bunu goremiyordu; gercek hata step.meta icinde
+    gomuluydu. Bu fonksiyon Tesseract'in nerede oldugunu, calisip calismadigini
+    ve dil dosyalarini bulup bulamadigini duz metin olarak doner.
+    """
+    parts: list[str] = [f"tesseract: {TESSERACT_CMD or 'BULUNAMADI'}"]
+    parts.append(f"TESSDATA_PREFIX: {os.environ.get('TESSDATA_PREFIX') or '(yok)'}")
+    if not TESSERACT_CMD:
+        return " | ".join(parts)
+
+    def _run(*args: str) -> str:
+        # BINARY oku, sonra replace ile decode et. Tesseract'in cikisi her zaman
+        # utf-8 degil; pytesseract'in kendi decode'u tam bu yuzden patliyor
+        # (UnicodeDecodeError) ve GERCEK hatayi gizliyor.
+        out = subprocess.run([TESSERACT_CMD, *args], capture_output=True, timeout=30)
+        return (out.stdout or out.stderr).decode("utf-8", "replace").strip()
+
+    try:
+        first = _run("--version").splitlines()
+        parts.append(f"surum: {first[0] if first else '(bos)'}")
+    except Exception as e:  # noqa: BLE001 — teshis asla patlamamali
+        parts.append(f"surum: CALISTIRILAMADI ({type(e).__name__}: {e})")
+        return " | ".join(parts)
+
+    # Dil dosyalarini TESSERACT'A SOR. Yol tahmin etme: Homebrew tessdata'yi
+    # binary'nin yaninda degil share/ altinda tutar; dosya sistemine bakarak
+    # "eksik" demek yanlis alarm uretir.
+    try:
+        langs = _run("--list-langs")
+        parts.append(f"diller: {' '.join(langs.splitlines()[1:]) or '(YOK)'}")
+        if "eng" not in langs:
+            parts.append("UYARI: 'eng' dil dosyasi yok — OCR hicbir sey okuyamaz")
+    except Exception as e:  # noqa: BLE001
+        parts.append(f"diller: SORULAMADI ({type(e).__name__}: {e})")
+    return " | ".join(parts)
 
 # Varsayilan tek-atis parametreleri (from_ocr / probe geriye donuk uyumluluk).
 BAND = 0.35

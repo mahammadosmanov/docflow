@@ -134,5 +134,6 @@
   "auth.err.rateLimit": "Çox sayda cəhd. Bir neçə dəqiqə gözləyib yenidən yoxlayın.",
   "auth.err.weakPassword": "Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.",
   "warn.no_ocr": "OCR mühərriki (Tesseract) tapılmadı — heç bir fayla toxunulmadı. Quraşdırın və ya tətbiq paketini yenidən yükləyin.",
-  "note.folder_created": "Yeni qovluq"
+  "note.folder_created": "Yeni qovluq",
+  "warn.ocr_broken": "OCR bütün fayllarda uğursuz oldu — bu quraşdırma problemidir, fayl problemi deyil. Heç nəyə toxunulmadı. Təfərrüat:"
 }
