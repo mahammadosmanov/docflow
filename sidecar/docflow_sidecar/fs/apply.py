@@ -10,7 +10,9 @@ Kullanicinin belgelerini tasiyor. Bir veri kaybi projeyi oldurur. Kurallar:
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import pathlib
 import shutil
 
@@ -31,11 +33,26 @@ def _write_journal(entry: JournalEntry) -> None:
     )
 
 
+def write_journal(entry: JournalEntry) -> None:
+    """Operation-ozel atomik islemler icin journal'i ayni kuralla yaz."""
+    _write_journal(entry)
+
+
+def file_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _do(step: Step) -> None:
     if step.kind == "mkdir":
+        assert step.dst is not None
         pathlib.Path(step.dst).mkdir(parents=True, exist_ok=True)
         return
 
+    assert step.src is not None and step.dst is not None
     src, dst = pathlib.Path(step.src), pathlib.Path(step.dst)
     if dst.exists():
         raise FileExistsError(str(dst))          # uzerine YAZMA
@@ -50,11 +67,37 @@ def _do(step: Step) -> None:
 
 
 def _undo(step: Step, dest_folder: str | None = None) -> None:
+    if step.kind == "restore_backup":
+        assert step.src is not None and step.dst is not None
+        backup = pathlib.Path(step.src)
+        workbook = pathlib.Path(step.dst)
+        if not backup.is_file():
+            raise FileNotFoundError(str(backup))
+        if dest_folder is not None:
+            target = pathlib.Path(dest_folder) / workbook.name
+            if target.exists():
+                raise FileExistsError(str(target))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, target)
+            return
+
+        expected = str(step.meta.get("appliedSha256") or "")
+        if expected and workbook.is_file() and file_sha256(workbook) != expected:
+            raise RuntimeError(
+                "calisma kitabi uygulamadan sonra degismis; yeni degisikliklerin "
+                "uzerine yazmamak icin geri alma durduruldu"
+            )
+        temp = workbook.with_name(f".{workbook.name}.docflow-undo.tmp")
+        shutil.copy2(backup, temp)
+        os.replace(temp, workbook)
+        return
+
     # dest_folder verilirse: dosyalari orijinal kaynaga DEGIL, secilen klasore
     # geri getir. Dosya adi orijinal kaynak adini korur. Uzerine ASLA yazma.
     if step.kind == "mkdir":
         if dest_folder is not None:
             return                                 # yonlendirmede klasorlere dokunma
+        assert step.dst is not None
         p = pathlib.Path(step.dst)
         if p.is_dir() and not any(p.iterdir()):   # sadece BOS klasoru sil
             p.rmdir()
@@ -69,6 +112,7 @@ def _undo(step: Step, dest_folder: str | None = None) -> None:
         shutil.move(step.dst, str(target))         # move/rename/copy -> hepsi klasore
         return
 
+    assert step.src is not None and step.dst is not None
     if step.kind in ("move", "rename"):
         shutil.move(step.dst, step.src)
     elif step.kind == "copy":
@@ -146,7 +190,11 @@ def list_history(limit: int = 50) -> list[dict]:
         except Exception:  # noqa: BLE001 — bozuk tek kayit listeyi bozmaz
             continue
         steps = d.get("steps", [])
-        moves = sum(1 for s in steps if s.get("kind") in ("move", "copy", "rename"))
+        moves = sum(
+            1
+            for s in steps
+            if s.get("kind") in ("move", "copy", "rename", "restore_backup")
+        )
         out.append({
             "journalId": d.get("journalId", ""),
             "opId": d.get("opId", ""),

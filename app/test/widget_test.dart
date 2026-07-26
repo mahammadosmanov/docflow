@@ -53,7 +53,13 @@ void main() {
       'planId': 'x',
       'opId': 'rfi.process_scans',
       'steps': [
-        {'kind': 'mkdir', 'src': null, 'dst': '/out/A', 'noteKey': null, 'meta': {}},
+        {
+          'kind': 'mkdir',
+          'src': null,
+          'dst': '/out/A',
+          'noteKey': null,
+          'meta': {},
+        },
       ],
       'warnings': [],
     });
@@ -63,8 +69,20 @@ void main() {
       'planId': 'x',
       'opId': 'rfi.process_scans',
       'steps': [
-        {'kind': 'mkdir', 'src': null, 'dst': '/out/A', 'noteKey': null, 'meta': {}},
-        {'kind': 'move', 'src': '/in/a.pdf', 'dst': '/out/A/a.pdf', 'noteKey': 'note.renamed', 'meta': {'confidence': 1.0}},
+        {
+          'kind': 'mkdir',
+          'src': null,
+          'dst': '/out/A',
+          'noteKey': null,
+          'meta': {},
+        },
+        {
+          'kind': 'move',
+          'src': '/in/a.pdf',
+          'dst': '/out/A/a.pdf',
+          'noteKey': 'note.renamed',
+          'meta': {'confidence': 1.0},
+        },
       ],
       'warnings': [],
     });
@@ -72,42 +90,76 @@ void main() {
     expect(withMove.steps[1].confidence, 1.0);
   });
 
+  test('Plan workbook_update adimini uygulanabilir ve editorlu sayar', () {
+    final plan = Plan.fromJson({
+      'planId': 'rfi-plan',
+      'opId': 'rfi.log_add',
+      'steps': [
+        {
+          'kind': 'workbook_update',
+          'src': 'RFI Log.xlsx',
+          'dst': 'backup.xlsx',
+          'noteKey': 'note.rfi.workbookUpdate',
+          'meta': {},
+        },
+      ],
+      'warnings': [],
+      'meta': {
+        'editor': {
+          'kind': 'recordTable',
+          'rows': [
+            {'rfiNo': 'AZE-SUN-INT-QMS-RFI-CIV-0860'},
+          ],
+        },
+      },
+    });
+    expect(plan.hasActionableSteps, isTrue);
+    expect(plan.editor?['kind'], 'recordTable');
+  });
+
   test('Strings cozulemeyen anahtari sessizce yutmaz, anahtari doner', () {
     final s = Strings({'action.apply': 'Apply'});
     expect(s.t('action.apply'), 'Apply');
     expect(s.t('yok.olan.anahtar'), 'yok.olan.anahtar');
-    expect(Strings({'plan.summary': '{count} files'}).count('plan.summary', 3), '3 files');
+    expect(
+      Strings({'plan.summary': '{count} files'}).count('plan.summary', 3),
+      '3 files',
+    );
   });
 
-  test('SettingsStore son secilen klasorleri hatirlar (disk round-trip)', () async {
-    final tmp = await Directory.systemTemp.createTemp('docflow_settings');
-    final f = File('${tmp.path}/settings.json');
-    try {
-      final s1 = await SettingsStore.load(file: f);
-      await s1.saveParams('rfi.process_scans', {
-        'source': '/a/in',
-        'dest': '/a/out',
-        'keep_original': true,
-        'not_serializable': [1, 2, 3], // filtrelenmeli
-      });
+  test(
+    'SettingsStore son secilen klasorleri hatirlar (disk round-trip)',
+    () async {
+      final tmp = await Directory.systemTemp.createTemp('docflow_settings');
+      final f = File('${tmp.path}/settings.json');
+      try {
+        final s1 = await SettingsStore.load(file: f);
+        await s1.saveParams('rfi.process_scans', {
+          'source': '/a/in',
+          'dest': '/a/out',
+          'keep_original': true,
+          'not_serializable': [1, 2, 3], // filtrelenmeli
+        });
 
-      final s2 = await SettingsStore.load(file: f); // yeniden okundu
-      final got = s2.paramsFor('rfi.process_scans');
-      expect(got['source'], '/a/in');
-      expect(got['dest'], '/a/out');
-      expect(got['keep_original'], true);
-      expect(got.containsKey('not_serializable'), isFalse);
-      expect(s2.paramsFor('unknown.op'), isEmpty);
-    } finally {
-      await tmp.delete(recursive: true);
-    }
-  });
+        final s2 = await SettingsStore.load(file: f); // yeniden okundu
+        final got = s2.paramsFor('rfi.process_scans');
+        expect(got['source'], '/a/in');
+        expect(got['dest'], '/a/out');
+        expect(got['keep_original'], true);
+        expect(got.containsKey('not_serializable'), isFalse);
+        expect(s2.paramsFor('unknown.op'), isEmpty);
+      } finally {
+        await tmp.delete(recursive: true);
+      }
+    },
+  );
 
   // CLAUDE.md kural 4: her metin DORT ARB'de de olmak zorunda. gen-l10n noktali
   // anahtarlari reddettigi icin build-time kontrol yok — kontrol burada.
   test('i18n: dort ARB ayni anahtar kumesine sahip', () {
     Set<String> keysOf(String loc) {
-      final j = json.decode(File('l10n/app_$loc.arb').readAsStringSync()) as Map;
+      final j =
+          json.decode(File('l10n/app_$loc.arb').readAsStringSync()) as Map;
       // '@@locale' ve '@key' meta girdileri cevrilebilir metin degil.
       return j.keys.cast<String>().where((k) => !k.startsWith('@')).toSet();
     }
@@ -128,19 +180,23 @@ void main() {
     final tr = load('tr');
     final az = load('az');
     for (final k in ['auth.signIn', 'auth.pending', 'admin.title']) {
-      expect(az[k], isNot(equals(tr[k])), reason: '$k: az, tr kopyasi olmamali');
+      expect(
+        az[k],
+        isNot(equals(tr[k])),
+        reason: '$k: az, tr kopyasi olmamali',
+      );
     }
   });
 
   test('AuthSession suresi dolmayi 60sn payla bildirir', () {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     AuthSession at(int expiresAt) => AuthSession(
-          accessToken: 'a',
-          refreshToken: 'r',
-          userId: 'u',
-          email: 'e@x.com',
-          expiresAt: expiresAt,
-        );
+      accessToken: 'a',
+      refreshToken: 'r',
+      userId: 'u',
+      email: 'e@x.com',
+      expiresAt: expiresAt,
+    );
     expect(at(now + 3600).expired, isFalse);
     expect(at(now + 30).expired, isTrue, reason: 'pay icinde: yenilenmeli');
     expect(at(now - 1).expired, isTrue);
@@ -159,7 +215,11 @@ void main() {
     expect(back.refreshToken, 'ref');
     expect(back.userId, 'uid');
     expect(AuthSession.fromJson(null), isNull);
-    expect(AuthSession.fromJson({'accessToken': 'x'}), isNull, reason: 'refresh yok');
+    expect(
+      AuthSession.fromJson({'accessToken': 'x'}),
+      isNull,
+      reason: 'refresh yok',
+    );
   });
 
   test('AppUser: eksik alanlar erisim ACMAZ (guvenli varsayilan)', () {
@@ -170,11 +230,17 @@ void main() {
   });
 
   test('AppUser.display: kullanici adi varsa o, yoksa e-posta', () {
-    final withName =
-        AppUser.fromJson({'id': 'x', 'email': 'e@x.com', 'username': 'ali_k'});
+    final withName = AppUser.fromJson({
+      'id': 'x',
+      'email': 'e@x.com',
+      'username': 'ali_k',
+    });
     expect(withName.display, 'ali_k');
     // username null VEYA bos -> e-postaya dus (bos string ekranda bosluk birakirdi)
-    expect(AppUser.fromJson({'id': 'x', 'email': 'e@x.com'}).display, 'e@x.com');
+    expect(
+      AppUser.fromJson({'id': 'x', 'email': 'e@x.com'}).display,
+      'e@x.com',
+    );
     expect(
       AppUser.fromJson({'id': 'x', 'email': 'e@x.com', 'username': ''}).display,
       'e@x.com',
@@ -240,7 +306,9 @@ void main() {
         compact: false,
       ).colorScheme;
       // Monokromda okunabilirligin TEK guvencesi bu fark; kaybolursa ekran okunmaz.
-      final diff = (cs.onSurface.computeLuminance() - cs.surface.computeLuminance()).abs();
+      final diff =
+          (cs.onSurface.computeLuminance() - cs.surface.computeLuminance())
+              .abs();
       expect(diff, greaterThan(0.5), reason: '${b.name}: kontrast yetersiz');
     }
   });
@@ -282,10 +350,12 @@ void main() {
         child: Builder(
           builder: (outer) => AppTheme.applyTextScale(
             outer,
-            Builder(builder: (inner) {
-              scaled = MediaQuery.of(inner).textScaler.scale(10);
-              return const SizedBox();
-            }),
+            Builder(
+              builder: (inner) {
+                scaled = MediaQuery.of(inner).textScaler.scale(10);
+                return const SizedBox();
+              },
+            ),
             1.5, // kullanici tercihi
           ),
         ),
@@ -309,7 +379,11 @@ void main() {
   test('AppFont: sistem disi secenekler fallback zinciri tasir', () {
     for (final f in AppFont.values.where((f) => f != AppFont.system)) {
       expect(f.family, isNotNull);
-      expect(f.fallback, isNotEmpty, reason: '${f.id}: her PC\'de bulunmayabilir');
+      expect(
+        f.fallback,
+        isNotEmpty,
+        reason: '${f.id}: her PC\'de bulunmayabilir',
+      );
     }
     // Sistem varsayilani: aile YOK -> Flutter platform fontunu secer.
     expect(AppFont.system.family, isNull);
@@ -351,32 +425,46 @@ void main() {
     }
   });
 
-  test('AppPrefs: bozuk/bilinmeyen degerler cokme degil varsayilan verir', () async {
-    final tmp = await Directory.systemTemp.createTemp('docflow_prefs_bad');
-    final f = File('${tmp.path}/settings.json');
-    try {
-      await f.writeAsString(json.encode({
-        'prefs': {'theme': 'neon', 'font': 'comic', 'fontScale': 'big', 'locale': 42},
-      }));
-      final p = AppPrefs(await SettingsStore.load(file: f));
-      expect(p.themeMode, ThemeMode.system);
-      expect(p.font, AppFont.system);
-      expect(p.fontScale, 1.0);
-      expect(p.localeCode, isNull);
-    } finally {
-      await tmp.delete(recursive: true);
-    }
-  });
+  test(
+    'AppPrefs: bozuk/bilinmeyen degerler cokme degil varsayilan verir',
+    () async {
+      final tmp = await Directory.systemTemp.createTemp('docflow_prefs_bad');
+      final f = File('${tmp.path}/settings.json');
+      try {
+        await f.writeAsString(
+          json.encode({
+            'prefs': {
+              'theme': 'neon',
+              'font': 'comic',
+              'fontScale': 'big',
+              'locale': 42,
+            },
+          }),
+        );
+        final p = AppPrefs(await SettingsStore.load(file: f));
+        expect(p.themeMode, ThemeMode.system);
+        expect(p.font, AppFont.system);
+        expect(p.fontScale, 1.0);
+        expect(p.localeCode, isNull);
+      } finally {
+        await tmp.delete(recursive: true);
+      }
+    },
+  );
 
   test('AppPrefs degisiklikte dinleyicileri uyarir (canli tema/dil)', () async {
     final tmp = await Directory.systemTemp.createTemp('docflow_prefs_notify');
     try {
-      final p = AppPrefs(await SettingsStore.load(file: File('${tmp.path}/s.json')));
+      final p = AppPrefs(
+        await SettingsStore.load(file: File('${tmp.path}/s.json')),
+      );
       var n = 0;
       p.addListener(() => n++);
       await p.setThemeMode(ThemeMode.dark);
       expect(n, 1);
-      await p.setThemeMode(ThemeMode.dark); // ayni deger -> gereksiz rebuild yok
+      await p.setThemeMode(
+        ThemeMode.dark,
+      ); // ayni deger -> gereksiz rebuild yok
       expect(n, 1);
       await p.setFontScale(1.2);
       expect(n, 2);

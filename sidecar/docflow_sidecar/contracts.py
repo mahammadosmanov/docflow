@@ -53,6 +53,10 @@ def FolderParam(name: str, label_key: str, **kw) -> Param:
     return Param(name, ParamKind.FOLDER, label_key, **kw)
 
 
+def FileParam(name: str, label_key: str, **kw) -> Param:
+    return Param(name, ParamKind.FILE, label_key, **kw)
+
+
 def BoolParam(name: str, label_key: str, default: bool = False, **kw) -> Param:
     return Param(name, ParamKind.BOOL, label_key, default=default, required=False, **kw)
 
@@ -63,6 +67,10 @@ def TextParam(name: str, label_key: str, **kw) -> Param:
 
 def ChoiceParam(name: str, label_key: str, choices: list[str], **kw) -> Param:
     return Param(name, ParamKind.CHOICE, label_key, choices=choices, **kw)
+
+
+def IntParam(name: str, label_key: str, **kw) -> Param:
+    return Param(name, ParamKind.INT, label_key, **kw)
 
 
 @dataclass(frozen=True)
@@ -85,7 +93,15 @@ class ParamSchema:
 # Plan / Step — preview() bunu uretir, apply() SADECE bunu uygular
 # --------------------------------------------------------------------------
 
-StepKind = Literal["mkdir", "move", "copy", "rename", "write"]
+StepKind = Literal[
+    "mkdir",
+    "move",
+    "copy",
+    "rename",
+    "write",
+    "workbook_update",
+    "restore_backup",
+]
 
 
 @dataclass
@@ -122,6 +138,7 @@ class Plan:
     op_id: str
     steps: list[Step] = field(default_factory=list)
     warnings: list[Warning] = field(default_factory=list)
+    meta: dict = field(default_factory=dict)
     plan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_json(self) -> dict:
@@ -130,6 +147,7 @@ class Plan:
             "opId": self.op_id,
             "steps": [s.to_json() for s in self.steps],
             "warnings": [w.to_json() for w in self.warnings],
+            "meta": self.meta,
         }
 
 
@@ -180,6 +198,14 @@ class Operation(ABC):
     @abstractmethod
     def apply(self, plan: Plan) -> Result:
         """SADECE plan.steps'i uygular. Yeniden hesaplama YOK."""
+
+    def revise(self, plan: Plan, payload: dict) -> Plan:
+        """Kullanicinin onizlemede duzenledigi verilerle yeni plan uret.
+
+        Sadece duzenlenebilir planlar override eder. Varsayilan guvenli davranis
+        plani degistirmeyi reddetmektir.
+        """
+        raise ValueError("bu plan duzenlenebilir degil")
 
     def to_json(self) -> dict:
         return {

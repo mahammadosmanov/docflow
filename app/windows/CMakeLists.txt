@@ -75,6 +75,20 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
+# The Python document engine is packaged independently with PyInstaller.
+# Keep it next to the Flutter executable so main.dart can discover it without
+# machine-specific Python paths or environment variables.
+set(DOCFLOW_SIDECAR_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../sidecar/dist/docflow_sidecar")
+if(EXISTS "${DOCFLOW_SIDECAR_DIR}/docflow_sidecar.exe")
+  install(DIRECTORY "${DOCFLOW_SIDECAR_DIR}/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/sidecar"
+    COMPONENT Runtime)
+else()
+  message(FATAL_ERROR
+    "Packaged sidecar missing. Build sidecar/docflow_sidecar.spec first.")
+endif()
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 

@@ -87,11 +87,13 @@ class SidecarClient {
       // notification (progress)
       if (msg['method'] == 'progress') {
         final p = (msg['params'] as Map).cast<String, dynamic>();
-        _progress.add(Progress(
-          phase: p['phase'] as String? ?? '',
-          done: (p['done'] as num?)?.toInt() ?? 0,
-          total: (p['total'] as num?)?.toInt() ?? 0,
-        ));
+        _progress.add(
+          Progress(
+            phase: p['phase'] as String? ?? '',
+            done: (p['done'] as num?)?.toInt() ?? 0,
+            total: (p['total'] as num?)?.toInt() ?? 0,
+          ),
+        );
       }
       return;
     }
@@ -101,10 +103,12 @@ class SidecarClient {
     if (c == null) return;
     if (msg.containsKey('error')) {
       final err = (msg['error'] as Map).cast<String, dynamic>();
-      c.completeError(SidecarError(
-        code: (err['code'] as num?)?.toInt() ?? 0,
-        message: err['message'] as String? ?? 'unknown',
-      ));
+      c.completeError(
+        SidecarError(
+          code: (err['code'] as num?)?.toInt() ?? 0,
+          message: err['message'] as String? ?? 'unknown',
+        ),
+      );
     } else {
       c.complete(_asMap(msg['result']));
     }
@@ -112,14 +116,18 @@ class SidecarClient {
 
   Map<String, dynamic> _asMap(Object? result) {
     if (result is Map) return result.cast<String, dynamic>();
-    return {'result': result}; // list_operations list dondurur; ayrica ele alinir
+    return {
+      'result': result,
+    }; // list_operations list dondurur; ayrica ele alinir
   }
 
   Future<void> _onExit(int code) async {
     _proc = null;
     // Bekleyen tum istekleri hataya dusur.
     for (final c in _pending.values) {
-      c.completeError(SidecarError(code: -1, message: 'sidecar exited ($code)'));
+      c.completeError(
+        SidecarError(code: -1, message: 'sidecar exited ($code)'),
+      );
     }
     _pending.clear();
     if (_stopping) return;
@@ -140,12 +148,16 @@ class SidecarClient {
   Future<Object?> _callRaw(String method, Map<String, dynamic> params) {
     final proc = _proc;
     if (proc == null) {
-      return Future.error(SidecarError(code: -1, message: 'sidecar not running'));
+      return Future.error(
+        SidecarError(code: -1, message: 'sidecar not running'),
+      );
     }
     final id = _nextId++;
     final c = Completer<Map<String, dynamic>>();
     _pending[id] = c;
-    proc.stdin.writeln(json.encode({'id': id, 'method': method, 'params': params}));
+    proc.stdin.writeln(
+      json.encode({'id': id, 'method': method, 'params': params}),
+    );
     return c.future.then((m) => m.containsKey('result') ? m['result'] : m);
   }
 
@@ -166,6 +178,22 @@ class SidecarClient {
   Future<ApplyResult> apply(String planId) async {
     final res = await _callRaw('apply', {'planId': planId});
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
+  }
+
+  Future<Plan> revisePlan(
+    String planId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final res = await _callRaw('plan_revise', {
+      'planId': planId,
+      'payload': {'rows': rows},
+    });
+    return Plan.fromJson((res as Map).cast<String, dynamic>());
+  }
+
+  Future<int> copyPlanTable(String planId) async {
+    final res = await _callRaw('plan_copy_table', {'planId': planId});
+    return ((res as Map)['count'] as num?)?.toInt() ?? 0;
   }
 
   /// steps verilirse yerel journal'a gerek yok (bulut kaydindan geri alma).
@@ -204,8 +232,14 @@ class SidecarClient {
         .toList();
   }
 
-  Future<Plan> reviewPreview(String dest, List<Map<String, dynamic>> decisions) async {
-    final res = await _callRaw('review_preview', {'dest': dest, 'decisions': decisions});
+  Future<Plan> reviewPreview(
+    String dest,
+    List<Map<String, dynamic>> decisions,
+  ) async {
+    final res = await _callRaw('review_preview', {
+      'dest': dest,
+      'decisions': decisions,
+    });
     return Plan.fromJson((res as Map).cast<String, dynamic>());
   }
 

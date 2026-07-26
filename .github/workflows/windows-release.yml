@@ -1,0 +1,116 @@
+name: Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: sidecar/requirements.txt
+
+      - name: Install sidecar dependencies
+        working-directory: sidecar
+        run: >-
+          python -m pip install
+          -r requirements.txt
+          pyinstaller
+          pytest
+          mypy
+
+      - name: Test sidecar
+        working-directory: sidecar
+        run: |
+          python -m mypy --config-file mypy.ini docflow_sidecar
+          python -m pytest tests -q
+
+      - name: Package sidecar
+        working-directory: sidecar
+        run: python -m PyInstaller --noconfirm --clean docflow_sidecar.spec
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter packages
+        working-directory: app
+        run: flutter pub get
+
+      - name: Analyze and test Flutter
+        working-directory: app
+        run: |
+          dart analyze
+          flutter test
+
+      - name: Build Windows release
+        working-directory: app
+        run: flutter build windows --release
+
+      - name: Bundle Visual C++ runtime
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsRoot = & $vswhere -latest -products * -property installationPath
+          if (-not $vsRoot) {
+            throw "Visual Studio installation was not found"
+          }
+          $crt = Get-ChildItem -Path (Join-Path $vsRoot "VC\Redist\MSVC") -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+            Select-Object -First 1
+          if (-not $crt) {
+            throw "Visual C++ x64 runtime directory was not found"
+          }
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            Copy-Item -LiteralPath (Join-Path $crt $dll) -Destination $release -Force
+          }
+
+      - name: Smoke-test packaged sidecar
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
+          $sidecar = Join-Path $release "sidecar\docflow_sidecar.exe"
+          if (-not (Test-Path -LiteralPath $sidecar -PathType Leaf)) {
+            throw "Packaged sidecar is missing from the release"
+          }
+          $response = '{"id":1,"method":"ping","params":{}}' |
+            & $sidecar |
+            ConvertFrom-Json
+          if ($response.result.ok -ne $true) {
+            throw "Packaged sidecar ping failed"
+          }
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocFlow-Windows-x64
+          path: app/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 14

@@ -36,7 +36,13 @@ class _StdoutGuard:
 
 
 def emit(obj: dict) -> None:
-    _real_stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    payload = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+    binary_stdout = getattr(_real_stdout, "buffer", None)
+    if binary_stdout is not None:
+        binary_stdout.write(payload)
+        binary_stdout.flush()
+        return
+    _real_stdout.write(payload.decode("utf-8"))
     _real_stdout.flush()
 
 

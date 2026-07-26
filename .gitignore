@@ -8,6 +8,7 @@ sidecar/.venv/
 sidecar/build/
 sidecar/dist/
 sidecar/*.spec
+!sidecar/docflow_sidecar.spec
 .mypy_cache/
 .pytest_cache/
 

@@ -42,14 +42,14 @@ class ParamDef {
   final String? helpKey;
 
   factory ParamDef.fromJson(Map<String, dynamic> j) => ParamDef(
-        name: j['name'] as String,
-        kind: _kindFrom(j['kind'] as String),
-        labelKey: j['labelKey'] as String,
-        required: (j['required'] as bool?) ?? true,
-        defaultValue: j['default'],
-        choices: (j['choices'] as List?)?.cast<String>() ?? const [],
-        helpKey: j['helpKey'] as String?,
-      );
+    name: j['name'] as String,
+    kind: _kindFrom(j['kind'] as String),
+    labelKey: j['labelKey'] as String,
+    required: (j['required'] as bool?) ?? true,
+    defaultValue: j['default'],
+    choices: (j['choices'] as List?)?.cast<String>() ?? const [],
+    helpKey: j['helpKey'] as String?,
+  );
 }
 
 class OperationDef {
@@ -66,13 +66,13 @@ class OperationDef {
   final List<ParamDef> params;
 
   factory OperationDef.fromJson(Map<String, dynamic> j) => OperationDef(
-        id: j['id'] as String,
-        titleKey: j['titleKey'] as String,
-        descriptionKey: j['descriptionKey'] as String,
-        params: (j['schema'] as List)
-            .map((e) => ParamDef.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as String,
+    titleKey: j['titleKey'] as String,
+    descriptionKey: j['descriptionKey'] as String,
+    params: (j['schema'] as List)
+        .map((e) => ParamDef.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class PlanStep {
@@ -94,12 +94,12 @@ class PlanStep {
   String? get code => meta['code'] as String?;
 
   factory PlanStep.fromJson(Map<String, dynamic> j) => PlanStep(
-        kind: j['kind'] as String,
-        src: j['src'] as String?,
-        dst: j['dst'] as String?,
-        noteKey: j['noteKey'] as String?,
-        meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
-      );
+    kind: j['kind'] as String,
+    src: j['src'] as String?,
+    dst: j['dst'] as String?,
+    noteKey: j['noteKey'] as String?,
+    meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
+  );
 }
 
 class PlanWarning {
@@ -109,9 +109,9 @@ class PlanWarning {
   final String subject;
 
   factory PlanWarning.fromJson(Map<String, dynamic> j) => PlanWarning(
-        key: j['key'] as String,
-        subject: (j['subject'] as String?) ?? '',
-      );
+    key: j['key'] as String,
+    subject: (j['subject'] as String?) ?? '',
+  );
 }
 
 class Plan {
@@ -120,27 +120,40 @@ class Plan {
     required this.opId,
     required this.steps,
     required this.warnings,
+    this.meta = const {},
   });
 
   final String? planId;
   final String opId;
   final List<PlanStep> steps;
   final List<PlanWarning> warnings;
+  final Map<String, dynamic> meta;
 
   /// Uygulanabilir adim = dosyayi tasiyan/kopyalayan (mkdir tek basina degil).
-  bool get hasActionableSteps =>
-      steps.any((s) => s.kind == 'move' || s.kind == 'copy' || s.kind == 'rename');
+  bool get hasActionableSteps => steps.any(
+    (s) =>
+        s.kind == 'move' ||
+        s.kind == 'copy' ||
+        s.kind == 'rename' ||
+        s.kind == 'workbook_update',
+  );
+
+  Map<String, dynamic>? get editor {
+    final raw = meta['editor'];
+    return raw is Map ? raw.cast<String, dynamic>() : null;
+  }
 
   factory Plan.fromJson(Map<String, dynamic> j) => Plan(
-        planId: j['planId'] as String?,
-        opId: j['opId'] as String,
-        steps: (j['steps'] as List? ?? [])
-            .map((e) => PlanStep.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        warnings: (j['warnings'] as List? ?? [])
-            .map((e) => PlanWarning.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    planId: j['planId'] as String?,
+    opId: j['opId'] as String,
+    steps: (j['steps'] as List? ?? [])
+        .map((e) => PlanStep.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    warnings: (j['warnings'] as List? ?? [])
+        .map((e) => PlanWarning.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
+  );
 }
 
 class ApplyResult {
@@ -157,13 +170,13 @@ class ApplyResult {
   final List<PlanWarning> errors;
 
   factory ApplyResult.fromJson(Map<String, dynamic> j) => ApplyResult(
-        applied: (j['applied'] as num).toInt(),
-        failed: (j['failed'] as num).toInt(),
-        journalId: (j['journalId'] as String?) ?? '',
-        errors: (j['errors'] as List? ?? [])
-            .map((e) => PlanWarning.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    applied: (j['applied'] as num).toInt(),
+    failed: (j['failed'] as num).toInt(),
+    journalId: (j['journalId'] as String?) ?? '',
+    errors: (j['errors'] as List? ?? [])
+        .map((e) => PlanWarning.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class Progress {
@@ -195,13 +208,13 @@ class ReviewItem {
   bool get hasCode => code.isNotEmpty;
 
   factory ReviewItem.fromJson(Map<String, dynamic> j) => ReviewItem(
-        name: j['name'] as String,
-        path: j['path'] as String,
-        code: (j['code'] as String?) ?? '',
-        confidence: (j['confidence'] as num?)?.toDouble() ?? 0.0,
-        target: j['target'] as String?,
-        targetExists: (j['targetExists'] as bool?) ?? false,
-      );
+    name: j['name'] as String,
+    path: j['path'] as String,
+    code: (j['code'] as String?) ?? '',
+    confidence: (j['confidence'] as num?)?.toDouble() ?? 0.0,
+    target: j['target'] as String?,
+    targetExists: (j['targetExists'] as bool?) ?? false,
+  );
 }
 
 /// Bir gecmis kaydi (journal ozeti). history_list ciktisi.
@@ -223,10 +236,10 @@ class HistoryEntry {
   DateTime? get when => DateTime.tryParse(ts)?.toLocal();
 
   factory HistoryEntry.fromJson(Map<String, dynamic> j) => HistoryEntry(
-        journalId: (j['journalId'] as String?) ?? '',
-        opId: (j['opId'] as String?) ?? '',
-        ts: (j['ts'] as String?) ?? '',
-        total: (j['total'] as num?)?.toInt() ?? 0,
-        moves: (j['moves'] as num?)?.toInt() ?? 0,
-      );
+    journalId: (j['journalId'] as String?) ?? '',
+    opId: (j['opId'] as String?) ?? '',
+    ts: (j['ts'] as String?) ?? '',
+    total: (j['total'] as num?)?.toInt() ?? 0,
+    moves: (j['moves'] as num?)?.toInt() ?? 0,
+  );
 }

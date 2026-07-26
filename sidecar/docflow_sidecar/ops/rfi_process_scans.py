@@ -13,6 +13,7 @@ Dikkat edilecek dort sey:
 from __future__ import annotations
 
 import pathlib
+from typing import Literal
 
 from ..contracts import (
     BoolParam,
@@ -76,7 +77,7 @@ class ProcessScans(Operation):
             if p.is_file() and p.suffix.lower() == ".pdf" and not p.name.startswith(".")
         )
 
-        kind = "copy" if copy_mode else "move"
+        kind: Literal["copy", "move"] = "copy" if copy_mode else "move"
 
         # 1. GECIS: her dosyayi OCR et. Okunamayan/kod yok/dusuk guven -> hemen
         # _review. Kod bulunanlari koda gore GRUPLA (revizyon ele almak icin).

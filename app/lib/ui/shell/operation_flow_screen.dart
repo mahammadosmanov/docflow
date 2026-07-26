@@ -8,6 +8,7 @@ import '../../core/ipc/sidecar_client.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
 import '../../core/settings/settings_store.dart';
+import '../forms/editable_plan_table.dart';
 import '../forms/schema_form.dart';
 import '../theme/app_theme.dart';
 import '../theme/responsive.dart';
@@ -41,6 +42,8 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   ApplyResult? _result;
   double _applyFraction = 0;
   StreamSubscription<Progress>? _sub;
+  List<Map<String, dynamic>> _editorRows = [];
+  bool _editorDirty = false;
 
   @override
   void initState() {
@@ -67,6 +70,8 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       final plan = await widget.client.preview(widget.op.id, _values);
       setState(() {
         _plan = plan;
+        _editorRows = _rowsFrom(plan);
+        _editorDirty = false;
         _stage = _Stage.preview;
       });
     } catch (e) {
@@ -76,8 +81,38 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   }
 
   Future<void> _apply() async {
-    final plan = _plan;
+    var plan = _plan;
     if (plan?.planId == null) return;
+    if (plan!.editor != null && _editorDirty) {
+      try {
+        final before = {
+          for (final warning in plan.warnings)
+            '${warning.key}\u0000${warning.subject}',
+        };
+        final revised = await widget.client.revisePlan(
+          plan.planId!,
+          _editorRows,
+        );
+        if (!mounted) return;
+        final hasNewWarning = revised.warnings.any(
+          (warning) =>
+              !before.contains('${warning.key}\u0000${warning.subject}'),
+        );
+        setState(() {
+          _plan = revised;
+          _editorRows = _rowsFrom(revised);
+          _editorDirty = false;
+        });
+        plan = revised;
+        if (hasNewWarning) {
+          _snack(Strings.of(context).t('rfi.editor.reviewWarnings'));
+          return;
+        }
+      } catch (e) {
+        _snack(e.toString());
+        return;
+      }
+    }
     setState(() {
       _stage = _Stage.applying;
       _applyFraction = 0;
@@ -86,7 +121,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       if (p.phase == 'apply') setState(() => _applyFraction = p.fraction);
     });
     try {
-      final res = await widget.client.apply(plan!.planId!);
+      final res = await widget.client.apply(plan.planId!);
       setState(() {
         _result = res;
         _stage = _Stage.result;
@@ -97,6 +132,28 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       _snack(e.toString());
     } finally {
       await _sub?.cancel();
+    }
+  }
+
+  List<Map<String, dynamic>> _rowsFrom(Plan plan) {
+    final raw = plan.editor?['rows'];
+    if (raw is! List) return [];
+    return raw
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<void> _copyMail() async {
+    final planId = _plan?.planId;
+    if (planId == null) return;
+    try {
+      final count = await widget.client.copyPlanTable(planId);
+      if (mounted) {
+        _snack(Strings.of(context).count('rfi.editor.copied', count));
+      }
+    } catch (e) {
+      _snack(e.toString());
     }
   }
 
@@ -114,7 +171,9 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         summary: '${r.applied}/${(j['steps'] as List?)?.length ?? r.applied}',
         steps: (j['steps'] as List?) ?? const [],
       );
-    } catch (_) {/* bulut opsiyonel */}
+    } catch (_) {
+      /* bulut opsiyonel */
+    }
   }
 
   Future<void> _undo() async {
@@ -139,21 +198,20 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       _snack(Strings.of(context).t('error.param.required.dest'));
       return;
     }
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReviewScreen(
-        client: widget.client,
-        dest: dest,
-        auth: widget.auth,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ReviewScreen(client: widget.client, dest: dest, auth: widget.auth),
       ),
-    ));
+    );
   }
 
   /// Akisin neresindeyiz? Kullanici her an nerede oldugunu gormeli.
   int get _stepIndex => switch (_stage) {
-        _Stage.form => 0,
-        _Stage.previewing || _Stage.preview => 1,
-        _Stage.applying || _Stage.result => 2,
-      };
+    _Stage.form => 0,
+    _Stage.previewing || _Stage.preview => 1,
+    _Stage.applying || _Stage.result => 2,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +227,12 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           ),
         ),
       ),
-      body: Pane(maxWidth: 820, child: _body(s)),
+      body: Pane(
+        maxWidth: _stage == _Stage.preview && _plan?.editor != null
+            ? 2200
+            : 820,
+        child: _body(s),
+      ),
     );
   }
 
@@ -226,6 +289,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
 
   Widget _previewView(Strings s) {
     final plan = _plan!;
+    if (plan.editor != null) return _editablePreviewView(s, plan);
     final canApply = plan.hasActionableSteps;
     final moves = plan.steps.where((e) => e.kind != 'mkdir').length;
     return Column(
@@ -237,16 +301,20 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         ],
         Row(
           children: [
-            Text(s.count('plan.summary', moves),
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              s.count('plan.summary', moves),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
             // Uygulanmadan once oku: bu plan neyi nereye tasiyacak.
-            Text(s.t('plan.readOnly'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(
+              s.t('plan.readOnly'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -278,6 +346,43 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     );
   }
 
+  Widget _editablePreviewView(Strings s, Plan plan) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (plan.warnings.isNotEmpty) ...[
+          _WarningBox(warnings: plan.warnings),
+          const SizedBox(height: 12),
+        ],
+        Expanded(
+          child: EditablePlanTable(
+            editor: plan.editor!,
+            rows: _editorRows,
+            onChanged: () => _editorDirty = true,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Bar(
+          left: TextButton(
+            onPressed: () => setState(() => _stage = _Stage.form),
+            child: Text(s.t('action.cancel')),
+          ),
+          middle: Text(
+            s.t('plan.readOnly'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          right: FilledButton.icon(
+            icon: const Icon(Icons.play_arrow, size: 18),
+            label: Text(s.t('action.apply')),
+            onPressed: plan.hasActionableSteps ? _apply : null,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _applyingView(Strings s) {
     return Center(
       child: Column(
@@ -294,12 +399,17 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          Text('${(_applyFraction * 100).round()}%',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            '${(_applyFraction * 100).round()}%',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 4),
-          Text(s.t('plan.applying'),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(
+            s.t('plan.applying'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -320,24 +430,30 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
                 color: t.colorScheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
                 // Basarisizlik varsa cerceve kalinlasir — monokromda vurgu bu.
-                border: ok ? null : Border.all(color: t.colorScheme.onSurface, width: 1.5),
+                border: ok
+                    ? null
+                    : Border.all(color: t.colorScheme.onSurface, width: 1.5),
               ),
-              child: Icon(
-                  ok ? Severity.ok.icon : Severity.warn.icon,
-                  size: 20),
+              child: Icon(ok ? Severity.ok.icon : Severity.warn.icon, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.count('result.applied', r.applied),
-                      style: t.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    s.count('result.applied', r.applied),
+                    style: t.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   if (r.failed > 0)
-                    Text(s.count('result.failed', r.failed),
-                        style: t.textTheme.bodySmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                      s.count('result.failed', r.failed),
+                      style: t.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -354,8 +470,9 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
                   dense: true,
                   leading: Icon(Severity.warn.icon, size: 18),
                   title: Text(s.t(r.errors[i].key)),
-                  subtitle:
-                      r.errors[i].subject.isEmpty ? null : Text(r.errors[i].subject),
+                  subtitle: r.errors[i].subject.isEmpty
+                      ? null
+                      : Text(r.errors[i].subject),
                 ),
               ),
             ),
@@ -369,10 +486,25 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
             label: Text(s.t('action.undo')),
             onPressed: r.journalId.isEmpty ? null : _undo,
           ),
-          middle: TextButton.icon(
-            icon: const Icon(Icons.folder_open_outlined, size: 18),
-            label: Text(s.t('action.review')),
-            onPressed: _openReview,
+          middle: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_plan?.editor?['copyEnabled'] == true)
+                TextButton.icon(
+                  icon: const Icon(Icons.content_copy_outlined, size: 18),
+                  label: Text(s.t('rfi.action.copyMail')),
+                  onPressed: _copyMail,
+                ),
+              if (_plan?.editor?['copyEnabled'] == true &&
+                  _values.containsKey('dest'))
+                const SizedBox(width: 8),
+              if (_values.containsKey('dest'))
+                TextButton.icon(
+                  icon: const Icon(Icons.folder_open_outlined, size: 18),
+                  label: Text(s.t('action.review')),
+                  onPressed: _openReview,
+                ),
+            ],
           ),
           right: FilledButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -413,7 +545,9 @@ class _Steps extends StatelessWidget {
                 height: 7,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: i <= index ? t.colorScheme.onSurface : Colors.transparent,
+                  color: i <= index
+                      ? t.colorScheme.onSurface
+                      : Colors.transparent,
                   border: Border.all(
                     color: i <= index
                         ? t.colorScheme.onSurface
@@ -485,8 +619,12 @@ class _WarningBox extends StatelessWidget {
             children: [
               Icon(Severity.warn.icon, size: 18),
               const SizedBox(width: 8),
-              Text(s.t('ui.warnings'),
-                  style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                s.t('ui.warnings'),
+                style: t.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -527,12 +665,14 @@ class _StepTile extends StatelessWidget {
     return ListTile(
       dense: true,
       leading: Icon(sev.icon, size: 18),
-      title: Text(name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: t.textTheme.bodyMedium?.copyWith(
-            fontWeight: sev.emphasized ? FontWeight.w600 : FontWeight.w400,
-          )),
+      title: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: t.textTheme.bodyMedium?.copyWith(
+          fontWeight: sev.emphasized ? FontWeight.w600 : FontWeight.w400,
+        ),
+      ),
       subtitle: Text(
         [
           if (step.src != null) step.src!.split(RegExp(r'[/\\]')).last,
@@ -540,7 +680,9 @@ class _StepTile extends StatelessWidget {
         ].join('  ·  '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+        style: t.textTheme.bodySmall?.copyWith(
+          color: t.colorScheme.onSurfaceVariant,
+        ),
       ),
       trailing: conf == null
           ? null

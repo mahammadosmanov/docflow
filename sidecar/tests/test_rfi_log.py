@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import copy
+import zipfile
+from datetime import date, time, timedelta
+
+from openpyxl import Workbook, load_workbook
+
+from docflow_sidecar.fs import apply as fsapply
+from docflow_sidecar.ops.rfi_log_add import AddRfiLogRows
+
+
+def _make_workbook(path):
+    wb = Workbook()
+    civ = wb.active
+    civ.title = "CIV"
+    mec = wb.create_sheet("MEC")
+    lookup = wb.create_sheet("Sheet1")
+
+    civ_headers = [
+        "RFI No.",
+        "ITP No:",
+        "Item No.",
+        "INSPECTION DESCRIPTION",
+        "FORMS",
+        "TAG NO",
+        "AREA",
+        "DATE OF ISSUE",
+        "INSPECTION DATE",
+        "EXPIRY DATE",
+        "INSPECTION START TIME",
+        "INSP. TYPE AZFEN",
+        "INSP. TYPE INTEC",
+        "Inspection Location",
+        "SUBCONTRACTOR",
+        "Inspection Status",
+        "RFI VALIDITY",
+    ]
+    mec_headers = civ_headers[:7] + ["ROW No."] + civ_headers[7:]
+    for column, value in enumerate(civ_headers, 1):
+        civ.cell(9, column).value = value
+    for column, value in enumerate(mec_headers, 1):
+        mec.cell(9, column).value = value
+
+    inspection_day = date.today() + timedelta(days=1)
+    civ_values = [
+        "AZE-SUN-INT-QMS-RFI-CIV-0007",
+        "AZE-SUN-INT-QMS-ITP-CIV-0005",
+        "CIV-5.2.1",
+        "Civil description",
+        "CON-CIV-001",
+        "N12",
+        "North Site",
+        date.today(),
+        inspection_day,
+        date.today() + timedelta(days=8),
+        time(17, 30),
+        "H",
+        "W",
+        "N3",
+        "AZFEN",
+        "Ongoing",
+        "Valid",
+    ]
+    for column, value in enumerate(civ_values, 1):
+        civ.cell(10, column).value = value
+
+    mec_values = [
+        "AZE-SUN-INT-QMS-RFI-MEC-0020",
+        "AZE-SUN-INT-QMS-ITP-MEC-0003",
+        "MEC-3.2.1",
+        "Mechanical description",
+        "CON-MEC-002",
+        "PCS-01",
+        "S1",
+        "",
+        date.today(),
+        inspection_day,
+        date.today() + timedelta(days=8),
+        time(9, 0),
+        "H",
+        "S",
+        "N3",
+        "AZFEN",
+        "Ongoing",
+        "Valid",
+    ]
+    for column, value in enumerate(mec_values, 1):
+        mec.cell(10, column).value = value
+
+    # Ayrilmis tablo kapasitesi ve "dokunma" kolonlari.
+    civ["J11"] = "KEEP EXPIRY"
+    civ["P11"] = "KEEP STATUS"
+    civ["Q11"] = "KEEP VALIDITY"
+    civ["Q30"] = ""
+    mec["K11"] = "KEEP EXPIRY"
+    mec["Q11"] = "KEEP STATUS"
+    mec["R11"] = "KEEP VALIDITY"
+    mec["R30"] = ""
+
+    lookup["K1"] = "Item"
+    lookup["L1"] = "Description"
+    lookup["M1"] = "Forms"
+    lookup["N1"] = "Item"
+    lookup["O1"] = "AZFEN"
+    lookup["P1"] = "Item"
+    lookup["Q1"] = "INTEC"
+    lookup.append([None] * 10 + [
+        "CIV-5.2.1",
+        "Civil description",
+        "CON-CIV-001",
+        "CIV-5.2.1",
+        "H",
+        "CIV-5.2.1",
+        "W",
+    ])
+    lookup.append([None] * 10 + [
+        "MEC-3.2.1",
+        "Mechanical description",
+        "CON-MEC-002",
+        "MEC-3.2.1",
+        "H",
+        "MEC-3.2.1",
+        "S",
+    ])
+    wb.save(path)
+    wb.close()
+
+
+def test_preview_numbers_schedule_and_overflow(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    plan = AddRfiLogRows().preview({
+        "workbook": str(path),
+        "discipline": "CIV",
+        "count": 2,
+        "overflow_next_day": True,
+    })
+
+    rows = plan.meta["editor"]["rows"]
+    assert [row["rfiNo"] for row in rows] == [
+        "AZE-SUN-INT-QMS-RFI-CIV-0008",
+        "AZE-SUN-INT-QMS-RFI-CIV-0009",
+    ]
+    assert rows[0]["inspectionDate"] == (
+        date.today() + timedelta(days=2)
+    ).strftime("%d-%b-%y")
+    assert [row["startTime"] for row in rows] == ["09:00", "09:30"]
+    assert any(w.key == "warn.rfi.overflowMoved" for w in plan.warnings)
+
+
+def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypatch):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    original = fsapply.file_sha256(path)
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "discipline": "CIV",
+        "count": 1,
+        "overflow_next_day": True,
+    })
+    rows = copy.deepcopy(plan.meta["editor"]["rows"])
+    duplicate = dict(rows[0])
+    duplicate["_rowId"] = "duplicate"
+    duplicate["area"] = "South Site"
+    rows.append(duplicate)
+    revised = operation.revise(plan, {"rows": rows})
+    result = operation.apply(revised)
+
+    assert result.failed == 0
+    assert result.applied == 2
+    journal = fsapply.get_journal(result.journal_id)
+    backup = journal["steps"][0]["src"]
+    with zipfile.ZipFile(backup) as before, zipfile.ZipFile(path) as after:
+        assert before.namelist() == after.namelist()
+        for name in before.namelist():
+            if name not in ("xl/worksheets/sheet1.xml", "xl/workbook.xml"):
+                assert before.read(name) == after.read(name), name
+
+    wb = load_workbook(path, data_only=False)
+    try:
+        civ = wb["CIV"]
+        assert civ["A11"].value == "AZE-SUN-INT-QMS-RFI-CIV-0008"
+        assert civ["A12"].value == "AZE-SUN-INT-QMS-RFI-CIV-0008"
+        assert civ["G11"].value in (None, "")
+        assert civ["G12"].value == "South Site"
+        assert str(civ["D11"].value).startswith("=IFERROR(VLOOKUP")
+        assert civ["J11"].value == "KEEP EXPIRY"
+        assert civ["P11"].value == "KEEP STATUS"
+        assert civ["Q11"].value == "KEEP VALIDITY"
+    finally:
+        wb.close()
+
+    undone = fsapply.undo(result.journal_id)
+    assert undone.failed == 0
+    assert fsapply.file_sha256(path) == original
+
+
+def test_mec_writes_after_row_number_without_touching_it(tmp_path, monkeypatch):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "discipline": "MEC",
+        "count": 1,
+        "overflow_next_day": True,
+    })
+    result = operation.apply(plan)
+    assert result.failed == 0
+
+    wb = load_workbook(path, data_only=False)
+    try:
+        mec = wb["MEC"]
+        assert mec["A11"].value == "AZE-SUN-INT-QMS-RFI-MEC-0021"
+        assert mec["H11"].value is None
+        assert mec["I11"].value.date() == date.today()
+        assert mec["P11"].value == "AZFEN"
+        assert mec["K11"].value == "KEEP EXPIRY"
+        assert mec["Q11"].value == "KEEP STATUS"
+        assert mec["R11"].value == "KEEP VALIDITY"
+    finally:
+        wb.close()

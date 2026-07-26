@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from . import ops  # noqa: F401  — @register'lari tetikler
 from . import review as _review
+from .clipboard import copy_plan_table as _copy_plan_table
 from .contracts import Plan, Step, Warning
 from .fs.apply import apply_steps as _apply_steps
 from .fs.apply import get_journal as _get_journal
@@ -38,6 +39,22 @@ def _apply(p: dict) -> dict:
         # Kayitli operasyona bagli olmayan plan (or. rfi.review) — dogrudan uygula.
         return _apply_steps(plan).to_json()
     return op.apply(plan).to_json()
+
+
+def _revise(p: dict) -> dict:
+    plan = _PLANS.get(p["planId"])
+    if plan is None:
+        raise KeyError("plan bulunamadi veya suresi doldu - preview'i tekrarla")
+    revised = get(plan.op_id).revise(plan, p.get("payload") or {})
+    _PLANS[revised.plan_id] = revised
+    return revised.to_json()
+
+
+def _copy_table(p: dict) -> dict:
+    plan = _PLANS.get(p["planId"])
+    if plan is None:
+        raise KeyError("plan bulunamadi veya suresi doldu - preview'i tekrarla")
+    return {"count": _copy_plan_table(plan)}
 
 
 def _undo(p: dict) -> dict:
@@ -78,6 +95,8 @@ def main() -> None:
         "ping": _ping,
         "list_operations": _list_operations,
         "preview": _preview,
+        "plan_revise": _revise,
+        "plan_copy_table": _copy_table,
         "apply": _apply,
         "undo": _undo,
         "review_scan": _review_scan,
