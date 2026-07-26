@@ -53,6 +53,13 @@ bool applyEditorRegexFill(
   return changed;
 }
 
+String planTableDisplayValue(Map<String, dynamic> column, String value) {
+  if (column['display'] == 'suffix' && value.contains('-')) {
+    return value.split('-').last;
+  }
+  return value;
+}
+
 /// Plan.meta.editor tarafindan tarif edilen genel, duzenlenebilir kayit tablosu.
 /// Operation kimligi bilmez; kolon, secenek, bagimli secenek ve otomatik doldurma
 /// kurallarinin tamamini sidecar planindan alir.
@@ -83,13 +90,6 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
           .toList();
 
   bool get _compact => widget.editor['layout'] == 'compact';
-
-  String _displayValue(Map<String, dynamic> column, String value) {
-    if (column['display'] == 'suffix' && value.contains('-')) {
-      return value.split('-').last;
-    }
-    return value;
-  }
 
   @override
   void dispose() {
@@ -209,7 +209,7 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
       return Tooltip(
         message: value,
         child: SelectableText(
-          _displayValue(column, value),
+          planTableDisplayValue(column, value),
           maxLines: 1,
           style: Theme.of(
             context,
@@ -232,7 +232,7 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
               child: Tooltip(
                 message: option,
                 child: Text(
-                  _displayValue(column, option),
+                  planTableDisplayValue(column, option),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

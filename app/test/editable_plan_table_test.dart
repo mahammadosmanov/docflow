@@ -164,6 +164,21 @@ void main() {
       },
     };
 
+    expect(
+      planTableDisplayValue(
+        (editor['columns'] as List).first as Map<String, dynamic>,
+        rows.first['rfiNo'] as String,
+      ),
+      '0860',
+    );
+    expect(
+      planTableDisplayValue(
+        (editor['columns'] as List)[1] as Map<String, dynamic>,
+        rows.first['itpNo'] as String,
+      ),
+      '0005',
+    );
+
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('en'),
@@ -189,13 +204,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is SelectableText && widget.data == '0860',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('0005'), findsOneWidget);
     expect(find.text('AZE-SUN-INT-QMS-RFI-CIV-0860'), findsNothing);
     expect(find.text('AUTOMATIC DESCRIPTION'), findsNothing);
 
