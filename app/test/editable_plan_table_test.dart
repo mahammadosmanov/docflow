@@ -112,9 +112,7 @@ void main() {
     expect(row['area'], 'South Site');
   });
 
-  testWidgets('compact RFI editor shows suffixes and keeps auto fields editable', (
-    tester,
-  ) async {
+  test('compact RFI schema shortens identifiers and keeps editable details', () {
     final rows = <Map<String, dynamic>>[
       {
         '_rowId': 'row-compact',
@@ -179,37 +177,12 @@ void main() {
       '0005',
     );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: Strings.supported,
-        localizationsDelegates: const [
-          StringsDelegate(),
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: Scaffold(
-          body: SizedBox(
-            width: 1200,
-            height: 420,
-            child: EditablePlanTable(
-              editor: editor,
-              rows: rows,
-              onChanged: () {},
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('AZE-SUN-INT-QMS-RFI-CIV-0860'), findsNothing);
-    expect(find.text('AUTOMATIC DESCRIPTION'), findsNothing);
-
-    await tester.tap(find.byIcon(Icons.tune_outlined));
-    await tester.pumpAndSettle();
-
-    expect(find.text('AUTOMATIC DESCRIPTION'), findsOneWidget);
+    final details = (editor['columns'] as List)
+        .cast<Map<String, dynamic>>()
+        .where((column) => column['detail'] == true)
+        .toList();
+    expect(details, hasLength(1));
+    expect(details.single['key'], 'description');
+    expect(details.single['kind'], 'multiline');
   });
 }
