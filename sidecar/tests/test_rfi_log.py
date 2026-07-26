@@ -7,7 +7,8 @@ from datetime import date, time, timedelta
 from openpyxl import Workbook, load_workbook
 
 from docflow_sidecar.fs import apply as fsapply
-from docflow_sidecar.ops.rfi_log_add import AddRfiLogRows
+from docflow_sidecar.ops import rfi_log_add
+from docflow_sidecar.ops.rfi_log_add import AddRfiLogRows, WorkbookLockedError
 
 
 def _make_workbook(path):
@@ -224,3 +225,39 @@ def test_mec_writes_after_row_number_without_touching_it(tmp_path, monkeypatch):
         assert mec["R11"].value == "KEEP VALIDITY"
     finally:
         wb.close()
+
+
+def test_apply_reports_workbook_lock_without_exposing_os_error(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "discipline": "CIV",
+        "count": 1,
+        "overflow_next_day": True,
+    })
+    original = fsapply.file_sha256(path)
+
+    def locked(_path):
+        raise WorkbookLockedError("sensitive operating system error")
+
+    monkeypatch.setattr(rfi_log_add, "_assert_not_locked", locked)
+    result = operation.apply(plan)
+
+    assert result.failed == 1
+    assert result.applied == 0
+    assert result.errors[0].key == "error.rfi.workbookLocked"
+    assert result.errors[0].subject == path.name
+    assert "sensitive" not in result.errors[0].subject
+    assert fsapply.file_sha256(path) == original
+
+    access_warning = rfi_log_add._apply_error_warning(
+        PermissionError("password or operating system detail"),
+        path,
+    )
+    assert access_warning.key == "error.rfi.workbookLocked"
+    assert access_warning.subject == path.name

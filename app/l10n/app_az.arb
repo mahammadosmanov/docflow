@@ -86,6 +86,7 @@
   "warn.exists": "Hədəf artıq mövcuddur — üzərinə yazılmadı, yoxlamaya köçürüldü",
   "warn.no_pdfs": "Qovluqda PDF yoxdur",
   "error.step_failed": "Addım uğursuz oldu",
+  "error.rfi.workbookLocked": "RFI Log açıqdır və ya yazmaq üçün bağlıdır. Excel-də yadda saxlayıb bağlayın və faylın yalnız oxuma rejimində olmadığını yoxlayın.",
   "error.undo_failed": "Geri qaytarma uğursuz oldu",
   "error.param.required.source": "Mənbə qovluğu mütləqdir",
   "error.param.required.dest": "Hədəf qovluğu mütləqdir",

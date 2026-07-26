@@ -86,6 +86,7 @@
   "warn.exists": "Целевой файл уже существует — перемещено на проверку (без перезаписи)",
   "warn.no_pdfs": "В папке нет PDF",
   "error.step_failed": "Шаг не выполнен",
+  "error.rfi.workbookLocked": "RFI Log открыт или доступен только для чтения. Сохраните и закройте его в Excel, затем проверьте доступ на запись.",
   "error.undo_failed": "Не удалось отменить",
   "error.param.required.source": "Исходная папка обязательна",
   "error.param.required.dest": "Целевая папка обязательна",

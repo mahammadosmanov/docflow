@@ -114,6 +114,7 @@
   "warn.exists": "Target already exists — moved to review (not overwritten)",
   "warn.no_pdfs": "No PDFs in folder",
   "error.step_failed": "Step failed",
+  "error.rfi.workbookLocked": "The RFI Log is open or read-only. Save and close it in Excel, then check that the file is writable.",
   "error.undo_failed": "Undo failed",
   "error.param.required.source": "Source folder is required",
   "error.param.required.dest": "Destination folder is required",

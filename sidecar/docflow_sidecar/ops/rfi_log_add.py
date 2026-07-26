@@ -56,6 +56,10 @@ MAX_RFI_COUNT = 100
 LOOKUP_LAST_ROW = 205
 
 
+class WorkbookLockedError(RuntimeError):
+    """Raised when Windows is keeping the RFI workbook open or read-only."""
+
+
 def _default_workbook() -> str | None:
     configured = os.environ.get("DOCFLOW_RFI_LOG")
     if configured:
@@ -566,10 +570,18 @@ def _assert_not_locked(path: pathlib.Path) -> None:
         with path.open("r+b") as stream:
             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
             msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-    except (OSError, PermissionError) as exc:
-        raise PermissionError(
-            "RFI Log Excel'de acik veya yazmaya kapali. Dosyayi kapatip tekrar deneyin."
-        ) from exc
+    except OSError as exc:
+        raise WorkbookLockedError(path.name) from exc
+
+
+def _apply_error_warning(exc: Exception, workbook_path: pathlib.Path) -> Warning:
+    windows_access_error = (
+        isinstance(exc, OSError)
+        and getattr(exc, "winerror", None) in {5, 32, 33}
+    )
+    if isinstance(exc, (WorkbookLockedError, PermissionError)) or windows_access_error:
+        return Warning("error.rfi.workbookLocked", workbook_path.name)
+    return Warning("error.step_failed", str(exc))
 
 
 def _formula_or_value(
@@ -895,5 +907,5 @@ class AddRfiLogRows(Operation):
             except Exception:
                 pass
             result.failed = 1
-            result.errors.append(Warning("error.step_failed", str(exc)))
+            result.errors.append(_apply_error_warning(exc, workbook_path))
             return result

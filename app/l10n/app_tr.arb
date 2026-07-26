@@ -86,6 +86,7 @@
   "warn.exists": "Hedef zaten var — üzerine yazılmadı, incelemeye taşındı",
   "warn.no_pdfs": "Klasörde PDF yok",
   "error.step_failed": "Adım başarısız",
+  "error.rfi.workbookLocked": "RFI Log açık veya yazmaya kapalı. Excel’de kaydedip kapatın ve dosyanın salt okunur olmadığını kontrol edin.",
   "error.undo_failed": "Geri alma başarısız",
   "error.param.required.source": "Kaynak klasör zorunlu",
   "error.param.required.dest": "Hedef klasör zorunlu",
