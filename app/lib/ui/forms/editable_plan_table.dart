@@ -75,11 +75,21 @@ class EditablePlanTable extends StatefulWidget {
 class _EditablePlanTableState extends State<EditablePlanTable> {
   final ScrollController _horizontal = ScrollController();
   final ScrollController _vertical = ScrollController();
+  final Set<String> _expandedRows = {};
 
   List<Map<String, dynamic>> get _columns =>
       (widget.editor['columns'] as List? ?? const [])
           .map((e) => (e as Map).cast<String, dynamic>())
           .toList();
+
+  bool get _compact => widget.editor['layout'] == 'compact';
+
+  String _displayValue(Map<String, dynamic> column, String value) {
+    if (column['display'] == 'suffix' && value.contains('-')) {
+      return value.split('-').last;
+    }
+    return value;
+  }
 
   @override
   void dispose() {
@@ -186,19 +196,25 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
     final kind = column['kind']?.toString() ?? 'text';
     final value = row[key]?.toString() ?? '';
     final version = row['_version:$key'] ?? row['_version'] ?? 0;
-    final inputDecoration = const InputDecoration(
+    final inputDecoration = InputDecoration(
       isDense: true,
-      contentPadding: EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      border: OutlineInputBorder(),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: _compact ? 6 : 9,
+        vertical: _compact ? 7 : 9,
+      ),
+      border: const OutlineInputBorder(),
     );
 
     if (kind == 'readonly') {
-      return SelectableText(
-        value,
-        maxLines: 3,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+      return Tooltip(
+        message: value,
+        child: SelectableText(
+          _displayValue(column, value),
+          maxLines: 1,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
       );
     }
     if (kind == 'choice') {
@@ -213,7 +229,14 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
           for (final option in options)
             DropdownMenuItem(
               value: option,
-              child: Text(option, maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Tooltip(
+                message: option,
+                child: Text(
+                  _displayValue(column, option),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
         ],
         onChanged: (choice) {
@@ -230,6 +253,7 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
         key: ValueKey('${row['_rowId']}:$key:$version'),
         value: value,
         options: options,
+        compact: _compact,
         onChanged: (text) => _set(row, key, text, infer: true),
         onSelected: (text) => _set(row, key, text, infer: true),
       );
@@ -246,6 +270,8 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
 
   @override
   Widget build(BuildContext context) {
+    if (_compact) return _buildCompact(context);
+
     final s = Strings.of(context);
     final t = Theme.of(context);
     final columns = _columns;
@@ -424,6 +450,311 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
       ),
     );
   }
+
+  Widget _buildCompact(BuildContext context) {
+    final s = Strings.of(context);
+    final t = Theme.of(context);
+    final columns = _columns.where((column) => column['compact'] == true).toList();
+    final detailColumns = _columns
+        .where((column) => column['detail'] == true)
+        .toList();
+    final baseWidths = [
+      for (final column in columns)
+        (column['width'] as num?)?.toDouble() ?? 100,
+    ];
+    const actionsWidth = 104.0;
+    final baseTableWidth = baseWidths.fold<double>(
+      actionsWidth,
+      (total, width) => total + width,
+    );
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(
+              children: [
+                const Icon(Icons.view_compact_outlined, size: 17),
+                const SizedBox(width: 7),
+                Text(
+                  s.count('rfi.editor.rowCount', widget.rows.length),
+                  style: t.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    s.t('rfi.editor.compactHint'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.textTheme.bodySmall?.copyWith(
+                      color: t.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = constraints.maxWidth > baseTableWidth
+                    ? constraints.maxWidth
+                    : baseTableWidth;
+                final extra = constraints.maxWidth > baseTableWidth
+                    ? (constraints.maxWidth - baseTableWidth) / columns.length
+                    : 0.0;
+                final widths = [
+                  for (final width in baseWidths) width + extra,
+                ];
+
+                Widget cell({
+                  required double width,
+                  required Widget child,
+                  required bool header,
+                }) {
+                  return Container(
+                    width: width,
+                    height: header ? 38 : 54,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: header ? 6 : 4,
+                      vertical: 4,
+                    ),
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: header
+                          ? t.colorScheme.surfaceContainerHigh
+                          : t.colorScheme.surfaceContainerLowest,
+                      border: Border(
+                        right: BorderSide(color: t.colorScheme.outlineVariant),
+                        bottom: BorderSide(color: t.colorScheme.outlineVariant),
+                      ),
+                    ),
+                    child: child,
+                  );
+                }
+
+                return Scrollbar(
+                  controller: _horizontal,
+                  thumbVisibility: tableWidth > constraints.maxWidth,
+                  child: SingleChildScrollView(
+                    controller: _horizontal,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      height: constraints.maxHeight,
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              for (var i = 0; i < columns.length; i++)
+                                cell(
+                                  width: widths[i],
+                                  header: true,
+                                  child: Text(
+                                    s.t(columns[i]['labelKey'] as String),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: t.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.05,
+                                    ),
+                                  ),
+                                ),
+                              cell(
+                                width: actionsWidth,
+                                header: true,
+                                child: Text(
+                                  s.t('rfi.col.actions'),
+                                  style: t.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Expanded(
+                            child: Scrollbar(
+                              controller: _vertical,
+                              thumbVisibility: true,
+                              child: ListView.builder(
+                                controller: _vertical,
+                                itemCount: widget.rows.length,
+                                itemBuilder: (context, rowIndex) {
+                                  final row = widget.rows[rowIndex];
+                                  final rowId = row['_rowId']?.toString() ?? '$rowIndex';
+                                  final expanded = _expandedRows.contains(rowId);
+                                  final groupField =
+                                      widget.editor['groupField']?.toString() ??
+                                      'rfiNo';
+                                  final groupCount = widget.rows
+                                      .where(
+                                        (item) =>
+                                            item[groupField] == row[groupField],
+                                      )
+                                      .length;
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          for (var i = 0; i < columns.length; i++)
+                                            cell(
+                                              width: widths[i],
+                                              header: false,
+                                              child: _field(columns[i], row),
+                                            ),
+                                          cell(
+                                            width: actionsWidth,
+                                            header: false,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _compactAction(
+                                                  icon: expanded
+                                                      ? Icons.expand_less
+                                                      : Icons.tune_outlined,
+                                                  tooltip: s.t(
+                                                    'rfi.action.details',
+                                                  ),
+                                                  onPressed: () => setState(() {
+                                                    if (expanded) {
+                                                      _expandedRows.remove(rowId);
+                                                    } else {
+                                                      _expandedRows.add(rowId);
+                                                    }
+                                                  }),
+                                                ),
+                                                _compactAction(
+                                                  icon: Icons
+                                                      .add_to_photos_outlined,
+                                                  tooltip: s.t(
+                                                    'rfi.action.duplicate',
+                                                  ),
+                                                  onPressed: () =>
+                                                      _duplicate(rowIndex),
+                                                ),
+                                                _compactAction(
+                                                  icon:
+                                                      Icons.remove_circle_outline,
+                                                  tooltip: s.t(
+                                                    'rfi.action.removeDuplicate',
+                                                  ),
+                                                  onPressed: groupCount > 1
+                                                      ? () => _remove(rowIndex)
+                                                      : null,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (expanded)
+                                        Container(
+                                          width: tableWidth,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            8,
+                                            7,
+                                            8,
+                                            9,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: t.colorScheme
+                                                .surfaceContainerLowest,
+                                            border: Border(
+                                              bottom: BorderSide(
+                                                color:
+                                                    t.colorScheme.outlineVariant,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              for (
+                                                var i = 0;
+                                                i < detailColumns.length;
+                                                i++
+                                              ) ...[
+                                                if (i > 0)
+                                                  const SizedBox(width: 8),
+                                                Expanded(
+                                                  flex: i < 2 ? 3 : 1,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
+                                                    children: [
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              left: 2,
+                                                              bottom: 3,
+                                                            ),
+                                                        child: Text(
+                                                          s.t(
+                                                            detailColumns[i]['labelKey']
+                                                                as String,
+                                                          ),
+                                                          style: t
+                                                              .textTheme
+                                                              .labelSmall
+                                                              ?.copyWith(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      _field(
+                                                        detailColumns[i],
+                                                        row,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 17),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 34),
+      onPressed: onPressed,
+    );
+  }
 }
 
 class _AutocompleteCell extends StatefulWidget {
@@ -431,12 +762,14 @@ class _AutocompleteCell extends StatefulWidget {
     super.key,
     required this.value,
     required this.options,
+    required this.compact,
     required this.onChanged,
     required this.onSelected,
   });
 
   final String value;
   final List<String> options;
+  final bool compact;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onSelected;
 
@@ -495,10 +828,13 @@ class _AutocompleteCellState extends State<_AutocompleteCell> {
           TextField(
             controller: controller,
             focusNode: focusNode,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: widget.compact ? 6 : 9,
+                vertical: widget.compact ? 7 : 9,
+              ),
+              border: const OutlineInputBorder(),
             ),
             onSubmitted: (_) => onSubmitted(),
           ),

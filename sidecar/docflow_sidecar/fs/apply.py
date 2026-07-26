@@ -22,6 +22,17 @@ from ..rpc import notify
 JOURNAL_DIR = pathlib.Path.home() / ".docflow" / "journal"
 
 
+def _copy_contents(
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    *,
+    overwrite: bool = False,
+) -> None:
+    mode = "wb" if overwrite else "xb"
+    with source.open("rb") as incoming, destination.open(mode) as outgoing:
+        shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+
+
 def _journal_path(entry: JournalEntry) -> pathlib.Path:
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     return JOURNAL_DIR / f"{entry.ts.replace(':', '-')}_{entry.journal_id[:8]}.json"
@@ -78,7 +89,7 @@ def _undo(step: Step, dest_folder: str | None = None) -> None:
             if target.exists():
                 raise FileExistsError(str(target))
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(backup, target)
+            _copy_contents(backup, target)
             return
 
         expected = str(step.meta.get("appliedSha256") or "")
@@ -88,7 +99,7 @@ def _undo(step: Step, dest_folder: str | None = None) -> None:
                 "uzerine yazmamak icin geri alma durduruldu"
             )
         temp = workbook.with_name(f".{workbook.name}.docflow-undo.tmp")
-        shutil.copy2(backup, temp)
+        _copy_contents(backup, temp, overwrite=True)
         os.replace(temp, workbook)
         return
 

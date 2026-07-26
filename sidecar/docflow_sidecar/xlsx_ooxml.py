@@ -15,6 +15,7 @@ from datetime import date, time
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import quoteattr
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 OFFICE_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -25,21 +26,55 @@ REL_NS = {"p": PACKAGE_REL}
 CELL_RE = re.compile(r"^([A-Z]+)(\d+)$")
 
 
-def _namespaces(raw: bytes) -> None:
+def _namespaces(raw: bytes) -> dict[str, str]:
+    namespaces: dict[str, str] = {}
     for _event, item in ET.iterparse(io.BytesIO(raw), events=("start-ns",)):
         prefix, uri = item
+        namespaces.setdefault(prefix, uri)
         if prefix not in ("xml", "xmlns"):
             ET.register_namespace(prefix or "", uri)
+    return namespaces
 
 
-def _xml(raw: bytes) -> ET.Element:
-    _namespaces(raw)
+def _xml(
+    raw: bytes,
+    namespaces: dict[str, str] | None = None,
+) -> ET.Element:
+    if namespaces is None:
+        _namespaces(raw)
     parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
     return ET.fromstring(raw, parser=parser)
 
 
-def _serialize(root: ET.Element) -> bytes:
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+def _serialize(
+    root: ET.Element,
+    *,
+    original_namespaces: dict[str, str] | None = None,
+) -> bytes:
+    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    if not original_namespaces:
+        return data
+
+    # ElementTree yalniz QName olarak kullanilan namespace'leri yazar. Excel
+    # dosyalarinda ise mc:Ignorable="xr2 xr3" gibi attribute degerleri icinde
+    # kullanilan prefix'ler de zorunludur. Bunlari kaybetmek Excel'in dosyayi
+    # bozuk saymasina neden olur; kaynak root bildirimlerini byte duzeyinde geri
+    # ekleyerek unsupported extension'lari oldugu gibi koruyoruz.
+    declaration_end = data.find(b"?>")
+    root_start = data.find(b"<", declaration_end + 2 if declaration_end >= 0 else 0)
+    root_end = data.find(b">", root_start)
+    if root_start < 0 or root_end < 0:
+        raise ValueError("XML root elementi bulunamadi")
+    root_header = data[root_start:root_end]
+    missing: list[bytes] = []
+    for prefix, uri in original_namespaces.items():
+        attribute = b"xmlns" if not prefix else f"xmlns:{prefix}".encode("ascii")
+        if attribute + b"=" in root_header:
+            continue
+        missing.append(b" " + attribute + b"=" + quoteattr(uri).encode("utf-8"))
+    if not missing:
+        return data
+    return data[:root_end] + b"".join(missing) + data[root_end:]
 
 
 def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
@@ -178,18 +213,26 @@ def _write_value(cell: ET.Element, value: Any) -> None:
     ET.SubElement(cell, f"{{{MAIN}}}v").text = str(value)
 
 
-def _write_formula(cell: ET.Element, formula: str) -> None:
+def _write_formula(
+    cell: ET.Element,
+    formula: str,
+    cached_value: str | None = None,
+) -> None:
     for child in list(cell):
         cell.remove(child)
     cell.attrib.pop("t", None)
     ET.SubElement(cell, f"{{{MAIN}}}f").text = formula.removeprefix("=")
+    if cached_value is not None:
+        cell.attrib["t"] = "str"
+        ET.SubElement(cell, f"{{{MAIN}}}v").text = cached_value
 
 
 def _patch_sheet(
     raw: bytes,
     updates: dict[tuple[int, int], tuple[str, Any]],
 ) -> bytes:
-    root = _xml(raw)
+    namespaces = _namespaces(raw)
+    root = _xml(raw, namespaces)
     sheet_data = root.find("m:sheetData", NS)
     if sheet_data is None:
         raise ValueError("worksheet sheetData bulunamadi")
@@ -197,23 +240,28 @@ def _patch_sheet(
         row = _row(sheet_data, row_number)
         cell = _cell(sheet_data, row, row_number, column_number)
         if kind == "formula":
-            _write_formula(cell, str(value))
+            if isinstance(value, tuple):
+                formula, cached_value = value
+                _write_formula(cell, str(formula), str(cached_value))
+            else:
+                _write_formula(cell, str(value))
         elif kind == "value":
             _write_value(cell, value)
         else:
             raise ValueError(f"bilinmeyen hucre yazma turu: {kind}")
-    return _serialize(root)
+    return _serialize(root, original_namespaces=namespaces)
 
 
 def _patch_calculation(raw: bytes) -> bytes:
-    root = _xml(raw)
+    namespaces = _namespaces(raw)
+    root = _xml(raw, namespaces)
     calculation = root.find("m:calcPr", NS)
     if calculation is None:
         calculation = ET.SubElement(root, f"{{{MAIN}}}calcPr")
     calculation.attrib["calcMode"] = "auto"
     calculation.attrib["fullCalcOnLoad"] = "1"
     calculation.attrib["forceFullCalc"] = "1"
-    return _serialize(root)
+    return _serialize(root, original_namespaces=namespaces)
 
 
 def patch_workbook(
@@ -225,12 +273,9 @@ def patch_workbook(
     with zipfile.ZipFile(source, "r") as incoming:
         sheet_path = _sheet_path(incoming, sheet_name)
         patched_sheet = _patch_sheet(incoming.read(sheet_path), updates)
-        patched_workbook = _patch_calculation(incoming.read("xl/workbook.xml"))
         with zipfile.ZipFile(destination, "w") as outgoing:
             for info in incoming.infolist():
                 data = incoming.read(info.filename)
                 if info.filename == sheet_path:
                     data = patched_sheet
-                elif info.filename == "xl/workbook.xml":
-                    data = patched_workbook
                 outgoing.writestr(copy.copy(info), data)

@@ -111,4 +111,92 @@ void main() {
     expect(applyEditorRegexFill(editor, row, 'tagNo'), isTrue);
     expect(row['area'], 'South Site');
   });
+
+  testWidgets('compact RFI editor shows suffixes and keeps auto fields editable', (
+    tester,
+  ) async {
+    final rows = <Map<String, dynamic>>[
+      {
+        '_rowId': 'row-compact',
+        'rfiNo': 'AZE-SUN-INT-QMS-RFI-CIV-0860',
+        'itpNo': 'AZE-SUN-INT-QMS-ITP-CIV-0005',
+        'itemNo': 'CIV-5.2.1',
+        'description': 'AUTOMATIC DESCRIPTION',
+      },
+    ];
+    final editor = <String, dynamic>{
+      'kind': 'recordTable',
+      'layout': 'compact',
+      'groupField': 'rfiNo',
+      'columns': [
+        {
+          'key': 'rfiNo',
+          'labelKey': 'rfi.col.rfiNo',
+          'kind': 'readonly',
+          'width': 72,
+          'compact': true,
+          'display': 'suffix',
+        },
+        {
+          'key': 'itpNo',
+          'labelKey': 'rfi.col.itpNo',
+          'kind': 'choice',
+          'width': 72,
+          'compact': true,
+          'display': 'suffix',
+        },
+        {
+          'key': 'itemNo',
+          'labelKey': 'rfi.col.itemNo',
+          'kind': 'text',
+          'width': 100,
+          'compact': true,
+        },
+        {
+          'key': 'description',
+          'labelKey': 'rfi.col.description',
+          'kind': 'multiline',
+          'detail': true,
+        },
+      ],
+      'choices': {
+        'itpNo': ['AZE-SUN-INT-QMS-ITP-CIV-0005'],
+      },
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: Strings.supported,
+        localizationsDelegates: const [
+          StringsDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: SizedBox(
+            width: 1200,
+            height: 420,
+            child: EditablePlanTable(
+              editor: editor,
+              rows: rows,
+              onChanged: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0860'), findsOneWidget);
+    expect(find.text('0005'), findsOneWidget);
+    expect(find.text('AZE-SUN-INT-QMS-RFI-CIV-0860'), findsNothing);
+    expect(find.text('AUTOMATIC DESCRIPTION'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.tune_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AUTOMATIC DESCRIPTION'), findsOneWidget);
+  });
 }

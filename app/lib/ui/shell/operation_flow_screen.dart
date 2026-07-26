@@ -229,7 +229,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       ),
       body: Pane(
         maxWidth: _stage == _Stage.preview && _plan?.editor != null
-            ? 2200
+            ? (_plan?.editor?['layout'] == 'compact' ? 1500 : 2200)
             : 820,
         child: _body(s),
       ),

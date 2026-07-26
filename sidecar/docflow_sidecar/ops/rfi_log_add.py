@@ -8,10 +8,12 @@ SHA-256 ile dogrular. Expiry/Status/Validity sutunlarina dokunulmaz.
 from __future__ import annotations
 
 import copy
+import ctypes
 import os
 import pathlib
 import re
 import shutil
+import time as time_module
 import uuid
 import warnings as pywarnings
 from dataclasses import dataclass
@@ -366,39 +368,105 @@ def _allocate(
 
 def _columns() -> list[dict[str, Any]]:
     return [
-        {"key": "rfiNo", "labelKey": "rfi.col.rfiNo", "kind": "readonly", "width": 236},
-        {"key": "itpNo", "labelKey": "rfi.col.itpNo", "kind": "choice", "width": 236},
-        {"key": "itemNo", "labelKey": "rfi.col.itemNo", "kind": "choice", "width": 128},
+        {
+            "key": "rfiNo",
+            "labelKey": "rfi.col.rfiNo",
+            "kind": "readonly",
+            "width": 72,
+            "compact": True,
+            "display": "suffix",
+        },
+        {
+            "key": "itpNo",
+            "labelKey": "rfi.col.itpNo",
+            "kind": "choice",
+            "width": 72,
+            "compact": True,
+            "display": "suffix",
+        },
+        {
+            "key": "itemNo",
+            "labelKey": "rfi.col.itemNo",
+            "kind": "choice",
+            "width": 94,
+            "compact": True,
+        },
         {
             "key": "description",
             "labelKey": "rfi.col.description",
             "kind": "multiline",
-            "width": 300,
+            "width": 360,
+            "detail": True,
         },
-        {"key": "forms", "labelKey": "rfi.col.forms", "kind": "multiline", "width": 240},
-        {"key": "tagNo", "labelKey": "rfi.col.tagNo", "kind": "autocomplete", "width": 150},
-        {"key": "area", "labelKey": "rfi.col.area", "kind": "autocomplete", "width": 144},
-        {"key": "dateOfIssue", "labelKey": "rfi.col.issueDate", "kind": "text", "width": 112},
+        {
+            "key": "forms",
+            "labelKey": "rfi.col.forms",
+            "kind": "multiline",
+            "width": 280,
+            "detail": True,
+        },
+        {
+            "key": "tagNo",
+            "labelKey": "rfi.col.tagNo",
+            "kind": "autocomplete",
+            "width": 116,
+            "compact": True,
+        },
+        {
+            "key": "area",
+            "labelKey": "rfi.col.area",
+            "kind": "autocomplete",
+            "width": 116,
+            "compact": True,
+        },
+        {
+            "key": "dateOfIssue",
+            "labelKey": "rfi.col.issueDate",
+            "kind": "text",
+            "width": 90,
+            "compact": True,
+        },
         {
             "key": "inspectionDate",
             "labelKey": "rfi.col.inspectionDate",
             "kind": "text",
-            "width": 120,
+            "width": 94,
+            "compact": True,
         },
-        {"key": "startTime", "labelKey": "rfi.col.startTime", "kind": "text", "width": 100},
-        {"key": "azfenType", "labelKey": "rfi.col.azfenType", "kind": "text", "width": 104},
-        {"key": "intecType", "labelKey": "rfi.col.intecType", "kind": "text", "width": 104},
+        {
+            "key": "startTime",
+            "labelKey": "rfi.col.startTime",
+            "kind": "text",
+            "width": 68,
+            "compact": True,
+        },
+        {
+            "key": "azfenType",
+            "labelKey": "rfi.col.azfenType",
+            "kind": "text",
+            "width": 130,
+            "detail": True,
+        },
+        {
+            "key": "intecType",
+            "labelKey": "rfi.col.intecType",
+            "kind": "text",
+            "width": 130,
+            "detail": True,
+        },
         {
             "key": "location",
             "labelKey": "rfi.col.location",
             "kind": "autocomplete",
-            "width": 180,
+            "width": 134,
+            "compact": True,
         },
         {
             "key": "subcontractor",
             "labelKey": "rfi.col.subcontractor",
             "kind": "autocomplete",
-            "width": 140,
+            "width": 110,
+            "compact": True,
         },
     ]
 
@@ -411,6 +479,7 @@ def _plan_meta(
     return {
         "editor": {
             "kind": "recordTable",
+            "layout": "compact",
             "titleKey": "rfi.editor.title",
             "groupField": "rfiNo",
             "columns": _columns(),
@@ -454,6 +523,36 @@ def _plan_meta(
             "copyHeaders": COPY_HEADERS,
             "discipline": discipline,
         }
+    }
+
+
+def _copy_source(
+    workbook_path: pathlib.Path,
+    discipline: str,
+    start_row: int,
+) -> dict[str, Any]:
+    layout = LAYOUTS[discipline]
+    return {
+        "workbook": str(workbook_path),
+        "sheet": layout.sheet,
+        "headerRow": 9,
+        "startRow": start_row,
+        "columns": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            layout.issue_col,
+            layout.inspection_col,
+            layout.time_col,
+            layout.azfen_col,
+            layout.intec_col,
+            layout.location_col,
+            layout.subcontractor_col,
+        ],
     }
 
 
@@ -564,22 +663,80 @@ def _safe_rows(
 def _assert_not_locked(path: pathlib.Path) -> None:
     if os.name != "nt":
         return
-    try:
-        import msvcrt
 
-        with path.open("r+b") as stream:
-            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-    except OSError as exc:
-        raise WorkbookLockedError(path.name) from exc
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    invalid_handle = ctypes.c_void_p(-1).value
+    last_error: OSError | None = None
+
+    for attempt in range(8):
+        handle = create_file(
+            str(path),
+            0x80000000 | 0x40000000,  # GENERIC_READ | GENERIC_WRITE
+            0,  # Excel aciksa paylasimsiz handle basarisiz olur.
+            None,
+            3,  # OPEN_EXISTING
+            0x80,  # FILE_ATTRIBUTE_NORMAL
+            None,
+        )
+        if handle != invalid_handle:
+            close_handle(handle)
+            return
+        last_error = ctypes.WinError(ctypes.get_last_error())
+        if attempt < 7:
+            time_module.sleep(0.15)
+    raise WorkbookLockedError(path.name) from last_error
 
 
-def _apply_error_warning(exc: Exception, workbook_path: pathlib.Path) -> Warning:
-    windows_access_error = (
+def _is_workbook_access_error(exc: Exception) -> bool:
+    return isinstance(exc, (WorkbookLockedError, PermissionError)) or (
         isinstance(exc, OSError)
         and getattr(exc, "winerror", None) in {5, 32, 33}
     )
-    if isinstance(exc, (WorkbookLockedError, PermissionError)) or windows_access_error:
+
+
+def _replace_with_retry(source: pathlib.Path, destination: pathlib.Path) -> None:
+    for attempt in range(20):
+        try:
+            os.replace(source, destination)
+            return
+        except OSError as exc:
+            if not _is_workbook_access_error(exc) or attempt >= 19:
+                raise
+            time_module.sleep(0.25)
+
+
+def _copy_contents(
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    *,
+    overwrite: bool = False,
+) -> None:
+    # shutil.copy/copy2/copyfile Windows'ta CopyFile2 kullanir. OneDrive bazen
+    # tum byte'lari kopyaladiktan sonra metadata asamasinda EACCES dondurur.
+    # Stream kopyasi yalniz workbook icerigini tasir ve bu yalanci hatayi onler.
+    mode = "wb" if overwrite else "xb"
+    with source.open("rb") as incoming, destination.open(mode) as outgoing:
+        shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+
+
+def _apply_error_warning(exc: Exception, workbook_path: pathlib.Path) -> Warning:
+    if _is_workbook_access_error(exc):
         return Warning("error.rfi.workbookLocked", workbook_path.name)
     return Warning("error.step_failed", str(exc))
 
@@ -588,8 +745,12 @@ def _formula_or_value(
     value: str,
     default_value: str,
     formula: str,
-) -> tuple[str, str]:
-    return ("formula", formula) if value == default_value else ("value", value)
+) -> tuple[str, Any]:
+    return (
+        ("formula", (formula, default_value))
+        if value == default_value
+        else ("value", value)
+    )
 
 
 def _write_records(
@@ -800,11 +961,17 @@ class AddRfiLogRows(Operation):
             },
         )
         notify("progress", {"phase": "preview", "done": 3, "total": 3})
+        meta = _plan_meta(discipline, source, rows)
+        meta["editor"]["copySource"] = _copy_source(
+            workbook_path,
+            discipline,
+            start_row,
+        )
         return Plan(
             op_id=self.id,
             steps=[step],
             warnings=_warnings_for_rows(rows, overflowed=overflowed, wrap=wrap),
-            meta=_plan_meta(discipline, source, rows),
+            meta=meta,
         )
 
     def revise(self, plan: Plan, payload: dict) -> Plan:
@@ -824,11 +991,18 @@ class AddRfiLogRows(Operation):
             raise ValueError("tek planda en fazla 500 fiziksel satir olabilir")
         revised_step = copy.deepcopy(original)
         revised_step.meta["records"] = copy.deepcopy(rows)
+        discipline = str(original.meta["discipline"])
+        meta = _plan_meta(discipline, source_data, rows)
+        meta["editor"]["copySource"] = _copy_source(
+            pathlib.Path(str(original.src)),
+            discipline,
+            start_row,
+        )
         revised = Plan(
             op_id=self.id,
             steps=[revised_step],
             warnings=_warnings_for_rows(rows),
-            meta=_plan_meta(str(original.meta["discipline"]), source_data, rows),
+            meta=meta,
         )
         revised.steps[0].meta["startRow"] = start_row
         return revised
@@ -858,7 +1032,7 @@ class AddRfiLogRows(Operation):
             backup_path.parent.mkdir(parents=True, exist_ok=True)
             if backup_path.exists():
                 raise FileExistsError(str(backup_path))
-            shutil.copy2(workbook_path, backup_path)
+            _copy_contents(workbook_path, backup_path)
 
             restore_step = Step(
                 "restore_backup",
@@ -881,7 +1055,7 @@ class AddRfiLogRows(Operation):
                 presets,
             )
             notify("progress", {"phase": "apply", "done": 1, "total": 3})
-            os.replace(temp_path, workbook_path)
+            _replace_with_retry(temp_path, workbook_path)
             _verify_records(workbook_path, discipline, start_row, rows)
             notify("progress", {"phase": "apply", "done": 2, "total": 3})
 
@@ -902,8 +1076,8 @@ class AddRfiLogRows(Operation):
                     restore_temp = workbook_path.with_name(
                         f".{workbook_path.name}.docflow-restore.tmp"
                     )
-                    shutil.copy2(backup_path, restore_temp)
-                    os.replace(restore_temp, workbook_path)
+                    _copy_contents(backup_path, restore_temp, overwrite=True)
+                    _replace_with_retry(restore_temp, workbook_path)
             except Exception:
                 pass
             result.failed = 1

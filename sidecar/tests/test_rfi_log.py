@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import zipfile
 from datetime import date, time, timedelta
 
@@ -8,7 +9,11 @@ from openpyxl import Workbook, load_workbook
 
 from docflow_sidecar.fs import apply as fsapply
 from docflow_sidecar.ops import rfi_log_add
-from docflow_sidecar.ops.rfi_log_add import AddRfiLogRows, WorkbookLockedError
+from docflow_sidecar.ops.rfi_log_add import (
+    AddRfiLogRows,
+    WorkbookLockedError,
+    _assert_not_locked,
+)
 
 
 def _make_workbook(path):
@@ -148,6 +153,11 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     ).strftime("%d-%b-%y")
     assert [row["startTime"] for row in rows] == ["09:00", "09:30"]
     assert any(w.key == "warn.rfi.overflowMoved" for w in plan.warnings)
+    assert plan.meta["editor"]["layout"] == "compact"
+    assert plan.meta["editor"]["copySource"]["sheet"] == "CIV"
+    assert plan.meta["editor"]["copySource"]["columns"] == [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15
+    ]
 
 
 def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypatch):
@@ -177,7 +187,7 @@ def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypa
     with zipfile.ZipFile(backup) as before, zipfile.ZipFile(path) as after:
         assert before.namelist() == after.namelist()
         for name in before.namelist():
-            if name not in ("xl/worksheets/sheet1.xml", "xl/workbook.xml"):
+            if name != "xl/worksheets/sheet1.xml":
                 assert before.read(name) == after.read(name), name
 
     wb = load_workbook(path, data_only=False)
@@ -193,6 +203,16 @@ def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypa
         assert civ["Q11"].value == "KEEP VALIDITY"
     finally:
         wb.close()
+
+    calculated = load_workbook(path, read_only=True, data_only=True)
+    try:
+        civ = calculated["CIV"]
+        assert civ["D11"].value == "Civil description"
+        assert civ["E11"].value == "CON-CIV-001"
+        assert civ["L11"].value == "H"
+        assert civ["M11"].value == "W"
+    finally:
+        calculated.close()
 
     undone = fsapply.undo(result.journal_id)
     assert undone.failed == 0
@@ -261,3 +281,12 @@ def test_apply_reports_workbook_lock_without_exposing_os_error(
     )
     assert access_warning.key == "error.rfi.workbookLocked"
     assert access_warning.subject == path.name
+
+
+def test_windows_lock_check_accepts_a_free_workbook(tmp_path):
+    if os.name != "nt":
+        return
+    path = tmp_path / "free.xlsx"
+    path.write_bytes(b"free")
+
+    _assert_not_locked(path)
