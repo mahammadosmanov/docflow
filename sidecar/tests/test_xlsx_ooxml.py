@@ -47,3 +47,36 @@ def test_value_replacing_formula_is_removed_from_target_sheet_calc_chain():
     ]
 
     assert entries == [("E10", "11"), ("D10", "12")]
+
+
+def test_patch_allows_only_consecutive_duplicate_identifiers():
+    sheet = b"""<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+ <sheetData><row r="10"><c r="A10"><v>1</v></c></row></sheetData>
+ <dataValidations count="2">
+  <dataValidation type="custom" sqref="A10:A18820">
+   <formula1>COUNTIF($A$16:$A$891,A10)&lt;=1</formula1>
+  </dataValidation>
+  <dataValidation type="list" sqref="C10:C18820">
+   <formula1>INDIRECT(B10)</formula1>
+  </dataValidation>
+ </dataValidations>
+</worksheet>"""
+
+    patched = _patch_sheet(
+        sheet,
+        {},
+        allow_consecutive_duplicates_column=1,
+    )
+    root = ET.fromstring(patched)
+    validations = root.find(f"{{{MAIN}}}dataValidations")
+    assert validations is not None
+    formulas = [
+        validation.find(f"{{{MAIN}}}formula1").text
+        for validation in validations.findall(f"{{{MAIN}}}dataValidation")
+    ]
+
+    assert formulas == [
+        'OR(A10="",COUNTIF($A$10:A10,A10)=1,A10=A9)',
+        "INDIRECT(B10)",
+    ]

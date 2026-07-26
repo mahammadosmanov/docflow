@@ -238,6 +238,7 @@ def _patch_sheet(
     raw: bytes,
     updates: dict[tuple[int, int], tuple[str, Any]],
     replaced_formulas: set[str] | None = None,
+    allow_consecutive_duplicates_column: int | None = None,
 ) -> bytes:
     namespaces = _namespaces(raw)
     root = _xml(raw, namespaces)
@@ -263,7 +264,53 @@ def _patch_sheet(
             _write_value(cell, value)
         else:
             raise ValueError(f"bilinmeyen hucre yazma turu: {kind}")
+    if allow_consecutive_duplicates_column is not None:
+        _patch_consecutive_duplicate_validation(
+            root,
+            allow_consecutive_duplicates_column,
+        )
     return _serialize(root, original_namespaces=namespaces)
+
+
+def _patch_consecutive_duplicate_validation(
+    root: ET.Element,
+    column_number: int,
+) -> None:
+    """Allow a repeated identifier only when it continues the preceding row.
+
+    The RFI workbook's original custom validation rejects every occurrence of a
+    duplicated RFI number. CIV/MEC legitimately use the same RFI number on
+    adjacent detail rows, so the first occurrence remains unique and following
+    adjacent rows are accepted. A later, non-adjacent reuse is still rejected.
+    """
+
+    column = _column_name(column_number)
+    validations = root.find("m:dataValidations", NS)
+    if validations is None:
+        return
+    for validation in validations.findall("m:dataValidation", NS):
+        if validation.attrib.get("type") != "custom":
+            continue
+        formula = validation.find("m:formula1", NS)
+        if formula is None or "COUNTIF" not in (formula.text or "").upper():
+            continue
+        for reference in validation.attrib.get("sqref", "").split():
+            match = re.fullmatch(
+                rf"{column}(\d+):{column}(\d+)",
+                reference,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                continue
+            start_row = int(match.group(1))
+            previous_row = max(1, start_row - 1)
+            formula.text = (
+                f'OR({column}{start_row}="",'
+                f"COUNTIF(${column}${start_row}:{column}{start_row},"
+                f"{column}{start_row})=1,"
+                f"{column}{start_row}={column}{previous_row})"
+            )
+            break
 
 
 def _patch_calc_chain(raw: bytes, sheet_id: int, removed_refs: set[str]) -> bytes:
@@ -304,6 +351,8 @@ def patch_workbook(
     destination: Path,
     sheet_name: str,
     updates: dict[tuple[int, int], tuple[str, Any]],
+    *,
+    allow_consecutive_duplicates_column: int | None = None,
 ) -> None:
     with zipfile.ZipFile(source, "r") as incoming:
         sheet_path, sheet_id = _sheet_info(incoming, sheet_name)
@@ -312,6 +361,7 @@ def patch_workbook(
             incoming.read(sheet_path),
             updates,
             replaced_formulas,
+            allow_consecutive_duplicates_column,
         )
         calc_chain_path = "xl/calcChain.xml"
         patched_calc_chain = None

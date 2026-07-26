@@ -816,7 +816,13 @@ def _write_records(
                 preset["intecType"],
                 f'=IFERROR(VLOOKUP(C{row_number},\'Sheet1\'!$P$1:$Q${LOOKUP_LAST_ROW},2,0),"")',
         )
-    patch_workbook(workbook_path, temp_path, layout.sheet, updates)
+    patch_workbook(
+        workbook_path,
+        temp_path,
+        layout.sheet,
+        updates,
+        allow_consecutive_duplicates_column=1,
+    )
 
 
 def _verify_records(
