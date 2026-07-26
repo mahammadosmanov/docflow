@@ -2,7 +2,8 @@
 
 openpyxl benzeri tam-workbook serializer'lari desteklemedikleri Excel extension
 parcalarini kayit sirasinda silebilir. Burada ZIP icindeki tum parcalar aynen
-kopyalanir; yalniz hedef worksheet XML'i ve recalculation bayraklari degisir.
+kopyalanir; yalniz hedef worksheet XML'i ve gerekiyorsa calcChain girdileri
+degisir.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ def _serialize(
     return data[:root_end] + b"".join(missing) + data[root_end:]
 
 
-def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
+def _sheet_info(archive: zipfile.ZipFile, sheet_name: str) -> tuple[str, int]:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     targets = {
@@ -92,9 +93,15 @@ def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
             continue
         target = targets[sheet.attrib[f"{{{OFFICE_REL}}}id"]].replace("\\", "/")
         if target.startswith("/"):
-            return target.lstrip("/")
-        return f"xl/{target}"
+            path = target.lstrip("/")
+        else:
+            path = f"xl/{target}"
+        return path, int(sheet.attrib["sheetId"])
     raise KeyError(sheet_name)
+
+
+def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
+    return _sheet_info(archive, sheet_name)[0]
 
 
 def _column_number(reference: str) -> int:
@@ -230,6 +237,7 @@ def _write_formula(
 def _patch_sheet(
     raw: bytes,
     updates: dict[tuple[int, int], tuple[str, Any]],
+    replaced_formulas: set[str] | None = None,
 ) -> bytes:
     namespaces = _namespaces(raw)
     root = _xml(raw, namespaces)
@@ -239,6 +247,12 @@ def _patch_sheet(
     for (row_number, column_number), (kind, value) in sorted(updates.items()):
         row = _row(sheet_data, row_number)
         cell = _cell(sheet_data, row, row_number, column_number)
+        if (
+            replaced_formulas is not None
+            and kind != "formula"
+            and cell.find(f"{{{MAIN}}}f") is not None
+        ):
+            replaced_formulas.add(f"{_column_name(column_number)}{row_number}")
         if kind == "formula":
             if isinstance(value, tuple):
                 formula, cached_value = value
@@ -249,6 +263,27 @@ def _patch_sheet(
             _write_value(cell, value)
         else:
             raise ValueError(f"bilinmeyen hucre yazma turu: {kind}")
+    return _serialize(root, original_namespaces=namespaces)
+
+
+def _patch_calc_chain(raw: bytes, sheet_id: int, removed_refs: set[str]) -> bytes:
+    namespaces = _namespaces(raw)
+    root = _xml(raw, namespaces)
+    current_sheet: int | None = None
+    last_kept_sheet: int | None = None
+    for cell in list(root):
+        if "i" in cell.attrib:
+            current_sheet = int(cell.attrib["i"])
+        if current_sheet == sheet_id and cell.attrib.get("r") in removed_refs:
+            root.remove(cell)
+            continue
+        if (
+            current_sheet is not None
+            and current_sheet != last_kept_sheet
+            and "i" not in cell.attrib
+        ):
+            cell.attrib["i"] = str(current_sheet)
+        last_kept_sheet = current_sheet
     return _serialize(root, original_namespaces=namespaces)
 
 
@@ -271,11 +306,26 @@ def patch_workbook(
     updates: dict[tuple[int, int], tuple[str, Any]],
 ) -> None:
     with zipfile.ZipFile(source, "r") as incoming:
-        sheet_path = _sheet_path(incoming, sheet_name)
-        patched_sheet = _patch_sheet(incoming.read(sheet_path), updates)
+        sheet_path, sheet_id = _sheet_info(incoming, sheet_name)
+        replaced_formulas: set[str] = set()
+        patched_sheet = _patch_sheet(
+            incoming.read(sheet_path),
+            updates,
+            replaced_formulas,
+        )
+        calc_chain_path = "xl/calcChain.xml"
+        patched_calc_chain = None
+        if replaced_formulas and calc_chain_path in incoming.namelist():
+            patched_calc_chain = _patch_calc_chain(
+                incoming.read(calc_chain_path),
+                sheet_id,
+                replaced_formulas,
+            )
         with zipfile.ZipFile(destination, "w") as outgoing:
             for info in incoming.infolist():
                 data = incoming.read(info.filename)
                 if info.filename == sheet_path:
                     data = patched_sheet
+                elif info.filename == calc_chain_path and patched_calc_chain is not None:
+                    data = patched_calc_chain
                 outgoing.writestr(copy.copy(info), data)

@@ -14,6 +14,7 @@ import pathlib
 import re
 import shutil
 import time as time_module
+import unicodedata
 import uuid
 import warnings as pywarnings
 from dataclasses import dataclass
@@ -746,9 +747,17 @@ def _formula_or_value(
     default_value: str,
     formula: str,
 ) -> tuple[str, Any]:
+    normalized_value = unicodedata.normalize(
+        "NFC",
+        value.replace("\r\n", "\n").replace("\r", "\n"),
+    )
+    normalized_default = unicodedata.normalize(
+        "NFC",
+        default_value.replace("\r\n", "\n").replace("\r", "\n"),
+    )
     return (
         ("formula", (formula, default_value))
-        if value == default_value
+        if normalized_value == normalized_default
         else ("value", value)
     )
 

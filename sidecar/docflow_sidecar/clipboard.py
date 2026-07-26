@@ -26,7 +26,12 @@ $excel.Visible = $false
 $excel.DisplayAlerts = $false
 $excel.AskToUpdateLinks = $false
 $sourceBook = $null
+$sourceSheet = $null
 $tempBook = $null
+$tempSheet = $null
+$headerRange = $null
+$dataRange = $null
+$copyRange = $null
 try {
   $sourceBook = $excel.Workbooks.Open($env:DOCFLOW_COPY_WORKBOOK, 0, $true)
   $sourceSheet = $sourceBook.Worksheets.Item($env:DOCFLOW_COPY_SHEET)
@@ -46,11 +51,19 @@ try {
     $sourceSheet.Cells.Item($headerRow, $lastColumn)
   )
   $null = $headerRange.Copy($tempSheet.Cells.Item(1, 1))
+  $tempSheet.Range(
+    $tempSheet.Cells.Item(1, 1),
+    $tempSheet.Cells.Item(1, $lastColumn - $firstColumn + 1)
+  ).Value2 = $headerRange.Value2
   $dataRange = $sourceSheet.Range(
     $sourceSheet.Cells.Item($startRow, $firstColumn),
     $sourceSheet.Cells.Item($endRow, $lastColumn)
   )
   $null = $dataRange.Copy($tempSheet.Cells.Item(2, 1))
+  $tempSheet.Range(
+    $tempSheet.Cells.Item(2, 1),
+    $tempSheet.Cells.Item($rowCount + 1, $lastColumn - $firstColumn + 1)
+  ).Value2 = $dataRange.Value2
 
   for ($sourceColumn = $lastColumn; $sourceColumn -ge $firstColumn; $sourceColumn--) {
     if ($columns -notcontains $sourceColumn) {
@@ -61,6 +74,11 @@ try {
   for ($index = 0; $index -lt $columns.Count; $index++) {
     $tempSheet.Columns.Item($index + 1).ColumnWidth =
       $sourceSheet.Columns.Item($columns[$index]).ColumnWidth
+  }
+  $tempSheet.Rows.Item(1).RowHeight = $sourceSheet.Rows.Item($headerRow).RowHeight
+  for ($offset = 0; $offset -lt $rowCount; $offset++) {
+    $tempSheet.Rows.Item($offset + 2).RowHeight =
+      $sourceSheet.Rows.Item($startRow + $offset).RowHeight
   }
 
   $copyRange = $tempSheet.Range(
@@ -87,7 +105,22 @@ try {
   if ($tempBook -ne $null) { $tempBook.Close($false) }
   if ($sourceBook -ne $null) { $sourceBook.Close($false) }
   $excel.Quit()
-  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+  foreach ($comObject in @(
+    $copyRange,
+    $dataRange,
+    $headerRange,
+    $tempSheet,
+    $sourceSheet,
+    $tempBook,
+    $sourceBook,
+    $excel
+  )) {
+    if ($comObject -ne $null) {
+      [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+        $comObject
+      ) | Out-Null
+    }
+  }
   [GC]::Collect()
   [GC]::WaitForPendingFinalizers()
 }
@@ -355,6 +388,10 @@ def copy_plan_table(plan: Plan) -> int:
                 html_bytes, plain = excel_payload
                 _set_windows_clipboard(html_bytes, plain)
                 return count
+            raise RuntimeError(
+                "Excel mail tablosu kaynaktan birebir kopyalanamadi; "
+                "RFI Log dosyasini kapatip yeniden deneyin."
+            )
         fragment, plain, count = _payload(plan)
         _set_windows_clipboard(_cf_html(fragment), plain)
     else:

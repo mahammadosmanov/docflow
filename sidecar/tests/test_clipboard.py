@@ -2,7 +2,7 @@ import re
 
 from openpyxl import Workbook
 
-from docflow_sidecar.clipboard import _cf_html, _payload
+from docflow_sidecar.clipboard import EXCEL_CLIPBOARD_SCRIPT, _cf_html, _payload
 from docflow_sidecar.contracts import Plan
 
 
@@ -59,6 +59,14 @@ def test_cf_html_offsets_are_utf8_byte_offsets():
     assert encoded[fields["StartFragment"] :].startswith(b"<table>")
     assert encoded[fields["EndFragment"] :].startswith(b"<!--EndFragment-->")
     assert encoded[fields["EndHTML"] :].startswith(b"\0")
+
+
+def test_excel_copy_freezes_values_and_preserves_dimensions():
+    assert ".Value2 = $headerRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
+    assert ".Value2 = $dataRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
+    assert ".ColumnWidth =" in EXCEL_CLIPBOARD_SCRIPT
+    assert ".RowHeight =" in EXCEL_CLIPBOARD_SCRIPT
+    assert "FinalReleaseComObject" in EXCEL_CLIPBOARD_SCRIPT
 
 
 def test_mail_table_reads_applied_values_and_headers_from_workbook(tmp_path):
