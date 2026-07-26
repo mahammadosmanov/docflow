@@ -13,7 +13,26 @@ from docflow_sidecar.ops.rfi_log_add import (
     AddRfiLogRows,
     WorkbookLockedError,
     _assert_not_locked,
+    _default_workbook,
 )
+
+
+def test_default_workbook_finds_onedrive_relocated_systemu(tmp_path, monkeypatch):
+    home = tmp_path / "user"
+    workbook = (
+        home
+        / "OneDrive - AZFEN LLC"
+        / "Desktop"
+        / "Rohtolos"
+        / "SystemU"
+        / "RFI Log.xlsx"
+    )
+    workbook.parent.mkdir(parents=True)
+    workbook.touch()
+    monkeypatch.delenv("DOCFLOW_RFI_LOG", raising=False)
+    monkeypatch.setattr(rfi_log_add.pathlib.Path, "home", lambda: home)
+
+    assert _default_workbook() == str(workbook)
 
 
 def _make_workbook(path):

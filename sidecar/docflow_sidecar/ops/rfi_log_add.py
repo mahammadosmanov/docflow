@@ -67,14 +67,15 @@ def _default_workbook() -> str | None:
     configured = os.environ.get("DOCFLOW_RFI_LOG")
     if configured:
         return configured
-    candidate = (
-        pathlib.Path.home()
-        / "OneDrive - AZFEN LLC"
-        / "Desktop"
-        / "SystemU"
-        / "RFI Log.xlsx"
-    )
-    return str(candidate) if candidate.is_file() else None
+    desktop = pathlib.Path.home() / "OneDrive - AZFEN LLC" / "Desktop"
+    candidate = desktop / "SystemU" / "RFI Log.xlsx"
+    if candidate.is_file():
+        return str(candidate)
+
+    # OneDrive may relocate Desktop folders beneath a user-created container
+    # (for example Desktop/Rohtolos/SystemU) while preserving the workbook.
+    relocated = sorted(desktop.glob("*/SystemU/RFI Log.xlsx"))
+    return str(relocated[0]) if relocated else None
 
 
 @dataclass(frozen=True)
