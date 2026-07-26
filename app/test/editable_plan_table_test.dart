@@ -189,7 +189,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('0860'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is SelectableText && widget.data == '0860',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('0005'), findsOneWidget);
     expect(find.text('AZE-SUN-INT-QMS-RFI-CIV-0860'), findsNothing);
     expect(find.text('AUTOMATIC DESCRIPTION'), findsNothing);
