@@ -186,6 +186,26 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     ]
 
 
+def test_revise_repairs_mojibake_itp_separator(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "discipline": "CIV",
+        "count": 1,
+        "overflow_next_day": True,
+    })
+    rows = copy.deepcopy(plan.meta["editor"]["rows"])
+    expected = rows[0]["itpNo"]
+    rows[0]["itpNo"] = expected.encode("utf-8").decode("cp1252")
+
+    revised = operation.revise(plan, {"rows": rows})
+
+    assert revised.meta["editor"]["rows"][0]["itpNo"] == expected
+    assert revised.steps[0].meta["records"][0]["itpNo"] == expected
+
+
 def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypatch):
     path = tmp_path / "RFI Log.xlsx"
     _make_workbook(path)

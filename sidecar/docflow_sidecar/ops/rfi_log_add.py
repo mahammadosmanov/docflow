@@ -198,6 +198,40 @@ def _canonical_itp(discipline: str, number: int) -> str:
     return f"AZE-SUN-INT-QMS-ITP-{discipline}-{number:04d}"
 
 
+def _itp_signature(value: str) -> tuple[str, ...]:
+    """Compare ITP identifiers by tokens, not their often-corrupted separators."""
+
+    normalized = unicodedata.normalize("NFKC", value).upper()
+    return tuple(re.findall(r"[A-Z]+|\d+", normalized))
+
+
+def _resolve_itp(
+    value: str,
+    item_no: str,
+    itp_to_items: dict[str, list[str]],
+) -> str | None:
+    if value in itp_to_items:
+        return value
+
+    signature = _itp_signature(value)
+    signature_matches = [
+        label
+        for label in itp_to_items
+        if signature and _itp_signature(label) == signature
+    ]
+    if len(signature_matches) == 1:
+        return signature_matches[0]
+
+    # The selected Item No. already has a definitive ITP relationship. This
+    # also repairs old saved rows whose separator was decoded as "Ë—".
+    item_matches = [
+        label
+        for label, items in itp_to_items.items()
+        if item_no in items
+    ]
+    return item_matches[0] if len(item_matches) == 1 else None
+
+
 def _recent_unique(values: list[str], limit: int = 500) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -652,8 +686,14 @@ def _safe_rows(
         _parse_time_text(row["startTime"])
         if row["itemNo"] not in source["presets"]:
             raise ValueError(f"bilinmeyen Item No.: {row['itemNo']}")
-        if row["itpNo"] not in source["itpToItems"]:
+        resolved_itp = _resolve_itp(
+            row["itpNo"],
+            row["itemNo"],
+            source["itpToItems"],
+        )
+        if resolved_itp is None:
             raise ValueError(f"bilinmeyen ITP No.: {row['itpNo']}")
+        row["itpNo"] = resolved_itp
         if row["itemNo"] not in source["itpToItems"][row["itpNo"]]:
             raise ValueError(
                 f"Item No. secilen ITP'ye ait degil: {row['itpNo']} / {row['itemNo']}"
