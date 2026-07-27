@@ -272,11 +272,13 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           ),
         ),
         _Bar(
-          left: TextButton.icon(
-            icon: const Icon(Icons.folder_open_outlined, size: 18),
-            label: Text(s.t('action.review')),
-            onPressed: _openReview,
-          ),
+          left: widget.op.params.any((param) => param.name == 'dest')
+              ? TextButton.icon(
+                  icon: const Icon(Icons.folder_open_outlined, size: 18),
+                  label: Text(s.t('action.review')),
+                  onPressed: _openReview,
+                )
+              : const SizedBox.shrink(),
           right: FilledButton.icon(
             icon: const Icon(Icons.visibility_outlined, size: 18),
             label: Text(s.t('action.preview')),
@@ -655,11 +657,13 @@ class _StepTile extends StatelessWidget {
     final s = Strings.of(context);
     final t = Theme.of(context);
     final dst = step.dst ?? '';
+    final isPrint = step.kind == 'print';
     final toReview = dst.contains('/_review/') || dst.contains(r'\_review\');
     final sev = step.kind == 'mkdir'
         ? Severity.neutral
         : (toReview ? Severity.warn : Severity.info);
-    final name = dst.split(RegExp(r'[/\\]')).last;
+    final displayPath = isPrint ? (step.src ?? dst) : dst;
+    final name = displayPath.split(RegExp(r'[/\\]')).last;
     final conf = step.confidence;
 
     return ListTile(
@@ -675,7 +679,10 @@ class _StepTile extends StatelessWidget {
       ),
       subtitle: Text(
         [
-          if (step.src != null) step.src!.split(RegExp(r'[/\\]')).last,
+          if (isPrint && step.meta['printer'] != null)
+            step.meta['printer'].toString(),
+          if (!isPrint && step.src != null)
+            step.src!.split(RegExp(r'[/\\]')).last,
           if (step.noteKey != null) s.t(step.noteKey!),
         ].join('  ·  '),
         maxLines: 1,

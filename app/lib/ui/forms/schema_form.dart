@@ -59,6 +59,8 @@ class _SchemaFormState extends State<SchemaForm> {
         return _pathField(s, p, pickFolder: true);
       case ParamKind.file:
         return _pathField(s, p, pickFolder: false);
+      case ParamKind.files:
+        return _filesField(s, p);
       case ParamKind.bool:
         final t = Theme.of(context);
         return Container(
@@ -68,16 +70,27 @@ class _SchemaFormState extends State<SchemaForm> {
             border: Border.all(color: t.colorScheme.outlineVariant),
           ),
           child: SwitchListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            title: Text(s.t(p.labelKey),
-                style: t.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 4,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            title: Text(
+              s.t(p.labelKey),
+              style: t.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             subtitle: p.helpKey == null
                 ? null
-                : Text(s.t(p.helpKey!),
-                    style: t.textTheme.bodySmall
-                        ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                : Text(
+                    s.t(p.helpKey!),
+                    style: t.textTheme.bodySmall?.copyWith(
+                      color: t.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
             value: (widget.values[p.name] as bool?) ?? false,
             onChanged: (v) => _set(p.name, v),
           ),
@@ -125,24 +138,34 @@ class _SchemaFormState extends State<SchemaForm> {
       children: [
         Row(
           children: [
-            Text(s.t(p.labelKey),
-                style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              s.t(p.labelKey),
+              style: t.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             // Zorunlu alan isareti — sema soyluyor, form gosteriyor.
             if (p.required)
               Padding(
                 padding: const EdgeInsets.only(left: 4),
-                child: Text('*',
-                    style: t.textTheme.bodyMedium
-                        ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                child: Text(
+                  '*',
+                  style: t.textTheme.bodyMedium?.copyWith(
+                    color: t.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
           ],
         ),
         if (p.helpKey != null)
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(s.t(p.helpKey!),
-                style: t.textTheme.bodySmall
-                    ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+            child: Text(
+              s.t(p.helpKey!),
+              style: t.textTheme.bodySmall?.copyWith(
+                color: t.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         const SizedBox(height: 8),
         field,
@@ -158,8 +181,10 @@ class _SchemaFormState extends State<SchemaForm> {
       initialValue: value ?? '',
       decoration: InputDecoration(
         isDense: true,
-        prefixIcon:
-            Icon(pickFolder ? Icons.folder_outlined : Icons.description_outlined, size: 18),
+        prefixIcon: Icon(
+          pickFolder ? Icons.folder_outlined : Icons.description_outlined,
+          size: 18,
+        ),
         hintText: s.t(pickFolder ? 'param.hint.folder' : 'param.hint.file'),
       ),
       onChanged: (v) => widget.values[p.name] = v,
@@ -196,6 +221,154 @@ class _SchemaFormState extends State<SchemaForm> {
                 browse,
               ],
             ),
+    );
+  }
+
+  Widget _filesField(Strings s, ParamDef p) {
+    final paths = (widget.values[p.name] as List? ?? const [])
+        .map((item) => item.toString())
+        .toList();
+    final t = Theme.of(context);
+
+    void update(List<String> next) => _set(p.name, next);
+
+    return _labeled(
+      s,
+      p,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.playlist_add, size: 18),
+                  label: Text(s.t('action.addFiles')),
+                  onPressed: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      allowMultiple: true,
+                    );
+                    if (result == null) return;
+                    final next = [...paths];
+                    for (final file in result.files) {
+                      final path = file.path;
+                      if (path != null && !next.contains(path)) next.add(path);
+                    }
+                    update(next);
+                  },
+                ),
+              ),
+              if (paths.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => update([]),
+                  child: Text(s.t('action.clear')),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 280),
+            decoration: BoxDecoration(
+              border: Border.all(color: t.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(10),
+              color: t.colorScheme.surfaceContainerLowest,
+            ),
+            child: paths.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text(
+                      s.t('param.hint.files'),
+                      textAlign: TextAlign.center,
+                      style: t.textTheme.bodySmall?.copyWith(
+                        color: t.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: paths.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, index) {
+                      final path = paths[index];
+                      final name = path.split(RegExp(r'[/\\]')).last;
+                      return ListTile(
+                        dense: true,
+                        leading: SizedBox(
+                          width: 28,
+                          child: Text(
+                            '${index + 1}',
+                            textAlign: TextAlign.center,
+                            style: t.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          path,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: s.t('action.moveUp'),
+                              onPressed: index == 0
+                                  ? null
+                                  : () {
+                                      final next = [...paths];
+                                      final item = next.removeAt(index);
+                                      next.insert(index - 1, item);
+                                      update(next);
+                                    },
+                              icon: const Icon(Icons.arrow_upward, size: 17),
+                            ),
+                            IconButton(
+                              tooltip: s.t('action.moveDown'),
+                              onPressed: index == paths.length - 1
+                                  ? null
+                                  : () {
+                                      final next = [...paths];
+                                      final item = next.removeAt(index);
+                                      next.insert(index + 1, item);
+                                      update(next);
+                                    },
+                              icon: const Icon(Icons.arrow_downward, size: 17),
+                            ),
+                            IconButton(
+                              tooltip: s.t('action.remove'),
+                              onPressed: () {
+                                final next = [...paths]..removeAt(index);
+                                update(next);
+                              },
+                              icon: const Icon(Icons.close, size: 17),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (paths.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                s.count('print.filesSelected', paths.length),
+                textAlign: TextAlign.end,
+                style: t.textTheme.labelSmall?.copyWith(
+                  color: t.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

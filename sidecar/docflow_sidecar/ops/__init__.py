@@ -4,5 +4,6 @@ Baska hicbir yere dokunma. Dokunman gerekiyorsa mimari bozulmus demektir.
 """
 from . import rfi_process_scans  # noqa: F401
 from . import rfi_log_add  # noqa: F401
+from . import batch_print  # noqa: F401
 
-__all__ = ["rfi_process_scans", "rfi_log_add"]
+__all__ = ["rfi_process_scans", "rfi_log_add", "batch_print"]

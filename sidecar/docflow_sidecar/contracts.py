@@ -21,6 +21,7 @@ from typing import Any, Literal
 class ParamKind(str, Enum):
     FOLDER = "folder"
     FILE = "file"
+    FILES = "files"
     TEXT = "text"
     BOOL = "bool"
     CHOICE = "choice"
@@ -55,6 +56,10 @@ def FolderParam(name: str, label_key: str, **kw) -> Param:
 
 def FileParam(name: str, label_key: str, **kw) -> Param:
     return Param(name, ParamKind.FILE, label_key, **kw)
+
+
+def FilesParam(name: str, label_key: str, **kw) -> Param:
+    return Param(name, ParamKind.FILES, label_key, default=[], **kw)
 
 
 def BoolParam(name: str, label_key: str, default: bool = False, **kw) -> Param:
@@ -101,6 +106,7 @@ StepKind = Literal[
     "write",
     "workbook_update",
     "restore_backup",
+    "print",
 ]
 
 

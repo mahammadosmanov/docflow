@@ -1,7 +1,7 @@
 // Sidecar'dan gelen JSON'un Dart karsiliklari. Bu dosya operation'a ozel
 // HICBIR SEY bilmez — sadece sozlesme sekilleri. UI bunlardan uretilir.
 
-enum ParamKind { folder, file, text, bool, choice, int, unknown }
+enum ParamKind { folder, file, files, text, bool, choice, int, unknown }
 
 ParamKind _kindFrom(String s) {
   switch (s) {
@@ -9,6 +9,8 @@ ParamKind _kindFrom(String s) {
       return ParamKind.folder;
     case 'file':
       return ParamKind.file;
+    case 'files':
+      return ParamKind.files;
     case 'text':
       return ParamKind.text;
     case 'bool':
@@ -135,7 +137,8 @@ class Plan {
         s.kind == 'move' ||
         s.kind == 'copy' ||
         s.kind == 'rename' ||
-        s.kind == 'workbook_update',
+        s.kind == 'workbook_update' ||
+        s.kind == 'print',
   );
 
   Map<String, dynamic>? get editor {
