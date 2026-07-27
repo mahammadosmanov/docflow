@@ -27,10 +27,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.DOCFLOW_PYTHON_VERSION }}
           cache: pip
@@ -226,7 +226,7 @@ jobs:
             Set-Content -LiteralPath (Join-Path $release "BUILD-MANIFEST.json") -Encoding utf8
 
       - name: Upload Windows package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: DocFlow-Windows-x64
           path: app/build/windows/x64/runner/Release/
