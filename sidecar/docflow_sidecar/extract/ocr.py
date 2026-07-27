@@ -220,7 +220,11 @@ def _thresh(gray: np.ndarray, band: float, block: int, c: int) -> np.ndarray:
 
 
 def _ocr(binary: np.ndarray, psm: int) -> str:
-    cfg = f'--oem 3 --psm {psm} -c tessedit_char_whitelist="{WHITELIST}"'
+    # pytesseract uses shlex(posix=False) on Windows. A quoted whitelist ending
+    # in a space is parsed as an unterminated quotation by current releases.
+    # RFI codes never contain whitespace, so pass one unquoted safe token.
+    whitelist = "".join(char for char in WHITELIST if not char.isspace())
+    cfg = f"--oem 3 --psm {psm} -c tessedit_char_whitelist={whitelist}"
     return pytesseract.image_to_string(binary, lang="eng", config=cfg)
 
 

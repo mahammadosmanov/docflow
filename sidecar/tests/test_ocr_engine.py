@@ -10,12 +10,34 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shlex
 
+import numpy as np
 import pytest
 
 from docflow_sidecar.extract import ocr as ocr_mod
 from docflow_sidecar.registry import get
 import docflow_sidecar.ops  # noqa: F401  — @register tetikle
+
+
+def test_ocr_config_is_windows_shlex_safe(monkeypatch):
+    """Whitelist tek arguman olmali; Windows'ta kapanmayan tirnak uretmemeli."""
+    captured: dict[str, str] = {}
+
+    def fake_image_to_string(_image, *, lang, config):
+        captured["lang"] = lang
+        captured["config"] = config
+        return "AZE-SUN-INT-QMS-RFI-CIV-0001"
+
+    monkeypatch.setattr(ocr_mod.pytesseract, "image_to_string", fake_image_to_string)
+
+    result = ocr_mod._ocr(np.zeros((4, 4), dtype=np.uint8), psm=6)
+    args = shlex.split(captured["config"], posix=False)
+
+    assert result.endswith("0001")
+    assert captured["lang"] == "eng"
+    assert '"' not in captured["config"]
+    assert args[-1].startswith("tessedit_char_whitelist=")
 
 
 def test_engine_missing_plan_has_no_steps(tmp_path, monkeypatch):
