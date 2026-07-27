@@ -5,16 +5,36 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:docflow/core/auth/auth_service.dart';
+import 'package:docflow/core/app_version.dart';
 import 'package:docflow/core/l10n/strings.dart';
 import 'package:docflow/core/operations/models.dart';
 import 'package:docflow/core/settings/app_prefs.dart';
 import 'package:docflow/core/settings/settings_store.dart';
 import 'package:docflow/ui/theme/app_theme.dart';
+import 'package:docflow/ui/version_badge.dart';
 import 'package:docflow/ui/shell/operation_flow_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('release version is always visible in the bottom-left badge', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Stack(
+          children: [Positioned(left: 0, bottom: 0, child: AppVersionBadge())],
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('app-version')), findsOneWidget);
+    expect(find.text('v$docFlowVersion'), findsOneWidget);
+    final positioned = tester.widget<Positioned>(find.byType(Positioned));
+    expect(positioned.left, 0);
+    expect(positioned.bottom, 0);
+  });
+
   test('OperationDef list_operations JSON semasini ayristirir', () {
     final op = OperationDef.fromJson({
       'id': 'rfi.process_scans',

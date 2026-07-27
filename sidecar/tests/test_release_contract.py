@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import docflow_sidecar.ops  # noqa: F401 - imports register all operations
+from docflow_sidecar import __version__ as sidecar_version
 from docflow_sidecar.registry import all_operations
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,3 +61,37 @@ def test_python_dependencies_are_exactly_pinned() -> None:
         assert all(exact_pin.fullmatch(line) for line in lines), (
             f"{filename} contains an unpinned dependency"
         )
+
+
+def test_public_versions_are_semver_and_synchronized() -> None:
+    pubspec = (ROOT / "app" / "pubspec.yaml").read_text(encoding="utf-8")
+    pubspec_match = re.search(
+        r"^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$",
+        pubspec,
+        re.MULTILINE,
+    )
+    assert pubspec_match, "pubspec version must be SemVer plus a build number"
+    app_version, build_number = pubspec_match.groups()
+
+    dart_source = (ROOT / "app" / "lib" / "core" / "app_version.dart").read_text(
+        encoding="utf-8"
+    )
+    dart_version = re.search(
+        r"const docFlowVersion = '([^']+)';",
+        dart_source,
+    )
+    dart_build = re.search(
+        r"const docFlowBuildNumber = (\d+);",
+        dart_source,
+    )
+
+    assert dart_version and dart_version.group(1) == app_version
+    assert dart_build and dart_build.group(1) == build_number
+    assert sidecar_version == app_version
+    assert int(build_number) > 0
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert re.search(
+        rf"^## {re.escape(app_version)}\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}$",
+        changelog,
+        re.MULTILINE,
+    ), "current public version must have a dated changelog entry"

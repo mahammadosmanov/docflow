@@ -17,6 +17,21 @@ Bu belge, bir özellik geliştirilirken başka bir özelliğin sessizce bozulmas
 5. `ping` tek başına yeterli değildir. Dağıtım, desteklenen bütün operation
    kimliklerini ve gerçek iş akışını kontrol eder.
 
+## Sürümleme politikası
+
+DocFlow, `MAJOR.MINOR.PATCH+BUILD` biçimini kullanır:
+
+- `MAJOR`: geriye uyumsuz veri, protokol veya kullanıcı akışı değişikliği
+- `MINOR`: kullanıcıya görünen yeni feature
+- `PATCH`: geriye uyumlu hata düzeltmesi
+- `BUILD`: üretilen her yeni Windows paketi için artan tam sayı
+
+Örnek: `0.2.0+2`. Kullanıcı arayüzü `v0.2.0` gösterir; build numarası paket
+manifestinde ve `pubspec.yaml` içinde tutulur. `pubspec.yaml`, Flutter sürüm
+sabitleri ve sidecar sürümü eşleşmezse release contract testi build'i durdurur.
+Yeni feature/fix commit edilmeden önce ilgili SemVer parçası ve build numarası
+birlikte artırılır.
+
 ## Regresyon matrisi
 
 | Alan | Zorunlu kapı | Koruduğu risk |
@@ -47,8 +62,8 @@ değildir. Güncelleme kabul edilmeden önce:
 ## Teşhis ve geri dönüş
 
 Her paket kökünde `BUILD-MANIFEST.json` bulunur. Hata bildiriminde bu dosya ile
-uygulamanın commit'i, Python/Flutter/Tesseract ve Python paket sürümleri kesin
-olarak belirlenebilir.
+uygulama sürümü, commit'i, Python/Flutter/Tesseract ve Python paket sürümleri
+kesin olarak belirlenebilir.
 
 Yeni build bir release kapısını geçmezse dağıtılmaz. Çalışan son artifact
 korunur; uygulama dosyalarının üzerine kısmi kopyalama yapılmaz. Yerel denemede

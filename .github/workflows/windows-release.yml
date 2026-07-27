@@ -155,6 +155,13 @@ jobs:
           if ($ping.result.ok -ne $true) {
             throw "Packaged sidecar ping failed"
           }
+          $versionLine = Select-String `
+            -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "app\pubspec.yaml") `
+            -Pattern '^version:\s*(\d+\.\d+\.\d+)\+\d+\s*$'
+          $appVersion = $versionLine.Matches[0].Groups[1].Value
+          if ($ping.result.version -ne $appVersion) {
+            throw "App/sidecar version mismatch: $appVersion / $($ping.result.version)"
+          }
 
           $operationsLine = '{"id":2,"method":"list_operations","params":{}}' |
             & $sidecar |
@@ -211,10 +218,15 @@ jobs:
         shell: pwsh
         run: |
           $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
+          $versionLine = Select-String `
+            -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "app\pubspec.yaml") `
+            -Pattern '^version:\s*(\d+\.\d+\.\d+)\+\d+\s*$'
+          $appVersion = $versionLine.Matches[0].Groups[1].Value
           $tesseractVersion = & (Join-Path $release "tesseract\tesseract.exe") --version |
             Select-Object -First 1
           $manifest = [ordered]@{
             gitCommit = $env:GITHUB_SHA
+            appVersion = $appVersion
             builtAtUtc = [DateTime]::UtcNow.ToString("o")
             python = (python --version 2>&1)
             flutter = ((flutter --version --machine | ConvertFrom-Json).frameworkVersion)

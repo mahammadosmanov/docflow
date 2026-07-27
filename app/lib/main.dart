@@ -11,6 +11,7 @@ import 'core/settings/app_prefs.dart';
 import 'core/settings/settings_store.dart';
 import 'ui/shell/auth_gate.dart';
 import 'ui/theme/app_theme.dart';
+import 'ui/version_badge.dart';
 
 // Dev fallback yollari (bu makine). Paketlenmis derlemede kullanilmaz —
 // orada sidecar app exe'sinin yaninda bundle edilir. --dart-define ile ezilebilir.
@@ -38,7 +39,9 @@ _Launch _resolveSidecar() {
   final exeDir = File(Platform.resolvedExecutable).parent.path;
 
   // 1) Paketlenmis: app exe yaninda  sidecar/<exe>  ve  tesseract/<exe>
-  final sideName = Platform.isWindows ? 'docflow_sidecar.exe' : 'docflow_sidecar';
+  final sideName = Platform.isWindows
+      ? 'docflow_sidecar.exe'
+      : 'docflow_sidecar';
   final bundled = '$exeDir${sep}sidecar$sep$sideName';
   if (File(bundled).existsSync()) {
     final tessName = Platform.isWindows ? 'tesseract.exe' : 'tesseract';
@@ -63,7 +66,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await SettingsStore.load();
   final prefs = AppPrefs(settings);
-  final auth = AuthService(url: supabaseUrl, key: supabaseKey, settings: settings);
+  final auth = AuthService(
+    url: supabaseUrl,
+    key: supabaseKey,
+    settings: settings,
+  );
   await auth.restore(); // diskteki oturumu geri yukle (varsa)
   final l = _resolveSidecar();
   final client = SidecarClient(
@@ -72,7 +79,9 @@ Future<void> main() async {
     workingDir: l.workingDir,
     environment: l.environment,
   );
-  runApp(DocFlowApp(client: client, settings: settings, auth: auth, prefs: prefs));
+  runApp(
+    DocFlowApp(client: client, settings: settings, auth: auth, prefs: prefs),
+  );
 }
 
 class DocFlowApp extends StatelessWidget {
@@ -109,8 +118,20 @@ class DocFlowApp extends StatelessWidget {
           compact: prefs.compact,
         ),
         // Yazi boyutu olcegi tema degil, MediaQuery isi (bkz. applyTextScale).
-        builder: (context, child) =>
-            AppTheme.applyTextScale(context, child, prefs.fontScale),
+        builder: (context, child) {
+          final content = AppTheme.applyTextScale(
+            context,
+            child,
+            prefs.fontScale,
+          );
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              content,
+              const Positioned(left: 0, bottom: 0, child: AppVersionBadge()),
+            ],
+          );
+        },
         localizationsDelegates: const [
           StringsDelegate(),
           GlobalMaterialLocalizations.delegate,
