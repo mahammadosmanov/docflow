@@ -7,6 +7,7 @@ import os
 import pathlib
 import time
 from ctypes import wintypes
+from dataclasses import dataclass
 from typing import Any
 
 from ..contracts import (
@@ -30,6 +31,23 @@ PRINTER_ENUM_LOCAL = 0x00000002
 PRINTER_ENUM_CONNECTIONS = 0x00000004
 ASSOCSTR_COMMAND = 1
 LPBYTE = ctypes.POINTER(wintypes.BYTE)
+PRINTER_CHANGE_ADD_JOB = 0x00000100
+PRINTER_CHANGE_SET_JOB = 0x00000200
+PRINTER_CHANGE_DELETE_JOB = 0x00000400
+PRINTER_CHANGE_WRITE_JOB = 0x00000800
+PRINTER_CHANGE_JOB = 0x0000FF00
+JOB_STATUS_DELETED = 0x00000100
+JOB_STATUS_COMPLETE = 0x00001000
+JOB_STATUS_PRINTED = 0x00000080
+JOB_TERMINAL_STATUS = (
+    JOB_STATUS_DELETED | JOB_STATUS_COMPLETE | JOB_STATUS_PRINTED
+)
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 258
+INFINITE_JOB_COUNT = 0xFFFFFFFF
+SPOOL_POLL_SECONDS = 0.2
+SPOOL_ACK_TIMEOUT_SECONDS = 30 * 60
+SPOOL_FINISH_TIMEOUT_SECONDS = 4 * 60 * 60
 
 
 class _PrinterInfo4(ctypes.Structure):
@@ -38,6 +56,248 @@ class _PrinterInfo4(ctypes.Structure):
         ("pServerName", wintypes.LPWSTR),
         ("Attributes", wintypes.DWORD),
     ]
+
+
+class _SystemTime(ctypes.Structure):
+    _fields_ = [
+        ("wYear", wintypes.WORD),
+        ("wMonth", wintypes.WORD),
+        ("wDayOfWeek", wintypes.WORD),
+        ("wDay", wintypes.WORD),
+        ("wHour", wintypes.WORD),
+        ("wMinute", wintypes.WORD),
+        ("wSecond", wintypes.WORD),
+        ("wMilliseconds", wintypes.WORD),
+    ]
+
+
+class _JobInfo1(ctypes.Structure):
+    _fields_ = [
+        ("JobId", wintypes.DWORD),
+        ("pPrinterName", wintypes.LPWSTR),
+        ("pMachineName", wintypes.LPWSTR),
+        ("pUserName", wintypes.LPWSTR),
+        ("pDocument", wintypes.LPWSTR),
+        ("pDatatype", wintypes.LPWSTR),
+        ("pStatus", wintypes.LPWSTR),
+        ("Status", wintypes.DWORD),
+        ("Priority", wintypes.DWORD),
+        ("Position", wintypes.DWORD),
+        ("TotalPages", wintypes.DWORD),
+        ("PagesPrinted", wintypes.DWORD),
+        ("Submitted", _SystemTime),
+    ]
+
+
+@dataclass(frozen=True)
+class _SpoolJob:
+    job_id: int
+    document: str
+    status: int
+
+
+def _job_matches_document(job: _SpoolJob, requested: str) -> bool:
+    queued = job.document.casefold()
+    path = pathlib.Path(requested)
+    name = path.name.casefold()
+    stem = path.stem.casefold()
+    return bool(queued and (name in queued or (stem and stem in queued)))
+
+
+class _PrintQueueMonitor:
+    """Wait until one shell print request has fully cleared the spooler."""
+
+    def __init__(self, printer: str) -> None:
+        if os.name != "nt":
+            raise OSError("Windows printing is required")
+
+        win_dll = getattr(ctypes, "WinDLL")
+        self._winspool = win_dll("winspool.drv", use_last_error=True)
+        self._kernel32 = win_dll("kernel32.dll", use_last_error=True)
+        self._configure_functions()
+        self._printer = wintypes.HANDLE()
+        if not self._winspool.OpenPrinterW(
+            printer,
+            ctypes.byref(self._printer),
+            None,
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        self._notification: int | None = None
+        notification = self._winspool.FindFirstPrinterChangeNotification(
+            self._printer,
+            PRINTER_CHANGE_JOB,
+            0,
+            None,
+        )
+        invalid_handle = ctypes.c_void_p(-1).value
+        if notification and notification != invalid_handle:
+            self._notification = int(notification)
+        self._baseline = set(self._jobs())
+
+    def _configure_functions(self) -> None:
+        self._winspool.OpenPrinterW.argtypes = [
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.HANDLE),
+            wintypes.LPVOID,
+        ]
+        self._winspool.OpenPrinterW.restype = wintypes.BOOL
+        self._winspool.ClosePrinter.argtypes = [wintypes.HANDLE]
+        self._winspool.ClosePrinter.restype = wintypes.BOOL
+        self._winspool.EnumJobsW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            LPBYTE,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        self._winspool.EnumJobsW.restype = wintypes.BOOL
+        self._winspool.FindFirstPrinterChangeNotification.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+        ]
+        self._winspool.FindFirstPrinterChangeNotification.restype = wintypes.HANDLE
+        self._winspool.FindNextPrinterChangeNotification.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID,
+            ctypes.POINTER(wintypes.LPVOID),
+        ]
+        self._winspool.FindNextPrinterChangeNotification.restype = wintypes.BOOL
+        self._winspool.FindClosePrinterChangeNotification.argtypes = [
+            wintypes.HANDLE,
+        ]
+        self._winspool.FindClosePrinterChangeNotification.restype = wintypes.BOOL
+        self._kernel32.WaitForSingleObject.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+        ]
+        self._kernel32.WaitForSingleObject.restype = wintypes.DWORD
+
+    def _jobs(self) -> dict[int, _SpoolJob]:
+        needed = wintypes.DWORD()
+        returned = wintypes.DWORD()
+        self._winspool.EnumJobsW(
+            self._printer,
+            0,
+            INFINITE_JOB_COUNT,
+            1,
+            None,
+            0,
+            ctypes.byref(needed),
+            ctypes.byref(returned),
+        )
+        if not needed.value:
+            return {}
+
+        buffer = ctypes.create_string_buffer(needed.value)
+        if not self._winspool.EnumJobsW(
+            self._printer,
+            0,
+            INFINITE_JOB_COUNT,
+            1,
+            ctypes.cast(buffer, LPBYTE),
+            needed.value,
+            ctypes.byref(needed),
+            ctypes.byref(returned),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        records = ctypes.cast(
+            buffer,
+            ctypes.POINTER(_JobInfo1 * returned.value),
+        ).contents
+        return {
+            int(record.JobId): _SpoolJob(
+                int(record.JobId),
+                record.pDocument or "",
+                int(record.Status),
+            )
+            for record in records
+        }
+
+    def _wait_change(self, seconds: float) -> int:
+        if self._notification is None:
+            time.sleep(seconds)
+            return 0
+        wait_result = self._kernel32.WaitForSingleObject(
+            self._notification,
+            max(1, int(seconds * 1000)),
+        )
+        if wait_result == WAIT_TIMEOUT:
+            return 0
+        if wait_result != WAIT_OBJECT_0:
+            raise ctypes.WinError(ctypes.get_last_error())
+        change = wintypes.DWORD()
+        if not self._winspool.FindNextPrinterChangeNotification(
+            self._notification,
+            ctypes.byref(change),
+            None,
+            None,
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return int(change.value)
+
+    def wait_for_completion(self, document: str) -> None:
+        """Fail closed: no later file starts until this request is finished."""
+
+        tracked: set[int] = set()
+        acknowledge_deadline = time.monotonic() + SPOOL_ACK_TIMEOUT_SECONDS
+
+        while time.monotonic() < acknowledge_deadline:
+            current = self._jobs()
+            added = {
+                job_id
+                for job_id, job in current.items()
+                if job_id not in self._baseline
+                and _job_matches_document(job, document)
+            }
+            if added:
+                tracked = added
+                break
+            self._wait_change(SPOOL_POLL_SECONDS)
+
+        if not tracked:
+            raise TimeoutError(
+                f"Windows did not accept the print job within "
+                f"{SPOOL_ACK_TIMEOUT_SECONDS // 60} minutes: {document}"
+            )
+
+        finish_deadline = time.monotonic() + SPOOL_FINISH_TIMEOUT_SECONDS
+        while time.monotonic() < finish_deadline:
+            current = self._jobs()
+            active = [current[job_id] for job_id in tracked if job_id in current]
+            if not active:
+                return
+            if all(job.status & JOB_TERMINAL_STATUS for job in active):
+                return
+            self._wait_change(SPOOL_POLL_SECONDS)
+
+        raise TimeoutError(
+            f"Windows did not finish the print job within "
+            f"{SPOOL_FINISH_TIMEOUT_SECONDS // 3600} hours: {document}"
+        )
+
+    def close(self) -> None:
+        if self._notification is not None:
+            self._winspool.FindClosePrinterChangeNotification(
+                self._notification,
+            )
+            self._notification = None
+        if self._printer:
+            self._winspool.ClosePrinter(self._printer)
+            self._printer = wintypes.HANDLE()
+
+    def __enter__(self) -> _PrintQueueMonitor:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
 
 def _printer_inventory() -> tuple[list[str], str]:
@@ -192,15 +452,17 @@ def _submit_print_job(path: pathlib.Path, printer: str, verb: str) -> None:
     startfile = getattr(os, "startfile", None)
     if startfile is None:
         raise OSError("Windows Shell printing is unavailable")
-    if verb == "printto":
-        startfile(str(path), "printto", f'"{printer}"')
-    elif verb == "print":
-        startfile(str(path), "print")
-    else:
-        raise ValueError(f"unsupported print verb: {verb}")
-    # Shell print handlers are asynchronous. A small gap prevents a burst of
-    # mixed Office/PDF/image launches from losing jobs on slower workstations.
-    time.sleep(0.5)
+    # Arm the spooler monitor before launching the associated application. If
+    # Word/Excel/PDF asks the user to confirm something, this call waits there.
+    # The next file is never launched until this job has left the Windows queue.
+    with _PrintQueueMonitor(printer) as monitor:
+        if verb == "printto":
+            startfile(str(path), "printto", f'"{printer}"')
+        elif verb == "print":
+            startfile(str(path), "print")
+        else:
+            raise ValueError(f"unsupported print verb: {verb}")
+        monitor.wait_for_completion(path.name)
 
 
 def _ordered_unique_files(raw: Any) -> list[pathlib.Path]:
@@ -351,7 +613,14 @@ class BatchPrint(Operation):
         for index, raw in enumerate(jobs):
             notify(
                 "progress",
-                {"phase": "apply", "done": index, "total": len(jobs)},
+                {
+                    "phase": "print_waiting",
+                    "done": index,
+                    "total": len(jobs),
+                    "subject": pathlib.Path(str(raw.get("path", ""))).name
+                    if isinstance(raw, dict)
+                    else "",
+                },
             )
             try:
                 if not isinstance(raw, dict):
@@ -361,8 +630,9 @@ class BatchPrint(Operation):
                 verb = str(raw["verb"])
                 _submit_print_job(path, printer, verb)
                 result.applied += 1
-            except Exception as error:  # noqa: BLE001 - one job must not stop the queue
-                result.failed += 1
+            except Exception as error:  # noqa: BLE001 - report exact queue failure
+                remaining = len(jobs) - index - 1
+                result.failed += 1 + remaining
                 subject = str(raw.get("path") if isinstance(raw, dict) else raw)
                 result.errors.append(
                     Warning(
@@ -370,6 +640,13 @@ class BatchPrint(Operation):
                         f"{pathlib.Path(subject).name}: {type(error).__name__}: {error}",
                     )
                 )
+                if remaining:
+                    result.errors.append(
+                        Warning("error.print.queueStopped", str(remaining))
+                    )
+                # Strict ordering is fail-closed. Continuing after an unknown
+                # print state could place later files ahead of this one.
+                break
         notify(
             "progress",
             {"phase": "apply", "done": len(jobs), "total": len(jobs)},

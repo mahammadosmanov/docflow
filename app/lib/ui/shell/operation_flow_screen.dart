@@ -41,6 +41,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   Plan? _plan;
   ApplyResult? _result;
   double _applyFraction = 0;
+  String _applySubject = '';
   StreamSubscription<Progress>? _sub;
   List<Map<String, dynamic>> _editorRows = [];
   bool _editorDirty = false;
@@ -116,9 +117,15 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     setState(() {
       _stage = _Stage.applying;
       _applyFraction = 0;
+      _applySubject = '';
     });
     _sub = widget.client.progress.listen((p) {
-      if (p.phase == 'apply') setState(() => _applyFraction = p.fraction);
+      if (p.phase == 'apply' || p.phase == 'print_waiting') {
+        setState(() {
+          _applyFraction = p.fraction;
+          _applySubject = p.subject;
+        });
+      }
     });
     try {
       final res = await widget.client.apply(plan.planId!);
@@ -407,7 +414,10 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            s.t('plan.applying'),
+            _applySubject.isEmpty
+                ? s.t('plan.applying')
+                : '${s.t('print.waitingForCurrent')}\n$_applySubject',
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

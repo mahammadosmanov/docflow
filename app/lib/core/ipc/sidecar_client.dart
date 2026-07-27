@@ -92,6 +92,7 @@ class SidecarClient {
             phase: p['phase'] as String? ?? '',
             done: (p['done'] as num?)?.toInt() ?? 0,
             total: (p['total'] as num?)?.toInt() ?? 0,
+            subject: p['subject'] as String? ?? '',
           ),
         );
       }

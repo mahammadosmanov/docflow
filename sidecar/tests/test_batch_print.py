@@ -113,9 +113,41 @@ def test_zero_copies_is_rejected(monkeypatch):
     ]
 
 
-def test_apply_uses_exact_preview_jobs_and_continues_after_failure(
-    monkeypatch,
-):
+def test_spooler_monitor_waits_for_job_to_appear_and_finish(monkeypatch):
+    monitor = object.__new__(batch_print._PrintQueueMonitor)
+    monitor._baseline = {7}
+    snapshots = iter(
+        [
+            {
+                7: batch_print._SpoolJob(7, "other.pdf", 0),
+                9: batch_print._SpoolJob(9, "unrelated.docx", 0),
+            },
+            {
+                7: batch_print._SpoolJob(7, "other.pdf", 0),
+                9: batch_print._SpoolJob(9, "unrelated.docx", 0),
+                12: batch_print._SpoolJob(12, "first.pdf", 0),
+            },
+            {
+                7: batch_print._SpoolJob(7, "other.pdf", 0),
+                9: batch_print._SpoolJob(9, "unrelated.docx", 0),
+            },
+        ]
+    )
+    changes: list[float] = []
+    monkeypatch.setattr(monitor, "_jobs", lambda: next(snapshots))
+    monkeypatch.setattr(
+        monitor,
+        "_wait_change",
+        lambda seconds: changes.append(seconds)
+        or batch_print.PRINTER_CHANGE_ADD_JOB,
+    )
+
+    monitor.wait_for_completion("first.pdf")
+
+    assert changes
+
+
+def test_apply_stops_remaining_files_after_unknown_print_state(monkeypatch):
     first = pathlib.Path(r"C:\Print tests\first.pdf")
     second = pathlib.Path(r"C:\Print tests\second.docx")
     operation = _operation(monkeypatch)
@@ -149,9 +181,11 @@ def test_apply_uses_exact_preview_jobs_and_continues_after_failure(
 
     assert submitted == [
         (str(first), "Office Printer", "printto"),
-        (str(second), "Office Printer", "printto"),
     ]
-    assert result.applied == 1
-    assert result.failed == 1
+    assert result.applied == 0
+    assert result.failed == 2
     assert result.journal_id == ""
-    assert result.errors[0].key == "error.print.failed"
+    assert [error.key for error in result.errors] == [
+        "error.print.failed",
+        "error.print.queueStopped",
+    ]

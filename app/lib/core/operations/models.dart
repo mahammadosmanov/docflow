@@ -183,10 +183,16 @@ class ApplyResult {
 }
 
 class Progress {
-  Progress({required this.phase, required this.done, required this.total});
+  Progress({
+    required this.phase,
+    required this.done,
+    required this.total,
+    this.subject = '',
+  });
   final String phase;
   final int done;
   final int total;
+  final String subject;
   double get fraction => total == 0 ? 0 : done / total;
 }
 
