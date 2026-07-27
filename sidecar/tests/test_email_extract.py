@@ -104,6 +104,9 @@ def test_gemini_uses_header_key_and_structured_schema(monkeypatch):
     assert request.get_header("X-goog-api-key") == "secret-key"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
     assert body["generationConfig"]["responseSchema"]["type"] == "OBJECT"
+    assert body["generationConfig"]["responseSchema"]["properties"][
+        "discipline"
+    ]["enum"] == ["CIV", "MEC"]
     assert result["provider"] == "gemini"
     assert result["rows"][0]["itemNo"] == "CIV-7.1.1"
 
@@ -126,3 +129,33 @@ def test_gemini_failure_falls_back_without_losing_offline_result(monkeypatch):
     assert result["provider"] == "offline"
     assert result["rows"][0]["tagNo"] == "N12"
     assert "quota" in str(error)
+
+
+def test_azerbaijani_markdown_mail_extracts_compact_tags_and_short_item():
+    result = email_extract.offline_extract(
+        """
+        Salam Məhəmməd bəy
+        Transformator təməllərinin hazırlığı üçün **PCU-14/15/16**
+        ərazilərinə (**AZE-SUN-INT-QMS-ITP-CIV-0005**)
+        **3** ədəd **2.1** (**gro beton**) bəndi üzrə **RFI**
+        nömrəsi verməyinizi xahiş edirəm.
+        """,
+        discipline="MEC",
+        itp_to_items=_mapping(),
+        known_tags=["PCU-14", "PCU-15", "PCU-16"],
+        known_subcontractors=["AZFEN"],
+    )
+
+    assert result["discipline"] == "CIV"
+    assert result["count"] == 3
+    assert [row["rfiIndex"] for row in result["rows"]] == [1, 2, 3]
+    assert [row["tagNo"] for row in result["rows"]] == [
+        "PCU-14",
+        "PCU-15",
+        "PCU-16",
+    ]
+    assert all(
+        row["itpNo"] == "AZE-SUN-INT-QMS-ITP-CIV-0005"
+        for row in result["rows"]
+    )
+    assert all(row["itemNo"] == "CIV-5.2.1" for row in result["rows"])

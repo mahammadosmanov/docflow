@@ -4,7 +4,7 @@ DocFlow, Windows üzerinde belge işlerini otomatikleştiren Flutter masaüstü
 uygulamasıdır. İş mantığı, uygulamayla birlikte paketlenen Python sidecar
 tarafından yürütülür.
 
-Güncel sürüm: **0.2.0**. Sürüm geçmişi ve değişiklikler
+Güncel sürüm: **0.2.1**. Sürüm geçmişi ve değişiklikler
 [`CHANGELOG.md`](CHANGELOG.md) içinde tutulur.
 
 Desteklenen işlemler:

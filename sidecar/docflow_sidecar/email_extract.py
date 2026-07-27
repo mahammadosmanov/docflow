@@ -71,7 +71,7 @@ _RESPONSE_SCHEMA = {
     "properties": {
         "discipline": {
             "type": "STRING",
-            "enum": ["", "CIV", "MEC"],
+            "enum": ["CIV", "MEC"],
         },
         "count": {"type": "INTEGER", "minimum": 0, "maximum": 100},
         "rows": {"type": "ARRAY", "items": _ROW_SCHEMA, "maxItems": 100},
@@ -114,6 +114,42 @@ def _mentioned_known(text: str, values: list[str]) -> list[str]:
     return [value for value in values if value and value.upper() in upper]
 
 
+def _expand_compact_tags(text: str) -> list[str]:
+    expanded: list[str] = []
+    for match in re.finditer(
+        r"\b([A-Z][A-Z0-9]*-)(\d+(?:\s*/\s*\d+)+)\b",
+        text.upper(),
+    ):
+        prefix = match.group(1)
+        expanded.extend(
+            f"{prefix}{number}"
+            for number in re.split(r"\s*/\s*", match.group(2))
+        )
+    return expanded
+
+
+def _abbreviated_item(
+    text: str,
+    itps: list[str],
+    itp_to_items: dict[str, list[str]],
+) -> str:
+    candidates = (
+        itp_to_items[itps[0]]
+        if len(itps) == 1
+        else [item for items in itp_to_items.values() for item in items]
+    )
+    matches: list[str] = []
+    for item in candidates:
+        numbers = re.findall(r"\d+", item)
+        if len(numbers) < 2:
+            continue
+        short = ".".join(numbers[-2:])
+        if re.search(rf"(?<![\d.]){re.escape(short)}(?![\d.])", text):
+            matches.append(item)
+    unique = list(dict.fromkeys(matches))
+    return unique[0] if len(unique) == 1 else ""
+
+
 def offline_extract(
     text: str,
     *,
@@ -122,7 +158,7 @@ def offline_extract(
     known_tags: list[str],
     known_subcontractors: list[str],
 ) -> dict[str, Any]:
-    clean = text[:MAX_EMAIL_CHARS]
+    clean = re.sub(r"[*_`]+", "", text[:MAX_EMAIL_CHARS])
     all_items = [item for items in itp_to_items.values() for item in items]
     items = _mentioned_known(clean, all_items)
     itps = _mentioned_known(clean, list(itp_to_items))
@@ -140,12 +176,17 @@ def offline_extract(
                 for label in itp_to_items
                 if re.search(rf"{suffix:04d}$", label)
             ]
+    if not items:
+        abbreviated = _abbreviated_item(clean, itps, itp_to_items)
+        items = [abbreviated] if abbreviated else []
 
     tag_values: list[str] = []
     for match in _TAG_LINE.finditer(clean):
         tag_values.extend(_split_values(match.group(1)))
     if not tag_values:
-        tag_values = _mentioned_known(clean, known_tags)
+        compact_tags = _expand_compact_tags(clean)
+        known = _mentioned_known(clean, known_tags)
+        tag_values = compact_tags or known
     tag_values = list(dict.fromkeys(tag_values))
 
     count = _explicit_count(clean)
@@ -215,7 +256,9 @@ def _gemini_prompt(
     return (
         "Extract an RFI inspection request from the email below. "
         "Use only facts explicitly present in the email; never invent values. "
-        "Unknown strings must be empty. Count means unique new RFI numbers, not "
+        "Discipline must be CIV or MEC; use the currently selected discipline "
+        "when the email does not state one. Other unknown strings must be empty. "
+        "Count means unique new RFI numbers, not "
         "Excel rows. When several tags/areas are requested for the same RFI, "
         "return multiple rows with the same rfiIndex, but keep the unique RFI "
         "count stated by the sender. rfiIndex is 1-based and identifies which "
