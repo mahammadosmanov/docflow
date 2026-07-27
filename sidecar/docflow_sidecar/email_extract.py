@@ -13,7 +13,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+FALLBACK_GEMINI_MODELS = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+)
 MAX_EMAIL_CHARS = 30_000
 MAX_ERROR_CHARS = 300
 
@@ -281,8 +285,14 @@ def gemini_extract(
     key = api_key.strip() or os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise ValueError("Gemini API key is missing")
-    model = os.environ.get("DOCFLOW_GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", model):
+    configured = os.environ.get("DOCFLOW_GEMINI_MODEL", "").strip()
+    models = list(
+        dict.fromkeys(
+            [configured, DEFAULT_GEMINI_MODEL, *FALLBACK_GEMINI_MODELS]
+        )
+    )
+    models = [model for model in models if model]
+    if any(not re.fullmatch(r"[A-Za-z0-9._-]+", model) for model in models):
         raise ValueError("Gemini model name is invalid")
 
     body = {
@@ -295,29 +305,41 @@ def gemini_extract(
             }
         ],
         "generationConfig": {
-            "temperature": 0,
             "responseMimeType": "application/json",
             "responseSchema": _RESPONSE_SCHEMA,
         },
     }
-    request = urllib.request.Request(
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/{model}:generateContent",
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "x-goog-api-key": key,
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace")[:MAX_ERROR_CHARS]
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
-    except (OSError, urllib.error.URLError) as exc:
-        raise RuntimeError(f"Gemini connection failed: {exc}") from exc
+    encoded_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    payload: dict[str, Any] | None = None
+    selected_model = ""
+    unavailable: list[str] = []
+    for model in models:
+        request = urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/"
+            f"models/{model}:generateContent",
+            data=encoded_body,
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            selected_model = model
+            break
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:MAX_ERROR_CHARS]
+            if exc.code == 404:
+                unavailable.append(model)
+                continue
+            raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
+        except (OSError, urllib.error.URLError) as exc:
+            raise RuntimeError(f"Gemini connection failed: {exc}") from exc
+    if payload is None:
+        tried = ", ".join(unavailable)
+        raise RuntimeError(f"No supported Gemini model was available: {tried}")
 
     try:
         raw = payload["candidates"][0]["content"]["parts"][0]["text"]
@@ -327,6 +349,7 @@ def gemini_extract(
     if not isinstance(result, dict):
         raise RuntimeError("Gemini response is not an object")
     result["provider"] = "gemini"
+    result["model"] = selected_model
     return result
 
 

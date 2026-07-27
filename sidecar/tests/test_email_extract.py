@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import json
+import urllib.error
 
 from docflow_sidecar import email_extract
 
@@ -103,12 +105,79 @@ def test_gemini_uses_header_key_and_structured_schema(monkeypatch):
     assert "secret-key" not in request.full_url
     assert request.get_header("X-goog-api-key") == "secret-key"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
+    assert "temperature" not in body["generationConfig"]
     assert body["generationConfig"]["responseSchema"]["type"] == "OBJECT"
     assert body["generationConfig"]["responseSchema"]["properties"][
         "discipline"
     ]["enum"] == ["CIV", "MEC"]
     assert result["provider"] == "gemini"
+    assert result["model"] == "gemini-3.1-flash-lite"
     assert result["rows"][0]["itemNo"] == "CIV-7.1.1"
+
+
+def test_gemini_retries_a_current_model_when_configured_model_is_gone(
+    monkeypatch,
+):
+    requested_models = []
+    structured = {
+        "discipline": "CIV",
+        "count": 1,
+        "rows": [
+            {
+                "rfiIndex": 1,
+                "itpNo": "",
+                "itemNo": "",
+                "tagNo": "",
+                "area": "",
+                "location": "",
+                "subcontractor": "",
+            }
+        ],
+        "confidence": 0.5,
+        "notes": [],
+    }
+    response_body = {
+        "candidates": [
+            {"content": {"parts": [{"text": json.dumps(structured)}]}}
+        ]
+    }
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(response_body).encode()
+
+    def fake_urlopen(request, timeout):
+        del timeout
+        model = request.full_url.split("/models/", 1)[1].split(":", 1)[0]
+        requested_models.append(model)
+        if model == "retired-model":
+            raise urllib.error.HTTPError(
+                request.full_url,
+                404,
+                "not found",
+                {},
+                io.BytesIO(b'{"error":{"message":"retired"}}'),
+            )
+        return _Response()
+
+    monkeypatch.setenv("DOCFLOW_GEMINI_MODEL", "retired-model")
+    monkeypatch.setattr(email_extract.urllib.request, "urlopen", fake_urlopen)
+
+    result = email_extract.gemini_extract(
+        "mail body",
+        api_key="secret-key",
+        discipline="CIV",
+        itp_to_items=_mapping(),
+    )
+
+    assert requested_models == ["retired-model", "gemini-3.1-flash-lite"]
+    assert result["model"] == "gemini-3.1-flash-lite"
 
 
 def test_gemini_failure_falls_back_without_losing_offline_result(monkeypatch):

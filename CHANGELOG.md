@@ -3,6 +3,15 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.2.2 - 2026-07-27
+
+### Fixed
+
+- Yeni kullanıcılara kapatılan `gemini-2.5-flash-lite` varsayılanı yerine
+  ücretsiz katmanı bulunan `gemini-3.1-flash-lite` kullanılması
+- Seçilen Gemini modeli 404 döndürürse güncel Flash modellerine otomatik geçiş
+- Yeni Gemini modellerinde deprecated olan `temperature` parametresinin kaldırılması
+
 ## 0.2.1 - 2026-07-27
 
 ### Fixed
