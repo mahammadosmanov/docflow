@@ -60,4 +60,19 @@ void main() {
     expect(values['files'], [r'C:\Docs\second.docx']);
     expect(changes, 2);
   });
+
+  test('Gemini key is hidden until external AI is explicitly selected', () {
+    final values = <String, dynamic>{'email_provider': 'offline'};
+    final apiKey = ParamDef.fromJson({
+      'name': 'gemini_api_key',
+      'kind': 'secret',
+      'labelKey': 'param.rfi.geminiApiKey',
+      'required': false,
+      'visibleWhen': {'email_provider': 'gemini'},
+    });
+
+    expect(isParamVisible(apiKey, values), isFalse);
+    values['email_provider'] = 'gemini';
+    expect(isParamVisible(apiKey, values), isTrue);
+  });
 }

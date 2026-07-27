@@ -16,6 +16,20 @@ import 'review_screen.dart';
 
 enum _Stage { form, previewing, preview, applying, result }
 
+Map<String, dynamic> persistentOperationValues(
+  List<ParamDef> params,
+  Map<String, dynamic> values,
+) {
+  final ephemeral = {
+    for (final p in params)
+      if (p.kind == ParamKind.longText || p.kind == ParamKind.secret) p.name,
+  };
+  return {
+    for (final entry in values.entries)
+      if (!ephemeral.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
 class OperationFlowScreen extends StatefulWidget {
   const OperationFlowScreen({
     super.key,
@@ -65,7 +79,12 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
 
   Future<void> _preview() async {
     // Kullanicinin sectigi klasorleri hatirla (bir sonraki acilista geri gelir).
-    await widget.settings.saveParams(widget.op.id, _values);
+    // Mail bodies and API keys are intentionally ephemeral. They must never
+    // be written to ~/.docflow/settings.json.
+    await widget.settings.saveParams(
+      widget.op.id,
+      persistentOperationValues(widget.op.params, _values),
+    );
     setState(() => _stage = _Stage.previewing);
     try {
       final plan = await widget.client.preview(widget.op.id, _values);

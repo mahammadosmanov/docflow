@@ -39,6 +39,7 @@ def test_operation_schema_keys_exist_in_every_language() -> None:
         required_keys.update((operation.title_key, operation.description_key))
         for param in operation.schema.params:
             required_keys.add(param.label_key)
+            required_keys.update(param.choice_labels.values())
             if param.help_key:
                 required_keys.add(param.help_key)
 

@@ -8,7 +8,14 @@ Desteklenen işlemler:
 
 - Taranmış RFI PDF'lerini OCR ile tanıma, adlandırma ve klasörleme
 - CIV/MEC kayıtlarını formül, stil ve doğrulamalarını koruyarak RFI Log'a ekleme
+- Talep e-postalarından özel/offline veya isteğe bağlı Gemini Free ile doğrulanabilir RFI taslağı çıkarma
+- Yeni RFI satırlarını Excel'in yerel görünümüyle, başlıklar dahil Subcontractor'a kadar kopyalama
 - PDF, Word, Excel ve görselleri kesin sırayla toplu yazdırma
+
+E-posta analizi varsayılan olarak tamamen çevrimdışıdır. Gemini seçeneği açıkça
+seçilirse API anahtarı yalnızca o istek için bellekte tutulur; e-posta metni ve
+anahtar ayarlara ya da çalışma kitabına kaydedilmez. Çıkarılan değerler çalışma
+kitabındaki ITP/Item eşlemeleriyle doğrulanır ve uygulanmadan önce düzenlenebilir.
 
 ## Geliştirme
 

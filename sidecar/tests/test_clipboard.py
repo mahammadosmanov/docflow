@@ -63,7 +63,9 @@ def test_cf_html_offsets_are_utf8_byte_offsets():
 
 def test_excel_copy_freezes_values_and_preserves_dimensions():
     assert ".Value2 = $headerRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
-    assert ".Value2 = $dataRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$targetRowRange.Value2 = $targetRowRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$criteria -contains $rfi" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$matchedRows.Add($sourceRow)" in EXCEL_CLIPBOARD_SCRIPT
     assert ".ColumnWidth =" in EXCEL_CLIPBOARD_SCRIPT
     assert ".RowHeight =" in EXCEL_CLIPBOARD_SCRIPT
     assert "FinalReleaseComObject" in EXCEL_CLIPBOARD_SCRIPT
@@ -96,6 +98,7 @@ def test_mail_table_reads_applied_values_and_headers_from_workbook(tmp_path):
                     "sheet": "CIV",
                     "headerRow": 9,
                     "startRow": 10,
+                    "rfiNumbers": ["AZE-SUN-INT-QMS-RFI-CIV-0860"],
                     "columns": [1, 5, 15],
                 },
                 "rows": [
@@ -116,3 +119,58 @@ def test_mail_table_reads_applied_values_and_headers_from_workbook(tmp_path):
     assert "ACTUAL FORM" in fragment
     assert "ACTUAL COMPANY" in plain
     assert "PREVIEW FORM" not in fragment
+
+
+def test_mail_table_finds_filtered_rfis_after_workbook_rows_are_reordered(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "CIV"
+    sheet["A9"] = "RFI No."
+    sheet["E9"] = "FORMS"
+    sheet["O9"] = "SUBCONTRACTOR"
+    sheet["A10"] = "AZE-SUN-INT-QMS-RFI-CIV-0100"
+    sheet["E10"] = "OLD"
+    sheet["A20"] = "AZE-SUN-INT-QMS-RFI-CIV-0861"
+    sheet["E20"] = "SECOND"
+    sheet["O20"] = "AZFEN"
+    sheet["A30"] = "AZE-SUN-INT-QMS-RFI-CIV-0860"
+    sheet["E30"] = "FIRST"
+    sheet["O30"] = "AZFEN"
+    workbook.save(path)
+    workbook.close()
+
+    plan = Plan(
+        op_id="rfi.log_add",
+        meta={
+            "editor": {
+                "kind": "recordTable",
+                "copyEnabled": True,
+                "copyFields": ["rfiNo", "forms", "subcontractor"],
+                "copyHeaders": ["RFI No.", "FORMS", "SUBCONTRACTOR"],
+                "copySource": {
+                    "workbook": str(path),
+                    "sheet": "CIV",
+                    "headerRow": 9,
+                    "startRow": 10,
+                    "rfiNumbers": [
+                        "AZE-SUN-INT-QMS-RFI-CIV-0860",
+                        "AZE-SUN-INT-QMS-RFI-CIV-0861",
+                    ],
+                    "columns": [1, 5, 15],
+                },
+                "rows": [
+                    {"rfiNo": "AZE-SUN-INT-QMS-RFI-CIV-0860"},
+                    {"rfiNo": "AZE-SUN-INT-QMS-RFI-CIV-0861"},
+                ],
+            }
+        },
+    )
+
+    fragment, plain, count = _payload(plan)
+
+    assert count == 2
+    assert "FIRST" in fragment
+    assert "SECOND" in fragment
+    assert "OLD" not in fragment
+    assert plain.index("0861") < plain.index("0860")

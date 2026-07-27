@@ -5,6 +5,12 @@ import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
 import '../theme/responsive.dart';
 
+bool isParamVisible(ParamDef param, Map<String, dynamic> values) {
+  return param.visibleWhen.entries.every(
+    (condition) => values[condition.key] == condition.value,
+  );
+}
+
 /// Semadan uretilen form. Bu dosya operation'a ozel HICBIR SEY bilmez.
 /// `if (opId == '...')` yazmak mimariyi bozar (docs/ARCHITECTURE.md sizinti testi).
 /// Yeni ParamKind eklemek = buraya tek `case`; operation dosyalarina dokunma yok.
@@ -42,12 +48,15 @@ class _SchemaFormState extends State<SchemaForm> {
   @override
   Widget build(BuildContext context) {
     final s = Strings.of(context);
+    final visible = widget.params
+        .where((p) => isParamVisible(p, widget.values))
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < widget.params.length; i++) ...[
+        for (var i = 0; i < visible.length; i++) ...[
           if (i > 0) const SizedBox(height: 18),
-          _field(context, s, widget.params[i]),
+          _field(context, s, visible[i]),
         ],
       ],
     );
@@ -100,10 +109,16 @@ class _SchemaFormState extends State<SchemaForm> {
           s,
           p,
           DropdownButtonFormField<String>(
+            key: ValueKey(p.name),
             initialValue: widget.values[p.name] as String?,
             items: [
               for (final c in p.choices)
-                DropdownMenuItem(value: c, child: Text(c)),
+                DropdownMenuItem(
+                  value: c,
+                  child: Text(
+                    p.choiceLabels[c] == null ? c : s.t(p.choiceLabels[c]!),
+                  ),
+                ),
             ],
             onChanged: (v) => _set(p.name, v),
           ),
@@ -113,9 +128,37 @@ class _SchemaFormState extends State<SchemaForm> {
           s,
           p,
           TextFormField(
+            key: ValueKey(p.name),
             initialValue: widget.values[p.name]?.toString() ?? '',
             keyboardType: TextInputType.number,
             onChanged: (v) => _set(p.name, int.tryParse(v)),
+          ),
+        );
+      case ParamKind.longText:
+        return _labeled(
+          s,
+          p,
+          TextFormField(
+            key: ValueKey(p.name),
+            initialValue: widget.values[p.name]?.toString() ?? '',
+            minLines: 7,
+            maxLines: 14,
+            keyboardType: TextInputType.multiline,
+            decoration: const InputDecoration(alignLabelWithHint: true),
+            onChanged: (v) => _set(p.name, v),
+          ),
+        );
+      case ParamKind.secret:
+        return _labeled(
+          s,
+          p,
+          TextFormField(
+            key: ValueKey(p.name),
+            initialValue: widget.values[p.name]?.toString() ?? '',
+            obscureText: true,
+            enableSuggestions: false,
+            autocorrect: false,
+            onChanged: (v) => _set(p.name, v),
           ),
         );
       case ParamKind.text:

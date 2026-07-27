@@ -10,6 +10,7 @@ import 'package:docflow/core/operations/models.dart';
 import 'package:docflow/core/settings/app_prefs.dart';
 import 'package:docflow/core/settings/settings_store.dart';
 import 'package:docflow/ui/theme/app_theme.dart';
+import 'package:docflow/ui/shell/operation_flow_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,6 +47,41 @@ void main() {
     expect(op.params.first.required, isTrue);
     expect(op.params[1].kind, ParamKind.bool);
     expect(op.params[1].required, isFalse);
+  });
+
+  test('mail ve API key operasyon ayarlarina yazilmaz', () {
+    final params = [
+      ParamDef.fromJson({
+        'name': 'workbook',
+        'kind': 'file',
+        'labelKey': 'x',
+        'required': true,
+      }),
+      ParamDef.fromJson({
+        'name': 'email_text',
+        'kind': 'longText',
+        'labelKey': 'x',
+        'required': false,
+      }),
+      ParamDef.fromJson({
+        'name': 'gemini_api_key',
+        'kind': 'secret',
+        'labelKey': 'x',
+        'required': false,
+        'visibleWhen': {'email_provider': 'gemini'},
+      }),
+    ];
+
+    final saved = persistentOperationValues(params, {
+      'workbook': r'C:\RFI Log.xlsx',
+      'email_text': 'confidential mail',
+      'gemini_api_key': 'secret',
+    });
+
+    expect(saved, {'workbook': r'C:\RFI Log.xlsx'});
+    expect(params[1].kind, ParamKind.longText);
+    expect(params[2].kind, ParamKind.secret);
+    expect(params[2].visibleWhen, {'email_provider': 'gemini'});
   });
 
   test('Plan.hasActionableSteps mkdir-only plani PASIF sayar', () {

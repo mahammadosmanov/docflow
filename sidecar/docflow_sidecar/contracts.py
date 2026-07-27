@@ -26,6 +26,8 @@ class ParamKind(str, Enum):
     BOOL = "bool"
     CHOICE = "choice"
     INT = "int"
+    LONG_TEXT = "longText"
+    SECRET = "secret"
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,8 @@ class Param:
     default: Any = None
     required: bool = True
     choices: list[str] = field(default_factory=list)   # kind == CHOICE icin
+    choice_labels: dict[str, str] = field(default_factory=dict)
+    visible_when: dict[str, Any] = field(default_factory=dict)
     help_key: str | None = None
 
     def to_json(self) -> dict:
@@ -46,6 +50,8 @@ class Param:
             "default": self.default,
             "required": self.required,
             "choices": self.choices,
+            "choiceLabels": self.choice_labels,
+            "visibleWhen": self.visible_when,
             "helpKey": self.help_key,
         }
 
@@ -70,12 +76,33 @@ def TextParam(name: str, label_key: str, **kw) -> Param:
     return Param(name, ParamKind.TEXT, label_key, **kw)
 
 
-def ChoiceParam(name: str, label_key: str, choices: list[str], **kw) -> Param:
-    return Param(name, ParamKind.CHOICE, label_key, choices=choices, **kw)
+def ChoiceParam(
+    name: str,
+    label_key: str,
+    choices: list[str],
+    choice_labels: dict[str, str] | None = None,
+    **kw,
+) -> Param:
+    return Param(
+        name,
+        ParamKind.CHOICE,
+        label_key,
+        choices=choices,
+        choice_labels=choice_labels or {},
+        **kw,
+    )
 
 
 def IntParam(name: str, label_key: str, **kw) -> Param:
     return Param(name, ParamKind.INT, label_key, **kw)
+
+
+def LongTextParam(name: str, label_key: str, **kw) -> Param:
+    return Param(name, ParamKind.LONG_TEXT, label_key, **kw)
+
+
+def SecretParam(name: str, label_key: str, **kw) -> Param:
+    return Param(name, ParamKind.SECRET, label_key, **kw)
 
 
 @dataclass(frozen=True)

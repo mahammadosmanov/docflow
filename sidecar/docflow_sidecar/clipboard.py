@@ -10,6 +10,7 @@ import pathlib
 import subprocess
 import tempfile
 import time
+from collections import Counter
 from ctypes import wintypes
 from datetime import date, datetime, time as date_time
 
@@ -31,6 +32,8 @@ $tempBook = $null
 $tempSheet = $null
 $headerRange = $null
 $dataRange = $null
+$sourceRowRange = $null
+$targetRowRange = $null
 $copyRange = $null
 try {
   $sourceBook = $excel.Workbooks.Open($env:DOCFLOW_COPY_WORKBOOK, 0, $true)
@@ -40,12 +43,31 @@ try {
   $headerRow = [int]$env:DOCFLOW_COPY_HEADER_ROW
   $startRow = [int]$env:DOCFLOW_COPY_START_ROW
   $rowCount = [int]$env:DOCFLOW_COPY_ROW_COUNT
-  $endRow = $startRow + $rowCount - 1
   $columns = @($env:DOCFLOW_COPY_COLUMNS.Split(',') | ForEach-Object { [int]$_ })
+  $expectedRfis = @($env:DOCFLOW_COPY_RFI_NUMBERS.Split('|'))
+  $criteria = @($expectedRfis | Select-Object -Unique)
 
   $sourceSheet.Calculate()
   $firstColumn = ($columns | Measure-Object -Minimum).Minimum
   $lastColumn = ($columns | Measure-Object -Maximum).Maximum
+  $lastDataRow = $sourceSheet.Cells.Item(
+    $sourceSheet.Rows.Count,
+    $firstColumn
+  ).End(-4162).Row
+  if ($lastDataRow -lt $headerRow) {
+    throw 'RFI Log contains no data rows'
+  }
+  $matchedRows = New-Object System.Collections.Generic.List[int]
+  for ($sourceRow = $headerRow + 1; $sourceRow -le $lastDataRow; $sourceRow++) {
+    $rfi = [string]$sourceSheet.Cells.Item($sourceRow, $firstColumn).Value2
+    if ($criteria -contains $rfi) {
+      $matchedRows.Add($sourceRow)
+    }
+  }
+  if ($matchedRows.Count -ne $rowCount) {
+    throw "Filtered RFI row count mismatch: expected $rowCount, found $($matchedRows.Count)"
+  }
+
   $headerRange = $sourceSheet.Range(
     $sourceSheet.Cells.Item($headerRow, $firstColumn),
     $sourceSheet.Cells.Item($headerRow, $lastColumn)
@@ -55,15 +77,27 @@ try {
     $tempSheet.Cells.Item(1, 1),
     $tempSheet.Cells.Item(1, $lastColumn - $firstColumn + 1)
   ).Value2 = $headerRange.Value2
-  $dataRange = $sourceSheet.Range(
-    $sourceSheet.Cells.Item($startRow, $firstColumn),
-    $sourceSheet.Cells.Item($endRow, $lastColumn)
-  )
-  $null = $dataRange.Copy($tempSheet.Cells.Item(2, 1))
-  $tempSheet.Range(
-    $tempSheet.Cells.Item(2, 1),
-    $tempSheet.Cells.Item($rowCount + 1, $lastColumn - $firstColumn + 1)
-  ).Value2 = $dataRange.Value2
+  for ($offset = 0; $offset -lt $matchedRows.Count; $offset++) {
+    $sourceRow = $matchedRows[$offset]
+    $sourceRowRange = $sourceSheet.Range(
+      $sourceSheet.Cells.Item($sourceRow, $firstColumn),
+      $sourceSheet.Cells.Item($sourceRow, $lastColumn)
+    )
+    $targetRowRange = $tempSheet.Range(
+      $tempSheet.Cells.Item($offset + 2, 1),
+      $tempSheet.Cells.Item($offset + 2, $lastColumn - $firstColumn + 1)
+    )
+    $null = $sourceRowRange.Copy($targetRowRange)
+    $targetRowRange.Value2 = $targetRowRange.Value2
+    [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+      $targetRowRange
+    ) | Out-Null
+    $targetRowRange = $null
+    [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+      $sourceRowRange
+    ) | Out-Null
+    $sourceRowRange = $null
+  }
 
   for ($sourceColumn = $lastColumn; $sourceColumn -ge $firstColumn; $sourceColumn--) {
     if ($columns -notcontains $sourceColumn) {
@@ -78,7 +112,7 @@ try {
   $tempSheet.Rows.Item(1).RowHeight = $sourceSheet.Rows.Item($headerRow).RowHeight
   for ($offset = 0; $offset -lt $rowCount; $offset++) {
     $tempSheet.Rows.Item($offset + 2).RowHeight =
-      $sourceSheet.Rows.Item($startRow + $offset).RowHeight
+      $sourceSheet.Rows.Item($matchedRows[$offset]).RowHeight
   }
 
   $copyRange = $tempSheet.Range(
@@ -107,6 +141,8 @@ try {
   $excel.Quit()
   foreach ($comObject in @(
     $copyRange,
+    $sourceRowRange,
+    $targetRowRange,
     $dataRange,
     $headerRange,
     $tempSheet,
@@ -172,7 +208,10 @@ def _copy_data(
         sheet = workbook[sheet_name]
         header_row = int(source.get("headerRow") or 9)
         start_row = int(source.get("startRow") or 0)
-        if start_row < 1:
+        expected_rfis = [
+            str(value) for value in (source.get("rfiNumbers") or [])
+        ]
+        if start_row < 1 or not expected_rfis:
             return fields, headers, planned_rows, False
 
         workbook_headers = [
@@ -181,15 +220,22 @@ def _copy_data(
         if all(workbook_headers):
             headers = workbook_headers
 
+        remaining = Counter(expected_rfis)
+        planned_by_rfi: dict[str, list[dict[str, str]]] = {}
+        for planned in planned_rows:
+            planned_by_rfi.setdefault(str(planned.get("rfiNo") or ""), []).append(planned)
+
         rows: list[dict[str, str]] = []
-        for offset, planned in enumerate(planned_rows):
-            physical_row = start_row + offset
+        for physical_row in range(header_row + 1, sheet.max_row + 1):
+            rfi = _cell_text(sheet.cell(physical_row, columns[0]).value)
+            if remaining[rfi] < 1:
+                continue
+            planned_candidates = planned_by_rfi.get(rfi) or []
+            planned = planned_candidates.pop(0) if planned_candidates else {}
             actual = {
                 field: _cell_text(sheet.cell(physical_row, column).value)
                 for field, column in zip(fields, columns, strict=True)
             }
-            if actual.get("rfiNo") != str(planned.get("rfiNo") or ""):
-                return fields, headers, planned_rows, False
             # Yeni formula hucrelerinin cached sonucu Excel acilmadan once bazi
             # okuyucularda bos olabilir. Bu durumda yalniz o hucre icin onayli
             # plan degerini kullan; diger tum veri fiziksel workbook'tan gelir.
@@ -197,6 +243,9 @@ def _copy_data(
                 if not actual[field] and planned.get(field):
                     actual[field] = str(planned[field])
             rows.append(actual)
+            remaining[rfi] -= 1
+        if any(remaining.values()) or len(rows) != len(expected_rfis):
+            return fields, headers, planned_rows, False
         return fields, headers, rows, True
     finally:
         workbook.close()
@@ -248,7 +297,10 @@ def _excel_clipboard_payload(
     if os.name != "nt" or not isinstance(source, dict) or row_count < 1:
         return None
     columns = [str(int(value)) for value in (source.get("columns") or [])]
-    if not columns:
+    rfi_numbers = [
+        str(value) for value in (source.get("rfiNumbers") or [])
+    ]
+    if not columns or len(rfi_numbers) != row_count:
         return None
 
     encoded = base64.b64encode(
@@ -266,6 +318,9 @@ def _excel_clipboard_payload(
                 "DOCFLOW_COPY_START_ROW": str(source.get("startRow") or 0),
                 "DOCFLOW_COPY_ROW_COUNT": str(row_count),
                 "DOCFLOW_COPY_COLUMNS": ",".join(columns),
+                "DOCFLOW_COPY_RFI_NUMBERS": "|".join(
+                    rfi_numbers
+                ),
                 "DOCFLOW_COPY_HTML": str(html_path),
                 "DOCFLOW_COPY_TEXT": str(text_path),
             }
@@ -291,8 +346,21 @@ def _excel_clipboard_payload(
             if not html_bytes.startswith(b"Version:") or not plain:
                 return None
             return html_bytes, plain
-        except (OSError, subprocess.SubprocessError):
-            return None
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Excel filtreleme ve kopyalama 90 saniyede tamamlanamadi. "
+                "Acik Excel diyaloglarini kapatip yeniden deneyin."
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or b"").decode("utf-8", "replace")
+            stdout = (exc.stdout or b"").decode("utf-8", "replace")
+            detail = (stderr or stdout).replace("\x00", "").strip()[-800:]
+            raise RuntimeError(
+                "Excel filtreleme/kopyalama hatasi"
+                + (f": {detail}" if detail else "")
+            ) from exc
+        except OSError as exc:
+            raise RuntimeError(f"Excel baslatilamadi: {exc}") from exc
 
 
 def _cf_html(fragment: str) -> bytes:
@@ -388,10 +456,7 @@ def copy_plan_table(plan: Plan) -> int:
                 html_bytes, plain = excel_payload
                 _set_windows_clipboard(html_bytes, plain)
                 return count
-            raise RuntimeError(
-                "Excel mail tablosu kaynaktan birebir kopyalanamadi; "
-                "RFI Log dosyasini kapatip yeniden deneyin."
-            )
+            raise RuntimeError("Excel mail tablosu kaynaktan birebir kopyalanamadi")
         fragment, plain, count = _payload(plan)
         _set_windows_clipboard(_cf_html(fragment), plain)
     else:

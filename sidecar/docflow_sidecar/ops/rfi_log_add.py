@@ -28,14 +28,17 @@ from ..contracts import (
     ChoiceParam,
     FileParam,
     IntParam,
+    LongTextParam,
     JournalEntry,
     Operation,
     ParamSchema,
     Plan,
     Result,
     Step,
+    SecretParam,
     Warning,
 )
+from ..email_extract import detect_discipline, extract_email
 from ..fs.apply import file_sha256, write_journal
 from ..registry import register
 from ..rpc import notify
@@ -582,6 +585,7 @@ def _copy_source(
     workbook_path: pathlib.Path,
     discipline: str,
     start_row: int,
+    rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     layout = LAYOUTS[discipline]
     return {
@@ -589,6 +593,7 @@ def _copy_source(
         "sheet": layout.sheet,
         "headerRow": 9,
         "startRow": start_row,
+        "rfiNumbers": [str(row.get("rfiNo") or "") for row in rows],
         "columns": [
             1,
             2,
@@ -634,6 +639,99 @@ def _record(
         "location": "",
         "subcontractor": "AZFEN",
     }
+
+
+def _apply_email_values(
+    row: dict[str, Any],
+    extracted: dict[str, Any],
+    source: dict[str, Any],
+    notes: list[str],
+) -> None:
+    item = str(extracted.get("itemNo") or "").strip()
+    itp = str(extracted.get("itpNo") or "").strip()
+    if item:
+        if item in source["presets"]:
+            preset = source["presets"][item]
+            row["itemNo"] = item
+            resolved = _resolve_itp(itp, item, source["itpToItems"])
+            if resolved is None:
+                matches = [
+                    label
+                    for label, items in source["itpToItems"].items()
+                    if item in items
+                ]
+                resolved = matches[0] if len(matches) == 1 else None
+            if resolved is not None:
+                row["itpNo"] = resolved
+            row.update(
+                {
+                    "description": preset["description"],
+                    "forms": preset["forms"],
+                    "azfenType": preset["azfenType"],
+                    "intecType": preset["intecType"],
+                }
+            )
+        else:
+            notes.append(f"Unknown Item No. ignored: {item}")
+    elif itp:
+        resolved = _resolve_itp(itp, row["itemNo"], source["itpToItems"])
+        if resolved is not None:
+            row["itpNo"] = resolved
+            allowed = source["itpToItems"][resolved]
+            if row["itemNo"] not in allowed and len(allowed) == 1:
+                item = allowed[0]
+                preset = source["presets"][item]
+                row.update(
+                    {
+                        "itemNo": item,
+                        "description": preset["description"],
+                        "forms": preset["forms"],
+                        "azfenType": preset["azfenType"],
+                        "intecType": preset["intecType"],
+                    }
+                )
+        else:
+            notes.append(f"Unknown ITP No. ignored: {itp}")
+
+    for field in ("tagNo", "area", "location", "subcontractor"):
+        value = str(extracted.get(field) or "").strip()
+        if value:
+            row[field] = value
+    if not row["area"]:
+        row["area"] = _infer_area(row["tagNo"])
+
+
+def _rows_from_email(
+    base_rows: list[dict[str, Any]],
+    extraction: dict[str, Any],
+    source: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    extracted_rows = extraction.get("rows")
+    if not isinstance(extracted_rows, list) or not extracted_rows:
+        return base_rows, []
+
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for raw in extracted_rows[:MAX_RFI_COUNT]:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            index = int(raw.get("rfiIndex") or 1)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= index <= len(base_rows):
+            grouped.setdefault(index - 1, []).append(raw)
+
+    rows: list[dict[str, Any]] = []
+    notes: list[str] = []
+    for index, base in enumerate(base_rows):
+        candidates = grouped.get(index) or [{}]
+        for duplicate_index, extracted in enumerate(candidates):
+            row = copy.deepcopy(base)
+            if duplicate_index:
+                row["_rowId"] = f"g{index + 1}-r{duplicate_index + 1}"
+            _apply_email_values(row, extracted, source, notes)
+            rows.append(row)
+    return rows, notes
 
 
 def _warnings_for_rows(
@@ -943,6 +1041,32 @@ class AddRfiLogRows(Operation):
                 default=_default_workbook(),
                 help_key="param.rfi.workbook.help",
             ),
+            LongTextParam(
+                "email_text",
+                "param.rfi.emailText",
+                default="",
+                required=False,
+                help_key="param.rfi.emailText.help",
+            ),
+            ChoiceParam(
+                "email_provider",
+                "param.rfi.emailProvider",
+                choices=["offline", "gemini"],
+                choice_labels={
+                    "offline": "choice.rfi.emailProvider.offline",
+                    "gemini": "choice.rfi.emailProvider.gemini",
+                },
+                default="offline",
+                help_key="param.rfi.emailProvider.help",
+            ),
+            SecretParam(
+                "gemini_api_key",
+                "param.rfi.geminiApiKey",
+                default="",
+                required=False,
+                visible_when={"email_provider": "gemini"},
+                help_key="param.rfi.geminiApiKey.help",
+            ),
             ChoiceParam(
                 "discipline",
                 "param.rfi.discipline",
@@ -966,7 +1090,10 @@ class AddRfiLogRows(Operation):
 
     def preview(self, params: dict) -> Plan:
         workbook_path = pathlib.Path(str(params["workbook"])).expanduser().resolve()
+        email_text = str(params.get("email_text") or "").strip()
         discipline = str(params.get("discipline") or "CIV").upper()
+        if email_text:
+            discipline = detect_discipline(email_text) or discipline
         count = int(params.get("count") or 0)
         wrap = bool(params.get("overflow_next_day", True))
         if workbook_path.suffix.lower() != ".xlsx" or not workbook_path.is_file():
@@ -979,6 +1106,45 @@ class AddRfiLogRows(Operation):
         notify("progress", {"phase": "preview", "done": 0, "total": 3})
         source = _read_source(workbook_path, discipline)
         notify("progress", {"phase": "preview", "done": 1, "total": 3})
+        extraction: dict[str, Any] | None = None
+        extraction_notes: list[str] = []
+        extraction_warnings: list[Warning] = []
+        if email_text:
+            provider = str(params.get("email_provider") or "offline").lower()
+            if provider not in {"offline", "gemini"}:
+                provider = "offline"
+            extraction, fallback_error = extract_email(
+                email_text,
+                provider=provider,
+                api_key=str(params.get("gemini_api_key") or ""),
+                discipline=discipline,
+                itp_to_items=source["itpToItems"],
+                known_tags=source["tags"],
+                known_subcontractors=source["subcontractors"],
+            )
+            extracted_count = int(extraction.get("count") or 0)
+            if 1 <= extracted_count <= MAX_RFI_COUNT:
+                count = extracted_count
+            raw_notes = extraction.get("notes")
+            if isinstance(raw_notes, list):
+                extraction_notes.extend(
+                    str(note).strip() for note in raw_notes if str(note).strip()
+                )
+            confidence = float(extraction.get("confidence") or 0)
+            used_provider = str(extraction.get("provider") or provider)
+            extraction_warnings.append(
+                Warning(
+                    "warn.rfi.emailExtracted",
+                    f"{used_provider} | {count} RFI | confidence {confidence:.0%}",
+                )
+            )
+            if provider == "gemini":
+                extraction_warnings.append(Warning("warn.rfi.geminiPrivacy"))
+            if fallback_error:
+                extraction_warnings.append(
+                    Warning("warn.rfi.aiFallback", fallback_error)
+                )
+
         start_day = _today() + timedelta(days=1)
         slots, overflowed = _allocate(source["occupied"], start_day, count, wrap)
         issue_day = _today()
@@ -997,6 +1163,16 @@ class AddRfiLogRows(Operation):
                     slot=slots[index],
                 )
             )
+        if extraction is not None:
+            rows, validation_notes = _rows_from_email(rows, extraction, source)
+            extraction_notes.extend(validation_notes)
+            if extraction_notes:
+                extraction_warnings.append(
+                    Warning(
+                        "warn.rfi.emailNeedsReview",
+                        " | ".join(dict.fromkeys(extraction_notes))[:500],
+                    )
+                )
 
         start_row = source["lastRow"] + 1
         if start_row + len(rows) - 1 > source["maxRow"]:
@@ -1034,15 +1210,25 @@ class AddRfiLogRows(Operation):
         )
         notify("progress", {"phase": "preview", "done": 3, "total": 3})
         meta = _plan_meta(discipline, source, rows)
+        if extraction is not None:
+            meta["editor"]["emailExtraction"] = {
+                "provider": extraction.get("provider"),
+                "confidence": extraction.get("confidence"),
+                "count": count,
+            }
         meta["editor"]["copySource"] = _copy_source(
             workbook_path,
             discipline,
             start_row,
+            rows,
         )
         return Plan(
             op_id=self.id,
             steps=[step],
-            warnings=_warnings_for_rows(rows, overflowed=overflowed, wrap=wrap),
+            warnings=[
+                *extraction_warnings,
+                *_warnings_for_rows(rows, overflowed=overflowed, wrap=wrap),
+            ],
             meta=meta,
         )
 
@@ -1069,6 +1255,7 @@ class AddRfiLogRows(Operation):
             pathlib.Path(str(original.src)),
             discipline,
             start_row,
+            rows,
         )
         revised = Plan(
             op_id=self.id,

@@ -1,7 +1,18 @@
 // Sidecar'dan gelen JSON'un Dart karsiliklari. Bu dosya operation'a ozel
 // HICBIR SEY bilmez — sadece sozlesme sekilleri. UI bunlardan uretilir.
 
-enum ParamKind { folder, file, files, text, bool, choice, int, unknown }
+enum ParamKind {
+  folder,
+  file,
+  files,
+  text,
+  bool,
+  choice,
+  int,
+  longText,
+  secret,
+  unknown,
+}
 
 ParamKind _kindFrom(String s) {
   switch (s) {
@@ -19,6 +30,10 @@ ParamKind _kindFrom(String s) {
       return ParamKind.choice;
     case 'int':
       return ParamKind.int;
+    case 'longText':
+      return ParamKind.longText;
+    case 'secret':
+      return ParamKind.secret;
     default:
       return ParamKind.unknown;
   }
@@ -32,6 +47,8 @@ class ParamDef {
     required this.required,
     this.defaultValue,
     this.choices = const [],
+    this.choiceLabels = const {},
+    this.visibleWhen = const {},
     this.helpKey,
   });
 
@@ -41,6 +58,8 @@ class ParamDef {
   final bool required;
   final Object? defaultValue;
   final List<String> choices;
+  final Map<String, String> choiceLabels;
+  final Map<String, dynamic> visibleWhen;
   final String? helpKey;
 
   factory ParamDef.fromJson(Map<String, dynamic> j) => ParamDef(
@@ -50,6 +69,13 @@ class ParamDef {
     required: (j['required'] as bool?) ?? true,
     defaultValue: j['default'],
     choices: (j['choices'] as List?)?.cast<String>() ?? const [],
+    choiceLabels:
+        (j['choiceLabels'] as Map?)?.map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ) ??
+        const {},
+    visibleWhen:
+        (j['visibleWhen'] as Map?)?.cast<String, dynamic>() ?? const {},
     helpKey: j['helpKey'] as String?,
   );
 }

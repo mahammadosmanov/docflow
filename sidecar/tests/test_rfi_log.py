@@ -186,6 +186,38 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     ]
 
 
+def test_email_prefills_validated_rows_and_can_duplicate_one_rfi(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    plan = AddRfiLogRows().preview({
+        "workbook": str(path),
+        "discipline": "MEC",
+        "count": 3,
+        "email_provider": "offline",
+        "email_text": (
+            "Create 1 CIV RFI number\n"
+            "ITP No: 5\n"
+            "Item: CIV-5.2.1\n"
+            "Tag No: N12, S14\n"
+            "Inspection Location: Foundation A"
+        ),
+        "overflow_next_day": True,
+    })
+
+    rows = plan.meta["editor"]["rows"]
+    assert len(rows) == 2
+    assert rows[0]["rfiNo"] == rows[1]["rfiNo"]
+    assert [row["tagNo"] for row in rows] == ["N12", "S14"]
+    assert [row["area"] for row in rows] == ["North Site", "South Site"]
+    assert all(row["itemNo"] == "CIV-5.2.1" for row in rows)
+    assert all(row["location"] == "Foundation A" for row in rows)
+    assert plan.meta["editor"]["copySource"]["rfiNumbers"] == [
+        rows[0]["rfiNo"],
+        rows[1]["rfiNo"],
+    ]
+    assert any(w.key == "warn.rfi.emailExtracted" for w in plan.warnings)
+
+
 def test_revise_repairs_mojibake_itp_separator(tmp_path):
     path = tmp_path / "RFI Log.xlsx"
     _make_workbook(path)
