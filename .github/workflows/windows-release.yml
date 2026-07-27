@@ -14,11 +14,16 @@ concurrency:
   group: windows-release-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOCFLOW_PYTHON_VERSION: "3.12.10"
+  DOCFLOW_FLUTTER_VERSION: "3.44.8"
+  DOCFLOW_TESSERACT_VERSION: "5.5.0.20241111"
+
 jobs:
   build:
-    name: Build Windows x64
+    name: Build and verify Windows x64
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 55
 
     steps:
       - name: Check out source
@@ -27,21 +32,51 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.DOCFLOW_PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: sidecar/requirements.txt
+          cache-dependency-path: |
+            sidecar/requirements.txt
+            sidecar/requirements-dev.txt
 
-      - name: Install sidecar dependencies
-        working-directory: sidecar
-        run: >-
-          python -m pip install
-          -r requirements.txt
-          pyinstaller
-          pytest
-          mypy
+      - name: Install pinned Tesseract
+        shell: pwsh
+        run: |
+          choco install tesseract `
+            --version="$env:DOCFLOW_TESSERACT_VERSION" `
+            --allow-downgrade `
+            --force `
+            --no-progress `
+            --yes
+          $roots = @(
+            "C:\Program Files\Tesseract-OCR",
+            "C:\Program Files (x86)\Tesseract-OCR",
+            (Join-Path $env:LOCALAPPDATA "Programs\Tesseract-OCR")
+          )
+          $root = $roots |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_ "tesseract.exe") -PathType Leaf } |
+            Select-Object -First 1
+          if (-not $root) {
+            throw "Pinned Tesseract installation was not found"
+          }
+          $exe = Join-Path $root "tesseract.exe"
+          $tessdata = Join-Path $root "tessdata"
+          if (-not (Test-Path -LiteralPath (Join-Path $tessdata "eng.traineddata") -PathType Leaf)) {
+            throw "English Tesseract language data is missing"
+          }
+          "DOCFLOW_TESSERACT=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DOCFLOW_TESSERACT_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TESSDATA_PREFIX=$tessdata" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Test sidecar
+      - name: Install pinned sidecar dependencies
         working-directory: sidecar
+        run: |
+          python -m pip install --requirement requirements-dev.txt
+          python -m pip check
+
+      - name: Test sidecar and real OCR
+        working-directory: sidecar
+        env:
+          DOCFLOW_RUN_OCR_INTEGRATION: "1"
         run: |
           python -m mypy --config-file mypy.ini docflow_sidecar
           python -m pytest tests -q
@@ -53,7 +88,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.8"
+          flutter-version: ${{ env.DOCFLOW_FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -71,7 +106,7 @@ jobs:
         working-directory: app
         run: flutter build windows --release
 
-      - name: Bundle Visual C++ runtime
+      - name: Bundle native runtimes
         shell: pwsh
         run: |
           $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
@@ -92,7 +127,18 @@ jobs:
             Copy-Item -LiteralPath (Join-Path $crt $dll) -Destination $release -Force
           }
 
-      - name: Smoke-test packaged sidecar
+          $tesseractDestination = Join-Path $release "tesseract"
+          New-Item -ItemType Directory -Path $tesseractDestination -Force | Out-Null
+          Copy-Item -Path (Join-Path $env:DOCFLOW_TESSERACT_ROOT "*") `
+            -Destination $tesseractDestination -Recurse -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $tesseractDestination "tesseract.exe") -PathType Leaf)) {
+            throw "Bundled Tesseract executable is missing"
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $tesseractDestination "tessdata\eng.traineddata") -PathType Leaf)) {
+            throw "Bundled Tesseract English language data is missing"
+          }
+
+      - name: Smoke-test complete packaged application
         shell: pwsh
         run: |
           $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
@@ -100,12 +146,84 @@ jobs:
           if (-not (Test-Path -LiteralPath $sidecar -PathType Leaf)) {
             throw "Packaged sidecar is missing from the release"
           }
-          $response = '{"id":1,"method":"ping","params":{}}' |
-            & $sidecar |
-            ConvertFrom-Json
-          if ($response.result.ok -ne $true) {
+          if (-not (Test-Path -LiteralPath (Join-Path $release "docflow.exe") -PathType Leaf)) {
+            throw "Flutter executable is missing from the release"
+          }
+
+          $pingLine = '{"id":1,"method":"ping","params":{}}' | & $sidecar | Select-Object -Last 1
+          $ping = $pingLine | ConvertFrom-Json
+          if ($ping.result.ok -ne $true) {
             throw "Packaged sidecar ping failed"
           }
+
+          $operationsLine = '{"id":2,"method":"list_operations","params":{}}' |
+            & $sidecar |
+            Select-Object -Last 1
+          $operations = $operationsLine | ConvertFrom-Json
+          $ids = @($operations.result | ForEach-Object { $_.id })
+          foreach ($expected in @("rfi.process_scans", "rfi.log_add", "files.batch_print")) {
+            if ($expected -notin $ids) {
+              throw "Packaged sidecar is missing operation: $expected"
+            }
+          }
+
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP "docflow-packaged-ocr"
+          $source = Join-Path $fixtureRoot "source"
+          $destination = Join-Path $fixtureRoot "destination"
+          New-Item -ItemType Directory -Path $source -Force | Out-Null
+          $fixture = Join-Path $source "scan.pdf"
+          python (Join-Path $env:GITHUB_WORKSPACE "sidecar\tests\ocr_fixture.py") $fixture
+
+          $env:DOCFLOW_TESSERACT = Join-Path $release "tesseract\tesseract.exe"
+          $env:TESSDATA_PREFIX = Join-Path $release "tesseract\tessdata"
+          $request = @{
+            id = 3
+            method = "preview"
+            params = @{
+              op = "rfi.process_scans"
+              params = @{
+                source = $source
+                dest = $destination
+                keep_original = $true
+              }
+            }
+          } | ConvertTo-Json -Depth 8 -Compress
+          $previewLine = $request | & $sidecar | Select-Object -Last 1
+          $preview = $previewLine | ConvertFrom-Json
+          if ($preview.error) {
+            throw "Packaged OCR preview failed: $($preview.error.message)"
+          }
+          if (@($preview.result.warnings).Count -ne 0) {
+            throw "Packaged OCR preview returned warnings"
+          }
+          $codes = @($preview.result.steps | ForEach-Object { $_.meta.code } | Where-Object { $_ })
+          if ("AZE-SUN-INT-QMS-RFI-CIV-0428" -notin $codes) {
+            throw "Packaged OCR did not recognize the release fixture"
+          }
+          if (-not (Test-Path -LiteralPath $fixture -PathType Leaf)) {
+            throw "Preview mutated the source fixture"
+          }
+          if (Test-Path -LiteralPath $destination) {
+            throw "Preview created the destination directory"
+          }
+
+      - name: Write build manifest
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:GITHUB_WORKSPACE "app\build\windows\x64\runner\Release"
+          $tesseractVersion = & (Join-Path $release "tesseract\tesseract.exe") --version |
+            Select-Object -First 1
+          $manifest = [ordered]@{
+            gitCommit = $env:GITHUB_SHA
+            builtAtUtc = [DateTime]::UtcNow.ToString("o")
+            python = (python --version 2>&1)
+            flutter = ((flutter --version --machine | ConvertFrom-Json).frameworkVersion)
+            tesseract = $tesseractVersion
+            dependencies = @(python -m pip freeze --all)
+          }
+          $manifest |
+            ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath (Join-Path $release "BUILD-MANIFEST.json") -Encoding utf8
 
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
@@ -113,4 +231,4 @@ jobs:
           name: DocFlow-Windows-x64
           path: app/build/windows/x64/runner/Release/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

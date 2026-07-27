@@ -1,44 +1,60 @@
 # DocFlow
 
-Masaüstü belge otomasyon uygulaması. Flutter (UI) + Python sidecar (iş mantığı).
+DocFlow, Windows üzerinde belge işlerini otomatikleştiren Flutter masaüstü
+uygulamasıdır. İş mantığı, uygulamayla birlikte paketlenen Python sidecar
+tarafından yürütülür.
 
-MVP: taranmış RFI formlarını ilk sayfadaki RFI numarasına göre adlandırır ve klasörler.
+Desteklenen işlemler:
 
-## Başlarken
+- Taranmış RFI PDF'lerini OCR ile tanıma, adlandırma ve klasörleme
+- CIV/MEC kayıtlarını formül, stil ve doğrulamalarını koruyarak RFI Log'a ekleme
+- PDF, Word, Excel ve görselleri kesin sırayla toplu yazdırma
 
-```bash
-# 0. Tesseract
-brew install tesseract                    # macOS
-sudo pacman -S tesseract tesseract-data-eng   # Arch / CachyOS
+## Geliştirme
 
-# 1. Sidecar
+Windows'ta Python 3.12.10, Flutter 3.44.8 ve Tesseract
+5.5.0.20241111 kullanılır. Python bağımlılıkları tam sürüme, Flutter
+bağımlılıkları `pubspec.lock` dosyasına sabitlenmiştir.
+
+```powershell
 cd sidecar
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-python -m pytest -q                       # 15 passed
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m mypy --config-file mypy.ini docflow_sidecar
+.\.venv\Scripts\python.exe -m pytest tests -q
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean docflow_sidecar.spec
 
-# 2. ÖNCE KALİBRE ET — bkz. docs/TASKS.md Görev 0.1
-python ../tools/rfi_probe.py /gercek/taramalar --sweep
-
-# 3. Flutter — henüz yok, docs/TASKS.md Faz 2
+cd ..\app
+flutter pub get
+dart analyze
+flutter test
+flutter build windows --release
 ```
 
-## Okuma sırası
+Gerçek OCR entegrasyon testini çalıştırmak için Tesseract kurulu olmalıdır:
 
-1. `CLAUDE.md` — kurallar ve ölçülmüş OCR gerçekleri
-2. `docs/ARCHITECTURE.md` — neden bu şekilde
-3. `docs/TASKS.md` — ne yapılacak, hangi sırayla
-4. `docs/IPC_PROTOCOL.md` — Flutter ↔ Python sözleşmesi
+```powershell
+$env:DOCFLOW_RUN_OCR_INTEGRATION = "1"
+.\sidecar\.venv\Scripts\python.exe -m pytest `
+  sidecar\tests\test_ocr_integration.py -q
+```
 
-## Durum
+## Windows paketi
 
-| Parça | Durum |
-|---|---|
-| Sözleşmeler (`contracts.py`) | ✅ |
-| RFI çıkarımı (`extract/`) | ✅ gerçek belge üzerinde test edildi |
-| Uygulama + journal (`fs/apply.py`) | ✅ |
-| JSON-RPC (`rpc.py`) | ✅ |
-| Referans operation | ✅ |
-| DPI kalibrasyonu | ⬜ gerçek taramalar gerekli |
-| Flutter | ⬜ |
-| Paketleme | ⬜ |
+Tek yetkili paketleme hattı `.github/workflows/windows-release.yml` dosyasıdır.
+Üretilen `DocFlow-Windows-x64` paketi Flutter uygulamasını, sidecar'ı, Visual
+C++ çalışma zamanı dosyalarını, sabit Tesseract sürümünü ve İngilizce OCR dil
+verisini içerir. Kullanıcı bilgisayarında ayrı Python veya Tesseract kurulumu
+gerekmez.
+
+Paket yayınlanmadan önce:
+
+- Python tip kontrolü ve bütün sidecar testleri
+- gerçek, metin katmanı olmayan PDF üzerinde OCR
+- Flutter analiz ve testleri
+- paketlenmiş sidecar içinde bütün operation'ların varlığı
+- paketlenmiş sidecar + gömülü Tesseract ile salt-okunur OCR önizlemesi
+- bağımlılık ve araç sürümlerini içeren `BUILD-MANIFEST.json`
+
+kontrol edilir. Ayrıntılı değişiklik ve release kuralları
+[`docs/RELEASE_SAFETY.md`](docs/RELEASE_SAFETY.md) dosyasındadır.

@@ -221,6 +221,10 @@ def test_existing_tessdata_prefix_is_not_overridden(tmp_path, monkeypatch):
     exe.write_text("")
     (tmp_path / "tessdata").mkdir()
     (tmp_path / "tessdata" / "eng.traineddata").write_bytes(b"x")
+    # _configure_tesseract mutates pytesseract's module-global command. Record
+    # it so this unit test cannot poison later real-OCR tests in this process.
+    current_cmd = ocr_mod.pytesseract.pytesseract.tesseract_cmd
+    monkeypatch.setattr(ocr_mod.pytesseract.pytesseract, "tesseract_cmd", current_cmd)
     monkeypatch.setenv("TESSDATA_PREFIX", "/kullanicinin/yolu")
     monkeypatch.setattr(ocr_mod, "_resolve_tesseract", lambda: str(exe))
     ocr_mod._configure_tesseract()
