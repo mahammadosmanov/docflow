@@ -117,7 +117,7 @@ void main() {
       {
         '_rowId': 'row-compact',
         'rfiNo': 'AZE-SUN-INT-QMS-RFI-CIV-0860',
-        'itpNo': 'AZE-SUN-INT-QMS-ITP-CIV-0005',
+        'itpNo': 'AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005',
         'itemNo': 'CIV-5.2.1',
         'description': 'AUTOMATIC DESCRIPTION',
       },
@@ -158,7 +158,7 @@ void main() {
         },
       ],
       'choices': {
-        'itpNo': ['AZE-SUN-INT-QMS-ITP-CIV-0005'],
+        'itpNo': ['AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005'],
       },
     };
 

@@ -130,6 +130,12 @@ def _make_workbook(path):
     lookup["O1"] = "AZFEN"
     lookup["P1"] = "Item"
     lookup["Q1"] = "INTEC"
+    lookup["B1"] = "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005"
+    lookup["C1"] = "AZE˗SUN˗INT˗QMS˗ITP˗MEC˗0003"
+    civ["D11"] = '=IFERROR(VLOOKUP(C11,Sheet1!K:L,2,0),"")'
+    civ["E11"] = '=IFERROR(VLOOKUP(D11,Sheet1!L:M,2,0),"")'
+    civ["L11"] = '=IFERROR(VLOOKUP(C11,Sheet1!N:O,2,0),"")'
+    civ["M11"] = '=IFERROR(VLOOKUP(C11,Sheet1!P:Q,2,0),"")'
     lookup.append([None] * 10 + [
         "CIV-5.2.1",
         "Civil description",
@@ -173,6 +179,7 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     assert [row["startTime"] for row in rows] == ["09:00", "09:30"]
     assert any(w.key == "warn.rfi.overflowMoved" for w in plan.warnings)
     assert plan.meta["editor"]["layout"] == "compact"
+    assert rows[0]["itpNo"] == "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005"
     assert plan.meta["editor"]["copySource"]["sheet"] == "CIV"
     assert plan.meta["editor"]["copySource"]["columns"] == [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15
@@ -216,7 +223,7 @@ def test_apply_duplicate_preserves_untouched_columns_and_undo(tmp_path, monkeypa
         assert civ["A12"].value == "AZE-SUN-INT-QMS-RFI-CIV-0008"
         assert civ["G11"].value in (None, "")
         assert civ["G12"].value == "South Site"
-        assert str(civ["D11"].value).startswith("=IFERROR(VLOOKUP")
+        assert civ["D11"].value == '=IFERROR(VLOOKUP(C11,Sheet1!K:L,2,0),"")'
         assert civ["J11"].value == "KEEP EXPIRY"
         assert civ["P11"].value == "KEEP STATUS"
         assert civ["Q11"].value == "KEEP VALIDITY"

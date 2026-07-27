@@ -234,6 +234,24 @@ def _write_formula(
         ET.SubElement(cell, f"{{{MAIN}}}v").text = cached_value
 
 
+def _write_cached_formula(
+    cell: ET.Element,
+    fallback_formula: str,
+    cached_value: str,
+) -> None:
+    """Update a formula result without changing Excel's formula structure."""
+
+    formula = cell.find(f"{{{MAIN}}}f")
+    if formula is None:
+        _write_formula(cell, fallback_formula, cached_value)
+        return
+    for child in list(cell):
+        if child is not formula:
+            cell.remove(child)
+    cell.attrib["t"] = "str"
+    ET.SubElement(cell, f"{{{MAIN}}}v").text = cached_value
+
+
 def _patch_sheet(
     raw: bytes,
     updates: dict[tuple[int, int], tuple[str, Any]],
@@ -250,7 +268,7 @@ def _patch_sheet(
         cell = _cell(sheet_data, row, row_number, column_number)
         if (
             replaced_formulas is not None
-            and kind != "formula"
+            and kind not in ("formula", "formula_cached")
             and cell.find(f"{{{MAIN}}}f") is not None
         ):
             replaced_formulas.add(f"{_column_name(column_number)}{row_number}")
@@ -260,6 +278,13 @@ def _patch_sheet(
                 _write_formula(cell, str(formula), str(cached_value))
             else:
                 _write_formula(cell, str(value))
+        elif kind == "formula_cached":
+            fallback_formula, cached_value = value
+            _write_cached_formula(
+                cell,
+                str(fallback_formula),
+                str(cached_value),
+            )
         elif kind == "value":
             _write_value(cell, value)
         else:

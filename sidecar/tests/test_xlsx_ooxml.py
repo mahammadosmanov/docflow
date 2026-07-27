@@ -80,3 +80,27 @@ def test_patch_allows_only_consecutive_duplicate_identifiers():
         'OR(A10="",COUNTIF($A$10:A10,A10)=1,A10=A9)',
         "INDIRECT(B10)",
     ]
+
+
+def test_cached_formula_update_preserves_existing_formula_structure():
+    sheet = b"""<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+ <sheetData><row r="10">
+  <c r="D10" t="str"><f t="shared" si="7">C10*2</f><v /></c>
+ </row></sheetData>
+</worksheet>"""
+
+    patched = _patch_sheet(
+        sheet,
+        {(10, 4): ("formula_cached", ("different fallback", "calculated"))},
+    )
+    root = ET.fromstring(patched)
+    cell = root.find(f".//{{{MAIN}}}c")
+    assert cell is not None
+    formula = cell.find(f"{{{MAIN}}}f")
+    value = cell.find(f"{{{MAIN}}}v")
+
+    assert formula is not None
+    assert formula.attrib == {"t": "shared", "si": "7"}
+    assert formula.text == "C10*2"
+    assert value is not None and value.text == "calculated"

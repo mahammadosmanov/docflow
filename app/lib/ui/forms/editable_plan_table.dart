@@ -54,8 +54,9 @@ bool applyEditorRegexFill(
 }
 
 String planTableDisplayValue(Map<String, dynamic> column, String value) {
-  if (column['display'] == 'suffix' && value.contains('-')) {
-    return value.split('-').last;
+  if (column['display'] == 'suffix') {
+    final suffix = RegExp(r'(\d+)$').firstMatch(value)?.group(1);
+    if (suffix != null) return suffix;
   }
   return value;
 }

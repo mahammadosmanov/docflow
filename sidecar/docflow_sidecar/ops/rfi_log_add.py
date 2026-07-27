@@ -297,11 +297,23 @@ def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
         if not presets:
             raise ValueError(f"{discipline} icin Sheet1 esleme verisi bulunamadi")
 
+        workbook_itps: dict[int, str] = {}
+        for value in next(
+            lookup_sheet.iter_rows(min_row=1, max_row=1, values_only=True)
+        ):
+            label = str(value or "").strip()
+            if "ITP" not in label.upper() or discipline not in label.upper():
+                continue
+            number_match = re.search(r"(\d{4})$", label)
+            if number_match:
+                workbook_itps[int(number_match.group(1))] = label
+
         itp_to_items: dict[str, list[str]] = {}
         for item in presets:
             match = ITEM_RE.match(item)
             assert match is not None
-            itp = _canonical_itp(discipline, int(match.group(2)))
+            number = int(match.group(2))
+            itp = workbook_itps.get(number, _canonical_itp(discipline, number))
             itp_to_items.setdefault(itp, []).append(item)
         for items in itp_to_items.values():
             items.sort(
@@ -314,7 +326,11 @@ def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
         default_item = latest_item if latest_item in presets else next(iter(presets))
         item_match = ITEM_RE.match(default_item)
         assert item_match is not None
-        default_itp = _canonical_itp(discipline, int(item_match.group(2)))
+        default_number = int(item_match.group(2))
+        default_itp = workbook_itps.get(
+            default_number,
+            _canonical_itp(discipline, default_number),
+        )
         return {
             "presets": presets,
             "itpToItems": itp_to_items,
@@ -757,7 +773,7 @@ def _formula_or_value(
         default_value.replace("\r\n", "\n").replace("\r", "\n"),
     )
     return (
-        ("formula", (formula, default_value))
+        ("formula_cached", (formula, default_value))
         if normalized_value == normalized_default
         else ("value", value)
     )
@@ -799,22 +815,22 @@ def _write_records(
         updates[(row_number, description_col)] = _formula_or_value(
                 record["description"],
                 preset["description"],
-                f'=IFERROR(VLOOKUP(C{row_number},\'Sheet1\'!$K$1:$L${LOOKUP_LAST_ROW},2,0),"")',
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!K:L,2,0),"")',
         )
         updates[(row_number, forms_col)] = _formula_or_value(
                 record["forms"],
                 preset["forms"],
-                f'=IFERROR(VLOOKUP(D{row_number},\'Sheet1\'!$L$1:$M${LOOKUP_LAST_ROW},2,0),"")',
+                f'=IFERROR(VLOOKUP(D{row_number},Sheet1!L:M,2,0),"")',
         )
         updates[(row_number, azfen_col)] = _formula_or_value(
                 record["azfenType"],
                 preset["azfenType"],
-                f'=IFERROR(VLOOKUP(C{row_number},\'Sheet1\'!$N$1:$O${LOOKUP_LAST_ROW},2,0),"")',
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!N:O,2,0),"")',
         )
         updates[(row_number, intec_col)] = _formula_or_value(
                 record["intecType"],
                 preset["intecType"],
-                f'=IFERROR(VLOOKUP(C{row_number},\'Sheet1\'!$P$1:$Q${LOOKUP_LAST_ROW},2,0),"")',
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!P:Q,2,0),"")',
         )
     patch_workbook(
         workbook_path,
