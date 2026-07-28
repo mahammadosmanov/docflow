@@ -11,6 +11,7 @@ def _mapping() -> dict[str, list[str]]:
     return {
         "AZE-SUN-INT-QMS-ITP-CIV-0005": ["CIV-5.2.1", "CIV-5.3.1"],
         "AZE-SUN-INT-QMS-ITP-CIV-0007": ["CIV-7.1.1"],
+        "AZE-SUN-INT-QMS-ITP-MEC-0003": ["MEC-3.1", "MEC-3.2"],
     }
 
 
@@ -104,10 +105,15 @@ def test_gemini_uses_header_key_and_structured_schema(monkeypatch):
     body = json.loads(request.data)
     assert "secret-key" not in request.full_url
     assert request.get_header("X-goog-api-key") == "secret-key"
-    assert body["generationConfig"]["responseMimeType"] == "application/json"
+    response_format = body["generationConfig"]["responseFormat"]["text"]
+    assert response_format["mimeType"] == "application/json"
     assert "temperature" not in body["generationConfig"]
-    assert body["generationConfig"]["responseSchema"]["type"] == "OBJECT"
-    assert body["generationConfig"]["responseSchema"]["properties"][
+    assert response_format["schema"]["type"] == "object"
+    assert response_format["schema"]["properties"]["rows"]["type"] == "array"
+    assert response_format["schema"]["properties"]["rows"]["items"][
+        "type"
+    ] == "object"
+    assert response_format["schema"]["properties"][
         "discipline"
     ]["enum"] == ["CIV", "MEC"]
     assert result["provider"] == "gemini"
@@ -180,6 +186,74 @@ def test_gemini_retries_a_current_model_when_configured_model_is_gone(
     assert result["model"] == "gemini-3.1-flash-lite"
 
 
+def test_gemini_retries_legacy_schema_after_current_format_is_rejected(
+    monkeypatch,
+):
+    formats = []
+    structured = {
+        "discipline": "MEC",
+        "count": 1,
+        "rows": [
+            {
+                "rfiIndex": 1,
+                "itpNo": "AZE-SUN-INT-QMS-ITP-MEC-0003",
+                "itemNo": "MEC-3.1",
+                "tagNo": "N3_PCS-02_S7/S8",
+                "area": "",
+                "location": "",
+                "subcontractor": "",
+            }
+        ],
+        "confidence": 0.9,
+        "notes": [],
+    }
+    response_body = {
+        "candidates": [
+            {"content": {"parts": [{"text": json.dumps(structured)}]}}
+        ]
+    }
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(response_body).encode()
+
+    def fake_urlopen(request, timeout):
+        del timeout
+        body = json.loads(request.data)
+        config = body["generationConfig"]
+        formats.append("current" if "responseFormat" in config else "legacy")
+        if "responseFormat" in config:
+            assert config["responseFormat"]["text"]["schema"]["type"] == "object"
+            raise urllib.error.HTTPError(
+                request.full_url,
+                400,
+                "invalid",
+                {},
+                io.BytesIO(
+                    b'{"error":{"message":"Request contains an invalid argument."}}'
+                ),
+            )
+        assert config["responseSchema"]["type"] == "OBJECT"
+        return _Response()
+
+    monkeypatch.setattr(email_extract.urllib.request, "urlopen", fake_urlopen)
+    result = email_extract.gemini_extract(
+        "mail body",
+        api_key="secret-key",
+        discipline="MEC",
+        itp_to_items=_mapping(),
+    )
+
+    assert formats == ["current", "legacy"]
+    assert result["rows"][0]["tagNo"] == "N3_PCS-02_S7/S8"
+
+
 def test_gemini_failure_falls_back_without_losing_offline_result(monkeypatch):
     def fail(*_args, **_kwargs):
         raise RuntimeError("quota")
@@ -228,3 +302,33 @@ def test_azerbaijani_markdown_mail_extracts_compact_tags_and_short_item():
         for row in result["rows"]
     )
     assert all(row["itemNo"] == "CIV-5.2.1" for row in result["rows"])
+
+
+def test_azerbaijani_mec_mail_preserves_escaped_underscore_tag():
+    result = email_extract.offline_extract(
+        r"""
+        Salam Məhəmməd bəy
+        Aşağıda qeyd olunan PCS(Tracker) sahəsi üçün
+        (**AZE-SUN-INT-QMS-ITP-MEC-0003** əsasən)
+        **3.1** bəndi üzrə **1** ədəd **RFI** nömrəsi verməyinizi xaiş edirəm.
+        **N3\_PCS-02\_S7/S8**
+        """,
+        discipline="CIV",
+        itp_to_items=_mapping(),
+        known_tags=[],
+        known_subcontractors=["AZFEN"],
+    )
+
+    assert result["discipline"] == "MEC"
+    assert result["count"] == 1
+    assert result["rows"] == [
+        {
+            "rfiIndex": 1,
+            "itpNo": "AZE-SUN-INT-QMS-ITP-MEC-0003",
+            "itemNo": "MEC-3.1",
+            "tagNo": "N3_PCS-02_S7/S8",
+            "area": "",
+            "location": "",
+            "subcontractor": "",
+        }
+    ]

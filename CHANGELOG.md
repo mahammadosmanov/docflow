@@ -3,6 +3,18 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.2.3 - 2026-07-28
+
+### Fixed
+
+- Gemini Generate Content API'nin güncel `responseFormat` structured-output
+  biçimine geçiş
+- HTTP 400 uyumsuzluğunda güncel ve legacy istek biçimleri ile desteklenen
+  modeller arasında kontrollü otomatik fallback
+- `N3_PCS-02_S7/S8` gibi escaped underscore ve slash içeren MEC Tag
+  numaralarının bozulmadan çıkarılması
+- Kısa MEC Item numaralarının seçilen ITP eşleşmesiyle offline çözülmesi
+
 ## 0.2.2 - 2026-07-27
 
 ### Fixed

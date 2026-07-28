@@ -86,6 +86,25 @@ _RESPONSE_SCHEMA = {
 }
 
 
+def _as_json_schema(value: Any) -> Any:
+    """Convert legacy Gemini Schema enum names to JSON Schema type names."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                item.lower()
+                if key == "type" and isinstance(item, str)
+                else _as_json_schema(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_as_json_schema(item) for item in value]
+    return value
+
+
+_CURRENT_RESPONSE_SCHEMA = _as_json_schema(_RESPONSE_SCHEMA)
+
+
 def detect_discipline(text: str) -> str | None:
     match = _DISCIPLINE.search(text.upper())
     return match.group(1).upper() if match else None
@@ -132,6 +151,23 @@ def _expand_compact_tags(text: str) -> list[str]:
     return expanded
 
 
+def _extract_tag_tokens(text: str) -> list[str]:
+    """Find tag-shaped tokens without mistaking ITP or Item numbers for tags."""
+    tokens = re.findall(
+        r"(?<![A-Z0-9])([A-Z0-9]+(?:[_-][A-Z0-9]+)+(?:/[A-Z0-9]+)*)"
+        r"(?![A-Z0-9])",
+        text.upper(),
+    )
+    return list(
+        dict.fromkeys(
+            token
+            for token in tokens
+            if "QMS-ITP" not in token
+            and not token.startswith(("AZE-SUN-", "CIV-", "MEC-"))
+        )
+    )
+
+
 def _abbreviated_item(
     text: str,
     itps: list[str],
@@ -162,7 +198,8 @@ def offline_extract(
     known_tags: list[str],
     known_subcontractors: list[str],
 ) -> dict[str, Any]:
-    clean = re.sub(r"[*_`]+", "", text[:MAX_EMAIL_CHARS])
+    clean = text[:MAX_EMAIL_CHARS].replace(r"\_", "_")
+    clean = re.sub(r"[*`]+", "", clean)
     all_items = [item for items in itp_to_items.values() for item in items]
     items = _mentioned_known(clean, all_items)
     itps = _mentioned_known(clean, list(itp_to_items))
@@ -190,7 +227,7 @@ def offline_extract(
     if not tag_values:
         compact_tags = _expand_compact_tags(clean)
         known = _mentioned_known(clean, known_tags)
-        tag_values = compact_tags or known
+        tag_values = compact_tags or known or _extract_tag_tokens(clean)
     tag_values = list(dict.fromkeys(tag_values))
 
     count = _explicit_count(clean)
@@ -295,7 +332,7 @@ def gemini_extract(
     if any(not re.fullmatch(r"[A-Za-z0-9._-]+", model) for model in models):
         raise ValueError("Gemini model name is invalid")
 
-    body = {
+    base_body = {
         "contents": [
             {
                 "role": "user",
@@ -304,41 +341,74 @@ def gemini_extract(
                 ],
             }
         ],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": _RESPONSE_SCHEMA,
-        },
     }
-    encoded_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    request_formats = (
+        (
+            "current",
+            {
+                "responseFormat": {
+                    "text": {
+                        "mimeType": "application/json",
+                        "schema": _CURRENT_RESPONSE_SCHEMA,
+                    }
+                }
+            },
+        ),
+        (
+            "legacy",
+            {
+                "responseMimeType": "application/json",
+                "responseSchema": _RESPONSE_SCHEMA,
+            },
+        ),
+    )
     payload: dict[str, Any] | None = None
     selected_model = ""
     unavailable: list[str] = []
+    invalid_attempts: list[str] = []
     for model in models:
-        request = urllib.request.Request(
-            "https://generativelanguage.googleapis.com/v1beta/"
-            f"models/{model}:generateContent",
-            data=encoded_body,
-            headers={
-                "Content-Type": "application/json",
-                "x-goog-api-key": key,
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            selected_model = model
+        for format_name, generation_config in request_formats:
+            body = {
+                **base_body,
+                "generationConfig": generation_config,
+            }
+            request = urllib.request.Request(
+                "https://generativelanguage.googleapis.com/v1beta/"
+                f"models/{model}:generateContent",
+                data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": key,
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                selected_model = model
+                break
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", "replace")[:MAX_ERROR_CHARS]
+                if exc.code == 404:
+                    unavailable.append(model)
+                    break
+                if exc.code == 400:
+                    invalid_attempts.append(f"{model}/{format_name}: {detail}")
+                    continue
+                raise RuntimeError(
+                    f"Gemini HTTP {exc.code} ({model}/{format_name}): {detail}"
+                ) from exc
+            except (OSError, urllib.error.URLError) as exc:
+                raise RuntimeError(f"Gemini connection failed: {exc}") from exc
+        if payload is not None:
             break
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:MAX_ERROR_CHARS]
-            if exc.code == 404:
-                unavailable.append(model)
-                continue
-            raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
-        except (OSError, urllib.error.URLError) as exc:
-            raise RuntimeError(f"Gemini connection failed: {exc}") from exc
     if payload is None:
-        tried = ", ".join(unavailable)
+        if invalid_attempts:
+            details = " | ".join(invalid_attempts)
+            raise RuntimeError(
+                f"Gemini rejected all supported request formats: {details}"
+            )
+        tried = ", ".join(dict.fromkeys(unavailable))
         raise RuntimeError(f"No supported Gemini model was available: {tried}")
 
     try:
