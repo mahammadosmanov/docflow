@@ -106,7 +106,7 @@ def test_gemini_uses_header_key_and_structured_schema(monkeypatch):
     assert "secret-key" not in request.full_url
     assert request.get_header("X-goog-api-key") == "secret-key"
     response_format = body["generationConfig"]["responseFormat"]["text"]
-    assert response_format["mimeType"] == "application/json"
+    assert response_format["mimeType"] == "APPLICATION_JSON"
     assert "temperature" not in body["generationConfig"]
     assert response_format["schema"]["type"] == "object"
     assert response_format["schema"]["properties"]["rows"]["type"] == "array"
@@ -227,9 +227,19 @@ def test_gemini_retries_legacy_schema_after_current_format_is_rejected(
         del timeout
         body = json.loads(request.data)
         config = body["generationConfig"]
-        formats.append("current" if "responseFormat" in config else "legacy")
+        if "responseFormat" in config:
+            format_name = "current"
+        elif "responseJsonSchema" in config:
+            format_name = "json-schema"
+        else:
+            format_name = "legacy"
+        formats.append(format_name)
         if "responseFormat" in config:
             assert config["responseFormat"]["text"]["schema"]["type"] == "object"
+            assert (
+                config["responseFormat"]["text"]["mimeType"]
+                == "APPLICATION_JSON"
+            )
             raise urllib.error.HTTPError(
                 request.full_url,
                 400,
@@ -237,6 +247,18 @@ def test_gemini_retries_legacy_schema_after_current_format_is_rejected(
                 {},
                 io.BytesIO(
                     b'{"error":{"message":"Request contains an invalid argument."}}'
+                ),
+            )
+        if "responseJsonSchema" in config:
+            assert config["responseMimeType"] == "application/json"
+            assert config["responseJsonSchema"]["type"] == "object"
+            raise urllib.error.HTTPError(
+                request.full_url,
+                400,
+                "invalid",
+                {},
+                io.BytesIO(
+                    b'{"error":{"message":"responseJsonSchema unavailable"}}'
                 ),
             )
         assert config["responseSchema"]["type"] == "OBJECT"
@@ -250,7 +272,7 @@ def test_gemini_retries_legacy_schema_after_current_format_is_rejected(
         itp_to_items=_mapping(),
     )
 
-    assert formats == ["current", "legacy"]
+    assert formats == ["current", "json-schema", "legacy"]
     assert result["rows"][0]["tagNo"] == "N3_PCS-02_S7/S8"
 
 

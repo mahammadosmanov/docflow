@@ -348,10 +348,17 @@ def gemini_extract(
             {
                 "responseFormat": {
                     "text": {
-                        "mimeType": "application/json",
+                        "mimeType": "APPLICATION_JSON",
                         "schema": _CURRENT_RESPONSE_SCHEMA,
                     }
                 }
+            },
+        ),
+        (
+            "json-schema",
+            {
+                "responseMimeType": "application/json",
+                "responseJsonSchema": _CURRENT_RESPONSE_SCHEMA,
             },
         ),
         (

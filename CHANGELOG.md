@@ -3,6 +3,15 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.2.4 - 2026-07-28
+
+### Fixed
+
+- Gemini REST `TextResponseFormat.MimeType` alanında metin MIME değeri yerine
+  zorunlu `APPLICATION_JSON` enum değerinin gönderilmesi
+- Güncel `responseFormat`, modern `responseJsonSchema` ve legacy
+  `responseSchema` arasında üç kademeli structured-output uyumluluğu
+
 ## 0.2.3 - 2026-07-28
 
 ### Fixed
