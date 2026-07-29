@@ -51,6 +51,15 @@ void main() {
           'helpKey': 'param.source.help',
         },
         {
+          'name': 'organize_into_rfi_folders',
+          'kind': 'bool',
+          'labelKey': 'param.organize_into_rfi_folders',
+          'default': true,
+          'required': false,
+          'choices': [],
+          'helpKey': 'param.organize_into_rfi_folders.help',
+        },
+        {
           'name': 'keep_original',
           'kind': 'bool',
           'labelKey': 'param.keep_original',
@@ -67,6 +76,7 @@ void main() {
     expect(op.params.first.required, isTrue);
     expect(op.params[1].kind, ParamKind.bool);
     expect(op.params[1].required, isFalse);
+    expect(op.params[1].defaultValue, isTrue);
   });
 
   test('mail ve API key operasyon ayarlarina yazilmaz', () {
@@ -193,6 +203,7 @@ void main() {
         await s1.saveParams('rfi.process_scans', {
           'source': '/a/in',
           'dest': '/a/out',
+          'organize_into_rfi_folders': false,
           'keep_original': true,
           'not_serializable': [1, 2, 3], // filtrelenmeli
         });
@@ -201,6 +212,7 @@ void main() {
         final got = s2.paramsFor('rfi.process_scans');
         expect(got['source'], '/a/in');
         expect(got['dest'], '/a/out');
+        expect(got['organize_into_rfi_folders'], false);
         expect(got['keep_original'], true);
         expect(got.containsKey('not_serializable'), isFalse);
         expect(s2.paramsFor('unknown.op'), isEmpty);

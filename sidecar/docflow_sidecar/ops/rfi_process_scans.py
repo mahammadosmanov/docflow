@@ -27,7 +27,7 @@ from ..contracts import (
 )
 from ..extract import OcrEngineMissing, diagnostics, extract_first_page
 from ..fs.apply import apply_steps
-from ..fs.naming import folder_for, target_for
+from ..fs.naming import flat_target_for, folder_for, target_for
 from ..registry import register
 from ..rpc import notify
 
@@ -60,12 +60,23 @@ class ProcessScans(Operation):
     schema = ParamSchema([
         FolderParam("source", "param.source", help_key="param.source.help"),
         FolderParam("dest", "param.dest", help_key="param.dest.help"),
+        BoolParam(
+            "organize_into_rfi_folders",
+            "param.organize_into_rfi_folders",
+            default=True,
+            help_key="param.organize_into_rfi_folders.help",
+        ),
         BoolParam("keep_original", "param.keep_original", default=False),
     ])
 
     def preview(self, params: dict) -> Plan:
         source = pathlib.Path(params["source"])
         dest = pathlib.Path(params["dest"])
+        # Varsayilan True kasitli: eski kayitli ayarlar ve eski API istemcileri
+        # bu yeni parametreyi gondermese bile mevcut klasorlu davranis korunur.
+        organize_into_folders = bool(
+            params.get("organize_into_rfi_folders", True)
+        )
         copy_mode = bool(params.get("keep_original"))
 
         plan = Plan(op_id=self.id)
@@ -140,10 +151,15 @@ class ProcessScans(Operation):
             winner = files[0]
             wpdf = winner[0]
 
-            # Hedef HER ZAMAN {dest}/{code}/RFI No. {code}.pdf
-            folder = folder_for(dest, code)
-            target = target_for(dest, code)
-            folder_exists = folder.is_dir()
+            # Klasorlu mod ESKI/VARSAYILAN davranistir. Duz mod yalnizca
+            # kullanici acikca secince {dest}/RFI No. {code}.pdf hedefini kullanir.
+            folder = folder_for(dest, code) if organize_into_folders else None
+            target = (
+                target_for(dest, code)
+                if organize_into_folders
+                else flat_target_for(dest, code)
+            )
+            folder_exists = bool(folder and folder.is_dir())
 
             if _same_file(wpdf, target):
                 # Dosya ZATEN dogru adda ve dogru yerde — yapacak is yok.
@@ -165,7 +181,7 @@ class ProcessScans(Operation):
                 # Klasor yoksa ONCE onu olustur. Adim SIRASI onemli: apply
                 # sirayla, undo TERS sirayla calisir — yani geri alirken once
                 # dosya cikar, sonra (bos kalan) klasor silinir.
-                if not folder_exists:
+                if folder is not None and not folder_exists:
                     plan.steps.append(Step(
                         "mkdir", None, str(folder),
                         note_key="note.folder_created", meta={"code": code},
@@ -174,7 +190,8 @@ class ProcessScans(Operation):
                     kind, str(wpdf), str(target),
                     note_key="note.renamed",
                     meta={"code": code, "confidence": winner[2], "source": winner[3],
-                          "intoFolder": True, "folderCreated": not folder_exists},
+                          "intoFolder": organize_into_folders,
+                          "folderCreated": bool(folder and not folder_exists)},
                 ))
 
             for older, _mt, _conf, _method in files[1:]:

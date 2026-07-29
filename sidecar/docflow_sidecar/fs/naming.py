@@ -41,3 +41,12 @@ def target_for(dest: pathlib.Path, code: str) -> pathlib.Path:
     """Dosyanin gidecegi TAM yol. Klasor yoksa bile bu yolu doner; klasoru
     olusturmak plan'in isi (mkdir adimi) — preview dosya sistemine DOKUNMAZ."""
     return folder_for(dest, code) / filename_for(code)
+
+
+def flat_target_for(dest: pathlib.Path, code: str) -> pathlib.Path:
+    """Klasorsuz modda dosyanin gidecegi TAM yol.
+
+    Bu ayri yardimci, mevcut ``target_for`` kuralini ve review akisini
+    degistirmeden Process Scans'in opt-in duz cikti modunu destekler.
+    """
+    return dest / filename_for(code)

@@ -72,12 +72,13 @@ class _SchemaFormState extends State<SchemaForm> {
         return _filesField(s, p);
       case ParamKind.bool:
         final t = Theme.of(context);
-        return Container(
-          decoration: BoxDecoration(
-            color: t.colorScheme.surfaceContainerLow,
+        return Material(
+          color: t.colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: t.colorScheme.outlineVariant),
+            side: BorderSide(color: t.colorScheme.outlineVariant),
           ),
+          clipBehavior: Clip.antiAlias,
           child: SwitchListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,

@@ -3,6 +3,22 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.4.0 - 2026-07-29
+
+### Added
+
+- Process Scans için varsayılan mevcut klasörlü davranışı koruyan, isteğe bağlı
+  klasörsüz çıktı modu
+- Klasörsüz modda adlandırılmış PDF'leri doğrudan seçilen hedef klasöre
+  taşıma veya orijinalleri koruma seçiliyse kopyalama
+
+### Safety
+
+- Eski kayıtlı ayarlar ve eski istemci istekleri için klasörlü davranışın
+  otomatik olarak korunması
+- Process Scans klasörlü/klasörsüz hedef, kopyalama, apply ve diğer özellikler
+  için genişletilmiş regresyon kontrolleri
+
 ## 0.3.0 - 2026-07-29
 
 ### Added
