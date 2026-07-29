@@ -2,7 +2,13 @@ import re
 
 from openpyxl import Workbook
 
-from docflow_sidecar.clipboard import EXCEL_CLIPBOARD_SCRIPT, _cf_html, _payload
+from docflow_sidecar.clipboard import (
+    EXCEL_CLIPBOARD_SCRIPT,
+    _cf_html,
+    _normalize_excel_cf_html,
+    _payload,
+    preview_plan_table,
+)
 from docflow_sidecar.contracts import Plan
 
 
@@ -61,7 +67,39 @@ def test_cf_html_offsets_are_utf8_byte_offsets():
     assert encoded[fields["EndHTML"] :].startswith(b"\0")
 
 
+def test_excel_cf_html_normalization_preserves_css_and_repairs_offsets():
+    document = (
+        "<html><head><style>.xl65{font-weight:700;color:#fff}</style></head>"
+        "<body><!--StartFragment--><table><tr>"
+        "<td class=\"xl65\">Şimal sahəsi</td>"
+        "</tr></table><!--EndFragment--></body></html>"
+    )
+    raw = (
+        b"Version:0.9\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\n"
+        b"StartFragment:0000000000\r\nEndFragment:0000000000\r\n"
+        + document.encode()
+    )
+
+    encoded = _normalize_excel_cf_html(raw)
+    fields = {
+        key.decode(): int(value)
+        for key, value in re.findall(
+            rb"(StartHTML|EndHTML|StartFragment|EndFragment):(\d+)",
+            encoded,
+        )
+    }
+
+    assert b".xl65{font-weight:700;color:#fff}" in encoded
+    assert encoded[fields["StartHTML"] :].startswith(b"<html>")
+    assert encoded[fields["StartFragment"] :].startswith(b"<table>")
+    assert encoded[fields["EndFragment"] :].startswith(b"<!--EndFragment-->")
+    assert encoded[fields["EndHTML"] :].startswith(b"\0")
+
+
 def test_excel_copy_freezes_values_and_preserves_dimensions():
+    assert "DocFlowClipboardReader" in EXCEL_CLIPBOARD_SCRIPT
+    assert "ReadBytes($htmlFormat)" in EXCEL_CLIPBOARD_SCRIPT
+    assert "GetData('HTML Format')" not in EXCEL_CLIPBOARD_SCRIPT
     assert ".Value2 = $headerRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
     assert "$targetRowRange.Value2 = $targetRowRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
     assert "$criteria -contains $rfi" in EXCEL_CLIPBOARD_SCRIPT
@@ -82,6 +120,7 @@ def test_mail_table_reads_applied_values_and_headers_from_workbook(tmp_path):
     sheet["A10"] = "AZE-SUN-INT-QMS-RFI-CIV-0860"
     sheet["E10"] = "ACTUAL FORM"
     sheet["O10"] = "ACTUAL COMPANY"
+    sheet.column_dimensions["A"].width = 25
     workbook.save(path)
     workbook.close()
 
@@ -119,6 +158,21 @@ def test_mail_table_reads_applied_values_and_headers_from_workbook(tmp_path):
     assert "ACTUAL FORM" in fragment
     assert "ACTUAL COMPANY" in plain
     assert "PREVIEW FORM" not in fragment
+
+    preview = preview_plan_table(plan)
+    assert preview["headers"] == [
+        "RFI No. FROM EXCEL",
+        "FORMS FROM EXCEL",
+        "SUBCONTRACTOR FROM EXCEL",
+    ]
+    assert preview["rows"] == [[
+        "AZE-SUN-INT-QMS-RFI-CIV-0860",
+        "ACTUAL FORM",
+        "ACTUAL COMPANY",
+    ]]
+    assert preview["fromWorkbook"] is True
+    assert preview["count"] == 1
+    assert preview["columnWidths"][0] == 25
 
 
 def test_mail_table_finds_filtered_rfis_after_workbook_rows_are_reordered(tmp_path):

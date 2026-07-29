@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import pytest
 from openpyxl import Workbook
@@ -50,6 +51,7 @@ def test_excel_filters_exact_rfis_and_copies_header_with_native_format(tmp_path)
     for row_number, (rfi, form) in rows.items():
         sheet.cell(row_number, 1, rfi)
         sheet.cell(row_number, 5, form)
+        sheet.cell(row_number, 14, "Şimal sahəsi")
         sheet.cell(row_number, 15, "AZFEN")
     workbook.save(path)
     workbook.close()
@@ -81,6 +83,27 @@ def test_excel_filters_exact_rfis_and_copies_header_with_native_format(tmp_path)
     assert payload is not None
     html_bytes, plain = payload
     assert html_bytes.startswith(b"Version:")
+    offsets = {
+        key.decode(): int(value)
+        for key, value in re.findall(
+            rb"(StartHTML|EndHTML|StartFragment|EndFragment):(\d+)",
+            html_bytes,
+        )
+    }
+    assert html_bytes[offsets["StartHTML"] :].startswith(b"<html")
+    start_marker = b"<!--StartFragment-->"
+    end_marker = b"<!--EndFragment-->"
+    assert offsets["StartFragment"] == (
+        html_bytes.index(start_marker) + len(start_marker)
+    )
+    assert offsets["EndFragment"] == html_bytes.index(end_marker)
+    assert html_bytes[offsets["EndFragment"] :].startswith(
+        end_marker
+    )
+    assert html_bytes[offsets["EndHTML"] :].startswith(b"\0")
+    assert b"\x01" not in html_bytes
+    assert b"<style" in html_bytes
+    assert "Şimal sahəsi".encode() in html_bytes
     assert "RFI No." in plain
     assert "FIRST" in plain
     assert "SECOND" in plain

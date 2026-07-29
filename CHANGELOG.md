@@ -3,6 +3,21 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.3.0 - 2026-07-29
+
+### Added
+
+- Uygulama sonucunda Excel'den yeniden okunan başlık ve hücrelerle Outlook
+  mail tablosu önizleme penceresi
+- Excel kolon genişliklerini kullanan yatay/dikey kaydırılabilir, hücre metni
+  seçilebilir tablo ve tek tıklamalı biçimli kopyalama
+
+### Fixed
+
+- Excel'in clipboard HTML belgesindeki `<head>` CSS stillerinin korunması
+- Unicode içerikte CF_HTML byte offset'lerinin yeniden hesaplanarak Outlook'a
+  eksik veya bozuk tablo yapıştırılmasının önlenmesi
+
 ## 0.2.4 - 2026-07-28
 
 ### Fixed

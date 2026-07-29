@@ -7,12 +7,15 @@ import ctypes
 import html
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 import time
+import zipfile
 from collections import Counter
 from ctypes import wintypes
 from datetime import date, datetime, time as date_time
+from xml.etree import ElementTree
 
 from openpyxl import load_workbook
 
@@ -22,6 +25,78 @@ from .contracts import Plan
 EXCEL_CLIPBOARD_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+public static class DocFlowClipboardReader {
+  [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern uint RegisterClipboardFormat(string format);
+
+  [DllImport("user32.dll", SetLastError = true)]
+  private static extern bool OpenClipboard(IntPtr owner);
+
+  [DllImport("user32.dll", SetLastError = true)]
+  private static extern bool CloseClipboard();
+
+  [DllImport("user32.dll", SetLastError = true)]
+  private static extern IntPtr GetClipboardData(uint format);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern IntPtr GlobalLock(IntPtr handle);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool GlobalUnlock(IntPtr handle);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern UIntPtr GlobalSize(IntPtr handle);
+
+  public static byte[] ReadBytes(uint format) {
+    bool opened = false;
+    for (int attempt = 0; attempt < 20; attempt++) {
+      if (OpenClipboard(IntPtr.Zero)) {
+        opened = true;
+        break;
+      }
+      Thread.Sleep(50);
+    }
+    if (!opened) {
+      throw new Win32Exception(
+        Marshal.GetLastWin32Error(),
+        "Windows clipboard could not be opened"
+      );
+    }
+    try {
+      IntPtr handle = GetClipboardData(format);
+      if (handle == IntPtr.Zero) {
+        throw new Win32Exception(
+          Marshal.GetLastWin32Error(),
+          "HTML Format is missing from the clipboard"
+        );
+      }
+      IntPtr pointer = GlobalLock(handle);
+      if (pointer == IntPtr.Zero) {
+        throw new Win32Exception(
+          Marshal.GetLastWin32Error(),
+          "Clipboard memory could not be locked"
+        );
+      }
+      try {
+        int length = checked((int)GlobalSize(handle).ToUInt64());
+        byte[] bytes = new byte[length];
+        Marshal.Copy(pointer, bytes, 0, length);
+        return bytes;
+      } finally {
+        GlobalUnlock(handle);
+      }
+    } finally {
+      CloseClipboard();
+    }
+  }
+}
+'@
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
 $excel.DisplayAlerts = $false
@@ -121,15 +196,13 @@ try {
   )
   $null = $copyRange.Copy()
   Start-Sleep -Milliseconds 250
-  $data = [System.Windows.Forms.Clipboard]::GetDataObject()
-  $html = $data.GetData('HTML Format')
-  $plain = $data.GetData([System.Windows.Forms.DataFormats]::UnicodeText)
-  $utf8 = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText(
-    $env:DOCFLOW_COPY_HTML,
-    [string]$html,
-    $utf8
+  $htmlFormat = [DocFlowClipboardReader]::RegisterClipboardFormat('HTML Format')
+  $htmlBytes = [DocFlowClipboardReader]::ReadBytes($htmlFormat)
+  $plain = [System.Windows.Forms.Clipboard]::GetText(
+    [System.Windows.Forms.TextDataFormat]::UnicodeText
   )
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllBytes($env:DOCFLOW_COPY_HTML, $htmlBytes)
   [System.IO.File]::WriteAllText(
     $env:DOCFLOW_COPY_TEXT,
     [string]$plain,
@@ -288,6 +361,100 @@ def _payload(plan: Plan) -> tuple[str, str, int]:
     return table, plain, len(rows)
 
 
+def preview_plan_table(plan: Plan) -> dict[str, object]:
+    """Return the exact workbook-backed values used by the mail clipboard."""
+    editor = plan.meta.get("editor") or {}
+    if editor.get("kind") != "recordTable" or not editor.get("copyEnabled"):
+        raise ValueError("bu planda onizlenebilir mail tablosu yok")
+    fields, headers, rows, from_workbook = _copy_data(plan)
+    widths = {
+        "rfiNo": 22.0,
+        "itpNo": 24.0,
+        "itemNo": 10.0,
+        "description": 28.0,
+        "forms": 20.0,
+        "tagNo": 15.0,
+        "area": 12.0,
+        "issueDate": 12.0,
+        "inspectionDate": 12.0,
+        "startTime": 12.0,
+        "azfenType": 10.0,
+        "intecType": 10.0,
+        "location": 18.0,
+        "subcontractor": 14.0,
+    }
+    column_widths = [widths.get(field, 14.0) for field in fields]
+    source = editor.get("copySource")
+    if from_workbook and isinstance(source, dict):
+        path = pathlib.Path(str(source.get("workbook") or ""))
+        columns = [int(value) for value in (source.get("columns") or [])]
+        sheet_name = str(source.get("sheet") or "")
+        if path.is_file() and len(columns) == len(fields):
+            column_widths = _workbook_column_widths(
+                path,
+                sheet_name,
+                columns,
+                column_widths,
+            )
+    return {
+        "headers": headers,
+        "fields": fields,
+        "rows": [
+            [str(row.get(field) or "") for field in fields]
+            for row in rows
+        ],
+        "columnWidths": [
+            max(7.0, min(width, 42.0)) for width in column_widths
+        ],
+        "fromWorkbook": from_workbook,
+        "count": len(rows),
+    }
+
+
+def _workbook_column_widths(
+    path: pathlib.Path,
+    sheet_name: str,
+    columns: list[int],
+    fallback: list[float],
+) -> list[float]:
+    """Read only the OOXML column metadata, not the workbook's 18k+ cells."""
+    workbook = load_workbook(path, read_only=True, data_only=True, keep_links=True)
+    try:
+        if sheet_name not in workbook.sheetnames:
+            return fallback
+        worksheet_path = str(
+            getattr(workbook[sheet_name], "_worksheet_path", "")
+        ).lstrip("/")
+    finally:
+        workbook.close()
+    if not worksheet_path:
+        return fallback
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            root = ElementTree.fromstring(archive.read(worksheet_path))
+    except (KeyError, OSError, ValueError, zipfile.BadZipFile):
+        return fallback
+
+    explicit: dict[int, float] = {}
+    for element in root.iter():
+        if not element.tag.endswith("}col"):
+            continue
+        try:
+            first = int(element.attrib["min"])
+            last = int(element.attrib["max"])
+            width = float(element.attrib["width"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        for column in columns:
+            if first <= column <= last:
+                explicit[column] = width
+    return [
+        explicit.get(column, fallback[index])
+        for index, column in enumerate(columns)
+    ]
+
+
 def _excel_clipboard_payload(
     plan: Plan,
     row_count: int,
@@ -341,9 +508,9 @@ def _excel_clipboard_payload(
                 env=environment,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            html_bytes = html_path.read_bytes().rstrip(b"\0") + b"\0"
+            html_bytes = _normalize_excel_cf_html(html_path.read_bytes())
             plain = text_path.read_text(encoding="utf-8")
-            if not html_bytes.startswith(b"Version:") or not plain:
+            if not plain:
                 return None
             return html_bytes, plain
         except subprocess.TimeoutExpired as exc:
@@ -363,10 +530,11 @@ def _excel_clipboard_payload(
             raise RuntimeError(f"Excel baslatilamadi: {exc}") from exc
 
 
-def _cf_html(fragment: str) -> bytes:
+def _cf_html_document(document: str) -> bytes:
     start_marker = "<!--StartFragment-->"
     end_marker = "<!--EndFragment-->"
-    document = f"<html><body>{start_marker}{fragment}{end_marker}</body></html>"
+    if start_marker not in document or end_marker not in document:
+        raise ValueError("HTML fragment markers are missing")
     header_template = (
         "Version:0.9\r\n"
         "StartHTML:{start_html:010d}\r\n"
@@ -382,12 +550,13 @@ def _cf_html(fragment: str) -> bytes:
     )
     start_html = len(placeholder.encode("utf-8"))
     document_bytes = document.encode("utf-8")
-    start_fragment = start_html + len(
-        document.split(start_marker, 1)[0].encode("utf-8")
-    ) + len(start_marker.encode("utf-8"))
-    end_fragment = start_html + len(
-        document.split(end_marker, 1)[0].encode("utf-8")
+    start_marker_bytes = start_marker.encode("utf-8")
+    end_marker_bytes = end_marker.encode("utf-8")
+    start_fragment = (
+        start_html + document_bytes.index(start_marker_bytes)
+        + len(start_marker_bytes)
     )
+    end_fragment = start_html + document_bytes.index(end_marker_bytes)
     end_html = start_html + len(document_bytes)
     header = header_template.format(
         start_html=start_html,
@@ -396,6 +565,45 @@ def _cf_html(fragment: str) -> bytes:
         end_fragment=end_fragment,
     ).encode("utf-8")
     return header + document_bytes + b"\0"
+
+
+def _cf_html(fragment: str) -> bytes:
+    document = (
+        "<html><head><meta charset=\"utf-8\"></head><body>"
+        f"<!--StartFragment-->{fragment}<!--EndFragment-->"
+        "</body></html>"
+    )
+    return _cf_html_document(document)
+
+
+def _normalize_excel_cf_html(payload: bytes) -> bytes:
+    """Preserve Excel's complete HTML/CSS while recalculating UTF-8 offsets."""
+    text = payload.rstrip(b"\0\x01").decode("utf-8-sig", "replace")
+    html_match = re.search(r"(?i)<html(?:\s|>)", text)
+    if html_match is None:
+        raise ValueError("Excel panosu HTML belgesi dondurmedi")
+    document = text[html_match.start():].rstrip("\0\x01")
+    start_match = re.search(r"(?i)<!--\s*StartFragment\s*-->", document)
+    end_match = re.search(r"(?i)<!--\s*EndFragment\s*-->", document)
+    if start_match is None or end_match is None or end_match.start() < start_match.end():
+        body_match = re.search(r"(?is)<body[^>]*>(.*)</body>", document)
+        fragment = body_match.group(1) if body_match else document
+        return _cf_html(fragment)
+    if start_match.group(0) != "<!--StartFragment-->":
+        document = (
+            document[:start_match.start()]
+            + "<!--StartFragment-->"
+            + document[start_match.end():]
+        )
+    end_match = re.search(r"(?i)<!--\s*EndFragment\s*-->", document)
+    assert end_match is not None
+    if end_match.group(0) != "<!--EndFragment-->":
+        document = (
+            document[:end_match.start()]
+            + "<!--EndFragment-->"
+            + document[end_match.end():]
+        )
+    return _cf_html_document(document)
 
 
 def _set_windows_clipboard(html_bytes: bytes, plain: str) -> None:

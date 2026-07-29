@@ -4,6 +4,7 @@ from __future__ import annotations
 from . import ops  # noqa: F401  — @register'lari tetikler
 from . import review as _review
 from .clipboard import copy_plan_table as _copy_plan_table
+from .clipboard import preview_plan_table as _preview_plan_table
 from .contracts import Plan, Step, Warning
 from .fs.apply import apply_steps as _apply_steps
 from .fs.apply import get_journal as _get_journal
@@ -57,6 +58,13 @@ def _copy_table(p: dict) -> dict:
     return {"count": _copy_plan_table(plan)}
 
 
+def _preview_table(p: dict) -> dict:
+    plan = _PLANS.get(p["planId"])
+    if plan is None:
+        raise KeyError("plan bulunamadi veya suresi doldu - preview'i tekrarla")
+    return _preview_plan_table(plan)
+
+
 def _undo(p: dict) -> dict:
     # destFolder verilirse dosyalar orijinal kaynaga degil secilen klasore doner.
     # steps verilirse (bulut kaydi) yerel journal'a ihtiyac yok.
@@ -96,6 +104,7 @@ def main() -> None:
         "list_operations": _list_operations,
         "preview": _preview,
         "plan_revise": _revise,
+        "plan_table_preview": _preview_table,
         "plan_copy_table": _copy_table,
         "apply": _apply,
         "undo": _undo,

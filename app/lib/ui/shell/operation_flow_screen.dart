@@ -174,10 +174,16 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     final planId = _plan?.planId;
     if (planId == null) return;
     try {
-      final count = await widget.client.copyPlanTable(planId);
-      if (mounted) {
-        _snack(Strings.of(context).count('rfi.editor.copied', count));
-      }
+      final preview = await widget.client.previewPlanTable(planId);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _MailTablePreviewDialog(
+          client: widget.client,
+          planId: planId,
+          preview: preview,
+        ),
+      );
     } catch (e) {
       _snack(e.toString());
     }
@@ -543,6 +549,250 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MailTablePreviewDialog extends StatefulWidget {
+  const _MailTablePreviewDialog({
+    required this.client,
+    required this.planId,
+    required this.preview,
+  });
+
+  final SidecarClient client;
+  final String planId;
+  final Map<String, dynamic> preview;
+
+  @override
+  State<_MailTablePreviewDialog> createState() =>
+      _MailTablePreviewDialogState();
+}
+
+class _MailTablePreviewDialogState extends State<_MailTablePreviewDialog> {
+  final ScrollController _horizontal = ScrollController();
+  final ScrollController _vertical = ScrollController();
+  bool _copying = false;
+  String? _status;
+
+  @override
+  void dispose() {
+    _horizontal.dispose();
+    _vertical.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    if (_copying) return;
+    setState(() {
+      _copying = true;
+      _status = null;
+    });
+    try {
+      final count = await widget.client.copyPlanTable(widget.planId);
+      if (!mounted) return;
+      setState(() {
+        _status = Strings.of(context).count('rfi.editor.copied', count);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = error.toString());
+    } finally {
+      if (mounted) setState(() => _copying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Strings.of(context);
+    final theme = Theme.of(context);
+    final headers = (widget.preview['headers'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList();
+    final fields = (widget.preview['fields'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList();
+    final rows = (widget.preview['rows'] as List? ?? const [])
+        .whereType<List>()
+        .map((row) => row.map((value) => value?.toString() ?? '').toList())
+        .toList();
+    final rawWidths = (widget.preview['columnWidths'] as List? ?? const [])
+        .whereType<num>()
+        .map((value) => value.toDouble())
+        .toList();
+    final widths = List<double>.generate(headers.length, (index) {
+      final excelWidth = index < rawWidths.length ? rawWidths[index] : 14.0;
+      return (excelWidth * 7.2 + 18).clamp(86.0, 320.0).toDouble();
+    });
+    final tableWidth = widths.fold<double>(0, (sum, width) => sum + width);
+    final fromWorkbook = widget.preview['fromWorkbook'] == true;
+
+    Widget cell(String text, {required int column, required bool header}) {
+      final leftAligned =
+          column < fields.length &&
+          const {'description', 'forms', 'location'}.contains(fields[column]);
+      return Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        alignment: header || !leftAligned
+            ? Alignment.center
+            : Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        color: header
+            ? theme.colorScheme.surfaceContainerHighest
+            : theme.colorScheme.surface,
+        child: SelectableText(
+          text,
+          textAlign: header || !leftAligned ? TextAlign.center : TextAlign.left,
+          style:
+              (header ? theme.textTheme.labelSmall : theme.textTheme.bodySmall)
+                  ?.copyWith(
+                    fontWeight: header ? FontWeight.w700 : FontWeight.w400,
+                    height: 1.2,
+                  ),
+        ),
+      );
+    }
+
+    final tableRows = <TableRow>[
+      TableRow(
+        children: [
+          for (var column = 0; column < headers.length; column++)
+            cell(headers[column], column: column, header: true),
+        ],
+      ),
+      for (final row in rows)
+        TableRow(
+          children: [
+            for (var column = 0; column < headers.length; column++)
+              cell(
+                column < row.length ? row[column] : '',
+                column: column,
+                header: false,
+              ),
+          ],
+        ),
+    ];
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1460, maxHeight: 780),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.table_view_outlined, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      s.t('rfi.mailPreview.title'),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      s.t(
+                        fromWorkbook
+                            ? 'rfi.mailPreview.sourceWorkbook'
+                            : 'rfi.mailPreview.sourcePlan',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                s.t('rfi.mailPreview.hint'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outline),
+                  ),
+                  child: Scrollbar(
+                    controller: _horizontal,
+                    thumbVisibility: true,
+                    notificationPredicate: (notification) =>
+                        notification.metrics.axis == Axis.horizontal,
+                    child: SingleChildScrollView(
+                      controller: _horizontal,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: Scrollbar(
+                          controller: _vertical,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _vertical,
+                            child: Table(
+                              border: TableBorder.all(
+                                color: theme.colorScheme.outlineVariant,
+                                width: 1,
+                              ),
+                              columnWidths: {
+                                for (
+                                  var index = 0;
+                                  index < widths.length;
+                                  index++
+                                )
+                                  index: FixedColumnWidth(widths[index]),
+                              },
+                              defaultVerticalAlignment:
+                                  TableCellVerticalAlignment.middle,
+                              children: tableRows,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_status != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _status!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(s.t('action.close')),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: rows.isEmpty || _copying ? null : _copy,
+                    icon: _copying
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.content_copy_outlined, size: 18),
+                    label: Text(s.t('rfi.mailPreview.copy')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

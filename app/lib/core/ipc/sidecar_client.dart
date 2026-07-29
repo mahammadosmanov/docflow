@@ -197,6 +197,11 @@ class SidecarClient {
     return ((res as Map)['count'] as num?)?.toInt() ?? 0;
   }
 
+  Future<Map<String, dynamic>> previewPlanTable(String planId) async {
+    final res = await _callRaw('plan_table_preview', {'planId': planId});
+    return (res as Map).cast<String, dynamic>();
+  }
+
   /// steps verilirse yerel journal'a gerek yok (bulut kaydindan geri alma).
   Future<ApplyResult> undo(
     String journalId, {
