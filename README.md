@@ -11,7 +11,8 @@ Desteklenen işlemler:
 
 - Taranmış RFI PDF'lerini OCR ile tanıma, adlandırma ve isteğe göre RFI
   klasörlerinde veya doğrudan seçilen hedefte saklama
-- CIV/MEC kayıtlarını formül, stil ve doğrulamalarını koruyarak RFI Log'a ekleme
+- CIV/MEC/ELE/PRC kayıtlarını tek işlemde, formül, stil ve doğrulamalarını
+  koruyarak RFI Log'a ekleme ve her sheet için ayrı Excel-native mail tablosu
 - Talep e-postalarından özel/offline veya isteğe bağlı Gemini Free ile doğrulanabilir RFI taslağı çıkarma
 - Yeni RFI satırlarını Excel'in yerel görünümüyle, başlıklar dahil Subcontractor'a kadar kopyalama
 - PDF, Word, Excel ve görselleri kesin sırayla toplu yazdırma

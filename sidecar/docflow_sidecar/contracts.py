@@ -28,6 +28,7 @@ class ParamKind(str, Enum):
     INT = "int"
     LONG_TEXT = "longText"
     SECRET = "secret"
+    SHEET_COUNTS = "sheetCounts"
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,21 @@ def SecretParam(name: str, label_key: str, **kw) -> Param:
     return Param(name, ParamKind.SECRET, label_key, **kw)
 
 
+def SheetCountsParam(
+    name: str,
+    label_key: str,
+    choices: list[str],
+    **kw,
+) -> Param:
+    return Param(
+        name,
+        ParamKind.SHEET_COUNTS,
+        label_key,
+        choices=choices,
+        **kw,
+    )
+
+
 @dataclass(frozen=True)
 class ParamSchema:
     params: list[Param]
@@ -116,7 +132,20 @@ class ParamSchema:
         """i18n anahtari listesi dondurur — bos ise gecerli."""
         errors = []
         for p in self.params:
-            if p.required and not values.get(p.name):
+            value = values.get(p.name)
+            if (
+                p.kind == ParamKind.SHEET_COUNTS
+                and p.required
+                and (
+                    not isinstance(value, dict)
+                    or not any(
+                        isinstance(count, int) and count > 0
+                        for count in value.values()
+                    )
+                )
+            ):
+                errors.append(f"error.param.required.{p.name}")
+            elif p.required and not value:
                 errors.append(f"error.param.required.{p.name}")
         return errors
 

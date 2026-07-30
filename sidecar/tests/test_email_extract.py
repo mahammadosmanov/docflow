@@ -115,7 +115,7 @@ def test_gemini_uses_header_key_and_structured_schema(monkeypatch):
     ] == "object"
     assert response_format["schema"]["properties"][
         "discipline"
-    ]["enum"] == ["CIV", "MEC"]
+    ]["enum"] == ["CIV", "MEC", "ELE", "PRC"]
     assert result["provider"] == "gemini"
     assert result["model"] == "gemini-3.1-flash-lite"
     assert result["rows"][0]["itemNo"] == "CIV-7.1.1"

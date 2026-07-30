@@ -22,10 +22,13 @@ FALLBACK_GEMINI_MODELS = (
 MAX_EMAIL_CHARS = 30_000
 MAX_ERROR_CHARS = 300
 
-_DISCIPLINE = re.compile(r"(?<![A-Z])(CIV|MEC)(?![A-Z])", re.IGNORECASE)
+_DISCIPLINE = re.compile(
+    r"(?<![A-Z])(CIV|MEC|ELE|PRC)(?![A-Z])",
+    re.IGNORECASE,
+)
 _COUNT_PATTERNS = (
     re.compile(
-        r"\b(\d{1,3})\s*(?:CIV|MEC)?\s*RFI(?:\s+numbers?)?\b",
+        r"\b(\d{1,3})\s*(?:CIV|MEC|ELE|PRC)?\s*RFI(?:\s+numbers?)?\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -76,7 +79,7 @@ _RESPONSE_SCHEMA = {
     "properties": {
         "discipline": {
             "type": "STRING",
-            "enum": ["CIV", "MEC"],
+            "enum": ["CIV", "MEC", "ELE", "PRC"],
         },
         "count": {"type": "INTEGER", "minimum": 0, "maximum": 100},
         "rows": {"type": "ARRAY", "items": _ROW_SCHEMA, "maxItems": 100},
@@ -180,7 +183,9 @@ def _extract_tag_tokens(text: str) -> list[str]:
             token
             for token in tokens
             if "QMS-ITP" not in token
-            and not token.startswith(("AZE-SUN-", "CIV-", "MEC-"))
+            and not token.startswith(
+                ("AZE-SUN-", "CIV-", "MEC-", "ELE-", "PRC-")
+            )
         )
     )
 
@@ -314,7 +319,8 @@ def _gemini_prompt(
     return (
         "Extract an RFI inspection request from the email below. "
         "Use only facts explicitly present in the email; never invent values. "
-        "Discipline must be CIV or MEC; use the currently selected discipline "
+        "Discipline must be CIV, MEC, ELE, or PRC; use the currently selected "
+        "discipline "
         "when the email does not state one. Other unknown strings must be empty. "
         "Count means unique new RFI numbers, not "
         "Excel rows. When several tags/areas are requested for the same RFI, "

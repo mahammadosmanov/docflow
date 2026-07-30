@@ -55,14 +55,14 @@ def _copy_table(p: dict) -> dict:
     plan = _PLANS.get(p["planId"])
     if plan is None:
         raise KeyError("plan bulunamadi veya suresi doldu - preview'i tekrarla")
-    return {"count": _copy_plan_table(plan)}
+    return {"count": _copy_plan_table(plan, p.get("sheet"))}
 
 
 def _preview_table(p: dict) -> dict:
     plan = _PLANS.get(p["planId"])
     if plan is None:
         raise KeyError("plan bulunamadi veya suresi doldu - preview'i tekrarla")
-    return _preview_plan_table(plan)
+    return _preview_plan_table(plan, p.get("sheet"))
 
 
 def _undo(p: dict) -> dict:

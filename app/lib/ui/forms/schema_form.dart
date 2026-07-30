@@ -162,6 +162,8 @@ class _SchemaFormState extends State<SchemaForm> {
             onChanged: (v) => _set(p.name, v),
           ),
         );
+      case ParamKind.sheetCounts:
+        return _sheetCountsField(s, p);
       case ParamKind.text:
       case ParamKind.unknown:
         return _labeled(
@@ -173,6 +175,132 @@ class _SchemaFormState extends State<SchemaForm> {
           ),
         );
     }
+  }
+
+  Widget _sheetCountsField(Strings s, ParamDef p) {
+    final raw = widget.values[p.name];
+    final counts = <String, int>{
+      for (final choice in p.choices)
+        choice:
+            ((raw is Map ? raw[choice] : null) as num?)?.toInt().clamp(0, 100) ??
+            0,
+    };
+    final total = counts.values.fold<int>(0, (sum, value) => sum + value);
+    final t = Theme.of(context);
+
+    void update(String sheet, int count) {
+      final next = <String, int>{...counts};
+      next[sheet] = count.clamp(0, 100);
+      _set(p.name, next);
+    }
+
+    return _labeled(
+      s,
+      p,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final sheet in p.choices)
+                SizedBox(
+                  width: 164,
+                  child: Material(
+                    key: ValueKey('sheet-count-$sheet'),
+                    color: counts[sheet]! > 0
+                        ? t.colorScheme.surfaceContainerHigh
+                        : t.colorScheme.surfaceContainerLowest,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: counts[sheet]! > 0
+                            ? t.colorScheme.onSurface
+                            : t.colorScheme.outlineVariant,
+                        width: counts[sheet]! > 0 ? 1.3 : 1,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            key: ValueKey('sheet-enabled-$sheet'),
+                            visualDensity: VisualDensity.compact,
+                            value: counts[sheet]! > 0,
+                            onChanged: (enabled) =>
+                                update(sheet, enabled == true ? 1 : 0),
+                          ),
+                          Expanded(
+                            child: Text(
+                              sheet,
+                              style: t.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: ValueKey('sheet-minus-$sheet'),
+                            tooltip: s.t('action.decrease'),
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 30,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: counts[sheet]! > 0
+                                ? () => update(sheet, counts[sheet]! - 1)
+                                : null,
+                            icon: const Icon(Icons.remove, size: 16),
+                          ),
+                          SizedBox(
+                            width: 25,
+                            child: Text(
+                              '${counts[sheet]}',
+                              key: ValueKey('sheet-value-$sheet'),
+                              textAlign: TextAlign.center,
+                              style: t.textTheme.labelLarge?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: ValueKey('sheet-plus-$sheet'),
+                            tooltip: s.t('action.increase'),
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 30,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: counts[sheet]! < 100
+                                ? () => update(sheet, counts[sheet]! + 1)
+                                : null,
+                            icon: const Icon(Icons.add, size: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            s.count('rfi.sheetCounts.total', total),
+            textAlign: TextAlign.end,
+            style: t.textTheme.bodySmall?.copyWith(
+              color: t.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _labeled(Strings s, ParamDef p, Widget field) {

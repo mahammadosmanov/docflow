@@ -205,6 +205,7 @@ void main() {
           'dest': '/a/out',
           'organize_into_rfi_folders': false,
           'keep_original': true,
+          'sheet_counts': {'CIV': 2, 'MEC': 1, 'ELE': 0, 'PRC': 0},
           'not_serializable': [1, 2, 3], // filtrelenmeli
         });
 
@@ -214,6 +215,12 @@ void main() {
         expect(got['dest'], '/a/out');
         expect(got['organize_into_rfi_folders'], false);
         expect(got['keep_original'], true);
+        expect(got['sheet_counts'], {
+          'CIV': 2,
+          'MEC': 1,
+          'ELE': 0,
+          'PRC': 0,
+        });
         expect(got.containsKey('not_serializable'), isFalse);
         expect(s2.paramsFor('unknown.op'), isEmpty);
       } finally {

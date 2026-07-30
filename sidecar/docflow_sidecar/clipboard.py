@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import ctypes
 import html
 import os
@@ -225,6 +226,49 @@ def _cell_text(value: object) -> str:
     return str(value)
 
 
+def _sheet_plan(plan: Plan, sheet: str | None) -> Plan:
+    editor = plan.meta.get("editor") or {}
+    copy_sources = editor.get("copySources")
+    if not isinstance(copy_sources, dict) or not copy_sources:
+        source = editor.get("copySource")
+        if (
+            sheet
+            and isinstance(source, dict)
+            and str(source.get("sheet") or "").upper() != sheet.upper()
+        ):
+            raise ValueError(f"bu planda {sheet} kopyalama kaynagi yok")
+        return plan
+
+    selected = (sheet or "").upper()
+    if not selected:
+        if len(copy_sources) != 1:
+            raise ValueError("kopyalanacak sheet secilmelidir")
+        selected = str(next(iter(copy_sources))).upper()
+    source = next(
+        (
+            value
+            for key, value in copy_sources.items()
+            if str(key).upper() == selected
+        ),
+        None,
+    )
+    if not isinstance(source, dict):
+        raise ValueError(f"bu planda {selected} kopyalama kaynagi yok")
+
+    selected_plan = copy.deepcopy(plan)
+    selected_editor = selected_plan.meta["editor"]
+    selected_editor["copySource"] = copy.deepcopy(source)
+    selected_editor["rows"] = [
+        row
+        for row in list(selected_editor.get("rows") or [])
+        if str(row.get("_sheet") or "").upper() == selected
+    ]
+    selected_editor.pop("copySources", None)
+    if not selected_editor["rows"]:
+        raise ValueError(f"{selected} icin kopyalanacak satir yok")
+    return selected_plan
+
+
 def _copy_data(
     plan: Plan,
 ) -> tuple[list[str], list[str], list[dict[str, str]], bool]:
@@ -353,8 +397,12 @@ def _payload(plan: Plan) -> tuple[str, str, int]:
     return table, plain, len(rows)
 
 
-def preview_plan_table(plan: Plan) -> dict[str, object]:
+def preview_plan_table(
+    plan: Plan,
+    sheet: str | None = None,
+) -> dict[str, object]:
     """Return the exact workbook-backed values used by the mail clipboard."""
+    plan = _sheet_plan(plan, sheet)
     editor = plan.meta.get("editor") or {}
     if editor.get("kind") != "recordTable" or not editor.get("copyEnabled"):
         raise ValueError("bu planda onizlenebilir mail tablosu yok")
@@ -701,7 +749,8 @@ def _set_windows_clipboard(html_bytes: bytes, plain: str) -> None:
         user32.CloseClipboard()
 
 
-def copy_plan_table(plan: Plan) -> int:
+def copy_plan_table(plan: Plan, sheet: str | None = None) -> int:
+    plan = _sheet_plan(plan, sheet)
     _fields, _headers, rows, from_workbook = _copy_data(plan)
     count = len(rows)
     if os.name == "nt":

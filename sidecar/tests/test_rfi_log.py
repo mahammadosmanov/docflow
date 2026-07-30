@@ -6,7 +6,9 @@ import zipfile
 from datetime import date, time, timedelta
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.datavalidation import DataValidation
 
+from docflow_sidecar.clipboard import preview_plan_table
 from docflow_sidecar.fs import apply as fsapply
 from docflow_sidecar.ops import rfi_log_add
 from docflow_sidecar.ops.rfi_log_add import (
@@ -156,6 +158,134 @@ def _make_workbook(path):
     ])
     wb.save(path)
     wb.close()
+
+
+def _add_ele_prc_sheets(path):
+    workbook = load_workbook(path)
+    try:
+        lookup = workbook["Sheet1"]
+        headers = [
+            "RFI No.",
+            "ITP No:",
+            "Item No.",
+            "INSPECTION DESCRIPTION",
+            "FORMS",
+            "TAG NO",
+            "AREA",
+            "DATE OF ISSUE",
+            "INSPECTION DATE",
+            "EXPIRY DATE",
+            "INSPECTION START TIME",
+            "INSP. TYPE AZFEN",
+            "INSP. TYPE INTEC",
+            "INSP. LOC./AREA",
+            "SUBCONTRACTOR",
+            "Inspection Status",
+            "RFI VALIDITY",
+        ]
+        existing = {
+            "ELE": (
+                25,
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.6",
+                "Electrical description",
+                "CON-ELE-001",
+                "R",
+                "W",
+            ),
+            "PRC": (
+                71,
+                "AZE-SUN-INT-QMS-ITP-PRC-0002",
+                "PRC-2.2.3",
+                "Procurement description",
+                "CON-MT-001",
+                "H",
+                "W",
+            ),
+        }
+        for discipline, (
+            number,
+            itp,
+            item,
+            description,
+            forms,
+            azfen_type,
+            intec_type,
+        ) in existing.items():
+            sheet = workbook.create_sheet(discipline)
+            for column, value in enumerate(headers, 1):
+                sheet.cell(9, column).value = value
+            values = [
+                f"AZE-SUN-INT-QMS-RFI-{discipline}-{number:04d}",
+                itp,
+                item,
+                description,
+                forms,
+                "N1",
+                "North Site",
+                date.today() - timedelta(days=2),
+                date.today() - timedelta(days=1),
+                date.today(),
+                time(10, 0),
+                azfen_type,
+                intec_type,
+                "Laydown",
+                "AZFEN",
+                "Ongoing",
+                "Valid",
+            ]
+            for column, value in enumerate(values, 1):
+                sheet.cell(10, column).value = value
+            sheet["D11"] = '=IFERROR(VLOOKUP(C11,Sheet1!K:L,2,0),"")'
+            sheet["E11"] = '=IFERROR(VLOOKUP(D11,Sheet1!L:M,2,0),"")'
+            sheet["L11"] = '=IFERROR(VLOOKUP(C11,Sheet1!N:O,2,0),"")'
+            sheet["M11"] = '=IFERROR(VLOOKUP(C11,Sheet1!P:Q,2,0),"")'
+            sheet["J11"] = f"KEEP {discipline} EXPIRY"
+            sheet["P11"] = f"KEEP {discipline} STATUS"
+            sheet["Q11"] = f"KEEP {discipline} VALIDITY"
+            sheet["Q30"] = ""
+
+        lookup["D1"] = "AZE-SUN-INT-QMS-ITP-ELE-0005"
+        lookup["E1"] = "AZE-SUN-INT-QMS-ITP-PRC-0002"
+        lookup.append(
+            [None] * 10
+            + [
+                "ELE-5.1.6",
+                "Electrical description",
+                "CON-ELE-001",
+                "ELE-5.1.6",
+                "R",
+                "ELE-5.1.6",
+                "W",
+            ]
+        )
+        lookup.append(
+            [None] * 10
+            + [
+                "PRC-2.2.3",
+                "Procurement description",
+                "CON-MT-001",
+                "PRC-2.2.3",
+                "H",
+                "PRC-2.2.3",
+                "W",
+            ]
+        )
+
+        for sheet_name in ("CIV", "MEC", "ELE", "PRC"):
+            sheet = workbook[sheet_name]
+            custom = DataValidation(
+                type="custom",
+                formula1="COUNTIF($A$10:$A$30,A10)<=1",
+            )
+            item_list = DataValidation(type="list", formula1="INDIRECT(B10)")
+            sheet.add_data_validation(custom)
+            sheet.add_data_validation(item_list)
+            custom.add("A10:A30")
+            item_list.add("C10:C30")
+        workbook.save(path)
+    finally:
+        workbook.close()
 
 
 def test_preview_numbers_schedule_and_overflow(tmp_path):
@@ -421,3 +551,105 @@ def test_windows_lock_check_accepts_a_free_workbook(tmp_path):
     path.write_bytes(b"free")
 
     _assert_not_locked(path)
+
+
+def test_multi_sheet_preview_apply_copy_sources_and_undo(tmp_path, monkeypatch):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    _add_ele_prc_sheets(path)
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    original = fsapply.file_sha256(path)
+
+    operation = AddRfiLogRows()
+    plan = operation.preview(
+        {
+            "workbook": str(path),
+            "sheet_counts": {"CIV": 1, "MEC": 1, "ELE": 2, "PRC": 1},
+            "overflow_next_day": True,
+        }
+    )
+
+    rows = plan.meta["editor"]["rows"]
+    assert [row["_sheet"] for row in rows] == [
+        "CIV",
+        "MEC",
+        "ELE",
+        "ELE",
+        "PRC",
+    ]
+    assert [row["rfiNo"] for row in rows] == [
+        "AZE-SUN-INT-QMS-RFI-CIV-0008",
+        "AZE-SUN-INT-QMS-RFI-MEC-0021",
+        "AZE-SUN-INT-QMS-RFI-ELE-0026",
+        "AZE-SUN-INT-QMS-RFI-ELE-0027",
+        "AZE-SUN-INT-QMS-RFI-PRC-0072",
+    ]
+    assert [row["startTime"] for row in rows] == [
+        "09:00",
+        "09:30",
+        "10:00",
+        "10:30",
+        "11:00",
+    ]
+    assert set(plan.meta["editor"]["copySources"]) == {
+        "CIV",
+        "MEC",
+        "ELE",
+        "PRC",
+    }
+    assert len(plan.steps) == 1
+    assert len(plan.steps[0].meta["batches"]) == 4
+
+    edited = copy.deepcopy(rows)
+    duplicate = dict(edited[-1])
+    duplicate["_rowId"] = "PRC-duplicate"
+    duplicate["area"] = "South Site"
+    edited.append(duplicate)
+    revised = operation.revise(plan, {"rows": edited})
+    result = operation.apply(revised)
+    assert result.failed == 0
+    assert result.applied == 6
+
+    workbook = load_workbook(path, data_only=False)
+    try:
+        expected = {
+            "CIV": (11, "AZE-SUN-INT-QMS-RFI-CIV-0008"),
+            "MEC": (11, "AZE-SUN-INT-QMS-RFI-MEC-0021"),
+            "ELE": (11, "AZE-SUN-INT-QMS-RFI-ELE-0026"),
+            "PRC": (11, "AZE-SUN-INT-QMS-RFI-PRC-0072"),
+        }
+        for sheet_name, (row_number, rfi) in expected.items():
+            sheet = workbook[sheet_name]
+            assert sheet.cell(row_number, 1).value == rfi
+            assert "VLOOKUP" in str(sheet.cell(row_number, 4).value)
+            assert "VLOOKUP" in str(
+                sheet.cell(
+                    row_number,
+                    rfi_log_add.LAYOUTS[sheet_name].azfen_col,
+                ).value
+            )
+        assert workbook["MEC"]["H11"].value is None
+        assert workbook["ELE"]["J11"].value == "KEEP ELE EXPIRY"
+        assert workbook["PRC"]["J11"].value == "KEEP PRC EXPIRY"
+        assert workbook["PRC"]["A12"].value == expected["PRC"][1]
+
+        for sheet_name in ("CIV", "MEC", "ELE", "PRC"):
+            formulas = [
+                str(validation.formula1 or "")
+                for validation in workbook[sheet_name].data_validations.dataValidation
+            ]
+            assert any("OR(A10=" in formula for formula in formulas)
+            assert any("INDIRECT(B10)" in formula for formula in formulas)
+    finally:
+        workbook.close()
+
+    ele_preview = preview_plan_table(revised, "ELE")
+    prc_preview = preview_plan_table(revised, "PRC")
+    assert ele_preview["count"] == 2
+    assert prc_preview["count"] == 2
+    assert ele_preview["fromWorkbook"] is True
+    assert prc_preview["fromWorkbook"] is True
+
+    undone = fsapply.undo(result.journal_id)
+    assert undone.failed == 0
+    assert fsapply.file_sha256(path) == original

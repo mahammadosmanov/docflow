@@ -192,13 +192,22 @@ class SidecarClient {
     return Plan.fromJson((res as Map).cast<String, dynamic>());
   }
 
-  Future<int> copyPlanTable(String planId) async {
-    final res = await _callRaw('plan_copy_table', {'planId': planId});
+  Future<int> copyPlanTable(String planId, {String? sheet}) async {
+    final res = await _callRaw('plan_copy_table', {
+      'planId': planId,
+      if (sheet != null && sheet.isNotEmpty) 'sheet': sheet,
+    });
     return ((res as Map)['count'] as num?)?.toInt() ?? 0;
   }
 
-  Future<Map<String, dynamic>> previewPlanTable(String planId) async {
-    final res = await _callRaw('plan_table_preview', {'planId': planId});
+  Future<Map<String, dynamic>> previewPlanTable(
+    String planId, {
+    String? sheet,
+  }) async {
+    final res = await _callRaw('plan_table_preview', {
+      'planId': planId,
+      if (sheet != null && sheet.isNotEmpty) 'sheet': sheet,
+    });
     return (res as Map).cast<String, dynamic>();
   }
 

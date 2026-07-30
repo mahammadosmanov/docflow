@@ -371,6 +371,57 @@ def _patch_calculation(raw: bytes) -> bytes:
     return _serialize(root, original_namespaces=namespaces)
 
 
+def patch_workbook_sheets(
+    source: Path,
+    destination: Path,
+    updates_by_sheet: dict[
+        str,
+        dict[tuple[int, int], tuple[str, Any]],
+    ],
+    *,
+    allow_consecutive_duplicates_column: int | None = None,
+) -> None:
+    if not updates_by_sheet:
+        raise ValueError("en az bir worksheet guncellemesi gerekli")
+    with zipfile.ZipFile(source, "r") as incoming:
+        sheet_details = {
+            sheet_name: _sheet_info(incoming, sheet_name)
+            for sheet_name in updates_by_sheet
+        }
+        patched_sheets: dict[str, bytes] = {}
+        replaced_by_sheet: list[tuple[int, set[str]]] = []
+        for sheet_name, updates in updates_by_sheet.items():
+            sheet_path, sheet_id = sheet_details[sheet_name]
+            replaced_formulas: set[str] = set()
+            patched_sheets[sheet_path] = _patch_sheet(
+                incoming.read(sheet_path),
+                updates,
+                replaced_formulas,
+                allow_consecutive_duplicates_column,
+            )
+            if replaced_formulas:
+                replaced_by_sheet.append((sheet_id, replaced_formulas))
+
+        calc_chain_path = "xl/calcChain.xml"
+        patched_calc_chain = None
+        if replaced_by_sheet and calc_chain_path in incoming.namelist():
+            patched_calc_chain = incoming.read(calc_chain_path)
+            for sheet_id, replaced_formulas in replaced_by_sheet:
+                patched_calc_chain = _patch_calc_chain(
+                    patched_calc_chain,
+                    sheet_id,
+                    replaced_formulas,
+                )
+        with zipfile.ZipFile(destination, "w") as outgoing:
+            for info in incoming.infolist():
+                data = incoming.read(info.filename)
+                if info.filename in patched_sheets:
+                    data = patched_sheets[info.filename]
+                elif info.filename == calc_chain_path and patched_calc_chain is not None:
+                    data = patched_calc_chain
+                outgoing.writestr(copy.copy(info), data)
+
+
 def patch_workbook(
     source: Path,
     destination: Path,
@@ -379,28 +430,11 @@ def patch_workbook(
     *,
     allow_consecutive_duplicates_column: int | None = None,
 ) -> None:
-    with zipfile.ZipFile(source, "r") as incoming:
-        sheet_path, sheet_id = _sheet_info(incoming, sheet_name)
-        replaced_formulas: set[str] = set()
-        patched_sheet = _patch_sheet(
-            incoming.read(sheet_path),
-            updates,
-            replaced_formulas,
-            allow_consecutive_duplicates_column,
-        )
-        calc_chain_path = "xl/calcChain.xml"
-        patched_calc_chain = None
-        if replaced_formulas and calc_chain_path in incoming.namelist():
-            patched_calc_chain = _patch_calc_chain(
-                incoming.read(calc_chain_path),
-                sheet_id,
-                replaced_formulas,
-            )
-        with zipfile.ZipFile(destination, "w") as outgoing:
-            for info in incoming.infolist():
-                data = incoming.read(info.filename)
-                if info.filename == sheet_path:
-                    data = patched_sheet
-                elif info.filename == calc_chain_path and patched_calc_chain is not None:
-                    data = patched_calc_chain
-                outgoing.writestr(copy.copy(info), data)
+    """Backward-compatible single-sheet wrapper."""
+
+    patch_workbook_sheets(
+        source,
+        destination,
+        {sheet_name: updates},
+        allow_consecutive_duplicates_column=allow_consecutive_duplicates_column,
+    )

@@ -15,6 +15,21 @@ void main() {
     expect(parameter.defaultValue, isEmpty);
   });
 
+  test('multi-sheet RFI counts are parsed from the operation schema', () {
+    final parameter = ParamDef.fromJson({
+      'name': 'sheet_counts',
+      'kind': 'sheetCounts',
+      'labelKey': 'param.rfi.sheetCounts',
+      'required': true,
+      'default': {'CIV': 3, 'MEC': 0, 'ELE': 0, 'PRC': 0},
+      'choices': ['CIV', 'MEC', 'ELE', 'PRC'],
+    });
+
+    expect(parameter.kind, ParamKind.sheetCounts);
+    expect(parameter.choices, ['CIV', 'MEC', 'ELE', 'PRC']);
+    expect(parameter.defaultValue, {'CIV': 3, 'MEC': 0, 'ELE': 0, 'PRC': 0});
+  });
+
   test('a print step makes a preview plan actionable', () {
     final plan = Plan.fromJson({
       'planId': 'preview-1',

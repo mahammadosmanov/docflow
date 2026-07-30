@@ -59,7 +59,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   StreamSubscription<Progress>? _sub;
   List<Map<String, dynamic>> _editorRows = [];
   bool _editorDirty = false;
-  bool _copying = false;
+  String? _copyingSheet;
 
   @override
   void initState() {
@@ -171,18 +171,18 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         .toList();
   }
 
-  Future<void> _copyMail() async {
+  Future<void> _copyMail([String? sheet]) async {
     final planId = _plan?.planId;
-    if (planId == null || _copying) return;
-    setState(() => _copying = true);
+    if (planId == null || _copyingSheet != null) return;
+    setState(() => _copyingSheet = sheet ?? '');
     try {
-      final count = await widget.client.copyPlanTable(planId);
+      final count = await widget.client.copyPlanTable(planId, sheet: sheet);
       if (!mounted) return;
       _snack(Strings.of(context).count('rfi.editor.copied', count));
     } catch (e) {
       _snack(e.toString());
     } finally {
-      if (mounted) setState(() => _copying = false);
+      if (mounted) setState(() => _copyingSheet = null);
     }
   }
 
@@ -453,6 +453,12 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     final r = _result!;
     final t = Theme.of(context);
     final ok = r.failed == 0;
+    final editor = _plan?.editor;
+    final rawCopySources = editor?['copySources'];
+    final copySheets = rawCopySources is Map
+        ? rawCopySources.keys.map((key) => key.toString()).toList()
+        : <String>[];
+    final legacyCopy = editor?['copyEnabled'] == true && copySheets.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -523,9 +529,39 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
           middle: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_plan?.editor?['copyEnabled'] == true)
+              if (copySheets.isNotEmpty)
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    for (final sheet in copySheets)
+                      TextButton.icon(
+                        key: ValueKey('copy-sheet-$sheet'),
+                        icon: _copyingSheet == sheet
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.table_view_outlined,
+                                size: 18,
+                              ),
+                        label: Text(
+                          '$sheet · ${s.t('rfi.action.copySheet')}',
+                        ),
+                        onPressed: _copyingSheet == null
+                            ? () => _copyMail(sheet)
+                            : null,
+                      ),
+                  ],
+                ),
+              if (legacyCopy)
                 TextButton.icon(
-                  icon: _copying
+                  icon: _copyingSheet != null
                       ? const SizedBox(
                           width: 16,
                           height: 16,
@@ -533,9 +569,9 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
                         )
                       : const Icon(Icons.table_view_outlined, size: 18),
                   label: Text(s.t('rfi.action.copyMail')),
-                  onPressed: _copying ? null : _copyMail,
+                  onPressed: _copyingSheet != null ? null : _copyMail,
                 ),
-              if (_plan?.editor?['copyEnabled'] == true &&
+              if ((copySheets.isNotEmpty || legacyCopy) &&
                   _values.containsKey('dest'))
                 const SizedBox(width: 8),
               if (_values.containsKey('dest'))
@@ -627,7 +663,12 @@ class _Bar extends StatelessWidget {
       children: [
         left,
         const Spacer(),
-        if (middle != null) ...[middle!, const SizedBox(width: 8)],
+        if (middle != null) ...[
+          Flexible(
+            child: Align(alignment: Alignment.centerRight, child: middle!),
+          ),
+          const SizedBox(width: 8),
+        ],
         right,
       ],
     );

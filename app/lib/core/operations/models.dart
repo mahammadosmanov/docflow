@@ -11,6 +11,7 @@ enum ParamKind {
   int,
   longText,
   secret,
+  sheetCounts,
   unknown,
 }
 
@@ -34,6 +35,8 @@ ParamKind _kindFrom(String s) {
       return ParamKind.longText;
     case 'secret':
       return ParamKind.secret;
+    case 'sheetCounts':
+      return ParamKind.sheetCounts;
     default:
       return ParamKind.unknown;
   }

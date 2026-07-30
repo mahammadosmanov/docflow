@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 /// Operasyona ozel form YOK (mimari): degerleri opId -> {param: value} olarak
 /// generic sakliyoruz. Yeni operation eklerken buraya dokunmak gerekmez.
 /// Depolama: ~/.docflow/settings.json (sidecar journal'i ile ayni kok).
-/// Sadece JSON-serilestirilebilir degerler (String/bool/num/null) saklanir.
+/// Basit JSON degerleri ve string->basit deger map'leri saklanir.
 class SettingsStore {
   SettingsStore._(this._file, this._data);
 
@@ -50,12 +50,26 @@ class SettingsStore {
   Future<void> saveParams(String opId, Map<String, dynamic> values) async {
     final clean = <String, dynamic>{};
     values.forEach((k, v) {
-      if (v == null || v is String || v is bool || v is num) clean[k] = v;
+      if (_isPreferenceValue(v)) {
+        clean[k] = v is Map ? Map<String, dynamic>.from(v) : v;
+      }
     });
     final params = Map<String, dynamic>.from(_data['params'] as Map? ?? {});
     params[opId] = clean;
     _data = {..._data, 'params': params};
     await _write();
+  }
+
+  static bool _isPreferenceValue(Object? value) {
+    if (value == null || value is String || value is bool || value is num) {
+      return true;
+    }
+    return value is Map &&
+        value.keys.every((key) => key is String) &&
+        value.values.every(
+          (item) =>
+              item == null || item is String || item is bool || item is num,
+        );
   }
 
   /// Generic bolum oku (or. 'session').

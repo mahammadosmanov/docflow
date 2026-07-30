@@ -1,4 +1,4 @@
-"""CIV/MEC RFI Log satiri olusturma.
+"""Bir veya daha fazla RFI Log sheet'inde kayit olusturma.
 
 Is kurallari preview'da hesaplanir. Apply yalnizca onaylanan kayitlari, onceden
 belirlenen satirlara yazar; kaynak dosyanin preview'dan sonra degismedigini
@@ -28,7 +28,6 @@ from ..contracts import (
     BoolParam,
     ChoiceParam,
     FileParam,
-    IntParam,
     LongTextParam,
     JournalEntry,
     Operation,
@@ -37,13 +36,14 @@ from ..contracts import (
     Result,
     Step,
     SecretParam,
+    SheetCountsParam,
     Warning,
 )
 from ..email_extract import detect_discipline, extract_email
 from ..fs.apply import file_sha256, write_journal
 from ..registry import register
 from ..rpc import notify
-from ..xlsx_ooxml import patch_workbook
+from ..xlsx_ooxml import patch_workbook_sheets
 
 pywarnings.filterwarnings(
     "ignore",
@@ -52,8 +52,9 @@ pywarnings.filterwarnings(
     module=r"openpyxl\..*",
 )
 
-RFI_RE = re.compile(r"-RFI-(CIV|MEC)-(\d+)$", re.IGNORECASE)
-ITEM_RE = re.compile(r"^(CIV|MEC)-(\d+)\.", re.IGNORECASE)
+SUPPORTED_DISCIPLINES = ("CIV", "MEC", "ELE", "PRC")
+RFI_RE = re.compile(r"-RFI-(CIV|MEC|ELE|PRC)-(\d+)$", re.IGNORECASE)
+ITEM_RE = re.compile(r"^(CIV|MEC|ELE|PRC)-(\d+)\.", re.IGNORECASE)
 NORTH_RE = re.compile(r"(?:^|[^A-Z0-9])N\d{1,3}(?:[^A-Z0-9]|$)", re.IGNORECASE)
 SOUTH_RE = re.compile(r"(?:^|[^A-Z0-9])S\d{1,3}(?:[^A-Z0-9]|$)", re.IGNORECASE)
 DAY_START = time(9, 0)
@@ -100,6 +101,8 @@ LAYOUTS = {
     "CIV": Layout("CIV", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
     # MEC'te H = ROW No.; kullanici istemedigi icin bos ve dokunulmadan kalir.
     "MEC": Layout("MEC", 9, 10, 11, 12, 13, 14, 15, 16, 17, 18),
+    "ELE": Layout("ELE", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
+    "PRC": Layout("PRC", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
 }
 
 COPY_FIELDS = [
@@ -307,23 +310,32 @@ def _lookup_columns(lookup_sheet: Any) -> dict[str, int]:
     raise ValueError("Sheet1 Item/description/forms/type esleme kolonlari bulunamadi")
 
 
-def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
+def _read_source(
+    path: pathlib.Path,
+    discipline: str,
+    *,
+    workbook: Any | None = None,
+) -> dict[str, Any]:
     layout = LAYOUTS[discipline]
-    with pywarnings.catch_warnings():
-        pywarnings.filterwarnings(
-            "ignore",
-            message="Data Validation extension is not supported.*",
-            category=UserWarning,
-        )
-        workbook = load_workbook(
-            path,
-            read_only=True,
-            data_only=True,
-            keep_links=True,
-        )
+    owns_workbook = workbook is None
+    if workbook is None:
+        with pywarnings.catch_warnings():
+            pywarnings.filterwarnings(
+                "ignore",
+                message="Data Validation extension is not supported.*",
+                category=UserWarning,
+            )
+            workbook = load_workbook(
+                path,
+                read_only=True,
+                data_only=True,
+                keep_links=True,
+            )
     try:
         if layout.sheet not in workbook.sheetnames or "Sheet1" not in workbook.sheetnames:
-            raise ValueError("RFI Log icin CIV/MEC/Sheet1 sayfalari bulunamadi")
+            raise ValueError(
+                f"RFI Log icin {layout.sheet}/Sheet1 sayfalari bulunamadi"
+            )
         sheet = workbook[layout.sheet]
         lookup_sheet = workbook["Sheet1"]
         lookup_columns = _lookup_columns(lookup_sheet)
@@ -435,6 +447,51 @@ def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
             "occupied": occupied,
         }
     finally:
+        if owns_workbook:
+            workbook.close()
+
+
+def _read_sources(
+    path: pathlib.Path,
+    requested: list[str],
+) -> tuple[dict[str, dict[str, Any]], dict[date, dict[str, time]]]:
+    """Read the workbook once and build requested sheet data plus a global clock."""
+
+    with pywarnings.catch_warnings():
+        pywarnings.filterwarnings(
+            "ignore",
+            message="Data Validation extension is not supported.*",
+            category=UserWarning,
+        )
+        workbook = load_workbook(
+            path,
+            read_only=True,
+            data_only=True,
+            keep_links=True,
+        )
+    try:
+        missing = [
+            discipline
+            for discipline in requested
+            if LAYOUTS[discipline].sheet not in workbook.sheetnames
+        ]
+        if missing:
+            raise ValueError(
+                "RFI Log'da secilen sheet bulunamadi: " + ", ".join(missing)
+            )
+
+        sources: dict[str, dict[str, Any]] = {}
+        occupied: dict[date, dict[str, time]] = {}
+        for discipline in SUPPORTED_DISCIPLINES:
+            if LAYOUTS[discipline].sheet not in workbook.sheetnames:
+                continue
+            source = _read_source(path, discipline, workbook=workbook)
+            if discipline in requested:
+                sources[discipline] = source
+            for day, values in source["occupied"].items():
+                occupied.setdefault(day, {}).update(values)
+        return sources, occupied
+    finally:
         workbook.close()
 
 
@@ -475,6 +532,13 @@ def _allocate(
 
 def _columns() -> list[dict[str, Any]]:
     return [
+        {
+            "key": "_sheet",
+            "labelKey": "rfi.col.sheet",
+            "kind": "readonly",
+            "width": 48,
+            "compact": True,
+        },
         {
             "key": "rfiNo",
             "labelKey": "rfi.col.rfiNo",
@@ -579,10 +643,34 @@ def _columns() -> list[dict[str, Any]]:
 
 
 def _plan_meta(
-    discipline: str,
-    source: dict[str, Any],
+    sources: dict[str, dict[str, Any]],
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    itp_to_items: dict[str, list[str]] = {}
+    presets: dict[str, dict[str, str]] = {}
+    autocomplete: dict[str, list[str]] = {
+        "tagNo": [],
+        "area": [],
+        "location": [],
+        "subcontractor": [],
+    }
+    for discipline in SUPPORTED_DISCIPLINES:
+        source = sources.get(discipline)
+        if source is None:
+            continue
+        itp_to_items.update(source["itpToItems"])
+        presets.update(source["presets"])
+        for field, source_key in (
+            ("tagNo", "tags"),
+            ("area", "areas"),
+            ("location", "locations"),
+            ("subcontractor", "subcontractors"),
+        ):
+            autocomplete[field] = list(
+                dict.fromkeys(
+                    [*autocomplete[field], *list(source[source_key])]
+                )
+            )
     return {
         "editor": {
             "kind": "recordTable",
@@ -592,24 +680,19 @@ def _plan_meta(
             "columns": _columns(),
             "rows": copy.deepcopy(rows),
             "choices": {
-                "itpNo": sorted(source["itpToItems"]),
+                "itpNo": sorted(itp_to_items),
             },
             "choicesByValue": {
                 "itemNo": {
                     "dependsOn": "itpNo",
-                    "values": source["itpToItems"],
+                    "values": itp_to_items,
                 },
             },
             "autoFill": {
                 "field": "itemNo",
-                "values": source["presets"],
+                "values": presets,
             },
-            "autocomplete": {
-                "tagNo": source["tags"],
-                "area": source["areas"],
-                "location": source["locations"],
-                "subcontractor": source["subcontractors"],
-            },
+            "autocomplete": autocomplete,
             "regexFill": [
                 {
                     "source": "tagNo",
@@ -628,7 +711,17 @@ def _plan_meta(
             "copyEnabled": True,
             "copyFields": COPY_FIELDS,
             "copyHeaders": COPY_HEADERS,
-            "discipline": discipline,
+            "sheets": [
+                discipline
+                for discipline in SUPPORTED_DISCIPLINES
+                if discipline in sources
+            ],
+            "sheetCounts": {
+                discipline: sum(
+                    1 for row in rows if row.get("_sheet") == discipline
+                )
+                for discipline in sources
+            },
         }
     }
 
@@ -668,6 +761,7 @@ def _copy_source(
 def _record(
     *,
     index: int,
+    discipline: str,
     rfi: str,
     source: dict[str, Any],
     issue_day: date,
@@ -675,7 +769,8 @@ def _record(
 ) -> dict[str, Any]:
     preset = source["presets"][source["defaultItem"]]
     return {
-        "_rowId": f"g{index + 1}-r1",
+        "_rowId": f"{discipline}-g{index + 1}-r1",
+        "_sheet": discipline,
         "rfiNo": rfi,
         "itpNo": source["defaultItp"],
         "itemNo": source["defaultItem"],
@@ -780,7 +875,10 @@ def _rows_from_email(
         for duplicate_index, extracted in enumerate(candidates):
             row = copy.deepcopy(base)
             if duplicate_index:
-                row["_rowId"] = f"g{index + 1}-r{duplicate_index + 1}"
+                row["_rowId"] = (
+                    f"{row.get('_sheet', '')}-g{index + 1}-"
+                    f"r{duplicate_index + 1}"
+                )
             _apply_email_values(row, extracted, source, notes)
             rows.append(row)
     return rows, notes
@@ -813,10 +911,11 @@ def _warnings_for_rows(
 def _safe_rows(
     raw_rows: list[Any],
     *,
+    discipline: str,
     base_rfis: list[str],
     source: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    allowed_fields = set(COPY_FIELDS) | {"_rowId"}
+    allowed_fields = set(COPY_FIELDS) | {"_rowId", "_sheet"}
     allowed_rfis = set(base_rfis)
     rows: list[dict[str, Any]] = []
     for index, raw in enumerate(raw_rows):
@@ -824,6 +923,9 @@ def _safe_rows(
             raise ValueError("gecersiz RFI satiri")
         row = {key: raw.get(key, "") for key in allowed_fields}
         row["_rowId"] = str(row.get("_rowId") or f"row-{uuid.uuid4().hex[:10]}")
+        if str(row.get("_sheet") or "").upper() != discipline:
+            raise ValueError(f"RFI satiri yanlis sheet'e ait: {discipline}")
+        row["_sheet"] = discipline
         row["rfiNo"] = str(row["rfiNo"]).strip()
         if row["rfiNo"] not in allowed_rfis:
             raise ValueError(f"plan disi RFI numarasi: {row['rfiNo']}")
@@ -969,15 +1071,13 @@ def _formula_or_value(
     )
 
 
-def _write_records(
-    workbook_path: pathlib.Path,
-    temp_path: pathlib.Path,
+def _record_updates(
     discipline: str,
     start_row: int,
     rows: list[dict[str, Any]],
     presets: dict[str, dict[str, str]],
     lookup_columns: dict[str, int],
-) -> None:
+) -> dict[tuple[int, int], tuple[str, Any]]:
     layout = LAYOUTS[discipline]
     updates: dict[tuple[int, int], tuple[str, Any]] = {}
     for index, record in enumerate(rows):
@@ -998,10 +1098,8 @@ def _write_records(
         for column, value in values.items():
             updates[(row_number, column)] = ("value", value)
 
-        if discipline == "CIV":
-            description_col, forms_col, azfen_col, intec_col = 4, 5, 12, 13
-        else:
-            description_col, forms_col, azfen_col, intec_col = 4, 5, 13, 14
+        description_col, forms_col = 4, 5
+        azfen_col, intec_col = layout.azfen_col, layout.intec_col
 
         updates[(row_number, description_col)] = _formula_or_value(
             record["description"],
@@ -1039,11 +1137,28 @@ def _write_records(
                 f'{get_column_letter(lookup_columns["intecType"])},2,0),"")'
             ),
         )
-    patch_workbook(
+    return updates
+
+
+def _write_batches(
+    workbook_path: pathlib.Path,
+    temp_path: pathlib.Path,
+    batches: list[dict[str, Any]],
+) -> None:
+    sheet_updates = {
+        str(batch["discipline"]): _record_updates(
+            str(batch["discipline"]),
+            int(batch["startRow"]),
+            list(batch["records"]),
+            dict(batch["presets"]),
+            dict(batch["lookupColumns"]),
+        )
+        for batch in batches
+    }
+    patch_workbook_sheets(
         workbook_path,
         temp_path,
-        layout.sheet,
-        updates,
+        sheet_updates,
         allow_consecutive_duplicates_column=1,
     )
 
@@ -1098,6 +1213,31 @@ def _verify_records(
         workbook.close()
 
 
+def _requested_sheet_counts(params: dict[str, Any]) -> dict[str, int]:
+    raw = params.get("sheet_counts")
+    if not isinstance(raw, dict):
+        # Saved v0.4.x settings and direct callers remain valid.
+        legacy_discipline = str(params.get("discipline") or "CIV").upper()
+        legacy_count = int(params.get("count") or 0)
+        raw = {legacy_discipline: legacy_count}
+
+    counts: dict[str, int] = {}
+    for discipline in SUPPORTED_DISCIPLINES:
+        try:
+            count = int(raw.get(discipline) or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{discipline} RFI adedi gecersiz") from exc
+        if count < 0 or count > MAX_RFI_COUNT:
+            raise ValueError(
+                f"{discipline} RFI adedi 0-{MAX_RFI_COUNT} arasinda olmali"
+            )
+        if count:
+            counts[discipline] = count
+    if not counts:
+        raise ValueError("en az bir sheet icin RFI adedi secin")
+    return counts
+
+
 @register("rfi.log_add")
 class AddRfiLogRows(Operation):
     title_key = "op.rfi.log_add.title"
@@ -1136,17 +1276,12 @@ class AddRfiLogRows(Operation):
                 visible_when={"email_provider": "gemini"},
                 help_key="param.rfi.geminiApiKey.help",
             ),
-            ChoiceParam(
-                "discipline",
-                "param.rfi.discipline",
-                choices=["CIV", "MEC"],
-                default="CIV",
-            ),
-            IntParam(
-                "count",
-                "param.rfi.count",
-                default=3,
-                help_key="param.rfi.count.help",
+            SheetCountsParam(
+                "sheet_counts",
+                "param.rfi.sheetCounts",
+                choices=list(SUPPORTED_DISCIPLINES),
+                default={"CIV": 3, "MEC": 0, "ELE": 0, "PRC": 0},
+                help_key="param.rfi.sheetCounts.help",
             ),
             BoolParam(
                 "overflow_next_day",
@@ -1160,25 +1295,42 @@ class AddRfiLogRows(Operation):
     def preview(self, params: dict) -> Plan:
         workbook_path = pathlib.Path(str(params["workbook"])).expanduser().resolve()
         email_text = str(params.get("email_text") or "").strip()
-        discipline = str(params.get("discipline") or "CIV").upper()
-        if email_text:
-            discipline = detect_discipline(email_text) or discipline
-        count = int(params.get("count") or 0)
         wrap = bool(params.get("overflow_next_day", True))
         if workbook_path.suffix.lower() != ".xlsx" or not workbook_path.is_file():
             raise ValueError("gecerli bir .xlsx RFI Log dosyasi secin")
-        if discipline not in LAYOUTS:
-            raise ValueError("yalnizca CIV ve MEC destekleniyor")
-        if count < 1 or count > MAX_RFI_COUNT:
-            raise ValueError(f"RFI adedi 1-{MAX_RFI_COUNT} arasinda olmali")
+        counts = _requested_sheet_counts(params)
+        detected = detect_discipline(email_text) if email_text else None
+        has_new_selection = isinstance(params.get("sheet_counts"), dict)
+        if detected in SUPPORTED_DISCIPLINES:
+            # The default CIV=3 is a convenience, not an instruction. A pasted
+            # MEC/ELE/PRC email should therefore route to its own sheet. Once
+            # the user makes a genuine multi-sheet selection, keep every
+            # selected sheet and add the email sheet if needed.
+            if not has_new_selection or counts == {"CIV": 3}:
+                counts = {detected: counts.get("CIV", 3)}
+            elif detected not in counts:
+                counts[detected] = 1
 
-        notify("progress", {"phase": "preview", "done": 0, "total": 3})
-        source = _read_source(workbook_path, discipline)
-        notify("progress", {"phase": "preview", "done": 1, "total": 3})
+        requested = [
+            discipline
+            for discipline in SUPPORTED_DISCIPLINES
+            if discipline in counts
+        ]
+        notify("progress", {"phase": "preview", "done": 0, "total": 4})
+        sources, occupied = _read_sources(workbook_path, requested)
+        notify("progress", {"phase": "preview", "done": 1, "total": 4})
         extraction: dict[str, Any] | None = None
+        extraction_discipline: str | None = None
         extraction_notes: list[str] = []
         extraction_warnings: list[Warning] = []
         if email_text:
+            extraction_discipline = (
+                detected
+                if detected in sources
+                else requested[0]
+            )
+            assert extraction_discipline is not None
+            source = sources[extraction_discipline]
             provider = str(params.get("email_provider") or "offline").lower()
             if provider not in {"offline", "gemini"}:
                 provider = "offline"
@@ -1186,14 +1338,14 @@ class AddRfiLogRows(Operation):
                 email_text,
                 provider=provider,
                 api_key=str(params.get("gemini_api_key") or ""),
-                discipline=discipline,
+                discipline=extraction_discipline,
                 itp_to_items=source["itpToItems"],
                 known_tags=source["tags"],
                 known_subcontractors=source["subcontractors"],
             )
             extracted_count = int(extraction.get("count") or 0)
             if 1 <= extracted_count <= MAX_RFI_COUNT:
-                count = extracted_count
+                counts[extraction_discipline] = extracted_count
             raw_notes = extraction.get("notes")
             if isinstance(raw_notes, list):
                 extraction_notes.extend(
@@ -1204,7 +1356,11 @@ class AddRfiLogRows(Operation):
             extraction_warnings.append(
                 Warning(
                     "warn.rfi.emailExtracted",
-                    f"{used_provider} | {count} RFI | confidence {confidence:.0%}",
+                    (
+                        f"{used_provider} | {extraction_discipline} "
+                        f"{counts[extraction_discipline]} RFI | "
+                        f"confidence {confidence:.0%}"
+                    ),
                 )
             )
             if provider == "gemini":
@@ -1215,84 +1371,130 @@ class AddRfiLogRows(Operation):
                 )
 
         start_day = _today() + timedelta(days=1)
-        slots, overflowed = _allocate(source["occupied"], start_day, count, wrap)
+        total_count = sum(counts.values())
+        slots, overflowed = _allocate(occupied, start_day, total_count, wrap)
         issue_day = _today()
-        rows = []
-        base_rfis = []
-        for index in range(count):
-            number = source["maxNumber"] + index + 1
-            rfi = f"AZE-SUN-INT-QMS-RFI-{discipline}-{number:04d}"
-            base_rfis.append(rfi)
-            rows.append(
-                _record(
-                    index=index,
-                    rfi=rfi,
-                    source=source,
-                    issue_day=issue_day,
-                    slot=slots[index],
-                )
-            )
-        if extraction is not None:
-            rows, validation_notes = _rows_from_email(rows, extraction, source)
-            extraction_notes.extend(validation_notes)
-            if extraction_notes:
-                extraction_warnings.append(
-                    Warning(
-                        "warn.rfi.emailNeedsReview",
-                        " | ".join(dict.fromkeys(extraction_notes))[:500],
+        rows: list[dict[str, Any]] = []
+        batches: list[dict[str, Any]] = []
+        slot_index = 0
+        for discipline in requested:
+            source = sources[discipline]
+            sheet_rows: list[dict[str, Any]] = []
+            base_rfis: list[str] = []
+            for index in range(counts[discipline]):
+                number = source["maxNumber"] + index + 1
+                rfi = f"AZE-SUN-INT-QMS-RFI-{discipline}-{number:04d}"
+                base_rfis.append(rfi)
+                sheet_rows.append(
+                    _record(
+                        index=index,
+                        discipline=discipline,
+                        rfi=rfi,
+                        source=source,
+                        issue_day=issue_day,
+                        slot=slots[slot_index],
                     )
                 )
+                slot_index += 1
+            if extraction is not None and discipline == extraction_discipline:
+                sheet_rows, validation_notes = _rows_from_email(
+                    sheet_rows,
+                    extraction,
+                    source,
+                )
+                extraction_notes.extend(validation_notes)
 
-        start_row = source["lastRow"] + 1
-        if start_row + len(rows) - 1 > source["maxRow"]:
-            raise ValueError("RFI Log'da yeni satirlar icin ayrilmis kapasite kalmadi")
+            start_row = source["lastRow"] + 1
+            if start_row + len(sheet_rows) - 1 > source["maxRow"]:
+                raise ValueError(
+                    f"{discipline} sheet'inde yeni satirlar icin "
+                    "ayrilmis kapasite kalmadi"
+                )
+            batches.append(
+                {
+                    "discipline": discipline,
+                    "startRow": start_row,
+                    "records": copy.deepcopy(sheet_rows),
+                    "baseRfis": base_rfis,
+                    "presets": source["presets"],
+                    "lookupColumns": source["lookupColumns"],
+                    "maxRow": source["maxRow"],
+                    "sourceData": {
+                        key: source[key]
+                        for key in (
+                            "presets",
+                            "itpToItems",
+                            "lookupColumns",
+                            "tags",
+                            "areas",
+                            "locations",
+                            "subcontractors",
+                            "maxRow",
+                        )
+                    },
+                }
+            )
+            rows.extend(sheet_rows)
+
+        if extraction_notes:
+            extraction_warnings.append(
+                Warning(
+                    "warn.rfi.emailNeedsReview",
+                    " | ".join(dict.fromkeys(extraction_notes))[:500],
+                )
+            )
+
         signature = _signature(workbook_path)
         backup_dir = workbook_path.parent / ".docflow-backups"
         backup_name = (
             f"{workbook_path.stem}_{datetime.now():%Y%m%d_%H%M%S}_"
             f"{uuid.uuid4().hex[:8]}{workbook_path.suffix}"
         )
+        step_meta: dict[str, Any] = {
+            "sourceSignature": signature,
+            "batches": batches,
+        }
+        if len(batches) == 1:
+            only = batches[0]
+            step_meta.update(
+                {
+                    "discipline": only["discipline"],
+                    "startRow": only["startRow"],
+                    "records": only["records"],
+                    "baseRfis": only["baseRfis"],
+                    "presets": only["presets"],
+                    "lookupColumns": only["lookupColumns"],
+                    "sourceData": only["sourceData"],
+                }
+            )
         step = Step(
             "workbook_update",
             src=str(workbook_path),
             dst=str(backup_dir / backup_name),
             note_key="note.rfi.workbookUpdate",
-            meta={
-                "discipline": discipline,
-                "startRow": start_row,
-                "records": copy.deepcopy(rows),
-                "sourceSignature": signature,
-                "baseRfis": base_rfis,
-                "presets": source["presets"],
-                "lookupColumns": source["lookupColumns"],
-                "sourceData": {
-                    key: source[key]
-                    for key in (
-                        "presets",
-                        "itpToItems",
-                        "lookupColumns",
-                        "tags",
-                        "areas",
-                        "locations",
-                        "subcontractors",
-                    )
-                },
-            },
+            meta=step_meta,
         )
-        notify("progress", {"phase": "preview", "done": 3, "total": 3})
-        meta = _plan_meta(discipline, source, rows)
+        meta = _plan_meta(sources, rows)
+        copy_sources = {
+            batch["discipline"]: _copy_source(
+                workbook_path,
+                batch["discipline"],
+                int(batch["startRow"]),
+                list(batch["records"]),
+            )
+            for batch in batches
+        }
+        meta["editor"]["copySources"] = copy_sources
+        if len(copy_sources) == 1:
+            meta["editor"]["copySource"] = next(iter(copy_sources.values()))
         if extraction is not None:
             meta["editor"]["emailExtraction"] = {
                 "provider": extraction.get("provider"),
                 "confidence": extraction.get("confidence"),
-                "count": count,
+                "count": counts.get(extraction_discipline or "", 0),
+                "sheet": extraction_discipline,
             }
-        meta["editor"]["copySource"] = _copy_source(
-            workbook_path,
-            discipline,
-            start_row,
-            rows,
-        )
+        notify("progress", {"phase": "preview", "done": 4, "total": 4})
         return Plan(
             op_id=self.id,
             steps=[step],
@@ -1307,48 +1509,100 @@ class AddRfiLogRows(Operation):
         if len(plan.steps) != 1 or plan.steps[0].kind != "workbook_update":
             raise ValueError("gecersiz RFI Log plani")
         original = plan.steps[0]
-        source_data = copy.deepcopy(original.meta["sourceData"])
-        rows = _safe_rows(
-            list(payload.get("rows") or []),
-            base_rfis=list(original.meta["baseRfis"]),
-            source=source_data,
-        )
-        start_row = int(original.meta["startRow"])
-        # Kaynak dosyadaki ayrilmis tablo kapasitesini ilk preview'da dogruladigimiz
-        # icin burada yalnizca kullanicinin ekledigi kopyalarin makul sinirini koru.
-        if len(rows) > 500:
+        original_batches = list(original.meta.get("batches") or [])
+        if not original_batches:
+            raise ValueError("gecersiz coklu-sheet RFI plani")
+        raw_rows = list(payload.get("rows") or [])
+        allowed_sheets = {
+            str(batch["discipline"]) for batch in original_batches
+        }
+        supplied_sheets = {
+            str(row.get("_sheet") or "").upper()
+            for row in raw_rows
+            if isinstance(row, dict)
+        }
+        if supplied_sheets != allowed_sheets:
+            raise ValueError("RFI sheet gruplari eklenemez veya silinemez")
+
+        revised_batches: list[dict[str, Any]] = []
+        revised_rows: list[dict[str, Any]] = []
+        sources: dict[str, dict[str, Any]] = {}
+        for batch in original_batches:
+            discipline = str(batch["discipline"])
+            source_data = copy.deepcopy(batch["sourceData"])
+            sheet_rows = _safe_rows(
+                [
+                    row
+                    for row in raw_rows
+                    if isinstance(row, dict)
+                    and str(row.get("_sheet") or "").upper() == discipline
+                ],
+                discipline=discipline,
+                base_rfis=list(batch["baseRfis"]),
+                source=source_data,
+            )
+            start_row = int(batch["startRow"])
+            if start_row + len(sheet_rows) - 1 > int(batch["maxRow"]):
+                raise ValueError(
+                    f"{discipline} sheet'inde kopyalar icin kapasite kalmadi"
+                )
+            revised_batch = copy.deepcopy(batch)
+            revised_batch["records"] = copy.deepcopy(sheet_rows)
+            revised_batches.append(revised_batch)
+            revised_rows.extend(sheet_rows)
+            sources[discipline] = source_data
+
+        if len(revised_rows) > 500:
             raise ValueError("tek planda en fazla 500 fiziksel satir olabilir")
         revised_step = copy.deepcopy(original)
-        revised_step.meta["records"] = copy.deepcopy(rows)
-        discipline = str(original.meta["discipline"])
-        meta = _plan_meta(discipline, source_data, rows)
-        meta["editor"]["copySource"] = _copy_source(
-            pathlib.Path(str(original.src)),
-            discipline,
-            start_row,
-            rows,
+        revised_step.meta["batches"] = revised_batches
+        if len(revised_batches) == 1:
+            revised_step.meta["records"] = copy.deepcopy(
+                revised_batches[0]["records"]
+            )
+        meta = _plan_meta(sources, revised_rows)
+        copy_sources = {
+            batch["discipline"]: _copy_source(
+                pathlib.Path(str(original.src)),
+                str(batch["discipline"]),
+                int(batch["startRow"]),
+                list(batch["records"]),
+            )
+            for batch in revised_batches
+        }
+        meta["editor"]["copySources"] = copy_sources
+        if len(copy_sources) == 1:
+            meta["editor"]["copySource"] = next(iter(copy_sources.values()))
+        original_extraction = (plan.meta.get("editor") or {}).get(
+            "emailExtraction"
         )
-        revised = Plan(
+        if original_extraction is not None:
+            meta["editor"]["emailExtraction"] = copy.deepcopy(
+                original_extraction
+            )
+        return Plan(
             op_id=self.id,
             steps=[revised_step],
-            warnings=_warnings_for_rows(rows),
+            warnings=_warnings_for_rows(revised_rows),
             meta=meta,
         )
-        revised.steps[0].meta["startRow"] = start_row
-        return revised
 
     def apply(self, plan: Plan) -> Result:
         if len(plan.steps) != 1 or plan.steps[0].kind != "workbook_update":
-            return Result(failed=1, errors=[Warning("error.step_failed", "gecersiz plan")])
+            return Result(
+                failed=1,
+                errors=[Warning("error.step_failed", "gecersiz plan")],
+            )
         step = plan.steps[0]
         workbook_path = pathlib.Path(str(step.src))
         backup_path = pathlib.Path(str(step.dst))
-        discipline = str(step.meta["discipline"])
-        start_row = int(step.meta["startRow"])
-        rows = list(step.meta["records"])
+        batches = list(step.meta.get("batches") or [])
+        if not batches:
+            return Result(
+                failed=1,
+                errors=[Warning("error.step_failed", "gecersiz sheet plani")],
+            )
         signature = dict(step.meta["sourceSignature"])
-        presets = dict(step.meta["presets"])
-        lookup_columns = dict(step.meta["lookupColumns"])
         result = Result()
         temp_path = workbook_path.with_name(
             f".{workbook_path.name}.{plan.plan_id[:8]}.docflow.tmp"
@@ -1374,31 +1628,28 @@ class AddRfiLogRows(Operation):
             )
             entry = JournalEntry(op_id=self.id, steps=[restore_step])
             result.journal_id = entry.journal_id
-            write_journal(entry)  # journal ONCE, workbook degisikligi SONRA
+            write_journal(entry)
 
             notify("progress", {"phase": "apply", "done": 0, "total": 3})
-            _write_records(
-                workbook_path,
-                temp_path,
-                discipline,
-                start_row,
-                rows,
-                presets,
-                lookup_columns,
-            )
+            _write_batches(workbook_path, temp_path, batches)
             notify("progress", {"phase": "apply", "done": 1, "total": 3})
             _replace_with_retry(temp_path, workbook_path)
-            _verify_records(workbook_path, discipline, start_row, rows)
+            for batch in batches:
+                _verify_records(
+                    workbook_path,
+                    str(batch["discipline"]),
+                    int(batch["startRow"]),
+                    list(batch["records"]),
+                )
             notify("progress", {"phase": "apply", "done": 2, "total": 3})
 
             restore_step.meta["appliedSha256"] = file_sha256(workbook_path)
             write_journal(entry)
-            result.applied = len(rows)
+            result.applied = sum(len(batch["records"]) for batch in batches)
             notify("progress", {"phase": "apply", "done": 3, "total": 3})
             return result
         except Exception as exc:  # noqa: BLE001
             temp_path.unlink(missing_ok=True)
-            # Atomik replace sonrasi dogrulama patlarsa orijinali hemen geri koy.
             try:
                 if (
                     backup_path.is_file()

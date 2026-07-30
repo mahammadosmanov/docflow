@@ -3,6 +3,35 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.5.0 - 2026-07-30
+
+### Added
+
+- CIV, MEC, ELE ve PRC için aynı işlem içinde ayrı adetler seçebilen kompakt
+  çoklu-sheet RFI seçim alanı
+- Sheet bilgisi görünür tek düzenleme tablosunda tüm otomatik alanları değiştirme,
+  Area bazlı aynı RFI satırını çoğaltma ve özel değer yazma desteği
+- İşlem sonucunda yalnızca kayıt eklenen sheet'ler için ayrı Excel-native
+  kopyalama butonları
+
+### Changed
+
+- RFI numarası, sonraki satır ve ITP/Item eşleşmeleri her sheet için bağımsız
+  hesaplanırken inspection saatleri tüm sheet'lerde çakışmayı engelleyecek şekilde
+  ortak planlanıyor
+- Mail okuma CIV/MEC ile sınırlı değil; ELE ve PRC disiplinlerini de algılıyor
+- Çoklu-sheet apply/undo işlemi tek workbook yazımı ve tek geri alma kaydıyla
+  atomik olarak çalışıyor
+
+### Safety
+
+- CIV, MEC, ELE ve PRC formülleri, farklı sütun yerleşimleri, item/duplicate veri
+  doğrulamaları ve dokunulmayan Expiry/Status/Validity alanları kalıcı testlerle
+  korunuyor
+- 18 binden fazla satırlı gerçek RFI Log güvenli kopyasında dört sheet birlikte
+  uygulandı, sheet bazlı mail tabloları tekrar Excel'den okundu ve undo'nun dosyayı
+  hash seviyesinde birebir geri getirdiği doğrulandı
+
 ## 0.4.4 - 2026-07-30
 
 ### Fixed
