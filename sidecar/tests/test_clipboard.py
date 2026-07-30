@@ -102,12 +102,16 @@ def test_excel_copy_uses_visible_native_excel_selection():
     assert "$criteria -contains $rfi" in EXCEL_CLIPBOARD_SCRIPT
     assert "$matchedRows.Add($sourceRow)" in EXCEL_CLIPBOARD_SCRIPT
     assert "$filterRange.AutoFilter" in EXCEL_CLIPBOARD_SCRIPT
+    assert ").Hidden = $true" in EXCEL_CLIPBOARD_SCRIPT
+    assert ").Hidden = $false" in EXCEL_CLIPBOARD_SCRIPT
     assert "$filterRange.SpecialCells(12)" in EXCEL_CLIPBOARD_SCRIPT
     assert "$copyRange.Select()" in EXCEL_CLIPBOARD_SCRIPT
     assert "$copyRange.Copy()" in EXCEL_CLIPBOARD_SCRIPT
     assert "DOCFLOW_EXCEL_COPY_OK" in EXCEL_CLIPBOARD_SCRIPT
     assert "DocFlowClipboardReader" not in EXCEL_CLIPBOARD_SCRIPT
     assert "Clipboard]::Set" not in EXCEL_CLIPBOARD_SCRIPT
+    assert "GetWindowThreadProcessId" in EXCEL_CLIPBOARD_SCRIPT
+    assert "Stop-Process -Id $excelPid" in EXCEL_CLIPBOARD_SCRIPT
     assert "FinalReleaseComObject" in EXCEL_CLIPBOARD_SCRIPT
 
 

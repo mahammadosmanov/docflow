@@ -8,6 +8,7 @@ import html
 import os
 import pathlib
 import re
+import signal
 import subprocess
 import tempfile
 import time
@@ -34,10 +35,32 @@ $rfiRange = $null
 $filterRange = $null
 $copyRange = $null
 $success = $false
+$excelPid = [uint32]0
+$terminateOwnedExcel = $false
+$failureMessage = ''
 function Set-DocFlowPhase([string]$phase) {
   [System.IO.File]::WriteAllText($env:DOCFLOW_COPY_TRACE, $phase)
 }
 try {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class DocFlowExcelNative {
+  [DllImport("user32.dll")]
+  public static extern uint GetWindowThreadProcessId(
+    IntPtr hWnd,
+    out uint processId
+  );
+}
+'@
+  [DocFlowExcelNative]::GetWindowThreadProcessId(
+    [IntPtr]$excel.Hwnd,
+    [ref]$excelPid
+  ) | Out-Null
+  [System.IO.File]::WriteAllText(
+    $env:DOCFLOW_COPY_PID,
+    [string]$excelPid
+  )
   Set-DocFlowPhase 'opening'
   $sourceBook = $excel.Workbooks.Open($env:DOCFLOW_COPY_WORKBOOK, 0, $true)
   $sourceSheet = $sourceBook.Worksheets.Item($env:DOCFLOW_COPY_SHEET)
@@ -94,7 +117,17 @@ try {
   if ($criteria.Count -eq 1) {
     $filterRange.AutoFilter(1, [string]$criteria[0]) | Out-Null
   } else {
-    $filterRange.AutoFilter(1, [object[]]$criteria, 7) | Out-Null
+    # Excel's multi-value AutoFilter COM overload is not stable across Office
+    # type libraries under Windows PowerShell 5.1. Some builds reject the
+    # xlFilterValues operator (7) before Excel even receives it. Hiding the
+    # data block once and revealing the exact matched rows produces the same
+    # visible native range without changing workbook content or formatting.
+    $sourceSheet.Rows.Item(
+      "$($headerRow + 1):$lastDataRow"
+    ).Hidden = $true
+    foreach ($matchedRow in $matchedRows) {
+      $sourceSheet.Rows.Item([int]$matchedRow).Hidden = $false
+    }
   }
   Set-DocFlowPhase 'filtered'
   for ($sourceColumn = $firstColumn; $sourceColumn -le $lastColumn; $sourceColumn++) {
@@ -119,15 +152,17 @@ try {
     "DOCFLOW_EXCEL_COPY_OK:$($matchedRows.Count)"
   )
 } catch {
-  [System.IO.File]::WriteAllText(
-    $env:DOCFLOW_COPY_ERROR,
-    [string]$_.Exception.Message
-  )
-  throw
+  # Do not publish the error until cleanup finishes. The Python host polls the
+  # error file and would otherwise terminate this PowerShell process while its
+  # finally block is still closing Excel.
+  $failureMessage = [string]$_.Exception.Message
 } finally {
   if (-not $success) {
-    if ($sourceBook -ne $null) { $sourceBook.Close($false) }
-    $excel.Quit()
+    try {
+      if ($sourceBook -ne $null) { $sourceBook.Close($false) }
+    } catch {}
+    try { $excel.Quit() } catch {}
+    $terminateOwnedExcel = ($excelPid -gt 0)
   }
   foreach ($comObject in @(
     $copyRange,
@@ -138,19 +173,33 @@ try {
     $excel
   )) {
     if ($comObject -ne $null) {
-      [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
-        $comObject
-      ) | Out-Null
+      try {
+        [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+          $comObject
+        ) | Out-Null
+      } catch {}
     }
   }
   [GC]::Collect()
   [GC]::WaitForPendingFinalizers()
+  if ($terminateOwnedExcel) {
+    Start-Sleep -Milliseconds 200
+    $ownedExcel = Get-Process -Id $excelPid -ErrorAction SilentlyContinue
+    if ($ownedExcel -ne $null -and $ownedExcel.ProcessName -eq 'EXCEL') {
+      Stop-Process -Id $excelPid -Force -ErrorAction SilentlyContinue
+    }
+  }
 }
 if ($success) {
   # A visible Excel instance intentionally owns the native clipboard. Force
   # only the short-lived automation host to exit; Excel remains open.
   [Environment]::Exit(0)
 }
+[System.IO.File]::WriteAllText(
+  $env:DOCFLOW_COPY_ERROR,
+  $failureMessage
+)
+[Environment]::Exit(1)
 """
 
 
@@ -414,6 +463,7 @@ def _copy_exact_from_excel(
         result_path = pathlib.Path(temp_dir) / "result.txt"
         error_path = pathlib.Path(temp_dir) / "error.txt"
         trace_path = pathlib.Path(temp_dir) / "trace.txt"
+        pid_path = pathlib.Path(temp_dir) / "excel-pid.txt"
         environment = os.environ.copy()
         environment.update(
             {
@@ -426,6 +476,7 @@ def _copy_exact_from_excel(
                 "DOCFLOW_COPY_RESULT": str(result_path),
                 "DOCFLOW_COPY_ERROR": str(error_path),
                 "DOCFLOW_COPY_TRACE": str(trace_path),
+                "DOCFLOW_COPY_PID": str(pid_path),
             }
         )
         process: subprocess.Popen[bytes] | None = None
@@ -439,6 +490,20 @@ def _copy_exact_from_excel(
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=3)
+
+        def stop_owned_excel() -> None:
+            if os.name != "nt" or not pid_path.is_file():
+                return
+            try:
+                excel_pid = int(pid_path.read_text(encoding="ascii").strip())
+            except (OSError, ValueError):
+                return
+            if excel_pid < 1:
+                return
+            try:
+                os.kill(excel_pid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                pass
 
         try:
             process = subprocess.Popen(
@@ -471,11 +536,13 @@ def _copy_exact_from_excel(
                         errors="replace",
                     ).strip()[-800:]
                     stop_host()
+                    stop_owned_excel()
                     raise RuntimeError(
                         "Excel filtreleme/kopyalama hatasi"
                         + (f": {detail}" if detail else "")
                     )
                 if process.poll() is not None:
+                    stop_owned_excel()
                     raise RuntimeError(
                         "Excel kopyalama islemi tamamlanmadan kapandi"
                     )
@@ -487,6 +554,7 @@ def _copy_exact_from_excel(
                 else "unknown"
             ).strip()
             stop_host()
+            stop_owned_excel()
             raise RuntimeError(
                 "Excel filtreleme ve kopyalama "
                 f"{timeout_seconds} saniyede tamamlanamadi. "
@@ -495,6 +563,7 @@ def _copy_exact_from_excel(
             )
         except OSError as exc:
             stop_host()
+            stop_owned_excel()
             raise RuntimeError(f"Excel baslatilamadi: {exc}") from exc
 
 

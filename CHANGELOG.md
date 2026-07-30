@@ -3,6 +3,25 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.4.3 - 2026-07-30
+
+### Fixed
+
+- Birden fazla farklı RFI numarası kopyalanırken bazı Office type-library
+  sürümlerinin `AutoFilter(..., 7)` COM çağrısını reddetmesi
+- Çoklu seçimde aynı native Excel görünümünü problemli COM overload'u yerine
+  hedef satırların görünürlüğünü doğrudan yöneterek oluşturma
+- Başarısız Excel otomasyonunun boş `EXCEL.EXE /automation -Embedding`
+  süreçleri bırakması; hata sinyali cleanup sonrasına taşındı ve PID tabanlı
+  ikinci kapatma güvencesi eklendi
+
+### Safety
+
+- Gerçek Microsoft Excel integration testi iki farklı RFI için genişletildi:
+  yalnız hedef satırlar, header ve Subcontractor kopyalanırken eski RFI ve
+  Expiry panoya alınmıyor
+- Kontrollü hata testinde yeni Excel süreci kalmadığı doğrulandı
+
 ## 0.4.2 - 2026-07-30
 
 ### Fixed
