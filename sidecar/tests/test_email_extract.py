@@ -354,3 +354,44 @@ def test_azerbaijani_mec_mail_preserves_escaped_underscore_tag():
             "subcontractor": "",
         }
     ]
+
+
+def test_real_mail_matches_workbook_separator_glyphs_and_keeps_custom_tag():
+    mapping = {
+        "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005": ["CIV-5.2.1"],
+        "AZE˗SUN˗INT˗QMS˗ITP˗MEC˗0003": ["MEC-3.3.1"],
+    }
+    civil = email_extract.offline_extract(
+        """
+        Transformator təməllərinin hazırlığı üçün PCU-14/15/16 ərazilərinə
+        (AZE-SUN-INT-QMS-ITP-CIV-0005) 3 ədəd 2.1 (gro beton)
+        bəndi üzrə RFI nömrəsi verməyinizi xahiş edirəm.
+        """,
+        discipline="CIV",
+        itp_to_items=mapping,
+        known_tags=["PCU-14", "PCU-15", "PCU-16"],
+        known_subcontractors=["AZFEN"],
+    )
+    mechanical = email_extract.offline_extract(
+        r"""
+        PCS(Tracker) sahəsi üçün
+        (AZE-SUN-INT-QMS-ITP-MEC-0003 əsasən) 3.1 bəndi üzrə
+        1 ədəd RFI nömrəsi verməyinizi xahiş edirəm.
+        N3\_PCS-02\_S7/S8
+        """,
+        discipline="MEC",
+        itp_to_items=mapping,
+        known_tags=["PCS-02"],
+        known_subcontractors=["AZFEN"],
+    )
+
+    assert civil["count"] == 3
+    assert all(row["itemNo"] == "CIV-5.2.1" for row in civil["rows"])
+    assert [row["tagNo"] for row in civil["rows"]] == [
+        "PCU-14",
+        "PCU-15",
+        "PCU-16",
+    ]
+    assert mechanical["count"] == 1
+    assert mechanical["rows"][0]["itemNo"] == "MEC-3.3.1"
+    assert mechanical["rows"][0]["tagNo"] == "N3_PCS-02_S7/S8"

@@ -96,16 +96,17 @@ def test_excel_cf_html_normalization_preserves_css_and_repairs_offsets():
     assert encoded[fields["EndHTML"] :].startswith(b"\0")
 
 
-def test_excel_copy_freezes_values_and_preserves_dimensions():
-    assert "DocFlowClipboardReader" in EXCEL_CLIPBOARD_SCRIPT
-    assert "ReadBytes($htmlFormat)" in EXCEL_CLIPBOARD_SCRIPT
-    assert "GetData('HTML Format')" not in EXCEL_CLIPBOARD_SCRIPT
-    assert ".Value2 = $headerRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
-    assert "$targetRowRange.Value2 = $targetRowRange.Value2" in EXCEL_CLIPBOARD_SCRIPT
+def test_excel_copy_uses_visible_native_excel_selection():
+    assert "$excel.Visible = $true" in EXCEL_CLIPBOARD_SCRIPT
     assert "$criteria -contains $rfi" in EXCEL_CLIPBOARD_SCRIPT
     assert "$matchedRows.Add($sourceRow)" in EXCEL_CLIPBOARD_SCRIPT
-    assert ".ColumnWidth =" in EXCEL_CLIPBOARD_SCRIPT
-    assert ".RowHeight =" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$filterRange.AutoFilter" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$filterRange.SpecialCells(12)" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$copyRange.Select()" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$copyRange.Copy()" in EXCEL_CLIPBOARD_SCRIPT
+    assert "DOCFLOW_EXCEL_COPY_OK" in EXCEL_CLIPBOARD_SCRIPT
+    assert "DocFlowClipboardReader" not in EXCEL_CLIPBOARD_SCRIPT
+    assert "Clipboard]::Set" not in EXCEL_CLIPBOARD_SCRIPT
     assert "FinalReleaseComObject" in EXCEL_CLIPBOARD_SCRIPT
 
 

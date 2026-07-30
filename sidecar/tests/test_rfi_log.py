@@ -186,6 +186,59 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     ]
 
 
+def test_composite_tag_uses_leading_site_marker():
+    assert rfi_log_add._infer_area("N3_PCS-02_S7/S8") == "North Site"
+    assert rfi_log_add._infer_area("S4_PCS-01_N1") == "South Site"
+
+
+def test_shifted_lookup_block_is_discovered_and_formulas_are_repaired(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    workbook = load_workbook(path)
+    try:
+        # Production gained an extra ITP list column, moving K:Q to L:R.
+        workbook["Sheet1"].insert_cols(11)
+        workbook.save(path)
+    finally:
+        workbook.close()
+
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "discipline": "CIV",
+        "count": 1,
+        "overflow_next_day": True,
+    })
+
+    assert plan.steps[0].meta["lookupColumns"]["item"] == 12
+    result = operation.apply(plan)
+    assert result.failed == 0
+
+    formulas = load_workbook(path, read_only=True, data_only=False)
+    try:
+        civ = formulas["CIV"]
+        assert civ["D11"].value == '=IFERROR(VLOOKUP(C11,Sheet1!L:M,2,0),"")'
+        assert civ["E11"].value == '=IFERROR(VLOOKUP(D11,Sheet1!M:N,2,0),"")'
+        assert civ["L11"].value == '=IFERROR(VLOOKUP(C11,Sheet1!O:P,2,0),"")'
+        assert civ["M11"].value == '=IFERROR(VLOOKUP(C11,Sheet1!Q:R,2,0),"")'
+    finally:
+        formulas.close()
+
+    calculated = load_workbook(path, read_only=True, data_only=True)
+    try:
+        civ = calculated["CIV"]
+        assert civ["D11"].value == "Civil description"
+        assert civ["E11"].value == "CON-CIV-001"
+        assert civ["L11"].value == "H"
+        assert civ["M11"].value == "W"
+    finally:
+        calculated.close()
+
+
 def test_email_prefills_validated_rows_and_can_duplicate_one_rfi(tmp_path):
     path = tmp_path / "RFI Log.xlsx"
     _make_workbook(path)

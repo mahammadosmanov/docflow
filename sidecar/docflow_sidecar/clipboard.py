@@ -24,105 +24,35 @@ from .contracts import Plan
 
 EXCEL_CLIPBOARD_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -TypeDefinition @'
-using System;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
-using System.Threading;
-
-public static class DocFlowClipboardReader {
-  [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-  public static extern uint RegisterClipboardFormat(string format);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  private static extern bool OpenClipboard(IntPtr owner);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  private static extern bool CloseClipboard();
-
-  [DllImport("user32.dll", SetLastError = true)]
-  private static extern IntPtr GetClipboardData(uint format);
-
-  [DllImport("kernel32.dll", SetLastError = true)]
-  private static extern IntPtr GlobalLock(IntPtr handle);
-
-  [DllImport("kernel32.dll", SetLastError = true)]
-  private static extern bool GlobalUnlock(IntPtr handle);
-
-  [DllImport("kernel32.dll", SetLastError = true)]
-  private static extern UIntPtr GlobalSize(IntPtr handle);
-
-  public static byte[] ReadBytes(uint format) {
-    bool opened = false;
-    for (int attempt = 0; attempt < 20; attempt++) {
-      if (OpenClipboard(IntPtr.Zero)) {
-        opened = true;
-        break;
-      }
-      Thread.Sleep(50);
-    }
-    if (!opened) {
-      throw new Win32Exception(
-        Marshal.GetLastWin32Error(),
-        "Windows clipboard could not be opened"
-      );
-    }
-    try {
-      IntPtr handle = GetClipboardData(format);
-      if (handle == IntPtr.Zero) {
-        throw new Win32Exception(
-          Marshal.GetLastWin32Error(),
-          "HTML Format is missing from the clipboard"
-        );
-      }
-      IntPtr pointer = GlobalLock(handle);
-      if (pointer == IntPtr.Zero) {
-        throw new Win32Exception(
-          Marshal.GetLastWin32Error(),
-          "Clipboard memory could not be locked"
-        );
-      }
-      try {
-        int length = checked((int)GlobalSize(handle).ToUInt64());
-        byte[] bytes = new byte[length];
-        Marshal.Copy(pointer, bytes, 0, length);
-        return bytes;
-      } finally {
-        GlobalUnlock(handle);
-      }
-    } finally {
-      CloseClipboard();
-    }
-  }
-}
-'@
 $excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
+$excel.Visible = $true
 $excel.DisplayAlerts = $false
 $excel.AskToUpdateLinks = $false
 $sourceBook = $null
 $sourceSheet = $null
-$tempBook = $null
-$tempSheet = $null
-$headerRange = $null
-$dataRange = $null
-$sourceRowRange = $null
-$targetRowRange = $null
+$rfiRange = $null
+$filterRange = $null
 $copyRange = $null
+$success = $false
+function Set-DocFlowPhase([string]$phase) {
+  [System.IO.File]::WriteAllText($env:DOCFLOW_COPY_TRACE, $phase)
+}
 try {
+  Set-DocFlowPhase 'opening'
   $sourceBook = $excel.Workbooks.Open($env:DOCFLOW_COPY_WORKBOOK, 0, $true)
   $sourceSheet = $sourceBook.Worksheets.Item($env:DOCFLOW_COPY_SHEET)
-  $tempBook = $excel.Workbooks.Add()
-  $tempSheet = $tempBook.Worksheets.Item(1)
+  Set-DocFlowPhase 'opened'
   $headerRow = [int]$env:DOCFLOW_COPY_HEADER_ROW
-  $startRow = [int]$env:DOCFLOW_COPY_START_ROW
   $rowCount = [int]$env:DOCFLOW_COPY_ROW_COUNT
   $columns = @($env:DOCFLOW_COPY_COLUMNS.Split(',') | ForEach-Object { [int]$_ })
   $expectedRfis = @($env:DOCFLOW_COPY_RFI_NUMBERS.Split('|'))
   $criteria = @($expectedRfis | Select-Object -Unique)
 
+  if ($columns.Count -eq 0 -or $criteria.Count -eq 0) {
+    throw 'No Excel columns or RFI filter values were supplied'
+  }
   $sourceSheet.Calculate()
+  Set-DocFlowPhase 'calculated'
   $firstColumn = ($columns | Measure-Object -Minimum).Minimum
   $lastColumn = ($columns | Measure-Object -Maximum).Maximum
   $lastDataRow = $sourceSheet.Cells.Item(
@@ -133,8 +63,18 @@ try {
     throw 'RFI Log contains no data rows'
   }
   $matchedRows = New-Object System.Collections.Generic.List[int]
-  for ($sourceRow = $headerRow + 1; $sourceRow -le $lastDataRow; $sourceRow++) {
-    $rfi = [string]$sourceSheet.Cells.Item($sourceRow, $firstColumn).Value2
+  $rfiRange = $sourceSheet.Range(
+    $sourceSheet.Cells.Item($headerRow + 1, $firstColumn),
+    $sourceSheet.Cells.Item($lastDataRow, $firstColumn)
+  )
+  $rfiValues = $rfiRange.Value2
+  for ($offset = 1; $offset -le $lastDataRow - $headerRow; $offset++) {
+    $sourceRow = $headerRow + $offset
+    if ($lastDataRow -eq $headerRow + 1) {
+      $rfi = [string]$rfiValues
+    } else {
+      $rfi = [string]$rfiValues[$offset, 1]
+    }
     if ($criteria -contains $rfi) {
       $matchedRows.Add($sourceRow)
     }
@@ -142,85 +82,58 @@ try {
   if ($matchedRows.Count -ne $rowCount) {
     throw "Filtered RFI row count mismatch: expected $rowCount, found $($matchedRows.Count)"
   }
+  Set-DocFlowPhase 'matched'
 
-  $headerRange = $sourceSheet.Range(
+  $filterRange = $sourceSheet.Range(
     $sourceSheet.Cells.Item($headerRow, $firstColumn),
-    $sourceSheet.Cells.Item($headerRow, $lastColumn)
+    $sourceSheet.Cells.Item($lastDataRow, $lastColumn)
   )
-  $null = $headerRange.Copy($tempSheet.Cells.Item(1, 1))
-  $tempSheet.Range(
-    $tempSheet.Cells.Item(1, 1),
-    $tempSheet.Cells.Item(1, $lastColumn - $firstColumn + 1)
-  ).Value2 = $headerRange.Value2
-  for ($offset = 0; $offset -lt $matchedRows.Count; $offset++) {
-    $sourceRow = $matchedRows[$offset]
-    $sourceRowRange = $sourceSheet.Range(
-      $sourceSheet.Cells.Item($sourceRow, $firstColumn),
-      $sourceSheet.Cells.Item($sourceRow, $lastColumn)
-    )
-    $targetRowRange = $tempSheet.Range(
-      $tempSheet.Cells.Item($offset + 2, 1),
-      $tempSheet.Cells.Item($offset + 2, $lastColumn - $firstColumn + 1)
-    )
-    $null = $sourceRowRange.Copy($targetRowRange)
-    $targetRowRange.Value2 = $targetRowRange.Value2
-    [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
-      $targetRowRange
-    ) | Out-Null
-    $targetRowRange = $null
-    [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject(
-      $sourceRowRange
-    ) | Out-Null
-    $sourceRowRange = $null
+  if ($sourceSheet.FilterMode) {
+    $sourceSheet.ShowAllData()
+  }
+  if ($criteria.Count -eq 1) {
+    $filterRange.AutoFilter(1, [string]$criteria[0]) | Out-Null
+  } else {
+    $filterRange.AutoFilter(1, [object[]]$criteria, 7) | Out-Null
+  }
+  Set-DocFlowPhase 'filtered'
+  for ($sourceColumn = $firstColumn; $sourceColumn -le $lastColumn; $sourceColumn++) {
+    $sourceSheet.Columns.Item($sourceColumn).Hidden =
+      ($columns -notcontains $sourceColumn)
   }
 
-  for ($sourceColumn = $lastColumn; $sourceColumn -ge $firstColumn; $sourceColumn--) {
-    if ($columns -notcontains $sourceColumn) {
-      $targetColumn = $sourceColumn - $firstColumn + 1
-      $null = $tempSheet.Columns.Item($targetColumn).Delete()
-    }
-  }
-  for ($index = 0; $index -lt $columns.Count; $index++) {
-    $tempSheet.Columns.Item($index + 1).ColumnWidth =
-      $sourceSheet.Columns.Item($columns[$index]).ColumnWidth
-  }
-  $tempSheet.Rows.Item(1).RowHeight = $sourceSheet.Rows.Item($headerRow).RowHeight
-  for ($offset = 0; $offset -lt $rowCount; $offset++) {
-    $tempSheet.Rows.Item($offset + 2).RowHeight =
-      $sourceSheet.Rows.Item($matchedRows[$offset]).RowHeight
-  }
-
-  $copyRange = $tempSheet.Range(
-    $tempSheet.Cells.Item(1, 1),
-    $tempSheet.Cells.Item($rowCount + 1, $columns.Count)
-  )
+  $sourceBook.Windows.Item(1).Activate() | Out-Null
+  $sourceSheet.Activate() | Out-Null
+  $copyRange = $filterRange.SpecialCells(12)
+  Set-DocFlowPhase 'visible-cells'
+  $copyRange.Select() | Out-Null
+  Set-DocFlowPhase 'selected'
   $null = $copyRange.Copy()
-  Start-Sleep -Milliseconds 250
-  $htmlFormat = [DocFlowClipboardReader]::RegisterClipboardFormat('HTML Format')
-  $htmlBytes = [DocFlowClipboardReader]::ReadBytes($htmlFormat)
-  $plain = [System.Windows.Forms.Clipboard]::GetText(
-    [System.Windows.Forms.TextDataFormat]::UnicodeText
-  )
-  $utf8 = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllBytes($env:DOCFLOW_COPY_HTML, $htmlBytes)
+  Set-DocFlowPhase 'copied'
+  $excel.DisplayAlerts = $true
+  Set-DocFlowPhase 'alerts-restored'
+  Start-Sleep -Milliseconds 400
+  $success = $true
   [System.IO.File]::WriteAllText(
-    $env:DOCFLOW_COPY_TEXT,
-    [string]$plain,
-    $utf8
+    $env:DOCFLOW_COPY_RESULT,
+    "DOCFLOW_EXCEL_COPY_OK:$($matchedRows.Count)"
   )
+} catch {
+  [System.IO.File]::WriteAllText(
+    $env:DOCFLOW_COPY_ERROR,
+    [string]$_.Exception.Message
+  )
+  throw
 } finally {
-  if ($tempBook -ne $null) { $tempBook.Close($false) }
-  if ($sourceBook -ne $null) { $sourceBook.Close($false) }
-  $excel.Quit()
+  if (-not $success) {
+    if ($sourceBook -ne $null) { $sourceBook.Close($false) }
+    $excel.Quit()
+  }
   foreach ($comObject in @(
     $copyRange,
-    $sourceRowRange,
-    $targetRowRange,
-    $dataRange,
-    $headerRange,
-    $tempSheet,
+    $filterRange,
+    $rfiRange,
     $sourceSheet,
-    $tempBook,
     $sourceBook,
     $excel
   )) {
@@ -232,6 +145,11 @@ try {
   }
   [GC]::Collect()
   [GC]::WaitForPendingFinalizers()
+}
+if ($success) {
+  # A visible Excel instance intentionally owns the native clipboard. Force
+  # only the short-lived automation host to exit; Excel remains open.
+  [Environment]::Exit(0)
 }
 """
 
@@ -455,45 +373,60 @@ def _workbook_column_widths(
     ]
 
 
-def _excel_clipboard_payload(
+def _copy_exact_from_excel(
     plan: Plan,
     row_count: int,
-) -> tuple[bytes, str] | None:
+) -> bool:
     editor = plan.meta.get("editor") or {}
     source = editor.get("copySource")
     if os.name != "nt" or not isinstance(source, dict) or row_count < 1:
-        return None
+        return False
     columns = [str(int(value)) for value in (source.get("columns") or [])]
     rfi_numbers = [
         str(value) for value in (source.get("rfiNumbers") or [])
     ]
     if not columns or len(rfi_numbers) != row_count:
-        return None
+        return False
 
     encoded = base64.b64encode(
         EXCEL_CLIPBOARD_SCRIPT.encode("utf-16-le")
     ).decode("ascii")
-    with tempfile.TemporaryDirectory(prefix="docflow-mail-") as temp_dir:
-        html_path = pathlib.Path(temp_dir) / "excel-clipboard.html"
-        text_path = pathlib.Path(temp_dir) / "excel-clipboard.txt"
+    timeout_seconds = max(
+        5,
+        int(os.environ.get("DOCFLOW_EXCEL_COPY_TIMEOUT", "90")),
+    )
+    with tempfile.TemporaryDirectory(prefix="docflow-excel-copy-") as temp_dir:
+        result_path = pathlib.Path(temp_dir) / "result.txt"
+        error_path = pathlib.Path(temp_dir) / "error.txt"
+        trace_path = pathlib.Path(temp_dir) / "trace.txt"
         environment = os.environ.copy()
         environment.update(
             {
                 "DOCFLOW_COPY_WORKBOOK": str(source.get("workbook") or ""),
                 "DOCFLOW_COPY_SHEET": str(source.get("sheet") or ""),
                 "DOCFLOW_COPY_HEADER_ROW": str(source.get("headerRow") or 9),
-                "DOCFLOW_COPY_START_ROW": str(source.get("startRow") or 0),
                 "DOCFLOW_COPY_ROW_COUNT": str(row_count),
                 "DOCFLOW_COPY_COLUMNS": ",".join(columns),
-                "DOCFLOW_COPY_RFI_NUMBERS": "|".join(
-                    rfi_numbers
-                ),
-                "DOCFLOW_COPY_HTML": str(html_path),
-                "DOCFLOW_COPY_TEXT": str(text_path),
+                "DOCFLOW_COPY_RFI_NUMBERS": "|".join(rfi_numbers),
+                "DOCFLOW_COPY_RESULT": str(result_path),
+                "DOCFLOW_COPY_ERROR": str(error_path),
+                "DOCFLOW_COPY_TRACE": str(trace_path),
             }
         )
+        process: subprocess.Popen[bytes] | None = None
+
+        def stop_host() -> None:
+            if process is None or process.poll() is not None:
+                return
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+
         try:
-            subprocess.run(
+            process = subprocess.Popen(
                 [
                     "powershell.exe",
                     "-NoProfile",
@@ -502,31 +435,51 @@ def _excel_clipboard_payload(
                     "-EncodedCommand",
                     encoded,
                 ],
-                check=True,
-                capture_output=True,
-                timeout=90,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 env=environment,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            html_bytes = _normalize_excel_cf_html(html_path.read_bytes())
-            plain = text_path.read_text(encoding="utf-8")
-            if not plain:
-                return None
-            return html_bytes, plain
-        except subprocess.TimeoutExpired as exc:
+            deadline = time.monotonic() + timeout_seconds
+            while time.monotonic() < deadline:
+                if result_path.is_file():
+                    result = result_path.read_text(
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+                    if "DOCFLOW_EXCEL_COPY_OK:" in result:
+                        stop_host()
+                        return True
+                if error_path.is_file():
+                    detail = error_path.read_text(
+                        encoding="utf-8",
+                        errors="replace",
+                    ).strip()[-800:]
+                    stop_host()
+                    raise RuntimeError(
+                        "Excel filtreleme/kopyalama hatasi"
+                        + (f": {detail}" if detail else "")
+                    )
+                if process.poll() is not None:
+                    raise RuntimeError(
+                        "Excel kopyalama islemi tamamlanmadan kapandi"
+                    )
+                time.sleep(0.1)
+
+            phase = (
+                trace_path.read_text(encoding="utf-8", errors="replace")
+                if trace_path.is_file()
+                else "unknown"
+            ).strip()
+            stop_host()
             raise RuntimeError(
-                "Excel filtreleme ve kopyalama 90 saniyede tamamlanamadi. "
+                "Excel filtreleme ve kopyalama "
+                f"{timeout_seconds} saniyede tamamlanamadi. "
+                f"Son asama: {phase}. "
                 "Acik Excel diyaloglarini kapatip yeniden deneyin."
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or b"").decode("utf-8", "replace")
-            stdout = (exc.stdout or b"").decode("utf-8", "replace")
-            detail = (stderr or stdout).replace("\x00", "").strip()[-800:]
-            raise RuntimeError(
-                "Excel filtreleme/kopyalama hatasi"
-                + (f": {detail}" if detail else "")
-            ) from exc
+            )
         except OSError as exc:
+            stop_host()
             raise RuntimeError(f"Excel baslatilamadi: {exc}") from exc
 
 
@@ -659,10 +612,7 @@ def copy_plan_table(plan: Plan) -> int:
     count = len(rows)
     if os.name == "nt":
         if from_workbook:
-            excel_payload = _excel_clipboard_payload(plan, count)
-            if excel_payload is not None:
-                html_bytes, plain = excel_payload
-                _set_windows_clipboard(html_bytes, plain)
+            if _copy_exact_from_excel(plan, count):
                 return count
             raise RuntimeError("Excel mail tablosu kaynaktan birebir kopyalanamadi")
         fragment, plain, count = _payload(plan)

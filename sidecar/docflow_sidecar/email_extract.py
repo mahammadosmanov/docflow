@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Any
@@ -137,6 +138,22 @@ def _mentioned_known(text: str, values: list[str]) -> list[str]:
     return [value for value in values if value and value.upper() in upper]
 
 
+def _identifier_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).upper()
+    return "-".join(re.findall(r"[A-Z]+|\d+", normalized))
+
+
+def _mentioned_identifiers(text: str, values: list[str]) -> list[str]:
+    """Match identifiers even when workbook separators are corrupted glyphs."""
+
+    normalized_text = _identifier_text(text)
+    return [
+        value
+        for value in values
+        if value and _identifier_text(value) in normalized_text
+    ]
+
+
 def _expand_compact_tags(text: str) -> list[str]:
     expanded: list[str] = []
     for match in re.finditer(
@@ -202,7 +219,7 @@ def offline_extract(
     clean = re.sub(r"[*`]+", "", clean)
     all_items = [item for items in itp_to_items.values() for item in items]
     items = _mentioned_known(clean, all_items)
-    itps = _mentioned_known(clean, list(itp_to_items))
+    itps = _mentioned_identifiers(clean, list(itp_to_items))
 
     if not itps:
         number_match = re.search(
@@ -227,7 +244,7 @@ def offline_extract(
     if not tag_values:
         compact_tags = _expand_compact_tags(clean)
         known = _mentioned_known(clean, known_tags)
-        tag_values = compact_tags or known or _extract_tag_tokens(clean)
+        tag_values = compact_tags or _extract_tag_tokens(clean) or known
     tag_values = list(dict.fromkeys(tag_values))
 
     count = _explicit_count(clean)

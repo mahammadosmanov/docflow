@@ -3,6 +3,26 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.4.1 - 2026-07-30
+
+### Fixed
+
+- Güncel RFI Log dosyasında K:Q'dan L:R'ye kayan Sheet1 eşleme kolonlarının
+  header yapısından dinamik bulunması
+- Yeni CIV/MEC satırlarında VLOOKUP formüllerinin gerçek eşleme kolonlarıyla
+  yazılması; calculated-column ve data-validation uyumluluğunun korunması
+- Excel'deki bozuk ayraçlı ITP adlarının normal mail metniyle eşleşmesi ve
+  birleşik MEC Tag değerlerinin kısaltılmadan çıkarılması
+- Uygulama içindeki yaklaşık mail tablosu önizlemesi yerine gerçek workbook'un
+  Excel'de filtrelenip header dâhil native Office formatlarıyla kopyalanması
+
+### Safety
+
+- RFI yazma testi gerçek üretim workbook kopyasında Excel COM ile açılma,
+  formül tutarlılığı ve data-validation sonuçları üzerinden doğrulandı
+- Kopyalama yalnız Excel'in kendi panosunu kullanır; Biff, HTML, RTF ve Office
+  bağlantı formatları uygulama tarafından yeniden yazılmaz
+
 ## 0.4.0 - 2026-07-29
 
 ### Added

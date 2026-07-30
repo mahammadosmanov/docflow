@@ -22,6 +22,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 from ..contracts import (
     BoolParam,
@@ -59,7 +60,6 @@ DAY_START = time(9, 0)
 DAY_END = time(17, 30)
 SLOT = timedelta(minutes=30)
 MAX_RFI_COUNT = 100
-LOOKUP_LAST_ROW = 205
 
 
 class WorkbookLockedError(RuntimeError):
@@ -250,11 +250,61 @@ def _recent_unique(values: list[str], limit: int = 500) -> list[str]:
 
 
 def _infer_area(tag: str) -> str:
+    leading = re.match(r"^\s*([NS])\d{1,3}(?:[^A-Z0-9]|$)", tag, re.IGNORECASE)
+    if leading:
+        return "North Site" if leading.group(1).upper() == "N" else "South Site"
     north = bool(NORTH_RE.search(tag))
     south = bool(SOUTH_RE.search(tag))
     if north == south:
         return ""
     return "North Site" if north else "South Site"
+
+
+def _header_key(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "")).casefold()
+    return "".join(char for char in normalized if char.isalnum())
+
+
+def _lookup_columns(lookup_sheet: Any) -> dict[str, int]:
+    """Locate the seven-column Item/description/forms/type lookup block.
+
+    The production workbook has gained an extra ITP-list column over time,
+    shifting this block from K:Q to L:R.  Header-based discovery keeps both
+    workbook layouts valid and prevents formulas from pointing at stale
+    columns.
+    """
+
+    headers = list(
+        next(
+            lookup_sheet.iter_rows(
+                min_row=1,
+                max_row=1,
+                min_col=1,
+                max_col=lookup_sheet.max_column,
+                values_only=True,
+            )
+        )
+    )
+    item_headers = {"item", "itemno", "itemnumber"}
+    for offset, value in enumerate(headers):
+        if _header_key(value) not in item_headers or offset + 6 >= len(headers):
+            continue
+        if (
+            _header_key(headers[offset + 3]) not in item_headers
+            or _header_key(headers[offset + 5]) not in item_headers
+        ):
+            continue
+        start = offset + 1
+        return {
+            "item": start,
+            "description": start + 1,
+            "forms": start + 2,
+            "azfenItem": start + 3,
+            "azfenType": start + 4,
+            "intecItem": start + 5,
+            "intecType": start + 6,
+        }
+    raise ValueError("Sheet1 Item/description/forms/type esleme kolonlari bulunamadi")
 
 
 def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
@@ -276,13 +326,14 @@ def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
             raise ValueError("RFI Log icin CIV/MEC/Sheet1 sayfalari bulunamadi")
         sheet = workbook[layout.sheet]
         lookup_sheet = workbook["Sheet1"]
+        lookup_columns = _lookup_columns(lookup_sheet)
 
         presets: dict[str, dict[str, str]] = {}
         for row in lookup_sheet.iter_rows(
             min_row=1,
-            max_row=LOOKUP_LAST_ROW,
-            min_col=11,
-            max_col=17,
+            max_row=lookup_sheet.max_row,
+            min_col=lookup_columns["item"],
+            max_col=lookup_columns["intecType"],
             values_only=True,
         ):
             item = str(row[0] or "").strip()
@@ -371,6 +422,7 @@ def _read_source(path: pathlib.Path, discipline: str) -> dict[str, Any]:
         return {
             "presets": presets,
             "itpToItems": itp_to_items,
+            "lookupColumns": lookup_columns,
             "defaultItem": default_item,
             "defaultItp": default_itp,
             "maxNumber": max_number,
@@ -911,7 +963,7 @@ def _formula_or_value(
         default_value.replace("\r\n", "\n").replace("\r", "\n"),
     )
     return (
-        ("formula_cached", (formula, default_value))
+        ("formula", (formula, default_value))
         if normalized_value == normalized_default
         else ("value", value)
     )
@@ -924,6 +976,7 @@ def _write_records(
     start_row: int,
     rows: list[dict[str, Any]],
     presets: dict[str, dict[str, str]],
+    lookup_columns: dict[str, int],
 ) -> None:
     layout = LAYOUTS[discipline]
     updates: dict[tuple[int, int], tuple[str, Any]] = {}
@@ -951,24 +1004,40 @@ def _write_records(
             description_col, forms_col, azfen_col, intec_col = 4, 5, 13, 14
 
         updates[(row_number, description_col)] = _formula_or_value(
-                record["description"],
-                preset["description"],
-                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!K:L,2,0),"")',
+            record["description"],
+            preset["description"],
+            (
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!'
+                f'{get_column_letter(lookup_columns["item"])}:'
+                f'{get_column_letter(lookup_columns["description"])},2,0),"")'
+            ),
         )
         updates[(row_number, forms_col)] = _formula_or_value(
-                record["forms"],
-                preset["forms"],
-                f'=IFERROR(VLOOKUP(D{row_number},Sheet1!L:M,2,0),"")',
+            record["forms"],
+            preset["forms"],
+            (
+                f'=IFERROR(VLOOKUP(D{row_number},Sheet1!'
+                f'{get_column_letter(lookup_columns["description"])}:'
+                f'{get_column_letter(lookup_columns["forms"])},2,0),"")'
+            ),
         )
         updates[(row_number, azfen_col)] = _formula_or_value(
-                record["azfenType"],
-                preset["azfenType"],
-                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!N:O,2,0),"")',
+            record["azfenType"],
+            preset["azfenType"],
+            (
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!'
+                f'{get_column_letter(lookup_columns["azfenItem"])}:'
+                f'{get_column_letter(lookup_columns["azfenType"])},2,0),"")'
+            ),
         )
         updates[(row_number, intec_col)] = _formula_or_value(
-                record["intecType"],
-                preset["intecType"],
-                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!P:Q,2,0),"")',
+            record["intecType"],
+            preset["intecType"],
+            (
+                f'=IFERROR(VLOOKUP(C{row_number},Sheet1!'
+                f'{get_column_letter(lookup_columns["intecItem"])}:'
+                f'{get_column_letter(lookup_columns["intecType"])},2,0),"")'
+            ),
         )
     patch_workbook(
         workbook_path,
@@ -1195,11 +1264,13 @@ class AddRfiLogRows(Operation):
                 "sourceSignature": signature,
                 "baseRfis": base_rfis,
                 "presets": source["presets"],
+                "lookupColumns": source["lookupColumns"],
                 "sourceData": {
                     key: source[key]
                     for key in (
                         "presets",
                         "itpToItems",
+                        "lookupColumns",
                         "tags",
                         "areas",
                         "locations",
@@ -1277,6 +1348,7 @@ class AddRfiLogRows(Operation):
         rows = list(step.meta["records"])
         signature = dict(step.meta["sourceSignature"])
         presets = dict(step.meta["presets"])
+        lookup_columns = dict(step.meta["lookupColumns"])
         result = Result()
         temp_path = workbook_path.with_name(
             f".{workbook_path.name}.{plan.plan_id[:8]}.docflow.tmp"
@@ -1312,6 +1384,7 @@ class AddRfiLogRows(Operation):
                 start_row,
                 rows,
                 presets,
+                lookup_columns,
             )
             notify("progress", {"phase": "apply", "done": 1, "total": 3})
             _replace_with_retry(temp_path, workbook_path)
