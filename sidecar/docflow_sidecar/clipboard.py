@@ -216,16 +216,31 @@ def _copy_data(
         for planned in planned_rows:
             planned_by_rfi.setdefault(str(planned.get("rfiNo") or ""), []).append(planned)
 
+        # read_only worksheets are forward-only streams. Calling
+        # ``sheet.cell(row, column)`` repeatedly for increasing rows makes
+        # openpyxl restart the XML reader for every access; on the production
+        # RFI Log (18k+ rows) that turns this small lookup into an apparent
+        # hang. Read the relevant column span once and pick values by offset.
+        first_column = min(columns)
+        last_column = max(columns)
+        offsets = [column - first_column for column in columns]
         rows: list[dict[str, str]] = []
-        for physical_row in range(header_row + 1, sheet.max_row + 1):
-            rfi = _cell_text(sheet.cell(physical_row, columns[0]).value)
+        source_rows = sheet.iter_rows(
+            min_row=header_row + 1,
+            max_row=sheet.max_row,
+            min_col=first_column,
+            max_col=last_column,
+            values_only=True,
+        )
+        for values in source_rows:
+            rfi = _cell_text(values[offsets[0]])
             if remaining[rfi] < 1:
                 continue
             planned_candidates = planned_by_rfi.get(rfi) or []
             planned = planned_candidates.pop(0) if planned_candidates else {}
             actual = {
-                field: _cell_text(sheet.cell(physical_row, column).value)
-                for field, column in zip(fields, columns, strict=True)
+                field: _cell_text(values[offset])
+                for field, offset in zip(fields, offsets, strict=True)
             }
             # Yeni formula hucrelerinin cached sonucu Excel acilmadan once bazi
             # okuyucularda bos olabilir. Bu durumda yalniz o hucre icin onayli

@@ -3,6 +3,23 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.4.2 - 2026-07-30
+
+### Fixed
+
+- 18 binden fazla satırlık RFI Log dosyasını kopyalama öncesinde rastgele hücre
+  erişimiyle tekrar tekrar tarayan ve butonu süresiz yükleniyor durumunda
+  bırakan okuma yolu tek geçişli akışa çevrildi
+- Gerçek boyuttaki workbook'ta mail tablosu verisi saniyeler içinde hazırlanıp
+  Excel'in native biçimli panosuna aktarılıyor
+
+### Safety
+
+- Büyük read-only worksheet'lerde veri satırlarına rastgele erişimi reddeden
+  kalıcı regresyon testi eklendi
+- Üretim boyutundaki güvenli workbook kopyasıyla Excel Biff12/Biff8, HTML ve
+  RTF pano formatları uçtan uca doğrulandı
+
 ## 0.4.1 - 2026-07-30
 
 ### Fixed

@@ -1,6 +1,7 @@
 import re
 
 from openpyxl import Workbook
+from openpyxl.worksheet._read_only import ReadOnlyWorksheet
 
 from docflow_sidecar.clipboard import (
     EXCEL_CLIPBOARD_SCRIPT,
@@ -229,3 +230,54 @@ def test_mail_table_finds_filtered_rfis_after_workbook_rows_are_reordered(tmp_pa
     assert "SECOND" in fragment
     assert "OLD" not in fragment
     assert plain.index("0861") < plain.index("0860")
+
+
+def test_mail_table_streams_large_read_only_sheet_without_random_cell_reads(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "RFI Log.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "CIV"
+    sheet["A9"] = "RFI No."
+    sheet["O9"] = "SUBCONTRACTOR"
+    sheet["A5000"] = "AZE-SUN-INT-QMS-RFI-CIV-0860"
+    sheet["O5000"] = "AZFEN"
+    workbook.save(path)
+    workbook.close()
+
+    original_cell = ReadOnlyWorksheet.cell
+
+    def reject_data_random_access(self, row, column, value=None):
+        if row > 9:
+            raise AssertionError("read-only data rows must be streamed")
+        return original_cell(self, row, column, value)
+
+    monkeypatch.setattr(ReadOnlyWorksheet, "cell", reject_data_random_access)
+    plan = Plan(
+        op_id="rfi.log_add",
+        meta={
+            "editor": {
+                "kind": "recordTable",
+                "copyEnabled": True,
+                "copyFields": ["rfiNo", "subcontractor"],
+                "copyHeaders": ["RFI No.", "SUBCONTRACTOR"],
+                "copySource": {
+                    "workbook": str(path),
+                    "sheet": "CIV",
+                    "headerRow": 9,
+                    "startRow": 5000,
+                    "rfiNumbers": ["AZE-SUN-INT-QMS-RFI-CIV-0860"],
+                    "columns": [1, 15],
+                },
+                "rows": [{"rfiNo": "AZE-SUN-INT-QMS-RFI-CIV-0860"}],
+            }
+        },
+    )
+
+    fragment, plain, count = _payload(plan)
+
+    assert count == 1
+    assert "AZE-SUN-INT-QMS-RFI-CIV-0860" in fragment
+    assert "AZFEN" in plain
