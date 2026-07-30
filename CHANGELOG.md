@@ -3,6 +3,23 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.5.1 - 2026-07-30
+
+### Fixed
+
+- Yerel Windows paketinde PyInstaller sidecar klasörünün yanlışlıkla bir seviye
+  fazla içeri kopyalanması nedeniyle arka plan servisinin başlayamaması
+- Uygulamanın standart düz paket yerleşimine ek olarak iç içe PyInstaller
+  yerleşimini de güvenli fallback olarak algılaması
+
+### Safety
+
+- Yerel runner tabanlı paketleyici sidecar klasörünün kendisini değil içeriğini
+  kopyalıyor, beklenen `sidecar\docflow_sidecar.exe` yolunu zorunlu tutuyor ve
+  paketi teslim etmeden önce gerçek executable ile `ping` çalıştırıyor
+- Düz ve iç içe paket yerleşimleri ile geliştirme override'ı Flutter testleriyle
+  kalıcı olarak doğrulanıyor
+
 ## 0.5.0 - 2026-07-30
 
 ### Added

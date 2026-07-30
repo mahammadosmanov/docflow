@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/auth/auth_service.dart';
 import 'core/cloud/cloud_history.dart' show supabaseKey, supabaseUrl;
 import 'core/ipc/sidecar_client.dart';
+import 'core/ipc/sidecar_launch.dart';
 import 'core/l10n/strings.dart';
 import 'core/settings/app_prefs.dart';
 import 'core/settings/settings_store.dart';
@@ -24,44 +23,6 @@ const _devSidecarDir = String.fromEnvironment(
   defaultValue: '/Users/rohtolos/Desktop/mono_azfen/sidecar',
 );
 
-class _Launch {
-  _Launch(this.executable, this.args, this.workingDir, [this.environment]);
-  final String executable;
-  final List<String> args;
-  final String workingDir;
-  final Map<String, String>? environment;
-}
-
-/// Sidecar nasil baslatilacak? Uc kademe: bundle -> env override -> dev fallback.
-_Launch _resolveSidecar() {
-  final env = Platform.environment;
-  final sep = Platform.pathSeparator;
-  final exeDir = File(Platform.resolvedExecutable).parent.path;
-
-  // 1) Paketlenmis: app exe yaninda  sidecar/<exe>  ve  tesseract/<exe>
-  final sideName = Platform.isWindows
-      ? 'docflow_sidecar.exe'
-      : 'docflow_sidecar';
-  final bundled = '$exeDir${sep}sidecar$sep$sideName';
-  if (File(bundled).existsSync()) {
-    final tessName = Platform.isWindows ? 'tesseract.exe' : 'tesseract';
-    final tess = '$exeDir${sep}tesseract$sep$tessName';
-    final childEnv = <String, String>{};
-    if (File(tess).existsSync()) childEnv['DOCFLOW_TESSERACT'] = tess;
-    return _Launch(bundled, const [], '$exeDir${sep}sidecar', childEnv);
-  }
-
-  // 2) Env override (dev/CI)
-  final py = env['DOCFLOW_PY'];
-  final dir = env['DOCFLOW_SIDECAR_DIR'];
-  if (py != null && dir != null) {
-    return _Launch(py, const ['-m', 'docflow_sidecar'], dir);
-  }
-
-  // 3) Dev fallback (compile-time defaults)
-  return _Launch(_devPython, const ['-m', 'docflow_sidecar'], _devSidecarDir);
-}
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await SettingsStore.load();
@@ -72,7 +33,10 @@ Future<void> main() async {
     settings: settings,
   );
   await auth.restore(); // diskteki oturumu geri yukle (varsa)
-  final l = _resolveSidecar();
+  final l = resolveSidecarLaunch(
+    devPython: _devPython,
+    devSidecarDir: _devSidecarDir,
+  );
   final client = SidecarClient(
     executable: l.executable,
     args: l.args,

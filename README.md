@@ -70,3 +70,8 @@ Paket yayınlanmadan önce:
 
 kontrol edilir. Ayrıntılı değişiklik ve release kuralları
 [`docs/RELEASE_SAFETY.md`](docs/RELEASE_SAFETY.md) dosyasındadır.
+
+Visual Studio toolchain bulunmayan kontrollü yerel build ortamında, yeni Flutter
+AOT/assets ve PyInstaller çıktısını doğrulanmış runner ile paketlemek için
+`tools/package_windows_from_runner.ps1` kullanılır. Betik sidecar'ın mutlaka
+`sidecar\docflow_sidecar.exe` yolunda olduğunu ve çalıştığını doğrular.
