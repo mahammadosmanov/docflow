@@ -26,9 +26,11 @@ from .contracts import Plan
 EXCEL_CLIPBOARD_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 $excel = New-Object -ComObject Excel.Application
-$excel.Visible = $true
+$excel.Visible = $false
 $excel.DisplayAlerts = $false
 $excel.AskToUpdateLinks = $false
+$excel.ScreenUpdating = $false
+$excel.EnableEvents = $false
 $sourceBook = $null
 $sourceSheet = $null
 $rfiRange = $null
@@ -64,6 +66,7 @@ public static class DocFlowExcelNative {
   Set-DocFlowPhase 'opening'
   $sourceBook = $excel.Workbooks.Open($env:DOCFLOW_COPY_WORKBOOK, 0, $true)
   $sourceSheet = $sourceBook.Worksheets.Item($env:DOCFLOW_COPY_SHEET)
+  $excel.Interactive = $false
   Set-DocFlowPhase 'opened'
   $headerRow = [int]$env:DOCFLOW_COPY_HEADER_ROW
   $rowCount = [int]$env:DOCFLOW_COPY_ROW_COUNT
@@ -143,9 +146,16 @@ public static class DocFlowExcelNative {
   Set-DocFlowPhase 'selected'
   $null = $copyRange.Copy()
   Set-DocFlowPhase 'copied'
+  $excel.EnableEvents = $true
+  $excel.ScreenUpdating = $true
   $excel.DisplayAlerts = $true
-  Set-DocFlowPhase 'alerts-restored'
-  Start-Sleep -Milliseconds 400
+  $excel.Visible = $true
+  $sourceBook.Windows.Item(1).Activate() | Out-Null
+  $sourceSheet.Activate() | Out-Null
+  $copyRange.Select() | Out-Null
+  $excel.Interactive = $true
+  Set-DocFlowPhase 'ready'
+  Start-Sleep -Milliseconds 200
   $success = $true
   [System.IO.File]::WriteAllText(
     $env:DOCFLOW_COPY_RESULT,

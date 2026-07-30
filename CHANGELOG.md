@@ -3,6 +3,24 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.4.4 - 2026-07-30
+
+### Fixed
+
+- Excel penceresinin filtreleme ve native clipboard kopyası tamamlanmadan
+  görünmesi; kullanıcının seçim veya hücre değişikliğiyle COM otomasyonunu
+  durdurabilmesi
+- Excel artık hazırlık boyunca gizli, ekran güncellemesi ve kullanıcı
+  etkileşimi kapalı çalışıyor; yalnız kopya hazırlandıktan sonra görünür ve
+  etkileşimli hale geliyor
+
+### Safety
+
+- Script sırası için kalıcı test: Excel görünürlüğü ve etkileşimi yalnız
+  `Range.Copy()` tamamlandıktan sonra açılabilir
+- Gerçek Excel integration testi native Biff12/HTML/RTF biçimlerini ve doğru
+  iki RFI satırını gizli hazırlık akışıyla doğruluyor
+
 ## 0.4.3 - 2026-07-30
 
 ### Fixed

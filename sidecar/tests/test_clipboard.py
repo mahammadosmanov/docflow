@@ -98,7 +98,13 @@ def test_excel_cf_html_normalization_preserves_css_and_repairs_offsets():
 
 
 def test_excel_copy_uses_visible_native_excel_selection():
-    assert "$excel.Visible = $true" in EXCEL_CLIPBOARD_SCRIPT
+    hidden = EXCEL_CLIPBOARD_SCRIPT.index("$excel.Visible = $false")
+    copied = EXCEL_CLIPBOARD_SCRIPT.index("$null = $copyRange.Copy()")
+    shown = EXCEL_CLIPBOARD_SCRIPT.index("$excel.Visible = $true")
+    ready = EXCEL_CLIPBOARD_SCRIPT.index("Set-DocFlowPhase 'ready'")
+    assert hidden < copied < shown < ready
+    assert "$excel.Interactive = $false" in EXCEL_CLIPBOARD_SCRIPT
+    assert "$excel.Interactive = $true" in EXCEL_CLIPBOARD_SCRIPT
     assert "$criteria -contains $rfi" in EXCEL_CLIPBOARD_SCRIPT
     assert "$matchedRows.Add($sourceRow)" in EXCEL_CLIPBOARD_SCRIPT
     assert "$filterRange.AutoFilter" in EXCEL_CLIPBOARD_SCRIPT
