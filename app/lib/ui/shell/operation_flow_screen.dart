@@ -520,73 +520,114 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         else
           const Spacer(),
         const SizedBox(height: 12),
-        _Bar(
+        ResultActionLayout(
+          copySheets: copySheets,
+          copyingSheet: _copyingSheet,
+          legacyCopy: legacyCopy,
+          onCopy: _copyMail,
           left: OutlinedButton.icon(
             icon: const Icon(Icons.undo, size: 18),
             label: Text(s.t('action.undo')),
             onPressed: r.journalId.isEmpty ? null : _undo,
           ),
-          middle: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (copySheets.isNotEmpty)
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    for (final sheet in copySheets)
-                      TextButton.icon(
-                        key: ValueKey('copy-sheet-$sheet'),
-                        icon: _copyingSheet == sheet
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.table_view_outlined,
-                                size: 18,
-                              ),
-                        label: Text(
-                          '$sheet · ${s.t('rfi.action.copySheet')}',
-                        ),
-                        onPressed: _copyingSheet == null
-                            ? () => _copyMail(sheet)
-                            : null,
-                      ),
-                  ],
-                ),
-              if (legacyCopy)
-                TextButton.icon(
-                  icon: _copyingSheet != null
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.table_view_outlined, size: 18),
-                  label: Text(s.t('rfi.action.copyMail')),
-                  onPressed: _copyingSheet != null ? null : _copyMail,
-                ),
-              if ((copySheets.isNotEmpty || legacyCopy) &&
-                  _values.containsKey('dest'))
-                const SizedBox(width: 8),
-              if (_values.containsKey('dest'))
-                TextButton.icon(
+          middle: _values.containsKey('dest')
+              ? TextButton.icon(
                   icon: const Icon(Icons.folder_open_outlined, size: 18),
                   label: Text(s.t('action.review')),
                   onPressed: _openReview,
-                ),
-            ],
-          ),
+                )
+              : null,
           right: FilledButton(
+            key: const ValueKey('result-done'),
             onPressed: () => Navigator.of(context).pop(),
             child: Text(s.t('action.done')),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Result actions keep sheet-specific copy controls on their own wrapping row.
+/// This prevents a long set of buttons from competing with the fixed Done
+/// action in the footer on compact windows.
+class ResultActionLayout extends StatelessWidget {
+  const ResultActionLayout({
+    super.key,
+    required this.copySheets,
+    required this.copyingSheet,
+    required this.legacyCopy,
+    required this.onCopy,
+    required this.left,
+    required this.right,
+    this.middle,
+  });
+
+  final List<String> copySheets;
+  final String? copyingSheet;
+  final bool legacyCopy;
+  final ValueChanged<String?> onCopy;
+  final Widget left;
+  final Widget? middle;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Strings.of(context);
+    final t = Theme.of(context);
+    final hasCopyActions = copySheets.isNotEmpty || legacyCopy;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasCopyActions) ...[
+          Container(
+            key: const ValueKey('result-copy-actions'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: t.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: t.colorScheme.outlineVariant),
+            ),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              alignment: WrapAlignment.end,
+              children: [
+                for (final sheet in copySheets)
+                  OutlinedButton.icon(
+                    key: ValueKey('copy-sheet-$sheet'),
+                    icon: copyingSheet == sheet
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.table_view_outlined, size: 18),
+                    label: Text('$sheet · ${s.t('rfi.action.copySheet')}'),
+                    onPressed: copyingSheet == null
+                        ? () => onCopy(sheet)
+                        : null,
+                  ),
+                if (legacyCopy)
+                  OutlinedButton.icon(
+                    key: const ValueKey('copy-sheet-legacy'),
+                    icon: copyingSheet != null
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.table_view_outlined, size: 18),
+                    label: Text(s.t('rfi.action.copyMail')),
+                    onPressed: copyingSheet == null ? () => onCopy(null) : null,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        _Bar(left: left, middle: middle, right: right),
       ],
     );
   }

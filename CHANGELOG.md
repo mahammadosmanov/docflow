@@ -3,6 +3,24 @@
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 
+## 0.5.2 - 2026-07-31
+
+### Fixed
+
+- Sheet bazlı Excel kopyalama butonlarının dar pencerelerde Done butonunun
+  arkasına taşması; kopyalama aksiyonları artık kendi tam genişlikte, satır
+  kırabilen alanında ve alt footer'ın üzerinde duruyor
+- Çoklu-sheet RFI işleminde inspection saatlerinin bütün sheet'ler için tek
+  ortak zaman çizelgesinden verilmesi; CIV, MEC, ELE ve PRC artık yalnızca kendi
+  sheet'indeki mevcut saatleri devam ettiriyor
+
+### Safety
+
+- Dört kopyalama butonunun kompakt pencere genişliğinde Done alanıyla
+  çakışmadığını doğrulayan widget testi
+- CIV overflow, MEC devam saati ve bağımsız ELE/PRC başlangıç saatlerini aynı
+  çoklu-sheet planında doğrulayan kalıcı regresyon testi
+
 ## 0.5.1 - 2026-07-30
 
 ### Fixed

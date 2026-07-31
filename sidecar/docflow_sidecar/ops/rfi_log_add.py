@@ -454,8 +454,8 @@ def _read_source(
 def _read_sources(
     path: pathlib.Path,
     requested: list[str],
-) -> tuple[dict[str, dict[str, Any]], dict[date, dict[str, time]]]:
-    """Read the workbook once and build requested sheet data plus a global clock."""
+) -> dict[str, dict[str, Any]]:
+    """Read requested sheet data once; each sheet keeps its own clock."""
 
     with pywarnings.catch_warnings():
         pywarnings.filterwarnings(
@@ -480,17 +480,10 @@ def _read_sources(
                 "RFI Log'da secilen sheet bulunamadi: " + ", ".join(missing)
             )
 
-        sources: dict[str, dict[str, Any]] = {}
-        occupied: dict[date, dict[str, time]] = {}
-        for discipline in SUPPORTED_DISCIPLINES:
-            if LAYOUTS[discipline].sheet not in workbook.sheetnames:
-                continue
-            source = _read_source(path, discipline, workbook=workbook)
-            if discipline in requested:
-                sources[discipline] = source
-            for day, values in source["occupied"].items():
-                occupied.setdefault(day, {}).update(values)
-        return sources, occupied
+        return {
+            discipline: _read_source(path, discipline, workbook=workbook)
+            for discipline in requested
+        }
     finally:
         workbook.close()
 
@@ -1317,7 +1310,7 @@ class AddRfiLogRows(Operation):
             if discipline in counts
         ]
         notify("progress", {"phase": "preview", "done": 0, "total": 4})
-        sources, occupied = _read_sources(workbook_path, requested)
+        sources = _read_sources(workbook_path, requested)
         notify("progress", {"phase": "preview", "done": 1, "total": 4})
         extraction: dict[str, Any] | None = None
         extraction_discipline: str | None = None
@@ -1371,14 +1364,19 @@ class AddRfiLogRows(Operation):
                 )
 
         start_day = _today() + timedelta(days=1)
-        total_count = sum(counts.values())
-        slots, overflowed = _allocate(occupied, start_day, total_count, wrap)
+        overflowed = 0
         issue_day = _today()
         rows: list[dict[str, Any]] = []
         batches: list[dict[str, Any]] = []
-        slot_index = 0
         for discipline in requested:
             source = sources[discipline]
+            slots, sheet_overflowed = _allocate(
+                source["occupied"],
+                start_day,
+                counts[discipline],
+                wrap,
+            )
+            overflowed += sheet_overflowed
             sheet_rows: list[dict[str, Any]] = []
             base_rfis: list[str] = []
             for index in range(counts[discipline]):
@@ -1392,10 +1390,9 @@ class AddRfiLogRows(Operation):
                         rfi=rfi,
                         source=source,
                         issue_day=issue_day,
-                        slot=slots[slot_index],
+                        slot=slots[index],
                     )
                 )
-                slot_index += 1
             if extraction is not None and discipline == extraction_discipline:
                 sheet_rows, validation_notes = _rows_from_email(
                     sheet_rows,

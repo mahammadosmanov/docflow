@@ -584,13 +584,19 @@ def test_multi_sheet_preview_apply_copy_sources_and_undo(tmp_path, monkeypatch):
         "AZE-SUN-INT-QMS-RFI-ELE-0027",
         "AZE-SUN-INT-QMS-RFI-PRC-0072",
     ]
-    assert [row["startTime"] for row in rows] == [
-        "09:00",
-        "09:30",
-        "10:00",
-        "10:30",
-        "11:00",
+    # Each sheet continues only its own schedule. CIV wraps after its existing
+    # 17:30 entry, MEC continues after 09:00, and ELE/PRC start independently.
+    assert [(row["inspectionDate"], row["startTime"]) for row in rows] == [
+        ((date.today() + timedelta(days=2)).strftime("%d-%b-%y"), "09:00"),
+        ((date.today() + timedelta(days=1)).strftime("%d-%b-%y"), "09:30"),
+        ((date.today() + timedelta(days=1)).strftime("%d-%b-%y"), "09:00"),
+        ((date.today() + timedelta(days=1)).strftime("%d-%b-%y"), "09:30"),
+        ((date.today() + timedelta(days=1)).strftime("%d-%b-%y"), "09:00"),
     ]
+    assert any(
+        warning.key == "warn.rfi.overflowMoved" and warning.subject == "1"
+        for warning in plan.warnings
+    )
     assert set(plan.meta["editor"]["copySources"]) == {
         "CIV",
         "MEC",
