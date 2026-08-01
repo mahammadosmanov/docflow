@@ -92,6 +92,7 @@
   "rfi.col.forms": "Forms",
   "rfi.col.tagNo": "Tag No.",
   "rfi.col.area": "Area",
+  "rfi.col.rowNo": "Row No.",
   "rfi.col.issueDate": "Date of Issue",
   "rfi.col.inspectionDate": "Inspection Date",
   "rfi.col.startTime": "Inspection Start Time",

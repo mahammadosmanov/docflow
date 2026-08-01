@@ -282,6 +282,17 @@ def _copy_data(
     if not isinstance(source, dict):
         return fields, headers, planned_rows, False
 
+    source_fields = source.get("fields")
+    source_headers = source.get("headers")
+    if (
+        isinstance(source_fields, list)
+        and isinstance(source_headers, list)
+        and source_fields
+        and len(source_fields) == len(source_headers)
+    ):
+        fields = [str(value) for value in source_fields]
+        headers = [str(value) for value in source_headers]
+
     columns = [int(value) for value in (source.get("columns") or [])]
     if len(columns) != len(fields):
         return fields, headers, planned_rows, False
@@ -415,6 +426,7 @@ def preview_plan_table(
         "forms": 20.0,
         "tagNo": 15.0,
         "area": 12.0,
+        "rowNo": 10.0,
         "issueDate": 12.0,
         "inspectionDate": 12.0,
         "startTime": 12.0,

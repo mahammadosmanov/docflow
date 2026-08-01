@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.3 - 2026-08-01
+
+### Added
+
+- MEC RFI kayitlarinda `ROW No.` alani artik karma sheet editorunde gorunur ve
+  duzenlenebilir; deger Excel'deki gercek H sutununa yazilir ve dogrulanir
+- MEC icin Excel tabanli mail onizleme/kopyalama `ROW No.` basligini, degerini ve
+  kaynak workbook bicimini sheet'e ozel 15 kolonlu secime dahil eder
+
+### Changed
+
+- Item No. secenekleri UI'da `CIV-`, `MEC-`, `ELE-` ve `PRC-` onekleri olmadan
+  gosterilir; plan ve Excel'e yazilan asil deger tam disiplin onekini korur
+- Kompakt RFI satir aksiyonlari Material'in guvenli tiklama alanini koruyacak
+  genislikte tutulur; uc buton artik hucre disina tasmaz
+
+### Safety
+
+- Karma CIV/MEC editorunde yalniz MEC Row No. hucresinin duzenlenebilir oldugunu,
+  MEC H sutununa yazmayi ve workbook-backed kopyaya alinmasini kalici testler
+  dogrular
+
 Bu proje [Semantic Versioning](https://semver.org/) kullanır. Kullanıcıya görünen
 her feature veya fix, yeni Windows paketi üretilmeden önce burada kaydedilir.
 

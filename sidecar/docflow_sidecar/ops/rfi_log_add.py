@@ -95,12 +95,12 @@ class Layout:
     subcontractor_col: int
     status_col: int
     validity_col: int
+    row_col: int | None = None
 
 
 LAYOUTS = {
     "CIV": Layout("CIV", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
-    # MEC'te H = ROW No.; kullanici istemedigi icin bos ve dokunulmadan kalir.
-    "MEC": Layout("MEC", 9, 10, 11, 12, 13, 14, 15, 16, 17, 18),
+    "MEC": Layout("MEC", 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, row_col=8),
     "ELE": Layout("ELE", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
     "PRC": Layout("PRC", 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
 }
@@ -138,6 +138,8 @@ COPY_HEADERS = [
     "Inspection Location",
     "SUBCONTRACTOR",
 ]
+
+EDITABLE_FIELDS = [*COPY_FIELDS, "rowNo"]
 
 
 def _today() -> date:
@@ -552,8 +554,9 @@ def _columns() -> list[dict[str, Any]]:
             "key": "itemNo",
             "labelKey": "rfi.col.itemNo",
             "kind": "choice",
-            "width": 94,
+            "width": 76,
             "compact": True,
+            "display": "itemSuffix",
         },
         {
             "key": "description",
@@ -582,6 +585,14 @@ def _columns() -> list[dict[str, Any]]:
             "kind": "autocomplete",
             "width": 116,
             "compact": True,
+        },
+        {
+            "key": "rowNo",
+            "labelKey": "rfi.col.rowNo",
+            "kind": "text",
+            "width": 82,
+            "compact": True,
+            "sheets": ["MEC"],
         },
         {
             "key": "dateOfIssue",
@@ -726,20 +737,15 @@ def _copy_source(
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     layout = LAYOUTS[discipline]
-    return {
-        "workbook": str(workbook_path),
-        "sheet": layout.sheet,
-        "headerRow": 9,
-        "startRow": start_row,
-        "rfiNumbers": [str(row.get("rfiNo") or "") for row in rows],
-        "columns": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
+    fields = list(COPY_FIELDS)
+    headers = list(COPY_HEADERS)
+    columns = [1, 2, 3, 4, 5, 6, 7]
+    if layout.row_col is not None:
+        fields.insert(7, "rowNo")
+        headers.insert(7, "ROW No.")
+        columns.append(layout.row_col)
+    columns.extend(
+        [
             layout.issue_col,
             layout.inspection_col,
             layout.time_col,
@@ -747,7 +753,17 @@ def _copy_source(
             layout.intec_col,
             layout.location_col,
             layout.subcontractor_col,
-        ],
+        ]
+    )
+    return {
+        "workbook": str(workbook_path),
+        "sheet": layout.sheet,
+        "headerRow": 9,
+        "startRow": start_row,
+        "rfiNumbers": [str(row.get("rfiNo") or "") for row in rows],
+        "fields": fields,
+        "headers": headers,
+        "columns": columns,
     }
 
 
@@ -771,6 +787,7 @@ def _record(
         "forms": preset["forms"],
         "tagNo": "",
         "area": "",
+        "rowNo": "",
         "dateOfIssue": _date_text(issue_day),
         "inspectionDate": _date_text(slot[0]),
         "startTime": _time_text(slot[1]),
@@ -908,7 +925,8 @@ def _safe_rows(
     base_rfis: list[str],
     source: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    allowed_fields = set(COPY_FIELDS) | {"_rowId", "_sheet"}
+    layout = LAYOUTS[discipline]
+    allowed_fields = set(EDITABLE_FIELDS) | {"_rowId", "_sheet"}
     allowed_rfis = set(base_rfis)
     rows: list[dict[str, Any]] = []
     for index, raw in enumerate(raw_rows):
@@ -922,8 +940,10 @@ def _safe_rows(
         row["rfiNo"] = str(row["rfiNo"]).strip()
         if row["rfiNo"] not in allowed_rfis:
             raise ValueError(f"plan disi RFI numarasi: {row['rfiNo']}")
-        for key in COPY_FIELDS:
+        for key in EDITABLE_FIELDS:
             row[key] = str(row.get(key) or "").strip()
+        if layout.row_col is None:
+            row["rowNo"] = ""
         if not row["area"]:
             row["area"] = _infer_area(row["tagNo"])
         _parse_date_text(row["dateOfIssue"])
@@ -1088,6 +1108,8 @@ def _record_updates(
             layout.location_col: record["location"],
             layout.subcontractor_col: record["subcontractor"],
         }
+        if layout.row_col is not None:
+            values[layout.row_col] = record["rowNo"]
         for column, value in values.items():
             updates[(row_number, column)] = ("value", value)
 
@@ -1188,6 +1210,8 @@ def _verify_records(
                 layout.location_col: record["location"],
                 layout.subcontractor_col: record["subcontractor"],
             }
+            if layout.row_col is not None:
+                checks[layout.row_col] = record["rowNo"]
             for column, expected in checks.items():
                 actual = str(sheet.cell(row_number, column).value or "")
                 if actual != str(expected or ""):

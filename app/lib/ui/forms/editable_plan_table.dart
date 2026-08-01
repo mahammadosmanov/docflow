@@ -58,7 +58,24 @@ String planTableDisplayValue(Map<String, dynamic> column, String value) {
     final suffix = RegExp(r'(\d+)$').firstMatch(value)?.group(1);
     if (suffix != null) return suffix;
   }
+  if (column['display'] == 'itemSuffix') {
+    return value.replaceFirst(
+      RegExp(r'^(?:CIV|MEC|ELE|PRC)-', caseSensitive: false),
+      '',
+    );
+  }
   return value;
+}
+
+bool planTableColumnAppliesToRow(
+  Map<String, dynamic> column,
+  Map<String, dynamic> row,
+) {
+  final allowedSheets = column['sheets'];
+  return allowedSheets is! List ||
+      allowedSheets
+          .map((item) => item.toString())
+          .contains(row['_sheet']?.toString());
 }
 
 /// Plan.meta.editor tarafindan tarif edilen genel, duzenlenebilir kayit tablosu.
@@ -205,6 +222,16 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
       ),
       border: const OutlineInputBorder(),
     );
+    if (!planTableColumnAppliesToRow(column, row)) {
+      return Center(
+        child: Text(
+          '—',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
 
     if (kind == 'readonly') {
       return Tooltip(
@@ -231,7 +258,7 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
             DropdownMenuItem(
               value: option,
               child: Tooltip(
-                message: option,
+                message: planTableDisplayValue(column, option),
                 child: Text(
                   planTableDisplayValue(column, option),
                   maxLines: 1,
@@ -455,7 +482,9 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
   Widget _buildCompact(BuildContext context) {
     final s = Strings.of(context);
     final t = Theme.of(context);
-    final columns = _columns.where((column) => column['compact'] == true).toList();
+    final columns = _columns
+        .where((column) => column['compact'] == true)
+        .toList();
     final detailColumns = _columns
         .where((column) => column['detail'] == true)
         .toList();
@@ -463,7 +492,9 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
       for (final column in columns)
         (column['width'] as num?)?.toDouble() ?? 100,
     ];
-    const actionsWidth = 104.0;
+    // Material keeps compact IconButtons at a 40 px tap target. Three actions
+    // therefore need 120 px plus cell padding to avoid clipping/overflow.
+    const actionsWidth = 132.0;
     final baseTableWidth = baseWidths.fold<double>(
       actionsWidth,
       (total, width) => total + width,
@@ -510,9 +541,7 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                 final extra = constraints.maxWidth > baseTableWidth
                     ? (constraints.maxWidth - baseTableWidth) / columns.length
                     : 0.0;
-                final widths = [
-                  for (final width in baseWidths) width + extra,
-                ];
+                final widths = [for (final width in baseWidths) width + extra];
 
                 Widget cell({
                   required double width,
@@ -588,8 +617,11 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                 itemCount: widget.rows.length,
                                 itemBuilder: (context, rowIndex) {
                                   final row = widget.rows[rowIndex];
-                                  final rowId = row['_rowId']?.toString() ?? '$rowIndex';
-                                  final expanded = _expandedRows.contains(rowId);
+                                  final rowId =
+                                      row['_rowId']?.toString() ?? '$rowIndex';
+                                  final expanded = _expandedRows.contains(
+                                    rowId,
+                                  );
                                   final groupField =
                                       widget.editor['groupField']?.toString() ??
                                       'rfiNo';
@@ -604,7 +636,11 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                     children: [
                                       Row(
                                         children: [
-                                          for (var i = 0; i < columns.length; i++)
+                                          for (
+                                            var i = 0;
+                                            i < columns.length;
+                                            i++
+                                          )
                                             cell(
                                               width: widths[i],
                                               header: false,
@@ -625,7 +661,9 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                                   ),
                                                   onPressed: () => setState(() {
                                                     if (expanded) {
-                                                      _expandedRows.remove(rowId);
+                                                      _expandedRows.remove(
+                                                        rowId,
+                                                      );
                                                     } else {
                                                       _expandedRows.add(rowId);
                                                     }
@@ -641,8 +679,8 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                                       _duplicate(rowIndex),
                                                 ),
                                                 _compactAction(
-                                                  icon:
-                                                      Icons.remove_circle_outline,
+                                                  icon: Icons
+                                                      .remove_circle_outline,
                                                   tooltip: s.t(
                                                     'rfi.action.removeDuplicate',
                                                   ),
@@ -665,12 +703,14 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                             9,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: t.colorScheme
+                                            color: t
+                                                .colorScheme
                                                 .surfaceContainerLowest,
                                             border: Border(
                                               bottom: BorderSide(
-                                                color:
-                                                    t.colorScheme.outlineVariant,
+                                                color: t
+                                                    .colorScheme
+                                                    .outlineVariant,
                                               ),
                                             ),
                                           ),
@@ -689,7 +729,8 @@ class _EditablePlanTableState extends State<EditablePlanTable> {
                                                   flex: i < 2 ? 3 : 1,
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Padding(
                                                         padding:

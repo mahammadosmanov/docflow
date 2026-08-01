@@ -603,10 +603,18 @@ def test_multi_sheet_preview_apply_copy_sources_and_undo(tmp_path, monkeypatch):
         "ELE",
         "PRC",
     }
+    mec_source = plan.meta["editor"]["copySources"]["MEC"]
+    assert mec_source["columns"] == [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16
+    ]
+    assert mec_source["fields"][7] == "rowNo"
+    assert mec_source["headers"][7] == "ROW No."
+    assert "rowNo" not in plan.meta["editor"]["copySources"]["CIV"]["fields"]
     assert len(plan.steps) == 1
     assert len(plan.steps[0].meta["batches"]) == 4
 
     edited = copy.deepcopy(rows)
+    edited[1]["rowNo"] = "MEC-ROW-01"
     duplicate = dict(edited[-1])
     duplicate["_rowId"] = "PRC-duplicate"
     duplicate["area"] = "South Site"
@@ -634,7 +642,7 @@ def test_multi_sheet_preview_apply_copy_sources_and_undo(tmp_path, monkeypatch):
                     rfi_log_add.LAYOUTS[sheet_name].azfen_col,
                 ).value
             )
-        assert workbook["MEC"]["H11"].value is None
+        assert workbook["MEC"]["H11"].value == "MEC-ROW-01"
         assert workbook["ELE"]["J11"].value == "KEEP ELE EXPIRY"
         assert workbook["PRC"]["J11"].value == "KEEP PRC EXPIRY"
         assert workbook["PRC"]["A12"].value == expected["PRC"][1]
@@ -650,11 +658,17 @@ def test_multi_sheet_preview_apply_copy_sources_and_undo(tmp_path, monkeypatch):
         workbook.close()
 
     ele_preview = preview_plan_table(revised, "ELE")
+    mec_preview = preview_plan_table(revised, "MEC")
     prc_preview = preview_plan_table(revised, "PRC")
     assert ele_preview["count"] == 2
     assert prc_preview["count"] == 2
     assert ele_preview["fromWorkbook"] is True
     assert prc_preview["fromWorkbook"] is True
+    assert mec_preview["count"] == 1
+    assert mec_preview["fromWorkbook"] is True
+    assert mec_preview["fields"][7] == "rowNo"
+    assert mec_preview["headers"][7] == "ROW No."
+    assert mec_preview["rows"][0][7] == "MEC-ROW-01"
 
     undone = fsapply.undo(result.journal_id)
     assert undone.failed == 0
