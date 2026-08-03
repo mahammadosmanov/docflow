@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.4 - 2026-08-03
+
+### Fixed
+
+- RFI inspection description metinlerindeki UTF-8 bullet karakterinin Windows
+  code-page katmaninda `â€¢` olarak gorunmesi; sidecar JSON hatti artik Unicode'u
+  ASCII-safe escape'lerle tasiyor ve istemci dogru `•` karakterini geri kuruyor
+- `CIV-5.2.2` ve `CIV-5.2.3` icin description, forms, AZFEN type ve INTEC type
+  degerleri uretim workbook'undaki gercek Sheet1 kayitlariyla sabitlendi
+
+### Safety
+
+- Workbook'tan okunan tum lookup metinleri NFC normalize edilir ve yalnizca
+  guvenli oldugunda UTF-8/CP1252 mojibake otomatik onarilir
+- Tum CIV, MEC, ELE ve PRC presetlerinde bos alan, uyusmayan AZFEN/INTEC item
+  baglantisi veya cakisan duplicate tespit edilirse preview artik durur
+- 234 uretim presetinin tamami gercek RFI Log uzerinde read-only denetlendi;
+  eksik, cakisan veya supheli encoding kaydi bulunmadi
+
 ## 0.5.3 - 2026-08-01
 
 ### Added

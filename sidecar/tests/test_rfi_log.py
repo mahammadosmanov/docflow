@@ -5,6 +5,7 @@ import os
 import zipfile
 from datetime import date, time, timedelta
 
+import pytest
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -15,8 +16,25 @@ from docflow_sidecar.ops.rfi_log_add import (
     AddRfiLogRows,
     WorkbookLockedError,
     _assert_not_locked,
+    _clean_workbook_text,
     _default_workbook,
+    _read_source,
 )
+
+
+CIV_522_DESCRIPTION = """Before concrete pouring check that:
+•\tDisposition, dimension, number and diameter of reinforcing steel, bending, embedded elements, anchor bolts and spacers for reinforcement cover installed according to drawings (IFC)
+•\tGrounding system installed.
+•\tCable duct installed.
+•\tConstruction joints installed.
+•\tElevation control performed"""
+
+CIV_523_DESCRIPTION = """During concrete pouring check:
+•\tPouring method, vibration, continuity, volumetric efficiency
+•\tSlump test, air temperature, control of concrete temperature in situ, sampling, and delivery notes for required mix design.
+•\tCheck concrete air content,
+•\tTake cube samples for strength test
+•\tConcrete traceability control activities"""
 
 
 def test_default_workbook_finds_onedrive_relocated_systemu(tmp_path, monkeypatch):
@@ -156,8 +174,107 @@ def _make_workbook(path):
         "MEC-3.2.1",
         "S",
     ])
+    lookup.append([None] * 10 + [
+        "CIV-5.2.2",
+        CIV_522_DESCRIPTION,
+        "CON-CIV-001, CON-CIV-009, QM-FRM-027",
+        "CIV-5.2.2",
+        "H",
+        "CIV-5.2.2",
+        "W/R",
+    ])
+    lookup.append([None] * 10 + [
+        "CIV-5.2.3",
+        CIV_523_DESCRIPTION,
+        "CON-CIV-010, Concrete Delivery Tickets",
+        "CIV-5.2.3",
+        "H",
+        "CIV-5.2.3",
+        "W/R",
+    ])
     wb.save(path)
     wb.close()
+
+
+def test_civ_522_523_presets_are_complete_and_repair_mojibake(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+
+    source = _read_source(path, "CIV")
+    expected = {
+        "CIV-5.2.2": {
+            "description": CIV_522_DESCRIPTION,
+            "forms": "CON-CIV-001, CON-CIV-009, QM-FRM-027",
+            "azfenType": "H",
+            "intecType": "W/R",
+        },
+        "CIV-5.2.3": {
+            "description": CIV_523_DESCRIPTION,
+            "forms": "CON-CIV-010, Concrete Delivery Tickets",
+            "azfenType": "H",
+            "intecType": "W/R",
+        },
+    }
+    assert {item: source["presets"][item] for item in expected} == expected
+
+    mojibake = CIV_522_DESCRIPTION.encode("utf-8").decode("cp1252")
+    assert "â€¢" in mojibake
+    assert _clean_workbook_text(mojibake) == CIV_522_DESCRIPTION
+    assert _clean_workbook_text(CIV_522_DESCRIPTION) == CIV_522_DESCRIPTION
+
+    operation = AddRfiLogRows()
+    plan = operation.preview({
+        "workbook": str(path),
+        "sheet_counts": {"CIV": 1},
+        "overflow_next_day": True,
+    })
+    auto_fill = plan.meta["editor"]["autoFill"]["values"]
+    assert {item: auto_fill[item] for item in expected} == expected
+
+    edited = copy.deepcopy(plan.meta["editor"]["rows"])
+    edited[0].update(expected["CIV-5.2.2"])
+    edited[0]["itemNo"] = "CIV-5.2.2"
+    edited[0]["description"] = mojibake
+    revised = operation.revise(plan, {"rows": edited})
+    revised_row = revised.meta["editor"]["rows"][0]
+    assert revised_row["description"] == CIV_522_DESCRIPTION
+    assert "â€¢" not in revised_row["description"]
+
+
+@pytest.mark.parametrize(
+    ("defect", "message"),
+    [
+        ("missing", "esleme verisi eksik"),
+        ("mismatch", "Item eslemesi tutarsiz"),
+        ("conflict", "cakisan Item eslemesi"),
+    ],
+)
+def test_lookup_validation_rejects_bad_data(tmp_path, defect, message):
+    path = tmp_path / f"RFI Log-{defect}.xlsx"
+    _make_workbook(path)
+    workbook = load_workbook(path)
+    try:
+        lookup = workbook["Sheet1"]
+        if defect == "missing":
+            lookup["M4"] = ""
+        elif defect == "mismatch":
+            lookup["N4"] = "CIV-5.2.3"
+        else:
+            lookup.append([None] * 10 + [
+                "CIV-5.2.2",
+                "Conflicting description",
+                "CON-CIV-001",
+                "CIV-5.2.2",
+                "H",
+                "CIV-5.2.2",
+                "W/R",
+            ])
+        workbook.save(path)
+    finally:
+        workbook.close()
+
+    with pytest.raises(ValueError, match=message):
+        _read_source(path, "CIV")
 
 
 def _add_ele_prc_sheets(path):

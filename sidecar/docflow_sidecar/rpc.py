@@ -36,7 +36,10 @@ class _StdoutGuard:
 
 
 def emit(obj: dict) -> None:
-    payload = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+    # Keep the wire format ASCII-only. JSON restores these escapes to Unicode
+    # at the client, while Windows console/code-page layers can no longer turn
+    # a valid bullet (U+2022) into the visible mojibake sequence "â€¢".
+    payload = (json.dumps(obj, ensure_ascii=True) + "\n").encode("ascii")
     binary_stdout = getattr(_real_stdout, "buffer", None)
     if binary_stdout is not None:
         binary_stdout.write(payload)

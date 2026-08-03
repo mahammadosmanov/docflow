@@ -270,6 +270,32 @@ def _header_key(value: Any) -> str:
     return "".join(char for char in normalized if char.isalnum())
 
 
+def _mojibake_score(value: str) -> int:
+    return sum(value.count(marker) for marker in ("Ã", "Â", "â", "ð", "Ë"))
+
+
+def _clean_workbook_text(value: Any) -> str:
+    """Normalize workbook/user text and repair UTF-8 decoded as CP1252.
+
+    Repair is deliberately conservative: the candidate must be valid UTF-8
+    and contain fewer well-known mojibake lead characters. Correct Unicode
+    text, including U+2022 bullets, is returned unchanged.
+    """
+
+    text = unicodedata.normalize("NFC", str(value or "").strip())
+    for _attempt in range(2):
+        if _mojibake_score(text) == 0:
+            break
+        try:
+            repaired = text.encode("cp1252").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            break
+        if _mojibake_score(repaired) >= _mojibake_score(text):
+            break
+        text = unicodedata.normalize("NFC", repaired)
+    return text
+
+
 def _lookup_columns(lookup_sheet: Any) -> dict[str, int]:
     """Locate the seven-column Item/description/forms/type lookup block.
 
@@ -350,16 +376,34 @@ def _read_source(
             max_col=lookup_columns["intecType"],
             values_only=True,
         ):
-            item = str(row[0] or "").strip()
+            item = _clean_workbook_text(row[0])
             match = ITEM_RE.match(item)
             if not match or match.group(1).upper() != discipline:
                 continue
-            presets[item] = {
-                "description": str(row[1] or "").strip(),
-                "forms": str(row[2] or "").strip(),
-                "azfenType": str(row[4] or "").strip(),
-                "intecType": str(row[6] or "").strip(),
+            azfen_item = _clean_workbook_text(row[3])
+            intec_item = _clean_workbook_text(row[5])
+            if azfen_item != item or intec_item != item:
+                raise ValueError(
+                    f"{discipline} Sheet1 Item eslemesi tutarsiz: {item}"
+                )
+            preset = {
+                "description": _clean_workbook_text(row[1]),
+                "forms": _clean_workbook_text(row[2]),
+                "azfenType": _clean_workbook_text(row[4]),
+                "intecType": _clean_workbook_text(row[6]),
             }
+            missing = [field for field, value in preset.items() if not value]
+            if missing:
+                raise ValueError(
+                    f"{discipline} Sheet1 esleme verisi eksik: "
+                    f"{item} / {', '.join(missing)}"
+                )
+            existing = presets.get(item)
+            if existing is not None and existing != preset:
+                raise ValueError(
+                    f"{discipline} Sheet1 cakisan Item eslemesi: {item}"
+                )
+            presets[item] = preset
 
         max_number = 0
         last_row = 9
@@ -386,11 +430,13 @@ def _read_source(
                 continue
             last_row = row_number
             max_number = max(max_number, int(match.group(2)))
-            latest_item = str(row[2] or "").strip() or latest_item
-            tags.append(str(row[5] or ""))
-            areas.append(str(row[6] or ""))
-            locations.append(str(row[layout.location_col - 1] or ""))
-            subcontractors.append(str(row[layout.subcontractor_col - 1] or ""))
+            latest_item = _clean_workbook_text(row[2]) or latest_item
+            tags.append(_clean_workbook_text(row[5]))
+            areas.append(_clean_workbook_text(row[6]))
+            locations.append(_clean_workbook_text(row[layout.location_col - 1]))
+            subcontractors.append(
+                _clean_workbook_text(row[layout.subcontractor_col - 1])
+            )
             inspection_day = _as_date(row[layout.inspection_col - 1])
             inspection_time = _as_time(row[layout.time_col - 1])
             if inspection_day and inspection_time:
@@ -941,7 +987,7 @@ def _safe_rows(
         if row["rfiNo"] not in allowed_rfis:
             raise ValueError(f"plan disi RFI numarasi: {row['rfiNo']}")
         for key in EDITABLE_FIELDS:
-            row[key] = str(row.get(key) or "").strip()
+            row[key] = _clean_workbook_text(row.get(key))
         if layout.row_col is None:
             row["rowNo"] = ""
         if not row["area"]:
