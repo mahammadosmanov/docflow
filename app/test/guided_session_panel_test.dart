@@ -181,4 +181,49 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('queue controls remain reachable in a short text-scaled window', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 280);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final value = GuidedSession.fromJson({
+      'sessionId': 'queue-1',
+      'revision': 1,
+      'opId': 'files.batch_print',
+      'status': 'active',
+      'current': 0,
+      'total': 2,
+      'currentJob': {
+        'path': r'C:\Docs\a-very-long-document-name-for-printing.pdf',
+        'paperSize': 'A3',
+        'copies': 2,
+      },
+      'lastError': 'The native document application could not open this file.',
+    });
+    var completed = 0;
+    await pump(
+      tester,
+      value,
+      onComplete: () => completed++,
+      onStop: () {},
+      onContinue: () {},
+      onRestart: () {},
+      onDone: () {},
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -1200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('guided-complete')));
+    expect(completed, 1);
+  });
 }

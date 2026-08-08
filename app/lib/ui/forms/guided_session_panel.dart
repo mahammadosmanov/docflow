@@ -59,126 +59,128 @@ class GuidedSessionPanel extends StatelessWidget {
     final copies = rawCopies is num ? rawCopies.toInt() : 1;
     final paused = session.isPaused;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LinearProgressIndicator(
-          value: session.total == 0 ? 0 : session.current / session.total,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${session.currentNumber}/${session.total}',
-          textAlign: TextAlign.end,
-          style: theme.textTheme.labelMedium,
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      paused
-                          ? Icons.pause_circle_outline
-                          : Icons.print_outlined,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LinearProgressIndicator(
+            value: session.total == 0 ? 0 : session.current / session.total,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${session.currentNumber}/${session.total}',
+            textAlign: TextAlign.end,
+            style: theme.textTheme.labelMedium,
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        paused
+                            ? Icons.pause_circle_outline
+                            : Icons.print_outlined,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(path, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Chip(
+                        label: Text(
+                          '${strings.t('print.session.paper')}: $paper',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          '${strings.t('print.session.copies')}: $copies',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    strings.t(
+                      paused
+                          ? 'print.session.paused'
+                          : 'print.session.instruction',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SelectableText(path, style: theme.textTheme.bodySmall),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    Chip(
-                      label: Text(
-                        '${strings.t('print.session.paper')}: $paper',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  if (session.lastError.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      session.lastError,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Chip(
-                      label: Text(
-                        '${strings.t('print.session.copies')}: $copies',
-                      ),
-                    ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  strings.t(
-                    paused
-                        ? 'print.session.paused'
-                        : 'print.session.instruction',
-                  ),
-                  style: theme.textTheme.bodyMedium,
-                ),
-                if (session.lastError.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    session.lastError,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-        const Spacer(),
-        if (paused)
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('guided-restart'),
-                onPressed: busy ? null : onRestart,
-                icon: const Icon(Icons.replay_outlined),
-                label: Text(strings.t('action.restartAll')),
-              ),
-              FilledButton.icon(
-                key: const ValueKey('guided-continue'),
-                onPressed: busy ? null : onContinue,
-                icon: const Icon(Icons.play_arrow),
-                label: Text(strings.t('action.continue')),
-              ),
-            ],
-          )
-        else
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('guided-stop'),
-                onPressed: busy ? null : onStop,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: Text(strings.t('action.stop')),
-              ),
-              FilledButton.icon(
-                key: const ValueKey('guided-complete'),
-                onPressed: busy ? null : onComplete,
-                icon: const Icon(Icons.navigate_next),
-                label: Text(strings.t('action.printedNext')),
-              ),
-            ],
-          ),
-      ],
+          const SizedBox(height: 24),
+          if (paused)
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('guided-restart'),
+                  onPressed: busy ? null : onRestart,
+                  icon: const Icon(Icons.replay_outlined),
+                  label: Text(strings.t('action.restartAll')),
+                ),
+                FilledButton.icon(
+                  key: const ValueKey('guided-continue'),
+                  onPressed: busy ? null : onContinue,
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(strings.t('action.continue')),
+                ),
+              ],
+            )
+          else
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('guided-stop'),
+                  onPressed: busy ? null : onStop,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: Text(strings.t('action.stop')),
+                ),
+                FilledButton.icon(
+                  key: const ValueKey('guided-complete'),
+                  onPressed: busy ? null : onComplete,
+                  icon: const Icon(Icons.navigate_next),
+                  label: Text(strings.t('action.printedNext')),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
