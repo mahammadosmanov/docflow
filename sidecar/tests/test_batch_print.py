@@ -7,7 +7,8 @@ import pathlib
 
 import pytest
 
-from docflow_sidecar.contracts import FilesParam, Plan
+from docflow_sidecar.contracts import FilesParam, Plan, Step, StepKind
+from docflow_sidecar.fs import apply as fsapply
 from docflow_sidecar.ops import batch_print
 
 
@@ -199,15 +200,20 @@ def test_spooler_monitor_waits_for_job_to_appear_and_finish(monkeypatch):
     assert changes
 
 
-def test_apply_starts_guided_session_without_submitting_print(monkeypatch):
+def test_apply_journals_approved_steps_before_starting_guided_session(
+    tmp_path, monkeypatch
+):
     first = pathlib.Path(r"C:\Print tests\first.pdf")
     second = pathlib.Path(r"C:\Print tests\second.docx")
     operation = _operation(monkeypatch)
     started: list[list[dict]] = []
-    monkeypatch.setattr(
-        batch_print,
-        "start_guided_session",
-        lambda jobs: started.append(jobs) or {
+    journal_dir = tmp_path / "journal"
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", journal_dir)
+
+    def start(jobs):
+        assert list(journal_dir.glob("*.json"))
+        started.append(jobs)
+        return {
             "sessionId": "queue-1",
             "revision": 1,
             "opId": operation.id,
@@ -216,21 +222,36 @@ def test_apply_starts_guided_session_without_submitting_print(monkeypatch):
             "total": len(jobs),
             "currentJob": jobs[0],
             "lastError": "",
-        },
+        }
+
+    monkeypatch.setattr(
+        batch_print,
+        "start_guided_session",
+        start,
     )
     plan = Plan(
         op_id=operation.id,
+        steps=[
+            Step(
+                "print",
+                str(first),
+                str(first),
+                meta={"format": "PDF", "paperSize": "A4", "copies": 1},
+            ),
+            Step(
+                "print",
+                str(second),
+                str(second),
+                meta={"format": "DOCX", "paperSize": "LEGAL", "copies": 2},
+            ),
+        ],
         meta={
+            # Hidden plan metadata must not override the user-visible approved steps.
             "jobs": [
                 {
-                    "path": str(first),
-                    "printer": "Office Printer",
-                    "verb": "printto",
-                },
-                {
-                    "path": str(second),
-                    "printer": "Office Printer",
-                    "verb": "printto",
+                    "path": r"C:\Docs\unapproved.pdf",
+                    "paperSize": "A0",
+                    "copies": 99,
                 },
             ]
         },
@@ -239,10 +260,65 @@ def test_apply_starts_guided_session_without_submitting_print(monkeypatch):
     result = operation.apply(plan)
 
     assert [job["path"] for job in started[0]] == [str(first), str(second)]
+    assert [job["paperSize"] for job in started[0]] == ["A4", "LEGAL"]
     assert result.applied == 0
     assert result.failed == 0
-    assert result.journal_id == ""
+    assert result.journal_id
+    journal = fsapply.get_journal(result.journal_id)
+    assert [step["kind"] for step in journal["steps"]] == ["print", "print"]
+    assert [step["src"] for step in journal["steps"]] == [str(first), str(second)]
     assert result.meta["guidedSession"]["sessionId"] == "queue-1"
+
+
+def test_apply_rejects_invalid_approved_print_steps_before_journal_or_session(
+    tmp_path, monkeypatch
+):
+    operation = _operation(monkeypatch)
+    journal_dir = tmp_path / "journal"
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", journal_dir)
+    started: list[list[dict]] = []
+    monkeypatch.setattr(
+        batch_print,
+        "start_guided_session",
+        lambda jobs: started.append(jobs),
+    )
+
+    def print_step(
+        *,
+        kind: StepKind = "print",
+        path: str = r"C:\Docs\approved.pdf",
+        paper_size: str = "A4",
+        copies: int = 1,
+        format_name: str = "PDF",
+    ):
+        return Step(
+            kind,
+            path,
+            path,
+            meta={
+                "format": format_name,
+                "paperSize": paper_size,
+                "copies": copies,
+            },
+        )
+
+    plans = [
+        Plan(op_id="other.operation", steps=[print_step()]),
+        Plan(op_id=operation.id, steps=[print_step(kind="copy")]),
+        Plan(op_id=operation.id, steps=[print_step(path="relative.pdf")]),
+        Plan(op_id=operation.id, steps=[print_step(paper_size="A9")]),
+        Plan(op_id=operation.id, steps=[print_step(copies=True)]),
+        Plan(op_id=operation.id, steps=[print_step(copies=0)]),
+        Plan(op_id=operation.id, steps=[print_step(copies=100)]),
+        Plan(op_id=operation.id, steps=[print_step(format_name="")]),
+    ]
+
+    for plan in plans:
+        result = operation.apply(plan)
+        assert result.failed == 1
+        assert [error.key for error in result.errors] == ["error.print.invalidPlan"]
+    assert started == []
+    assert not journal_dir.exists()
 
 
 def test_guided_session_persists_stop_continue_and_restart(tmp_path, monkeypatch):

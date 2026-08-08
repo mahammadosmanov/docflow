@@ -17,6 +17,7 @@ from typing import Any, Iterator
 from ..contracts import (
     FilesParam,
     IntParam,
+    JournalEntry,
     Operation,
     ParamSchema,
     Plan,
@@ -24,6 +25,7 @@ from ..contracts import (
     Step,
     Warning,
 )
+from ..fs.apply import write_journal
 from ..registry import register
 from ..rpc import notify
 
@@ -830,16 +832,51 @@ class BatchPrint(Operation):
         return plan
 
     def apply(self, plan: Plan) -> Result:
-        jobs = plan.meta.get("jobs")
-        if not isinstance(jobs, list) or not jobs:
+        if (
+            plan.op_id != self.id
+            or not plan.steps
+            or len(plan.steps) > MAX_FILES
+        ):
             return Result(
                 failed=1,
                 errors=[Warning("error.print.invalidPlan")],
             )
-        if not all(isinstance(job, dict) and job.get("path") for job in jobs):
-            return Result(
-                failed=1,
-                errors=[Warning("error.print.invalidPlan")],
+
+        jobs: list[dict[str, str | int]] = []
+        for step in plan.steps:
+            path = step.src
+            paper_size = step.meta.get("paperSize")
+            copies = step.meta.get("copies")
+            format_name = step.meta.get("format")
+            if (
+                step.kind != "print"
+                or not isinstance(path, str)
+                or not _is_absolute_document_path(path)
+                or not isinstance(paper_size, str)
+                or paper_size not in PAPER_SIZES
+                or not isinstance(copies, int)
+                or isinstance(copies, bool)
+                or not 1 <= copies <= MAX_COPIES
+                or not isinstance(format_name, str)
+                or not format_name
+            ):
+                return Result(
+                    failed=1,
+                    errors=[Warning("error.print.invalidPlan")],
+                )
+            jobs.append(
+                {
+                    "path": path,
+                    "format": format_name,
+                    "paperSize": paper_size,
+                    "copies": copies,
+                }
             )
+
+        journal = JournalEntry(op_id=plan.op_id, steps=list(plan.steps))
+        write_journal(journal)  # approved steps are durable before native launch
         session = start_guided_session(jobs)
-        return Result(meta={"guidedSession": session})
+        return Result(
+            journal_id=journal.journal_id,
+            meta={"guidedSession": session},
+        )
