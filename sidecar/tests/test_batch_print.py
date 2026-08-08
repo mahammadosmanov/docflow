@@ -391,3 +391,40 @@ def test_guided_session_rejects_corrupt_persisted_state(
         batch_print.start_guided_session(
             [{"path": r"C:\Docs\new.pdf", "paperSize": "A4", "copies": 1}]
         )
+
+
+def test_guided_session_rejects_more_than_max_files(tmp_path, monkeypatch):
+    state_file = tmp_path / "print-session.json"
+    monkeypatch.setattr(batch_print, "PRINT_SESSION_FILE", state_file)
+    monkeypatch.setattr(batch_print, "_open_document", lambda _: None)
+    jobs = [
+        {
+            "path": rf"C:\Docs\drawing-{index}.pdf",
+            "paperSize": "A4",
+            "copies": 1,
+        }
+        for index in range(batch_print.MAX_FILES + 1)
+    ]
+
+    with pytest.raises(ValueError, match="invalid guided print job"):
+        batch_print.start_guided_session(jobs)
+    with pytest.raises(ValueError, match="invalid guided print job"):
+        batch_print.start_guided_session(["not-a-job"])  # type: ignore[list-item]
+    accepted = batch_print.start_guided_session(jobs[: batch_print.MAX_FILES])
+    assert accepted["total"] == batch_print.MAX_FILES
+
+    state_file.write_text(
+        json.dumps(
+            {
+                "sessionId": "queue-oversized",
+                "revision": 1,
+                "opId": "files.batch_print",
+                "status": "paused",
+                "current": 0,
+                "jobs": jobs,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid print session"):
+        batch_print.get_guided_session("queue-oversized")

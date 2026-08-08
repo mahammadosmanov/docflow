@@ -577,6 +577,7 @@ def _read_guided_session() -> dict[str, Any]:
     valid_jobs = (
         isinstance(jobs, list)
         and bool(jobs)
+        and len(jobs) <= MAX_FILES
         and all(
             isinstance(job, dict)
             and isinstance(job.get("path"), str)
@@ -671,8 +672,9 @@ def start_guided_session(jobs: list[dict[str, Any]]) -> dict[str, Any]:
             if previous.get("status") != "completed":
                 raise RuntimeError("unfinished print session exists")
         # Validate the exact durable shape before the first checkpoint.
-        if not all(
-            isinstance(job.get("path"), str)
+        if len(jobs) > MAX_FILES or not all(
+            isinstance(job, dict)
+            and isinstance(job.get("path"), str)
             and _is_absolute_document_path(job["path"])
             and str(job.get("paperSize") or "") in PAPER_SIZES
             and isinstance(job.get("copies"), int)
