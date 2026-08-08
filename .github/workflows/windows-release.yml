@@ -8,7 +8,7 @@ on:
       - "codex/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: windows-release-${{ github.ref }}
@@ -237,8 +237,30 @@ jobs:
             ConvertTo-Json -Depth 5 |
             Set-Content -LiteralPath (Join-Path $release "BUILD-MANIFEST.json") -Encoding utf8
 
+      - name: Create Windows trial ZIP
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "DocFlow-Windows-x64-v0.6.0.zip"
+          Compress-Archive `
+            -Path "app\build\windows\x64\runner\Release\*" `
+            -DestinationPath $zip `
+            -CompressionLevel Optimal `
+            -Force
+
+      - name: Upload Windows trial prerelease asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "DocFlow-Windows-x64-v0.6.0.zip"
+          gh release upload v0.6.0-test $zip --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub prerelease upload failed"
+          }
+
       - name: Upload Windows package
         uses: actions/upload-artifact@v5
+        continue-on-error: true
         with:
           name: DocFlow-Windows-x64
           path: app/build/windows/x64/runner/Release/
@@ -247,6 +269,7 @@ jobs:
 
       - name: Upload lightweight UI component
         uses: actions/upload-artifact@v5
+        continue-on-error: true
         with:
           name: DocFlow-Windows-UI-component
           path: |
