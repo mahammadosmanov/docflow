@@ -4,7 +4,7 @@ DocFlow, Windows üzerinde belge işlerini otomatikleştiren Flutter masaüstü
 uygulamasıdır. İş mantığı, uygulamayla birlikte paketlenen Python sidecar
 tarafından yürütülür.
 
-Güncel sürüm: **0.4.0**. Sürüm geçmişi ve değişiklikler
+Güncel sürüm: **0.6.0**. Sürüm geçmişi ve değişiklikler
 [`CHANGELOG.md`](CHANGELOG.md) içinde tutulur.
 
 Desteklenen işlemler:
@@ -15,7 +15,8 @@ Desteklenen işlemler:
   koruyarak RFI Log'a ekleme ve her sheet için ayrı Excel-native mail tablosu
 - Talep e-postalarından özel/offline veya isteğe bağlı Gemini Free ile doğrulanabilir RFI taslağı çıkarma
 - Yeni RFI satırlarını Excel'in yerel görünümüyle, başlıklar dahil Subcontractor'a kadar kopyalama
-- PDF, Word, Excel ve görselleri kesin sırayla toplu yazdırma
+- PDF, Word, Excel ve görselleri dosya/grup bazlı kâğıt boyutlarıyla yönlendirmeli
+  toplu yazdırma; kuyruğu durdurma, kaldığı yerden sürdürme veya baştan başlatma
 
 E-posta analizi varsayılan olarak tamamen çevrimdışıdır. Gemini seçeneği açıkça
 seçilirse API anahtarı yalnızca o istek için bellekte tutulur; e-posta metni ve

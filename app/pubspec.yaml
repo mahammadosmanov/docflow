@@ -1,7 +1,7 @@
 name: docflow
 description: "DocFlow — desktop document automation (Flutter UI + Python sidecar)."
 publish_to: 'none'
-version: 0.5.4+17
+version: 0.6.0+18
 
 environment:
   sdk: ^3.12.2

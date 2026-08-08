@@ -35,6 +35,31 @@ vermez — istemci sessizce parse hatası alır. Log → stderr, istisnasız.
 ← {"id": 5, "result": {"applied": 12, "failed": 0, "journalId": "uuid", "errors": []}}
 ```
 
+## Devam ettirilebilir operation oturumu
+
+Uzun ve dış uygulama kontrollü akışlar, örneğin çoklu yazdırma, kalıcı bir
+oturum döndürebilir. `revision` compare-and-swap belirtecidir; istemci her
+aksiyonda ekranda gördüğü revision'ı göndermek zorundadır. Eski veya başka bir
+uygulama örneğinden gelen aksiyon reddedilir.
+
+```jsonc
+→ {"id": 6, "method": "operation_session",
+   "params": {"op": "files.batch_print"}}
+← {"id": 6, "result": {"sessionId": "uuid", "revision": 4,
+   "status": "paused", "current": 2, "total": 8, "currentJob": {...}}}
+
+→ {"id": 7, "method": "operation_session_action",
+   "params": {"op": "files.batch_print", "sessionId": "uuid",
+              "revision": 4, "action": "continue"}}
+← {"id": 7, "result": {"sessionId": "uuid", "revision": 5,
+   "status": "active", "current": 2, "total": 8, "currentJob": {...}}}
+```
+
+Desteklenen yazdırma aksiyonları: `stop`, `continue`, `restart`, `complete`.
+`operation_session` aktif bir kalıcı oturumu güvenli biçimde `paused` durumuna
+alır; böylece uygulama/PC yeniden başladıktan sonra dosya yalnızca açık bir
+`continue` ile yeniden açılır.
+
 ## Bildirim (tek yönlü, `id` YOK)
 
 ```jsonc
@@ -61,7 +86,7 @@ döngü devam eder.
 ## Adım (Step) şeması
 
 ```jsonc
-{"kind": "mkdir" | "move" | "copy" | "rename" | "write",
+{"kind": "mkdir" | "move" | "copy" | "rename" | "write" | "print",
  "src": "kaynak yol veya null",
  "dst": "hedef yol",
  "noteKey": "note.renamed",        // i18n anahtarı — düz metin DEĞİL

@@ -181,6 +181,33 @@ class SidecarClient {
     return ApplyResult.fromJson((res as Map).cast<String, dynamic>());
   }
 
+  Future<GuidedSession?> operationSession(
+    String opId, {
+    bool recover = true,
+  }) async {
+    final res = await _callRaw('operation_session', {
+      'op': opId,
+      'recover': recover,
+    });
+    final map = (res as Map).cast<String, dynamic>();
+    return map.isEmpty ? null : GuidedSession.fromJson(map);
+  }
+
+  Future<GuidedSession> operationSessionAction(
+    String opId,
+    String sessionId,
+    int revision,
+    String action,
+  ) async {
+    final res = await _callRaw('operation_session_action', {
+      'op': opId,
+      'sessionId': sessionId,
+      'revision': revision,
+      'action': action,
+    });
+    return GuidedSession.fromJson((res as Map).cast<String, dynamic>());
+  }
+
   Future<Plan> revisePlan(
     String planId,
     List<Map<String, dynamic>> rows,

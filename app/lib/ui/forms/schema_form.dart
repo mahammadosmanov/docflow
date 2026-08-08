@@ -31,6 +31,8 @@ class SchemaForm extends StatefulWidget {
 }
 
 class _SchemaFormState extends State<SchemaForm> {
+  final Map<String, Set<String>> _selectedFiles = {};
+
   @override
   void initState() {
     super.initState();
@@ -182,7 +184,10 @@ class _SchemaFormState extends State<SchemaForm> {
     final counts = <String, int>{
       for (final choice in p.choices)
         choice:
-            ((raw is Map ? raw[choice] : null) as num?)?.toInt().clamp(0, 100) ??
+            ((raw is Map ? raw[choice] : null) as num?)?.toInt().clamp(
+              0,
+              100,
+            ) ??
             0,
     };
     final total = counts.values.fold<int>(0, (sum, value) => sum + value);
@@ -397,12 +402,84 @@ class _SchemaFormState extends State<SchemaForm> {
   }
 
   Widget _filesField(Strings s, ParamDef p) {
-    final paths = (widget.values[p.name] as List? ?? const [])
-        .map((item) => item.toString())
+    final configured = p.itemChoices.isNotEmpty;
+    final items = (widget.values[p.name] as List? ?? const [])
+        .map((raw) {
+          if (raw is Map) {
+            final path = raw['path']?.toString() ?? '';
+            final option = raw['option']?.toString();
+            return (
+              path: path,
+              option: p.itemChoices.contains(option) ? option! : p.itemDefault,
+            );
+          }
+          return (path: raw.toString(), option: p.itemDefault);
+        })
+        .where((item) => item.path.isNotEmpty)
         .toList();
+    final paths = items.map((item) => item.path).toList();
+    final selected = _selectedFiles.putIfAbsent(p.name, () => <String>{});
+    selected.removeWhere((path) => !paths.contains(path));
     final t = Theme.of(context);
 
-    void update(List<String> next) => _set(p.name, next);
+    void update(List<({String path, String? option})> next) => _set(
+      p.name,
+      configured
+          ? next
+                .map(
+                  (item) => {
+                    'path': item.path,
+                    'option': item.option ?? p.itemDefault,
+                  },
+                )
+                .toList()
+          : next.map((item) => item.path).toList(),
+    );
+
+    String optionLabel(String choice) {
+      final key = p.itemChoiceLabels[choice];
+      return key == null ? choice : s.t(key);
+    }
+
+    void assign(Iterable<String> targets, String? choice) {
+      if (choice == null) return;
+      final targetSet = targets.toSet();
+      update([
+        for (final item in items)
+          (
+            path: item.path,
+            option: targetSet.contains(item.path) ? choice : item.option,
+          ),
+      ]);
+    }
+
+    Widget bulkDropdown(Key key, Iterable<String> targets) {
+      final targetSet = targets.toSet();
+      final options = items
+          .where((item) => targetSet.contains(item.path))
+          .map((item) => item.option)
+          .toList();
+      final common =
+          options.isNotEmpty && options.every((v) => v == options.first)
+          ? options.first
+          : null;
+      return SizedBox(
+        key: key,
+        width: 112,
+        child: DropdownButton<String>(
+          value: common,
+          isExpanded: true,
+          isDense: true,
+          items: [
+            for (final choice in p.itemChoices)
+              DropdownMenuItem(value: choice, child: Text(optionLabel(choice))),
+          ],
+          onChanged: targetSet.isEmpty
+              ? null
+              : (choice) => assign(targetSet, choice),
+        ),
+      );
+    }
 
     return _labeled(
       s,
@@ -421,10 +498,13 @@ class _SchemaFormState extends State<SchemaForm> {
                       allowMultiple: true,
                     );
                     if (result == null) return;
-                    final next = [...paths];
+                    final next = [...items];
                     for (final file in result.files) {
                       final path = file.path;
-                      if (path != null && !next.contains(path)) next.add(path);
+                      if (path != null &&
+                          !next.any((item) => item.path == path)) {
+                        next.add((path: path, option: p.itemDefault));
+                      }
                     }
                     update(next);
                   },
@@ -439,9 +519,26 @@ class _SchemaFormState extends State<SchemaForm> {
               ],
             ],
           ),
+          if (configured && paths.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(s.t('print.paper.all'), style: t.textTheme.labelMedium),
+                bulkDropdown(ValueKey('${p.name}-paper-all'), paths),
+                Text(
+                  s.t('print.paper.selected'),
+                  style: t.textTheme.labelMedium,
+                ),
+                bulkDropdown(ValueKey('${p.name}-paper-selected'), selected),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Container(
-            constraints: const BoxConstraints(maxHeight: 280),
+            constraints: const BoxConstraints(maxHeight: 300),
             decoration: BoxDecoration(
               border: Border.all(color: t.colorScheme.outlineVariant),
               borderRadius: BorderRadius.circular(10),
@@ -463,29 +560,65 @@ class _SchemaFormState extends State<SchemaForm> {
                     itemCount: paths.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, index) {
-                      final path = paths[index];
+                      final item = items[index];
+                      final path = item.path;
                       final name = path.split(RegExp(r'[/\\]')).last;
                       return ListTile(
                         dense: true,
-                        leading: SizedBox(
-                          width: 28,
-                          child: Text(
-                            '${index + 1}',
-                            textAlign: TextAlign.center,
-                            style: t.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
+                        leading: configured
+                            ? Checkbox(
+                                key: ValueKey('${p.name}-select-$index'),
+                                value: selected.contains(path),
+                                onChanged: (checked) => setState(() {
+                                  if (checked == true) {
+                                    selected.add(path);
+                                  } else {
+                                    selected.remove(path);
+                                  }
+                                }),
+                              )
+                            : SizedBox(
+                                width: 28,
+                                child: Text(
+                                  '${index + 1}',
+                                  textAlign: TextAlign.center,
+                                  style: t.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                         title: Text(
                           name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        subtitle: Text(
-                          path,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        subtitle: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                path,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (configured)
+                              SizedBox(
+                                width: 86,
+                                child: DropdownButton<String>(
+                                  key: ValueKey('${p.name}-paper-$index'),
+                                  value: item.option,
+                                  isDense: true,
+                                  items: [
+                                    for (final choice in p.itemChoices)
+                                      DropdownMenuItem(
+                                        value: choice,
+                                        child: Text(optionLabel(choice)),
+                                      ),
+                                  ],
+                                  onChanged: (choice) => assign([path], choice),
+                                ),
+                              ),
+                          ],
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -495,9 +628,9 @@ class _SchemaFormState extends State<SchemaForm> {
                               onPressed: index == 0
                                   ? null
                                   : () {
-                                      final next = [...paths];
-                                      final item = next.removeAt(index);
-                                      next.insert(index - 1, item);
+                                      final next = [...items];
+                                      final moved = next.removeAt(index);
+                                      next.insert(index - 1, moved);
                                       update(next);
                                     },
                               icon: const Icon(Icons.arrow_upward, size: 17),
@@ -507,9 +640,9 @@ class _SchemaFormState extends State<SchemaForm> {
                               onPressed: index == paths.length - 1
                                   ? null
                                   : () {
-                                      final next = [...paths];
-                                      final item = next.removeAt(index);
-                                      next.insert(index + 1, item);
+                                      final next = [...items];
+                                      final moved = next.removeAt(index);
+                                      next.insert(index + 1, moved);
                                       update(next);
                                     },
                               icon: const Icon(Icons.arrow_downward, size: 17),
@@ -517,7 +650,7 @@ class _SchemaFormState extends State<SchemaForm> {
                             IconButton(
                               tooltip: s.t('action.remove'),
                               onPressed: () {
-                                final next = [...paths]..removeAt(index);
+                                final next = [...items]..removeAt(index);
                                 update(next);
                               },
                               icon: const Icon(Icons.close, size: 17),

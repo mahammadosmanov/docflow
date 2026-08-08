@@ -42,6 +42,9 @@ class Param:
     choice_labels: dict[str, str] = field(default_factory=dict)
     visible_when: dict[str, Any] = field(default_factory=dict)
     help_key: str | None = None
+    item_choices: list[str] = field(default_factory=list)
+    item_choice_labels: dict[str, str] = field(default_factory=dict)
+    item_default: str | None = None
 
     def to_json(self) -> dict:
         return {
@@ -54,6 +57,9 @@ class Param:
             "choiceLabels": self.choice_labels,
             "visibleWhen": self.visible_when,
             "helpKey": self.help_key,
+            "itemChoices": self.item_choices,
+            "itemChoiceLabels": self.item_choice_labels,
+            "itemDefault": self.item_default,
         }
 
 
@@ -219,12 +225,14 @@ class Result:
     failed: int = 0
     journal_id: str = ""
     errors: list[Warning] = field(default_factory=list)
+    meta: dict = field(default_factory=dict)
 
     def to_json(self) -> dict:
         return {
             "applied": self.applied, "failed": self.failed,
             "journalId": self.journal_id,
             "errors": [e.to_json() for e in self.errors],
+            "meta": self.meta,
         }
 
 

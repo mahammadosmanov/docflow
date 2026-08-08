@@ -5,6 +5,7 @@ from . import ops  # noqa: F401  — @register'lari tetikler
 from . import review as _review
 from .clipboard import copy_plan_table as _copy_plan_table
 from .clipboard import preview_plan_table as _preview_plan_table
+from .ops import batch_print as _batch_print
 from .contracts import Plan, Step, Warning
 from .fs.apply import apply_steps as _apply_steps
 from .fs.apply import get_journal as _get_journal
@@ -98,6 +99,44 @@ def _ping(_: dict) -> dict:
     return {"ok": True, "version": __version__}
 
 
+def _operation_session(p: dict) -> dict:
+    if p.get("op") != "files.batch_print":
+        return {}
+    try:
+        recover = p.get("recover", True)
+        if not isinstance(recover, bool):
+            raise ValueError("recover must be a boolean")
+        return _batch_print.get_guided_session(
+            p.get("sessionId") or "",
+            recover=recover,
+        )
+    except KeyError:
+        return {}
+
+
+def _operation_session_action(p: dict) -> dict:
+    if p.get("op") != "files.batch_print":
+        raise ValueError("operation has no guided session")
+    session_id = p.get("sessionId")
+    action = p.get("action")
+    revision = p.get("revision")
+    if not isinstance(session_id, str) or not session_id:
+        raise ValueError("sessionId must be a non-empty string")
+    if not isinstance(action, str):
+        raise ValueError("action must be a string")
+    if (
+        not isinstance(revision, int)
+        or isinstance(revision, bool)
+        or revision < 0
+    ):
+        raise ValueError("revision must be a non-negative integer")
+    return _batch_print.update_guided_session(
+        session_id,
+        action,
+        revision,
+    )
+
+
 def main() -> None:
     serve({
         "ping": _ping,
@@ -112,6 +151,8 @@ def main() -> None:
         "review_preview": _review_preview,
         "history_list": _history,
         "journal_get": _journal_get,
+        "operation_session": _operation_session,
+        "operation_session_action": _operation_session_action,
     })
 
 

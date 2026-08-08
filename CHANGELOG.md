@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 - 2026-08-08
+
+### Added
+
+- Toplu yazdırmada A0-A5, Letter ve Legal kâğıt boyutunu tüm dosyalara, seçili
+  dosya grubuna veya tek bir dosyaya atama
+- Her belgeyi Windows'ta kayıtlı uygulamasında açan yönlendirmeli yazdırma akışı;
+  kullanıcı uygulamanın yerel Yazdır penceresinde boyut ve kopya sayısını onaylar
+- Kalıcı yazdırma kuyruğunda güvenli durdurma, kaldığı dosyadan devam etme ve
+  bütün kuyruğu baştan başlatma
+
+### Safety
+
+- Her dosya açılmadan önce atomik kuyruk checkpoint'i yazılır; uygulama kapanırsa
+  tamamlanan dosyalar atlanır ve bekleyen dosya geri yüklenir
+- Windows'a teslim edilmiş bir yazdırma işini geri almış gibi davranılmaz;
+  durdurma yalnızca henüz onaylanmamış dosyaları bekletir
+
 ## 0.5.4 - 2026-08-03
 
 ### Fixed

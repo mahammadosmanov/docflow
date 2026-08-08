@@ -2,5 +2,5 @@
 ///
 /// Keep this synchronized with `pubspec.yaml` and the sidecar version.
 /// The release contract test rejects a build when any of them differs.
-const docFlowVersion = '0.5.4';
-const docFlowBuildNumber = 17;
+const docFlowVersion = '0.6.0';
+const docFlowBuildNumber = 18;

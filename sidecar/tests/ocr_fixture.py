@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 
 import cv2
-import fitz
+import pymupdf as fitz
 import numpy as np
 
 EXPECTED_CODE = "AZE-SUN-INT-QMS-RFI-CIV-0428"

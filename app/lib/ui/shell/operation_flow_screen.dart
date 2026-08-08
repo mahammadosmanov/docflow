@@ -9,12 +9,13 @@ import '../../core/l10n/strings.dart';
 import '../../core/operations/models.dart';
 import '../../core/settings/settings_store.dart';
 import '../forms/editable_plan_table.dart';
+import '../forms/guided_session_panel.dart';
 import '../forms/schema_form.dart';
 import '../theme/app_theme.dart';
 import '../theme/responsive.dart';
 import 'review_screen.dart';
 
-enum _Stage { form, previewing, preview, applying, result }
+enum _Stage { form, previewing, preview, applying, guided, result }
 
 Map<String, dynamic> persistentOperationValues(
   List<ParamDef> params,
@@ -60,6 +61,8 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   List<Map<String, dynamic>> _editorRows = [];
   bool _editorDirty = false;
   String? _copyingSheet;
+  GuidedSession? _guidedSession;
+  bool _sessionBusy = false;
 
   @override
   void initState() {
@@ -70,6 +73,20 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     saved.forEach((k, v) {
       if (known.contains(k)) _values[k] = v;
     });
+    unawaited(_restoreSession());
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final session = await widget.client.operationSession(widget.op.id);
+      if (!mounted || session == null || session.isComplete) return;
+      setState(() {
+        _guidedSession = session;
+        _stage = _Stage.guided;
+      });
+    } catch (error) {
+      if (mounted) _snack(error.toString());
+    }
   }
 
   @override
@@ -151,7 +168,8 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
       final res = await widget.client.apply(plan.planId!);
       setState(() {
         _result = res;
-        _stage = _Stage.result;
+        _guidedSession = res.guidedSession;
+        _stage = _guidedSession == null ? _Stage.result : _Stage.guided;
       });
       await _syncCloud(widget.op.id, res);
     } catch (e) {
@@ -160,6 +178,51 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
     } finally {
       await _sub?.cancel();
     }
+  }
+
+  Future<void> _sessionAction(String action) async {
+    final session = _guidedSession;
+    if (session == null || _sessionBusy) return;
+    setState(() => _sessionBusy = true);
+    try {
+      final updated = await widget.client.operationSessionAction(
+        widget.op.id,
+        session.sessionId,
+        session.revision,
+        action,
+      );
+      if (!mounted) return;
+      setState(() => _guidedSession = updated);
+    } catch (error) {
+      try {
+        final refreshed = await widget.client.operationSession(
+          widget.op.id,
+          recover: false,
+        );
+        if (mounted && refreshed != null) {
+          setState(() => _guidedSession = refreshed);
+        }
+      } catch (_) {
+        // Preserve the original action error below.
+      }
+      if (mounted) _snack(error.toString());
+    } finally {
+      if (mounted) setState(() => _sessionBusy = false);
+    }
+  }
+
+  void _finishGuidedSession() {
+    final session = _guidedSession;
+    if (session == null || !session.isComplete) return;
+    setState(() {
+      _result = ApplyResult(
+        applied: session.total,
+        failed: 0,
+        journalId: '',
+        errors: const [],
+      );
+      _stage = _Stage.result;
+    });
   }
 
   List<Map<String, dynamic>> _rowsFrom(Plan plan) {
@@ -239,7 +302,7 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
   int get _stepIndex => switch (_stage) {
     _Stage.form => 0,
     _Stage.previewing || _Stage.preview => 1,
-    _Stage.applying || _Stage.result => 2,
+    _Stage.applying || _Stage.guided || _Stage.result => 2,
   };
 
   @override
@@ -275,6 +338,16 @@ class _OperationFlowScreenState extends State<OperationFlowScreen> {
         return _previewView(s);
       case _Stage.applying:
         return _applyingView(s);
+      case _Stage.guided:
+        return GuidedSessionPanel(
+          session: _guidedSession!,
+          busy: _sessionBusy,
+          onComplete: () => _sessionAction('complete'),
+          onStop: () => _sessionAction('stop'),
+          onContinue: () => _sessionAction('continue'),
+          onRestart: () => _sessionAction('restart'),
+          onDone: _finishGuidedSession,
+        );
       case _Stage.result:
         return _resultView(s);
     }

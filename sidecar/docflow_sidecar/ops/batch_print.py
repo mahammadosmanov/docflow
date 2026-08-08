@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import pathlib
 import time
+import uuid
+from contextlib import contextmanager
 from ctypes import wintypes
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Iterator
 
 from ..contracts import (
-    BoolParam,
-    ChoiceParam,
     FilesParam,
     IntParam,
     Operation,
@@ -27,6 +29,9 @@ from ..rpc import notify
 
 MAX_FILES = 250
 MAX_COPIES = 99
+PAPER_SIZES = ["A0", "A1", "A2", "A3", "A4", "A5", "LETTER", "LEGAL"]
+DEFAULT_PAPER_SIZE = "A4"
+PRINT_SESSION_FILE = pathlib.Path.home() / ".docflow" / "print-session.json"
 PRINTER_ENUM_LOCAL = 0x00000002
 PRINTER_ENUM_CONNECTIONS = 0x00000004
 ASSOCSTR_COMMAND = 1
@@ -465,19 +470,272 @@ def _submit_print_job(path: pathlib.Path, printer: str, verb: str) -> None:
         monitor.wait_for_completion(path.name)
 
 
-def _ordered_unique_files(raw: Any) -> list[pathlib.Path]:
+def _ordered_unique_files(raw: Any) -> list[tuple[pathlib.Path, str]]:
     if not isinstance(raw, list):
         return []
     seen: set[str] = set()
-    files: list[pathlib.Path] = []
+    files: list[tuple[pathlib.Path, str]] = []
     for value in raw:
-        path = pathlib.Path(str(value)).expanduser().absolute()
+        if isinstance(value, dict):
+            raw_path = str(value.get("path") or "")
+            requested = str(value.get("option") or DEFAULT_PAPER_SIZE).upper()
+        else:
+            raw_path = str(value)
+            requested = DEFAULT_PAPER_SIZE
+        expanded = pathlib.Path(raw_path).expanduser()
+        path = (
+            expanded
+            if expanded.is_absolute() or pathlib.PureWindowsPath(raw_path).is_absolute()
+            else expanded.absolute()
+        )
+        paper_size = requested if requested in PAPER_SIZES else DEFAULT_PAPER_SIZE
         key = os.path.normcase(str(path))
         if key in seen:
             continue
         seen.add(key)
-        files.append(path)
+        files.append((path, paper_size))
     return files
+
+
+def _session_view(data: dict[str, Any]) -> dict[str, Any]:
+    current = int(data.get("current") or 0)
+    raw_jobs = data.get("jobs")
+    jobs: list[Any] = raw_jobs if isinstance(raw_jobs, list) else []
+    return {
+        "sessionId": str(data.get("sessionId") or ""),
+        "revision": int(data.get("revision") or 0),
+        "opId": "files.batch_print",
+        "status": str(data.get("status") or "paused"),
+        "current": current,
+        "total": len(jobs),
+        "currentJob": jobs[current] if current < len(jobs) else None,
+        "lastError": str(data.get("lastError") or ""),
+    }
+
+
+@contextmanager
+def _guided_session_lock() -> Iterator[None]:
+    PRINT_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = PRINT_SESSION_FILE.with_suffix(".lock")
+    with lock_path.open("a+b") as lock_file:
+        if os.name == "nt":
+            import msvcrt
+
+            if lock_file.tell() == 0:
+                lock_file.write(b"\0")
+                lock_file.flush()
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _write_guided_session(data: dict[str, Any]) -> None:
+    PRINT_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    data["revision"] = int(data.get("revision") or 0) + 1
+    data["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    temporary = PRINT_SESSION_FILE.with_name(
+        f".{PRINT_SESSION_FILE.name}.{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        with temporary.open("w", encoding="utf-8") as stream:
+            stream.write(json.dumps(data, ensure_ascii=False, indent=2))
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(PRINT_SESSION_FILE)
+        if os.name != "nt":
+            directory_fd = os.open(PRINT_SESSION_FILE.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _read_guided_session() -> dict[str, Any]:
+    if not PRINT_SESSION_FILE.is_file():
+        raise KeyError("print session not found")
+    raw = json.loads(PRINT_SESSION_FILE.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("invalid print session")
+    jobs = raw.get("jobs")
+    current = raw.get("current")
+    revision = raw.get("revision", 0)
+    status = raw.get("status")
+    valid_jobs = (
+        isinstance(jobs, list)
+        and bool(jobs)
+        and all(
+            isinstance(job, dict)
+            and isinstance(job.get("path"), str)
+            and _is_absolute_document_path(job["path"])
+            and str(job.get("paperSize") or "") in PAPER_SIZES
+            and isinstance(job.get("copies"), int)
+            and not isinstance(job.get("copies"), bool)
+            and 1 <= int(job["copies"]) <= MAX_COPIES
+            for job in jobs
+        )
+    )
+    valid_current = (
+        isinstance(current, int)
+        and not isinstance(current, bool)
+        and isinstance(jobs, list)
+        and 0 <= current <= len(jobs)
+    )
+    valid_status = (
+        status in {"active", "paused", "completed"}
+        and valid_current
+        and isinstance(jobs, list)
+        and ((status == "completed") == (current == len(jobs)))
+    )
+    if (
+        raw.get("opId") != "files.batch_print"
+        or not isinstance(raw.get("sessionId"), str)
+        or not raw["sessionId"]
+        or not isinstance(revision, int)
+        or isinstance(revision, bool)
+        or revision < 0
+        or not valid_jobs
+        or not valid_status
+    ):
+        raise ValueError("invalid print session")
+    return raw
+
+
+def _open_document(path: pathlib.Path) -> None:
+    if os.name != "nt":
+        raise OSError("Windows is required to open the native print application")
+    if not path.is_file():
+        raise FileNotFoundError(str(path))
+    startfile = getattr(os, "startfile", None)
+    if startfile is None:
+        raise OSError("Windows Shell is unavailable")
+    startfile(str(path), "open")
+
+
+def _is_absolute_document_path(value: str) -> bool:
+    return pathlib.Path(value).is_absolute() or pathlib.PureWindowsPath(
+        value
+    ).is_absolute()
+
+
+def _open_current_session_document(data: dict[str, Any]) -> None:
+    current = int(data.get("current") or 0)
+    jobs = data["jobs"]
+    if current >= len(jobs):
+        data["status"] = "completed"
+        data["lastError"] = ""
+        _write_guided_session(data)
+        return
+    data["status"] = "active"
+    data["lastError"] = ""
+    _write_guided_session(data)  # checkpoint before launching another app
+    try:
+        _open_document(pathlib.Path(str(jobs[current]["path"])))
+    except Exception as error:  # noqa: BLE001 - persisted for explicit retry
+        data["status"] = "paused"
+        data["lastError"] = f"{type(error).__name__}: {error}"
+        _write_guided_session(data)
+
+
+def start_guided_session(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    if not jobs:
+        raise ValueError("guided print queue is empty")
+    now = datetime.now(timezone.utc).isoformat()
+    data: dict[str, Any] = {
+        "sessionId": str(uuid.uuid4()),
+        "opId": "files.batch_print",
+        "status": "active",
+        "revision": 0,
+        "current": 0,
+        "jobs": jobs,
+        "createdAt": now,
+        "updatedAt": now,
+        "lastError": "",
+    }
+    with _guided_session_lock():
+        if PRINT_SESSION_FILE.is_file():
+            previous = _read_guided_session()
+            if previous.get("status") != "completed":
+                raise RuntimeError("unfinished print session exists")
+        # Validate the exact durable shape before the first checkpoint.
+        if not all(
+            isinstance(job.get("path"), str)
+            and _is_absolute_document_path(job["path"])
+            and str(job.get("paperSize") or "") in PAPER_SIZES
+            and isinstance(job.get("copies"), int)
+            and not isinstance(job.get("copies"), bool)
+            and 1 <= int(job["copies"]) <= MAX_COPIES
+            for job in jobs
+        ):
+            raise ValueError("invalid guided print job")
+        _open_current_session_document(data)
+        return _session_view(data)
+
+
+def get_guided_session(
+    session_id: str = "",
+    *,
+    recover: bool = False,
+) -> dict[str, Any]:
+    with _guided_session_lock():
+        data = _read_guided_session()
+        if session_id and data.get("sessionId") != session_id:
+            raise KeyError("print session not found")
+        if recover and data.get("status") == "active":
+            # The querying UI may be a new process after an application or PC
+            # restart. Require an explicit Continue before reopening this file.
+            data["status"] = "paused"
+            _write_guided_session(data)
+        return _session_view(data)
+
+
+def update_guided_session(
+    session_id: str,
+    action: str,
+    expected_revision: int,
+) -> dict[str, Any]:
+    with _guided_session_lock():
+        data = _read_guided_session()
+        if data.get("sessionId") != session_id:
+            raise KeyError("print session not found")
+        if int(data.get("revision") or 0) != expected_revision:
+            raise RuntimeError("print session changed; reload before retrying")
+        status = str(data.get("status"))
+        if action == "stop":
+            if status != "active":
+                raise RuntimeError("print session is not active")
+            data["status"] = "paused"
+            _write_guided_session(data)
+        elif action == "continue":
+            if status != "paused":
+                raise RuntimeError("print session is not paused")
+            _open_current_session_document(data)
+        elif action == "restart":
+            if status != "paused":
+                raise RuntimeError("print session is not paused")
+            data["current"] = 0
+            _open_current_session_document(data)
+        elif action == "complete":
+            if status != "active":
+                raise RuntimeError("print session is not active")
+            data["current"] = int(data.get("current") or 0) + 1
+            _open_current_session_document(data)
+        else:
+            raise ValueError(f"unsupported print session action: {action}")
+        return _session_view(data)
 
 
 @register("files.batch_print")
@@ -486,21 +744,17 @@ class BatchPrint(Operation):
     description_key = "op.files.batch_print.desc"
 
     def __init__(self) -> None:
-        printers, default = _printer_inventory()
-        self._printers = printers
-        self._default_printer = default
         self.schema = ParamSchema([
             FilesParam(
                 "files",
                 "param.print.files",
                 help_key="param.print.files.help",
-            ),
-            ChoiceParam(
-                "printer",
-                "param.print.printer",
-                printers,
-                default=default or (printers[0] if printers else None),
-                help_key="param.print.printer.help",
+                item_choices=PAPER_SIZES,
+                item_choice_labels={
+                    "LETTER": "print.paper.letter",
+                    "LEGAL": "print.paper.legal",
+                },
+                item_default=DEFAULT_PAPER_SIZE,
             ),
             IntParam(
                 "copies",
@@ -508,31 +762,18 @@ class BatchPrint(Operation):
                 default=1,
                 help_key="param.print.copies.help",
             ),
-            BoolParam(
-                "collate",
-                "param.print.collate",
-                default=True,
-                help_key="param.print.collate.help",
-            ),
         ])
 
     def preview(self, params: dict) -> Plan:
         plan = Plan(op_id=self.id)
         files = _ordered_unique_files(params.get("files"))
-        printer = str(params.get("printer") or "")
+
         try:
             raw_copies = params.get("copies")
             copies = 1 if raw_copies in (None, "") else int(raw_copies)
         except (TypeError, ValueError):
             copies = 0
-        collate = bool(params.get("collate", True))
 
-        if not self._printers:
-            plan.warnings.append(Warning("warn.print.noPrinters"))
-            return plan
-        if printer not in self._printers:
-            plan.warnings.append(Warning("warn.print.printerUnavailable", printer))
-            return plan
         if copies < 1 or copies > MAX_COPIES:
             plan.warnings.append(Warning("warn.print.invalidCopies", str(copies)))
             return plan
@@ -540,8 +781,8 @@ class BatchPrint(Operation):
             plan.warnings.append(Warning("warn.print.tooManyFiles", str(len(files))))
             return plan
 
-        printable: list[dict[str, str]] = []
-        for index, path in enumerate(files):
+        printable: list[dict[str, str | int]] = []
+        for index, (path, paper_size) in enumerate(files):
             notify(
                 "progress",
                 {"phase": "preview", "done": index, "total": len(files)},
@@ -549,17 +790,11 @@ class BatchPrint(Operation):
             if not path.is_file():
                 plan.warnings.append(Warning("warn.print.fileMissing", path.name))
                 continue
-            verb = _resolve_print_verb(path, printer, self._default_printer)
-            if not verb:
-                plan.warnings.append(
-                    Warning("warn.print.noHandler", f"{path.name} ({path.suffix or '?'})")
-                )
-                continue
-            item = {
+            item: dict[str, str | int] = {
                 "path": str(path),
-                "printer": printer,
-                "verb": verb,
                 "format": (path.suffix.lstrip(".") or "file").upper(),
+                "paperSize": paper_size,
+                "copies": copies,
             }
             printable.append(item)
             plan.steps.append(Step(
@@ -568,33 +803,23 @@ class BatchPrint(Operation):
                 str(path),
                 note_key="note.print.queued",
                 meta={
-                    "printer": printer,
-                    "verb": verb,
                     "format": item["format"],
                     "copies": copies,
+                    "paperSize": paper_size,
                 },
             ))
 
-        jobs: list[dict[str, str | int]] = []
-        if collate:
-            for copy_index in range(1, copies + 1):
-                for item in printable:
-                    jobs.append({**item, "copy": copy_index})
-        else:
-            for item in printable:
-                for copy_index in range(1, copies + 1):
-                    jobs.append({**item, "copy": copy_index})
+        jobs: list[dict[str, str | int]] = list(printable)
 
         if printable:
             plan.warnings.append(Warning("warn.print.nonUndoable"))
         plan.meta = {
-            "printer": printer,
             "copies": copies,
-            "collate": collate,
             "jobs": jobs,
             "fileCount": len(printable),
             "jobCount": len(jobs),
             "nonUndoable": True,
+            "guided": True,
         }
         notify(
             "progress",
@@ -603,52 +828,16 @@ class BatchPrint(Operation):
         return plan
 
     def apply(self, plan: Plan) -> Result:
-        result = Result()
         jobs = plan.meta.get("jobs")
-        if not isinstance(jobs, list):
+        if not isinstance(jobs, list) or not jobs:
             return Result(
                 failed=1,
                 errors=[Warning("error.print.invalidPlan")],
             )
-        for index, raw in enumerate(jobs):
-            notify(
-                "progress",
-                {
-                    "phase": "print_waiting",
-                    "done": index,
-                    "total": len(jobs),
-                    "subject": pathlib.Path(str(raw.get("path", ""))).name
-                    if isinstance(raw, dict)
-                    else "",
-                },
+        if not all(isinstance(job, dict) and job.get("path") for job in jobs):
+            return Result(
+                failed=1,
+                errors=[Warning("error.print.invalidPlan")],
             )
-            try:
-                if not isinstance(raw, dict):
-                    raise ValueError("invalid print job")
-                path = pathlib.Path(str(raw["path"]))
-                printer = str(raw["printer"])
-                verb = str(raw["verb"])
-                _submit_print_job(path, printer, verb)
-                result.applied += 1
-            except Exception as error:  # noqa: BLE001 - report exact queue failure
-                remaining = len(jobs) - index - 1
-                result.failed += 1 + remaining
-                subject = str(raw.get("path") if isinstance(raw, dict) else raw)
-                result.errors.append(
-                    Warning(
-                        "error.print.failed",
-                        f"{pathlib.Path(subject).name}: {type(error).__name__}: {error}",
-                    )
-                )
-                if remaining:
-                    result.errors.append(
-                        Warning("error.print.queueStopped", str(remaining))
-                    )
-                # Strict ordering is fail-closed. Continuing after an unknown
-                # print state could place later files ahead of this one.
-                break
-        notify(
-            "progress",
-            {"phase": "apply", "done": len(jobs), "total": len(jobs)},
-        )
-        return result
+        session = start_guided_session(jobs)
+        return Result(meta={"guidedSession": session})

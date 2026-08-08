@@ -53,6 +53,9 @@ class ParamDef {
     this.choiceLabels = const {},
     this.visibleWhen = const {},
     this.helpKey,
+    this.itemChoices = const [],
+    this.itemChoiceLabels = const {},
+    this.itemDefault,
   });
 
   final String name;
@@ -64,6 +67,9 @@ class ParamDef {
   final Map<String, String> choiceLabels;
   final Map<String, dynamic> visibleWhen;
   final String? helpKey;
+  final List<String> itemChoices;
+  final Map<String, String> itemChoiceLabels;
+  final String? itemDefault;
 
   factory ParamDef.fromJson(Map<String, dynamic> j) => ParamDef(
     name: j['name'] as String,
@@ -80,6 +86,13 @@ class ParamDef {
     visibleWhen:
         (j['visibleWhen'] as Map?)?.cast<String, dynamic>() ?? const {},
     helpKey: j['helpKey'] as String?,
+    itemChoices: (j['itemChoices'] as List?)?.cast<String>() ?? const [],
+    itemChoiceLabels:
+        (j['itemChoiceLabels'] as Map?)?.map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ) ??
+        const {},
+    itemDefault: j['itemDefault'] as String?,
   );
 }
 
@@ -194,12 +207,21 @@ class ApplyResult {
     required this.failed,
     required this.journalId,
     required this.errors,
+    this.meta = const {},
   });
 
   final int applied;
   final int failed;
   final String journalId;
   final List<PlanWarning> errors;
+  final Map<String, dynamic> meta;
+
+  GuidedSession? get guidedSession {
+    final raw = meta['guidedSession'];
+    return raw is Map
+        ? GuidedSession.fromJson(raw.cast<String, dynamic>())
+        : null;
+  }
 
   factory ApplyResult.fromJson(Map<String, dynamic> j) => ApplyResult(
     applied: (j['applied'] as num).toInt(),
@@ -208,7 +230,103 @@ class ApplyResult {
     errors: (j['errors'] as List? ?? [])
         .map((e) => PlanWarning.fromJson(e as Map<String, dynamic>))
         .toList(),
+    meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
   );
+}
+
+class GuidedSession {
+  GuidedSession({
+    required this.sessionId,
+    required this.revision,
+    required this.opId,
+    required this.status,
+    required this.current,
+    required this.total,
+    required this.currentJob,
+    required this.lastError,
+  });
+
+  final String sessionId;
+  final int revision;
+  final String opId;
+  final String status;
+  final int current;
+  final int total;
+  final Map<String, dynamic>? currentJob;
+  final String lastError;
+
+  bool get isPaused => status == 'paused';
+  bool get isComplete => status == 'completed';
+  int get currentNumber => isComplete ? total : current + 1;
+
+  factory GuidedSession.fromJson(Map<String, dynamic> j) {
+    final rawSessionId = j['sessionId'];
+    final rawOpId = j['opId'];
+    final rawRevision = j['revision'];
+    final rawStatus = j['status'];
+    final rawCurrent = j['current'];
+    final rawTotal = j['total'];
+    final rawLastError = j['lastError'];
+    final sessionId = rawSessionId is String ? rawSessionId : '';
+    final opId = rawOpId is String ? rawOpId : '';
+    final revision = rawRevision is int ? rawRevision : -1;
+    final status = rawStatus is String ? rawStatus : '';
+    final current = rawCurrent is int ? rawCurrent : -1;
+    final total = rawTotal is int ? rawTotal : -1;
+    final currentJob = j['currentJob'] is Map
+        ? (j['currentJob'] as Map).cast<String, dynamic>()
+        : null;
+    final currentPath = currentJob?['path'];
+    final currentPaper = currentJob?['paperSize'];
+    final absoluteCurrentPath =
+        currentPath is String &&
+        (currentPath.startsWith('/') ||
+            currentPath.startsWith(r'\\') ||
+            RegExp(r'^[A-Za-z]:[\\/]').hasMatch(currentPath));
+    final validCurrentJob =
+        currentJob != null &&
+        absoluteCurrentPath &&
+        currentPaper is String &&
+        const {
+          'A0',
+          'A1',
+          'A2',
+          'A3',
+          'A4',
+          'A5',
+          'LETTER',
+          'LEGAL',
+        }.contains(currentPaper) &&
+        currentJob['copies'] is int &&
+        (currentJob['copies'] as int) >= 1 &&
+        (currentJob['copies'] as int) <= 99;
+    if (sessionId.isEmpty ||
+        opId != 'files.batch_print' ||
+        revision < 0 ||
+        (rawLastError != null && rawLastError is! String) ||
+        rawCurrent is! int ||
+        rawTotal is! int ||
+        !const {'active', 'paused', 'completed'}.contains(status) ||
+        current < 0 ||
+        total < 0 ||
+        current > total ||
+        (status == 'completed' && current != total) ||
+        (status == 'completed' && currentJob != null) ||
+        (status != 'completed' &&
+            (total == 0 || current >= total || !validCurrentJob))) {
+      throw const FormatException('invalid guided session');
+    }
+    return GuidedSession(
+      sessionId: sessionId,
+      revision: revision,
+      opId: opId,
+      status: status,
+      current: current,
+      total: total,
+      currentJob: currentJob,
+      lastError: rawLastError as String? ?? '',
+    );
+  }
 }
 
 class Progress {

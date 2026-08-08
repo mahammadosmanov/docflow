@@ -243,7 +243,7 @@ jobs:
           name: DocFlow-Windows-x64
           path: app/build/windows/x64/runner/Release/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload lightweight UI component
         uses: actions/upload-artifact@v5
@@ -253,4 +253,4 @@ jobs:
             app/build/windows/x64/runner/Release/data/app.so
             app/build/windows/x64/runner/Release/BUILD-MANIFEST.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7

@@ -32,8 +32,15 @@ SidecarLaunch resolveSidecarLaunch({
   final windows = isWindows ?? Platform.isWindows;
   final separator = pathSeparator ?? Platform.pathSeparator;
   bool exists(String path) => fileExists?.call(path) ?? File(path).existsSync();
+  String directoryOf(String path) {
+    final separatorIndex = path.lastIndexOf(separator);
+    return separatorIndex < 0
+        ? File(path).parent.path
+        : path.substring(0, separatorIndex);
+  }
+
   final executablePath = resolvedExecutable ?? Platform.resolvedExecutable;
-  final executableDir = File(executablePath).parent.path;
+  final executableDir = directoryOf(executablePath);
   final sidecarName = windows ? 'docflow_sidecar.exe' : 'docflow_sidecar';
   final sidecarRoot = '$executableDir${separator}sidecar';
   final candidates = [
@@ -50,7 +57,7 @@ SidecarLaunch resolveSidecarLaunch({
     return SidecarLaunch(
       candidate,
       const [],
-      File(candidate).parent.path,
+      directoryOf(candidate),
       exists(tesseract) ? {'DOCFLOW_TESSERACT': tesseract} : const {},
     );
   }
@@ -58,16 +65,11 @@ SidecarLaunch resolveSidecarLaunch({
   final python = environment['DOCFLOW_PY'];
   final sidecarDir = environment['DOCFLOW_SIDECAR_DIR'];
   if (python != null && sidecarDir != null) {
-    return SidecarLaunch(
-      python,
-      const ['-m', 'docflow_sidecar'],
-      sidecarDir,
-    );
+    return SidecarLaunch(python, const ['-m', 'docflow_sidecar'], sidecarDir);
   }
 
-  return SidecarLaunch(
-    devPython,
-    const ['-m', 'docflow_sidecar'],
-    devSidecarDir,
-  );
+  return SidecarLaunch(devPython, const [
+    '-m',
+    'docflow_sidecar',
+  ], devSidecarDir);
 }
