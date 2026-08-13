@@ -1,0 +1,147 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { App } from "./App";
+import { resetBridgeForTests } from "./lib/bridge";
+
+async function signIn() {
+  expect(
+    await screen.findByRole("heading", { name: "DocFlow" }),
+  ).toBeVisible();
+  fireEvent.change(
+    screen.getByLabelText("Kullanıcı adı veya e-posta"),
+    { target: { value: "demo" } },
+  );
+  fireEvent.change(screen.getByLabelText("Parola"), {
+    target: { value: "secret1" },
+  });
+  const submit = document.querySelector<HTMLButtonElement>(
+    'button[type="submit"]',
+  );
+  expect(submit).not.toBeNull();
+  fireEvent.click(submit!);
+  await screen.findByRole("heading", { name: "Çalışma alanı" });
+}
+
+afterEach(() => {
+  cleanup();
+  resetBridgeForTests();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-font");
+  document.documentElement.removeAttribute("data-compact");
+});
+
+describe("DocFlow shell", () => {
+  it("signs in and opens the schema-driven operation", async () => {
+    render(<App />);
+    await signIn();
+
+    expect(
+      await screen.findByRole("heading", { name: "İşlemler" }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Taramaları İşle/ }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Ayarlar" }),
+    ).toBeVisible();
+    expect(screen.getByText("Kaynak klasör")).toBeVisible();
+    expect(screen.getByText("Hedef klasör")).toBeVisible();
+  });
+
+  it("exposes every preserved feature from the workspace", async () => {
+    render(<App />);
+    await signIn();
+
+    expect(screen.getByText("Diğer özellikler")).toBeVisible();
+    expect(
+      screen.getByText("Bekleyen dosyaları tek tek kontrol et ve yerleştir."),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Yapılan işlemleri gör ve güvenle geri al."),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Dil, görünüm, yazı ve hesap tercihlerini yönet.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Kullanıcı erişimlerini ve yönetici yetkilerini yönet.",
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen
+        .getByText("Yapılan işlemleri gör ve güvenle geri al.")
+        .closest("button")!,
+    );
+    const historyHeadings = await screen.findAllByRole("heading", {
+      name: "Geçmiş",
+    });
+    expect(historyHeadings[0]).toBeVisible();
+  });
+
+  it("renders the restored v0.5.4 RFI and print operation forms", async () => {
+    render(<App />);
+    await signIn();
+
+    expect(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: /İmzalı RFI ilk sayfalarını hazırla/,
+      }),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    expect(await screen.findByText("RFI Log Excel dosyası")).toBeVisible();
+    expect(screen.getByText("Sheet'ler ve RFI adetleri")).toBeVisible();
+    expect(screen.getByText("Talep mailini buraya yapıştır")).toBeVisible();
+    expect(
+      screen.queryByText("Gemini API anahtarı (yalnız Gemini için)"),
+    ).toBeNull();
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "gemini" },
+    });
+    expect(
+      screen.getByText("Gemini API anahtarı (yalnız Gemini için)"),
+    ).toBeVisible();
+  });
+
+  it("renders the signed first-page staging form from its schema", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /İmzalı RFI ilk sayfalarını hazırla/,
+      }),
+    );
+    expect(await screen.findByText("Yeni imzalı taramalar klasörü")).toBeVisible();
+    expect(screen.getByText("Mevcut RFI arşivinin kökü")).toBeVisible();
+    expect(screen.getByText("Review çıktı klasörü")).toBeVisible();
+    expect(
+      screen.getByText("Yeni taramaların alt klasörlerini de tara"),
+    ).toBeVisible();
+  });
+
+  it("opens preferences before authentication", async () => {
+    render(<App />);
+    await screen.findByRole("heading", { name: "DocFlow" });
+    fireEvent.click(screen.getByRole("button", { name: "Ayarlar" }));
+    expect(
+      await screen.findByRole("heading", { name: "Ayarlar" }),
+    ).toBeVisible();
+    expect(screen.getByText("Dil")).toBeVisible();
+    expect(screen.getByText("Tema")).toBeVisible();
+  });
+});

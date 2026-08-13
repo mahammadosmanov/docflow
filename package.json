@@ -1,0 +1,36 @@
+{
+  "name": "docflow-desktop",
+  "version": "0.5.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config frontend/vite.config.ts",
+    "build": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
+    "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1",
+    "test": "vitest run --config frontend/vite.config.ts",
+    "test:watch": "vitest --config frontend/vite.config.ts",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.2",
+    "@tauri-apps/plugin-opener": "2.5.4",
+    "@tauri-apps/plugin-shell": "2.3.5",
+    "lucide-react": "1.26.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.9.5",
+    "@testing-library/jest-dom": "7.0.0",
+    "@testing-library/react": "16.3.2",
+    "@types/node": "25.5.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "jsdom": "29.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

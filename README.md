@@ -1,77 +1,96 @@
 # DocFlow
 
-DocFlow, Windows üzerinde belge işlerini otomatikleştiren Flutter masaüstü
-uygulamasıdır. İş mantığı, uygulamayla birlikte paketlenen Python sidecar
-tarafından yürütülür.
+DocFlow keeps all three original 0.5.4 RFI workflow operations and adds a safe
+signed-page staging workflow:
 
-Güncel sürüm: **0.4.0**. Sürüm geçmişi ve değişiklikler
-[`CHANGELOG.md`](CHANGELOG.md) içinde tutulur.
+- Process Scans: OCR, rename, organize into optional RFI folders, and review
+- Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe
+  workbook backup/verification, email extraction, and Excel-native mail copy
+- Batch Print: one strictly ordered Windows print queue for mixed file types
+- Stage signed RFI first pages: identify signed scans, keep the archive strictly
+  read-only, and create review copies in the original folder structure with only
+  page one replaced
 
-Desteklenen işlemler:
+The active desktop stack is intentionally small at the product layer:
 
-- Taranmış RFI PDF'lerini OCR ile tanıma, adlandırma ve isteğe göre RFI
-  klasörlerinde veya doğrudan seçilen hedefte saklama
-- CIV/MEC/ELE/PRC kayıtlarını tek işlemde, formül, stil ve doğrulamalarını
-  koruyarak RFI Log'a ekleme ve her sheet için ayrı Excel-native mail tablosu
-- Talep e-postalarından özel/offline veya isteğe bağlı Gemini Free ile doğrulanabilir RFI taslağı çıkarma
-- Yeni RFI satırlarını Excel'in yerel görünümüyle, başlıklar dahil Subcontractor'a kadar kopyalama
-- PDF, Word, Excel ve görselleri kesin sırayla toplu yazdırma
+- Tauri 2 for the native window, lifecycle, dialogs, and packaging
+- React 19 + TypeScript for the schema-driven interface
+- the proven Python engine for PDF/OCR, filesystem safety, Supabase, and undo
+- a private JSON-lines sidecar channel; no local server and no exposed port
 
-E-posta analizi varsayılan olarak tamamen çevrimdışıdır. Gemini seçeneği açıkça
-seçilirse API anahtarı yalnızca o istek için bellekte tutulur; e-posta metni ve
-anahtar ayarlara ya da çalışma kitabına kaydedilmez. Çıkarılan değerler çalışma
-kitabındaki ITP/Item eşlemeleriyle doğrulanır ve uygulanmadan önce düzenlenebilir.
+The webview never receives Supabase access/refresh tokens and cannot directly
+touch arbitrary files. All document changes remain preview-first and journaled.
 
-## Geliştirme
+## Development
 
-Windows'ta Python 3.12.10, Flutter 3.44.8 ve Tesseract
-5.5.0.20241111 kullanılır. Python bağımlılıkları tam sürüme, Flutter
-bağımlılıkları `pubspec.lock` dosyasına sabitlenmiştir.
+Requirements: Python 3.12+, Node 22+, stable Rust, and Tesseract.
 
-```powershell
-cd sidecar
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m mypy --config-file mypy.ini docflow_sidecar
-.\.venv\Scripts\python.exe -m pytest tests -q
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean docflow_sidecar.spec
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m pip install -e .
+npm ci
 
-cd ..\app
-flutter pub get
-dart analyze
-flutter test
-flutter build windows --release
+python -m pytest
+python -m mypy src/docflow
+npm test
+npm run build
+python tools/build_sidecar.py
+npm run tauri dev
 ```
 
-Gerçek OCR entegrasyon testini çalıştırmak için Tesseract kurulu olmalıdır:
+On macOS, `./tools/run_macos.sh` prepares missing local dependencies, stages
+the sidecar, and starts the Tauri application.
 
-```powershell
-$env:DOCFLOW_RUN_OCR_INTEGRATION = "1"
-.\sidecar\.venv\Scripts\python.exe -m pytest `
-  sidecar\tests\test_ocr_integration.py -q
+## Release build
+
+```bash
+python tools/build_sidecar.py
+npm run tauri build
 ```
 
-## Windows paketi
+Tauri produces native installers under `src-tauri/target/release/bundle/`.
+The Windows workflow also bundles Tesseract and runs OCR against a real
+image-only PDF before producing an NSIS installer.
 
-Tek yetkili paketleme hattı `.github/workflows/windows-release.yml` dosyasıdır.
-Üretilen `DocFlow-Windows-x64` paketi Flutter uygulamasını, sidecar'ı, Visual
-C++ çalışma zamanı dosyalarını, sabit Tesseract sürümünü ve İngilizce OCR dil
-verisini içerir. Kullanıcı bilgisayarında ayrı Python veya Tesseract kurulumu
-gerekmez.
+## Windows installer
 
-Paket yayınlanmadan önce:
+The simplest path does not require a prepared Windows development machine:
+open the repository's **Actions → windows-build → Run workflow** page. When the
+job finishes, download the `DocFlow-windows-x64` artifact and run the contained
+setup executable.
 
-- Python tip kontrolü ve bütün sidecar testleri
-- gerçek, metin katmanı olmayan PDF üzerinde OCR
-- Flutter analiz ve testleri
-- paketlenmiş sidecar içinde bütün operation'ların varlığı
-- paketlenmiş sidecar + gömülü Tesseract ile salt-okunur OCR önizlemesi
-- bağımlılık ve araç sürümlerini içeren `BUILD-MANIFEST.json`
+For a local Windows build, install Python 3.12+, Node 22+, stable Rust, Visual
+Studio C++ Build Tools, and Tesseract. Then run:
 
-kontrol edilir. Ayrıntılı değişiklik ve release kuralları
-[`docs/RELEASE_SAFETY.md`](docs/RELEASE_SAFETY.md) dosyasındadır.
+```powershell
+npm run build:windows
+```
 
-Visual Studio toolchain bulunmayan kontrollü yerel build ortamında, yeni Flutter
-AOT/assets ve PyInstaller çıktısını doğrulanmış runner ile paketlemek için
-`tools/package_windows_from_runner.ps1` kullanılır. Betik sidecar'ın mutlaka
-`sidecar\docflow_sidecar.exe` yolunda olduğunu ve çalıştığını doğrular.
+That single command installs pinned project dependencies, runs every active
+test and type check, stages Tesseract, freezes and smoke-tests the Python
+sidecar, verifies real image-only PDF OCR, and creates the installer under
+`src-tauri\target\release\bundle\nsis\`.
+
+Building the Windows artifact on Windows or in the supplied GitHub Actions
+runner is recommended. Although Tauri can cross-compile some Windows bundles,
+the native Python/OpenCV sidecar also has to be frozen for Windows.
+
+## Safety model
+
+1. `preview()` reads inputs and creates an immutable `Plan`.
+2. The user reviews and approves that exact plan.
+3. `apply()` executes only approved steps and journals each mutation.
+4. `undo()` reverses journaled steps and never overwrites an existing file.
+
+The signed-page staging operation additionally requires three non-overlapping
+roots: new scans, the read-only archive, and a separate review output. Duplicate
+scan numbers, missing/ambiguous archive matches, and existing outputs are
+reported without selecting or overwriting anything.
+
+Unknown or low-confidence documents go to `_review/`; delete from review is a
+recoverable move to `~/.docflow/trash/`.
+
+See [architecture](docs/ARCHITECTURE.md), [migration decision](docs/MIGRATION.md),
+and [Supabase schema](docs/supabase_auth.sql).

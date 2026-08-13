@@ -77,6 +77,11 @@ returns boolean language sql security definer stable set search_path = '' as $$
                    where u.id = (select auth.uid())), false)
 $$;
 
+revoke all on function public.is_admin() from public;
+revoke all on function public.is_allowed() from public;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_allowed() to authenticated;
+
 -- ---------------------------------------------------------------- kullanici adi
 -- pgcrypto: Supabase'de genelde 'extensions' semasinda hazir gelir.
 create extension if not exists pgcrypto with schema extensions;
@@ -181,16 +186,55 @@ revoke all on public.app_users from anon;
 
 drop policy if exists app_users_select on public.app_users;
 create policy app_users_select on public.app_users for select to authenticated
-  using ( (select auth.uid()) = id or public.is_admin() );
+  using ( (select auth.uid()) = id or (select public.is_admin()) );
 
 -- SADECE admin degistirebilir (kimi onayladigin buradan kontrol edilir).
 drop policy if exists app_users_update on public.app_users;
 create policy app_users_update on public.app_users for update to authenticated
-  using ( public.is_admin() ) with check ( public.is_admin() );
+  using ( (select public.is_admin()) )
+  with check ( (select public.is_admin()) );
 
 -- ---------------------------------------------------------------- history kilitle
-alter table public.history add column if not exists user_id uuid references auth.users(id);
+-- Temiz bir Supabase projesinde de bu dosya tek basina calissin. Onceki surum
+-- history tablosunun panelde daha once elle olusturuldugunu varsayiyordu.
+create table if not exists public.history (
+  id         uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  device     text not null default '',
+  op_id      text not null,
+  applied    integer not null default 0 check (applied >= 0),
+  failed     integer not null default 0 check (failed >= 0),
+  journal_id text not null,
+  summary    text not null default '',
+  steps      jsonb not null default '[]'::jsonb,
+  undone     boolean not null default false,
+  user_id    uuid references auth.users(id) on delete set null,
+  user_email text
+);
+
+alter table public.history add column if not exists user_id uuid;
 alter table public.history add column if not exists user_email text;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conname = 'history_user_id_fkey'
+       and conrelid = 'public.history'::regclass
+  ) then
+    alter table public.history
+      add constraint history_user_id_fkey
+      foreign key (user_id) references auth.users(id) on delete set null;
+  end if;
+end $$;
+
+-- Postgres foreign key sutunlarini otomatik indekslemez. user_id silme/join
+-- islemleri ve uygulamanin created_at siralamasi bu indeksleri kullanir.
+create index if not exists history_user_id_idx
+  on public.history (user_id);
+create index if not exists history_created_at_idx
+  on public.history (created_at desc);
 
 -- anon erisimini KALDIR (artik giris zorunlu)
 drop policy if exists history_anon_select on public.history;
@@ -201,15 +245,19 @@ grant select, insert, update on public.history to authenticated;
 
 drop policy if exists history_select_allowed on public.history;
 create policy history_select_allowed on public.history for select to authenticated
-  using ( public.is_allowed() );
+  using ( (select public.is_allowed()) );
 
 drop policy if exists history_insert_allowed on public.history;
 create policy history_insert_allowed on public.history for insert to authenticated
-  with check ( public.is_allowed() and (user_id is null or user_id = (select auth.uid())) );
+  with check (
+    (select public.is_allowed())
+    and (user_id is null or user_id = (select auth.uid()))
+  );
 
 drop policy if exists history_update_allowed on public.history;
 create policy history_update_allowed on public.history for update to authenticated
-  using ( public.is_allowed() ) with check ( public.is_allowed() );
+  using ( (select public.is_allowed()) )
+  with check ( (select public.is_allowed()) );
 
 -- ---------------------------------------------------------------- BOOTSTRAP
 -- 1) Bu dosyanin TAMAMINI calistir. Tekrar calistirmak GUVENLI ve onaricidir
