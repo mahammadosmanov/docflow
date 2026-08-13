@@ -35,6 +35,28 @@ function Resolve-RequiredCommand {
     return $command.Source
 }
 
+function Assert-WindowsGuiExecutable {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $Path).Path)
+    if ($bytes.Length -lt 96 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+        throw "The built application is not a valid Windows PE executable: $Path"
+    }
+
+    $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+    $subsystemOffset = $peOffset + 24 + 68
+    if ($peOffset -lt 0 -or $subsystemOffset + 1 -ge $bytes.Length) {
+        throw "The built application has an invalid PE header: $Path"
+    }
+
+    # IMAGE_SUBSYSTEM_WINDOWS_GUI = 2. A CUI value of 3 opens the command
+    # window beside the desktop app and closing it terminates the app process.
+    $subsystem = [System.BitConverter]::ToUInt16($bytes, $subsystemOffset)
+    if ($subsystem -ne 2) {
+        throw "The built application uses PE subsystem $subsystem instead of Windows GUI (2)."
+    }
+}
+
 function Resolve-TesseractDirectory {
     param([string]$RequestedPath)
 
@@ -135,6 +157,7 @@ try {
     $env:DOCFLOW_TESSERACT = (Resolve-Path $bundledTesseract).Path
     Invoke-Checked $python ($pythonPrefix + @("tools/ci_ocr_smoke.py", $sidecar.FullName)) "Run packaged OCR smoke test"
     Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis") "Build the Windows installer"
+    Assert-WindowsGuiExecutable "src-tauri\target\release\docflow.exe"
 
     $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" |
         Sort-Object LastWriteTime -Descending |
