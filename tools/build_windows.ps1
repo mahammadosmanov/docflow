@@ -100,7 +100,6 @@ try {
         Invoke-Checked $python ($pythonPrefix + @("-m", "mypy", "src/docflow")) "Run Python type checks"
         Invoke-Checked $npm @("test") "Run interface tests"
         Invoke-Checked $npm @("run", "build") "Build the interface"
-        Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Tauri shell"
     }
 
     $tesseractDir = Resolve-TesseractDirectory $TesseractPath
@@ -126,6 +125,10 @@ try {
         Select-Object -First 1
     if (-not $sidecar) {
         throw "The Windows sidecar was not produced."
+    }
+
+    if (-not $SkipTests) {
+        Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Tauri shell"
     }
 
     Invoke-Checked $sidecar.FullName @("--ping") "Smoke-test the sidecar"
