@@ -220,7 +220,12 @@ def _thresh(gray: np.ndarray, band: float, block: int, c: int) -> np.ndarray:
 
 
 def _ocr(binary: np.ndarray, psm: int) -> str:
-    cfg = f'--oem 3 --psm {psm} -c tessedit_char_whitelist="{WHITELIST}"'
+    # Space is produced by Tesseract's layout/word segmentation; it is not a
+    # glyph the classifier needs in its whitelist.  Keeping the trailing space
+    # inside quotes makes pytesseract's Windows ``shlex(..., posix=False)``
+    # parser raise ``ValueError: No closing quotation`` before OCR can start.
+    classifier_chars = WHITELIST.replace(" ", "")
+    cfg = f"--oem 3 --psm {psm} -c tessedit_char_whitelist={classifier_chars}"
     return str(pytesseract.image_to_string(binary, lang="eng", config=cfg))
 
 

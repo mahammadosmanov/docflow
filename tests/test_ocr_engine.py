@@ -10,12 +10,30 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shlex
 
 import pytest
 
 from docflow.extract import ocr as ocr_mod
 from docflow.registry import get
 import docflow.ops  # noqa: F401  — @register tetikle
+
+
+def test_tesseract_config_is_parseable_by_windows(monkeypatch):
+    """Whitelist config must survive pytesseract's Windows command parser."""
+    captured: dict[str, str] = {}
+
+    def _capture(_binary, *, lang: str, config: str) -> str:
+        assert lang == "eng"
+        captured["config"] = config
+        return ""
+
+    monkeypatch.setattr(ocr_mod.pytesseract, "image_to_string", _capture)
+    ocr_mod._ocr(object(), psm=6)
+
+    parsed = shlex.split(captured["config"], posix=False)
+    assert parsed[:5] == ["--oem", "3", "--psm", "6", "-c"]
+    assert parsed[5].startswith("tessedit_char_whitelist=")
 
 
 def test_engine_missing_plan_has_no_steps(tmp_path, monkeypatch):
