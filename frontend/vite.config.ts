@@ -1,8 +1,12 @@
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
+const frontendRoot = fileURLToPath(new URL(".", import.meta.url));
+
 export default defineConfig({
-  root: new URL(".", import.meta.url).pathname,
+  root: frontendRoot,
   plugins: [react()],
   clearScreen: false,
   server: {
