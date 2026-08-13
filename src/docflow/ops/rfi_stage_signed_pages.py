@@ -298,7 +298,10 @@ def _build_replacement(
         if _preservation_fingerprint(completed) != preservation:
             raise RuntimeError("document metadata or attachments were not preserved")
 
-    with temp_path.open("rb") as stream:
+    # Windows rejects fsync() on a read-only descriptor with EBADF. Opening the
+    # already-validated file read/write does not modify it, but gives both NTFS
+    # and POSIX platforms a descriptor that can be flushed before publication.
+    with temp_path.open("r+b") as stream:
         os.fsync(stream.fileno())
     return file_sha256(temp_path)
 
