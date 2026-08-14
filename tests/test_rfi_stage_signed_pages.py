@@ -9,6 +9,7 @@ import pytest
 from docflow.fs import apply as apply_module
 from docflow.fs.apply import undo
 from docflow.fs.naming import filename_for
+from docflow.ops import rfi_stage_signed_pages as stage_module
 from docflow.ops.rfi_stage_signed_pages import StageSignedFirstPages
 
 
@@ -66,6 +67,47 @@ def _params(signed: Path, archive: Path, review: Path) -> dict[str, object]:
         "review_root": str(review),
         "scan_subfolders": False,
     }
+
+
+def test_windows_publish_retries_a_transient_onedrive_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temp_path = tmp_path / ".review.pdf.docflow-test.tmp"
+    destination = tmp_path / "review.pdf"
+    temp_path.write_bytes(b"completed PDF bytes")
+    real_rename = stage_module.os.rename
+    calls = 0
+
+    def busy_then_rename(source: Path, target: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError("simulated OneDrive sharing violation")
+        real_rename(source, target)
+
+    monkeypatch.setattr(stage_module.os, "rename", busy_then_rename)
+    monkeypatch.setattr(stage_module.time_module, "sleep", lambda _delay: None)
+
+    stage_module._publish_windows_without_overwrite(temp_path, destination)
+
+    assert calls == 3
+    assert destination.read_bytes() == b"completed PDF bytes"
+    assert not temp_path.exists()
+
+
+def test_windows_publish_never_overwrites_an_existing_review_pdf(
+    tmp_path: Path,
+) -> None:
+    temp_path = tmp_path / ".review.pdf.docflow-test.tmp"
+    destination = tmp_path / "review.pdf"
+    temp_path.write_bytes(b"new bytes")
+    destination.write_bytes(b"existing user bytes")
+
+    with pytest.raises(FileExistsError):
+        stage_module._publish_windows_without_overwrite(temp_path, destination)
+
+    assert destination.read_bytes() == b"existing user bytes"
+    assert temp_path.read_bytes() == b"new bytes"
 
 
 def test_stage_replaces_only_first_page_and_never_changes_inputs(
@@ -194,6 +236,53 @@ def test_existing_review_output_is_never_overwritten(tmp_path: Path) -> None:
         "warn.rfi.reviewExists"
     ]
     assert _sha256(output) == before
+
+
+def test_stale_hardlink_from_completed_windows_publish_is_cleaned_safely(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    _make_pdf(signed / "signed.pdf", [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    output = review / archive_pdf.relative_to(archive)
+    _make_pdf(output, ["COMPLETED REVIEW PDF"])
+    before = _sha256(output)
+    stale = output.with_name(f".{output.name}.docflow-leftover.tmp")
+    stage_module.os.link(output, stale)
+    assert stage_module.os.path.samefile(output, stale)
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+
+    operation = StageSignedFirstPages()
+    plan = operation.preview(_params(signed, archive, review))
+
+    assert [step.kind for step in plan.steps] == ["cleanup_temp"]
+    assert [warning.key for warning in plan.warnings] == [
+        "warn.rfi.staleTempFound"
+    ]
+    result = operation.apply(plan)
+    assert result.applied == 1
+    assert result.failed == 0
+    assert not stale.exists()
+    assert output.is_file()
+    assert _sha256(output) == before
+
+
+def test_unrelated_temp_copy_is_never_deleted(tmp_path: Path) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    _make_pdf(signed / "signed.pdf", [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    output = review / archive_pdf.relative_to(archive)
+    _make_pdf(output, ["USER REVIEW FILE"])
+    unrelated = output.with_name(f".{output.name}.docflow-unrelated.tmp")
+    unrelated.write_bytes(output.read_bytes())
+
+    plan = StageSignedFirstPages().preview(_params(signed, archive, review))
+
+    assert plan.steps == []
+    assert [warning.key for warning in plan.warnings] == [
+        "warn.rfi.reviewExists"
+    ]
+    assert unrelated.is_file()
 
 
 def test_review_root_cannot_overlap_archive_or_signed_scans(tmp_path: Path) -> None:

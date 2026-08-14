@@ -39,7 +39,8 @@ export interface Step {
     | "workbook_update"
     | "restore_backup"
     | "print"
-    | "pdf_first_page_replace";
+    | "pdf_first_page_replace"
+    | "cleanup_temp";
   src: string | null;
   dst: string | null;
   noteKey: string | null;

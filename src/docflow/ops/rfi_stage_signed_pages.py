@@ -16,6 +16,7 @@ import os
 import pathlib
 import shutil
 import tempfile
+import time as time_module
 from typing import Any
 
 import fitz
@@ -211,13 +212,68 @@ def _restore_navigation(
     document.set_page_labels(page_labels)
 
 
+def _is_temporary_access_error(error: OSError) -> bool:
+    return (
+        isinstance(error, PermissionError)
+        or error.errno in {errno.EACCES, errno.EPERM, errno.EBUSY}
+        or getattr(error, "winerror", None) in {5, 32, 33}
+    )
+
+
+def _unlink_with_retry(path: pathlib.Path, attempts: int = 40) -> bool:
+    """Remove a temp entry after short-lived OneDrive/AV locks are released."""
+    for attempt in range(attempts):
+        try:
+            path.unlink(missing_ok=True)
+            return True
+        except OSError as error:
+            if not _is_temporary_access_error(error) or attempt >= attempts - 1:
+                return False
+            time_module.sleep(0.15)
+    return False
+
+
+def _publish_windows_without_overwrite(
+    temp_path: pathlib.Path,
+    destination: pathlib.Path,
+    attempts: int = 40,
+) -> None:
+    """Atomically rename on Windows, retrying transient sync/indexer locks.
+
+    Windows ``os.rename`` refuses an existing destination, so it preserves the
+    operation's strict no-overwrite contract without the extra hard-link name
+    that previously remained visible when OneDrive briefly locked the temp.
+    """
+    for attempt in range(attempts):
+        if destination.exists():
+            raise FileExistsError(str(destination))
+        try:
+            os.rename(temp_path, destination)
+            return
+        except FileExistsError:
+            raise
+        except OSError as error:
+            # A destination created by another process always wins, even if the
+            # Windows error was reported as a generic sharing/access failure.
+            if destination.exists():
+                raise FileExistsError(str(destination)) from error
+            if not _is_temporary_access_error(error) or attempt >= attempts - 1:
+                raise
+            time_module.sleep(0.15)
+    raise RuntimeError("Windows PDF publish retry loop ended unexpectedly")
+
+
 def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Path) -> None:
     """Install a completed PDF while preserving the no-overwrite contract."""
+    if os.name == "nt":
+        _publish_windows_without_overwrite(temp_path, destination)
+        return
+
     try:
         # Temp and destination share a directory, so a hard link is an atomic,
         # no-clobber publish on normal NTFS/APFS/ext filesystems.
         os.link(temp_path, destination)
-        temp_path.unlink()
+        _unlink_with_retry(temp_path)
         return
     except FileExistsError:
         raise
@@ -244,7 +300,53 @@ def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Pat
         if created:
             destination.unlink(missing_ok=True)
         raise
-    temp_path.unlink()
+    _unlink_with_retry(temp_path)
+
+
+def _temp_name_matches(temp_name: str, destination_name: str) -> bool:
+    return (
+        temp_name.startswith(f".{destination_name}.docflow-")
+        and temp_name.endswith(".tmp")
+    )
+
+
+def _stale_hardlink_temps(
+    destination: pathlib.Path,
+    review_root: pathlib.Path,
+) -> list[pathlib.Path]:
+    """Find only our stale names that are hard links to a completed output."""
+    try:
+        destination_inside_review = _inside(
+            destination.resolve(strict=True), review_root
+        )
+    except OSError:
+        return []
+    if (
+        not destination.is_file()
+        or destination.is_symlink()
+        or not destination_inside_review
+    ):
+        return []
+    stale: list[pathlib.Path] = []
+    try:
+        candidates = list(destination.parent.iterdir())
+    except OSError:
+        return []
+    for candidate in candidates:
+        if not _temp_name_matches(candidate.name, destination.name):
+            continue
+        try:
+            if (
+                candidate.is_symlink()
+                or not candidate.is_file()
+                or not _inside(candidate.resolve(strict=True), review_root)
+                or not os.path.samefile(candidate, destination)
+            ):
+                continue
+        except OSError:
+            continue
+        stale.append(candidate)
+    return sorted(stale)
 
 
 def _build_replacement(
@@ -433,9 +535,35 @@ class StageSignedFirstPages(Operation):
             relative = archive_pdf.relative_to(archive_root)
             destination = review_root / relative
             if destination.exists():
-                plan.warnings.append(
-                    Warning("warn.rfi.reviewExists", str(relative))
-                )
+                stale_temps = _stale_hardlink_temps(destination, review_root)
+                try:
+                    destination_hash = (
+                        file_sha256(destination) if stale_temps else ""
+                    )
+                except OSError:
+                    stale_temps = []
+                    destination_hash = ""
+                if stale_temps:
+                    for stale_temp in stale_temps:
+                        plan.steps.append(
+                            Step(
+                                "cleanup_temp",
+                                src=str(stale_temp),
+                                dst=str(destination),
+                                note_key="note.rfi.cleanupStaleTemp",
+                                meta={
+                                    "reviewRoot": str(review_root),
+                                    "destinationSha256": destination_hash,
+                                },
+                            )
+                        )
+                    plan.warnings.append(
+                        Warning("warn.rfi.staleTempFound", str(relative))
+                    )
+                else:
+                    plan.warnings.append(
+                        Warning("warn.rfi.reviewExists", str(relative))
+                    )
                 continue
             if not _inside(destination.resolve(strict=False), review_root):
                 plan.warnings.append(
@@ -551,7 +679,8 @@ class StageSignedFirstPages(Operation):
         )
         os.close(descriptor)
         temp_path = pathlib.Path(raw_temp)
-        temp_path.unlink()
+        if not _unlink_with_retry(temp_path):
+            raise PermissionError(f"temporary file is locked: {temp_path}")
         try:
             output_hash = _build_replacement(
                 archive_pdf,
@@ -569,7 +698,10 @@ class StageSignedFirstPages(Operation):
             if file_sha256(destination) != output_hash:
                 raise RuntimeError("published PDF validation failed")
         finally:
-            temp_path.unlink(missing_ok=True)
+            # Cleanup must never turn an already validated/published PDF into
+            # a false failed result. The Windows publish path normally moves
+            # the temp entry away; this is a final retry for exceptional exits.
+            _unlink_with_retry(temp_path)
 
         journal_step = Step(
             "copy",
@@ -580,6 +712,35 @@ class StageSignedFirstPages(Operation):
         )
         journal_step.meta["undoSha256"] = output_hash
         return journal_step
+
+    def _apply_cleanup_temp(self, step: Step) -> None:
+        if step.src is None or step.dst is None:
+            raise ValueError("temp cleanup paths are missing")
+        review_root = _folder(step.meta.get("reviewRoot"), "review root")
+        temp_path = pathlib.Path(step.src)
+        destination = pathlib.Path(step.dst)
+        if temp_path.is_symlink() or destination.is_symlink():
+            raise ValueError("temp cleanup path is redirected")
+        temp_path = temp_path.resolve(strict=True)
+        destination = destination.resolve(strict=True)
+        if (
+            not _inside(temp_path, review_root)
+            or not _inside(destination, review_root)
+            or temp_path.parent != destination.parent
+            or not _temp_name_matches(temp_path.name, destination.name)
+            or not temp_path.is_file()
+            or not destination.is_file()
+            or not os.path.samefile(temp_path, destination)
+        ):
+            raise ValueError("temp cleanup did not match a completed review PDF")
+
+        approved_hash = str(step.meta.get("destinationSha256") or "")
+        if not approved_hash or file_sha256(destination) != approved_hash:
+            raise RuntimeError("review PDF changed after preview; cleanup stopped")
+        if not _unlink_with_retry(temp_path):
+            raise PermissionError(f"temporary file is still locked: {temp_path}")
+        if not destination.is_file() or file_sha256(destination) != approved_hash:
+            raise RuntimeError("review PDF changed during temp cleanup")
 
     def apply(self, plan: Plan) -> Result:
         if plan.op_id != self.id:
@@ -594,9 +755,12 @@ class StageSignedFirstPages(Operation):
             try:
                 if step.kind == "mkdir":
                     self._apply_mkdir(step)
-                    journal_step = step
+                    journal_step: Step | None = step
                 elif step.kind == "pdf_first_page_replace":
                     journal_step = self._apply_pdf(step)
+                elif step.kind == "cleanup_temp":
+                    self._apply_cleanup_temp(step)
+                    journal_step = None
                 else:
                     raise ValueError(f"unsupported approved step: {step.kind}")
             except Exception as error:  # continue other independent RFIs
@@ -609,7 +773,8 @@ class StageSignedFirstPages(Operation):
                 )
             else:
                 result.applied += 1
-                entry.steps.append(journal_step)
+                if journal_step is not None:
+                    entry.steps.append(journal_step)
             finally:
                 entry.pending_step = None
                 write_journal(entry)

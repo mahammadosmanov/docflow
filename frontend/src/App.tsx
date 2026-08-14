@@ -1511,6 +1511,8 @@ function StepRow({ step, s }: { step: Step; s: Strings }) {
           <TableProperties />
         ) : step.kind === "pdf_first_page_replace" ? (
           <Files />
+        ) : step.kind === "cleanup_temp" ? (
+          <Trash2 />
         ) : step.kind === "copy" ? (
           <Copy />
         ) : step.kind === "mkdir" ? (

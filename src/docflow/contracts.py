@@ -166,6 +166,7 @@ StepKind = Literal[
     "restore_backup",
     "print",
     "pdf_first_page_replace",
+    "cleanup_temp",
 ]
 
 
