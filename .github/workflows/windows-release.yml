@@ -16,6 +16,8 @@ concurrency:
 
 env:
   DOCFLOW_TESSERACT_VERSION: "5.5.0.20241111"
+  DOCFLOW_TESSERACT_URL: "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.0/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
+  DOCFLOW_TESSERACT_SHA256: "F3FC4236425B690C8BE756F35793F77394EE004BE0A6460A440C754D892F68BC"
 
 jobs:
   build:
@@ -47,12 +49,67 @@ jobs:
 
       - name: Install Tesseract
         shell: pwsh
-        run: >-
-          choco install tesseract
-          --version="$env:DOCFLOW_TESSERACT_VERSION"
-          --allow-downgrade
-          --no-progress
-          --yes
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tesseractDirectory = Join-Path $env:ProgramFiles "Tesseract-OCR"
+          $tesseractExecutable = Join-Path $tesseractDirectory "tesseract.exe"
+          $validChocolateyExitCodes = @(0, 1605, 1614, 1641, 3010)
+
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "Installing Tesseract with Chocolatey (attempt $attempt of 3)..."
+            & choco install tesseract `
+              --version="$env:DOCFLOW_TESSERACT_VERSION" `
+              --allow-downgrade `
+              --no-progress `
+              --yes
+            $chocolateyExitCode = $LASTEXITCODE
+
+            if (
+              $validChocolateyExitCodes -contains $chocolateyExitCode -and
+              (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)
+            ) {
+              break
+            }
+
+            if ($attempt -lt 3) {
+              Write-Warning "Chocolatey failed with exit code $chocolateyExitCode; retrying."
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)) {
+            Write-Warning "Chocolatey is unavailable; using the pinned official Tesseract release."
+            $installer = Join-Path $env:RUNNER_TEMP "tesseract-$env:DOCFLOW_TESSERACT_VERSION.exe"
+            Invoke-WebRequest `
+              -Uri $env:DOCFLOW_TESSERACT_URL `
+              -OutFile $installer `
+              -MaximumRetryCount 3 `
+              -RetryIntervalSec 10
+
+            $downloadedHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+            if ($downloadedHash -ne $env:DOCFLOW_TESSERACT_SHA256) {
+              throw "Tesseract installer checksum mismatch: $downloadedHash"
+            }
+
+            $installProcess = Start-Process `
+              -FilePath $installer `
+              -ArgumentList "/S" `
+              -Wait `
+              -PassThru
+            if ($installProcess.ExitCode -notin @(0, 3010)) {
+              throw "Tesseract installer failed with exit code $($installProcess.ExitCode)."
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)) {
+            throw "Tesseract installation completed without producing $tesseractExecutable."
+          }
+
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $tesseractDirectory
+          & $tesseractExecutable --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tesseract executable verification failed with exit code $LASTEXITCODE."
+          }
 
       - name: Test and build Windows installer
         shell: pwsh
