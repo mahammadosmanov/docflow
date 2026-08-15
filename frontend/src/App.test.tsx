@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
@@ -132,6 +138,79 @@ describe("DocFlow shell", () => {
     expect(
       screen.getByText("Yeni taramaların alt klasörlerini de tara"),
     ).toBeVisible();
+  });
+
+  it("bulk-edits RFI rows and keeps automatic fields behind a toggle", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    expect(
+      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("columnheader", { name: "Inspection Description" }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Otomatik alanları göster" }),
+    );
+    expect(
+      screen.getByRole("columnheader", { name: "Inspection Description" }),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tümünü seç" }));
+    fireEvent.change(screen.getByLabelText("Değiştirilecek alan"), {
+      target: { value: "subcontractor" },
+    });
+    fireEvent.change(screen.getByLabelText("Yeni değer"), {
+      target: { value: "PDL" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Seçilenlere uygula" }),
+    );
+
+    await waitFor(() => {
+      const subcontractors = Array.from(
+        document.querySelectorAll<HTMLInputElement>(
+          'input[list^="editor-"][list$="-subcontractor"]',
+        ),
+        (input) => input.value,
+      );
+      expect(subcontractors).toEqual(["PDL", "PDL"]);
+    });
+  });
+
+  it("selects a whole print group and includes or excludes it in one action", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    expect(
+      await screen.findByText("Yazdırma kuyruğunu kontrol et ve özelleştir"),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Tümünü seç" }));
+    expect(screen.getByLabelText("Değiştirilecek alan")).toHaveValue("enabled");
+    fireEvent.change(screen.getByLabelText("Yeni değer"), {
+      target: { value: "false" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Seçilenlere uygula" }),
+    );
+
+    for (const checkbox of screen.getAllByLabelText("Yazdır")) {
+      expect(checkbox).not.toBeChecked();
+    }
   });
 
   it("opens preferences before authentication", async () => {

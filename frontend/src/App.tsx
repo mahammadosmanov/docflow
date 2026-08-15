@@ -63,6 +63,7 @@ import type {
   OperationResult,
   ParamDef,
   Plan,
+  PrintQueueSummary,
   ProgressEvent,
   ReviewAction,
   ReviewDecision,
@@ -735,6 +736,9 @@ function OperationScreen({
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
+  const [latestPrintQueue, setLatestPrintQueue] =
+    useState<PrintQueueSummary | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     void bridge
@@ -754,6 +758,28 @@ function OperationScreen({
       });
   }, [bridge, operation]);
 
+  useEffect(() => {
+    if (operation.id !== "files.batch_print") return;
+    void bridge
+      .call<PrintQueueSummary | null>("engine/printQueueLatest")
+      .then(setLatestPrintQueue)
+      .catch(() => setLatestPrintQueue(null));
+  }, [bridge, operation.id]);
+
+  const installPlan = (next: Plan) => {
+    setPlan(next);
+    const editor = next.meta?.editor;
+    const rows =
+      editor &&
+      typeof editor === "object" &&
+      Array.isArray((editor as Record<string, unknown>).rows)
+        ? ((editor as Record<string, unknown>).rows as Record<string, unknown>[])
+        : [];
+    setEditorRows(rows.map((row) => ({ ...row })));
+    setEditorDirty(false);
+    setStage("preview");
+  };
+
   const preview = async () => {
     setError("");
     setStage("previewing");
@@ -772,18 +798,40 @@ function OperationScreen({
         { opId: operation.id, values },
         setProgress,
       );
-      setPlan(next);
-      const editor = next.meta?.editor;
-      const rows =
-        editor && typeof editor === "object" && Array.isArray((editor as Record<string, unknown>).rows)
-          ? ((editor as Record<string, unknown>).rows as Record<string, unknown>[])
-          : [];
-      setEditorRows(rows.map((row) => ({ ...row })));
-      setEditorDirty(false);
-      setStage("preview");
+      installPlan(next);
     } catch (reason) {
       setError(humanError(reason, s));
       setStage("form");
+    }
+  };
+  const resumePrintQueue = async (queueId: string) => {
+    setError("");
+    setStage("previewing");
+    try {
+      installPlan(
+        await bridge.call<Plan>("engine/printQueueResume", { queueId }),
+      );
+    } catch (reason) {
+      setError(humanError(reason, s));
+      setStage("form");
+    }
+  };
+  const discardPrintQueue = async (queueId: string) => {
+    setError("");
+    try {
+      await bridge.call("engine/printQueueDiscard", { queueId });
+      setLatestPrintQueue(null);
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+  const cancelApply = async () => {
+    if (!plan || cancelling) return;
+    setCancelling(true);
+    try {
+      await bridge.call("engine/cancel", { planId: plan.planId });
+    } catch (reason) {
+      setError(humanError(reason, s));
     }
   };
   const apply = async () => {
@@ -829,8 +877,10 @@ function OperationScreen({
           setProgress,
         ),
       );
+      setCancelling(false);
       setStage("result");
     } catch (reason) {
+      setCancelling(false);
       setError(humanError(reason, s));
       setStage("preview");
     }
@@ -919,6 +969,37 @@ function OperationScreen({
                   />
                 ))}
               </div>
+              {latestPrintQueue && (
+                <div className="resume-queue-card">
+                  <div>
+                    <strong>{s.t("print.resume.title")}</strong>
+                    <small>
+                      {s.t("print.resume.summary", {
+                        count: latestPrintQueue.resumable,
+                      })}
+                    </small>
+                  </div>
+                  <span className="resume-queue-actions">
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        void discardPrintQueue(latestPrintQueue.queueId)
+                      }
+                    >
+                      {s.t("print.resume.discard")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      icon={<RotateCcw />}
+                      onClick={() =>
+                        void resumePrintQueue(latestPrintQueue.queueId)
+                      }
+                    >
+                      {s.t("print.resume.review")}
+                    </Button>
+                  </span>
+                </div>
+              )}
             </section>
             {error && <Notice kind="error">{error}</Notice>}
             <ActionBar
@@ -962,7 +1043,28 @@ function OperationScreen({
           />
         )}
         {stage === "applying" && (
-          <BusyState label={s.t("plan.applying")} progress={progress} />
+          <div className="flow-layout">
+            <BusyState label={s.t("plan.applying")} progress={progress} />
+            <ActionBar
+              left={
+                <Button
+                  variant="danger"
+                  icon={cancelling ? <LoaderCircle className="spin" /> : <X />}
+                  disabled={cancelling}
+                  onClick={() => void cancelApply()}
+                >
+                  {s.t(
+                    cancelling
+                      ? "operation.cancelling"
+                      : operation.id === "files.batch_print"
+                        ? "print.cancelQueue"
+                        : "operation.cancel",
+                  )}
+                </Button>
+              }
+              right={null}
+            />
+          </div>
         )}
         {stage === "result" && result && (
           <ResultView
@@ -971,6 +1073,13 @@ function OperationScreen({
             error={error}
             onDone={onBack}
             onUndo={() => void undo()}
+            onResumePrint={
+              operation.id === "files.batch_print" &&
+              result.meta?.resumeAvailable === true
+                ? () =>
+                    void resumePrintQueue(String(result.meta?.queueId ?? ""))
+                : undefined
+            }
             copySheets={copySheetsFromPlan(plan)}
             copyEnabled={Boolean(
               (plan?.meta?.editor as Record<string, unknown> | undefined)
@@ -1206,6 +1315,9 @@ type EditorColumn = {
   kind?: string;
   width?: number;
   sheets?: string[];
+  detail?: boolean;
+  bulk?: boolean;
+  display?: string;
 };
 
 function EditablePlanTable({
@@ -1235,6 +1347,53 @@ function EditablePlanTable({
     editor.autocomplete && typeof editor.autocomplete === "object"
       ? (editor.autocomplete as Record<string, unknown>)
       : {};
+  const choiceLabels =
+    editor.choiceLabels && typeof editor.choiceLabels === "object"
+      ? (editor.choiceLabels as Record<string, unknown>)
+      : {};
+  const rowId = (row: Record<string, unknown>, index: number) =>
+    String(row._rowId ?? `${row[groupField] ?? "row"}-${index}`);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [detailsVisible, setDetailsVisible] = useState(
+    editor.detailsDefaultVisible === true,
+  );
+  const bulkColumns = columns.filter(
+    (column) =>
+      column.bulk !== false &&
+      column.kind !== "readonly" &&
+      (!column.detail || detailsVisible),
+  );
+  const [bulkField, setBulkField] = useState(
+    bulkColumns[0]?.key ?? "",
+  );
+  const [bulkValue, setBulkValue] = useState("");
+  const visibleColumns = columns.filter(
+    (column) => !column.detail || detailsVisible,
+  );
+  const selectedRows = rows.filter((row, index) =>
+    selectedIds.has(rowId(row, index)),
+  );
+
+  useEffect(() => {
+    const validIds = new Set(rows.map((row, index) => rowId(row, index)));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => validIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [rows, groupField]);
+
+  useEffect(() => {
+    if (bulkColumns.some((column) => column.key === bulkField)) return;
+    setBulkField(bulkColumns[0]?.key ?? "");
+    setBulkValue("");
+  }, [bulkField, detailsVisible, editor.columns]);
+
+  const choiceLabel = (field: string, value: string) => {
+    const fieldLabels = choiceLabels[field];
+    if (!fieldLabels || typeof fieldLabels !== "object") return value;
+    const key = (fieldLabels as Record<string, unknown>)[value];
+    return typeof key === "string" ? s.t(key) : value;
+  };
 
   const choicesFor = (
     column: EditorColumn,
@@ -1252,16 +1411,18 @@ function EditablePlanTable({
     return Array.isArray(options) ? options.map(String) : [];
   };
 
-  const update = (index: number, key: string, value: string) => {
-    const next = rows.map((row) => ({ ...row }));
-    const row = next[index];
+  const applyValue = (
+    row: Record<string, unknown>,
+    key: string,
+    value: string | boolean,
+  ) => {
     row[key] = value;
 
     const autoFill = editor.autoFill;
     if (autoFill && typeof autoFill === "object") {
       const config = autoFill as Record<string, unknown>;
       if (config.field === key && config.values && typeof config.values === "object") {
-        const preset = (config.values as Record<string, unknown>)[value];
+        const preset = (config.values as Record<string, unknown>)[String(value)];
         if (preset && typeof preset === "object") Object.assign(row, preset);
       }
     }
@@ -1272,7 +1433,7 @@ function EditablePlanTable({
         const rule = rawRule as Record<string, unknown>;
         if (rule.source !== key) continue;
         try {
-          if (new RegExp(String(rule.pattern), "i").test(value)) {
+          if (new RegExp(String(rule.pattern), "i").test(String(value))) {
             row[String(rule.target)] = String(rule.value ?? "");
           }
         } catch {
@@ -1280,8 +1441,53 @@ function EditablePlanTable({
         }
       }
     }
+  };
+
+  const update = (
+    index: number,
+    key: string,
+    value: string | boolean,
+  ) => {
+    const next = rows.map((row) => ({ ...row }));
+    applyValue(next[index], key, value);
     onChange(next);
   };
+
+  const applyBulk = () => {
+    if (!bulkField || !selectedIds.size) return;
+    const nextValue: string | boolean =
+      bulkColumns.find((column) => column.key === bulkField)?.kind === "bool"
+        ? bulkValue === "true"
+        : bulkValue;
+    const next = rows.map((row, index) => {
+      const clone = { ...row };
+      if (selectedIds.has(rowId(row, index))) {
+        applyValue(clone, bulkField, nextValue);
+      }
+      return clone;
+    });
+    onChange(next);
+  };
+
+  const selectAll = () =>
+    setSelectedIds(new Set(rows.map((row, index) => rowId(row, index))));
+  const selectNone = () => setSelectedIds(new Set());
+  const toggleRow = (id: string) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const selectGroup = (field: string, value: unknown) =>
+    setSelectedIds(
+      new Set(
+        rows
+          .map((row, index) => ({ row, id: rowId(row, index) }))
+          .filter(({ row }) => row[field] === value)
+          .map(({ id }) => id),
+      ),
+    );
 
   const duplicate = (index: number) => {
     const source = rows[index];
@@ -1305,20 +1511,167 @@ function EditablePlanTable({
     onChange(rows.filter((_, rowIndex) => rowIndex !== index));
   };
 
+  const selectionGroupFields = Array.isArray(editor.selectionGroupFields)
+    ? (editor.selectionGroupFields as unknown[]).map(String)
+    : [];
+  const groupChoices = selectionGroupFields.flatMap((field) => {
+    const values = [...new Set(rows.map((row) => String(row[field] ?? "")))]
+      .filter(Boolean);
+    return values.length <= 12
+      ? values.map((value) => ({ field, value }))
+      : [];
+  });
+  const bulkColumn = bulkColumns.find((column) => column.key === bulkField);
+  const choiceRows = selectedRows.length
+    ? selectedRows
+    : rows.length
+      ? [rows[0]]
+      : [];
+  const bulkChoiceValues = bulkColumn
+    ? choiceRows
+        .map((row) => choicesFor(bulkColumn, row))
+        .reduce<string[]>((common, values, index) =>
+          index === 0 ? values : common.filter((value) => values.includes(value)),
+        [],)
+    : [];
+  const bulkSuggestions = Array.isArray(autocomplete[bulkField])
+    ? (autocomplete[bulkField] as unknown[]).map(String)
+    : [];
+  const bulkListId = `bulk-${bulkField}`;
+
   return (
     <section className="editor-card">
       <div className="editor-heading">
         <span><TableProperties /></span>
         <div>
           <strong>{s.t(String(editor.titleKey ?? "rfi.editor.title"))}</strong>
-          <small>{s.t("rfi.editor.rowCount", { count: rows.length })}</small>
+          <small>
+            {s.t(String(editor.rowCountKey ?? "rfi.editor.rowCount"), {
+              count: rows.length,
+            })}
+          </small>
+        </div>
+        <div className="editor-heading-actions">
+          {editor.detailsEnabled === true && (
+            <Button
+              variant="ghost"
+              icon={detailsVisible ? <EyeOff /> : <Eye />}
+              onClick={() => setDetailsVisible((visible) => !visible)}
+            >
+              {s.t(
+                detailsVisible
+                  ? "editor.action.hideDetails"
+                  : "editor.action.showDetails",
+              )}
+            </Button>
+          )}
         </div>
       </div>
+      {editor.bulkEnabled === true && (
+        <div className="bulk-editor" aria-label={s.t("editor.bulk.title")}>
+          <div className="bulk-selection">
+            <strong>
+              {s.t("editor.selectedCount", { count: selectedIds.size })}
+            </strong>
+            <button type="button" onClick={selectAll}>
+              {s.t("editor.selectAll")}
+            </button>
+            <button type="button" onClick={selectNone}>
+              {s.t("editor.selectNone")}
+            </button>
+            {groupChoices.map(({ field, value }) => (
+              <button
+                type="button"
+                key={`${field}-${value}`}
+                onClick={() => selectGroup(field, value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+          <div className="bulk-fields">
+            <select
+              aria-label={s.t("editor.bulk.field")}
+              value={bulkField}
+              onChange={(event) => {
+                setBulkField(event.target.value);
+                setBulkValue("");
+              }}
+            >
+              {bulkColumns.map((column) => (
+                <option key={column.key} value={column.key}>
+                  {s.t(column.labelKey)}
+                </option>
+              ))}
+            </select>
+            {bulkColumn?.kind === "bool" ? (
+              <select
+                aria-label={s.t("editor.bulk.value")}
+                value={bulkValue}
+                onChange={(event) => setBulkValue(event.target.value)}
+              >
+                <option value="">{s.t("editor.bulk.choose")}</option>
+                <option value="true">{s.t("editor.bool.true")}</option>
+                <option value="false">{s.t("editor.bool.false")}</option>
+              </select>
+            ) : bulkColumn?.kind === "choice" ? (
+              <select
+                aria-label={s.t("editor.bulk.value")}
+                value={bulkValue}
+                onChange={(event) => setBulkValue(event.target.value)}
+              >
+                <option value="">{s.t("editor.bulk.choose")}</option>
+                {bulkChoiceValues.map((choice) => (
+                  <option key={choice} value={choice}>
+                    {choiceLabel(bulkField, choice)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <input
+                  aria-label={s.t("editor.bulk.value")}
+                  type={bulkColumn?.kind === "int" ? "number" : "text"}
+                  value={bulkValue}
+                  list={bulkSuggestions.length ? bulkListId : undefined}
+                  onChange={(event) => setBulkValue(event.target.value)}
+                />
+                {bulkSuggestions.length > 0 && (
+                  <datalist id={bulkListId}>
+                    {bulkSuggestions.map((suggestion) => (
+                      <option key={suggestion} value={suggestion} />
+                    ))}
+                  </datalist>
+                )}
+              </>
+            )}
+            <Button
+              variant="secondary"
+              disabled={!selectedIds.size || !bulkField || bulkValue === ""}
+              onClick={applyBulk}
+            >
+              {s.t("editor.bulk.apply")}
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="editor-scroll">
         <table className="editor-table">
           <thead>
             <tr>
-              {columns.map((column) => (
+              {editor.selectionEnabled === true && (
+                <th className="selection-column">
+                  <input
+                    aria-label={s.t("editor.selectAll")}
+                    type="checkbox"
+                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    onChange={(event) =>
+                      event.target.checked ? selectAll() : selectNone()
+                    }
+                  />
+                </th>
+              )}
+              {visibleColumns.map((column) => (
                 <th key={column.key} style={{ minWidth: column.width ?? 120 }}>
                   {s.t(column.labelKey)}
                 </th>
@@ -1332,13 +1685,41 @@ function EditablePlanTable({
               const groupCount = rows.filter(
                 (item) => item[groupField] === row[groupField],
               ).length;
+              const id = rowId(row, rowIndex);
               return (
-                <tr key={String(row._rowId ?? `${row[groupField]}-${rowIndex}`)}>
-                  {columns.map((column) => {
+                <tr key={id} className={selectedIds.has(id) ? "selected-row" : ""}>
+                  {editor.selectionEnabled === true && (
+                    <td className="selection-column">
+                      <input
+                        aria-label={s.t("editor.selectRow", { row: rowIndex + 1 })}
+                        type="checkbox"
+                        checked={selectedIds.has(id)}
+                        onChange={() => toggleRow(id)}
+                      />
+                      {groupCount > 1 && (
+                        <button
+                          type="button"
+                          title={s.t("editor.selectGroup")}
+                          onClick={() => selectGroup(groupField, row[groupField])}
+                        >
+                          {groupCount}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.map((column) => {
                     if (column.sheets && !column.sheets.includes(sheet)) {
                       return <td key={column.key} className="not-applicable">—</td>;
                     }
                     const text = String(row[column.key] ?? "");
+                    const displayText =
+                      column.key === "status"
+                        ? s.t(`print.status.${text}`)
+                        : column.display === "suffix"
+                          ? text.split("-").at(-1) ?? text
+                          : column.display === "itemSuffix"
+                            ? text.replace(/^[A-Z]+-/i, "")
+                            : text;
                     const choices = choicesFor(column, row);
                     const suggestions = Array.isArray(autocomplete[column.key])
                       ? (autocomplete[column.key] as unknown[]).map(String)
@@ -1347,7 +1728,16 @@ function EditablePlanTable({
                     return (
                       <td key={column.key}>
                         {column.kind === "readonly" ? (
-                          <span className="readonly-cell" title={text}>{text}</span>
+                          <span className="readonly-cell" title={text}>{displayText}</span>
+                        ) : column.kind === "bool" ? (
+                          <input
+                            aria-label={s.t(column.labelKey)}
+                            type="checkbox"
+                            checked={Boolean(row[column.key])}
+                            onChange={(event) =>
+                              update(rowIndex, column.key, event.target.checked)
+                            }
+                          />
                         ) : column.kind === "choice" ? (
                           <select
                             value={text}
@@ -1356,7 +1746,9 @@ function EditablePlanTable({
                             }
                           >
                             {choices.map((choice) => (
-                              <option key={choice} value={choice}>{choice}</option>
+                              <option key={choice} value={choice}>
+                                {choiceLabel(column.key, choice)}
+                              </option>
                             ))}
                           </select>
                         ) : column.kind === "multiline" ? (
@@ -1370,6 +1762,7 @@ function EditablePlanTable({
                         ) : (
                           <>
                             <input
+                              type={column.kind === "int" ? "number" : "text"}
                               value={text}
                               list={suggestions.length ? listId : undefined}
                               onChange={(event) =>
@@ -1544,6 +1937,7 @@ function ResultView({
   copyEnabled = false,
   copyingSheet = null,
   onCopy,
+  onResumePrint,
 }: {
   result: OperationResult;
   s: Strings;
@@ -1554,8 +1948,10 @@ function ResultView({
   copyEnabled?: boolean;
   copyingSheet?: string | null;
   onCopy?: (sheet?: string) => void;
+  onResumePrint?: () => void;
 }) {
-  const success = result.failed === 0;
+  const success =
+    result.failed === 0 && result.meta?.resumeAvailable !== true;
   return (
     <div className="result-card">
       <span className={`result-icon ${success ? "success" : "failure"}`}>
@@ -1582,6 +1978,16 @@ function ResultView({
             .map((item) => `${item.subject} ${s.t(item.key)}`)
             .join("\n")}
         </Notice>
+      )}
+      {result.meta?.resumeAvailable === true && (
+        <div className="queue-result-summary">
+          <strong>{s.t("print.resume.incomplete")}</strong>
+          <span>
+            {s.t("print.resume.summary", {
+              count: Number(result.meta.resumable ?? 0),
+            })}
+          </span>
+        </div>
       )}
       {error && <Notice kind="error">{error}</Notice>}
       {onCopy && (copySheets.length > 0 || copyEnabled) && (
@@ -1618,6 +2024,15 @@ function ResultView({
         </div>
       )}
       <div className="result-actions">
+        {onResumePrint && (
+          <Button
+            variant="secondary"
+            icon={<RotateCcw />}
+            onClick={onResumePrint}
+          >
+            {s.t("print.resume.review")}
+          </Button>
+        )}
         <Button
           variant="secondary"
           icon={<Undo2 />}

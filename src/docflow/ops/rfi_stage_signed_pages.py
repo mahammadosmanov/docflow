@@ -35,7 +35,7 @@ from ..contracts import (
 from ..extract import OcrEngineMissing, diagnostics, extract_first_page
 from ..fs.apply import file_sha256, write_journal
 from ..fs.naming import filename_for
-from ..progress import notify
+from ..progress import cancellation_requested, notify
 from ..registry import register
 from .rfi_process_scans import MIN_CONFIDENCE
 
@@ -749,6 +749,13 @@ class StageSignedFirstPages(Operation):
         result = Result(journal_id=entry.journal_id)
 
         for index, step in enumerate(plan.steps):
+            if cancellation_requested():
+                result.meta = {
+                    "cancelled": True,
+                    "pending": len(plan.steps) - index,
+                }
+                result.errors.append(Warning("warn.operation.cancelled"))
+                break
             notify("apply", index, len(plan.steps), pathlib.Path(step.dst or "").name)
             entry.pending_step = step
             write_journal(entry)

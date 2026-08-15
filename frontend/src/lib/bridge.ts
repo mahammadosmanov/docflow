@@ -316,6 +316,105 @@ const demoPrintOperation: OperationDef = {
       visibleWhen: {},
       helpKey: "param.print.copies.help",
     },
+    {
+      name: "paper",
+      kind: "choice",
+      labelKey: "param.print.paper",
+      default: "A4",
+      required: true,
+      choices: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.paper.help",
+    },
+    {
+      name: "orientation",
+      kind: "choice",
+      labelKey: "param.print.orientation",
+      default: "auto",
+      required: true,
+      choices: ["auto", "portrait", "landscape"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+    },
+    {
+      name: "scaling",
+      kind: "choice",
+      labelKey: "param.print.scaling",
+      default: "fit",
+      required: true,
+      choices: ["fit", "actual", "shrink"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+    },
+    {
+      name: "color",
+      kind: "choice",
+      labelKey: "param.print.color",
+      default: "printer",
+      required: true,
+      choices: ["printer", "color", "grayscale"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+    },
+    {
+      name: "duplex",
+      kind: "choice",
+      labelKey: "param.print.duplex",
+      default: "printer",
+      required: true,
+      choices: ["printer", "simplex", "long", "short"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+    },
+    {
+      name: "collate",
+      kind: "bool",
+      labelKey: "param.print.collate",
+      default: true,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.collate.help",
+    },
+    {
+      name: "retries",
+      kind: "int",
+      labelKey: "param.print.retries",
+      default: 0,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.retries.help",
+    },
+    {
+      name: "on_error",
+      kind: "choice",
+      labelKey: "param.print.onError",
+      default: "pause",
+      required: true,
+      choices: ["pause", "skip"],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.onError.help",
+    },
+    {
+      name: "timeout_minutes",
+      kind: "int",
+      labelKey: "param.print.timeout",
+      default: 30,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.timeout.help",
+    },
   ],
 };
 
@@ -493,7 +592,172 @@ export class MockBridge implements Bridge {
         break;
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
-        const values = params.values as Record<string, string>;
+        const values = params.values as Record<string, unknown>;
+        if (params.opId === "files.batch_print") {
+          const files = Array.isArray(values.files)
+            ? values.files.map(String)
+            : ["/Users/demo/Documents/first.pdf"];
+          const rows = files.map((path, index) => ({
+            _rowId: `file-${index + 1}`,
+            enabled: true,
+            status: "ready",
+            file: path.split(/[\\/]/).pop() ?? path,
+            path,
+            format: path.split(".").pop()?.toUpperCase() ?? "FILE",
+            printer: "Office Printer",
+            paper: index ? "A3" : "A4",
+            orientation: "auto",
+            scaling: "fit",
+            color: "printer",
+            duplex: "printer",
+            copies: 1,
+          }));
+          result = {
+            planId: "demo-print-plan",
+            opId: "files.batch_print",
+            warnings: [],
+            meta: {
+              editor: {
+                kind: "recordTable",
+                titleKey: "print.editor.title",
+                rowCountKey: "print.editor.rowCount",
+                groupField: "format",
+                selectionGroupFields: ["format"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                columns: [
+                  { key: "enabled", labelKey: "print.col.include", kind: "bool", width: 64 },
+                  { key: "status", labelKey: "print.col.status", kind: "readonly", width: 90, bulk: false },
+                  { key: "file", labelKey: "print.col.file", kind: "readonly", width: 260, bulk: false },
+                  { key: "format", labelKey: "print.col.format", kind: "readonly", width: 76, bulk: false },
+                  { key: "printer", labelKey: "print.col.printer", kind: "choice", width: 180 },
+                  { key: "paper", labelKey: "print.col.paper", kind: "choice", width: 88 },
+                  { key: "orientation", labelKey: "print.col.orientation", kind: "choice", width: 110 },
+                  { key: "scaling", labelKey: "print.col.scaling", kind: "choice", width: 110 },
+                  { key: "color", labelKey: "print.col.color", kind: "choice", width: 100 },
+                  { key: "duplex", labelKey: "print.col.duplex", kind: "choice", width: 116 },
+                  { key: "copies", labelKey: "print.col.copies", kind: "int", width: 76 },
+                ],
+                choices: {
+                  printer: ["Office Printer"],
+                  paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+                  orientation: ["auto", "portrait", "landscape"],
+                  scaling: ["fit", "actual", "shrink"],
+                  color: ["printer", "color", "grayscale"],
+                  duplex: ["printer", "simplex", "long", "short"],
+                },
+                choiceLabels: {},
+                rows,
+              },
+            },
+            steps: rows.map((row) => ({
+              kind: "print" as const,
+              src: row.path,
+              dst: row.path,
+              noteKey: "note.print.queued",
+              meta: {},
+            })),
+          } satisfies Plan;
+          break;
+        }
+        if (params.opId === "rfi.log_add") {
+          const rows = [
+            {
+              _rowId: "CIV-g1-r1",
+              _sheet: "CIV",
+              rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0008",
+              itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+              itemNo: "CIV-5.2.1",
+              description: "Civil inspection description",
+              forms: "CON-CIV-001",
+              tagNo: "N12",
+              area: "North Site",
+              rowNo: "",
+              dateOfIssue: "15-Aug-26",
+              inspectionDate: "16-Aug-26",
+              startTime: "09:00",
+              azfenType: "H",
+              intecType: "W",
+              location: "N3",
+              subcontractor: "AZFEN",
+            },
+            {
+              _rowId: "CIV-g2-r1",
+              _sheet: "CIV",
+              rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0009",
+              itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+              itemNo: "CIV-5.2.1",
+              description: "Civil inspection description",
+              forms: "CON-CIV-001",
+              tagNo: "N18",
+              area: "North Site",
+              rowNo: "",
+              dateOfIssue: "15-Aug-26",
+              inspectionDate: "16-Aug-26",
+              startTime: "09:30",
+              azfenType: "H",
+              intecType: "W",
+              location: "N3",
+              subcontractor: "PDL",
+            },
+          ];
+          result = {
+            planId: "demo-rfi-plan",
+            opId: "rfi.log_add",
+            warnings: [],
+            meta: {
+              editor: {
+                kind: "recordTable",
+                titleKey: "rfi.editor.title",
+                groupField: "rfiNo",
+                selectionGroupFields: ["_sheet", "rfiNo"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                detailsEnabled: true,
+                detailsDefaultVisible: false,
+                duplicateEnabled: true,
+                columns: [
+                  { key: "_sheet", labelKey: "rfi.col.sheet", kind: "readonly", width: 48 },
+                  { key: "rfiNo", labelKey: "rfi.col.rfiNo", kind: "readonly", width: 72, display: "suffix" },
+                  { key: "itpNo", labelKey: "rfi.col.itpNo", kind: "choice", width: 72, display: "suffix" },
+                  { key: "itemNo", labelKey: "rfi.col.itemNo", kind: "choice", width: 76, display: "itemSuffix" },
+                  { key: "description", labelKey: "rfi.col.description", kind: "multiline", width: 360, detail: true },
+                  { key: "forms", labelKey: "rfi.col.forms", kind: "multiline", width: 280, detail: true },
+                  { key: "tagNo", labelKey: "rfi.col.tagNo", kind: "autocomplete", width: 116 },
+                  { key: "area", labelKey: "rfi.col.area", kind: "autocomplete", width: 116 },
+                  { key: "dateOfIssue", labelKey: "rfi.col.issueDate", kind: "text", width: 90 },
+                  { key: "inspectionDate", labelKey: "rfi.col.inspectionDate", kind: "text", width: 94 },
+                  { key: "startTime", labelKey: "rfi.col.startTime", kind: "text", width: 68 },
+                  { key: "azfenType", labelKey: "rfi.col.azfenType", kind: "text", width: 130, detail: true },
+                  { key: "intecType", labelKey: "rfi.col.intecType", kind: "text", width: 130, detail: true },
+                  { key: "location", labelKey: "rfi.col.location", kind: "autocomplete", width: 134 },
+                  { key: "subcontractor", labelKey: "rfi.col.subcontractor", kind: "autocomplete", width: 110 },
+                ],
+                choices: {
+                  itpNo: ["AZE-SUN-INT-QMS-ITP-CIV-0005"],
+                  itemNo: ["CIV-5.2.1"],
+                },
+                autocomplete: {
+                  tagNo: ["N12", "N18"],
+                  area: ["North Site", "South Site"],
+                  location: ["N3"],
+                  subcontractor: ["AZFEN", "PDL"],
+                },
+                rows,
+              },
+            },
+            steps: [
+              {
+                kind: "workbook_update",
+                src: String(values.workbook || "/Users/demo/Documents/RFI Log.xlsx"),
+                dst: "/Users/demo/Documents/.docflow-backups/RFI Log.xlsx",
+                noteKey: "note.rfi.workbookUpdate",
+                meta: {},
+              },
+            ],
+          } satisfies Plan;
+          break;
+        }
         result = {
           planId: "demo-plan",
           opId: String(params.opId),
@@ -502,8 +766,8 @@ export class MockBridge implements Bridge {
           steps: [
             {
               kind: "move",
-              src: `${values.source || "/Scans"}/20260718_163146.PDF`,
-              dst: `${values.dest || "/RFI"}/RFI-CIV-0064/RFI-CIV-0064-R0.pdf`,
+              src: `${String(values.source || "/Scans")}/20260718_163146.PDF`,
+              dst: `${String(values.dest || "/RFI")}/RFI-CIV-0064/RFI-CIV-0064-R0.pdf`,
               noteKey: "note.renamed",
               meta: { confidence: 1 },
             },
@@ -520,6 +784,15 @@ export class MockBridge implements Bridge {
           errors: [],
           cloudSynced: true,
         } satisfies OperationResult;
+        break;
+      case "engine/printQueueLatest":
+        result = null;
+        break;
+      case "engine/printQueueDiscard":
+        result = { status: "abandoned" };
+        break;
+      case "engine/cancel":
+        result = { accepted: true };
         break;
       case "engine/reviewScan":
         result = [

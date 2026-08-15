@@ -18,7 +18,7 @@ import pathlib
 import shutil
 
 from ..contracts import JournalEntry, Plan, Result, Step, Warning
-from ..progress import notify
+from ..progress import cancellation_requested, notify
 
 JOURNAL_DIR = pathlib.Path.home() / ".docflow" / "journal"
 
@@ -166,6 +166,13 @@ def apply_steps(plan: Plan) -> Result:
     result = Result(journal_id=entry.journal_id)
 
     for i, step in enumerate(plan.steps):
+        if cancellation_requested():
+            result.meta = {
+                "cancelled": True,
+                "pending": len(plan.steps) - i,
+            }
+            result.errors.append(Warning("warn.operation.cancelled"))
+            break
         notify("apply", i, len(plan.steps))
         entry.pending_step = step
         _write_journal(entry)                    # ONCE pending, SONRA is

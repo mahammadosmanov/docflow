@@ -561,6 +561,40 @@ textarea:focus {
   display: grid;
   gap: 6px;
 }
+.resume-queue-card {
+  margin-top: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.resume-queue-card > div,
+.queue-result-summary {
+  display: grid;
+  gap: 3px;
+}
+.resume-queue-card small,
+.queue-result-summary span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.resume-queue-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.queue-result-summary {
+  width: min(480px, 100%);
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  text-align: left;
+  background: var(--surface-2);
+}
 .selected-file {
   min-width: 0;
   padding: 8px 10px;
@@ -976,6 +1010,56 @@ textarea:focus {
 .editor-heading small {
   color: var(--muted);
 }
+.editor-heading-actions {
+  margin-left: auto;
+  display: flex !important;
+  align-items: center;
+}
+.bulk-editor {
+  margin-bottom: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.bulk-selection,
+.bulk-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.bulk-selection strong {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.bulk-selection button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.72rem;
+}
+.bulk-selection button:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.bulk-fields select,
+.bulk-fields input {
+  width: min(220px, 100%);
+  flex: 0 1 220px;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+}
 .editor-scroll {
   min-height: 0;
   flex: 1;
@@ -1005,6 +1089,40 @@ textarea:focus {
   background: var(--surface);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--line) 70%, transparent),
     0 -1px 0 color-mix(in srgb, var(--line) 70%, transparent);
+}
+.editor-table tr.selected-row td {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 30%, var(--line)),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+.selection-column {
+  width: 62px;
+  min-width: 62px;
+  text-align: center !important;
+}
+.editor-table td.selection-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.editor-table input[type="checkbox"],
+.editor-table .selection-column input {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.selection-column button {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.66rem;
+  font-weight: 700;
 }
 .editor-table td:first-child {
   border-radius: 9px 0 0 9px;

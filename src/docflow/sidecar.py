@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -275,6 +276,23 @@ class SidecarApplication:
             payload = result.to_json()
             payload["cloudSynced"] = self._sync_result(op_id, result)
             return payload
+        if method == "engine/cancel":
+            return {
+                "accepted": self.engine.cancel(
+                    str(params.get("planId", ""))
+                )
+            }
+        if method == "engine/printQueueLatest":
+            return self.engine.latest_print_queue()
+        if method == "engine/printQueueDiscard":
+            return self.engine.discard_print_queue(
+                str(params.get("queueId", ""))
+            )
+        if method == "engine/printQueueResume":
+            plan = self.engine.resume_print_queue(
+                str(params.get("queueId", ""))
+            )
+            return plan.to_json()
         if method == "engine/revise":
             rows = params.get("rows")
             plan = self.engine.revise(
@@ -327,13 +345,17 @@ class SidecarApplication:
 class JsonLineServer:
     def __init__(self, application: SidecarApplication | None = None) -> None:
         self.application = application or SidecarApplication()
+        self._write_lock = threading.Lock()
+        self._workers: set[threading.Thread] = set()
+        self._workers_lock = threading.Lock()
 
-    @staticmethod
-    def _write(payload: JsonObject) -> None:
-        sys.stdout.write(
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
-        )
-        sys.stdout.flush()
+    def _write(self, payload: JsonObject) -> None:
+        with self._write_lock:
+            sys.stdout.write(
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                + "\n"
+            )
+            sys.stdout.flush()
 
     def _handle(self, request: JsonObject) -> None:
         request_id = request.get("id")
@@ -412,8 +434,30 @@ class JsonLineServer:
                     }
                 )
                 continue
-            self._handle(request)
+            # Apply may wait on a physical printer for minutes. Run it in one
+            # worker so stdin remains responsive to engine/cancel. All other
+            # requests stay serialized on the reader thread.
+            if request.get("method") == "engine/apply":
+                worker = threading.Thread(
+                    target=self._handle_worker,
+                    args=(request,),
+                    name=f"docflow-apply-{request.get('id', '')}",
+                    daemon=True,
+                )
+                with self._workers_lock:
+                    self._workers.add(worker)
+                worker.start()
+            else:
+                self._handle(request)
         return 0
+
+    def _handle_worker(self, request: JsonObject) -> None:
+        try:
+            self._handle(request)
+        finally:
+            current = threading.current_thread()
+            with self._workers_lock:
+                self._workers.discard(current)
 
 
 def main() -> int:

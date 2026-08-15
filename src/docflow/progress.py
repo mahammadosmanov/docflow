@@ -29,6 +29,10 @@ ProgressCallback = Callable[[Progress], None]
 _callback: ContextVar[ProgressCallback | None] = ContextVar(
     "docflow_progress_callback", default=None
 )
+CancellationCallback = Callable[[], bool]
+_cancellation: ContextVar[CancellationCallback | None] = ContextVar(
+    "docflow_cancellation_callback", default=None
+)
 
 
 @contextmanager
@@ -38,6 +42,22 @@ def reporting(callback: ProgressCallback | None) -> Iterator[None]:
         yield
     finally:
         _callback.reset(token)
+
+
+@contextmanager
+def cancellable(callback: CancellationCallback | None) -> Iterator[None]:
+    """Expose cooperative cancellation without coupling operations to IPC."""
+
+    token = _cancellation.set(callback)
+    try:
+        yield
+    finally:
+        _cancellation.reset(token)
+
+
+def cancellation_requested() -> bool:
+    callback = _cancellation.get()
+    return bool(callback and callback())
 
 
 def notify(phase: str, done: int, total: int, subject: str = "") -> None:

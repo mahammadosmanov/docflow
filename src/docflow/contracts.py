@@ -223,12 +223,14 @@ class Result:
     failed: int = 0
     journal_id: str = ""
     errors: list[Warning] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict:
         return {
             "applied": self.applied, "failed": self.failed,
             "journalId": self.journal_id,
             "errors": [e.to_json() for e in self.errors],
+            "meta": self.meta,
         }
 
 

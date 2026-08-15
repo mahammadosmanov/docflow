@@ -3,6 +3,7 @@ import pathlib
 import pytest
 from docflow.contracts import Plan, Step
 from docflow.fs import apply as fsapply
+from docflow.progress import cancellable
 
 
 @pytest.fixture(autouse=True)
@@ -109,3 +110,18 @@ def test_undo_only_removes_empty_dirs(tmp_path):
     (folder / "kullanici_ekledi.txt").write_text("dokunma")
     fsapply.undo(r.journal_id)
     assert folder.exists() and (folder / "kullanici_ekledi.txt").exists()
+
+
+def test_cancel_keeps_unstarted_steps_and_reports_pending(tmp_path):
+    src, folder, plan = _plan(tmp_path)
+    with cancellable(lambda: True):
+        result = fsapply.apply_steps(plan)
+
+    assert result.applied == 0
+    assert result.failed == 0
+    assert result.meta == {"cancelled": True, "pending": 2}
+    assert [warning.key for warning in result.errors] == [
+        "warn.operation.cancelled"
+    ]
+    assert src.exists()
+    assert not folder.exists()

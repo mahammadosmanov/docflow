@@ -241,6 +241,41 @@ def test_civ_522_523_presets_are_complete_and_repair_mojibake(tmp_path):
     assert "â€¢" not in revised_row["description"]
 
 
+def test_editor_supports_bulk_selection_hidden_auto_fields_and_pdl(tmp_path):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    operation = AddRfiLogRows()
+    plan = operation.preview(
+        {
+            "workbook": str(path),
+            "sheet_counts": {"CIV": 2},
+            "overflow_next_day": True,
+        }
+    )
+
+    editor = plan.meta["editor"]
+    assert editor["selectionEnabled"] is True
+    assert editor["bulkEnabled"] is True
+    assert editor["selectionGroupFields"] == ["_sheet", "rfiNo"]
+    assert editor["detailsEnabled"] is True
+    assert editor["detailsDefaultVisible"] is False
+    detail_fields = {
+        column["key"]
+        for column in editor["columns"]
+        if column.get("detail") is True
+    }
+    assert detail_fields == {"description", "forms", "azfenType", "intecType"}
+    assert editor["autocomplete"]["subcontractor"][:2] == ["AZFEN", "PDL"]
+
+    rows = copy.deepcopy(editor["rows"])
+    for row in rows:
+        row["subcontractor"] = "PDL"
+    revised = operation.revise(plan, {"rows": rows})
+    assert {
+        row["subcontractor"] for row in revised.meta["editor"]["rows"]
+    } == {"PDL"}
+
+
 @pytest.mark.parametrize(
     ("defect", "message"),
     [

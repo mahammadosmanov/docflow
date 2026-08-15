@@ -42,6 +42,7 @@ from ..contracts import (
 from ..email_extract import detect_discipline, extract_email
 from ..fs.apply import file_sha256, write_journal
 from ..registry import register
+from ..progress import cancellation_requested
 from ..rpc import notify
 from ..xlsx_ooxml import patch_workbook_sheets
 
@@ -702,7 +703,7 @@ def _plan_meta(
         "tagNo": [],
         "area": [],
         "location": [],
-        "subcontractor": [],
+        "subcontractor": ["AZFEN", "PDL"],
     }
     for discipline in SUPPORTED_DISCIPLINES:
         source = sources.get(discipline)
@@ -727,6 +728,7 @@ def _plan_meta(
             "layout": "compact",
             "titleKey": "rfi.editor.title",
             "groupField": "rfiNo",
+            "selectionGroupFields": ["_sheet", "rfiNo"],
             "columns": _columns(),
             "rows": copy.deepcopy(rows),
             "choices": {
@@ -758,6 +760,10 @@ def _plan_meta(
                 },
             ],
             "duplicateEnabled": True,
+            "selectionEnabled": True,
+            "bulkEnabled": True,
+            "detailsEnabled": True,
+            "detailsDefaultVisible": False,
             "copyEnabled": True,
             "copyFields": COPY_FIELDS,
             "copyHeaders": COPY_HEADERS,
@@ -1671,6 +1677,10 @@ class AddRfiLogRows(Operation):
             )
         signature = dict(step.meta["sourceSignature"])
         result = Result()
+        if cancellation_requested():
+            result.meta = {"cancelled": True, "pending": 1}
+            result.errors.append(Warning("warn.operation.cancelled"))
+            return result
         temp_path = workbook_path.with_name(
             f".{workbook_path.name}.{plan.plan_id[:8]}.docflow.tmp"
         )

@@ -65,7 +65,18 @@ export interface OperationResult {
   failed: number;
   journalId: string;
   errors: Warning[];
+  meta?: Record<string, unknown>;
   cloudSynced?: boolean;
+}
+
+export interface PrintQueueSummary {
+  queueId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  counts: Record<string, number>;
+  resumable: number;
+  fileCount: number;
 }
 
 export interface AppUser {
