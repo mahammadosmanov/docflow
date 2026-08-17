@@ -25,6 +25,8 @@ def _make_pdf(
     pages: list[str],
     *,
     size: tuple[float, float] = (595, 842),
+    rotation: int = 0,
+    cropbox: tuple[float, float, float, float] | None = None,
     metadata: dict[str, str] | None = None,
     attachment: bytes | None = None,
     toc: list[list[object]] | None = None,
@@ -35,6 +37,10 @@ def _make_pdf(
     for text in pages:
         page = document.new_page(width=size[0], height=size[1])
         page.insert_text((48, 72), text)
+        if cropbox is not None:
+            page.set_cropbox(fitz.Rect(*cropbox))
+        if rotation:
+            page.set_rotation(rotation)
     if metadata:
         document.set_metadata(metadata)
     if attachment is not None:
@@ -91,6 +97,31 @@ def test_windows_publish_retries_a_transient_onedrive_lock(
     stage_module._publish_windows_without_overwrite(temp_path, destination)
 
     assert calls == 3
+    assert destination.read_bytes() == b"completed PDF bytes"
+    assert not temp_path.exists()
+
+
+def test_windows_publish_falls_back_when_onedrive_keeps_rename_locked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temp_path = tmp_path / ".review.pdf.docflow-test.tmp"
+    destination = tmp_path / "review.pdf"
+    temp_path.write_bytes(b"completed PDF bytes")
+    rename_calls = 0
+
+    def locked_rename(_source: Path, _target: Path) -> None:
+        nonlocal rename_calls
+        rename_calls += 1
+        raise PermissionError("simulated persistent OneDrive sharing violation")
+
+    monkeypatch.setattr(stage_module.os, "rename", locked_rename)
+    monkeypatch.setattr(stage_module.time_module, "sleep", lambda _delay: None)
+
+    stage_module._publish_windows_without_overwrite(
+        temp_path, destination, attempts=3
+    )
+
+    assert rename_calls == 3
     assert destination.read_bytes() == b"completed PDF bytes"
     assert not temp_path.exists()
 
@@ -191,6 +222,65 @@ def test_stage_replaces_only_first_page_and_never_changes_inputs(
     assert review.is_dir()
     assert _sha256(archive_pdf) == archive_before
     assert _sha256(signed_pdf) == signed_before
+
+
+@pytest.mark.parametrize(
+    ("rotation", "cropbox"),
+    [
+        (90, None),
+        (270, None),
+        (0, (12, 18, 570, 810)),
+        (90, (12, 18, 570, 810)),
+    ],
+)
+def test_stage_accepts_rotated_or_cropped_signed_first_pages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rotation: int,
+    cropbox: tuple[float, float, float, float] | None,
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    signed_pdf = signed / "fresh-signed-scan.pdf"
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    _make_pdf(
+        signed_pdf,
+        [f"SIGNED {CODE} " + "text " * 20],
+        size=(595, 842),
+        rotation=rotation,
+        cropbox=cropbox,
+    )
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+
+    operation = StageSignedFirstPages()
+    result = operation.apply(operation.preview(_params(signed, archive, review)))
+
+    assert result.failed == 0, result.errors
+    output = review / archive_pdf.relative_to(archive)
+    assert output.is_file()
+    with fitz.open(signed_pdf) as source, fitz.open(output) as completed:
+        assert completed[0].rect == source[0].rect
+        assert completed[0].rotation == source[0].rotation
+
+
+def test_failed_pdf_does_not_leave_empty_review_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    _make_pdf(signed / "signed.pdf", [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+    operation = StageSignedFirstPages()
+
+    def fail_pdf(_step: object) -> object:
+        raise PermissionError("simulated persistent sync lock")
+
+    monkeypatch.setattr(operation, "_apply_pdf", fail_pdf)
+    result = operation.apply(operation.preview(_params(signed, archive, review)))
+
+    assert result.applied == 0
+    assert result.failed == 1
+    assert not (review / "Package-A").exists()
+    assert review.is_dir()
 
 
 def test_duplicate_signed_scans_fail_closed(tmp_path: Path) -> None:

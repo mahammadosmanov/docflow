@@ -461,6 +461,13 @@ def test_preview_numbers_schedule_and_overflow(tmp_path):
     assert [row["startTime"] for row in rows] == ["09:00", "09:30"]
     assert any(w.key == "warn.rfi.overflowMoved" for w in plan.warnings)
     assert plan.meta["editor"]["layout"] == "compact"
+    columns = {
+        column["key"]: column for column in plan.meta["editor"]["columns"]
+    }
+    assert columns["itpNo"]["display"] == "shortNumber"
+    assert columns["itemNo"]["display"] == "itemSuffix"
+    assert columns["dateOfIssue"]["kind"] == "compactDate"
+    assert columns["inspectionDate"]["kind"] == "compactDate"
     assert rows[0]["itpNo"] == "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005"
     assert plan.meta["editor"]["copySource"]["sheet"] == "CIV"
     assert plan.meta["editor"]["copySource"]["columns"] == [

@@ -238,11 +238,13 @@ def _publish_windows_without_overwrite(
     destination: pathlib.Path,
     attempts: int = 40,
 ) -> None:
-    """Atomically rename on Windows, retrying transient sync/indexer locks.
+    """Publish on Windows despite transient sync/indexer locks.
 
     Windows ``os.rename`` refuses an existing destination, so it preserves the
-    operation's strict no-overwrite contract without the extra hard-link name
-    that previously remained visible when OneDrive briefly locked the temp.
+    operation's strict no-overwrite contract. OneDrive can, however, hold a
+    sharing lock that blocks rename while still allowing a hard link or an
+    exclusive copy. Falling back after the retry window prevents a completed
+    PDF from being discarded while leaving only its planned folders behind.
     """
     for attempt in range(attempts):
         if destination.exists():
@@ -257,27 +259,33 @@ def _publish_windows_without_overwrite(
             # Windows error was reported as a generic sharing/access failure.
             if destination.exists():
                 raise FileExistsError(str(destination)) from error
-            if not _is_temporary_access_error(error) or attempt >= attempts - 1:
+            if not _is_temporary_access_error(error):
                 raise
+            if attempt >= attempts - 1:
+                break
             time_module.sleep(0.15)
-    raise RuntimeError("Windows PDF publish retry loop ended unexpectedly")
+
+    _publish_by_link_or_copy(temp_path, destination)
 
 
-def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Path) -> None:
-    """Install a completed PDF while preserving the no-overwrite contract."""
-    if os.name == "nt":
-        _publish_windows_without_overwrite(temp_path, destination)
-        return
-
+def _publish_by_link_or_copy(
+    temp_path: pathlib.Path,
+    destination: pathlib.Path,
+) -> None:
+    """Publish without overwrite when rename is unavailable or temporarily locked."""
     try:
         # Temp and destination share a directory, so a hard link is an atomic,
-        # no-clobber publish on normal NTFS/APFS/ext filesystems.
+        # no-clobber publish on normal NTFS/APFS/ext filesystems. If a sync
+        # service keeps the temp name locked, the destination remains a valid
+        # completed PDF and the stale name can be cleaned on the next preview.
         os.link(temp_path, destination)
         _unlink_with_retry(temp_path)
         return
     except FileExistsError:
         raise
     except OSError as error:
+        if destination.exists():
+            raise FileExistsError(str(destination)) from error
         if error.errno not in {
             errno.EPERM,
             errno.EACCES,
@@ -287,7 +295,7 @@ def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Pat
         }:
             raise
 
-    # Some synced/removable filesystems do not support hard links. Exclusive
+    # Synced/removable filesystems may not support hard links. Exclusive
     # creation still guarantees that an existing review file is never replaced.
     created = False
     try:
@@ -297,10 +305,20 @@ def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Pat
             outgoing.flush()
             os.fsync(outgoing.fileno())
     except Exception:
-        if created:
-            destination.unlink(missing_ok=True)
+        if created and not _unlink_with_retry(destination):
+            raise RuntimeError(
+                f"incomplete review PDF could not be cleaned: {destination}"
+            )
         raise
     _unlink_with_retry(temp_path)
+
+
+def _publish_without_overwrite(temp_path: pathlib.Path, destination: pathlib.Path) -> None:
+    """Install a completed PDF while preserving the no-overwrite contract."""
+    if os.name == "nt":
+        _publish_windows_without_overwrite(temp_path, destination)
+        return
+    _publish_by_link_or_copy(temp_path, destination)
 
 
 def _temp_name_matches(temp_name: str, destination_name: str) -> bool:
@@ -742,11 +760,37 @@ class StageSignedFirstPages(Operation):
         if not destination.is_file() or file_sha256(destination) != approved_hash:
             raise RuntimeError("review PDF changed during temp cleanup")
 
+    @staticmethod
+    def _remove_empty_created_directories(
+        created_directories: list[Step],
+        entry: JournalEntry,
+        result: Result,
+    ) -> None:
+        """Do not leave an empty review tree after a PDF or cancellation failure."""
+        for step in reversed(created_directories):
+            if step.dst is None:
+                continue
+            directory = pathlib.Path(step.dst)
+            try:
+                if directory.is_symlink():
+                    continue
+                directory.rmdir()
+            except OSError:
+                # Non-empty, concurrently changed, or already unavailable.
+                # In each case preserving the path is the safest outcome.
+                continue
+            try:
+                entry.steps.remove(step)
+            except ValueError:
+                pass
+            result.applied = max(0, result.applied - 1)
+
     def apply(self, plan: Plan) -> Result:
         if plan.op_id != self.id:
             raise ValueError("operation plan mismatch")
         entry = JournalEntry(op_id=plan.op_id, steps=[])
         result = Result(journal_id=entry.journal_id)
+        created_directories: list[Step] = []
 
         for index, step in enumerate(plan.steps):
             if cancellation_requested():
@@ -782,9 +826,15 @@ class StageSignedFirstPages(Operation):
                 result.applied += 1
                 if journal_step is not None:
                     entry.steps.append(journal_step)
+                    if step.kind == "mkdir":
+                        created_directories.append(journal_step)
             finally:
                 entry.pending_step = None
                 write_journal(entry)
 
+        self._remove_empty_created_directories(
+            created_directories, entry, result
+        )
+        write_journal(entry)
         notify("apply", len(plan.steps), len(plan.steps))
         return result

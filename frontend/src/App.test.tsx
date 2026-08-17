@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -153,6 +154,45 @@ describe("DocFlow shell", () => {
     expect(
       await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
     ).toBeVisible();
+    expect(screen.getByRole("button", { name: "0008" })).toHaveAttribute(
+      "title",
+      "AZE-SUN-INT-QMS-RFI-CIV-0008",
+    );
+    const itpSelects = screen.getAllByLabelText("ITP");
+    expect(itpSelects[0]).toHaveValue("AZE-SUN-INT-QMS-ITP-CIV-0005");
+    expect(
+      within(itpSelects[0]).getByRole("option", { name: "5" }),
+    ).toBeVisible();
+    const itemSelects = screen.getAllByLabelText("Item");
+    expect(itemSelects[0]).toHaveValue("CIV-5.2.1");
+    expect(
+      within(itemSelects[0]).getByRole("option", { name: "5.2.1" }),
+    ).toBeVisible();
+
+    const issueDays = screen.getAllByLabelText("Veriliş — Gün");
+    const issueMonths = screen.getAllByLabelText("Veriliş — Ay");
+    expect(issueDays[0]).toHaveValue("15");
+    expect(issueMonths[0]).toHaveValue("8");
+    expect(issueDays[0].closest(".compact-date-cell")).toHaveAttribute(
+      "title",
+      "15-Aug-26",
+    );
+    expect(screen.queryByLabelText("Veriliş — Yıl")).toBeNull();
+    fireEvent.click(screen.getAllByLabelText("Veriliş — Yılı değiştir")[0]);
+    expect(screen.getByLabelText("Veriliş — Yıl")).toHaveValue("2026");
+
+    fireEvent.change(screen.getByLabelText("Değiştirilecek alan"), {
+      target: { value: "dateOfIssue" },
+    });
+    const bulkIssueDay = screen.getAllByLabelText("Veriliş — Gün")[0];
+    const bulkIssueMonth = screen.getAllByLabelText("Veriliş — Ay")[0];
+    fireEvent.change(bulkIssueDay, { target: { value: "20" } });
+    fireEvent.change(bulkIssueMonth, { target: { value: "9" } });
+    expect(bulkIssueDay.closest(".compact-date-cell")).toHaveAttribute(
+      "title",
+      `20-Sep-${String(new Date().getFullYear()).slice(-2)}`,
+    );
+
     expect(
       screen.queryByRole("columnheader", { name: "Inspection Description" }),
     ).toBeNull();
