@@ -85,7 +85,8 @@ Statuses:
    `vX.Y.Z`.
 10. Push the tag. The existing Windows workflow validates tag/version identity,
     builds the installer, and creates a new GitHub Release. It refuses to replace
-    any asset on an existing release.
+    any asset on an existing release, publishes a SHA-256 sidecar file, and marks
+    SemVer suffixes such as `-rc.1` as GitHub prereleases.
 
 ## Historical exceptions
 

@@ -61,7 +61,8 @@ a GUI executable without a companion console window.
 3. Run all local gates after the final edit.
 4. Tag the exact commit `v$VERSION`; never move or reuse a published tag.
 5. Push the tag and inspect the Windows workflow result.
-6. Download the produced installer and record/report its checksum.
+6. Confirm the release contains both the installer and its generated `.sha256`
+   asset; verify the checksum before running the installer.
 7. Keep the previous GitHub Release available until the new installer has been
    manually opened and the critical workflow smoke-tested on Windows.
 8. If any gate fails, do not publish or relabel the build as stable.

@@ -76,7 +76,8 @@ Stable installers are published under the repository's **Releases** page. To
 produce an unversioned test build without a prepared Windows machine, open
 **Actions → Windows Release → Run workflow**. When free Actions artifact storage
 is available, download the `DocFlow-windows-x64` artifact. A test build never
-replaces a stable or preview release asset.
+replaces a stable or preview release asset. Versioned releases include a
+downloadable `.sha256` checksum beside the installer.
 
 For a local Windows build, install Python 3.12+, Node 22+, stable Rust, Visual
 Studio C++ Build Tools, and Tesseract. Then run:

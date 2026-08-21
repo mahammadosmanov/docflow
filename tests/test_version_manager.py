@@ -180,3 +180,22 @@ def test_tagged_release_workflow_never_replaces_a_published_asset() -> None:
 
     assert "--clobber" not in workflow
     assert "refusing to replace its assets" in workflow
+
+
+def test_tagged_release_workflow_publishes_an_installer_checksum() -> None:
+    workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Get-FileHash" in workflow
+    assert ".sha256" in workflow
+    assert "$checksum.FullName" in workflow
+
+
+def test_semver_suffix_creates_a_github_prerelease() -> None:
+    workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$version.Contains("-")' in workflow
+    assert '"--prerelease"' in workflow
