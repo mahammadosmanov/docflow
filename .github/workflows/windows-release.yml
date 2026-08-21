@@ -156,17 +156,26 @@ jobs:
           }
           $notes = Join-Path $env:RUNNER_TEMP "docflow-$version-notes.md"
           python tools/version_manager.py notes $version | Out-File -FilePath $notes -Encoding utf8
+          $installerHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksumPath = Join-Path $env:RUNNER_TEMP "$($installer.Name).sha256"
+          "$installerHash  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
+          $checksum = Get-Item -LiteralPath $checksumPath
+          $releaseFlags = @()
+          if ($version.Contains("-")) {
+            $releaseFlags += "--prerelease"
+          }
 
           & gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
             throw "Release $tag already exists; refusing to replace its assets."
           }
 
-          & gh release create $tag $installer.FullName `
+          & gh release create $tag $installer.FullName $checksum.FullName `
             --repo $env:GITHUB_REPOSITORY `
             --verify-tag `
             --title "DocFlow $version" `
-            --notes-file $notes
+            --notes-file $notes `
+            @releaseFlags
           if ($LASTEXITCODE -ne 0) {
             throw "Publishing the Windows installer release failed."
           }
