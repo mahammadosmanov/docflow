@@ -171,3 +171,12 @@ def test_frontend_demo_version_comes_from_the_canonical_package_manifest() -> No
     assert "__DOCFLOW_VERSION__" in bridge
     assert "package.json" in vite_config
     assert "__DOCFLOW_VERSION__" in vite_config
+
+
+def test_tagged_release_workflow_never_replaces_a_published_asset() -> None:
+    workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--clobber" not in workflow
+    assert "refusing to replace its assets" in workflow
