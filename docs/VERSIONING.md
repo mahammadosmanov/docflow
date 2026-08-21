@@ -84,7 +84,8 @@ Statuses:
 9. Commit the release candidate, merge it to `main`, and tag that exact commit
    `vX.Y.Z`.
 10. Push the tag. The existing Windows workflow validates tag/version identity,
-    builds the installer, and creates/updates the GitHub Release.
+    builds the installer, and creates a new GitHub Release. It refuses to replace
+    any asset on an existing release.
 
 ## Historical exceptions
 

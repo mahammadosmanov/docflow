@@ -72,10 +72,11 @@ image-only PDF before producing an NSIS installer.
 
 ## Windows installer
 
-The simplest path does not require a prepared Windows development machine:
-open the repository's **Actions → windows-build → Run workflow** page. When the
-job finishes, download the `DocFlow-windows-x64` artifact and run the contained
-setup executable.
+Stable installers are published under the repository's **Releases** page. To
+produce an unversioned test build without a prepared Windows machine, open
+**Actions → Windows Release → Run workflow**. When free Actions artifact storage
+is available, download the `DocFlow-windows-x64` artifact. A test build never
+replaces a stable or preview release asset.
 
 For a local Windows build, install Python 3.12+, Node 22+, stable Rust, Visual
 Studio C++ Build Tools, and Tesseract. Then run:
