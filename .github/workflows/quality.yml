@@ -60,6 +60,12 @@ jobs:
 
       - name: Verify the Tauri shell
         run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
           touch src-tauri/binaries/docflow-sidecar-x86_64-unknown-linux-gnu
           chmod +x src-tauri/binaries/docflow-sidecar-x86_64-unknown-linux-gnu
           cargo check --manifest-path src-tauri/Cargo.toml
