@@ -39,6 +39,13 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("shows the exact runtime product version in the workspace", async () => {
+    render(<App />);
+    await signIn();
+
+    expect(screen.getByText("v0.6.0-demo")).toBeVisible();
+  });
+
   it("signs in and opens the schema-driven operation", async () => {
     render(<App />);
     await signIn();

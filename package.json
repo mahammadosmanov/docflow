@@ -1,6 +1,6 @@
 {
   "name": "docflow-desktop",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,8 @@
     "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1",
     "test": "vitest run --config frontend/vite.config.ts",
     "test:watch": "vitest --config frontend/vite.config.ts",
+    "version:check": "python tools/version_manager.py check",
+    "versions": "python tools/version_manager.py list",
     "tauri": "tauri"
   },
   "dependencies": {

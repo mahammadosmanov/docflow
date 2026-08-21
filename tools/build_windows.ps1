@@ -118,6 +118,7 @@ try {
     }
 
     if (-not $SkipTests) {
+        Invoke-Checked $python ($pythonPrefix + @("tools/version_manager.py", "check")) "Check version contract"
         Invoke-Checked $python ($pythonPrefix + @("-m", "pytest")) "Run Python tests"
         Invoke-Checked $python ($pythonPrefix + @("-m", "mypy", "src/docflow")) "Run Python type checks"
         Invoke-Checked $npm @("test") "Run interface tests"

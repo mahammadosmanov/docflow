@@ -600,7 +600,8 @@ function HomeScreen({
             <p>{s.t("home.subtitle")}</p>
           </div>
           <div className="safe-badge">
-            <Shield /> Preview-first
+            <Shield /> Preview-first <span aria-hidden="true">·</span>
+            <span>v{bootstrap.version}</span>
           </div>
         </section>
         <div className="dashboard-grid">

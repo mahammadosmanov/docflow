@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow keeps all three original 0.5.4 RFI workflow operations and adds a safe
+DocFlow 0.6.0 keeps all three original RFI workflow operations and adds a safe
 signed-page staging workflow:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
@@ -32,6 +32,7 @@ python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 npm ci
 
+python tools/version_manager.py check
 python -m pytest
 python -m mypy src/docflow
 npm test
@@ -39,6 +40,21 @@ npm run build
 python tools/build_sidecar.py
 npm run tauri dev
 ```
+
+## Project and version tracking
+
+The complete product/release record lives in the repository and requires no
+paid service:
+
+- [`docs/PRODUCT.md`](docs/PRODUCT.md) — living product requirements
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Now / Next / Later outcomes
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision index
+- [`docs/VERSIONING.md`](docs/VERSIONING.md) — SemVer and release workflow
+- [`releases.json`](releases.json) — every known version in machine-readable form
+- [`CHANGELOG.md`](CHANGELOG.md) — user-visible changes and safety notes
+
+Run `npm run versions` to list every release and `npm run version:check` to
+detect version drift before a build.
 
 On macOS, `./tools/run_macos.sh` prepares missing local dependencies, stages
 the sidecar, and starts the Tauri application.

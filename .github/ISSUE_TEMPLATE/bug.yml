@@ -1,0 +1,51 @@
+name: Bug report
+description: Report reproducible incorrect or unsafe behavior
+title: "bug: "
+labels: ["type:bug", "status:triage"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 — data loss, overwrite, secret exposure, or false document label
+        - P1 — critical workflow blocked
+        - P2 — degraded workflow with workaround
+        - P3 — cosmetic or low-impact
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: DocFlow version
+      description: Use the in-app version or VERSION/tag. Do not write "latest".
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic reproduction
+      description: Do not attach private documents, workbooks, passwords, or tokens.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and diagnostics
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed private documents, credentials, and personal data.
+          required: true
+        - label: I stated whether source/destination files changed.
+          required: true

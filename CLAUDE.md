@@ -27,6 +27,7 @@ DocFlow is a Tauri 2 desktop application:
 ## Verification
 
 ```bash
+python tools/version_manager.py check
 .venv/bin/python -m pytest
 .venv/bin/python -m mypy src/docflow
 npm test
@@ -38,6 +39,10 @@ Run `.venv/bin/python tools/build_sidecar.py`, then
 `npm run tauri build` for packaging. Use
 `.venv/bin/python tools/ci_ocr_smoke.py <sidecar-executable>` for the real OCR
 path.
+
+Product scope is tracked in `docs/PRODUCT.md`; version/release rules are in
+`docs/VERSIONING.md` and `docs/RELEASE_SAFETY.md`. `VERSION` is the canonical
+current version and `releases.json` is the complete machine-readable catalog.
 
 The pre-migration Flutter and Qt UI sources under `legacy/` are read-only
 rollback material. Do not make active changes there.

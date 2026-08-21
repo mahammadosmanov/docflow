@@ -17,5 +17,6 @@ if [[ ! -d node_modules ]]; then
   npm ci
 fi
 
+.venv/bin/python tools/version_manager.py check
 .venv/bin/python tools/build_sidecar.py
 exec npm run tauri dev

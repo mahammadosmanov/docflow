@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose a measurable document-automation outcome
+title: "feature: "
+labels: ["type:feature", "status:triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Repetitive user problem
+      description: Describe the manual work and frequency, not a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired user outcome
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - Given ... when ... then ...
+        - Preview shows ...
+        - Undo restores ...
+    validations:
+      required: true
+  - type: dropdown
+    id: data_risk
+    attributes:
+      label: Does it modify files or workbooks?
+      options:
+        - No, read-only
+        - Yes, reversible local mutation
+        - Unknown — requires architecture review
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Synthetic examples or evidence
+      description: Never upload private production documents.
+  - type: input
+    id: target
+    attributes:
+      label: Suggested release
+      placeholder: Next patch / next minor / later

@@ -3,12 +3,17 @@
 ## Verification on every change
 
 ```bash
+python tools/version_manager.py check
 python -m pytest
 python -m mypy src/docflow
 npm test
 npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+Project scope and priority are tracked in `PRODUCT.md` and `ROADMAP.md`.
+Implementation tasks live in GitHub Issues; completed versions live in
+`../releases.json` and `../CHANGELOG.md`.
 
 For a release:
 

@@ -1,13 +1,20 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 const frontendRoot = fileURLToPath(new URL(".", import.meta.url));
+const packageManifest = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 export default defineConfig({
   root: frontendRoot,
   plugins: [react()],
+  define: {
+    __DOCFLOW_VERSION__: JSON.stringify(packageManifest.version),
+  },
   clearScreen: false,
   server: {
     port: 1420,

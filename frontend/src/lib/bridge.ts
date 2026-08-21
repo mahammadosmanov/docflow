@@ -516,7 +516,7 @@ export class MockBridge implements Bridge {
       case "app/bootstrap":
         result = {
           protocol: 1,
-          version: "0.5.4-demo",
+          version: `${__DOCFLOW_VERSION__}-demo`,
           auth: this.auth,
           prefs: this.prefs,
           operations: [
