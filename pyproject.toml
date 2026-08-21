@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==83.0.0", "wheel==0.47.0"]
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,13 +9,13 @@ description = "Safe desktop document automation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "PyMuPDF==1.28.0",
-  "numpy==2.5.1",
+  "PyMuPDF==1.28.2",
+  "numpy==2.5.2",
   "opencv-python-headless==5.0.0.93",
   "pytesseract==0.3.13",
   "openpyxl==3.1.5",
   "et_xmlfile==2.0.0",
-  "packaging==26.2",
+  "packaging==26.3",
   "pillow==12.3.0",
 ]
 
