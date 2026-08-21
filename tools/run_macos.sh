@@ -1,48 +1,22 @@
 #!/usr/bin/env bash
-# macOS'ta derle, imzala, calistir.
-#
-# NEDEN BU SCRIPT VAR: proje iCloud Drive ile senkronlanan Desktop altinda.
-# iCloud'un fileprovider'i .framework klasorlerine com.apple.FinderInfo xattr'i
-# yapistiriyor ve `xattr -cr` bunu SILEMIYOR (dosya saglayici geri koyuyor).
-# codesign bu xattr'i gorunce "resource fork, Finder information, or similar
-# detritus not allowed" deyip patliyor — yani `flutter build macos` her zaman
-# CodeSign adiminda basarisiz oluyor. Derleme ADIMLARI bitmis oluyor, sadece
-# imza kalmis oluyor.
-#
-# Cozum: bundle'i iCloud DISINA, xattr'lari soyarak kopyala (ditto --noextattr)
-# ve orada imzala. Uygulama oradan calisir.
-set -uo pipefail
+# Prepare and run the Tauri desktop application.
+set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../app" && pwd)"
-OUT="${DOCFLOW_RUN_DIR:-/tmp/docflow-run}"
-SRC="$APP_DIR/build/macos/Build/Products/Debug/docflow.app"
-DST="$OUT/docflow.app"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON="${DOCFLOW_PYTHON:-python3.12}"
 
-cd "$APP_DIR"
+cd "$ROOT"
 
-echo "==> flutter build macos --debug"
-# CodeSign hatasi BEKLENIYOR (yukariya bak); .app yine de uretiliyor.
-flutter build macos --debug 2>&1 | tail -3 || true
-
-if [[ ! -d "$SRC" ]]; then
-  echo "HATA: bundle uretilmedi: $SRC" >&2
-  echo "Bu gercek bir derleme hatasi — yukaridaki ciktiya bak." >&2
-  exit 1
+if [[ ! -x .venv/bin/python ]]; then
+  "$PYTHON" -m venv .venv
+  .venv/bin/python -m pip install -r requirements-dev.txt
+  .venv/bin/python -m pip install -e .
 fi
 
-echo "==> iCloud disina kopyala + xattr soy: $DST"
-mkdir -p "$OUT"
-rm -rf "$DST"
-ditto --norsrc --noextattr --noqtn "$SRC" "$DST" || exit 1
-
-echo "==> ad-hoc imzala"
-codesign --force --deep --sign - "$DST" 2>&1 | grep -v "replacing existing signature" || true
-if ! codesign --verify --deep --strict "$DST"; then
-  echo "HATA: imza dogrulanmadi" >&2
-  exit 1
+if [[ ! -d node_modules ]]; then
+  npm ci
 fi
 
-echo "==> calistir"
-pkill -f "$OUT/docflow.app/Contents/MacOS/docflow" 2>/dev/null || true
-open "$DST"
-echo "OK: $DST"
+.venv/bin/python tools/version_manager.py check
+.venv/bin/python tools/build_sidecar.py
+exec npm run tauri dev

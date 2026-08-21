@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/mahammadosmanov/docflow/security/advisories/new
+    about: Report secrets, authorization problems, overwrite/data-loss paths, or other vulnerabilities privately.

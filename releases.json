@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "currentVersion": "0.6.0",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "date": "2026-07-26",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "First verified Windows package with Process Scans, RFI Log, and Batch Print."
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-07-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Email-assisted RFI drafting, native Excel copy, systematic app versioning, and lightweight Windows UI artifacts."
+    },
+    {
+      "version": "0.2.1",
+      "date": "2026-07-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Gemini schema, Azerbaijani mail parsing, compact tag expansion, and short item lookup fixes."
+    },
+    {
+      "version": "0.2.2",
+      "date": "2026-07-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Gemini model fallback and compatibility update."
+    },
+    {
+      "version": "0.2.3",
+      "date": "2026-07-28",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Modern and legacy Gemini structured-output compatibility."
+    },
+    {
+      "version": "0.2.4",
+      "date": "2026-07-28",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Correct Gemini response-format MIME handling."
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-07-29",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Workbook-backed Outlook mail-table preview and native formatted copy."
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-07-29",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Optional flat output mode for Process Scans."
+    },
+    {
+      "version": "0.4.1",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Dynamic RFI workbook mapping and Excel-native clipboard flow."
+    },
+    {
+      "version": "0.4.2",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Single-pass large-workbook processing and clipboard performance fixes."
+    },
+    {
+      "version": "0.4.3",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Reliable multi-RFI Excel automation and process cleanup."
+    },
+    {
+      "version": "0.4.4",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Hidden, non-interactive Excel preparation until native copy completes."
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Multi-sheet CIV, MEC, ELE, and PRC RFI workflow with atomic apply and undo."
+    },
+    {
+      "version": "0.5.1",
+      "date": "2026-07-30",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Packaged sidecar startup and Windows layout compatibility fixes."
+    },
+    {
+      "version": "0.5.2",
+      "date": "2026-07-31",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "Independent per-sheet scheduling and compact copy-action layout."
+    },
+    {
+      "version": "0.5.3",
+      "date": "2026-08-01",
+      "channel": "stable",
+      "status": "archived",
+      "tag": null,
+      "summary": "MEC row-number editing and workbook-backed mail copy."
+    },
+    {
+      "version": "0.5.4",
+      "date": "2026-08-03",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": null,
+      "summary": "Unicode-safe RFI lookup transport and production workbook validation."
+    },
+    {
+      "version": "0.6.0-test",
+      "date": "2026-08-08",
+      "channel": "trial",
+      "status": "superseded",
+      "tag": "v0.6.0-test",
+      "summary": "Flutter-era trial of resumable guided batch printing; preserved for traceability."
+    },
+    {
+      "version": "0.5.4-tauri-preview",
+      "date": "2026-08-13",
+      "channel": "preview",
+      "status": "superseded",
+      "tag": "v0.5.4-tauri-preview",
+      "summary": "First Tauri migration preview with the Python engine and signed-page staging."
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-08-21",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.6.0",
+      "summary": "Tauri 2 production baseline with complete v0.5.4 workflows, resilient printing, compact RFI editing, and safe signed-page staging."
+    }
+  ]
+}

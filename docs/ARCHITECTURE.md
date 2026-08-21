@@ -1,104 +1,64 @@
-# Mimari
+# Architecture
 
-Tek cümle: **her özellik bir `Operation`'dır, UI şemasından üretilir, her dosya
-işlemi preview → apply → journal'dan geçer.**
-
-Geri kalan her şey bu üç cümlenin sonucu.
-
-## Neden bu şekilde
-
-Sahibinin beyanı: *"özellikler zaman geçtikçe eklenecek ve/veya düzenlenecek."*
-O halde mimarinin optimize edeceği tek metrik: **yeni özellik eklemenin maliyeti.**
-
-Hedef: yeni özellik = 1 Python dosyası + 4 ARB girdisi. UI'a dokunma yok,
-IPC'ye dokunma yok, Flutter derlemesi yok.
-
-Bu hedefe üç kararla ulaşılıyor:
-
-### 1. Tek sözleşme (`contracts.py`)
-
-Her operation `preview()` ve `apply()` implement eder, `ParamSchema` bildirir.
-Sidecar `list_operations` ile bunları JSON olarak yayınlar. Flutter tarafı
-operation'ların **ne yaptığını bilmez** — sadece şemayı okur.
-
-### 2. Şema-güdümlü UI
-
-`ParamKind` → widget eşlemesi tek yerde (`lib/ui/forms/schema_form.dart`).
-Operation parametrelerini bildirir, form kendiliğinden çıkar.
-
-Sızıntı testi: `schema_form.dart` içinde herhangi bir operation id'si geçiyorsa
-mimari bozulmuştur.
-
-### 3. preview / apply ayrımı
-
-```
-preview(params) -> Plan     # dosya sistemine DOKUNMAZ, sadece okur
-apply(plan)     -> Result   # SADECE plan.steps'i uygular, hesap YAPMAZ
+```text
+Tauri 2 native shell
+        |
+React + TypeScript presentation
+        |
+scoped stdin/stdout JSON-lines channel
+        |
+Python application facade
+        |
+engine + auth + cloud + OCR + safe filesystem
 ```
 
-Bu ayrım pazarlık konusu değil. `apply()` içinde yeniden hesaplama yapmak,
-kullanıcının **onayladığı şey** ile **yapılan şey** arasında sessiz bir fark açar.
-Bu uygulama kullanıcının belgelerini taşıyor; o fark veri kaybıdır.
+Tauri owns only the window, OS dialogs, opening a selected path, and sidecar
+lifecycle. React owns presentation and transient screen state. Python remains
+the authority for authentication, operation schemas, plans, mutations,
+journals, cloud history, and OCR.
 
-Yan fayda: dry-run bedava. Undo bedava.
+## Security boundary
 
-## Journal
+- The shell capability permits spawning only `binaries/docflow-sidecar`.
+- The webview has no Supabase URL/key/token and makes no external requests.
+- Access and refresh tokens stay in the Python process and compatible settings
+  file.
+- No localhost port, HTTP server, eval, remote scripts, or service-role key is
+  used.
+- Native file selection is scoped to user-initiated Tauri dialogs.
 
-Her `apply()` ters çevrilebilir bir kayıt yazar (`~/.docflow/journal/`).
-Undo = adımları **ters sırada** ters çevir.
+## Operation contract
 
-Journal, adım uygulanmadan **önce** yazılır. Çökme anında yarım iş kalırsa
-journal'da fazladan kayıt olur — zararsız (undo o adımı atlar). Tersi veri kaybı.
+Every document feature implements the same framework-independent contract:
 
-Undo kuralları:
-- `move` → geri taşı
-- `copy` → hedefi sil
-- `mkdir` → **sadece boş klasörü** sil. Kullanıcı içine bir şey koyduysa dokunma.
+```python
+class Operation:
+    schema: ParamSchema
 
-## Veri akışı
-
-```
-Flutter                          Sidecar (Python)
-───────                          ────────────────
-list_operations  ─────────────►  registry.all_operations()
-                 ◄─────────────  [{id, titleKey, schema}]
-
-şemadan form üret
-kullanıcı doldurur
-
-preview(op, params) ──────────►  op.preview(params)
-                                   ├─ extract.first_page_text()  ── metin katmanı? yoksa OCR
-                                   ├─ extract.find()             ── strict → repaired → fuzzy
-                                   └─ Plan(steps, warnings)
-                 ◄─────────────  Plan
-
-planı tablo olarak göster
-kullanıcı ONAYLAR                 ◄── tek insan kararı burada
-
-apply(planId)   ──────────────►  fs.apply_steps(plan)
-                                   ├─ journal yaz (ÖNCE)
-                                   └─ adımı uygula (SONRA)
-                 ◄─────────────  Result(applied, failed, journalId)
+    def preview(self, params: dict) -> Plan: ...
+    def apply(self, plan: Plan) -> Result: ...
 ```
 
-## Katman kuralı
+React renders `ParamSchema`; there is no operation-specific form. Add a module
+under `src/docflow/ops/` and translations to all four ARB catalogs for a new
+operation.
 
-Flutter **hiçbir belge işi yapmaz.** Parametre toplar, planı gösterir, onay alır,
-sonucu gösterir. PDF açmaz, OCR yapmaz, dosya taşımaz.
+## Safety invariants
 
-Gerekçe: Dart'ta OCR yok, docx/pptx manipülasyonu yok. Bugün bir istisna yaparsan
-yarın belge mantığı iki dile bölünür ve hangi tarafta olduğunu kimse bilmez.
+- Preview never mutates the filesystem.
+- Apply executes only `plan.steps`; it never recalculates a plan.
+- Every step is journaled as pending before execution.
+- Existing destinations are never overwritten.
+- Undo runs steps in reverse and removes only empty created directories.
+- Review “delete” moves to recoverable application trash.
+- Missing/broken OCR produces a zero-step plan.
 
-## Genişletme örneği
+## Persistent compatibility
 
-`pdf.merge` eklemek:
+- settings/session: `~/.docflow/settings.json`
+- journals: `~/.docflow/journal/`
+- recoverable trash: `~/.docflow/trash/`
+- Supabase `app_users` and `history` contracts: unchanged
 
-1. `sidecar/docflow_sidecar/ops/pdf_merge.py` yaz — `@register("pdf.merge")`,
-   şema bildir, `preview`/`apply` yaz
-2. `ops/__init__.py`'ye tek satır import ekle
-3. Dört ARB dosyasına `op.pdf.merge.title` / `.desc` ekle
-
-Bitti. Flutter'a dokunmadın. Yeniden derlemedin. UI kendiliğinden çıktı.
-
-Bu adımlardan fazlasını yapman gerekiyorsa **dur ve mimariyi konuş** —
-sızıntı var demektir.
+The Python sidecar is frozen as one executable with PyInstaller. Tauri bundles
+it using the required target-triple filename and packages the final native app.
