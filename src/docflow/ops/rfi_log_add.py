@@ -1684,6 +1684,21 @@ class AddRfiLogRows(Operation):
         temp_path = workbook_path.with_name(
             f".{workbook_path.name}.{plan.plan_id[:8]}.docflow.tmp"
         )
+        restore_step = Step(
+            "restore_backup",
+            src=str(backup_path),
+            dst=str(workbook_path),
+            note_key="note.rfi.restoreBackup",
+            meta={"originalSha256": signature["sha256"]},
+            state="pending",
+        )
+        entry = JournalEntry(
+            op_id=self.id,
+            steps=[],
+            pending_step=restore_step,
+        )
+        result.journal_id = entry.journal_id
+        write_journal(entry)
 
         try:
             if _signature(workbook_path) != signature:
@@ -1695,17 +1710,6 @@ class AddRfiLogRows(Operation):
             if backup_path.exists():
                 raise FileExistsError(str(backup_path))
             _copy_contents(workbook_path, backup_path)
-
-            restore_step = Step(
-                "restore_backup",
-                src=str(backup_path),
-                dst=str(workbook_path),
-                note_key="note.rfi.restoreBackup",
-                meta={"originalSha256": signature["sha256"]},
-            )
-            entry = JournalEntry(op_id=self.id, steps=[restore_step])
-            result.journal_id = entry.journal_id
-            write_journal(entry)
 
             notify("progress", {"phase": "apply", "done": 0, "total": 3})
             _write_batches(workbook_path, temp_path, batches)
@@ -1721,8 +1725,12 @@ class AddRfiLogRows(Operation):
             notify("progress", {"phase": "apply", "done": 2, "total": 3})
 
             restore_step.meta["appliedSha256"] = file_sha256(workbook_path)
+            restore_step.state = "applied"
+            entry.steps.append(restore_step)
+            entry.pending_step = None
             write_journal(entry)
             result.applied = sum(len(batch["records"]) for batch in batches)
+            result.undoable = entry.undoable
             notify("progress", {"phase": "apply", "done": 3, "total": 3})
             return result
         except Exception as exc:  # noqa: BLE001
@@ -1740,6 +1748,20 @@ class AddRfiLogRows(Operation):
                     _replace_with_retry(restore_temp, workbook_path)
             except Exception:
                 pass
+            if workbook_path.is_file() and backup_path.is_file():
+                current_hash = file_sha256(workbook_path)
+                if current_hash != signature["sha256"]:
+                    restore_step.meta["appliedSha256"] = current_hash
+                    restore_step.state = "applied"
+                else:
+                    restore_step.state = "failed"
+            else:
+                restore_step.state = "failed"
+            if restore_step not in entry.steps:
+                entry.steps.append(restore_step)
+            entry.pending_step = None
+            write_journal(entry)
             result.failed = 1
+            result.undoable = entry.undoable
             result.errors.append(_apply_error_warning(exc, workbook_path))
             return result

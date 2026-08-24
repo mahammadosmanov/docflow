@@ -32,7 +32,7 @@ import subprocess
 from dataclasses import dataclass
 
 import cv2
-import fitz
+import pymupdf as fitz
 import numpy as np
 
 import pytesseract

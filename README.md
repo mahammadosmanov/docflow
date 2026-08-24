@@ -34,12 +34,23 @@ npm ci
 
 python tools/version_manager.py check
 python -m pytest
-python -m mypy src/docflow
+python -m mypy src/docflow tools/version_manager.py tools/onedrive_stage_smoke.py
 npm test
 npm run build
 python tools/build_sidecar.py
 npm run tauri dev
 ```
+
+On Windows, run the signed-page suite with every synthetic file inside the
+registered OneDrive tree containing the current checkout:
+
+```powershell
+python tools/onedrive_stage_smoke.py
+```
+
+An explicit existing directory inside any registered OneDrive account can be
+passed as the sole argument. The tool rejects paths outside registered sync
+roots and removes its synthetic workspace after the run.
 
 ## Project and version tracking
 
@@ -101,6 +112,9 @@ the native Python/OpenCV sidecar also has to be frozen for Windows.
 2. The user reviews and approves that exact plan.
 3. `apply()` executes only approved steps and journals each mutation.
 4. `undo()` reverses journaled steps and never overwrites an existing file.
+
+Undo authority comes only from an exact local journal ID. Cloud history is
+audit data: it can show Undo only when the same journal still exists locally.
 
 The signed-page staging operation additionally requires three non-overlapping
 roots: new scans, the read-only archive, and a separate review output. Duplicate

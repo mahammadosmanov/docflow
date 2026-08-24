@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
 from docflow.auth import AppUser, AuthService, AuthSession, UsernameRule
+from docflow.contracts import Plan, Step
 from docflow.engine import Engine
 from docflow.http import Response
 from docflow.i18n import SUPPORTED, Strings, catalog_keys
@@ -324,3 +327,135 @@ def test_sidecar_schema_and_preferences_are_json_ready(tmp_path: Path) -> None:
         "fontScale": 1.25,
         "compact": False,
     }
+
+
+def test_sidecar_ping_writes_only_the_json_protocol_to_stdout() -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "docflow.sidecar", "--ping"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = completed.stdout.splitlines()
+
+    assert len(lines) == 1
+    assert json.loads(lines[0]) == {"ok": True, "protocol": 1}
+
+
+def test_sidecar_rejects_cloud_supplied_undo_steps_before_mutation(
+    tmp_path: Path,
+) -> None:
+    from docflow.sidecar import SidecarApplication
+
+    application = SidecarApplication(SettingsStore(tmp_path / "settings.json"))
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"KEEP")
+    victim = tmp_path / "victim.pdf"
+    victim.write_bytes(b"KEEP")
+
+    with pytest.raises(ValueError, match="undo parameters"):
+        application.dispatch(
+            "engine/undo",
+            {
+                "journalId": "not-a-local-capability",
+                "steps": [
+                    {"kind": "copy", "src": str(source), "dst": str(victim)}
+                ],
+            },
+            lambda _event: None,
+        )
+
+    assert victim.read_bytes() == b"KEEP"
+
+
+def test_sidecar_rejects_an_undo_destination_override_before_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from docflow.fs import apply as fsapply
+    from docflow.settings import SettingsStore
+    from docflow.sidecar import SidecarApplication
+
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"DOCUMENT")
+    output = tmp_path / "output.pdf"
+    applied = fsapply.apply_steps(
+        Plan(op_id="test", steps=[Step("copy", src=str(source), dst=str(output))])
+    )
+    recovery = tmp_path / "recovery"
+    recovery.mkdir()
+    application = SidecarApplication(SettingsStore(tmp_path / "settings.json"))
+
+    with pytest.raises(ValueError, match="invalid undo parameters"):
+        application.dispatch(
+            "engine/undo",
+            {"journalId": applied.journal_id, "destination": str(recovery)},
+            lambda _event: None,
+        )
+
+    assert output.read_bytes() == b"DOCUMENT"
+    assert list(recovery.iterdir()) == []
+
+
+def test_cloud_history_exposes_undo_only_for_an_exact_local_journal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from docflow.cloud import CloudEntry
+    from docflow.fs import apply as fsapply
+    from docflow.sidecar import SidecarApplication
+
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    local = fsapply.apply_steps(
+        Plan(op_id="test", steps=[Step("mkdir", dst=str(tmp_path / "created"))])
+    )
+    marked: list[str] = []
+
+    class FakeCloud:
+        enabled = True
+
+        def list(self, _limit: int) -> list[CloudEntry]:
+            return [
+                CloudEntry(
+                    "remote",
+                    "2026-08-24T00:00:00Z",
+                    "test",
+                    1,
+                    0,
+                    "00000000-0000-4000-8000-000000000000",
+                    "1/1",
+                    [{"kind": "copy", "dst": str(tmp_path / "victim.pdf")}],
+                    False,
+                    "other@example.com",
+                ),
+                CloudEntry(
+                    "local",
+                    "2026-08-24T00:00:01Z",
+                    "test",
+                    1,
+                    0,
+                    local.journal_id,
+                    "1/1",
+                    [],
+                    False,
+                    "local@example.com",
+                ),
+            ]
+
+        def mark_undone(self, cloud_id: str) -> None:
+            marked.append(cloud_id)
+
+    application = SidecarApplication(SettingsStore(tmp_path / "settings.json"))
+    application.cloud = FakeCloud()  # type: ignore[assignment]
+
+    payload = application.dispatch("history/list", {"limit": 50}, lambda _event: None)
+
+    assert payload["rows"][0]["undoable"] is False
+    assert payload["rows"][0]["steps"] is None
+    assert payload["rows"][1]["undoable"] is True
+    assert payload["rows"][1]["steps"] is None
+
+    result = application.dispatch(
+        "engine/undo", {"journalId": local.journal_id}, lambda _event: None
+    )
+    assert result["failed"] == 0
+    assert marked == ["local"]

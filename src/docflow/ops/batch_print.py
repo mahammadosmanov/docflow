@@ -649,7 +649,7 @@ def _draw_pdf_page(
     settings: dict[str, Any],
 ) -> Any:
     from PIL import Image, ImageOps
-    import fitz
+    import pymupdf as fitz
 
     pointer = ctypes.cast(devmode_buffer, ctypes.POINTER(_DevModeW))
     orientation = _page_orientation(
@@ -778,7 +778,7 @@ def _submit_controlled_job(
 ) -> None:
     if os.name != "nt":
         raise OSError("Windows printing is required")
-    import fitz
+    import pymupdf as fitz
 
     orientation = str(settings.get("orientation") or "auto")
     winspool, gdi32, printer_handle, devmode_buffer, _devmode, hdc = (

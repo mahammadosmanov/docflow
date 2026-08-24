@@ -37,7 +37,7 @@ of the webview. The UI uses a small typed bridge and schema-generated forms.
 - schema-driven operation forms and remembered values
 - progress, warnings, exact preview, apply result, journal, undo
 - review keep/put/recoverable-delete workflow
-- cloud history with local fallback and both undo destinations
+- cloud history with exact local-journal undo capability
 - Turkish, English, Russian, and Azerbaijani catalogs
 - system/light/dark, font, scaling, and compact density preferences
 - Windows Tesseract packaging and real OCR smoke validation

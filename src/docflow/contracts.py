@@ -168,6 +168,7 @@ StepKind = Literal[
     "pdf_first_page_replace",
     "cleanup_temp",
 ]
+JournalState = Literal["pending", "applied", "failed"]
 
 
 @dataclass
@@ -177,12 +178,16 @@ class Step:
     dst: str | None = None
     note_key: str | None = None           # UI'da gosterilecek aciklama anahtari
     meta: dict = field(default_factory=dict)
+    state: JournalState | None = None
 
     def to_json(self) -> dict:
-        return {
+        payload = {
             "kind": self.kind, "src": self.src, "dst": self.dst,
             "noteKey": self.note_key, "meta": self.meta,
         }
+        if self.state is not None:
+            payload["state"] = self.state
+        return payload
 
 
 @dataclass
@@ -223,6 +228,7 @@ class Result:
     failed: int = 0
     journal_id: str = ""
     errors: list[Warning] = field(default_factory=list)
+    undoable: bool = False
     meta: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict:
@@ -230,6 +236,7 @@ class Result:
             "applied": self.applied, "failed": self.failed,
             "journalId": self.journal_id,
             "errors": [e.to_json() for e in self.errors],
+            "undoable": self.undoable,
             "meta": self.meta,
         }
 
@@ -240,6 +247,7 @@ class JournalEntry:
     op_id: str
     steps: list[Step]
     pending_step: Step | None = None
+    undoable: bool = False
     journal_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     ts: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -247,6 +255,7 @@ class JournalEntry:
         payload: dict[str, Any] = {
             "journalId": self.journal_id, "opId": self.op_id, "ts": self.ts,
             "steps": [s.to_json() for s in self.steps],
+            "undoable": self.undoable,
         }
         if self.pending_step is not None:
             payload["pendingStep"] = self.pending_step.to_json()

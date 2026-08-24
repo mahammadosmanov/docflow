@@ -30,3 +30,11 @@ Method families:
 
 Authentication responses expose only user/profile state; Supabase access and
 refresh tokens never cross into the webview.
+
+`engine/undo` accepts only an exact local `journalId`. Restore destinations,
+reverse steps, cloud record IDs, and every other extra field are rejected at
+the privileged boundary. Cloud history rows are audit
+summaries; their `undoable` flag is true only after exact local-journal lookup.
+
+Operation results also carry the authoritative `undoable` flag. The renderer
+does not expose Undo from a journal ID alone.
