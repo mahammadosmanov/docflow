@@ -20,7 +20,7 @@ import pathlib
 import shutil
 import stat
 import uuid
-from typing import Literal
+from typing import Callable, Literal, cast
 
 from ..contracts import JournalEntry, Plan, Result, Step, Warning
 from ..progress import cancellation_requested, notify
@@ -85,6 +85,54 @@ def directory_entry_identity(directory: pathlib.Path) -> tuple[int, int]:
     return int(entry.st_dev), int(entry.st_ino)
 
 
+_DIRECTORY_OWNER_XATTR = b"user.docflow.owner"
+
+
+def create_directory_ownership_token(directory: pathlib.Path) -> str | None:
+    """Mark a POSIX directory entry with a random ownership token."""
+    if os.name == "nt":
+        return None
+    token = uuid.uuid4().hex
+    setter = cast(Callable[..., None] | None, getattr(os, "setxattr", None))
+    if setter is None:
+        raise RuntimeError("directory ownership markers are unavailable")
+    try:
+        setter(
+            directory,
+            _DIRECTORY_OWNER_XATTR,
+            token.encode("ascii"),
+            follow_symlinks=False,
+        )
+    except (AttributeError, OSError) as error:
+        raise RuntimeError("directory ownership markers are unavailable") from error
+    return token
+
+
+def directory_entry_owned(
+    directory: pathlib.Path,
+    expected_identity: tuple[int, int],
+    expected_token: str | None,
+) -> bool:
+    if directory_entry_identity(directory) != expected_identity:
+        return False
+    if os.name == "nt":
+        return expected_token is None
+    if not isinstance(expected_token, str) or not expected_token:
+        return False
+    getter = cast(Callable[..., bytes] | None, getattr(os, "getxattr", None))
+    if getter is None:
+        return False
+    try:
+        value = getter(
+            directory,
+            _DIRECTORY_OWNER_XATTR,
+            follow_symlinks=False,
+        )
+    except (AttributeError, OSError):
+        return False
+    return value == expected_token.encode("ascii")
+
+
 def _file_entry_identity(path: pathlib.Path) -> tuple[int, int]:
     entry = path.lstat()
     attributes = int(getattr(entry, "st_file_attributes", 0))
@@ -101,8 +149,9 @@ def _file_entry_identity(path: pathlib.Path) -> tuple[int, int]:
 def remove_owned_empty_directory(
     directory: pathlib.Path,
     expected_identity: tuple[int, int],
+    expected_token: str | None,
 ) -> Literal["removed", "nonempty", "changed"]:
-    if directory_entry_identity(directory) != expected_identity:
+    if not directory_entry_owned(directory, expected_identity, expected_token):
         return "changed"
 
     quarantine = directory.with_name(
@@ -120,7 +169,7 @@ def remove_owned_empty_directory(
         os.rename(quarantine, directory)
 
     try:
-        if directory_entry_identity(quarantine) != expected_identity:
+        if not directory_entry_owned(quarantine, expected_identity, expected_token):
             restore()
             return "changed"
         if any(quarantine.iterdir()):
@@ -181,8 +230,11 @@ def _do(step: Step) -> None:
         directory = pathlib.Path(step.dst)
         directory.mkdir(parents=True, exist_ok=False)
         device, inode = directory_entry_identity(directory)
+        owner_token = create_directory_ownership_token(directory)
         step.meta["directoryDevice"] = device
         step.meta["directoryInode"] = inode
+        if owner_token is not None:
+            step.meta["directoryOwnerToken"] = owner_token
         return
 
     assert step.src is not None and step.dst is not None
@@ -232,16 +284,20 @@ def _undo(step: Step) -> None:
         p = pathlib.Path(step.dst)
         expected_device = step.meta.get("directoryDevice")
         expected_inode = step.meta.get("directoryInode")
+        expected_token = step.meta.get("directoryOwnerToken")
         if (
             not isinstance(expected_device, int)
             or isinstance(expected_device, bool)
             or not isinstance(expected_inode, int)
             or isinstance(expected_inode, bool)
+            or (os.name != "nt" and not isinstance(expected_token, str))
+            or (os.name == "nt" and expected_token is not None)
         ):
             raise RuntimeError(f"missing directory identity: {p}")
         removal = remove_owned_empty_directory(
             p,
             (expected_device, expected_inode),
+            expected_token if isinstance(expected_token, str) else None,
         )
         if removal == "changed":
             raise RuntimeError(f"directory entry changed since apply: {p}")
@@ -364,12 +420,17 @@ def _undo_step_safe(step: Step) -> bool:
     if step.kind == "mkdir":
         device = step.meta.get("directoryDevice")
         inode = step.meta.get("directoryInode")
+        owner_token = step.meta.get("directoryOwnerToken")
         return (
             step.dst is not None
             and isinstance(device, int)
             and not isinstance(device, bool)
             and isinstance(inode, int)
             and not isinstance(inode, bool)
+            and (
+                (os.name == "nt" and owner_token is None)
+                or (os.name != "nt" and isinstance(owner_token, str))
+            )
         )
     if step.kind in {"move", "rename", "copy"}:
         return (

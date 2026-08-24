@@ -35,6 +35,7 @@ from ..contracts import (
 )
 from ..extract import OcrEngineMissing, diagnostics, extract_first_page
 from ..fs.apply import (
+    create_directory_ownership_token,
     directory_entry_identity,
     file_sha256,
     remove_owned_empty_directory,
@@ -665,8 +666,11 @@ class StageSignedFirstPages(Operation):
             raise ValueError("mkdir leaves the approved review root")
         destination.mkdir(exist_ok=False)
         device, inode = directory_entry_identity(destination)
+        owner_token = create_directory_ownership_token(destination)
         step.meta["directoryDevice"] = device
         step.meta["directoryInode"] = inode
+        if owner_token is not None:
+            step.meta["directoryOwnerToken"] = owner_token
 
     def _apply_pdf(self, step: Step) -> Step:
         if step.src is None or step.dst is None:
@@ -782,17 +786,21 @@ class StageSignedFirstPages(Operation):
             directory = pathlib.Path(step.dst)
             expected_device = step.meta.get("directoryDevice")
             expected_inode = step.meta.get("directoryInode")
+            expected_token = step.meta.get("directoryOwnerToken")
             if (
                 not isinstance(expected_device, int)
                 or isinstance(expected_device, bool)
                 or not isinstance(expected_inode, int)
                 or isinstance(expected_inode, bool)
+                or (os.name != "nt" and not isinstance(expected_token, str))
+                or (os.name == "nt" and expected_token is not None)
             ):
                 continue
             try:
                 removal = remove_owned_empty_directory(
                     directory,
                     (expected_device, expected_inode),
+                    expected_token if isinstance(expected_token, str) else None,
                 )
             except (FileNotFoundError, ValueError):
                 removal = "changed"
