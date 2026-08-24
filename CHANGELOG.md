@@ -8,6 +8,27 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+### Fixed
+
+- Undo now accepts only an exact local journal capability; cloud history cannot
+  supply reverse steps, restore paths, or expose Undo on another device.
+- Journals persist pending, applied, and failed states plus a validated
+  `undoable` decision before the UI or backend permits any reversal.
+- Copy, move, and rename create destinations exclusively and persist source
+  content identity before mutation, closing destination-overwrite races.
+- File deletion, reverse moves, and workbook restoration atomically claim the
+  applied entry and revalidate both applied and backup content identities.
+- Directory cleanup and undo atomically claim and verify the created directory
+  entry before removal, preserving replacements, junctions, and reparse points.
+- PyMuPDF imports no longer print deprecation warnings into the sidecar's
+  JSON-lines stdout protocol.
+
+### Testing
+
+- Added a registered-OneDrive smoke command for the complete synthetic signed-
+  page staging suite, including lock, cancellation, cleanup, undo, and isolated
+  pytest plugin, profile, cache, bytecode, and temporary storage coverage.
+
 ## 0.6.0 - 2026-08-21
 
 ### Added

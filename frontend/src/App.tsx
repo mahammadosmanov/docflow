@@ -81,6 +81,12 @@ type Route =
   | { name: "admin" }
   | { name: "settings"; back: "home" | "login" | "pending" };
 
+export function canUndoOperation(
+  result: OperationResult | null | undefined,
+): result is OperationResult & { journalId: string } {
+  return Boolean(result?.undoable && result.journalId);
+}
+
 const usernamePattern = /^[a-zA-Z0-9._-]{3,24}$/;
 
 function humanError(error: unknown, s: Strings): string {
@@ -904,7 +910,7 @@ function OperationScreen({
     }
   };
   const undo = async () => {
-    if (!result?.journalId) return;
+    if (!canUndoOperation(result)) return;
     try {
       await bridge.call("engine/undo", {
         journalId: result.journalId,
@@ -2241,14 +2247,11 @@ function ResultView({
             {s.t("print.resume.review")}
           </Button>
         )}
-        <Button
-          variant="secondary"
-          icon={<Undo2 />}
-          disabled={!result.journalId}
-          onClick={onUndo}
-        >
-          {s.t("action.undo")}
-        </Button>
+        {canUndoOperation(result) && (
+          <Button variant="secondary" icon={<Undo2 />} onClick={onUndo}>
+            {s.t("action.undo")}
+          </Button>
+        )}
         <Button icon={<Check />} onClick={onDone}>
           {s.t("action.done")}
         </Button>
@@ -2501,15 +2504,12 @@ function HistoryScreen({
     void load();
   }, [load]);
 
-  const undo = async (row: HistoryRow, destination?: string) => {
+  const undo = async (row: HistoryRow) => {
     setUndoRow(null);
     setBusy(true);
     try {
       await bridge.call("engine/undo", {
         journalId: row.journalId,
-        steps: row.steps,
-        cloudId: row.cloudId,
-        ...(destination ? { destination } : {}),
       });
       await load();
     } catch (reason) {
@@ -2577,7 +2577,7 @@ function HistoryScreen({
                   <span className="status-label">
                     <Check /> {s.t("history.undone")}
                   </span>
-                ) : (
+                ) : row.undoable ? (
                   <Button
                     variant="secondary"
                     icon={<Undo2 />}
@@ -2586,7 +2586,7 @@ function HistoryScreen({
                   >
                     {s.t("action.undo")}
                   </Button>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
@@ -2607,17 +2607,6 @@ function HistoryScreen({
           <div className="modal-actions vertical">
             <Button icon={<Undo2 />} onClick={() => void undo(undoRow)}>
               {s.t("history.undoOriginal")}
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<FolderOpen />}
-              onClick={() =>
-                void chooseFolder().then((folder) => {
-                  if (folder) return undo(undoRow, folder);
-                })
-              }
-            >
-              {s.t("history.undoToFolder")}
             </Button>
           </div>
         </Modal>

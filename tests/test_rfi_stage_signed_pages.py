@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
+import subprocess
 
 import fitz
 import pytest
@@ -11,6 +13,7 @@ from docflow.fs.apply import undo
 from docflow.fs.naming import filename_for
 from docflow.ops import rfi_stage_signed_pages as stage_module
 from docflow.ops.rfi_stage_signed_pages import StageSignedFirstPages
+from docflow.progress import cancellable
 
 
 CODE = "AZE-SUN-INT-QMS-RFI-CIV-0064"
@@ -186,6 +189,7 @@ def test_stage_replaces_only_first_page_and_never_changes_inputs(
 
     result = operation.apply(plan)
     assert result.failed == 0
+    assert result.undoable is True
     output = review / archive_pdf.relative_to(archive)
     assert output.is_file()
     assert _sha256(archive_pdf) == archive_before
@@ -216,7 +220,7 @@ def test_stage_replaces_only_first_page_and_never_changes_inputs(
         assert round(document[0].rect.height) == 792
 
     undone = undo(result.journal_id)
-    assert undone.failed == 0
+    assert undone.failed == 0, "\n".join(error.subject for error in undone.errors)
     assert not output.exists()
     assert not (review / "Package-A").exists()
     assert review.is_dir()
@@ -281,6 +285,127 @@ def test_failed_pdf_does_not_leave_empty_review_folders(
     assert result.failed == 1
     assert not (review / "Package-A").exists()
     assert review.is_dir()
+
+
+def test_cancelled_stage_removes_created_review_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    signed_pdf = signed / "signed.pdf"
+    _make_pdf(signed_pdf, [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    archive_before = _sha256(archive_pdf)
+    signed_before = _sha256(signed_pdf)
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+    operation = StageSignedFirstPages()
+    plan = operation.preview(_params(signed, archive, review))
+    polls = 0
+
+    def cancel_after_first_step() -> bool:
+        nonlocal polls
+        polls += 1
+        return polls > 1
+
+    with cancellable(cancel_after_first_step):
+        result = operation.apply(plan)
+
+    assert result.applied == 0
+    assert result.failed == 0
+    assert result.meta == {"cancelled": True, "pending": len(plan.steps) - 1}
+    assert [warning.key for warning in result.errors] == [
+        "warn.operation.cancelled"
+    ]
+    assert not (review / "Package-A").exists()
+    assert review.is_dir()
+    assert _sha256(archive_pdf) == archive_before
+    assert _sha256(signed_pdf) == signed_before
+    with pytest.raises(RuntimeError, match="journal is not safely undoable"):
+        undo(result.journal_id)
+    assert _sha256(archive_pdf) == archive_before
+    assert _sha256(signed_pdf) == signed_before
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction semantics")
+def test_cancelled_stage_preserves_a_replaced_review_directory_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    _make_pdf(signed / "signed.pdf", [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+    operation = StageSignedFirstPages()
+    plan = operation.preview(_params(signed, archive, review))
+    created = review / "Package-A"
+    user_directory = tmp_path / "user-directory"
+    user_directory.mkdir()
+    sentinel = user_directory / "keep.txt"
+    sentinel.write_text("user data", encoding="utf-8")
+    apply_mkdir = operation._apply_mkdir
+
+    def replace_created_directory(step: object) -> None:
+        apply_mkdir(step)  # type: ignore[arg-type]
+        created.rmdir()
+        subprocess.run(
+            ["cmd.exe", "/c", "mklink", "/J", str(created), str(user_directory)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert created.is_junction()
+
+    monkeypatch.setattr(operation, "_apply_mkdir", replace_created_directory)
+    polls = 0
+
+    def cancel_after_first_step() -> bool:
+        nonlocal polls
+        polls += 1
+        return polls > 1
+
+    try:
+        with cancellable(cancel_after_first_step):
+            result = operation.apply(plan)
+
+        assert result.meta.get("cancelled") is True
+        assert created.is_junction()
+        assert sentinel.read_text(encoding="utf-8") == "user data"
+    finally:
+        if created.is_junction():
+            created.rmdir()
+
+
+def test_undo_preserves_an_empty_replacement_for_a_created_review_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signed, archive, review, archive_pdf = _roots(tmp_path)
+    _make_pdf(signed / "signed.pdf", [f"SIGNED {CODE} " + "text " * 20])
+    _make_pdf(archive_pdf, [f"ARCHIVE {CODE} " + "text " * 20])
+    monkeypatch.setattr(apply_module, "JOURNAL_DIR", tmp_path / "journal")
+    operation = StageSignedFirstPages()
+    plan = operation.preview(_params(signed, archive, review))
+    created = review / "Package-A"
+    apply_mkdir = operation._apply_mkdir
+
+    def replace_created_directory(step: object) -> None:
+        apply_mkdir(step)  # type: ignore[arg-type]
+        created.rmdir()
+        created.mkdir()
+
+    monkeypatch.setattr(operation, "_apply_mkdir", replace_created_directory)
+    polls = 0
+
+    def cancel_after_first_step() -> bool:
+        nonlocal polls
+        polls += 1
+        return polls > 1
+
+    with cancellable(cancel_after_first_step):
+        result = operation.apply(plan)
+
+    assert result.applied == 0
+    assert created.is_dir()
+    with pytest.raises(RuntimeError, match="journal is not safely undoable"):
+        undo(result.journal_id)
+    assert created.is_dir()
 
 
 def test_duplicate_signed_scans_fail_closed(tmp_path: Path) -> None:
@@ -407,7 +532,8 @@ def test_apply_refuses_an_archive_file_changed_after_preview(
     assert result.failed == 1
     assert not output.exists()
     assert _sha256(archive_pdf) == changed_hash
-    undo(result.journal_id)
+    with pytest.raises(RuntimeError, match="journal is not safely undoable"):
+        undo(result.journal_id)
     assert not (review / "Package-A").exists()
 
 

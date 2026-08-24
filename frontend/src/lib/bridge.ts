@@ -783,6 +783,7 @@ export class MockBridge implements Bridge {
           failed: 0,
           journalId: "demo-journal",
           errors: [],
+          undoable: true,
           cloudSynced: true,
         } satisfies OperationResult;
         break;
@@ -834,6 +835,7 @@ export class MockBridge implements Bridge {
           failed: 0,
           journalId: "",
           errors: [],
+          undoable: false,
         } satisfies OperationResult;
         break;
       case "history/list":
@@ -849,8 +851,22 @@ export class MockBridge implements Bridge {
               steps: null,
               cloudId: "demo-cloud",
               undone: false,
+              undoable: false,
               fromCloud: true,
               userEmail: demoAdmin.email,
+            },
+            {
+              when: new Date(Date.now() - 1000).toISOString(),
+              opId: "rfi.review",
+              moves: 1,
+              failed: 0,
+              journalId: "11111111-1111-4111-8111-111111111111",
+              steps: null,
+              cloudId: "demo-history-local",
+              undone: false,
+              undoable: true,
+              fromCloud: true,
+              userEmail: "local@docflow.local",
             },
           ],
         } satisfies HistoryPayload;

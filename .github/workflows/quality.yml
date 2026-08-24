@@ -48,7 +48,7 @@ jobs:
         run: |
           python tools/version_manager.py check
           python -m pytest
-          python -m mypy src/docflow tools/version_manager.py
+          python -m mypy src/docflow tools/version_manager.py tools/onedrive_stage_smoke.py
 
       - name: Verify the React interface
         run: |

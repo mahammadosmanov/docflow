@@ -506,6 +506,7 @@ def test_shifted_lookup_block_is_discovered_and_formulas_are_repaired(
     assert plan.steps[0].meta["lookupColumns"]["item"] == 12
     result = operation.apply(plan)
     assert result.failed == 0
+    assert result.undoable is True
 
     formulas = load_workbook(path, read_only=True, data_only=False)
     try:
@@ -701,6 +702,53 @@ def test_apply_reports_workbook_lock_without_exposing_os_error(
     )
     assert access_warning.key == "error.rfi.workbookLocked"
     assert access_warning.subject == path.name
+
+
+def test_failed_apply_exposes_undo_when_applied_workbook_cannot_be_rolled_back(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "RFI Log.xlsx"
+    _make_workbook(path)
+    before = fsapply.file_sha256(path)
+    monkeypatch.setattr(fsapply, "JOURNAL_DIR", tmp_path / "journal")
+    operation = AddRfiLogRows()
+    plan = operation.preview(
+        {
+            "workbook": str(path),
+            "discipline": "CIV",
+            "count": 1,
+            "overflow_next_day": True,
+        }
+    )
+    original_replace = rfi_log_add._replace_with_retry
+    calls = 0
+
+    def publish_then_fail_restore(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            original_replace(source, destination)
+            raise OSError("publish acknowledgement failed")
+        raise OSError("automatic restore failed")
+
+    monkeypatch.setattr(
+        rfi_log_add,
+        "_replace_with_retry",
+        publish_then_fail_restore,
+    )
+
+    result = operation.apply(plan)
+    journal = fsapply.get_journal(result.journal_id)
+
+    assert result.failed == 1
+    assert fsapply.file_sha256(path) != before
+    assert journal["undoable"] is True
+    assert result.undoable is True
+
+    undone = fsapply.undo(result.journal_id)
+    assert undone.failed == 0
+    assert fsapply.file_sha256(path) == before
 
 
 def test_windows_lock_check_accepts_a_free_workbook(tmp_path):

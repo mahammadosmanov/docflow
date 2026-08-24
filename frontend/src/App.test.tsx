@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { App } from "./App";
+import { App, canUndoOperation } from "./App";
 import { resetBridgeForTests } from "./lib/bridge";
 
 async function signIn() {
@@ -39,6 +39,21 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("exposes result undo only for an authoritative undoable capability", () => {
+    const base = {
+      applied: 1,
+      failed: 0,
+      journalId: "local-journal",
+      errors: [],
+    };
+
+    expect(canUndoOperation({ ...base, undoable: false })).toBe(false);
+    expect(canUndoOperation({ ...base, undoable: true })).toBe(true);
+    expect(
+      canUndoOperation({ ...base, journalId: "", undoable: true }),
+    ).toBe(false);
+  });
+
   it("shows the exact runtime product version in the workspace", async () => {
     render(<App />);
     await signIn();
@@ -269,5 +284,41 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
     expect(screen.getByText("Dil")).toBeVisible();
     expect(screen.getByText("Tema")).toBeVisible();
+  });
+
+  it("hides undo for cloud history without a local journal", async () => {
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen
+        .getByText("Yapılan işlemleri gör ve güvenle geri al.")
+        .closest("button")!,
+    );
+
+    const remoteEmail = await screen.findByText(/demo@docflow\.local/);
+    const remoteRow = remoteEmail.closest(".history-row");
+    expect(remoteRow).not.toBeNull();
+    expect(
+      within(remoteRow as HTMLElement).queryByRole("button", {
+        name: "Geri al",
+      }),
+    ).toBeNull();
+  });
+
+  it("shows undo for history backed by a safe local journal", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(screen.getByRole("button", { name: "Geçmiş" }));
+
+    await screen.findByText(/local@docflow\.local/);
+    fireEvent.click(screen.getByRole("button", { name: "Geri al" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Orijinal konuma geri al" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Bir klasöre geri al…" }),
+    ).toBeNull();
   });
 });

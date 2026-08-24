@@ -65,6 +65,7 @@ export interface OperationResult {
   failed: number;
   journalId: string;
   errors: Warning[];
+  undoable: boolean;
   meta?: Record<string, unknown>;
   cloudSynced?: boolean;
 }
@@ -151,6 +152,7 @@ export interface HistoryRow {
   steps: Step[] | null;
   cloudId: string | null;
   undone: boolean;
+  undoable: boolean;
   fromCloud: boolean;
   userEmail: string;
 }

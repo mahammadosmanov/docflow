@@ -6,7 +6,6 @@ exact preview/apply/undo contract is independent of React, Tauri, and IPC.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import threading
 from typing import cast
 
@@ -14,7 +13,13 @@ from . import ops  # noqa: F401  -- trigger @register decorators
 from . import review
 from .clipboard import copy_plan_table, preview_plan_table
 from .contracts import Operation, Plan, Result, Warning
-from .fs.apply import apply_steps, get_journal, list_history, undo
+from .fs.apply import (
+    apply_steps,
+    get_journal,
+    journal_undoable,
+    list_history,
+    undo,
+)
 from .progress import ProgressCallback, cancellable, reporting
 from .registry import all_operations, get
 
@@ -133,18 +138,14 @@ class Engine:
         self._plans[plan.plan_id] = plan
         return plan
 
-    def undo(
-        self,
-        journal_id: str = "",
-        *,
-        destination: str | None = None,
-        steps: Iterable[dict] | None = None,
-    ) -> Result:
-        serialized = list(steps) if steps is not None else None
-        return undo(journal_id, destination, serialized)
+    def undo(self, journal_id: str = "") -> Result:
+        return undo(journal_id)
 
     def history(self, limit: int = 50) -> list[dict]:
         return list_history(limit)
 
     def journal(self, journal_id: str) -> dict:
         return get_journal(journal_id)
+
+    def journal_undoable(self, journal_id: str) -> bool:
+        return journal_undoable(get_journal(journal_id))

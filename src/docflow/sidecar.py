@@ -74,6 +74,7 @@ class SidecarApplication:
         self.auth = AuthService(self.settings)
         self.cloud = CloudHistory(self.auth)
         self.engine = Engine()
+        self._local_cloud_ids: dict[str, str] = {}
 
     def _auth_state(self) -> JsonObject:
         session = self.auth.session
@@ -118,6 +119,12 @@ class SidecarApplication:
         if self.cloud.enabled:
             try:
                 entries = self.cloud.list(limit)
+                self._local_cloud_ids = {
+                    entry.journal_id: entry.id
+                    for entry in entries
+                    if not entry.undone
+                    and self._local_undo_available(entry.journal_id)
+                }
                 return {
                     "online": True,
                     "rows": [
@@ -127,9 +134,13 @@ class SidecarApplication:
                             "moves": entry.applied,
                             "failed": entry.failed,
                             "journalId": entry.journal_id,
-                            "steps": entry.steps,
+                            "steps": None,
                             "cloudId": entry.id,
                             "undone": entry.undone,
+                            "undoable": (
+                                not entry.undone
+                                and entry.journal_id in self._local_cloud_ids
+                            ),
                             "fromCloud": True,
                             "userEmail": entry.user_email,
                         }
@@ -138,6 +149,7 @@ class SidecarApplication:
                 }
             except Exception:
                 pass
+        self._local_cloud_ids = {}
         return {
             "online": False,
             "rows": [
@@ -150,12 +162,21 @@ class SidecarApplication:
                     "steps": None,
                     "cloudId": None,
                     "undone": False,
+                    "undoable": self._local_undo_available(
+                        str(entry.get("journalId", ""))
+                    ),
                     "fromCloud": False,
                     "userEmail": "",
                 }
                 for entry in self.engine.history(limit)
             ],
         }
+
+    def _local_undo_available(self, journal_id: str) -> bool:
+        try:
+            return self.engine.journal_undoable(journal_id)
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            return False
 
     def _sync_result(self, op_id: str, result: Result) -> bool:
         if not self.cloud.enabled or not result.journal_id:
@@ -324,16 +345,12 @@ class SidecarApplication:
             )
             return plan.to_json()
         if method == "engine/undo":
-            raw_steps = params.get("steps")
-            steps = list(raw_steps) if isinstance(raw_steps, list) else None
-            destination = params.get("destination")
-            result = self.engine.undo(
-                str(params.get("journalId", "")),
-                destination=destination if isinstance(destination, str) else None,
-                steps=steps,
-            )
-            cloud_id = params.get("cloudId")
-            if result.failed == 0 and isinstance(cloud_id, str):
+            if set(params) - {"journalId"}:
+                raise ValueError("invalid undo parameters")
+            journal_id = str(params.get("journalId", ""))
+            result = self.engine.undo(journal_id)
+            cloud_id = self._local_cloud_ids.pop(journal_id, None)
+            if result.failed == 0 and cloud_id:
                 self.cloud.mark_undone(cloud_id)
             return result.to_json()
         if method == "history/list":

@@ -9,6 +9,7 @@ no actionable step.
 
 from __future__ import annotations
 
+import copy
 import errno
 import hashlib
 import json
@@ -19,7 +20,7 @@ import tempfile
 import time as time_module
 from typing import Any
 
-import fitz
+import pymupdf as fitz
 
 from ..contracts import (
     BoolParam,
@@ -33,7 +34,13 @@ from ..contracts import (
     Warning,
 )
 from ..extract import OcrEngineMissing, diagnostics, extract_first_page
-from ..fs.apply import file_sha256, write_journal
+from ..fs.apply import (
+    create_directory_ownership_token,
+    directory_entry_identity,
+    file_sha256,
+    remove_owned_empty_directory,
+    write_journal,
+)
 from ..fs.naming import filename_for
 from ..progress import cancellation_requested, notify
 from ..registry import register
@@ -400,7 +407,7 @@ def _build_replacement(
             temp_path,
             garbage=0,
             deflate=True,
-            encryption=fitz.PDF_ENCRYPT_KEEP,
+            encryption=fitz.PDF_ENCRYPT_KEEP,  # type: ignore[attr-defined]
             preserve_metadata=True,
         )
 
@@ -658,6 +665,12 @@ class StageSignedFirstPages(Operation):
         if not _inside(destination.resolve(strict=False), review_root):
             raise ValueError("mkdir leaves the approved review root")
         destination.mkdir(exist_ok=False)
+        device, inode = directory_entry_identity(destination)
+        owner_token = create_directory_ownership_token(destination)
+        step.meta["directoryDevice"] = device
+        step.meta["directoryInode"] = inode
+        if owner_token is not None:
+            step.meta["directoryOwnerToken"] = owner_token
 
     def _apply_pdf(self, step: Step) -> Step:
         if step.src is None or step.dst is None:
@@ -771,14 +784,33 @@ class StageSignedFirstPages(Operation):
             if step.dst is None:
                 continue
             directory = pathlib.Path(step.dst)
-            try:
-                if directory.is_symlink():
-                    continue
-                directory.rmdir()
-            except OSError:
-                # Non-empty, concurrently changed, or already unavailable.
-                # In each case preserving the path is the safest outcome.
+            expected_device = step.meta.get("directoryDevice")
+            expected_inode = step.meta.get("directoryInode")
+            expected_token = step.meta.get("directoryOwnerToken")
+            if (
+                not isinstance(expected_device, int)
+                or isinstance(expected_device, bool)
+                or not isinstance(expected_inode, int)
+                or isinstance(expected_inode, bool)
+                or (os.name != "nt" and not isinstance(expected_token, str))
+                or (os.name == "nt" and expected_token is not None)
+            ):
                 continue
+            try:
+                removal = remove_owned_empty_directory(
+                    directory,
+                    (expected_device, expected_inode),
+                    expected_token if isinstance(expected_token, str) else None,
+                )
+            except (FileNotFoundError, ValueError):
+                removal = "changed"
+            except OSError:
+                # An inaccessible entry might still be the one we created.
+                continue
+            if removal == "nonempty":
+                continue
+            # A removed/replaced entry is no longer this transaction's effect.
+            # Forget it without touching the replacement.
             try:
                 entry.steps.remove(step)
             except ValueError:
@@ -791,6 +823,7 @@ class StageSignedFirstPages(Operation):
         entry = JournalEntry(op_id=plan.op_id, steps=[])
         result = Result(journal_id=entry.journal_id)
         created_directories: list[Step] = []
+        write_journal(entry)
 
         for index, step in enumerate(plan.steps):
             if cancellation_requested():
@@ -801,32 +834,40 @@ class StageSignedFirstPages(Operation):
                 result.errors.append(Warning("warn.operation.cancelled"))
                 break
             notify("apply", index, len(plan.steps), pathlib.Path(step.dst or "").name)
-            entry.pending_step = step
+            pending_step = copy.deepcopy(step)
+            pending_step.state = "pending"
+            entry.pending_step = pending_step
             write_journal(entry)
             try:
-                if step.kind == "mkdir":
-                    self._apply_mkdir(step)
-                    journal_step: Step | None = step
-                elif step.kind == "pdf_first_page_replace":
-                    journal_step = self._apply_pdf(step)
-                elif step.kind == "cleanup_temp":
-                    self._apply_cleanup_temp(step)
+                if pending_step.kind == "mkdir":
+                    self._apply_mkdir(pending_step)
+                    journal_step: Step | None = pending_step
+                elif pending_step.kind == "pdf_first_page_replace":
+                    journal_step = self._apply_pdf(pending_step)
+                elif pending_step.kind == "cleanup_temp":
+                    self._apply_cleanup_temp(pending_step)
                     journal_step = None
                 else:
-                    raise ValueError(f"unsupported approved step: {step.kind}")
+                    raise ValueError(
+                        f"unsupported approved step: {pending_step.kind}"
+                    )
             except Exception as error:  # continue other independent RFIs
+                pending_step.state = "failed"
+                entry.steps.append(pending_step)
                 result.failed += 1
                 result.errors.append(
                     Warning(
                         "error.step_failed",
-                        f"{step.src or step.dst}: {type(error).__name__}: {error}",
+                        f"{pending_step.src or pending_step.dst}: "
+                        f"{type(error).__name__}: {error}",
                     )
                 )
             else:
                 result.applied += 1
                 if journal_step is not None:
+                    journal_step.state = "applied"
                     entry.steps.append(journal_step)
-                    if step.kind == "mkdir":
+                    if pending_step.kind == "mkdir":
                         created_directories.append(journal_step)
             finally:
                 entry.pending_step = None
@@ -836,5 +877,6 @@ class StageSignedFirstPages(Operation):
             created_directories, entry, result
         )
         write_journal(entry)
+        result.undoable = entry.undoable
         notify("apply", len(plan.steps), len(plan.steps))
         return result
