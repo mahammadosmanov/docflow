@@ -48,7 +48,7 @@ const ACTIVE_CONFIG_FILES = [
 const FORBIDDEN_ACTIVE_CONFIG =
   /FallbackSupervisor|tauri[_-]plugin[_-]shell|externalBin|docflow-sidecar|PyInstaller|build_sidecar\.py|ci_ocr_smoke\.py|version_manager\.py/iu;
 const FORBIDDEN_PACKAGE_NAME =
-  /(^|[-_.])(docflow[-_.]?sidecar|python(?:\d+(?:\.\d+)*)?|libpython|pyinstaller|pyimod\d*|base_library)([-_.]|$)/iu;
+  /(^|[-_.])(docflow[-_.]?sidecar|python(?:\d+(?:\.\d+)*)?|libpython(?:\d+(?:\.\d+)*)?|pyinstaller|pyimod\d*|base_library)([-_.]|$)/iu;
 const FORBIDDEN_PACKAGE_EXTENSION = new Set([
   ".py",
   ".pyc",
@@ -57,6 +57,10 @@ const FORBIDDEN_PACKAGE_EXTENSION = new Set([
   ".pyz",
   ".whl",
 ]);
+
+export function isForbiddenPackageName(name) {
+  return FORBIDDEN_PACKAGE_NAME.test(name);
+}
 
 function normalizedRelative(root, path) {
   return relative(root, path).split(sep).join("/");
@@ -155,7 +159,7 @@ export function auditPackage(root) {
     );
     if (
       FORBIDDEN_PACKAGE_EXTENSION.has(extension) ||
-      FORBIDDEN_PACKAGE_NAME.test(name)
+      isForbiddenPackageName(name)
     ) {
       failures.push(`forbidden packaged runtime path: ${relativePath}`);
     }

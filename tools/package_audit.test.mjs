@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { auditPackage } from "./package_audit.mjs";
+import { auditPackage, isForbiddenPackageName } from "./package_audit.mjs";
+
+test("package name audit rejects versioned libpython without platform tools", () => {
+  assert.equal(isForbiddenPackageName("libpython3.12.dylib"), true);
+  assert.equal(isForbiddenPackageName("libpython311.dll"), true);
+});
 
 test("package audit rejects Python, PyInstaller, and sidecar payloads", () => {
   const root = mkdtempSync(join(tmpdir(), "docflow-package-audit-"));
