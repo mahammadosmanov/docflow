@@ -17,7 +17,7 @@ use docflow_lib::{
 };
 use serde_json::{Map, Value, json};
 use tempfile::TempDir;
-use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileOptions};
+use zip::{CompressionMethod, DateTime, System, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -33,6 +33,7 @@ fn workbook_fixture(path: &Path, macros: bool) {
     let mut writer = ZipWriter::new(File::create(path).unwrap());
     writer.set_comment("RFI corpus fixture").unwrap();
     let options = SimpleFileOptions::default()
+        .system(System::Unix)
         .compression_method(CompressionMethod::Deflated)
         .last_modified_time(DateTime::from_date_and_time(2025, 7, 6, 5, 4, 2).unwrap())
         .unix_permissions(0o640);

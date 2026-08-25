@@ -160,7 +160,7 @@ try {
         Invoke-Checked $npm @("run", "build") "Build the interface and verify final source"
         Invoke-Checked $cargo @("fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check") "Check Rust formatting"
         Invoke-Checked $cargo @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings") "Lint the Rust backend"
-        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml") "Test the Rust backend"
+        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--no-fail-fast") "Test the Rust backend"
         Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Rust backend"
     }
 

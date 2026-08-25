@@ -41,3 +41,12 @@ test("CI workflows pin the verified Rust toolchain", () => {
     assert.doesNotMatch(source, /dtolnay\/rust-toolchain@stable/u, path);
   }
 });
+
+test("Windows backend tests report every failing integration binary", () => {
+  const source = readFileSync(resolve(root, "tools/build_windows.ps1"), "utf8");
+
+  assert.match(
+    source,
+    /@\("test", "--manifest-path", "src-tauri\/Cargo\.toml", "--no-fail-fast"\)/u,
+  );
+});
