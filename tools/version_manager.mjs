@@ -8,8 +8,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPOSITORY_ROOT = resolve(new URL("..", import.meta.url).pathname);
+const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
 const RELEASE_STATUSES = new Set([
@@ -353,6 +354,6 @@ function main(argv) {
   }
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   process.exitCode = main(process.argv.slice(2));
 }

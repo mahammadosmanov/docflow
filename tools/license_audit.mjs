@@ -12,8 +12,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPOSITORY_ROOT = resolve(new URL("..", import.meta.url).pathname);
+const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const REJECTED_LICENSE = /AGPL|Affero|LicenseRef-commercial|commercial license/iu;
 
 function hostTarget() {
@@ -200,6 +201,6 @@ function main(argv) {
   return 0;
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   process.exitCode = main(process.argv.slice(2));
 }

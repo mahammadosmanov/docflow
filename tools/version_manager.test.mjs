@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -19,7 +20,7 @@ import {
   validateRepository,
 } from "./version_manager.mjs";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 function repositoryFixture() {
   const temporary = mkdtempSync(join(tmpdir(), "docflow-version-"));

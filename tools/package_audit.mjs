@@ -10,8 +10,9 @@ import {
   statSync,
 } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPOSITORY_ROOT = resolve(new URL("..", import.meta.url).pathname);
+const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const IGNORED_SOURCE_DIRECTORIES = new Set([
   ".git",
   ".mypy_cache",
@@ -215,6 +216,6 @@ function main(argv) {
   return failures.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   process.exitCode = main(process.argv.slice(2));
 }
