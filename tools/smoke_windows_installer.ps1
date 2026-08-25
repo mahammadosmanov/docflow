@@ -69,9 +69,15 @@ finally {
 }
 $report = Join-Path $env:RUNNER_TEMP "docflow-installed-smoke-$([guid]::NewGuid()).json"
 try {
-    & $application --package-smoke $report
-    if ($LASTEXITCODE -ne 0) {
-        throw "Installed application smoke failed with exit code $LASTEXITCODE."
+    $smoke = Start-Process -FilePath $application -ArgumentList @(
+        "--package-smoke",
+        "`"$report`""
+    ) -Wait -PassThru
+    if ($smoke.ExitCode -ne 0) {
+        throw "Installed application smoke failed with exit code $($smoke.ExitCode)."
+    }
+    if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+        throw "Installed application smoke exited without producing its report."
     }
     Get-Content -LiteralPath $report
     & node tools/package_audit.mjs package $installRoot

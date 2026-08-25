@@ -190,12 +190,19 @@ try {
 
     $smokeReport = Join-Path ([System.IO.Path]::GetTempPath()) "docflow-package-smoke-$([guid]::NewGuid()).json"
     try {
-        Invoke-Checked (Resolve-Path $application).Path @(
+        Write-Host "`n==> Run Rust packaged bootstrap/settings/OCR/apply/undo smoke"
+        $smoke = Start-Process -FilePath (Resolve-Path $application).Path -ArgumentList @(
             "--package-smoke",
-            $smokeReport,
+            "`"$smokeReport`"",
             "--tesseract",
-            (Resolve-Path $bundledTesseract).Path
-        ) "Run Rust packaged bootstrap/settings/OCR/apply/undo smoke"
+            "`"$((Resolve-Path $bundledTesseract).Path)`""
+        ) -Wait -PassThru
+        if ($smoke.ExitCode -ne 0) {
+            throw "Rust packaged smoke failed with exit code $($smoke.ExitCode)."
+        }
+        if (-not (Test-Path -LiteralPath $smokeReport -PathType Leaf)) {
+            throw "Rust packaged smoke exited without producing its report."
+        }
         Get-Content -LiteralPath $smokeReport
     }
     finally {

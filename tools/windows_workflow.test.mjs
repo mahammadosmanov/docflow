@@ -50,3 +50,20 @@ test("Windows backend tests report every failing integration binary", () => {
     /@\("test", "--manifest-path", "src-tauri\/Cargo\.toml", "--no-fail-fast"\)/u,
   );
 });
+
+test("Windows package smoke waits for GUI-subsystem processes", () => {
+  for (const path of ["tools/build_windows.ps1", "tools/smoke_windows_installer.ps1"]) {
+    const source = readFileSync(resolve(root, path), "utf8");
+    const smokeBlock = source
+      .split("$smoke = Start-Process", 2)[1]
+      ?.split("if ($smoke.ExitCode", 1)[0];
+    assert.ok(smokeBlock, path);
+    assert.match(smokeBlock, /"--package-smoke"/u, path);
+    assert.match(smokeBlock, /\)\s+-Wait\s+-PassThru\s*$/u, path);
+  }
+
+  const sourceBuild = readFileSync(resolve(root, "tools/build_windows.ps1"), "utf8");
+  const installedSmoke = readFileSync(resolve(root, "tools/smoke_windows_installer.ps1"), "utf8");
+  assert.doesNotMatch(sourceBuild, /Invoke-Checked \(Resolve-Path \$application\)\.Path/u);
+  assert.doesNotMatch(installedSmoke, /& \$application --package-smoke/u);
+});
