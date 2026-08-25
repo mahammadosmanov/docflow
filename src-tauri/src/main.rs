@@ -4,5 +4,8 @@
 )]
 
 fn main() {
+    if let Some(status) = docflow_lib::smoke::maybe_run(std::env::args()) {
+        std::process::exit(status);
+    }
     docflow_lib::run();
 }

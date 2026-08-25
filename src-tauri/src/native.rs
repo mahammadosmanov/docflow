@@ -1,0 +1,1823 @@
+use std::{
+    collections::HashSet,
+    env, fs,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value, json};
+
+use crate::{
+    auth::{AuthConfig, AuthService},
+    backend::BackendMethod,
+    clipboard,
+    cloud::CloudHistory,
+    contracts::{AppPrefs, Bootstrap, ParamKind, PrintQueueSummary, ProgressEvent, StepKind},
+    credentials::OsCredentialStore,
+    errors::BackendError,
+    fs_ops::FilesystemAuthority,
+    gemini::{DEFAULT_MODEL, FALLBACK_MODELS, GeminiClient},
+    http::{HttpClient, HttpConfig, JsonHttp},
+    journal::JournalStore,
+    ocr::NativeOcr,
+    operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
+    operations::stage_signed_pages::{
+        StageSignedPagesParams, preview as preview_stage_signed_pages,
+        revise as revise_stage_signed_pages,
+    },
+    path_selection::{PathSelection, PathSelectionStore, SelectionKind, SelectionScope},
+    paths::{CallerIdentity, GrantAccess, GrantScope},
+    plan_store::{BackendOrigin, PlanBinding},
+    platform,
+    print_queue::{BatchPrintParams, PrintService, default_queue_root},
+    progress::GlobalMutationLock,
+    registry::{RegistryFacts, operation_registry},
+    review::{
+        ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
+    },
+    rfi_log,
+    settings::{SettingsStore, default_settings_path},
+};
+
+const SUPABASE_URL: &str = "https://ndpkgbfmshceffwhpqoz.supabase.co";
+const SUPABASE_KEY: &str = "sb_publishable_sK0uEH4t-Hw7LVBpnEaMog_z_2MQwxq";
+const GEMINI_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
+const MAX_OPERATION_ID_CHARS: usize = 128;
+
+pub(crate) struct NativeBackend {
+    settings: Arc<SettingsStore>,
+    auth: Arc<AuthService>,
+    cloud: Arc<CloudHistory>,
+    gemini: Arc<GeminiClient>,
+    journals: JournalStore,
+    mutation_lock: GlobalMutationLock,
+    filesystem: FilesystemAuthority,
+    selections: PathSelectionStore,
+    print: PrintService,
+    process_session_id: Mutex<String>,
+    app_data_dir: PathBuf,
+}
+
+impl NativeBackend {
+    pub(crate) fn production() -> Result<Self, BackendError> {
+        let settings_path = default_settings_path();
+        let app_data_dir = settings_path
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_else(|| env::temp_dir().join("docflow"));
+        let _ = fs::create_dir_all(app_data_dir.join("trash"));
+        let journal_dir = settings_path
+            .parent()
+            .map(|parent| parent.join("journal"))
+            .unwrap_or_else(|| env::temp_dir().join("docflow-journal"));
+        let settings = Arc::new(
+            SettingsStore::new(settings_path).map_err(|_| BackendError::settings_write())?,
+        );
+        let supabase_http: Arc<dyn JsonHttp> = Arc::new(
+            HttpClient::new(HttpConfig::default()).expect("valid Supabase HTTP configuration"),
+        );
+        let auth_config = AuthConfig::new(SUPABASE_URL, SUPABASE_KEY);
+        let auth = Arc::new(AuthService::new(
+            settings.clone(),
+            Arc::new(OsCredentialStore::new()),
+            supabase_http.clone(),
+            auth_config.clone(),
+        ));
+        let journals = JournalStore::new(&journal_dir);
+        let cloud = Arc::new(CloudHistory::new(
+            auth.clone(),
+            supabase_http,
+            auth_config,
+            journal_dir.clone(),
+        ));
+        let gemini_http: Arc<dyn JsonHttp> = Arc::new(
+            HttpClient::new(HttpConfig {
+                request_timeout: Duration::from_secs(45),
+                ..HttpConfig::default()
+            })
+            .expect("valid Gemini HTTP configuration"),
+        );
+        let gemini = Arc::new(GeminiClient::new(
+            gemini_http,
+            GEMINI_URL,
+            configured_gemini_models(),
+        ));
+        let mutation_lock = GlobalMutationLock::default();
+        let filesystem = FilesystemAuthority::with_mutation_lock(
+            &journal_dir,
+            Duration::from_secs(30 * 60),
+            mutation_lock.clone(),
+        );
+        let selections = PathSelectionStore::new(Duration::from_secs(30 * 60));
+        let print = PrintService::new(
+            default_queue_root(&app_data_dir),
+            &journal_dir,
+            Duration::from_secs(30 * 60),
+            mutation_lock.clone(),
+            platform::production_print_adapter(),
+        );
+        Ok(Self {
+            settings,
+            auth,
+            cloud,
+            gemini,
+            journals,
+            mutation_lock,
+            filesystem,
+            selections,
+            print,
+            process_session_id: Mutex::new(uuid::Uuid::new_v4().to_string()),
+            app_data_dir,
+        })
+    }
+
+    pub(crate) fn dispatch(
+        &self,
+        method: BackendMethod,
+        params: Value,
+    ) -> Result<Value, BackendError> {
+        match method {
+            BackendMethod::AppBootstrap => {
+                decode_empty(params)?;
+                let auth = self.auth.restore(now())?;
+                encode(Bootstrap {
+                    protocol: 1,
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    auth,
+                    prefs: self.settings.preferences(),
+                    operations: operation_registry(self.registry_facts()),
+                })
+            }
+            BackendMethod::SettingsUpdate => self.update_settings(params),
+            BackendMethod::SettingsReset => {
+                decode_empty(params)?;
+                self.settings
+                    .save_preferences(AppPrefs::default())
+                    .map_err(|_| BackendError::settings_write())?;
+                encode(self.settings.preferences())
+            }
+            BackendMethod::SettingsParams => {
+                let request: OperationIdParams = decode(params)?;
+                validate_operation_id(&request.op_id)?;
+                Ok(Value::Object(self.selected_params(&request.op_id)?))
+            }
+            BackendMethod::SettingsSaveParams => {
+                let request: SaveParams = decode(params)?;
+                validate_operation_id(&request.op_id)?;
+                let values = filter_saved_operation_params(&request.op_id, request.values)?;
+                let values = self.materialize_operation_values(&request.op_id, values)?;
+                self.settings
+                    .save_params(&request.op_id, values)
+                    .map_err(|_| BackendError::settings_write())?;
+                Ok(json!({"ok": true}))
+            }
+            BackendMethod::AuthSignIn => {
+                if let Ok(caller) = self.signed_in_caller_identity() {
+                    self.revoke_session_authority(&caller);
+                }
+                self.rotate_session_authority();
+                let request: SignInParams = decode(params)?;
+                encode(
+                    self.auth
+                        .sign_in(&request.identifier, &request.password, now())?,
+                )
+            }
+            BackendMethod::AuthSignUp => {
+                let request: SignUpParams = decode(params)?;
+                self.auth
+                    .sign_up(&request.email, &request.password, &request.username)?;
+                Ok(json!({"ok": true}))
+            }
+            BackendMethod::AuthSignOut => {
+                decode_empty(params)?;
+                let caller = self.signed_in_caller_identity().ok();
+                if let Some(caller) = caller.as_ref() {
+                    self.revoke_session_authority(caller);
+                }
+                self.rotate_session_authority();
+                encode(self.auth.sign_out()?)
+            }
+            BackendMethod::AuthUsernameAvailable => {
+                let request: UsernameParams = decode(params)?;
+                Ok(Value::Bool(self.auth.username_available(&request.username)))
+            }
+            BackendMethod::AuthLoadMe => {
+                decode_empty(params)?;
+                encode(self.auth.load_me(now())?)
+            }
+            BackendMethod::AuthSetUsername => {
+                let request: UsernameParams = decode(params)?;
+                encode(self.auth.set_username(&request.username, now())?)
+            }
+            BackendMethod::AuthListUsers => {
+                decode_empty(params)?;
+                encode(self.auth.list_users(now())?)
+            }
+            BackendMethod::AuthSetFlags => {
+                let request: SetFlagsParams = decode(params)?;
+                self.auth
+                    .set_flags(&request.user_id, request.allowed, request.is_admin, now())?;
+                Ok(json!({"ok": true}))
+            }
+            BackendMethod::EnginePrintQueueLatest => {
+                decode_empty(params)?;
+                encode(self.print.latest(&self.caller_identity()?)?)
+            }
+            BackendMethod::EnginePrintQueueDiscard => {
+                let request: QueueIdParams = decode(params)?;
+                encode(
+                    self.print
+                        .discard(&self.caller_identity()?, &request.queue_id)?,
+                )
+            }
+            BackendMethod::EnginePrintQueueResume => {
+                let request: QueueIdParams = decode(params)?;
+                encode(
+                    self.print
+                        .resume(&self.caller_identity()?, &request.queue_id)?,
+                )
+            }
+            BackendMethod::EngineReviewScan => self.review_scan(params),
+            BackendMethod::EngineReviewPreview => self.review_preview(params),
+            BackendMethod::HistoryList => {
+                let request: HistoryParams = decode(params)?;
+                encode(self.cloud.list(request.limit.unwrap_or(50), now())?)
+            }
+            BackendMethod::RecoveryList => {
+                decode_empty(params)?;
+                encode(self.recovery()?)
+            }
+            _ => Err(BackendError::protocol(
+                "method is not owned by the Rust native backend",
+            )),
+        }
+    }
+
+    pub(crate) fn auth_state(&self) -> crate::contracts::AuthState {
+        self.auth.state()
+    }
+
+    pub(crate) fn sync_result(&self, approved_op_id: &str, result: &mut Value) {
+        sync_result_metadata(
+            result,
+            |journal_id| {
+                self.journals
+                    .read(journal_id)
+                    .ok()
+                    .map(|journal| journal.steps.len())
+            },
+            |applied, failed, journal_id, summary| {
+                self.cloud
+                    .push(approved_op_id, applied, failed, journal_id, summary, now())
+            },
+        );
+    }
+
+    pub(crate) fn mark_undone(&self, cloud_id: &str) {
+        self.cloud.mark_undone(cloud_id, now());
+    }
+
+    pub(crate) fn selection_mode(
+        &self,
+        operation_id: &str,
+        parameter_name: &str,
+    ) -> Result<PathSelectionMode, BackendError> {
+        match path_parameter_kind(operation_id, parameter_name) {
+            Some(ParamKind::Folder) => Ok(PathSelectionMode::Folder),
+            Some(ParamKind::File) => Ok(PathSelectionMode::File),
+            Some(ParamKind::Files) => Ok(PathSelectionMode::Files),
+            _ => Err(BackendError::invalid_params()),
+        }
+    }
+
+    pub(crate) fn register_selected_paths(
+        &self,
+        operation_id: &str,
+        parameter_name: &str,
+        paths: Vec<PathBuf>,
+    ) -> Result<Vec<PathSelection>, BackendError> {
+        let mode = self.selection_mode(operation_id, parameter_name)?;
+        if mode != PathSelectionMode::Files && paths.len() > 1 {
+            return Err(BackendError::invalid_params());
+        }
+        let kind = if mode == PathSelectionMode::Folder {
+            SelectionKind::Folder
+        } else {
+            SelectionKind::File
+        };
+        let caller = self.caller_identity()?;
+        paths
+            .into_iter()
+            .map(|path| {
+                self.selections
+                    .issue(&caller, operation_id, parameter_name, &path, kind)
+            })
+            .collect()
+    }
+
+    pub(crate) fn reveal_path(&self, selection_id: &str) -> Result<PathBuf, BackendError> {
+        self.selections.resolve_scope(
+            selection_id,
+            &self.caller_identity()?,
+            SelectionScope::RevealReviewItem,
+        )
+    }
+
+    fn selected_params(&self, operation_id: &str) -> Result<Map<String, Value>, BackendError> {
+        filter_saved_operation_params(operation_id, self.settings.params_for(operation_id))
+    }
+
+    fn materialize_preview(&self, params: Value) -> Result<Value, BackendError> {
+        let mut object = params
+            .as_object()
+            .cloned()
+            .ok_or_else(BackendError::invalid_params)?;
+        let operation_id = object
+            .get("opId")
+            .and_then(Value::as_str)
+            .ok_or_else(BackendError::invalid_params)?
+            .to_string();
+        let values = object
+            .remove("values")
+            .and_then(|value| value.as_object().cloned())
+            .ok_or_else(BackendError::invalid_params)?;
+        object.insert(
+            "values".to_string(),
+            Value::Object(self.materialize_operation_values(&operation_id, values)?),
+        );
+        Ok(Value::Object(object))
+    }
+
+    fn materialize_operation_values(
+        &self,
+        operation_id: &str,
+        mut values: Map<String, Value>,
+    ) -> Result<Map<String, Value>, BackendError> {
+        let caller = self.caller_identity()?;
+        for (name, kind) in operation_path_parameters(operation_id)? {
+            let Some(raw) = values.get(&name).cloned() else {
+                continue;
+            };
+            let materialized = match kind {
+                ParamKind::Folder | ParamKind::File => {
+                    let selection: PathSelection = decode(raw)?;
+                    let path = self.selections.resolve(
+                        &selection,
+                        &caller,
+                        operation_id,
+                        &name,
+                        if kind == ParamKind::Folder {
+                            SelectionKind::Folder
+                        } else {
+                            SelectionKind::File
+                        },
+                    )?;
+                    Value::String(path.to_string_lossy().into_owned())
+                }
+                ParamKind::Files => {
+                    let selections: Vec<PathSelection> = decode(raw)?;
+                    Value::Array(
+                        selections
+                            .into_iter()
+                            .map(|selection| {
+                                self.selections
+                                    .resolve(
+                                        &selection,
+                                        &caller,
+                                        operation_id,
+                                        &name,
+                                        SelectionKind::File,
+                                    )
+                                    .map(|path| Value::String(path.to_string_lossy().into_owned()))
+                            })
+                            .collect::<Result<Vec<_>, BackendError>>()?,
+                    )
+                }
+                _ => continue,
+            };
+            values.insert(name, materialized);
+        }
+        Ok(values)
+    }
+
+    fn recovery(&self) -> Result<RecoveryPayload, BackendError> {
+        Ok(RecoveryPayload {
+            journals: self.journals.recover_pending()?,
+            print_queue: self.print.latest(&self.caller_identity()?)?,
+        })
+    }
+
+    pub(crate) fn preview_process_scans<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<ProcessScansValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != "rfi.process_scans" {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust Process Scans backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let source_access = process_scans_source_access();
+        let source_grant =
+            self.filesystem
+                .issue_grant(&scope, &request.values.source, source_access)?;
+        let destination_grant =
+            self.filesystem
+                .issue_grant(&scope, &request.values.dest, GrantAccess::ReadWrite)?;
+        let plan = preview_process_scans(
+            &ProcessScansParams {
+                source: request.values.source,
+                destination: request.values.dest,
+                organize_into_rfi_folders: request.values.organize_into_rfi_folders,
+                keep_original: request.values.keep_original,
+            },
+            &NativeOcr::discover(),
+            &mut progress,
+            || false,
+        )?;
+        encode(self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![source_grant.grant_id, destination_grant.grant_id],
+            ),
+            plan,
+        )?)
+    }
+
+    pub(crate) fn preview_rfi_log<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<Map<String, Value>> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != "rfi.log_add" {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI Log backend",
+            ));
+        }
+        let workbook = request
+            .values
+            .get("workbook")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(BackendError::invalid_params)?;
+        let root = workbook
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("workbook has no parent directory"))?;
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let grant = self
+            .filesystem
+            .issue_grant(&scope, root, GrantAccess::ReadWrite)?;
+        let plan = rfi_log::preview(
+            &request.values,
+            chrono::Local::now().date_naive(),
+            Some(&self.gemini),
+            progress,
+            || false,
+        )?;
+        encode(self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![grant.grant_id],
+            ),
+            plan,
+        )?)
+    }
+
+    pub(crate) fn preview_stage_signed_pages<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<StageSignedPagesValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != "rfi.stage_signed_first_pages" {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust signed-page backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let signed_grant =
+            self.filesystem
+                .issue_grant(&scope, &request.values.signed_scans, GrantAccess::Read)?;
+        let archive_grant =
+            self.filesystem
+                .issue_grant(&scope, &request.values.archive_root, GrantAccess::Read)?;
+        let review_grant = self.filesystem.issue_grant(
+            &scope,
+            &request.values.review_root,
+            GrantAccess::ReadWrite,
+        )?;
+        let plan = preview_stage_signed_pages(
+            &StageSignedPagesParams {
+                signed_scans: request.values.signed_scans,
+                archive_root: request.values.archive_root,
+                review_root: request.values.review_root,
+                scan_subfolders: request.values.scan_subfolders,
+            },
+            &NativeOcr::discover(),
+            progress,
+            || false,
+        )?;
+        encode(self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![
+                    signed_grant.grant_id,
+                    archive_grant.grant_id,
+                    review_grant.grant_id,
+                ],
+            ),
+            plan,
+        )?)
+    }
+
+    pub(crate) fn preview_batch_print<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<BatchPrintParams> = decode(self.materialize_preview(params)?)?;
+        if request.op_id != "files.batch_print" {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust print backend",
+            ));
+        }
+        encode(
+            self.print
+                .preview(&self.caller_identity()?, request.values, progress)?,
+        )
+    }
+
+    pub(crate) fn revise_native_plan(&self, params: Value) -> Result<Value, BackendError> {
+        let request: ReviseParams = decode(params)?;
+        let caller = self.caller_identity()?;
+        if self.print.contains_plan(&request.plan_id) {
+            return encode(
+                self.print
+                    .revise(&caller, &request.plan_id, &request.rows)?,
+            );
+        }
+        let claimed = self
+            .filesystem
+            .resolve_native_plan(&request.plan_id, &caller)?;
+        let binding = claimed.binding.ok_or_else(BackendError::plan_unavailable)?;
+        let payload = json!({"rows": request.rows});
+        let revised = match claimed.plan.op_id.as_str() {
+            "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
+            "rfi.stage_signed_first_pages" => revise_stage_signed_pages(&claimed.plan, &payload)?,
+            _ => {
+                return Err(BackendError::validation(
+                    "native plan does not support revision",
+                ));
+            }
+        };
+        encode(
+            self.filesystem
+                .cache_plan(BackendOrigin::Rust, binding, revised)?,
+        )
+    }
+
+    pub(crate) fn copy_native_table(&self, params: Value) -> Result<Value, BackendError> {
+        let request: TableParams = decode(params)?;
+        let claimed = self
+            .filesystem
+            .resolve_native_plan(&request.plan_id, &self.caller_identity()?)?;
+        if claimed.plan.op_id != "rfi.log_add" {
+            return Err(BackendError::validation(
+                "native plan does not contain an RFI table",
+            ));
+        }
+        let payload = rfi_log::copy_payload(&claimed.plan, request.sheet.as_deref())?;
+        clipboard::write(&payload)?;
+        Ok(json!({"count": payload.count}))
+    }
+
+    pub(crate) fn apply_native_plan<F>(
+        &self,
+        plan_id: &str,
+        operation_id: Option<&str>,
+        mut progress: F,
+    ) -> Result<(Value, String), BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let caller = self.caller_identity()?;
+        if self.print.contains_plan(plan_id) {
+            if operation_id.is_some_and(|operation_id| operation_id != "files.batch_print") {
+                return Err(BackendError::validation(
+                    "apply operation does not match the approved plan",
+                ));
+            }
+            return Ok((
+                encode(self.print.apply(plan_id, &caller, &mut progress)?)?,
+                "files.batch_print".to_string(),
+            ));
+        }
+        let approved_op_id =
+            self.filesystem
+                .validate_plan_operation(plan_id, &caller, operation_id)?;
+        let result = encode(self.filesystem.apply_with_progress(
+            plan_id,
+            &caller,
+            &mut progress,
+        )?)?;
+        Ok((result, approved_op_id))
+    }
+
+    pub(crate) fn cancel_native_plan(&self, plan_id: &str) -> bool {
+        self.print.cancel(plan_id) || self.filesystem.cancel(plan_id)
+    }
+
+    fn review_scan(&self, params: Value) -> Result<Value, BackendError> {
+        let request: ReviewScanParams = decode(params)?;
+        let caller = self.caller_identity()?;
+        let destination = self.selections.resolve_scope(
+            &request.destination.selection_id,
+            &caller,
+            SelectionScope::ReviewDestination,
+        )?;
+        let items = scan_review(&destination, &NativeOcr::discover())?
+            .into_iter()
+            .map(|item| {
+                let selection = self.selections.issue(
+                    &caller,
+                    "rfi.review",
+                    "item",
+                    std::path::Path::new(&item.path),
+                    SelectionKind::File,
+                )?;
+                Ok(FrontendReviewItem {
+                    selection_id: selection.selection_id,
+                    name: item.name,
+                    path: item.path,
+                    code: item.code,
+                    target_exists: item.target_exists,
+                })
+            })
+            .collect::<Result<Vec<_>, BackendError>>()?;
+        encode(items)
+    }
+
+    fn review_preview(&self, params: Value) -> Result<Value, BackendError> {
+        let request: ReviewPreviewParams = decode(params)?;
+        let caller = self.caller_identity()?;
+        let destination = self.selections.resolve_scope(
+            &request.destination.selection_id,
+            &caller,
+            SelectionScope::ReviewDestination,
+        )?;
+        let decisions = request
+            .decisions
+            .into_iter()
+            .map(|decision| {
+                Ok(NativeReviewDecision {
+                    path: self.selections.resolve_scope(
+                        &decision.item_id,
+                        &caller,
+                        SelectionScope::ReviewItem,
+                    )?,
+                    action: decision.action,
+                    code: decision.code,
+                })
+            })
+            .collect::<Result<Vec<_>, BackendError>>()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            "rfi.review",
+        );
+        let destination_grant =
+            self.filesystem
+                .issue_grant(&scope, &destination, GrantAccess::ReadWrite)?;
+        let app_data_grant =
+            self.filesystem
+                .issue_grant(&scope, &self.app_data_dir, GrantAccess::ReadWrite)?;
+        let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%6f").to_string();
+        let plan = preview_review(
+            &destination,
+            &self.app_data_dir.join("trash"),
+            &decisions,
+            &timestamp,
+        )?;
+        encode(self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                "rfi.review",
+                vec![destination_grant.grant_id, app_data_grant.grant_id],
+            ),
+            plan,
+        )?)
+    }
+
+    pub(crate) fn try_native_undo(&self, params: &Value) -> Result<Option<Value>, BackendError> {
+        let object = params
+            .as_object()
+            .ok_or_else(BackendError::invalid_params)?;
+        if object
+            .keys()
+            .any(|key| !matches!(key.as_str(), "journalId" | "cloudId" | "destination"))
+        {
+            return Err(BackendError::invalid_params());
+        }
+        let journal_id = object
+            .get("journalId")
+            .and_then(Value::as_str)
+            .ok_or_else(BackendError::invalid_params)?;
+        let record = self.journals.read(journal_id)?;
+        if record.steps.iter().any(|step| step.kind == StepKind::Print) {
+            return Err(BackendError::validation(
+                "print audit journals are not undoable",
+            ));
+        }
+        if record.steps.iter().any(|step| {
+            !matches!(
+                step.kind,
+                StepKind::Mkdir
+                    | StepKind::Move
+                    | StepKind::Copy
+                    | StepKind::Rename
+                    | StepKind::Write
+                    | StepKind::RestoreBackup
+            )
+        }) {
+            return Ok(None);
+        }
+        let caller = self.caller_identity()?;
+        let destination = object
+            .get("destination")
+            .cloned()
+            .map(|value| {
+                let selection: PathSelection = decode(value)?;
+                self.selections.resolve_scope(
+                    &selection.selection_id,
+                    &caller,
+                    SelectionScope::UndoDestination,
+                )
+            })
+            .transpose()?;
+        let cloud_id = object
+            .get("cloudId")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let _permit = self.mutation_lock.try_acquire()?;
+        let result =
+            crate::undo::undo_journal(&self.journals, journal_id, &caller, destination.as_deref())?;
+        if result.failed == 0
+            && let Some(cloud_id) = cloud_id
+        {
+            self.mark_undone(&cloud_id);
+        }
+        encode(result).map(Some)
+    }
+
+    fn caller_identity(&self) -> Result<CallerIdentity, BackendError> {
+        let session_id = self
+            .process_session_id
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        authenticated_caller_identity(&self.auth.state(), &session_id)
+    }
+
+    fn signed_in_caller_identity(&self) -> Result<CallerIdentity, BackendError> {
+        let session_id = self
+            .process_session_id
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        signed_in_caller_identity(&self.auth.state(), &session_id)
+    }
+
+    fn revoke_session_authority(&self, caller: &CallerIdentity) {
+        self.filesystem.revoke(caller);
+        self.selections.revoke(caller);
+        self.print.revoke(caller);
+    }
+
+    fn rotate_session_authority(&self) {
+        *self
+            .process_session_id
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = uuid::Uuid::new_v4().to_string();
+    }
+
+    fn registry_facts(&self) -> RegistryFacts {
+        self.print.inventory().map_or_else(
+            |_| RegistryFacts::default(),
+            |inventory| RegistryFacts {
+                printers: inventory.printers,
+                default_printer: inventory.default_printer,
+                ..RegistryFacts::default()
+            },
+        )
+    }
+
+    fn update_settings(&self, params: Value) -> Result<Value, BackendError> {
+        let request: SettingsUpdate = decode(params)?;
+        let mut preferences = self.settings.preferences();
+        if let PatchField::Value(locale) = request.locale {
+            preferences.locale = locale;
+        }
+        if let Some(theme) = request.theme {
+            preferences.theme = theme;
+        }
+        if let Some(font) = request.font {
+            preferences.font = font;
+        }
+        if let Some(font_scale) = request.font_scale {
+            preferences.font_scale = font_scale;
+        }
+        if let Some(compact) = request.compact {
+            preferences.compact = compact;
+        }
+        self.settings
+            .save_preferences(preferences)
+            .map_err(|_| BackendError::settings_write())?;
+        encode(self.settings.preferences())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PathSelectionMode {
+    Folder,
+    File,
+    Files,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoveryPayload {
+    journals: Vec<crate::journal::RecoveryEntry>,
+    print_queue: Option<PrintQueueSummary>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FrontendReviewItem {
+    selection_id: String,
+    name: String,
+    path: String,
+    code: String,
+    target_exists: bool,
+}
+
+fn path_parameter_kind(operation_id: &str, parameter_name: &str) -> Option<ParamKind> {
+    if operation_id == "rfi.review" && parameter_name == "destination"
+        || operation_id == "history.undo" && parameter_name == "destination"
+    {
+        return Some(ParamKind::Folder);
+    }
+    operation_registry(RegistryFacts::default())
+        .into_iter()
+        .find(|operation| operation.id == operation_id)
+        .and_then(|operation| {
+            operation
+                .schema
+                .params
+                .into_iter()
+                .find(|parameter| parameter.name == parameter_name)
+        })
+        .map(|parameter| parameter.kind)
+}
+
+fn operation_path_parameters(operation_id: &str) -> Result<Vec<(String, ParamKind)>, BackendError> {
+    let operation = operation_registry(RegistryFacts::default())
+        .into_iter()
+        .find(|operation| operation.id == operation_id)
+        .ok_or_else(|| BackendError::validation("unknown operation ID"))?;
+    Ok(operation
+        .schema
+        .params
+        .into_iter()
+        .filter(|parameter| {
+            matches!(
+                parameter.kind,
+                ParamKind::Folder | ParamKind::File | ParamKind::Files
+            )
+        })
+        .map(|parameter| (parameter.name, parameter.kind))
+        .collect())
+}
+
+fn filter_saved_operation_params(
+    operation_id: &str,
+    mut values: Map<String, Value>,
+) -> Result<Map<String, Value>, BackendError> {
+    let operation = operation_registry(RegistryFacts::default())
+        .into_iter()
+        .find(|operation| operation.id == operation_id)
+        .ok_or_else(|| BackendError::validation("unknown operation ID"))?;
+    let allowed = operation
+        .schema
+        .params
+        .into_iter()
+        .filter(|parameter| {
+            !matches!(
+                parameter.kind,
+                ParamKind::Folder | ParamKind::File | ParamKind::Files | ParamKind::Secret
+            )
+        })
+        .map(|parameter| parameter.name)
+        .collect::<HashSet<_>>();
+    values.retain(|name, _| allowed.contains(name));
+    Ok(values)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EmptyParams {}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OperationIdParams {
+    op_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SaveParams {
+    op_id: String,
+    values: Map<String, Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SignInParams {
+    identifier: String,
+    password: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SignUpParams {
+    email: String,
+    password: String,
+    username: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UsernameParams {
+    username: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SetFlagsParams {
+    user_id: String,
+    #[serde(default)]
+    allowed: Option<bool>,
+    #[serde(default)]
+    is_admin: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryParams {
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct QueueIdParams {
+    queue_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreviewEnvelope<T> {
+    op_id: String,
+    values: T,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProcessScansValues {
+    source: std::path::PathBuf,
+    dest: std::path::PathBuf,
+    #[serde(default = "default_true")]
+    organize_into_rfi_folders: bool,
+    #[serde(default)]
+    keep_original: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StageSignedPagesValues {
+    signed_scans: PathBuf,
+    archive_root: PathBuf,
+    review_root: PathBuf,
+    #[serde(default)]
+    scan_subfolders: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReviseParams {
+    plan_id: String,
+    rows: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TableParams {
+    plan_id: String,
+    #[serde(default)]
+    sheet: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewScanParams {
+    destination: PathSelection,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewPreviewParams {
+    destination: PathSelection,
+    decisions: Vec<FrontendReviewDecision>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FrontendReviewDecision {
+    item_id: String,
+    action: crate::review::ReviewAction,
+    code: String,
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+const fn process_scans_source_access() -> GrantAccess {
+    // Move mode removes every classified or review-bound source; copy mode
+    // preserves every source, including unreadable and low-confidence files.
+    GrantAccess::ReadWrite
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SettingsUpdate {
+    #[serde(default)]
+    locale: PatchField<Option<String>>,
+    #[serde(default)]
+    theme: Option<String>,
+    #[serde(default)]
+    font: Option<String>,
+    #[serde(default)]
+    font_scale: Option<f64>,
+    #[serde(default)]
+    compact: Option<bool>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+enum PatchField<T> {
+    #[default]
+    Missing,
+    Value(T),
+}
+
+impl<'de, T> Deserialize<'de> for PatchField<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(Self::Value)
+    }
+}
+
+fn decode<T: for<'de> Deserialize<'de>>(params: Value) -> Result<T, BackendError> {
+    serde_json::from_value(params).map_err(|_| BackendError::invalid_params())
+}
+
+fn decode_empty(params: Value) -> Result<(), BackendError> {
+    decode::<EmptyParams>(params).map(|_| ())
+}
+
+fn encode(value: impl serde::Serialize) -> Result<Value, BackendError> {
+    serde_json::to_value(value).map_err(|_| BackendError::protocol("response encoding failed"))
+}
+
+fn validate_operation_id(op_id: &str) -> Result<(), BackendError> {
+    if op_id.is_empty() || op_id.chars().count() > MAX_OPERATION_ID_CHARS {
+        return Err(BackendError::validation("operation ID is invalid"));
+    }
+    Ok(())
+}
+
+fn configured_gemini_models() -> Vec<String> {
+    let configured = env::var("DOCFLOW_GEMINI_MODEL").unwrap_or_default();
+    let mut models = [configured.as_str(), DEFAULT_MODEL]
+        .into_iter()
+        .chain(FALLBACK_MODELS.iter().copied())
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let mut seen = HashSet::new();
+    models.retain(|model| seen.insert(model.clone()));
+    models
+}
+
+fn now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .try_into()
+        .unwrap_or(i64::MAX)
+}
+
+fn authenticated_caller_identity(
+    state: &crate::contracts::AuthState,
+    session_id: &str,
+) -> Result<CallerIdentity, BackendError> {
+    let caller = signed_in_caller_identity(state, session_id)?;
+    if !state.allowed {
+        return Err(BackendError::permission_denied());
+    }
+    Ok(caller)
+}
+
+fn signed_in_caller_identity(
+    state: &crate::contracts::AuthState,
+    session_id: &str,
+) -> Result<CallerIdentity, BackendError> {
+    if !state.signed_in {
+        return Err(BackendError::auth_required());
+    }
+    let owner_id = state
+        .session
+        .as_ref()
+        .map(|session| session.user_id.as_str())
+        .filter(|owner_id| !owner_id.is_empty() && *owner_id != "anonymous")
+        .ok_or_else(BackendError::auth_required)?;
+    if session_id.is_empty() {
+        return Err(BackendError::auth_required());
+    }
+    Ok(CallerIdentity::new(owner_id, session_id))
+}
+
+fn cloud_result_summary(applied: u64, journal_step_count: usize) -> String {
+    format!("{applied}/{journal_step_count}")
+}
+
+fn sync_result_metadata<L, P>(result: &mut Value, mut load_steps: L, mut push: P)
+where
+    L: FnMut(&str) -> Option<usize>,
+    P: FnMut(u64, u64, &str, &str) -> bool,
+{
+    let Some(payload) = result.as_object_mut() else {
+        return;
+    };
+    let applied = payload
+        .get("applied")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let failed = payload
+        .get("failed")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let journal_id = payload
+        .get("journalId")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            payload
+                .get("meta")
+                .and_then(Value::as_object)
+                .and_then(|meta| meta.get("auditJournalId"))
+                .and_then(Value::as_str)
+        })
+        .unwrap_or_default()
+        .to_string();
+    let Some(step_count) = load_steps(&journal_id) else {
+        payload.insert("cloudSynced".to_string(), Value::Bool(false));
+        return;
+    };
+    let summary = cloud_result_summary(applied, step_count);
+    let synced = push(applied, failed, &journal_id, &summary);
+    payload.insert("cloudSynced".to_string(), Value::Bool(synced));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+
+    use crate::{
+        credentials::{CredentialError, CredentialStore, StoredSession},
+        http::{HttpError, HttpResponse},
+    };
+    use serde_json::json;
+
+    use super::*;
+
+    struct TestCredentials(Mutex<Option<StoredSession>>);
+
+    impl CredentialStore for TestCredentials {
+        fn read(&self) -> Result<Option<StoredSession>, CredentialError> {
+            Ok(self.0.lock().unwrap().clone())
+        }
+
+        fn write(&self, session: &StoredSession) -> Result<(), CredentialError> {
+            *self.0.lock().unwrap() = Some(session.clone());
+            Ok(())
+        }
+
+        fn delete(&self) -> Result<(), CredentialError> {
+            *self.0.lock().unwrap() = None;
+            Ok(())
+        }
+    }
+
+    struct TestHttp(Mutex<VecDeque<Result<HttpResponse, HttpError>>>);
+
+    impl JsonHttp for TestHttp {
+        fn send_json(
+            &self,
+            _method: &str,
+            _url: &str,
+            _headers: &[(String, String)],
+            _body: Option<&Value>,
+        ) -> Result<HttpResponse, HttpError> {
+            self.0
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or(Err(HttpError::InvalidResponse))
+        }
+    }
+
+    fn auth_responses(owner_id: &str) -> [Result<HttpResponse, HttpError>; 2] {
+        auth_responses_with_allowed(owner_id, true)
+    }
+
+    fn auth_responses_with_allowed(
+        owner_id: &str,
+        allowed: bool,
+    ) -> [Result<HttpResponse, HttpError>; 2] {
+        [
+            Ok(HttpResponse::from_json(
+                200,
+                &json!({
+                    "access_token": "access-secret",
+                    "refresh_token": "refresh-secret",
+                    "expires_at": i64::MAX,
+                    "user": {"id": owner_id, "email": "user@example.com"}
+                }),
+            )),
+            Ok(HttpResponse::from_json(
+                200,
+                &json!([{
+                    "id": owner_id,
+                    "email": "user@example.com",
+                    "allowed": allowed,
+                    "is_admin": false
+                }]),
+            )),
+        ]
+    }
+
+    fn test_backend(temporary: &tempfile::TempDir) -> NativeBackend {
+        let responses = auth_responses("owner")
+            .into_iter()
+            .chain(auth_responses("owner"))
+            .collect();
+        test_backend_with_responses(temporary, responses)
+    }
+
+    fn test_backend_with_responses(
+        temporary: &tempfile::TempDir,
+        responses: VecDeque<Result<HttpResponse, HttpError>>,
+    ) -> NativeBackend {
+        let settings =
+            Arc::new(SettingsStore::new(temporary.path().join("settings.json")).unwrap());
+        let http: Arc<dyn JsonHttp> = Arc::new(TestHttp(Mutex::new(responses)));
+        let config = AuthConfig::new("http://supabase.test", "publishable");
+        let auth = Arc::new(AuthService::new(
+            settings.clone(),
+            Arc::new(TestCredentials(Mutex::new(None))),
+            http.clone(),
+            config.clone(),
+        ));
+        auth.sign_in("user@example.com", "password", now()).unwrap();
+        let journal_dir = temporary.path().join("journal");
+        let mutation_lock = GlobalMutationLock::default();
+        NativeBackend {
+            settings,
+            auth: auth.clone(),
+            cloud: Arc::new(CloudHistory::new(
+                auth,
+                http.clone(),
+                config,
+                journal_dir.clone(),
+            )),
+            gemini: Arc::new(GeminiClient::new(
+                http,
+                "http://gemini.test",
+                vec![DEFAULT_MODEL.to_string()],
+            )),
+            journals: JournalStore::new(&journal_dir),
+            mutation_lock: mutation_lock.clone(),
+            filesystem: FilesystemAuthority::with_mutation_lock(
+                &journal_dir,
+                Duration::from_secs(60),
+                mutation_lock.clone(),
+            ),
+            selections: PathSelectionStore::new(Duration::from_secs(60)),
+            print: PrintService::new(
+                temporary.path().join("print-queues"),
+                &journal_dir,
+                Duration::from_secs(60),
+                mutation_lock,
+                platform::production_print_adapter(),
+            ),
+            process_session_id: Mutex::new("epoch-initial".to_string()),
+            app_data_dir: temporary.path().to_path_buf(),
+        }
+    }
+
+    fn signed_in_state(owner_id: &str) -> crate::contracts::AuthState {
+        crate::contracts::AuthState {
+            signed_in: true,
+            allowed: true,
+            is_admin: false,
+            session: Some(crate::contracts::AuthSessionView {
+                user_id: owner_id.to_string(),
+                email: "user@example.com".to_string(),
+                expires_at: i64::MAX,
+            }),
+            user: None,
+        }
+    }
+
+    #[test]
+    fn caller_identity_never_falls_back_to_an_authorized_anonymous_identity() {
+        let signed_out = crate::contracts::AuthState {
+            signed_in: false,
+            allowed: false,
+            is_admin: false,
+            session: None,
+            user: None,
+        };
+        assert_eq!(
+            authenticated_caller_identity(&signed_out, "session")
+                .unwrap_err()
+                .code,
+            "auth_required"
+        );
+        assert_eq!(
+            authenticated_caller_identity(&signed_in_state("owner"), "session").unwrap(),
+            CallerIdentity::new("owner", "session")
+        );
+    }
+
+    #[test]
+    fn sign_out_and_re_sign_in_revoke_old_plan_and_selection_ids() {
+        let temporary = tempfile::tempdir().unwrap();
+        let old = CallerIdentity::new("owner", "session-old");
+        let fresh = CallerIdentity::new("owner", "session-fresh");
+        let selections = PathSelectionStore::new(Duration::from_secs(60));
+        let selected = selections
+            .issue(
+                &old,
+                "rfi.review",
+                "destination",
+                temporary.path(),
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let plans = crate::plan_store::PlanStore::new(Duration::from_secs(60));
+        let plan = plans
+            .insert_bound(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session-old", "rfi.review", Vec::new()),
+                crate::contracts::Plan {
+                    plan_id: "backend-plan".to_string(),
+                    op_id: "rfi.review".to_string(),
+                    steps: Vec::new(),
+                    warnings: Vec::new(),
+                    meta: Map::new(),
+                },
+            )
+            .unwrap();
+
+        selections.revoke(&old);
+        plans.revoke(&old);
+
+        assert_eq!(
+            selections
+                .resolve_scope(
+                    &selected.selection_id,
+                    &fresh,
+                    SelectionScope::ReviewDestination,
+                )
+                .unwrap_err()
+                .code,
+            "path_grant_not_found_or_expired"
+        );
+        assert_eq!(
+            plans.resolve_bound(&plan.plan_id, &fresh).unwrap_err().code,
+            "plan_not_found_or_expired"
+        );
+    }
+
+    #[test]
+    fn attempted_and_same_uid_sign_in_replacements_rotate_and_revoke_capabilities() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let initial = backend.caller_identity().unwrap();
+        let selected = backend
+            .selections
+            .issue(
+                &initial,
+                "rfi.review",
+                "destination",
+                temporary.path(),
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let grant = backend
+            .filesystem
+            .issue_grant(
+                &GrantScope::new(&initial.owner_id, &initial.session_id, "request", "op.test"),
+                temporary.path(),
+                GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let plan = backend
+            .filesystem
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    &initial.owner_id,
+                    &initial.session_id,
+                    "op.test",
+                    vec![grant.grant_id],
+                ),
+                crate::contracts::Plan {
+                    plan_id: "ignored".to_string(),
+                    op_id: "op.test".to_string(),
+                    steps: Vec::new(),
+                    warnings: Vec::new(),
+                    meta: Map::new(),
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::AuthSignIn,
+                    json!({"identifier": "not-an-email", "password": "password"}),
+                )
+                .unwrap_err()
+                .code,
+            "auth_failed"
+        );
+        let after_attempt = backend.caller_identity().unwrap();
+        assert_ne!(after_attempt.session_id, initial.session_id);
+        assert_eq!(
+            backend
+                .selections
+                .resolve_scope(
+                    &selected.selection_id,
+                    &after_attempt,
+                    SelectionScope::ReviewDestination,
+                )
+                .unwrap_err()
+                .code,
+            "path_grant_not_found_or_expired"
+        );
+        assert_eq!(
+            backend
+                .filesystem
+                .apply(&plan.plan_id, &after_attempt)
+                .unwrap_err()
+                .code,
+            "plan_not_found_or_expired"
+        );
+
+        let selected_after_attempt = backend
+            .selections
+            .issue(
+                &after_attempt,
+                "rfi.review",
+                "destination",
+                temporary.path(),
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let grant_after_attempt = backend
+            .filesystem
+            .issue_grant(
+                &GrantScope::new(
+                    &after_attempt.owner_id,
+                    &after_attempt.session_id,
+                    "request-after-attempt",
+                    "op.test",
+                ),
+                temporary.path(),
+                GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let plan_after_attempt = backend
+            .filesystem
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    &after_attempt.owner_id,
+                    &after_attempt.session_id,
+                    "op.test",
+                    vec![grant_after_attempt.grant_id],
+                ),
+                crate::contracts::Plan {
+                    plan_id: "ignored-again".to_string(),
+                    op_id: "op.test".to_string(),
+                    steps: Vec::new(),
+                    warnings: Vec::new(),
+                    meta: Map::new(),
+                },
+            )
+            .unwrap();
+
+        backend
+            .dispatch(
+                BackendMethod::AuthSignIn,
+                json!({"identifier": "user@example.com", "password": "password"}),
+            )
+            .unwrap();
+        let after_success = backend.caller_identity().unwrap();
+        assert_eq!(after_success.owner_id, initial.owner_id);
+        assert_ne!(after_success.session_id, after_attempt.session_id);
+        assert_eq!(
+            backend
+                .selections
+                .resolve_scope(
+                    &selected_after_attempt.selection_id,
+                    &after_success,
+                    SelectionScope::ReviewDestination,
+                )
+                .unwrap_err()
+                .code,
+            "path_grant_not_found_or_expired"
+        );
+        assert_eq!(
+            backend
+                .filesystem
+                .apply(&plan_after_attempt.plan_id, &after_success)
+                .unwrap_err()
+                .code,
+            "plan_not_found_or_expired"
+        );
+    }
+
+    #[test]
+    fn disallowed_same_uid_reauthentication_cannot_revive_old_capabilities() {
+        let temporary = tempfile::tempdir().unwrap();
+        let responses = auth_responses("owner")
+            .into_iter()
+            .chain([Ok(HttpResponse::from_json(
+                200,
+                &json!([{
+                    "id": "owner",
+                    "email": "user@example.com",
+                    "allowed": false,
+                    "is_admin": false
+                }]),
+            ))])
+            .chain(auth_responses("owner"))
+            .collect();
+        let backend = test_backend_with_responses(&temporary, responses);
+        let initial = backend.caller_identity().unwrap();
+        let selected = backend
+            .selections
+            .issue(
+                &initial,
+                "rfi.review",
+                "destination",
+                temporary.path(),
+                SelectionKind::Folder,
+            )
+            .unwrap();
+
+        let denied = backend.auth.load_me(now()).unwrap();
+        assert!(denied.signed_in);
+        assert!(!denied.allowed);
+        backend
+            .dispatch(
+                BackendMethod::AuthSignIn,
+                json!({"identifier": "user@example.com", "password": "password"}),
+            )
+            .unwrap();
+
+        let replacement = backend.caller_identity().unwrap();
+        assert_ne!(replacement.session_id, initial.session_id);
+        assert_eq!(
+            backend
+                .selections
+                .resolve_scope(
+                    &selected.selection_id,
+                    &replacement,
+                    SelectionScope::ReviewDestination,
+                )
+                .unwrap_err()
+                .code,
+            "path_grant_not_found_or_expired"
+        );
+    }
+
+    #[test]
+    fn dispatch_sign_out_stays_revoked_when_settings_cleanup_fails() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let initial = backend.caller_identity().unwrap();
+        let initial_epoch = initial.session_id.clone();
+        let selected = backend
+            .selections
+            .issue(
+                &initial,
+                "rfi.review",
+                "destination",
+                temporary.path(),
+                SelectionKind::Folder,
+            )
+            .unwrap();
+
+        let settings_path = temporary.path().join("settings.json");
+        std::fs::remove_file(&settings_path).unwrap();
+        std::fs::create_dir(&settings_path).unwrap();
+
+        assert_eq!(
+            backend
+                .dispatch(BackendMethod::AuthSignOut, json!({}))
+                .unwrap_err()
+                .code,
+            "settings_write_failed"
+        );
+        assert!(!backend.auth_state().signed_in);
+        assert_ne!(
+            *backend
+                .process_session_id
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            initial_epoch
+        );
+        assert_eq!(
+            backend
+                .selections
+                .resolve_scope(
+                    &selected.selection_id,
+                    &initial,
+                    SelectionScope::ReviewDestination,
+                )
+                .unwrap_err()
+                .code,
+            "path_grant_not_found_or_expired"
+        );
+    }
+
+    #[test]
+    fn settings_locale_distinguishes_omission_from_explicit_null() {
+        let omitted: SettingsUpdate = decode(json!({})).expect("omitted locale should decode");
+        let cleared: SettingsUpdate =
+            decode(json!({"locale": null})).expect("null locale should decode");
+
+        assert_eq!(omitted.locale, PatchField::Missing);
+        assert_eq!(cleared.locale, PatchField::Value(None));
+    }
+
+    #[test]
+    fn saved_operation_params_are_schema_filtered_and_never_include_secrets() {
+        let filtered = filter_saved_operation_params(
+            "rfi.log_add",
+            serde_json::from_value(json!({
+                "email_provider": "gemini",
+                "gemini_api_key": "must-not-persist",
+                "unknown": "must-not-persist"
+            }))
+            .unwrap(),
+        )
+        .expect("known operation should filter saved params");
+
+        assert_eq!(filtered.get("email_provider"), Some(&json!("gemini")));
+        assert!(!filtered.contains_key("gemini_api_key"));
+        assert!(!filtered.contains_key("unknown"));
+    }
+
+    #[test]
+    fn persisted_paths_are_never_returned_or_rebound_across_accounts_or_sessions() {
+        let legacy: Map<String, Value> = serde_json::from_value(json!({
+            "source": "/account-a/source",
+            "dest": "/account-a/destination",
+            "organize_into_rfi_folders": false,
+            "keep_original": true
+        }))
+        .unwrap();
+
+        for _caller in [
+            CallerIdentity::new("account-a", "session-1"),
+            CallerIdentity::new("account-a", "session-2"),
+            CallerIdentity::new("account-b", "session-1"),
+        ] {
+            let returned = filter_saved_operation_params("rfi.process_scans", legacy.clone())
+                .expect("known operation should filter saved params");
+            assert!(!returned.contains_key("source"));
+            assert!(!returned.contains_key("dest"));
+            assert_eq!(returned.get("keep_original"), Some(&json!(true)));
+            assert_eq!(
+                returned.get("organize_into_rfi_folders"),
+                Some(&json!(false))
+            );
+        }
+    }
+
+    #[test]
+    fn process_scans_source_grant_allows_review_moves_even_in_copy_mode() {
+        assert_eq!(process_scans_source_access(), GrantAccess::ReadWrite);
+    }
+
+    #[test]
+    fn cloud_summary_preserves_legacy_journal_step_count() {
+        assert_eq!(cloud_result_summary(1, 3), "1/3");
+    }
+
+    #[test]
+    fn batch_print_audit_result_finds_and_pushes_the_nested_journal_id() {
+        let mut result = json!({
+            "applied": 2,
+            "failed": 1,
+            "meta": {"auditJournalId": "print-audit-1"}
+        });
+        let mut pushed = None;
+
+        sync_result_metadata(
+            &mut result,
+            |journal_id| (journal_id == "print-audit-1").then_some(3),
+            |applied, failed, journal_id, summary| {
+                pushed = Some((applied, failed, journal_id.to_string(), summary.to_string()));
+                true
+            },
+        );
+
+        assert_eq!(
+            pushed,
+            Some((2, 1, "print-audit-1".to_string(), "2/3".to_string()))
+        );
+        assert_eq!(result["cloudSynced"], true);
+    }
+}

@@ -24,11 +24,11 @@
 
 ## Verification
 
-- [ ] `python tools/version_manager.py check`
-- [ ] `.venv/bin/python -m pytest`
-- [ ] `.venv/bin/python -m mypy src/docflow`
+- [ ] `node tools/version_manager.mjs check`
+- [ ] `node tools/package_audit.mjs source`
 - [ ] `npm test`
 - [ ] `npm run build`
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml`
+- [ ] Rust fmt/Clippy/tests/check
+- [ ] `npm run audit:licenses`
 
 Paste concise real results and any platform-only omission below.

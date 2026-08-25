@@ -1,0 +1,2077 @@
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{self, Read, Write},
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use uuid::Uuid;
+
+use crate::{
+    cap_fs::AnchoredPath,
+    contracts::{JsonObject, OperationResult, Plan, ProgressEvent, Step, StepKind, Warning},
+    errors::BackendError,
+    journal::{JournalRecord, JournalState, JournalStore},
+    ooxml::patch_workbook_sheets,
+    paths::{CallerIdentity, GrantAccess, GrantScope, PathGrant, PathGrantStore, PathIntent},
+    pdf::replace_first_page_incremental,
+    pdf_publish::temporary_pdf_name_matches,
+    plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore},
+    progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
+    rfi_log::{verify_workbook_step, workbook_record_count, workbook_step_updates},
+};
+
+#[cfg(test)]
+use crate::pdf_publish::publish_pdf_no_clobber_with;
+
+pub fn copy_no_clobber(source: &Path, destination: &Path) -> io::Result<()> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"))?;
+    let (temporary, mut output) = create_temporary(parent, destination)?;
+    let result = (|| -> io::Result<()> {
+        let mut input = open_source_no_follow(source)?;
+        io::copy(&mut input, &mut output)?;
+        output.set_permissions(input.metadata()?.permissions())?;
+        output.sync_all()?;
+        drop(output);
+        publish_no_clobber(&temporary, destination)?;
+        sync_directory(parent)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+pub fn write_no_clobber(destination: &Path, contents: &[u8]) -> io::Result<()> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"))?;
+    let (temporary, mut output) = create_temporary(parent, destination)?;
+    let result = (|| -> io::Result<()> {
+        output.write_all(contents)?;
+        output.sync_all()?;
+        drop(output);
+        publish_no_clobber(&temporary, destination)?;
+        sync_directory(parent)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+pub fn move_no_clobber(source: &Path, destination: &Path) -> io::Result<()> {
+    match rename_no_replace(source, destination) {
+        Ok(()) => {
+            if let Some(parent) = destination.parent() {
+                sync_directory(parent)?;
+            }
+            if let Some(parent) = source.parent()
+                && destination.parent() != Some(parent)
+            {
+                sync_directory(parent)?;
+            }
+            Ok(())
+        }
+        Err(error) if error.raw_os_error() == Some(libc::EXDEV) => {
+            copy_no_clobber(source, destination)?;
+            fs::remove_file(source)?;
+            if let Some(parent) = source.parent() {
+                sync_directory(parent)?;
+            }
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub fn file_sha256(path: &Path) -> io::Result<String> {
+    let mut file = open_source_no_follow(path)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 1024 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+pub struct FilesystemAuthority {
+    plans: PlanStore,
+    grants: PathGrantStore,
+    journals: JournalStore,
+    mutation_lock: GlobalMutationLock,
+    cancellations: CancellationRegistry,
+    #[cfg(test)]
+    fail_after_effect: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    before_capability_effect: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl FilesystemAuthority {
+    pub fn new(journal_dir: impl AsRef<Path>, ttl: Duration) -> Self {
+        Self::with_mutation_lock(journal_dir, ttl, GlobalMutationLock::default())
+    }
+
+    pub fn with_mutation_lock(
+        journal_dir: impl AsRef<Path>,
+        ttl: Duration,
+        mutation_lock: GlobalMutationLock,
+    ) -> Self {
+        Self {
+            plans: PlanStore::new(ttl),
+            grants: PathGrantStore::new(ttl),
+            journals: JournalStore::new(journal_dir),
+            mutation_lock,
+            cancellations: CancellationRegistry::default(),
+            #[cfg(test)]
+            fail_after_effect: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            before_capability_effect: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[cfg(test)]
+    fn inject_post_effect_failure(&self) {
+        self.fail_after_effect
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    #[cfg(all(test, unix))]
+    fn inject_before_capability_effect<F>(&self, hook: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        *self
+            .before_capability_effect
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(hook));
+    }
+
+    #[cfg(test)]
+    fn run_before_capability_effect(&self) {
+        let hook = self
+            .before_capability_effect
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        if let Some(hook) = hook {
+            hook();
+        }
+    }
+
+    pub fn issue_grant(
+        &self,
+        scope: &GrantScope,
+        selected_root: &Path,
+        access: GrantAccess,
+    ) -> Result<PathGrant, BackendError> {
+        self.grants.issue(scope, selected_root, access)
+    }
+
+    pub fn cache_plan(
+        &self,
+        origin: BackendOrigin,
+        binding: PlanBinding,
+        plan: Plan,
+    ) -> Result<Plan, BackendError> {
+        let caller = CallerIdentity::new(&binding.owner_id, &binding.session_id);
+        self.grants
+            .roots_for_plan(&binding.grant_ids, &caller, &binding.operation_id)?;
+        self.plans.insert_bound(origin, binding, plan)
+    }
+
+    pub fn journals(&self) -> &JournalStore {
+        &self.journals
+    }
+
+    pub fn plan_origin(&self, plan_id: &str) -> Option<BackendOrigin> {
+        self.plans.snapshot(plan_id).map(|snapshot| snapshot.origin)
+    }
+
+    pub fn validate_plan_operation(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        operation_id: Option<&str>,
+    ) -> Result<String, BackendError> {
+        let plan = self.plans.resolve_bound(plan_id, caller)?;
+        if plan.origin != BackendOrigin::Rust {
+            return Err(BackendError::validation(
+                "plan is not owned by the Rust filesystem backend",
+            ));
+        }
+        if operation_id.is_some_and(|operation_id| operation_id != plan.plan.op_id) {
+            return Err(BackendError::validation(
+                "apply operation does not match the approved plan",
+            ));
+        }
+        Ok(plan.plan.op_id)
+    }
+
+    pub fn resolve_native_plan(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+    ) -> Result<ClaimedPlan, BackendError> {
+        let plan = self.plans.resolve_bound(plan_id, caller)?;
+        if plan.origin != BackendOrigin::Rust {
+            return Err(BackendError::validation(
+                "plan is not owned by the Rust filesystem backend",
+            ));
+        }
+        Ok(plan)
+    }
+
+    pub fn cancel(&self, plan_id: &str) -> bool {
+        self.cancellations.cancel(plan_id)
+    }
+
+    pub fn revoke(&self, caller: &CallerIdentity) {
+        self.plans.revoke(caller);
+        self.grants.revoke(caller);
+        self.cancellations.revoke_all();
+    }
+
+    pub fn apply(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+    ) -> Result<OperationResult, BackendError> {
+        self.apply_with_progress(plan_id, caller, |_| {})
+    }
+
+    pub fn apply_with_progress<F>(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        mut progress: F,
+    ) -> Result<OperationResult, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let claim = self
+            .plans
+            .claim_for_apply_bound(plan_id, caller, &self.mutation_lock)?;
+        if claim.claimed.origin != BackendOrigin::Rust {
+            return Err(BackendError::validation(
+                "plan is not owned by the Rust filesystem backend",
+            ));
+        }
+        let binding = claim
+            .claimed
+            .binding
+            .as_ref()
+            .ok_or_else(BackendError::plan_unavailable)?;
+        let roots =
+            self.grants
+                .roots_for_plan(&binding.grant_ids, caller, &binding.operation_id)?;
+        let root_identities = self.grants.root_identities_for_plan(
+            &binding.grant_ids,
+            caller,
+            &binding.operation_id,
+        )?;
+        let token = self.cancellations.register(plan_id);
+        let _registration = CancellationRegistration {
+            registry: &self.cancellations,
+            request_id: plan_id,
+        };
+        let mut record = JournalRecord::fresh(
+            &claim.claimed.plan.op_id,
+            &binding.owner_id,
+            &binding.session_id,
+            &claim.claimed.digest,
+        );
+        record.grant_roots = roots
+            .iter()
+            .map(|root| root.to_string_lossy().into_owned())
+            .collect();
+        record.grant_root_identities = root_identities;
+        record.state = Some(JournalState::Applying);
+        let mut result = OperationResult {
+            applied: 0,
+            failed: 0,
+            journal_id: record.journal_id.clone(),
+            errors: Vec::new(),
+            meta: JsonObject::new(),
+            cloud_synced: None,
+        };
+        let total = claim.claimed.plan.steps.len();
+        progress(ProgressEvent {
+            phase: "apply".to_string(),
+            done: 0,
+            total: total as u64,
+            subject: String::new(),
+        });
+        for (index, step) in claim.claimed.plan.steps.iter().enumerate() {
+            if token.checkpoint().is_err() {
+                mark_cancelled(&mut record, &mut result, total - index);
+                self.cleanup_signed_page_directories(binding, caller, &mut record, &mut result)?;
+                self.journals.write(&record)?;
+                return Ok(result);
+            }
+            match self.execute_step(step, binding, caller, &token, &mut record) {
+                Ok(applied) => result.applied += applied,
+                Err(StepFailure::NoEffect(subject)) => {
+                    result.failed += 1;
+                    result.errors.push(Warning {
+                        key: "error.step_failed".to_string(),
+                        subject,
+                    });
+                }
+                Err(StepFailure::WarningNoEffect(warning)) => {
+                    result.failed += 1;
+                    result.errors.push(warning);
+                }
+                Err(StepFailure::OutcomeUnknown(subject)) => {
+                    result.failed += 1;
+                    result.errors.push(Warning {
+                        key: "error.step_failed".to_string(),
+                        subject,
+                    });
+                    record.state = Some(JournalState::RecoveryRequired);
+                    insert_effect_state(&mut result, "outcome_unknown");
+                    self.journals.write(&record)?;
+                    return Ok(result);
+                }
+                Err(StepFailure::Cancelled) => {
+                    mark_cancelled(&mut record, &mut result, total - index);
+                    self.cleanup_signed_page_directories(
+                        binding,
+                        caller,
+                        &mut record,
+                        &mut result,
+                    )?;
+                    self.journals.write(&record)?;
+                    return Ok(result);
+                }
+            }
+            progress(ProgressEvent {
+                phase: "apply".to_string(),
+                done: (index + 1) as u64,
+                total: total as u64,
+                subject: step
+                    .src
+                    .as_deref()
+                    .or(step.dst.as_deref())
+                    .unwrap_or_default()
+                    .to_string(),
+            });
+        }
+        if result.failed > 0 {
+            self.cleanup_signed_page_directories(binding, caller, &mut record, &mut result)?;
+        }
+        record.state = Some(if result.failed == 0 {
+            JournalState::Committed
+        } else if result.applied > 0 || !record.steps.is_empty() {
+            JournalState::PartialCommitted
+        } else {
+            JournalState::NoEffectRetryable
+        });
+        let effect_state = if result.failed == 0 {
+            "committed"
+        } else if result.applied > 0 || !record.steps.is_empty() {
+            "partial_committed"
+        } else {
+            "no_effect_retryable"
+        };
+        insert_effect_state(&mut result, effect_state);
+        self.journals.write(&record)?;
+        Ok(result)
+    }
+
+    fn cleanup_signed_page_directories(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        record: &mut JournalRecord,
+        result: &mut OperationResult,
+    ) -> Result<(), BackendError> {
+        if record.op_id != "rfi.stage_signed_first_pages" {
+            return Ok(());
+        }
+        let directories = record
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step.kind == StepKind::Mkdir)
+            .map(|(index, step)| (index, step.clone()))
+            .collect::<Vec<_>>();
+        for (index, step) in directories.into_iter().rev() {
+            let Some(directory) = step.dst.as_deref().map(PathBuf::from) else {
+                continue;
+            };
+            record.pending_step = Some(step);
+            self.journals.write(record)?;
+            let removed = self
+                .grants
+                .authorize_capability_for_plan(
+                    &binding.grant_ids,
+                    caller,
+                    &binding.operation_id,
+                    &directory,
+                    PathIntent::Write,
+                )
+                .and_then(|path| {
+                    path.anchor()
+                        .map_err(|_| BackendError::path_invalid("created directory is unavailable"))
+                })
+                .and_then(|directory| {
+                    directory
+                        .remove_dir()
+                        .map_err(|_| BackendError::path_invalid("created directory is not empty"))
+                })
+                .is_ok();
+            if removed {
+                record.steps.remove(index);
+                result.applied = result.applied.saturating_sub(1);
+            }
+            record.pending_step = None;
+            self.journals.write(record)?;
+        }
+        Ok(())
+    }
+
+    pub fn undo(
+        &self,
+        journal_id: &str,
+        caller: &CallerIdentity,
+        destination: Option<&Path>,
+    ) -> Result<OperationResult, BackendError> {
+        let _permit = self.mutation_lock.try_acquire()?;
+        crate::undo::undo_journal(&self.journals, journal_id, caller, destination)
+    }
+
+    fn execute_step(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        match step.kind {
+            StepKind::Mkdir => self
+                .execute_mkdir(step, binding, caller, token, record)
+                .map(|()| 1),
+            StepKind::Copy | StepKind::Move | StepKind::Rename | StepKind::Write => self
+                .execute_file_effect(step, binding, caller, token, record)
+                .map(|()| 1),
+            StepKind::WorkbookUpdate => {
+                self.execute_workbook_update(step, binding, caller, token, record)
+            }
+            StepKind::PdfFirstPageReplace => {
+                self.execute_pdf_first_page_replace(step, binding, caller, token, record)
+            }
+            StepKind::CleanupTemp => {
+                self.execute_cleanup_temp(step, binding, caller, token, record)
+            }
+            _ => Err(StepFailure::NoEffect(format!(
+                "unsupported Rust filesystem action: {:?}",
+                step.kind
+            ))),
+        }
+    }
+
+    fn execute_mkdir(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<(), StepFailure> {
+        let destination = required_path(step.dst.as_deref(), "mkdir destination")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        self.create_missing_directories(&destination, step, binding, caller, token, record)
+    }
+
+    fn create_missing_directories(
+        &self,
+        destination: &Path,
+        template: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<(), StepFailure> {
+        let authorized = self
+            .grants
+            .authorize_directory_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let mut missing = authorized.missing_directories().map_err(io_no_effect)?;
+        while let Some(directory) = missing.next_path().map(Path::to_path_buf) {
+            token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+            let actual = Step {
+                kind: StepKind::Mkdir,
+                src: None,
+                dst: Some(directory.to_string_lossy().into_owned()),
+                note_key: template.note_key.clone(),
+                meta: template.meta.clone(),
+            };
+            record.pending_step = Some(actual.clone());
+            record.state = Some(JournalState::Applying);
+            self.journals.write(record).map_err(step_unknown)?;
+            #[cfg(test)]
+            self.run_before_capability_effect();
+            if let Err(error) = missing.create_next() {
+                if error.is_outcome_unknown() {
+                    return Err(StepFailure::OutcomeUnknown(format!(
+                        "{}: {}",
+                        directory.display(),
+                        error.into_inner()
+                    )));
+                }
+                record.pending_step = None;
+                self.journals.write(record).map_err(step_unknown)?;
+                return Err(io_no_effect(error.into_inner()));
+            }
+            record.steps.push(actual);
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+        }
+        Ok(())
+    }
+
+    fn execute_file_effect(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<(), StepFailure> {
+        let destination = required_path(step.dst.as_deref(), "step destination")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let source = if step.kind == StepKind::Write {
+            None
+        } else {
+            let source = required_path(step.src.as_deref(), "step source")?;
+            let intent = if step.kind == StepKind::Copy {
+                PathIntent::Read
+            } else {
+                PathIntent::Write
+            };
+            Some(
+                self.grants
+                    .authorize_for_plan(
+                        &binding.grant_ids,
+                        caller,
+                        &binding.operation_id,
+                        &source,
+                        intent,
+                    )
+                    .map_err(step_no_effect)?,
+            )
+        };
+        if source.as_deref() == Some(destination.as_path()) {
+            return Err(StepFailure::NoEffect(
+                "source and destination are the same path".to_string(),
+            ));
+        }
+        let parent = destination.parent().ok_or_else(|| {
+            StepFailure::NoEffect("destination has no parent directory".to_string())
+        })?;
+        self.create_missing_directories(parent, step, binding, caller, token, record)?;
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        let mut actual = step.clone();
+        actual.src = source
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned());
+        actual.dst = Some(destination.to_string_lossy().into_owned());
+        actual.meta.remove("content");
+        let source_anchor = source
+            .as_deref()
+            .map(|source| {
+                self.grants
+                    .authorize_capability_for_plan(
+                        &binding.grant_ids,
+                        caller,
+                        &binding.operation_id,
+                        source,
+                        if step.kind == StepKind::Copy {
+                            PathIntent::Read
+                        } else {
+                            PathIntent::Write
+                        },
+                    )
+                    .map_err(step_no_effect)?
+                    .anchor()
+                    .map_err(io_no_effect)
+            })
+            .transpose()?;
+        let destination_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if let Some(source) = source_anchor.as_ref()
+            && let Ok(hash) = source.sha256()
+        {
+            actual
+                .meta
+                .insert("sourceSha256".to_string(), Value::String(hash));
+        }
+        record.pending_step = Some(actual.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+        #[cfg(test)]
+        self.run_before_capability_effect();
+        let effect = match step.kind {
+            StepKind::Copy => destination_anchor
+                .copy_no_clobber_from(source_anchor.as_ref().expect("copy source")),
+            StepKind::Move | StepKind::Rename => source_anchor
+                .as_ref()
+                .expect("move source")
+                .move_no_clobber_to(&destination_anchor),
+            StepKind::Write => {
+                let Some(contents) = step.meta.get("content").and_then(Value::as_str) else {
+                    record.pending_step = None;
+                    self.journals.write(record).map_err(step_unknown)?;
+                    return Err(StepFailure::NoEffect(
+                        "write action has no string content".to_string(),
+                    ));
+                };
+                destination_anchor.write_no_clobber(contents.as_bytes())
+            }
+            _ => unreachable!("file effect kind checked by caller"),
+        };
+        if let Err(error) = effect {
+            let outcome_unknown = error.kind() != io::ErrorKind::AlreadyExists
+                && destination_anchor.open_read().is_ok();
+            if outcome_unknown {
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    destination.display()
+                )));
+            }
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(io_no_effect(error));
+        }
+        #[cfg(test)]
+        if self
+            .fail_after_effect
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(StepFailure::OutcomeUnknown(
+                "injected failure after filesystem effect".to_string(),
+            ));
+        }
+        let hash = destination_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", destination.display()))
+        })?;
+        actual
+            .meta
+            .insert("undoSha256".to_string(), Value::String(hash));
+        record.steps.push(actual);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(())
+    }
+
+    fn execute_workbook_update(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        let workbook = required_path(step.src.as_deref(), "workbook source")?;
+        let workbook = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &workbook,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let backup = required_path(step.dst.as_deref(), "workbook backup")?;
+        let backup = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &backup,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        if workbook == backup {
+            return Err(StepFailure::NoEffect(
+                "workbook and backup are the same path".to_string(),
+            ));
+        }
+        let signature = step
+            .meta
+            .get("sourceSignature")
+            .and_then(Value::as_object)
+            .ok_or_else(|| StepFailure::NoEffect("workbook signature is missing".to_string()))?;
+        let expected_size = signature
+            .get("size")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| StepFailure::NoEffect("workbook size is missing".to_string()))?;
+        let expected_hash = signature
+            .get("sha256")
+            .and_then(Value::as_str)
+            .ok_or_else(|| StepFailure::NoEffect("workbook hash is missing".to_string()))?;
+        let workbook_capability = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &workbook,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let workbook_anchor = workbook_capability.anchor().map_err(io_no_effect)?;
+        let actual_size = workbook_anchor.len().map_err(io_no_effect)?;
+        let actual_hash = workbook_anchor.sha256().map_err(io_no_effect)?;
+        if actual_size != expected_size || actual_hash != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "workbook changed after preview".to_string(),
+            ));
+        }
+        workbook_anchor.open_mutable().map(drop).map_err(|_| {
+            StepFailure::WarningNoEffect(Warning {
+                key: "error.rfi.workbookLocked".to_string(),
+                subject: workbook
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+        })?;
+
+        let backup_parent = backup
+            .parent()
+            .ok_or_else(|| StepFailure::NoEffect("workbook backup has no parent".to_string()))?;
+        self.create_missing_directories(backup_parent, step, binding, caller, token, record)?;
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+
+        let mut backup_step = Step {
+            kind: StepKind::Copy,
+            src: Some(workbook.to_string_lossy().into_owned()),
+            dst: Some(backup.to_string_lossy().into_owned()),
+            note_key: Some("note.rfi.workbookUpdate".to_string()),
+            meta: JsonObject::new(),
+        };
+        backup_step.meta.insert(
+            "sourceSha256".to_string(),
+            Value::String(actual_hash.clone()),
+        );
+        record.pending_step = Some(backup_step.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+        let backup_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &backup,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if let Err(error) = backup_anchor.copy_no_clobber_from(&workbook_anchor) {
+            if error.kind() != io::ErrorKind::AlreadyExists && backup_anchor.open_read().is_ok() {
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    backup.display()
+                )));
+            }
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(io_no_effect(error));
+        }
+        let backup_hash = backup_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", backup.display()))
+        })?;
+        if backup_hash != actual_hash {
+            return Err(StepFailure::OutcomeUnknown(
+                "workbook backup verification failed".to_string(),
+            ));
+        }
+        backup_step
+            .meta
+            .insert("undoSha256".to_string(), Value::String(backup_hash));
+        record.steps.push(backup_step);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        let workspace = tempfile::tempdir().map_err(io_no_effect)?;
+        let workspace_capability =
+            crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
+        let input = workspace.path().join("approved-input.xlsm");
+        let output = workspace.path().join("completed-output.xlsm");
+        let input_anchor = workspace_capability
+            .authorize(&input)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        input_anchor
+            .copy_no_clobber_from(&workbook_anchor)
+            .map_err(io_no_effect)?;
+        let updates = workbook_step_updates(step).map_err(step_no_effect)?;
+        if let Err(error) = patch_workbook_sheets(&input, &output, &updates, Some(1)) {
+            return Err(StepFailure::NoEffect(error.to_string()));
+        }
+        if let Err(error) = verify_workbook_step(step, &output) {
+            return Err(StepFailure::NoEffect(error.message));
+        }
+        File::open(&output)
+            .and_then(|file| file.sync_all())
+            .map_err(io_no_effect)?;
+        let output_anchor = workspace_capability
+            .authorize(&output)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let output_hash = output_anchor.sha256().map_err(io_no_effect)?;
+        if token.checkpoint().is_err() {
+            return Err(StepFailure::Cancelled);
+        }
+
+        let mut restore_step = Step {
+            kind: StepKind::RestoreBackup,
+            src: Some(backup.to_string_lossy().into_owned()),
+            dst: Some(workbook.to_string_lossy().into_owned()),
+            note_key: Some("note.rfi.restoreBackup".to_string()),
+            meta: JsonObject::new(),
+        };
+        restore_step
+            .meta
+            .insert("originalSha256".to_string(), Value::String(actual_hash));
+        record.pending_step = Some(restore_step.clone());
+        self.journals.write(record).map_err(step_unknown)?;
+        if let Err(error) = atomic_replace_capability_with_retry(&output_anchor, &workbook_anchor) {
+            return Err(replacement_failure(&workbook_anchor, error));
+        }
+        let applied_hash = match workbook_anchor.sha256() {
+            Ok(hash) => hash,
+            Err(error) => {
+                if rollback_from_backup_capability(&backup_anchor, &workbook_anchor, expected_hash)
+                    .is_ok()
+                {
+                    record.pending_step = None;
+                    self.journals.write(record).map_err(step_unknown)?;
+                    return Err(io_no_effect(error));
+                }
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    workbook.display()
+                )));
+            }
+        };
+        if applied_hash != output_hash {
+            if rollback_from_backup_capability(&backup_anchor, &workbook_anchor, expected_hash)
+                .is_ok()
+            {
+                record.pending_step = None;
+                self.journals.write(record).map_err(step_unknown)?;
+                return Err(StepFailure::NoEffect(
+                    "workbook replacement verification failed".to_string(),
+                ));
+            }
+            return Err(StepFailure::OutcomeUnknown(
+                "workbook replacement verification failed".to_string(),
+            ));
+        }
+        restore_step
+            .meta
+            .insert("appliedSha256".to_string(), Value::String(applied_hash));
+        record.steps.push(restore_step);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        workbook_record_count(step).map_err(step_no_effect)
+    }
+
+    fn execute_pdf_first_page_replace(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        let archive = required_path(step.src.as_deref(), "archive PDF")?;
+        let archive = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &archive,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?;
+        let signed = step
+            .meta
+            .get("signedPdf")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| StepFailure::NoEffect("signed PDF path is missing".to_string()))?;
+        let signed = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &signed,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?;
+        let destination = required_path(step.dst.as_deref(), "review PDF destination")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let expected_archive_hash = step
+            .meta
+            .get("archiveSha256")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("archive PDF hash is missing".to_string()))?;
+        let expected_signed_hash = step
+            .meta
+            .get("signedSha256")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("signed PDF hash is missing".to_string()))?;
+        let archive_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &archive,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let signed_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &signed,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let destination_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if archive_anchor.sha256().map_err(io_no_effect)? != expected_archive_hash {
+            return Err(StepFailure::NoEffect(
+                "archive PDF changed after preview".to_string(),
+            ));
+        }
+        if signed_anchor.sha256().map_err(io_no_effect)? != expected_signed_hash {
+            return Err(StepFailure::NoEffect(
+                "signed PDF changed after preview".to_string(),
+            ));
+        }
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        record.pending_step = Some(step.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+
+        let workspace = tempfile::tempdir().map_err(io_no_effect)?;
+        let workspace_capability =
+            crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
+        let archive_copy = workspace.path().join("archive.pdf");
+        let signed_copy = workspace.path().join("signed.pdf");
+        let completed = workspace.path().join("completed.pdf");
+        let archive_copy_anchor = workspace_capability
+            .authorize(&archive_copy)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let signed_copy_anchor = workspace_capability
+            .authorize(&signed_copy)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        archive_copy_anchor
+            .copy_no_clobber_from(&archive_anchor)
+            .map_err(io_no_effect)?;
+        signed_copy_anchor
+            .copy_no_clobber_from(&signed_anchor)
+            .map_err(io_no_effect)?;
+        let generated = replace_first_page_incremental(&archive_copy, &signed_copy, &completed)
+            .map_err(|error| StepFailure::NoEffect(error.to_string()));
+        if let Err(error) = generated {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(error);
+        }
+        let completed_anchor = workspace_capability
+            .authorize(&completed)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let output_hash = completed_anchor.sha256().map_err(io_no_effect)?;
+        if token.checkpoint().is_err() {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(StepFailure::Cancelled);
+        }
+        if archive_anchor.sha256().map_err(io_no_effect)? != expected_archive_hash
+            || signed_anchor.sha256().map_err(io_no_effect)? != expected_signed_hash
+        {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(StepFailure::NoEffect(
+                "approved PDF input changed during apply".to_string(),
+            ));
+        }
+        if let Err(error) = destination_anchor.copy_no_clobber_from(&completed_anchor) {
+            if error.kind() != io::ErrorKind::AlreadyExists
+                && destination_anchor.open_read().is_ok()
+            {
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    destination.display()
+                )));
+            }
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(io_no_effect(error));
+        }
+        if destination_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", destination.display()))
+        })? != output_hash
+        {
+            return Err(StepFailure::OutcomeUnknown(
+                "published review PDF failed hash validation".to_string(),
+            ));
+        }
+        let mut actual = Step {
+            kind: StepKind::Copy,
+            src: Some(archive.to_string_lossy().into_owned()),
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: step.note_key.clone(),
+            meta: step.meta.clone(),
+        };
+        actual
+            .meta
+            .insert("undoSha256".to_string(), Value::String(output_hash));
+        record.steps.push(actual);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(1)
+    }
+
+    fn execute_cleanup_temp(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        if binding.operation_id != "rfi.stage_signed_first_pages" {
+            return Err(StepFailure::NoEffect(
+                "temporary PDF cleanup is not authorized for this operation".to_string(),
+            ));
+        }
+        let temporary = required_path(step.src.as_deref(), "stale PDF temporary path")?;
+        let temporary = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &temporary,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let destination = required_path(step.dst.as_deref(), "completed review PDF")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let review_root = step
+            .meta
+            .get("reviewRoot")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| StepFailure::NoEffect("review root is missing".to_string()))?;
+        let review_root = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &review_root,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        if !temporary.starts_with(&review_root)
+            || !destination.starts_with(&review_root)
+            || temporary.parent() != destination.parent()
+        {
+            return Err(StepFailure::NoEffect(
+                "temporary PDF cleanup escaped the approved review path".to_string(),
+            ));
+        }
+        let destination_name = destination
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| StepFailure::NoEffect("review PDF name is invalid".to_string()))?;
+        let temporary_name = temporary
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| StepFailure::NoEffect("temporary PDF name is invalid".to_string()))?;
+        if !temporary_pdf_name_matches(temporary_name, destination_name) {
+            return Err(StepFailure::NoEffect(
+                "temporary PDF name is outside the cleanup contract".to_string(),
+            ));
+        }
+        let temporary_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &temporary,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let destination_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if !temporary_anchor
+            .same_file_as(&destination_anchor)
+            .map_err(io_no_effect)?
+        {
+            return Err(StepFailure::NoEffect(
+                "temporary PDF is not the completed review PDF hard link".to_string(),
+            ));
+        }
+        let expected_hash = step
+            .meta
+            .get("destinationSha256")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("review PDF hash is missing".to_string()))?;
+        if destination_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "completed review PDF changed after preview".to_string(),
+            ));
+        }
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        record.pending_step = Some(step.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+        if let Err(error) = remove_anchored_file_with_access_retry(&temporary_anchor, 40) {
+            if temporary_anchor.open_read().is_ok()
+                && destination_anchor
+                    .sha256()
+                    .is_ok_and(|hash| hash == expected_hash)
+            {
+                record.pending_step = None;
+                self.journals.write(record).map_err(step_unknown)?;
+                return Err(io_no_effect(error));
+            }
+            return Err(StepFailure::OutcomeUnknown(format!(
+                "{}: {error}",
+                temporary.display()
+            )));
+        }
+        if destination_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", destination.display()))
+        })? != expected_hash
+        {
+            return Err(StepFailure::OutcomeUnknown(
+                "completed review PDF changed during temporary cleanup".to_string(),
+            ));
+        }
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(1)
+    }
+}
+
+enum StepFailure {
+    NoEffect(String),
+    WarningNoEffect(Warning),
+    OutcomeUnknown(String),
+    Cancelled,
+}
+
+struct CancellationRegistration<'a> {
+    registry: &'a CancellationRegistry,
+    request_id: &'a str,
+}
+
+impl Drop for CancellationRegistration<'_> {
+    fn drop(&mut self) {
+        self.registry.finish(self.request_id);
+    }
+}
+
+fn mark_cancelled(record: &mut JournalRecord, result: &mut OperationResult, pending: usize) {
+    let partial = !record.steps.is_empty();
+    record.state = Some(if partial {
+        JournalState::CancelledPartial
+    } else {
+        JournalState::CancelledClean
+    });
+    result.errors.push(Warning {
+        key: "warn.operation.cancelled".to_string(),
+        subject: String::new(),
+    });
+    result
+        .meta
+        .insert("cancelled".to_string(), Value::Bool(true));
+    result.meta.insert(
+        "pending".to_string(),
+        Value::from(u64::try_from(pending).unwrap_or(u64::MAX)),
+    );
+    insert_effect_state(
+        result,
+        if partial {
+            "cancelled_partial"
+        } else {
+            "cancelled_clean"
+        },
+    );
+}
+
+fn insert_effect_state(result: &mut OperationResult, state: &str) {
+    result
+        .meta
+        .insert("effectState".to_string(), Value::String(state.to_string()));
+}
+
+fn required_path(raw: Option<&str>, label: &str) -> Result<PathBuf, StepFailure> {
+    raw.filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| StepFailure::NoEffect(format!("{label} is missing")))
+}
+
+fn step_no_effect(error: BackendError) -> StepFailure {
+    StepFailure::NoEffect(error.message)
+}
+
+fn step_unknown(error: BackendError) -> StepFailure {
+    StepFailure::OutcomeUnknown(error.message)
+}
+
+fn io_no_effect(error: io::Error) -> StepFailure {
+    StepFailure::NoEffect(error.to_string())
+}
+
+fn replacement_failure(destination: &AnchoredPath, error: io::Error) -> StepFailure {
+    StepFailure::OutcomeUnknown(format!("{}: {error}", destination.absolute().display()))
+}
+
+fn create_temporary(parent: &Path, destination: &Path) -> io::Result<(PathBuf, File)> {
+    if !parent.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "destination parent does not exist",
+        ));
+    }
+    for _ in 0..16 {
+        let name = destination
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("file");
+        let temporary = parent.join(format!(".{name}.docflow-{}.tmp", Uuid::new_v4()));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "could not allocate a unique temporary file",
+    ))
+}
+
+fn rollback_from_backup_capability(
+    backup: &AnchoredPath,
+    workbook: &AnchoredPath,
+    expected_hash: &str,
+) -> io::Result<()> {
+    let temporary = workbook.temporary_sibling("restore")?;
+    temporary.copy_no_clobber_from(backup)?;
+    let result = (|| {
+        if temporary.sha256()? != expected_hash {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "workbook rollback copy did not match the approved backup",
+            ));
+        }
+        atomic_replace_capability_with_retry(&temporary, workbook)?;
+        if workbook.sha256()? != expected_hash {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "workbook rollback verification failed",
+            ));
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = temporary.remove_file();
+    }
+    result
+}
+
+fn atomic_replace_capability_with_retry(
+    source: &AnchoredPath,
+    destination: &AnchoredPath,
+) -> io::Result<()> {
+    for attempt in 0..20 {
+        match destination.replace_with(source) {
+            Ok(()) => return Ok(()),
+            Err(error) if is_workbook_access_error(&error) && attempt < 19 => {
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("replacement retry loop always returns")
+}
+
+pub(crate) fn atomic_replace(source: &Path, destination: &Path) -> io::Result<()> {
+    atomic_replace_platform(source, destination)?;
+    if let Some(parent) = destination.parent() {
+        sync_directory(parent)?;
+    }
+    Ok(())
+}
+
+fn is_workbook_access_error(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::PermissionDenied
+        || matches!(error.raw_os_error(), Some(5 | 32 | 33))
+}
+
+fn remove_anchored_file_with_access_retry(path: &AnchoredPath, attempts: usize) -> io::Result<()> {
+    for attempt in 0..attempts.max(1) {
+        match path.remove_file() {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if is_workbook_access_error(&error) && attempt + 1 < attempts.max(1) => {
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::other(
+        "capability-relative file could not be removed",
+    ))
+}
+
+#[cfg(unix)]
+fn atomic_replace_platform(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::rename(source, destination)
+}
+
+#[cfg(windows)]
+fn atomic_replace_platform(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
+    };
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn publish_no_clobber(temporary: &Path, destination: &Path) -> io::Result<()> {
+    fs::hard_link(temporary, destination)?;
+    fs::remove_file(temporary)
+}
+
+#[cfg(unix)]
+fn open_source_no_follow(path: &Path) -> io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+}
+
+#[cfg(windows)]
+fn open_source_no_follow(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+}
+
+#[cfg(target_os = "macos")]
+fn rename_no_replace(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::{ffi::CString, os::unix::ffi::OsStrExt};
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "source contains NUL"))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "destination contains NUL"))?;
+    let result =
+        unsafe { libc::renamex_np(source.as_ptr(), destination.as_ptr(), libc::RENAME_EXCL) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn rename_no_replace(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::{ffi::CString, os::unix::ffi::OsStrExt};
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "source contains NUL"))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "destination contains NUL"))?;
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(windows)]
+fn rename_no_replace(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MOVEFILE_WRITE_THROUGH, MoveFileExW};
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+fn rename_no_replace(source: &Path, destination: &Path) -> io::Result<()> {
+    if source.is_file() {
+        fs::hard_link(source, destination)?;
+        fs::remove_file(source)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "atomic no-replace directory rename is unavailable",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
+}
+
+#[cfg(windows)]
+fn sync_directory(_path: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pdf_publish_retries_transient_access_errors_without_overwriting() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let temporary = fixture.path().join(".review.pdf.docflow-test.tmp");
+        let destination = fixture.path().join("review.pdf");
+        fs::write(&temporary, b"completed PDF bytes").unwrap();
+        let mut calls = 0;
+
+        publish_pdf_no_clobber_with(
+            &temporary,
+            &destination,
+            4,
+            |source, target| {
+                calls += 1;
+                if calls < 3 {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "simulated OneDrive lock",
+                    ))
+                } else {
+                    fs::hard_link(source, target)
+                }
+            },
+            |_| {},
+        )
+        .unwrap();
+
+        assert_eq!(calls, 3);
+        assert_eq!(fs::read(destination).unwrap(), b"completed PDF bytes");
+        assert!(!temporary.exists());
+    }
+
+    #[test]
+    fn pdf_publish_falls_back_to_exclusive_copy_after_persistent_access_errors() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let temporary = fixture.path().join(".review.pdf.docflow-test.tmp");
+        let destination = fixture.path().join("review.pdf");
+        fs::write(&temporary, b"completed PDF bytes").unwrap();
+        let mut calls = 0;
+
+        publish_pdf_no_clobber_with(
+            &temporary,
+            &destination,
+            3,
+            |_, _| {
+                calls += 1;
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "simulated persistent OneDrive lock",
+                ))
+            },
+            |_| {},
+        )
+        .unwrap();
+
+        assert_eq!(calls, 3);
+        assert_eq!(fs::read(destination).unwrap(), b"completed PDF bytes");
+        assert!(!temporary.exists());
+    }
+
+    #[test]
+    fn pdf_publish_never_overwrites_an_existing_destination() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let temporary = fixture.path().join(".review.pdf.docflow-test.tmp");
+        let destination = fixture.path().join("review.pdf");
+        fs::write(&temporary, b"new PDF bytes").unwrap();
+        fs::write(&destination, b"existing user bytes").unwrap();
+
+        let error = publish_pdf_no_clobber_with(
+            &temporary,
+            &destination,
+            3,
+            |source, target| fs::hard_link(source, target),
+            |_| {},
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read(destination).unwrap(), b"existing user bytes");
+        assert_eq!(fs::read(temporary).unwrap(), b"new PDF bytes");
+    }
+
+    #[test]
+    fn a_fault_after_a_move_effect_keeps_the_pending_step_for_recovery() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("documents");
+        let source = root.join("source.pdf");
+        let destination = root.join("destination.pdf");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&source, b"PDF").unwrap();
+
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let scope = GrantScope::new("owner", "session", "request", "op.test");
+        let grant = authority
+            .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+            .unwrap();
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", "op.test", vec![grant.grant_id]),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "op.test".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Move,
+                        src: Some(source.to_string_lossy().into_owned()),
+                        dst: Some(destination.to_string_lossy().into_owned()),
+                        note_key: None,
+                        meta: JsonObject::new(),
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        authority.inject_post_effect_failure();
+
+        let result = authority
+            .apply(&cached.plan_id, &CallerIdentity::new("owner", "session"))
+            .unwrap();
+
+        assert_eq!(result.meta["effectState"], "outcome_unknown");
+        assert!(!source.exists());
+        assert_eq!(fs::read(destination).unwrap(), b"PDF");
+        let journal = authority.journals().read(&result.journal_id).unwrap();
+        assert_eq!(journal.state, Some(JournalState::RecoveryRequired));
+        assert_eq!(journal.steps.len(), 0);
+        assert_eq!(journal.pending_step.unwrap().kind, StepKind::Move);
+    }
+
+    #[test]
+    fn post_rename_sync_failures_keep_copy_write_and_move_pending_for_recovery() {
+        for kind in [StepKind::Copy, StepKind::Write, StepKind::Move] {
+            let fixture = tempfile::TempDir::new().unwrap();
+            let root = fixture.path().join("documents");
+            let source = root.join("source.txt");
+            let destination = root.join("destination.txt");
+            fs::create_dir_all(&root).unwrap();
+            fs::write(&source, b"APPROVED BYTES").unwrap();
+            let authority =
+                FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+            let grant = authority
+                .issue_grant(
+                    &GrantScope::new("owner", "session", "request", "op.test"),
+                    &root,
+                    GrantAccess::ReadWrite,
+                )
+                .unwrap();
+            let mut meta = JsonObject::new();
+            if kind == StepKind::Write {
+                meta.insert(
+                    "content".to_string(),
+                    Value::String("APPROVED BYTES".to_string()),
+                );
+            }
+            let cached = authority
+                .cache_plan(
+                    BackendOrigin::Rust,
+                    PlanBinding::new("owner", "session", "op.test", vec![grant.grant_id]),
+                    Plan {
+                        plan_id: String::new(),
+                        op_id: "op.test".to_string(),
+                        steps: vec![Step {
+                            kind,
+                            src: (kind != StepKind::Write)
+                                .then(|| source.to_string_lossy().into_owned()),
+                            dst: Some(destination.to_string_lossy().into_owned()),
+                            note_key: None,
+                            meta,
+                        }],
+                        warnings: Vec::new(),
+                        meta: JsonObject::new(),
+                    },
+                )
+                .unwrap();
+            crate::cap_fs::inject_directory_sync_failure_after(0);
+
+            let result = authority
+                .apply(&cached.plan_id, &CallerIdentity::new("owner", "session"))
+                .unwrap();
+
+            assert_eq!(result.meta["effectState"], "outcome_unknown", "{kind:?}");
+            assert_eq!(
+                fs::read(&destination).unwrap(),
+                b"APPROVED BYTES",
+                "{kind:?}"
+            );
+            let journal = authority.journals().read(&result.journal_id).unwrap();
+            assert_eq!(
+                journal.state,
+                Some(JournalState::RecoveryRequired),
+                "{kind:?}"
+            );
+            assert_eq!(
+                journal.pending_step.as_ref().map(|step| step.kind),
+                Some(kind)
+            );
+        }
+    }
+
+    #[test]
+    fn workbook_backup_post_rename_sync_failure_remains_outcome_unknown() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("documents");
+        let workbook = root.join("RFI Log.xlsm");
+        let backup = root.join("RFI Log.backup.xlsm");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&workbook, b"APPROVED WORKBOOK PACKAGE").unwrap();
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new("owner", "session", "request", "rfi.log_add"),
+                &root,
+                GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let mut meta = JsonObject::new();
+        meta.insert(
+            "sourceSignature".to_string(),
+            serde_json::json!({
+                "size": fs::metadata(&workbook).unwrap().len(),
+                "sha256": file_sha256(&workbook).unwrap()
+            }),
+        );
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", "rfi.log_add", vec![grant.grant_id]),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "rfi.log_add".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::WorkbookUpdate,
+                        src: Some(workbook.to_string_lossy().into_owned()),
+                        dst: Some(backup.to_string_lossy().into_owned()),
+                        note_key: None,
+                        meta,
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        crate::cap_fs::inject_directory_sync_failure_after(0);
+
+        let result = authority
+            .apply(&cached.plan_id, &CallerIdentity::new("owner", "session"))
+            .unwrap();
+
+        assert_eq!(result.meta["effectState"], "outcome_unknown");
+        assert_eq!(fs::read(&backup).unwrap(), b"APPROVED WORKBOOK PACKAGE");
+        let journal = authority.journals().read(&result.journal_id).unwrap();
+        assert_eq!(journal.state, Some(JournalState::RecoveryRequired));
+        assert_eq!(
+            journal.pending_step.as_ref().map(|step| step.kind),
+            Some(StepKind::Copy)
+        );
+    }
+
+    #[test]
+    fn byte_identical_replace_with_post_rename_sync_failure_is_still_outcome_unknown() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let source = fixture.path().join("replacement.xlsm");
+        let destination = fixture.path().join("workbook.xlsm");
+        fs::write(&source, b"IDENTICAL PACKAGE").unwrap();
+        fs::write(&destination, b"IDENTICAL PACKAGE").unwrap();
+        let capability = crate::cap_fs::CapabilityRoot::open(fixture.path()).unwrap();
+        let source = capability.authorize(&source).unwrap().anchor().unwrap();
+        let destination = capability
+            .authorize(&destination)
+            .unwrap()
+            .anchor()
+            .unwrap();
+        crate::cap_fs::inject_directory_sync_failure_after(0);
+
+        let error = destination
+            .replace_with(&source)
+            .expect_err("rename succeeded but directory sync was injected to fail");
+        let classified = replacement_failure(&destination, error);
+
+        assert!(matches!(classified, StepFailure::OutcomeUnknown(_)));
+        assert_eq!(destination.sha256().unwrap(), {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(b"IDENTICAL PACKAGE"))
+        });
+        assert!(source.open_read().is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn nested_mkdirs_stay_on_the_pinned_parent_after_visible_parent_swap() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("documents");
+        let visible_parent = root.join("approved-parent");
+        let pinned_parent = root.join("pinned-parent");
+        let outside = fixture.path().join("outside");
+        fs::create_dir_all(&visible_parent).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let destination = visible_parent.join("nested/deeper");
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new("owner", "session", "request", "op.test"),
+                &root,
+                GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", "op.test", vec![grant.grant_id]),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "op.test".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Mkdir,
+                        src: None,
+                        dst: Some(destination.to_string_lossy().into_owned()),
+                        note_key: None,
+                        meta: JsonObject::new(),
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let outside_target = outside.clone();
+        let swapped_parent = pinned_parent.clone();
+        authority.inject_before_capability_effect(move || {
+            fs::rename(&visible_parent, &swapped_parent).unwrap();
+            symlink(&outside_target, &visible_parent).unwrap();
+        });
+
+        let result = authority
+            .apply(&cached.plan_id, &CallerIdentity::new("owner", "session"))
+            .unwrap();
+
+        assert_eq!((result.applied, result.failed), (1, 0));
+        assert!(pinned_parent.join("nested/deeper").is_dir());
+        assert!(!outside.join("nested").exists());
+        let journal = authority.journals().read(&result.journal_id).unwrap();
+        assert_eq!(
+            journal
+                .steps
+                .iter()
+                .map(|step| step.kind)
+                .collect::<Vec<_>>(),
+            vec![StepKind::Mkdir, StepKind::Mkdir]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pinned_parent_capability_defeats_post_acquisition_path_swap() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("documents");
+        let visible_parent = root.join("approved-parent");
+        let pinned_parent = root.join("pinned-parent");
+        let outside = fixture.path().join("outside");
+        fs::create_dir_all(&visible_parent).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let destination = visible_parent.join("created.txt");
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new("owner", "session", "request", "op.test"),
+                &root,
+                GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let mut meta = JsonObject::new();
+        meta.insert("content".to_string(), Value::String("PINNED".to_string()));
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", "op.test", vec![grant.grant_id]),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "op.test".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Write,
+                        src: None,
+                        dst: Some(destination.to_string_lossy().into_owned()),
+                        note_key: None,
+                        meta,
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let swapped_parent = pinned_parent.clone();
+        let outside_target = outside.clone();
+        authority.inject_before_capability_effect(move || {
+            fs::rename(&visible_parent, &swapped_parent).unwrap();
+            symlink(&outside_target, &visible_parent).unwrap();
+        });
+
+        let result = authority
+            .apply(&cached.plan_id, &CallerIdentity::new("owner", "session"))
+            .unwrap();
+
+        assert!(!outside.join("created.txt").exists());
+        if result.applied == 1 {
+            assert_eq!(
+                fs::read(pinned_parent.join("created.txt")).unwrap(),
+                b"PINNED"
+            );
+        } else {
+            assert_eq!(result.meta["effectState"], "no_effect_retryable");
+        }
+    }
+
+    #[test]
+    fn file_effect_source_metadata_is_read_only_through_the_pinned_capability() {
+        let source = include_str!("fs_ops.rs");
+        let function = source
+            .split("fn execute_file_effect(")
+            .nth(1)
+            .and_then(|tail| tail.split("fn execute_workbook_update(").next())
+            .expect("file effect implementation");
+
+        assert!(!function.contains("file_sha256(source)"));
+        assert!(function.contains("source_anchor"));
+        assert!(function.contains(".sha256()"));
+    }
+
+    #[test]
+    fn verified_backup_rollback_atomically_restores_the_original_bytes() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let workbook = fixture.path().join("RFI Log.xlsm");
+        let backup = fixture.path().join("backup.xlsm");
+        fs::write(&workbook, b"changed package").unwrap();
+        fs::write(&backup, b"original package").unwrap();
+        let expected = file_sha256(&backup).unwrap();
+
+        let capability = crate::cap_fs::CapabilityRoot::open(fixture.path()).unwrap();
+        let backup = capability.authorize(&backup).unwrap().anchor().unwrap();
+        let workbook = capability.authorize(&workbook).unwrap().anchor().unwrap();
+        rollback_from_backup_capability(&backup, &workbook, &expected).unwrap();
+
+        assert_eq!(workbook.sha256().unwrap(), expected);
+        assert_eq!(backup.sha256().unwrap(), expected);
+        assert!(fixture.path().read_dir().unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("restore-")
+        }));
+    }
+}

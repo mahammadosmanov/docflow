@@ -127,7 +127,16 @@ export interface ProgressEvent {
   subject?: string;
 }
 
+export type ProgressEventHandler = (event: ProgressEvent) => void;
+
+export interface PathSelection {
+  selectionId: string;
+  displayPath: string;
+  name: string;
+}
+
 export interface ReviewItem {
+  selectionId: string;
   path: string;
   name: string;
   code: string;
@@ -137,7 +146,7 @@ export interface ReviewItem {
 export type ReviewAction = "keep" | "put" | "delete";
 
 export interface ReviewDecision {
-  path: string;
+  itemId: string;
   action: Exclude<ReviewAction, "keep">;
   code: string;
 }
@@ -151,6 +160,7 @@ export interface HistoryRow {
   steps: Step[] | null;
   cloudId: string | null;
   undone: boolean;
+  undoAvailable: boolean;
   fromCloud: boolean;
   userEmail: string;
 }
@@ -158,4 +168,14 @@ export interface HistoryRow {
 export interface HistoryPayload {
   online: boolean;
   rows: HistoryRow[];
+}
+
+export interface RecoveryEntry {
+  journalId: string;
+  disposition: "no_effect" | "outcome_unknown";
+}
+
+export interface RecoveryPayload {
+  journals: RecoveryEntry[];
+  printQueue: PrintQueueSummary | null;
 }

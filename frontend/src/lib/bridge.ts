@@ -1,4 +1,11 @@
-import { Child, Command } from "@tauri-apps/plugin-shell";
+import { Channel, invoke } from "@tauri-apps/api/core";
+
+import type {
+  CommandArgs,
+  CommandParams,
+  CommandResult,
+  FrontendMethod,
+} from "./commands";
 
 import type {
   AppPrefs,
@@ -8,8 +15,10 @@ import type {
   HistoryPayload,
   OperationDef,
   OperationResult,
+  PathSelection,
   Plan,
   ProgressEvent,
+  RecoveryPayload,
   ReviewItem,
 } from "../types";
 
@@ -17,157 +26,67 @@ type ProgressHandler = (event: ProgressEvent) => void;
 
 export interface Bridge {
   start(): Promise<void>;
-  call<T>(
-    method: string,
-    params?: Record<string, unknown>,
-    onProgress?: ProgressHandler,
-  ): Promise<T>;
+  call<Method extends FrontendMethod>(
+    method: Method,
+    ...args: CommandArgs<Method>
+  ): Promise<CommandResult<Method>>;
   stop(): Promise<void>;
 }
 
-interface PendingRequest {
-  resolve: (value: unknown) => void;
-  reject: (reason: Error) => void;
-  onProgress?: ProgressHandler;
+export class BridgeError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "BridgeError";
+  }
 }
 
-interface RpcMessage {
-  type: "ready" | "response" | "progress";
-  id?: string;
-  requestId?: string;
-  result?: unknown;
-  event?: ProgressEvent;
-  error?: {
-    kind?: string;
-    message?: string;
-  };
+function asError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    const code =
+      "code" in error && typeof error.code === "string"
+        ? error.code
+        : "backend_request_failed";
+    return new BridgeError(code, error.message);
+  }
+  return new Error(String(error));
 }
 
-export class SidecarBridge implements Bridge {
-  private child: Child | null = null;
-  private pending = new Map<string, PendingRequest>();
-  private sequence = 0;
-  private buffer = "";
-  private ready: Promise<void> | null = null;
-  private resolveReady: (() => void) | null = null;
-  private rejectReady: ((reason: Error) => void) | null = null;
-
+export class TauriBridge implements Bridge {
   async start(): Promise<void> {
-    if (this.child && this.ready) {
-      return this.ready;
-    }
-    this.ready = new Promise<void>((resolve, reject) => {
-      this.resolveReady = resolve;
-      this.rejectReady = reject;
-    });
-    const command = Command.sidecar("binaries/docflow-sidecar");
-    command.stdout.on("data", (chunk) => this.consume(chunk));
-    command.stderr.on("data", (line) => {
-      console.error(`[docflow-sidecar] ${line}`);
-    });
-    command.on("error", (message) => this.fail(new Error(message)));
-    command.on("close", ({ code, signal }) => {
-      this.fail(
-        new Error(
-          `DocFlow engine stopped unexpectedly (code ${code ?? "none"}, signal ${signal ?? "none"})`,
-        ),
-      );
-    });
-    try {
-      this.child = await command.spawn();
-    } catch (error) {
-      this.fail(error instanceof Error ? error : new Error(String(error)));
-    }
-    const timeout = new Promise<never>((_resolve, reject) => {
-      window.setTimeout(
-        () => reject(new Error("DocFlow engine did not become ready")),
-        120_000,
-      );
-    });
-    return Promise.race([this.ready, timeout]);
+    // Native commands initialize lazily behind the Rust boundary.
   }
 
-  async call<T>(
-    method: string,
-    params: Record<string, unknown> = {},
-    onProgress?: ProgressHandler,
-  ): Promise<T> {
-    await this.start();
-    if (!this.child) {
-      throw new Error("DocFlow engine is not running");
-    }
-    const id = String(++this.sequence);
-    const response = new Promise<T>((resolve, reject) => {
-      this.pending.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
-        onProgress,
-      });
-    });
+  async call<Method extends FrontendMethod>(
+    method: Method,
+    ...args: CommandArgs<Method>
+  ): Promise<CommandResult<Method>> {
+    const [params, onProgress] = args as [
+      CommandParams<Method> | undefined,
+      ProgressHandler | undefined,
+    ];
+    const progress = new Channel<ProgressEvent>();
+    progress.onmessage = (event) => onProgress?.(event);
     try {
-      await this.child.write(`${JSON.stringify({ id, method, params })}\n`);
+      return await invoke<CommandResult<Method>>("frontend_call", {
+        request: { method, params: params ?? {} },
+        onProgress: progress,
+      });
     } catch (error) {
-      this.pending.delete(id);
-      throw error;
+      throw asError(error);
     }
-    return response;
   }
 
   async stop(): Promise<void> {
-    const child = this.child;
-    this.child = null;
-    if (child) {
-      await child.kill().catch(() => undefined);
-    }
-  }
-
-  private consume(chunk: string): void {
-    this.buffer += chunk;
-    const lines = this.buffer.split(/\r?\n/);
-    this.buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        this.route(JSON.parse(line) as RpcMessage);
-      } catch {
-        console.error(`[docflow-sidecar] invalid response: ${line}`);
-      }
-    }
-  }
-
-  private route(message: RpcMessage): void {
-    if (message.type === "ready") {
-      this.resolveReady?.();
-      this.resolveReady = null;
-      this.rejectReady = null;
-      return;
-    }
-    const id =
-      message.type === "progress" ? message.requestId : message.id;
-    if (!id) return;
-    const pending = this.pending.get(id);
-    if (!pending) return;
-    if (message.type === "progress") {
-      if (message.event) pending.onProgress?.(message.event);
-      return;
-    }
-    this.pending.delete(id);
-    if (message.error) {
-      pending.reject(
-        new Error(message.error.message || message.error.kind || "Unknown error"),
-      );
-    } else {
-      pending.resolve(message.result);
-    }
-  }
-
-  private fail(error: Error): void {
-    this.rejectReady?.(error);
-    this.resolveReady = null;
-    this.rejectReady = null;
-    for (const request of this.pending.values()) request.reject(error);
-    this.pending.clear();
-    this.child = null;
+    // The final React surface has no process lifecycle authority.
   }
 }
 
@@ -496,6 +415,15 @@ const defaultPrefs: AppPrefs = {
   compact: false,
 };
 
+function mockPath(value: unknown, fallback: string): string {
+  return value &&
+    typeof value === "object" &&
+    "displayPath" in value &&
+    typeof value.displayPath === "string"
+    ? value.displayPath
+    : fallback;
+}
+
 /** Browser-only bridge used by component tests and visual development. */
 export class MockBridge implements Bridge {
   private auth: AuthState = signedOut;
@@ -505,11 +433,15 @@ export class MockBridge implements Bridge {
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
 
-  async call<T>(
-    method: string,
-    params: Record<string, unknown> = {},
-    onProgress?: ProgressHandler,
-  ): Promise<T> {
+  async call<Method extends FrontendMethod>(
+    method: Method,
+    ...args: CommandArgs<Method>
+  ): Promise<CommandResult<Method>> {
+    const [rawParams, onProgress] = args as [
+      CommandParams<Method> | undefined,
+      ProgressHandler | undefined,
+    ];
+    const params = (rawParams ?? {}) as Record<string, unknown>;
     await new Promise((resolve) => window.setTimeout(resolve, 30));
     let result: unknown;
     switch (method) {
@@ -549,7 +481,6 @@ export class MockBridge implements Bridge {
         result = this.auth;
         break;
       case "auth/loadMe":
-      case "auth/state":
       case "auth/setUsername":
         result = this.auth;
         break;
@@ -572,9 +503,6 @@ export class MockBridge implements Bridge {
       case "auth/setFlags":
         result = { ok: true };
         break;
-      case "settings/get":
-        result = this.prefs;
-        break;
       case "settings/update":
         this.prefs = { ...this.prefs, ...params } as AppPrefs;
         result = this.prefs;
@@ -595,7 +523,7 @@ export class MockBridge implements Bridge {
         const values = params.values as Record<string, unknown>;
         if (params.opId === "files.batch_print") {
           const files = Array.isArray(values.files)
-            ? values.files.map(String)
+            ? values.files.map((value) => mockPath(value, ""))
             : ["/Users/demo/Documents/first.pdf"];
           const rows = files.map((path, index) => ({
             _rowId: `file-${index + 1}`,
@@ -750,7 +678,10 @@ export class MockBridge implements Bridge {
             steps: [
               {
                 kind: "workbook_update",
-                src: String(values.workbook || "/Users/demo/Documents/RFI Log.xlsx"),
+                src: mockPath(
+                  values.workbook,
+                  "/Users/demo/Documents/RFI Log.xlsx",
+                ),
                 dst: "/Users/demo/Documents/.docflow-backups/RFI Log.xlsx",
                 noteKey: "note.rfi.workbookUpdate",
                 meta: {},
@@ -767,8 +698,8 @@ export class MockBridge implements Bridge {
           steps: [
             {
               kind: "move",
-              src: `${String(values.source || "/Scans")}/20260718_163146.PDF`,
-              dst: `${String(values.dest || "/RFI")}/RFI-CIV-0064/RFI-CIV-0064-R0.pdf`,
+              src: `${mockPath(values.source, "/Scans")}/20260718_163146.PDF`,
+              dst: `${mockPath(values.dest, "/RFI")}/RFI-CIV-0064/RFI-CIV-0064-R0.pdf`,
               noteKey: "note.renamed",
               meta: { confidence: 1 },
             },
@@ -798,12 +729,14 @@ export class MockBridge implements Bridge {
       case "engine/reviewScan":
         result = [
           {
+            selectionId: "demo-review-item-1",
             path: "/RFI/_review/scan-01.pdf",
             name: "scan-01.pdf",
             code: "RFI-CIV-0064",
             targetExists: false,
           },
           {
+            selectionId: "demo-review-item-2",
             path: "/RFI/_review/scan-02.pdf",
             name: "scan-02.pdf",
             code: "",
@@ -841,24 +774,79 @@ export class MockBridge implements Bridge {
           online: true,
           rows: [
             {
-              when: new Date().toISOString(),
+              when: "2026-08-24T00:00:00Z",
               opId: demoOperation.id,
               moves: 4,
               failed: 0,
-              journalId: "demo-journal",
+              journalId: "local-1",
               steps: null,
-              cloudId: "demo-cloud",
+              cloudId: "cloud-1",
               undone: false,
+              undoAvailable: true,
               fromCloud: true,
               userEmail: demoAdmin.email,
+            },
+            {
+              when: "2026-08-23T00:00:00Z",
+              opId: demoOperation.id,
+              moves: 1,
+              failed: 0,
+              journalId: "remote-only",
+              steps: null,
+              cloudId: "cloud-2",
+              undone: false,
+              undoAvailable: false,
+              fromCloud: true,
+              userEmail: "other@docflow.local",
             },
           ],
         } satisfies HistoryPayload;
         break;
+      case "paths/select": {
+        const multiple = params.paramName === "files";
+        const paths = multiple
+          ? [
+              "/Users/demo/Documents/first.pdf",
+              "/Users/demo/Documents/second.docx",
+            ]
+          : [
+              params.paramName === "workbook"
+                ? "/Users/demo/Documents/RFI Log.xlsx"
+                : "/Users/demo/Documents/DocFlow",
+            ];
+        result = paths.map((displayPath, index) => ({
+          selectionId: `demo-selection-${String(params.paramName)}-${index}`,
+          displayPath,
+          name: displayPath.split(/[\\/]/).pop() ?? displayPath,
+        })) satisfies PathSelection[];
+        break;
+      }
+      case "paths/reveal":
+        result = { ok: true };
+        break;
+      case "recovery/list":
+        result = {
+          journals: [
+            {
+              journalId: "demo-recovery-journal",
+              disposition: "outcome_unknown",
+            },
+          ],
+          printQueue: {
+            queueId: "demo-recovery-queue",
+            status: "paused",
+            createdAt: "2026-08-24T00:00:00Z",
+            updatedAt: "2026-08-24T00:01:00Z",
+            counts: { uncertain: 1 },
+            resumable: 1,
+            fileCount: 1,
+          },
+        } satisfies RecoveryPayload;
+        break;
       default:
-        throw new Error(`Mock method not implemented: ${method}`);
+        throw new Error(`Mock method not implemented: ${String(method)}`);
     }
-    return result as T;
+    return result as CommandResult<Method>;
   }
 }
 
@@ -867,7 +855,7 @@ let sharedBridge: Bridge | null = null;
 export function getBridge(): Bridge {
   if (!sharedBridge) {
     sharedBridge = window.__TAURI_INTERNALS__
-      ? new SidecarBridge()
+      ? new TauriBridge()
       : new MockBridge();
   }
   return sharedBridge;

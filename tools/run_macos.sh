@@ -3,20 +3,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON="${DOCFLOW_PYTHON:-python3.12}"
 
 cd "$ROOT"
-
-if [[ ! -x .venv/bin/python ]]; then
-  "$PYTHON" -m venv .venv
-  .venv/bin/python -m pip install -r requirements-dev.txt
-  .venv/bin/python -m pip install -e .
-fi
 
 if [[ ! -d node_modules ]]; then
   npm ci
 fi
 
-.venv/bin/python tools/version_manager.py check
-.venv/bin/python tools/build_sidecar.py
+node tools/version_manager.mjs check
+node tools/package_audit.mjs source
+if [[ ! -x src-tauri/resources/tesseract/tesseract ]]; then
+  ./tools/stage_tesseract_macos.sh
+fi
 exec npm run tauri dev

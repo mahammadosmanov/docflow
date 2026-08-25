@@ -11,10 +11,8 @@ Current product version: **0.6.0**. `VERSION` is authoritative.
 ## Problem
 
 Manual construction-document work is repetitive and error-prone: scans must be
-identified, files renamed and organized, Excel registers updated without
-breaking workbook behavior, print batches kept in order, and every change made
-recoverable. Existing general-purpose tools do not preserve one reviewable plan
-and one undo trail across those operations.
+identified, files renamed and organized, Excel registers updated without breaking
+workbook behavior, print batches kept in order, and every change recoverable.
 
 ## Users
 
@@ -32,6 +30,7 @@ and one undo trail across those operations.
 6. The webview never receives Supabase tokens or arbitrary filesystem/network authority.
 7. All user-visible strings exist in Turkish, English, Russian, and Azerbaijani.
 8. The UI is monochrome; meaning is conveyed by words, icons, controls, and border weight.
+9. Cloud history is audit metadata only; only a validated local journal can authorize undo.
 
 ## Current capabilities
 
@@ -48,7 +47,9 @@ and one undo trail across those operations.
 ## Non-goals
 
 - No paid SaaS dependency is required to build, track, or release the project.
-- No document processing in React, Rust, or the webview.
+- No document processing, filesystem authority, credentials, arbitrary network access,
+  shell access, or process control in React or the webview.
+- No embedded interpreter, application sidecar, or second mutation backend.
 - No silent auto-correction when source evidence is ambiguous.
 - No destructive delete or destination overwrite.
 - No unsupported claim that authentication prevents local binary modification.
@@ -58,18 +59,23 @@ and one undo trail across those operations.
 - Representative OCR calibration remains at least 95% accurate.
 - Preview never changes source or destination state.
 - Apply/undo returns the test fixture to its original hash when no later user edit exists.
-- Every release passes Python tests/mypy, frontend tests/build, Rust check, sidecar smoke,
-  and packaged real-OCR smoke on Windows.
+- Source, frontend, Rust, license, package-content, packaged operation, and
+  platform packaging gates pass after the final edit.
+- Package inspection proves that no retired application runtime, library,
+  frozen-runtime artifact, bytecode, or sidecar is bundled.
+- Windows host, Office, printer, live-service, signing, and notarization evidence
+  is reported separately and never inferred from a macOS or cross-compile result.
 - Every release is discoverable through `releases.json`, `CHANGELOG.md`, a Git tag,
   and (for distributed builds) a GitHub Release.
 
 ## Source-of-truth order
 
-1. `CLAUDE.md` non-negotiable engineering rules
+1. Root and nearest nested `AGENTS.md` engineering rules
 2. This product contract and accepted architecture decisions
-3. Protocol/contracts and safety tests
-4. Release/version metadata and CI evidence
-5. Roadmap and GitHub Issues
+3. `docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`
+4. Protocol/contracts and safety tests
+5. Release/version metadata and CI evidence
+6. Roadmap and GitHub Issues
 
-When sources disagree, stop the change and reconcile the documents and tests in
-the same pull request.
+When sources disagree, stop the change and reconcile documents and tests in the
+same pull request.

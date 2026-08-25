@@ -1,46 +1,52 @@
 # Stack migration decision
 
-## Why this stack
+## Decision
 
-The first migration to a single PySide6 process simplified the architecture,
-but it made pixel-accurate product UI slower to iterate and the result did not
-meet the product's visual bar. The document engine itself remained reliable.
+DocFlow uses a thin React/Vite presentation layer and a Rust/Tauri trusted
+application authority. The staged migration approved on 2026-08-24 is source-complete:
+all React-reachable commands, plans, mutations, journals, document operations,
+credentials, cloud calls, and platform adapters are Rust-owned.
+
+The former application-sidecar runtime, child-process router, shell plugin,
+external-binary packaging, manifests, application sources, and repository tools
+were retired only after operation parity and safety gates had passed. Compatibility
+fixtures remain under `src-tauri/tests/fixtures/` as inert test data.
+
+## Historical alternatives
 
 | Option | Decision |
 |---|---|
-| Flutter + Python | Rejected: duplicated Dart/Python contracts and heavier UI toolchain |
-| PySide6 | Retired: robust native widgets, but slower product-UI iteration |
-| Electron + React | Rejected: capable, but much larger runtime and memory floor |
-| Full Rust native | Rejected: rewrites proven OCR and document behavior |
-| Tauri 2 + React/TS + Python engine | Selected: lean native shell, fast UI work, preserves the mature engine |
+| Flutter plus a second backend runtime | Rejected: duplicated contracts and heavier UI toolchain |
+| PySide6 | Retired: robust widgets, slower product-UI iteration |
+| Electron + React | Rejected: larger runtime and memory floor |
+| Rust-native UI | Rejected: unnecessary React rewrite and document-engine coupling |
+| Tauri + React + permanent application sidecar | Superseded 2026-08-24: startup/package overhead and duplicated backend maintenance |
+| Tauri + React + Rust authority | Accepted and implemented |
 
-## Resulting stack
+## Completed migration sequence
 
-- Tauri 2 with least-privilege shell/dialog/opener plugins
-- React 19, TypeScript, Vite, and Lucide icons
-- existing Python 3.12+ engine, PyMuPDF, OpenCV, and pytesseract
-- standard-library HTTPS for the existing Supabase contracts
-- PyInstaller one-file sidecar plus Tauri native installers
+1. Froze canon, contracts, representative fixtures, and performance baselines.
+2. Moved routing, bootstrap, authentication, cloud, and security boundaries to Rust.
+3. Added immutable plans, grants, journals, recovery, and compatibility harnesses.
+4. Migrated deterministic parsers, preferences, history, review, and queues.
+5. Proved filesystem mutations in isolated adversarial fixtures.
+6. Migrated OCR and Process Scans.
+7. Migrated OOXML/RFI Log, email extraction, and clipboard output.
+8. Migrated signed-page PDF staging.
+9. Migrated printer submission and queue recovery.
+10. Removed the retired runtime and replaced version, release, checksum, license,
+    source-audit, package-audit, and packaged-smoke tooling without it.
 
-The sidecar is a deliberate domain boundary, not a local web service. It
-retains the Python OCR ecosystem and keeps credentials/filesystem authority out
-of the webview. The UI uses a small typed bridge and schema-generated forms.
+## Compatibility and certification boundary
 
-## Functionality retained
+- Settings, journals, trash, print queues, protocol-1 DTOs, operation IDs, and
+  Supabase schemas remain compatible.
+- Cloud history remains metadata-only; local validated journals alone authorize undo.
+- macOS local/package evidence and Windows cross-compile evidence cannot certify
+  Windows installer execution, Office/Excel COM, or physical/network printers.
+- Live Supabase policy, signing, and notarization require external credentials and
+  are explicit separate gates.
 
-- all DocFlow 0.5.4 operations: Process Scans, multi-sheet RFI Log Add, and
-  ordered mixed-file Batch Print
-- editable RFI table preview, workbook backup/restore, and Excel-native copy
-- offline or optional Gemini-assisted RFI email extraction
-- email or username sign-in, account creation, approval gate
-- administrator access controls and username changes
-- schema-driven operation forms and remembered values
-- progress, warnings, exact preview, apply result, journal, undo
-- review keep/put/recoverable-delete workflow
-- cloud history with local fallback and both undo destinations
-- Turkish, English, Russian, and Azerbaijani catalogs
-- system/light/dark, font, scaling, and compact density preferences
-- Windows Tesseract packaging and real OCR smoke validation
-
-Existing settings, sessions, journals, trash, and Supabase rows are compatible.
-The Flutter and Qt sources remain under ignored `legacy/` only for rollback.
+The detailed approved design and historical gates remain in
+`docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`. The Flutter and
+Qt sources under ignored `legacy/` remain read-only rollback material.

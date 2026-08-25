@@ -24,9 +24,11 @@ entries are historical unless explicitly marked `supported`.
 ## Security boundaries
 
 - Supabase service-role/secret keys are forbidden in desktop code.
-- Access/refresh tokens remain in the Python sidecar and never cross to the webview.
+- Access/refresh tokens remain in Windows Credential Manager or macOS Keychain and
+  never cross to the webview.
 - Local authentication is a UI gate; server RLS is the cloud authorization boundary.
-- Local session persistence is not an OS keychain and must not be described as one.
+- A verified one-time legacy import removes plaintext token fields after secure-store
+  readback; downgrade requires sign-in again.
 - Filesystem mutations require approved plans and journals; existing destinations
   are never overwritten.
 

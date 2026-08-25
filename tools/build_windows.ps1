@@ -57,6 +57,54 @@ function Assert-WindowsGuiExecutable {
     }
 }
 
+function Assert-TesseractResourceEvidence {
+    param([Parameter(Mandatory = $true)][string]$Root)
+
+    $nativeLibraries = @(Get-ChildItem $Root -Recurse -File -Filter "*.dll")
+    if ($nativeLibraries.Count -eq 0) {
+        throw "The staged Tesseract resource has no native dependency DLLs."
+    }
+
+    $licenseFiles = @(
+        Get-ChildItem $Root -Recurse -File |
+            Where-Object { $_.Name -match "^(LICENSE|COPYING|NOTICE)(\.|$)" }
+    )
+    if ($licenseFiles.Count -eq 0) {
+        throw "The staged Tesseract resource has no license evidence."
+    }
+    $rejectedNames = $licenseFiles |
+        Where-Object { $_.Name -match "AGPL|Affero|commercial" }
+    $spdxFiles = @(Get-ChildItem $Root -Recurse -File -Filter "*.spdx.json")
+    $rejectedSpdx = @()
+    if ($spdxFiles.Count -gt 0) {
+        $rejectedSpdx = $spdxFiles |
+            Select-String -Pattern '"license(Concluded|Declared)"\s*:\s*"[^"]*(AGPL|Affero|LicenseRef-commercial)' -CaseSensitive:$false
+    }
+    if ($rejectedNames -or $rejectedSpdx) {
+        throw "The staged Tesseract resource contains rejected AGPL/commercial license evidence."
+    }
+}
+
+function Write-ResourceChecksums {
+    param([Parameter(Mandatory = $true)][string]$Root)
+
+    $checksumPath = Join-Path $Root "SHA256SUMS"
+    $lines = @(
+        Get-ChildItem $Root -Recurse -File |
+            Where-Object { $_.FullName -ne $checksumPath } |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relative = [System.IO.Path]::GetRelativePath($Root, $_.FullName).Replace("\", "/")
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  ./$relative"
+            }
+    )
+    if ($lines.Count -eq 0) {
+        throw "The staged Tesseract resource is empty."
+    }
+    $lines | Set-Content -LiteralPath $checksumPath -Encoding ascii
+}
+
 function Resolve-TesseractDirectory {
     param([string]$RequestedPath)
 
@@ -96,33 +144,24 @@ For a custom installation, pass -TesseractPath C:\path\to\Tesseract-OCR.
 Push-Location $ProjectRoot
 try {
     $npm = Resolve-RequiredCommand "npm.cmd"
+    $node = Resolve-RequiredCommand "node.exe"
     $cargo = Resolve-RequiredCommand "cargo.exe"
 
-    $pythonCommand = Get-Command "python.exe" -ErrorAction SilentlyContinue
-    $pythonPrefix = @()
-    if ($pythonCommand) {
-        $python = $pythonCommand.Source
-    } else {
-        $python = Resolve-RequiredCommand "py.exe"
-        $pythonPrefix = @("-3.12")
-    }
-
-    Invoke-Checked $python ($pythonPrefix + @("-c", "import sys; assert sys.version_info >= (3, 12), sys.version")) "Check Python 3.12+"
     Invoke-Checked $cargo @("--version") "Check Rust"
 
     if (-not $SkipInstall) {
-        Invoke-Checked $python ($pythonPrefix + @("-m", "pip", "install", "--upgrade", "pip")) "Update pip"
-        Invoke-Checked $python ($pythonPrefix + @("-m", "pip", "install", "-r", "requirements-dev.txt")) "Install Python dependencies"
-        Invoke-Checked $python ($pythonPrefix + @("-m", "pip", "install", "-e", ".")) "Install DocFlow engine"
         Invoke-Checked $npm @("ci") "Install frontend dependencies"
     }
 
     if (-not $SkipTests) {
-        Invoke-Checked $python ($pythonPrefix + @("tools/version_manager.py", "check")) "Check version contract"
-        Invoke-Checked $python ($pythonPrefix + @("-m", "pytest")) "Run Python tests"
-        Invoke-Checked $python ($pythonPrefix + @("-m", "mypy", "src/docflow")) "Run Python type checks"
-        Invoke-Checked $npm @("test") "Run interface tests"
-        Invoke-Checked $npm @("run", "build") "Build the interface"
+        Invoke-Checked $node @("tools/version_manager.mjs", "check") "Check version contract"
+        Invoke-Checked $node @("tools/package_audit.mjs", "source") "Reject removed runtime source"
+        Invoke-Checked $npm @("test") "Run Node and interface tests"
+        Invoke-Checked $npm @("run", "build") "Build the interface and verify final source"
+        Invoke-Checked $cargo @("fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check") "Check Rust formatting"
+        Invoke-Checked $cargo @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings") "Lint the Rust backend"
+        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml") "Test the Rust backend"
+        Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Rust backend"
     }
 
     $tesseractDir = Resolve-TesseractDirectory $TesseractPath
@@ -141,24 +180,26 @@ try {
     if (-not (Test-Path $englishData -PathType Leaf)) {
         throw "The staged English OCR data is missing."
     }
-
-    Invoke-Checked $python ($pythonPrefix + @("tools/build_sidecar.py")) "Build the Python sidecar"
-    $sidecar = Get-ChildItem "src-tauri\binaries\docflow-sidecar-*.exe" |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-    if (-not $sidecar) {
-        throw "The Windows sidecar was not produced."
-    }
-
-    if (-not $SkipTests) {
-        Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Tauri shell"
-    }
-
-    Invoke-Checked $sidecar.FullName @("--ping") "Smoke-test the sidecar"
-    $env:DOCFLOW_TESSERACT = (Resolve-Path $bundledTesseract).Path
-    Invoke-Checked $python ($pythonPrefix + @("tools/ci_ocr_smoke.py", $sidecar.FullName)) "Run packaged OCR smoke test"
+    Assert-TesseractResourceEvidence $ResourceDir
+    Write-ResourceChecksums $ResourceDir
+    Invoke-Checked $node @("tools/license_audit.mjs", "--target", "x86_64-pc-windows-msvc") "Audit locked dependency and OCR licenses"
     Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis") "Build the Windows installer"
-    Assert-WindowsGuiExecutable "src-tauri\target\release\docflow.exe"
+    $application = "src-tauri\target\release\docflow.exe"
+    Assert-WindowsGuiExecutable $application
+
+    $smokeReport = Join-Path ([System.IO.Path]::GetTempPath()) "docflow-package-smoke-$([guid]::NewGuid()).json"
+    try {
+        Invoke-Checked (Resolve-Path $application).Path @(
+            "--package-smoke",
+            $smokeReport,
+            "--tesseract",
+            (Resolve-Path $bundledTesseract).Path
+        ) "Run Rust packaged bootstrap/settings/OCR/apply/undo smoke"
+        Get-Content -LiteralPath $smokeReport
+    }
+    finally {
+        Remove-Item -LiteralPath $smokeReport -Force -ErrorAction SilentlyContinue
+    }
 
     $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" |
         Sort-Object LastWriteTime -Descending |
@@ -166,9 +207,12 @@ try {
     if (-not $installer) {
         throw "The NSIS installer was not produced."
     }
+    Invoke-Checked $node @("tools/package_audit.mjs", "package", $installer.FullName) "Audit the NSIS artifact name and linked payload"
+    Invoke-Checked $node @("tools/checksum.mjs", $installer.FullName) "Create the NSIS SHA-256 checksum"
 
     Write-Host "`nWindows installer ready:"
     Write-Host $installer.FullName -ForegroundColor Green
+    Write-Host "$($installer.FullName).sha256" -ForegroundColor Green
 }
 finally {
     Pop-Location

@@ -86,6 +86,10 @@ grant execute on function public.is_allowed() to authenticated;
 -- pgcrypto: Supabase'de genelde 'extensions' semasinda hazir gelir.
 create extension if not exists pgcrypto with schema extensions;
 
+-- Eski surumlerde anon'a acilan parola-denetleyen giris RPC'sini onarici
+-- calistirmalarda da kaldir; kullanici adiyla giris guvenle desteklenmiyor.
+drop function if exists public.email_for_login(text, text);
+
 -- Kullanici adi kurallari TEK YERDE (sunucu). Istemci ayni kurali gosterir ama
 -- zorlayan burasi — istemci dogrulamasi bir kolayliktir, guvenlik degil.
 create or replace function public.username_ok(p text)
@@ -106,30 +110,6 @@ returns boolean language sql security definer stable set search_path = '' as $$
        select 1 from public.app_users
         where lower(username) = lower(trim(p_username))
      )
-$$;
-
--- Kullanici adi ile giris.
---
--- NEDEN PAROLA DA ALIYOR: Supabase e-posta ile kimlik dogrular, yani istemcinin
--- username -> email cevirmesi lazim. Duz bir email_for_username(text) fonksiyonu
--- HERKESE ekibin e-postalarini acardi — publishable key uygulamanin ICINDE
--- geliyor, yani "gizli" degil; adres toplamak icin tek bir istek yeterdi.
--- Bu yuzden parolayi Postgres icinde dogruluyoruz (bcrypt, auth.users) ve
--- e-postayi SADECE parola dogruysa donuyoruz. Yanlis parola/olmayan ad -> null,
--- yani ikisi disaridan ayirt edilemez.
---
--- Kirilganlik (durustce): auth.users.encrypted_password Supabase'in IC semasi.
--- Supabase hash yontemini degistirirse bu fonksiyon null donmeye baslar ve
--- kullanici adiyla giris bozulur — E-POSTA ILE GIRIS calismaya devam eder.
-create or replace function public.email_for_login(p_username text, p_password text)
-returns text language sql security definer stable set search_path = '' as $$
-  select u.email
-    from public.app_users au
-    join auth.users u on u.id = au.id
-   where lower(au.username) = lower(trim(p_username))
-     and u.encrypted_password is not null
-     and u.encrypted_password = extensions.crypt(p_password, u.encrypted_password)
-   limit 1
 $$;
 
 -- Kendi kullanici adini degistir.
@@ -158,13 +138,11 @@ begin
 end $$;
 
 revoke all on function public.username_available(text) from public;
-revoke all on function public.email_for_login(text, text) from public;
 revoke all on function public.set_username(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
-grant execute on function public.email_for_login(text, text) to anon;
 grant execute on function public.set_username(text) to authenticated;
 
--- Giris YAPMAMIS kullanici bu iki fonksiyonu cagirabilmeli (kayit + giris).
+-- Giris YAPMAMIS kullanici kayit sirasinda username_available cagirabilmeli.
 -- Supabase varsayilani zaten boyle; asagida history icin anon'dan TABLO
 -- yetkileri aliniyor — bu satir onunla karistirilmasin: sema kullanimi ayri sey.
 grant usage on schema public to anon;
@@ -180,8 +158,7 @@ grant select, update on public.app_users to authenticated;
 -- olarak kalirdi ve kullanici listesi anon'a acilirdi. Iki kilit, tek anahtar degil.
 -- Not: Supabase yeni public tablolara anon icin varsayilan SELECT verir; bu satir
 -- olmadan app_users anon'a 200 [] doner (404/401 degil) — yani tablo VAR bilgisi
--- de sizar. username_available/email_for_login SECURITY DEFINER oldugu icin
--- bundan etkilenmez.
+-- de sizar. username_available SECURITY DEFINER oldugu icin bundan etkilenmez.
 revoke all on public.app_users from anon;
 
 drop policy if exists app_users_select on public.app_users;
@@ -241,7 +218,9 @@ drop policy if exists history_anon_select on public.history;
 drop policy if exists history_anon_insert on public.history;
 drop policy if exists history_anon_update on public.history;
 revoke select, insert, update on public.history from anon;
-grant select, insert, update on public.history to authenticated;
+revoke all on public.history from authenticated;
+grant select, insert on public.history to authenticated;
+grant update (undone) on public.history to authenticated;
 
 drop policy if exists history_select_allowed on public.history;
 create policy history_select_allowed on public.history for select to authenticated
@@ -251,13 +230,19 @@ drop policy if exists history_insert_allowed on public.history;
 create policy history_insert_allowed on public.history for insert to authenticated
   with check (
     (select public.is_allowed())
-    and (user_id is null or user_id = (select auth.uid()))
+    and user_id = (select auth.uid())
   );
 
 drop policy if exists history_update_allowed on public.history;
 create policy history_update_allowed on public.history for update to authenticated
-  using ( (select public.is_allowed()) )
-  with check ( (select public.is_allowed()) );
+  using (
+    (select public.is_allowed())
+    and user_id = (select auth.uid())
+  )
+  with check (
+    (select public.is_allowed())
+    and user_id = (select auth.uid())
+  );
 
 -- ---------------------------------------------------------------- BOOTSTRAP
 -- 1) Bu dosyanin TAMAMINI calistir. Tekrar calistirmak GUVENLI ve onaricidir
@@ -269,7 +254,9 @@ create policy history_update_allowed on public.history for update to authenticat
 --    ekibin kayitlarini ongorulemez sekilde bozar.
 -- 3) Uygulamayi ac -> "Hesap oluştur" -> e-posta + kullanici adi + parola.
 --    "Onay bekleniyor" ekranini goreceksin. DOGRUSU BU: herkes allowed = false
---    baslar, sahibi dahil.
+--    baslar, sahibi dahil. Sonraki girislerde e-posta adresini kullan;
+--    guvenli, sunucu-tarafi hiz sinirli bir altyapi olmadan kullanici adiyla
+--    giris bilerek desteklenmez.
 -- 4) Kendini onayla + admin yap:
 --
 --   update public.app_users set allowed = true, is_admin = true

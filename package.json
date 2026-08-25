@@ -5,19 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config frontend/vite.config.ts",
-    "build": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
+    "build": "npm run audit:source && npm run build:frontend",
+    "build:frontend": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
     "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1",
-    "test": "vitest run --config frontend/vite.config.ts",
+    "test": "node --test tools/*.test.mjs && vitest run --config frontend/vite.config.ts",
     "test:watch": "vitest --config frontend/vite.config.ts",
-    "version:check": "python tools/version_manager.py check",
-    "versions": "python tools/version_manager.py list",
+    "version:check": "node tools/version_manager.mjs check",
+    "versions": "node tools/version_manager.mjs list",
+    "audit:source": "node tools/package_audit.mjs source",
+    "audit:licenses": "node tools/license_audit.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
-    "@tauri-apps/plugin-dialog": "2.7.2",
-    "@tauri-apps/plugin-opener": "2.5.4",
-    "@tauri-apps/plugin-shell": "2.3.5",
     "lucide-react": "1.32.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"

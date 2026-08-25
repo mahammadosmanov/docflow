@@ -1,82 +1,82 @@
 # Release safety
 
-This document defines the gates that prevent one DocFlow feature or packaging
-change from silently breaking another.
-
 ## Release invariants
 
-1. Only `.github/workflows/windows-release.yml` and `tools/build_windows.ps1`
-   define a distributable Windows build.
-2. Python, Node, Rust lockfiles, Tesseract, and direct application dependencies
-   remain pinned. Dependency upgrades are separate reviewed changes.
-3. Tesseract and the Python sidecar are bundled; user `PATH` is not trusted.
-4. Preview must not mutate files. Packaged OCR smoke verifies source/destination
-   state as well as extraction output.
-5. `ping` alone is insufficient: tests verify the complete operation ID set,
-   version contract, and real image-only OCR path.
-6. A release tag must equal `v` plus the exact canonical `VERSION`.
+1. `.github/workflows/windows-release.yml` and `tools/build_windows.ps1` define
+   the distributable Windows build.
+2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
+3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
+4. Preview does not mutate files; packaged smoke verifies source/destination state.
+5. Bootstrap, the exact four-operation registry, settings, real image-only OCR,
+   apply, journal, and undo are exercised beyond a process-start check.
+6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
    are never overwritten.
+8. Source and package audits reject retired application runtimes, sidecars,
+   bytecode, frozen-runtime artifacts, and shell/external-binary configuration.
 
-## Required gates
+## Required source gates
 
 ```bash
-python tools/version_manager.py check
-.venv/bin/python -m pytest
-.venv/bin/python -m mypy src/docflow
+node tools/version_manager.mjs check
+node tools/package_audit.mjs source
 npm test
 npm run build
-python tools/build_sidecar.py
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
+npm run audit:licenses
 ```
 
-On Windows, the canonical release command is:
+## Package gates
 
-```powershell
-./tools/build_windows.ps1
-```
+For each host package:
 
-It additionally stages pinned Tesseract, freezes and smoke-tests the sidecar,
-runs real packaged OCR, builds the NSIS installer, and verifies that the app is
-a GUI executable without a companion console window.
+1. Build from the verified source and locked dependencies.
+2. Audit the complete installed/bundle tree with
+   `node tools/package_audit.mjs package <path>`.
+3. Run `<packaged-executable> --package-smoke <new-report.json>`.
+4. Launch the normal GUI and verify it remains alive through bootstrap.
+5. Record package size, cold startup, peak memory, bootstrap/settings, first OCR,
+   and representative operation timing against any available recorded baseline.
+6. Create SHA-256 files with `node tools/checksum.mjs <artifact...>`.
+7. Preserve the dependency-license report and OCR checksum/license evidence.
+
+On Windows the canonical command is `./tools/build_windows.ps1`; the Actions
+workflow then performs silent clean install, packaged smoke, installed-tree audit,
+and silent uninstall on a real Windows runner.
 
 ## Regression matrix
 
 | Area | Mandatory evidence | Risk controlled |
 |---|---|---|
-| Version contract | `version_manager.py check` | Mixed UI/sidecar/installer versions |
-| Process Scans | parser/OCR unit tests + image-only smoke | OCR drift, false labels, missing engine/data |
-| Signed pages | rotated/cropped PDF tests | Archive mutation, wrong page geometry, partial output |
-| RFI Log | workbook/OOXML tests | Formula, validation, style, lock, and repair damage |
-| Batch Print | queue/spooler tests | Order loss, duplicated jobs, unrecoverable resume state |
-| Operation registry | exact operation ID test | Feature omitted from frozen sidecar |
+| Version contract | Node version check | Mixed UI/installer versions |
+| Process Scans | parser/OCR tests + image-only packaged smoke | OCR drift, false labels, missing engine/data |
+| Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
+| RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |
+| Batch Print | fake-adapter queue/spooler tests | Order loss, duplicated jobs, uncertain recovery |
+| Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |
 | Localization | four-catalog key equality | Raw keys or missing language strings |
-| Security boundary | sidecar/bridge tests | Tokens or authority crossing into webview |
-| Package | sidecar smoke + OCR smoke + NSIS build | Source/package behavior mismatch |
+| Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
+| Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
 
-## Release procedure
+## External certification gates
 
-1. Start from a clean, reviewed commit on `main`.
-2. Complete the version/changelog/catalog steps in `docs/VERSIONING.md`.
-3. Run all local gates after the final edit.
-4. Tag the exact commit `v$VERSION`; never move or reuse a published tag.
-5. Push the tag and inspect the Windows workflow result.
-6. Confirm the release contains both the installer and its generated `.sha256`
-   asset; verify the checksum before running the installer.
-7. Keep the previous GitHub Release available until the new installer has been
-   manually opened and the critical workflow smoke-tested on Windows.
-8. If any gate fails, do not publish or relabel the build as stable.
+These are never implied by source, macOS, or cross-compile success:
 
-## Rollback
+- Windows clean-machine installer/startup/uninstall execution (automated in CI,
+  but still pending until a workflow run from the exact source succeeds)
+- Microsoft Office open/recalculate, Excel COM, and Excel-native clipboard
+- Microsoft Print to PDF and representative physical/network printers
+- live Supabase RLS deployment and two-user verification
+- signing and macOS notarization with authorized credentials
 
-- Code rollback: redeploy/reinstall the last verified immutable tag.
-- Document rollback: use the operation journal; never replace it with a source-code rollback.
-- Release metadata rollback: mark the bad release superseded/yanked in notes;
-  do not delete history or retarget its tag.
-- Partial local builds are staged separately and never copied over a working install.
+## Release and rollback
 
-## Budget boundary
-
-The safety model does not require paid infrastructure. Local scripts provide the
-same checks as CI. GitHub Actions and Releases are convenient mirrors; when free
-quota is exhausted, releases wait rather than skipping gates or incurring cost.
+Start from a clean reviewed commit, complete version/catalog notes, run all
+applicable gates after the final edit, and never reuse a published tag. Verify
+checksums before installation. Keep the previous verified release available until
+the new package passes its host gates. Roll back code by reinstalling the prior
+immutable tag and documents through their journals; never substitute source-code
+rollback for document undo.

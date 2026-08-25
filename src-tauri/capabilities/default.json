@@ -4,21 +4,6 @@
   "description": "Least-privilege access for the DocFlow main window",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "dialog:allow-open",
-    "dialog:allow-message",
-    "dialog:allow-confirm",
-    "opener:allow-open-path",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "binaries/docflow-sidecar",
-          "sidecar": true
-        }
-      ]
-    },
-    "shell:allow-stdin-write",
-    "shell:allow-kill"
+    "core:default"
   ]
 }

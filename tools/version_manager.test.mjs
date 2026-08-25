@@ -1,0 +1,86 @@
+import assert from "node:assert/strict";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import test from "node:test";
+
+import {
+  canonicalVersion,
+  manifestVersions,
+  parseVersion,
+  releaseNotes,
+  setVersion,
+  validateRepository,
+} from "./version_manager.mjs";
+
+const root = resolve(new URL("..", import.meta.url).pathname);
+
+function repositoryFixture() {
+  const temporary = mkdtempSync(join(tmpdir(), "docflow-version-"));
+  for (const path of [
+    "VERSION",
+    "package.json",
+    "package-lock.json",
+    "releases.json",
+    "CHANGELOG.md",
+    "src-tauri/Cargo.toml",
+    "src-tauri/Cargo.lock",
+    "src-tauri/tauri.conf.json",
+  ]) {
+    cpSync(join(root, path), join(temporary, path), { recursive: true });
+  }
+  return temporary;
+}
+
+test("repository version contract is consistent without Python manifests", () => {
+  assert.deepEqual(validateRepository(root), []);
+  const version = canonicalVersion(root);
+  for (const manifestVersion of Object.values(manifestVersions(root))) {
+    assert.equal(manifestVersion, version);
+  }
+});
+
+test("set updates every remaining runtime manifest", () => {
+  const fixture = repositoryFixture();
+  try {
+    setVersion(fixture, "1.2.3-rc.1");
+    assert.equal(canonicalVersion(fixture), "1.2.3-rc.1");
+    assert.deepEqual(new Set(Object.values(manifestVersions(fixture))), new Set(["1.2.3-rc.1"]));
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("SemVer rejects numeric prerelease identifiers with leading zeroes", () => {
+  assert.throws(() => parseVersion("1.2.3-rc.01"), /leading zeroes/);
+  assert.deepEqual(parseVersion("1.2.3-rc.1").prerelease, ["rc", "1"]);
+});
+
+test("validation rejects mismatched catalog tags and impossible dates", () => {
+  const fixture = repositoryFixture();
+  try {
+    const registryPath = join(fixture, "releases.json");
+    const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+    const current = registry.releases.find((release) => release.status === "current");
+    current.tag = "v9.9.9";
+    current.date = "2026-02-31";
+    writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+    const errors = validateRepository(fixture).join("\n");
+    assert.match(errors, /does not identify/);
+    assert.match(errors, /invalid date/);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("release notes never include neighboring sections", () => {
+  const notes = releaseNotes(root, canonicalVersion(root));
+  assert.ok(notes.length > 0);
+  assert.doesNotMatch(notes, /^##\s+/mu);
+});

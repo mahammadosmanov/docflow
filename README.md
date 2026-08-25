@@ -1,99 +1,98 @@
 # DocFlow
 
-DocFlow 0.6.0 keeps all three original RFI workflow operations and adds a safe
-signed-page staging workflow:
+DocFlow 0.6.0 is a Tauri 2 desktop application for four high-risk document
+workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
 - Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe
   workbook backup/verification, email extraction, and Excel-native mail copy
 - Batch Print: one strictly ordered Windows print queue for mixed file types
 - Stage signed RFI first pages: identify signed scans, keep the archive strictly
-  read-only, and create review copies in the original folder structure with only
-  page one replaced
+  read-only, and create review copies with only page one replaced
 
-The active desktop stack is intentionally small at the product layer:
+The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
+TypeScript presentation layer. Tesseract and operating-system document/print
+adapters are loaded only when needed. There is no application sidecar, embedded
+interpreter, or local server.
 
-- Tauri 2 for the native window, lifecycle, dialogs, and packaging
-- React 19 + TypeScript for the schema-driven interface
-- the proven Python engine for PDF/OCR, filesystem safety, Supabase, and undo
-- a private JSON-lines sidecar channel; no local server and no exposed port
-
-The webview never receives Supabase access/refresh tokens and cannot directly
-touch arbitrary files. All document changes remain preview-first and journaled.
+The webview never receives Supabase tokens and cannot directly touch arbitrary
+files. All document changes remain preview-first, explicitly approved, journaled,
+and undoable.
 
 ## Development
 
-Requirements: Python 3.12+, Node 22+, stable Rust, and Tesseract.
+Requirements: Node 22+, stable Rust, the platform Tauri prerequisites, and
+Tesseract 5 for OCR development.
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python -m pip install -e .
 npm ci
-
-python tools/version_manager.py check
-python -m pytest
-python -m mypy src/docflow
+node tools/version_manager.mjs check
 npm test
 npm run build
-python tools/build_sidecar.py
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+npm run audit:licenses
 npm run tauri dev
 ```
 
-## Project and version tracking
+`npm run build` includes the final-source audit, which fails if retired runtime,
+sidecar, shell-plugin, or packaging configuration is reintroduced. Rust builds
+apply the same fail-fast guard.
 
-The complete product/release record lives in the repository and requires no
-paid service:
+## Project and version tracking
 
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) — living product requirements
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — Now / Next / Later outcomes
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision index
 - [`docs/VERSIONING.md`](docs/VERSIONING.md) — SemVer and release workflow
-- [`releases.json`](releases.json) — every known version in machine-readable form
+- [`releases.json`](releases.json) — machine-readable release history
 - [`CHANGELOG.md`](CHANGELOG.md) — user-visible changes and safety notes
 
-Run `npm run versions` to list every release and `npm run version:check` to
-detect version drift before a build.
+Run `npm run versions` to list releases and `npm run version:check` to detect
+version drift. On macOS, `./tools/run_macos.sh` verifies the source contract,
+stages the native OCR resources if needed, and starts the application.
 
-On macOS, `./tools/run_macos.sh` prepares missing local dependencies, stages
-the sidecar, and starts the Tauri application.
-
-## Release build
+## Unsigned local packages
 
 ```bash
-python tools/build_sidecar.py
 npm run tauri build
 ```
 
-Tauri produces native installers under `src-tauri/target/release/bundle/`.
-The Windows workflow also bundles Tesseract and runs OCR against a real
-image-only PDF before producing an NSIS installer.
+Tauri writes native packages under `src-tauri/target/release/bundle/`. Audit a
+bundle before use:
+
+```bash
+node tools/package_audit.mjs package src-tauri/target/release/bundle/macos/DocFlow.app
+node tools/checksum.mjs path/to/package
+```
+
+The packaged executable exposes an isolated, non-GUI verification mode used by
+release automation:
+
+```bash
+path/to/docflow --package-smoke artifacts/package-smoke.json
+```
+
+It round-trips bootstrap/settings, performs real image-only OCR, and applies then
+undoes a representative Process Scans fixture in a temporary directory.
 
 ## Windows installer
 
-Stable installers are published under the repository's **Releases** page. To
-produce an unversioned test build without a prepared Windows machine, open
-**Actions → Windows Release → Run workflow**. When free Actions artifact storage
-is available, download the `DocFlow-windows-x64` artifact. A test build never
-replaces a stable or preview release asset. Versioned releases include a
-downloadable `.sha256` checksum beside the installer.
-
-For a local Windows build, install Python 3.12+, Node 22+, stable Rust, Visual
-Studio C++ Build Tools, and Tesseract. Then run:
+On a Windows host with Node 22+, stable Rust, Visual Studio C++ Build Tools, and
+Tesseract 5, run:
 
 ```powershell
 npm run build:windows
 ```
 
-That single command installs pinned project dependencies, runs every active
-test and type check, stages Tesseract, freezes and smoke-tests the Python
-sidecar, verifies real image-only PDF OCR, and creates the installer under
-`src-tauri\target\release\bundle\nsis\`.
-
-Building the Windows artifact on Windows or in the supplied GitHub Actions
-runner is recommended. Although Tauri can cross-compile some Windows bundles,
-the native Python/OpenCV sidecar also has to be frozen for Windows.
+The command runs all source gates, stages Tesseract, audits dependency licenses,
+builds the NSIS installer, exercises the unpackaged release executable, audits
+the artifact, and writes a SHA-256 file. The Windows Actions workflow additionally
+performs a silent clean install, packaged startup/OCR/apply/undo smoke, content
+audit, and uninstall. Office/Excel COM and representative physical/network printer
+certification remain explicit manual Windows-host gates.
 
 ## Safety model
 
@@ -101,11 +100,6 @@ the native Python/OpenCV sidecar also has to be frozen for Windows.
 2. The user reviews and approves that exact plan.
 3. `apply()` executes only approved steps and journals each mutation.
 4. `undo()` reverses journaled steps and never overwrites an existing file.
-
-The signed-page staging operation additionally requires three non-overlapping
-roots: new scans, the read-only archive, and a separate review output. Duplicate
-scan numbers, missing/ambiguous archive matches, and existing outputs are
-reported without selecting or overwriting anything.
 
 Unknown or low-confidence documents go to `_review/`; delete from review is a
 recoverable move to `~/.docflow/trash/`.

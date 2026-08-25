@@ -8,6 +8,22 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+### Changed
+
+- The desktop application authority is fully Rust-owned; the retired application
+  sidecar, interpreter runtime, child-process routing, and frozen packaging have
+  been removed.
+- Version, source/package audit, dependency-license, checksum, and packaged-smoke
+  gates now run with Node, Rust, and platform-native tools only.
+
+### Safety
+
+- Final builds fail fast if retired runtime paths or shell/external-binary wiring
+  reappear, and package inspection rejects interpreter libraries, bytecode,
+  frozen-runtime artifacts, or an application sidecar.
+- The packaged binary smoke verifies isolated bootstrap/settings plus real OCR and
+  Process Scans apply/journal/undo before an artifact can be accepted.
+
 ## 0.6.0 - 2026-08-21
 
 ### Added

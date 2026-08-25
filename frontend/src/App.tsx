@@ -63,9 +63,11 @@ import type {
   OperationDef,
   OperationResult,
   ParamDef,
+  PathSelection,
   Plan,
   PrintQueueSummary,
   ProgressEvent,
+  RecoveryPayload,
   ReviewAction,
   ReviewDecision,
   ReviewItem,
@@ -76,15 +78,28 @@ import type {
 type Route =
   | { name: "home" }
   | { name: "operation"; operation: OperationDef }
-  | { name: "review"; destination: string }
+  | { name: "review"; destination: PathSelection }
+  | { name: "recovery" }
   | { name: "history" }
   | { name: "admin" }
   | { name: "settings"; back: "home" | "login" | "pending" };
 
 const usernamePattern = /^[a-zA-Z0-9._-]{3,24}$/;
 
+function isPathSelection(value: unknown): value is PathSelection {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "selectionId" in value &&
+      typeof value.selectionId === "string" &&
+      "displayPath" in value &&
+      typeof value.displayPath === "string",
+  );
+}
+
 function humanError(error: unknown, s: Strings): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (/email_required/i.test(raw)) return s.t("auth.emailSignInHelp");
   if (/invalid_credentials|Invalid login/i.test(raw))
     return s.t("auth.err.credentials");
   if (/email_not_confirmed|Email not confirmed/i.test(raw))
@@ -110,6 +125,7 @@ function applyAppearance(prefs: AppPrefs): void {
 
 export function App() {
   const bridge = useMemo(() => getBridge(), []);
+  const initialStrings = useMemo(() => makeStrings(null), []);
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [fatal, setFatal] = useState("");
   const [route, setRoute] = useState<Route>({ name: "home" });
@@ -117,7 +133,7 @@ export function App() {
   const load = useCallback(async () => {
     setFatal("");
     try {
-      const value = await bridge.call<Bootstrap>("app/bootstrap");
+      const value = await bridge.call("app/bootstrap");
       setBootstrap(value);
       applyAppearance(value.prefs);
     } catch (error) {
@@ -134,11 +150,11 @@ export function App() {
       <Centered>
         <EmptyState
           icon={<XCircle />}
-          title="DocFlow başlatılamadı"
+          title={initialStrings.t("bootstrap.fatalTitle")}
           message={fatal}
           action={
             <Button onClick={() => void load()} icon={<RefreshCw />}>
-              Tekrar dene
+              {initialStrings.t("bootstrap.retry")}
             </Button>
           }
         />
@@ -223,6 +239,18 @@ export function App() {
           onBack={() => setRoute({ name: "home" })}
         />
       );
+    case "recovery":
+      return (
+        <RecoveryScreen
+          bridge={bridge}
+          operations={bootstrap.operations}
+          s={s}
+          onBack={() => setRoute({ name: "home" })}
+          onOpenOperation={(operation) =>
+            setRoute({ name: "operation", operation })
+          }
+        />
+      );
     case "admin":
       return (
         <AdminScreen
@@ -289,7 +317,7 @@ function LoginScreen({
       setChecking(true);
       try {
         setAvailable(
-          await bridge.call<boolean>("auth/usernameAvailable", { username }),
+          await bridge.call("auth/usernameAvailable", { username }),
         );
       } catch {
         setAvailable(null);
@@ -303,7 +331,7 @@ function LoginScreen({
   const valid =
     password.length >= 6 &&
     (mode === "in"
-      ? identifier.trim().length > 0
+      ? identifier.trim().includes("@")
       : email.includes("@") &&
         usernamePattern.test(username) &&
         available !== false);
@@ -315,7 +343,7 @@ function LoginScreen({
     setMessage(null);
     try {
       if (mode === "in") {
-        const auth = await bridge.call<AuthState>("auth/signIn", {
+        const auth = await bridge.call("auth/signIn", {
           identifier: identifier.trim(),
           password,
         });
@@ -368,9 +396,10 @@ function LoginScreen({
             {mode === "in" ? (
               <Field
                 autoFocus
-                label={s.t("auth.identifier")}
-                help={s.t("auth.identifierHelp")}
-                autoComplete="username"
+                type="email"
+                label={s.t("auth.email")}
+                help={s.t("auth.emailSignInHelp")}
+                autoComplete="email"
                 value={identifier}
                 onChange={setIdentifier}
                 icon={<User />}
@@ -462,11 +491,11 @@ function PendingScreen({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const run = async (method: string) => {
+  const run = async (request: () => Promise<AuthState>) => {
     setBusy(true);
     setError("");
     try {
-      onAuth(await bridge.call<AuthState>(method));
+      onAuth(await request());
     } catch (reason) {
       setError(humanError(reason, s));
     } finally {
@@ -484,7 +513,7 @@ function PendingScreen({
             </IconButton>
             <IconButton
               label={s.t("auth.signOut")}
-              onClick={() => void run("auth/signOut")}
+              onClick={() => void run(() => bridge.call("auth/signOut"))}
             >
               <LogOut />
             </IconButton>
@@ -498,7 +527,7 @@ function PendingScreen({
           message={`${s.t("auth.pendingHelp")}\n${auth.session?.email ?? ""}`}
           action={
             <Button
-              onClick={() => void run("auth/loadMe")}
+              onClick={() => void run(() => bridge.call("auth/loadMe"))}
               disabled={busy}
               icon={<RefreshCw className={busy ? "spin" : ""} />}
             >
@@ -530,21 +559,16 @@ function HomeScreen({
   const [reviewBusy, setReviewBusy] = useState(false);
   const [shortcutError, setShortcutError] = useState("");
   const signOut = async () =>
-    onAuth(await bridge.call<AuthState>("auth/signOut"));
+    onAuth(await bridge.call("auth/signOut"));
   const openReview = async () => {
     setReviewBusy(true);
     setShortcutError("");
     try {
-      const operation =
-        bootstrap.operations.find((item) => item.id === "rfi.process_scans") ??
-        bootstrap.operations[0];
-      const saved = operation
-        ? await bridge.call<Record<string, unknown>>("settings/params", {
-            opId: operation.id,
-          })
-        : {};
-      let destination = String(saved.dest ?? "").trim();
-      if (!destination) destination = (await chooseFolder()) ?? "";
+      const destination = await chooseFolder(
+        bridge,
+        "rfi.review",
+        "destination",
+      );
       if (destination) navigate({ name: "review", destination });
     } catch (reason) {
       setShortcutError(humanError(reason, s));
@@ -675,6 +699,19 @@ function HomeScreen({
               </button>
               <button
                 className="feature-card"
+                onClick={() => navigate({ name: "recovery" })}
+              >
+                <span className="feature-icon">
+                  <CircleAlert />
+                </span>
+                <span className="feature-copy">
+                  <strong>{s.t("recovery.title")}</strong>
+                  <small>{s.t("home.recovery.desc")}</small>
+                </span>
+                <ChevronRight />
+              </button>
+              <button
+                className="feature-card"
                 onClick={() => navigate({ name: "settings", back: "home" })}
               >
                 <span className="feature-icon">
@@ -721,7 +758,7 @@ function OperationScreen({
   operation: OperationDef;
   s: Strings;
   onBack: () => void;
-  onReview: (destination: string) => void;
+  onReview: (destination: PathSelection) => void;
 }) {
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
@@ -744,7 +781,7 @@ function OperationScreen({
 
   useEffect(() => {
     void bridge
-      .call<Record<string, unknown>>("settings/params", {
+      .call("settings/params", {
         opId: operation.id,
       })
       .then((saved) => {
@@ -763,7 +800,7 @@ function OperationScreen({
   useEffect(() => {
     if (operation.id !== "files.batch_print") return;
     void bridge
-      .call<PrintQueueSummary | null>("engine/printQueueLatest")
+      .call("engine/printQueueLatest")
       .then(setLatestPrintQueue)
       .catch(() => setLatestPrintQueue(null));
   }, [bridge, operation.id]);
@@ -795,7 +832,7 @@ function OperationScreen({
           }),
         ),
       });
-      const next = await bridge.call<Plan>(
+      const next = await bridge.call(
         "engine/preview",
         { opId: operation.id, values },
         setProgress,
@@ -811,7 +848,7 @@ function OperationScreen({
     setStage("previewing");
     try {
       installPlan(
-        await bridge.call<Plan>("engine/printQueueResume", { queueId }),
+        await bridge.call("engine/printQueueResume", { queueId }),
       );
     } catch (reason) {
       setError(humanError(reason, s));
@@ -846,7 +883,7 @@ function OperationScreen({
         const previousWarnings = new Set(
           plan.warnings.map((warning) => `${warning.key}\u0000${warning.subject}`),
         );
-        const revised = await bridge.call<Plan>("engine/revise", {
+        const revised = await bridge.call("engine/revise", {
           planId: plan.planId,
           rows: editorRows,
         });
@@ -873,7 +910,7 @@ function OperationScreen({
       }
       setStage("applying");
       setResult(
-        await bridge.call<OperationResult>(
+        await bridge.call(
           "engine/apply",
           { opId: operation.id, planId: approvedPlan.planId },
           setProgress,
@@ -892,7 +929,7 @@ function OperationScreen({
     setCopyingSheet(sheet ?? "");
     setError("");
     try {
-      const payload = await bridge.call<{ count: number }>("engine/copyTable", {
+      const payload = await bridge.call("engine/copyTable", {
         planId: plan.planId,
         sheet,
       });
@@ -958,6 +995,8 @@ function OperationScreen({
                   .map((param) => (
                   <SchemaField
                     key={param.name}
+                    bridge={bridge}
+                    operationId={operation.id}
                     param={param}
                     value={values[param.name]}
                     values={values}
@@ -1009,12 +1048,15 @@ function OperationScreen({
                 <Button
                   variant="ghost"
                   icon={<FolderOpen />}
-                  onClick={() => {
-                    const destination = String(values.dest ?? "").trim();
-                    if (!destination)
-                      setError(s.t("error.param.required.dest"));
-                    else onReview(destination);
-                  }}
+                  onClick={() =>
+                    void chooseFolder(
+                      bridge,
+                      "rfi.review",
+                      "destination",
+                    ).then((destination) => {
+                      if (destination) onReview(destination);
+                    })
+                  }
                 >
                   {s.t("action.review")}
                 </Button>
@@ -1097,12 +1139,16 @@ function OperationScreen({
 }
 
 function SchemaField({
+  bridge,
+  operationId,
   param,
   value,
   values,
   s,
   onChange,
 }: {
+  bridge: Bridge;
+  operationId: string;
   param: ParamDef;
   value: unknown;
   values: Record<string, unknown>;
@@ -1149,7 +1195,7 @@ function SchemaField({
   }
   if (param.kind === "files") {
     const paths = Array.isArray(value)
-      ? value.map((item) => String(item))
+      ? value.filter(isPathSelection)
       : [];
     return (
       <div className="field">
@@ -1160,8 +1206,16 @@ function SchemaField({
             variant="secondary"
             icon={<Plus />}
             onClick={() =>
-              void chooseFiles().then((selected) =>
-                onChange([...new Set([...paths, ...selected])]),
+              void chooseFiles(bridge, operationId, param.name).then(
+                (selected) => {
+                  const merged = new Map(
+                    [...paths, ...selected].map((item) => [
+                      item.selectionId,
+                      item,
+                    ]),
+                  );
+                  onChange([...merged.values()]);
+                },
               )
             }
           >
@@ -1176,8 +1230,8 @@ function SchemaField({
         {paths.length > 0 && (
           <div className="selected-files">
             {paths.map((path, index) => (
-              <div className="selected-file" key={`${path}-${index}`}>
-                <span title={path}>{path.split(/[\\/]/).pop()}</span>
+              <div className="selected-file" key={path.selectionId}>
+                <span title={path.displayPath}>{path.name}</span>
                 <button
                   type="button"
                   title={s.t("action.remove")}
@@ -1244,6 +1298,7 @@ function SchemaField({
     );
   }
   const browse = param.kind === "folder" || param.kind === "file";
+  const pathValue = isPathSelection(value) ? value.displayPath : "";
   if (param.kind === "longText") {
     return (
       <label className="field">
@@ -1269,9 +1324,11 @@ function SchemaField({
                 ? "password"
                 : "text"
           }
-          value={String(value ?? "")}
+          value={browse ? pathValue : String(value ?? "")}
           placeholder={browse ? s.t(`param.hint.${param.kind}`) : ""}
+          readOnly={browse}
           onChange={(event) =>
+            !browse &&
             onChange(
               param.kind === "int"
                 ? Number(event.target.value)
@@ -1286,8 +1343,8 @@ function SchemaField({
             icon={<FolderOpen />}
             onClick={() =>
               void (param.kind === "folder"
-                ? chooseFolder()
-                : chooseFile()
+                ? chooseFolder(bridge, operationId, param.name)
+                : chooseFile(bridge, operationId, param.name)
               ).then((path) => {
                 if (path) onChange(path);
               })
@@ -2158,8 +2215,18 @@ function ResultView({
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
 }) {
+  const effectState =
+    typeof result.meta?.effectState === "string"
+      ? result.meta.effectState
+      : result.meta?.resumeAvailable === true
+        ? "partial_committed"
+        : result.failed > 0
+          ? result.applied > 0
+            ? "partial_committed"
+            : "no_effect_retryable"
+          : "committed";
   const success =
-    result.failed === 0 && result.meta?.resumeAvailable !== true;
+    effectState === "committed" && result.meta?.resumeAvailable !== true;
   return (
     <div className="result-card">
       <span className={`result-icon ${success ? "success" : "failure"}`}>
@@ -2172,6 +2239,9 @@ function ResultView({
       <p className="muted">
         {s.t("result.failed", { count: result.failed })}
       </p>
+      <span className="status-label">
+        {s.t(`effect.${effectState}`)}
+      </span>
       {result.cloudSynced !== undefined && (
         <span className="safe-badge">
           {result.cloudSynced ? <Check /> : <History />}
@@ -2244,7 +2314,7 @@ function ResultView({
         <Button
           variant="secondary"
           icon={<Undo2 />}
-          disabled={!result.journalId}
+          disabled={!result.journalId || result.meta?.nonUndoable === true}
           onClick={onUndo}
         >
           {s.t("action.undo")}
@@ -2264,7 +2334,7 @@ function ReviewScreen({
   onBack,
 }: {
   bridge: Bridge;
-  destination: string;
+  destination: PathSelection;
   s: Strings;
   onBack: () => void;
 }) {
@@ -2280,15 +2350,15 @@ function ReviewScreen({
     setBusy(true);
     setError("");
     try {
-      const rows = await bridge.call<ReviewItem[]>("engine/reviewScan", {
+      const rows = await bridge.call("engine/reviewScan", {
         destination,
       });
       setItems(rows);
       setActions(
-        Object.fromEntries(rows.map((item) => [item.path, "keep"])),
+        Object.fromEntries(rows.map((item) => [item.selectionId, "keep"])),
       );
       setCodes(
-        Object.fromEntries(rows.map((item) => [item.path, item.code])),
+        Object.fromEntries(rows.map((item) => [item.selectionId, item.code])),
       );
     } catch (reason) {
       setError(humanError(reason, s));
@@ -2302,11 +2372,11 @@ function ReviewScreen({
   }, [scan]);
 
   const decisions: ReviewDecision[] = items
-    .filter((item) => actions[item.path] !== "keep")
+    .filter((item) => actions[item.selectionId] !== "keep")
     .map((item) => ({
-      path: item.path,
-      action: actions[item.path] as ReviewDecision["action"],
-      code: codes[item.path] ?? "",
+      itemId: item.selectionId,
+      action: actions[item.selectionId] as ReviewDecision["action"],
+      code: codes[item.selectionId] ?? "",
     }));
 
   const preview = async () => {
@@ -2314,7 +2384,7 @@ function ReviewScreen({
     setError("");
     try {
       setPlan(
-        await bridge.call<Plan>("engine/reviewPreview", {
+        await bridge.call("engine/reviewPreview", {
           destination,
           decisions,
         }),
@@ -2330,7 +2400,7 @@ function ReviewScreen({
     setBusy(true);
     try {
       setResult(
-        await bridge.call<OperationResult>("engine/apply", {
+        await bridge.call("engine/apply", {
           opId: "rfi.review",
           planId: plan.planId,
         }),
@@ -2389,11 +2459,13 @@ function ReviewScreen({
             {items.length ? (
               <div className="review-list">
                 {items.map((item) => (
-                  <div className="review-row" key={item.path}>
+                  <div className="review-row" key={item.selectionId}>
                     <button
                       className="file-button"
                       title={item.path}
-                      onClick={() => void revealPath(item.path)}
+                      onClick={() =>
+                        void revealPath(bridge, item.selectionId)
+                      }
                     >
                       <FileSearch />
                       <span>
@@ -2403,18 +2475,18 @@ function ReviewScreen({
                     </button>
                     <input
                       aria-label={`${item.name} code`}
-                      value={codes[item.path] ?? ""}
+                      value={codes[item.selectionId] ?? ""}
                       placeholder={s.t("review.noCode")}
-                      disabled={actions[item.path] !== "put"}
+                      disabled={actions[item.selectionId] !== "put"}
                       onChange={(event) =>
                         setCodes((current) => ({
                           ...current,
-                          [item.path]: event.target.value,
+                          [item.selectionId]: event.target.value,
                         }))
                       }
                     />
                     <Segmented
-                      value={actions[item.path] ?? "keep"}
+                      value={actions[item.selectionId] ?? "keep"}
                       options={[
                         ["keep", s.t("review.keep")],
                         ["put", s.t("review.put")],
@@ -2423,7 +2495,7 @@ function ReviewScreen({
                       onChange={(action) =>
                         setActions((current) => ({
                           ...current,
-                          [item.path]: action as ReviewAction,
+                          [item.selectionId]: action as ReviewAction,
                         }))
                       }
                       small
@@ -2489,7 +2561,7 @@ function HistoryScreen({
     setBusy(true);
     try {
       setPayload(
-        await bridge.call<HistoryPayload>("history/list", { limit: 50 }),
+        await bridge.call("history/list", { limit: 50 }),
       );
     } catch (reason) {
       setError(humanError(reason, s));
@@ -2501,13 +2573,12 @@ function HistoryScreen({
     void load();
   }, [load]);
 
-  const undo = async (row: HistoryRow, destination?: string) => {
+  const undo = async (row: HistoryRow, destination?: PathSelection) => {
     setUndoRow(null);
     setBusy(true);
     try {
       await bridge.call("engine/undo", {
         journalId: row.journalId,
-        steps: row.steps,
         cloudId: row.cloudId,
         ...(destination ? { destination } : {}),
       });
@@ -2577,6 +2648,10 @@ function HistoryScreen({
                   <span className="status-label">
                     <Check /> {s.t("history.undone")}
                   </span>
+                ) : !row.undoAvailable ? (
+                  <span className="status-label">
+                    {s.t("history.localJournalRequired")}
+                  </span>
                 ) : (
                   <Button
                     variant="secondary"
@@ -2612,7 +2687,11 @@ function HistoryScreen({
               variant="secondary"
               icon={<FolderOpen />}
               onClick={() =>
-                void chooseFolder().then((folder) => {
+                void chooseFolder(
+                  bridge,
+                  "history.undo",
+                  "destination",
+                ).then((folder) => {
                   if (folder) return undo(undoRow, folder);
                 })
               }
@@ -2622,6 +2701,147 @@ function HistoryScreen({
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function RecoveryScreen({
+  bridge,
+  operations,
+  s,
+  onBack,
+  onOpenOperation,
+}: {
+  bridge: Bridge;
+  operations: OperationDef[];
+  s: Strings;
+  onBack: () => void;
+  onOpenOperation: (operation: OperationDef) => void;
+}) {
+  const [payload, setPayload] = useState<RecoveryPayload | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setPayload(await bridge.call("recovery/list"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setBusy(false);
+    }
+  }, [bridge, s]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const discardQueue = async () => {
+    if (!payload?.printQueue) return;
+    setBusy(true);
+    setError("");
+    try {
+      await bridge.call("engine/printQueueDiscard", {
+        queueId: payload.printQueue.queueId,
+      });
+      await load();
+    } catch (reason) {
+      setError(humanError(reason, s));
+      setBusy(false);
+    }
+  };
+
+  const openPrintQueue = () => {
+    const operation = operations.find(
+      (candidate) => candidate.id === "files.batch_print",
+    );
+    if (operation) onOpenOperation(operation);
+  };
+
+  return (
+    <div className="screen">
+      <Header
+        title={s.t("recovery.title")}
+        onBack={onBack}
+        trailing={
+          <IconButton label={s.t("action.retry")} onClick={() => void load()}>
+            <RefreshCw />
+          </IconButton>
+        }
+      />
+      <main className="pane">
+        <div className="page-heading compact-heading">
+          <div>
+            <h1>{s.t("recovery.title")}</h1>
+            <p>{s.t("recovery.help")}</p>
+          </div>
+        </div>
+        {busy && !payload ? (
+          <BusyState label={s.t("recovery.title")} />
+        ) : (
+          <div className="flow-layout">
+            {payload?.journals.map((entry) => (
+              <div className="history-row" key={entry.journalId}>
+                <span className="history-icon">
+                  <CircleAlert />
+                </span>
+                <div className="history-copy">
+                  <strong>
+                    {s.t(
+                      entry.disposition === "no_effect"
+                        ? "recovery.noEffect"
+                        : "recovery.outcomeUnknown",
+                    )}
+                  </strong>
+                  <small>{entry.journalId}</small>
+                </div>
+                <span className="status-label">{s.t("recovery.manual")}</span>
+              </div>
+            ))}
+            {payload?.printQueue && (
+              <div className="resume-queue-card">
+                <div>
+                  <strong>{s.t("recovery.printQueue")}</strong>
+                  <small>
+                    {s.t("print.resume.summary", {
+                      count: payload.printQueue.resumable,
+                    })}
+                  </small>
+                </div>
+                <span className="resume-queue-actions">
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => void discardQueue()}
+                  >
+                    {s.t("print.resume.discard")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<RotateCcw />}
+                    disabled={busy}
+                    onClick={openPrintQueue}
+                  >
+                    {s.t("print.resume.review")}
+                  </Button>
+                </span>
+              </div>
+            )}
+            {payload &&
+              payload.journals.length === 0 &&
+              !payload.printQueue && (
+                <EmptyState
+                  icon={<CheckCircle2 />}
+                  title={s.t("recovery.empty")}
+                  message={s.t("recovery.empty.help")}
+                />
+              )}
+          </div>
+        )}
+        {error && <Notice kind="error">{error}</Notice>}
+      </main>
     </div>
   );
 }
@@ -2642,7 +2862,7 @@ function AdminScreen({
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     try {
-      setUsers(await bridge.call<AppUser[]>("auth/listUsers"));
+      setUsers(await bridge.call("auth/listUsers"));
     } catch (reason) {
       setError(humanError(reason, s));
     }
@@ -2769,7 +2989,7 @@ function SettingsScreen({
   const update = async (patch: Partial<AppPrefs>) => {
     try {
       onPrefs(
-        await bridge.call<AppPrefs>(
+        await bridge.call(
           "settings/update",
           patch as Record<string, unknown>,
         ),
@@ -2782,7 +3002,7 @@ function SettingsScreen({
     setError("");
     try {
       onAuth(
-        await bridge.call<AuthState>("auth/setUsername", { username }),
+        await bridge.call("auth/setUsername", { username }),
       );
       setSaved(s.t("prefs.account.saved"));
     } catch (reason) {
@@ -2915,7 +3135,7 @@ function SettingsScreen({
           icon={<RotateCcw />}
           onClick={() =>
             void bridge
-              .call<AppPrefs>("settings/reset")
+              .call("settings/reset")
               .then(onPrefs)
               .catch((reason: unknown) =>
                 setError(humanError(reason, s)),

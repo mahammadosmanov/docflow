@@ -1,7 +1,7 @@
-import azSource from "../../src/docflow/resources/l10n/app_az.arb?raw";
-import enSource from "../../src/docflow/resources/l10n/app_en.arb?raw";
-import ruSource from "../../src/docflow/resources/l10n/app_ru.arb?raw";
-import trSource from "../../src/docflow/resources/l10n/app_tr.arb?raw";
+import azSource from "./locales/app_az.arb?raw";
+import enSource from "./locales/app_en.arb?raw";
+import ruSource from "./locales/app_ru.arb?raw";
+import trSource from "./locales/app_tr.arb?raw";
 
 import type { AppPrefs } from "./types";
 

@@ -1,0 +1,117 @@
+{
+  "batch": {
+    "baseRfis": [
+      "AZE-SUN-INT-QMS-RFI-CIV-0008"
+    ],
+    "discipline": "CIV",
+    "lookupColumns": {
+      "azfenItem": 14,
+      "azfenType": 15,
+      "description": 12,
+      "forms": 13,
+      "intecItem": 16,
+      "intecType": 17,
+      "item": 11
+    },
+    "startRow": 11
+  },
+  "copyColumns": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "copyFields": [
+    "rfiNo",
+    "itpNo",
+    "itemNo",
+    "description",
+    "forms",
+    "tagNo",
+    "area",
+    "dateOfIssue",
+    "inspectionDate",
+    "startTime",
+    "azfenType",
+    "intecType",
+    "location",
+    "subcontractor"
+  ],
+  "copyHeaders": [
+    "RFI No.",
+    "ITP No.",
+    "Item No.",
+    "INSPECTION DESCRIPTION",
+    "FORMS",
+    "TAG NO",
+    "AREA",
+    "DATE OF ISSUE",
+    "INSPECTION DATE",
+    "INSPECTION START TIME",
+    "INSP. TYPE AZFEN",
+    "INSP. TYPE INTEC",
+    "Inspection Location",
+    "SUBCONTRACTOR"
+  ],
+  "opId": "rfi.log_add",
+  "rows": [
+    {
+      "_rowId": "CIV-g1-r1",
+      "_sheet": "CIV",
+      "area": "North Site",
+      "azfenType": "H",
+      "dateOfIssue": "25-Aug-26",
+      "description": "Civil description",
+      "forms": "CON-CIV-001",
+      "inspectionDate": "27-Aug-26",
+      "intecType": "W",
+      "itemNo": "CIV-5.2.1",
+      "itpNo": "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005",
+      "location": "Foundation A",
+      "rfiNo": "AZE-SUN-INT-QMS-RFI-CIV-0008",
+      "rowNo": "",
+      "startTime": "09:00",
+      "subcontractor": "AZFEN",
+      "tagNo": "N12"
+    },
+    {
+      "_rowId": "CIV-g1-r2",
+      "_sheet": "CIV",
+      "area": "South Site",
+      "azfenType": "H",
+      "dateOfIssue": "25-Aug-26",
+      "description": "Civil description",
+      "forms": "CON-CIV-001",
+      "inspectionDate": "27-Aug-26",
+      "intecType": "W",
+      "itemNo": "CIV-5.2.1",
+      "itpNo": "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0005",
+      "location": "Foundation A",
+      "rfiNo": "AZE-SUN-INT-QMS-RFI-CIV-0008",
+      "rowNo": "",
+      "startTime": "09:00",
+      "subcontractor": "AZFEN",
+      "tagNo": "S14"
+    }
+  ],
+  "warnings": [
+    {
+      "key": "warn.rfi.emailExtracted",
+      "subject": "offline | CIV 1 RFI | confidence 83%"
+    },
+    {
+      "key": "warn.rfi.overflowMoved",
+      "subject": "1"
+    }
+  ]
+}

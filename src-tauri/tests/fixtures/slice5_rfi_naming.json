@@ -1,0 +1,106 @@
+{
+  "rfiCases": [
+    {
+      "name": "real OCR output with decoys",
+      "input": "REQUEST FOR INSPECTION\nD 18.02.2026 REI N0 AZE-SUN-INT-QMS-RFI-MEC-0107 -R O I\nAZE-SUN-INT-QMS-ITP-MEC-0001 AZE-SUN-INT-ENG-STR-DRG-0901",
+      "code": "AZE-SUN-INT-QMS-RFI-MEC-0107",
+      "discipline": "MEC",
+      "number": "0107",
+      "method": "strict",
+      "confidence": 1.0
+    },
+    {
+      "name": "lowercase strict code",
+      "input": "aze-sun-int-qms-rfi-civ-0064",
+      "code": "AZE-SUN-INT-QMS-RFI-CIV-0064",
+      "discipline": "CIV",
+      "number": "0064",
+      "method": "strict",
+      "confidence": 1.0
+    },
+    {
+      "name": "number positional repair",
+      "input": "AZE-SUN-INT-QMS-RFI-MEC-Ol07",
+      "code": "AZE-SUN-INT-QMS-RFI-MEC-0107",
+      "discipline": "MEC",
+      "number": "0107",
+      "method": "repaired",
+      "confidence": 0.8
+    },
+    {
+      "name": "prefix positional repair",
+      "input": "4ZE-SUN-1NT-QMS-RFI-MEC-0107",
+      "code": "AZE-SUN-INT-QMS-RFI-MEC-0107",
+      "discipline": "MEC",
+      "number": "0107",
+      "method": "repaired",
+      "confidence": 0.8
+    },
+    {
+      "name": "missing discipline letter recovery",
+      "input": "AZE-SUN-INT-QMS-RFI-CV-0064",
+      "code": "AZE-SUN-INT-QMS-RFI-CIV-0064",
+      "discipline": "CIV",
+      "number": "0064",
+      "method": "repaired",
+      "confidence": 0.9
+    },
+    {
+      "name": "bounded prefix fuzzy recovery",
+      "input": "AZE-SUN-INT-QMX-RFI-MEC-0107",
+      "code": "AZE-SUN-INT-QMS-RFI-MEC-0107",
+      "discipline": "MEC",
+      "number": "0107",
+      "method": "fuzzy",
+      "confidence": 0.9
+    },
+    {
+      "name": "strict PRC compatibility",
+      "input": "AZE-SUN-INT-QMS-RFI-PRC-0072",
+      "code": "AZE-SUN-INT-QMS-RFI-PRC-0072",
+      "discipline": "PRC",
+      "number": "0072",
+      "method": "strict",
+      "confidence": 1.0
+    },
+    {
+      "name": "ITP decoy miss",
+      "input": "AZE-SUN-INT-QMS-ITP-MEC-0001",
+      "code": "",
+      "discipline": "",
+      "number": "",
+      "method": "miss",
+      "confidence": 0.0
+    },
+    {
+      "name": "drawing decoy miss",
+      "input": "AZE-SUN-INT-ENG-STR-DRG-0901 S-205",
+      "code": "",
+      "discipline": "",
+      "number": "",
+      "method": "miss",
+      "confidence": 0.0
+    },
+    {
+      "name": "ambiguous discipline miss",
+      "input": "AZE-SUN-INT-QMX-RFI-AEC-0001",
+      "code": "",
+      "discipline": "",
+      "number": "",
+      "method": "miss",
+      "confidence": 0.0
+    }
+  ],
+  "namingCases": [
+    {
+      "code": "AZE-SUN-INT-QMS-RFI-CIV-0064",
+      "filename": "RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf",
+      "folder": "AZE-SUN-INT-QMS-RFI-CIV-0064"
+    },
+    {
+      "code": "AZE-SUN-INT-QMS-RFI-PRC-0072",
+      "filename": "RFI No. AZE-SUN-INT-QMS-RFI-PRC-0072.pdf",
+      "folder": "AZE-SUN-INT-QMS-RFI-PRC-0072"
+    }
+  ]
+}

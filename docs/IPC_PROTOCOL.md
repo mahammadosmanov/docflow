@@ -1,6 +1,9 @@
-# Private sidecar protocol
+# Retired private sidecar protocol (historical)
 
-DocFlow uses one long-lived, line-delimited JSON channel over the child
+This protocol is retained only to document compatibility history. No shipping or
+test path starts a sidecar or uses child-process IPC.
+
+DocFlow used one long-lived, line-delimited JSON channel over the child
 process's stdin/stdout. There is no listening socket or network server.
 
 Request:
@@ -16,7 +19,7 @@ Progress and response:
 {"type":"response","id":"12","result":{"planId":"...","steps":[],"warnings":[]}}
 ```
 
-Errors are returned as `{kind,message}`. Python tracebacks go only to stderr.
+Errors were returned as `{kind,message}`. Backend tracebacks went only to stderr.
 Every accepted request produces exactly one final response.
 
 Method families:

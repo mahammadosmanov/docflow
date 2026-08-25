@@ -5,8 +5,9 @@ and versioned with the code they govern.
 
 | Decision | Status | Document |
 |---|---|---|
-| Tauri 2 + React/TypeScript + Python sidecar | Accepted | [`MIGRATION.md`](MIGRATION.md) |
-| Private JSON-lines child-process protocol | Accepted | [`IPC_PROTOCOL.md`](IPC_PROTOCOL.md) |
+| Tauri 2 + React/TypeScript + permanent Python sidecar | Superseded | [`MIGRATION.md`](MIGRATION.md) |
+| Tauri 2 + React/TypeScript + Rust authority | Accepted | [`MIGRATION.md`](MIGRATION.md) |
+| Private JSON-lines child-process protocol | Retired after Rust migration | [`IPC_PROTOCOL.md`](IPC_PROTOCOL.md) |
 | Preview/apply/journal operation contract | Accepted | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Repository-native SemVer and release catalog | Accepted | [`VERSIONING.md`](VERSIONING.md) |
 

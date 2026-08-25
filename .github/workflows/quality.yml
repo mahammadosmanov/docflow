@@ -12,22 +12,13 @@ concurrency:
 
 jobs:
   verify:
-    name: Test Python, React, and Rust contracts
+    name: Test Node, React, and Rust contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -40,22 +31,9 @@ jobs:
 
       - name: Install project dependencies
         run: |
-          python -m pip install -r requirements-dev.txt
-          python -m pip install -e .
           npm ci
 
-      - name: Verify version and Python contracts
-        run: |
-          python tools/version_manager.py check
-          python -m pytest
-          python -m mypy src/docflow tools/version_manager.py
-
-      - name: Verify the React interface
-        run: |
-          npm test
-          npm run build
-
-      - name: Verify the Tauri shell
+      - name: Install Linux Tauri prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
@@ -63,6 +41,20 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
-          touch src-tauri/binaries/docflow-sidecar-x86_64-unknown-linux-gnu
-          chmod +x src-tauri/binaries/docflow-sidecar-x86_64-unknown-linux-gnu
+
+      - name: Verify version and final source contracts
+        run: |
+          node tools/version_manager.mjs check
+          node tools/package_audit.mjs source
+
+      - name: Verify Node tooling and the React interface
+        run: |
+          npm test
+          npm run build
+
+      - name: Verify the Rust authority
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+          cargo test --manifest-path src-tauri/Cargo.toml
           cargo check --manifest-path src-tauri/Cargo.toml

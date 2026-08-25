@@ -1,38 +1,41 @@
-import { open } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
+import type { PathSelection } from "../types";
+import type { Bridge } from "./bridge";
 
-function isTauri(): boolean {
-  return Boolean(window.__TAURI_INTERNALS__);
+async function selectPaths(
+  bridge: Bridge,
+  opId: string,
+  paramName: string,
+): Promise<PathSelection[]> {
+  return bridge.call("paths/select", { opId, paramName });
 }
 
-export async function chooseFolder(): Promise<string | null> {
-  if (!isTauri()) return "/Users/demo/Documents/DocFlow";
-  const selected = await open({ directory: true, multiple: false });
-  return typeof selected === "string" ? selected : null;
+export async function chooseFolder(
+  bridge: Bridge,
+  opId: string,
+  paramName: string,
+): Promise<PathSelection | null> {
+  return (await selectPaths(bridge, opId, paramName))[0] ?? null;
 }
 
-export async function chooseFile(): Promise<string | null> {
-  if (!isTauri()) return "/Users/demo/Documents/file.xlsx";
-  const selected = await open({
-    directory: false,
-    multiple: false,
-  });
-  return typeof selected === "string" ? selected : null;
+export async function chooseFile(
+  bridge: Bridge,
+  opId: string,
+  paramName: string,
+): Promise<PathSelection | null> {
+  return (await selectPaths(bridge, opId, paramName))[0] ?? null;
 }
 
-export async function chooseFiles(): Promise<string[]> {
-  if (!isTauri()) {
-    return [
-      "/Users/demo/Documents/first.pdf",
-      "/Users/demo/Documents/second.docx",
-    ];
-  }
-  const selected = await open({ directory: false, multiple: true });
-  if (Array.isArray(selected)) return selected;
-  return typeof selected === "string" ? [selected] : [];
+export async function chooseFiles(
+  bridge: Bridge,
+  opId: string,
+  paramName: string,
+): Promise<PathSelection[]> {
+  return selectPaths(bridge, opId, paramName);
 }
 
-export async function revealPath(path: string): Promise<void> {
-  if (!isTauri()) return;
-  await openPath(path);
+export async function revealPath(
+  bridge: Bridge,
+  selectionId: string,
+): Promise<void> {
+  await bridge.call("paths/reveal", { selectionId });
 }

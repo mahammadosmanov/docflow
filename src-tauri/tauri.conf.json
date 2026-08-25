@@ -31,9 +31,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/docflow-sidecar"
-    ],
     "resources": [
       "resources/tesseract"
     ],

@@ -16,8 +16,8 @@ async function signIn() {
     await screen.findByRole("heading", { name: "DocFlow" }),
   ).toBeVisible();
   fireEvent.change(
-    screen.getByLabelText("Kullanıcı adı veya e-posta"),
-    { target: { value: "demo" } },
+    screen.getByLabelText("E-posta"),
+    { target: { value: "demo@example.com" } },
   );
   fireEvent.change(screen.getByLabelText("Parola"), {
     target: { value: "secret1" },
@@ -39,6 +39,18 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("requires account email and explains that username sign-in is unavailable", async () => {
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "DocFlow" });
+    expect(screen.getByLabelText("E-posta")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Kullanıcı adıyla giriş kullanılamıyor. Hesabının e-posta adresini kullan.",
+      ),
+    ).toBeVisible();
+  });
+
   it("shows the exact runtime product version in the workspace", async () => {
     render(<App />);
     await signIn();
@@ -85,6 +97,11 @@ describe("DocFlow shell", () => {
         "Kullanıcı erişimlerini ve yönetici yetkilerini yönet.",
       ),
     ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+      ),
+    ).toBeVisible();
 
     fireEvent.click(
       screen
@@ -95,6 +112,46 @@ describe("DocFlow shell", () => {
       name: "Geçmiş",
     });
     expect(historyHeadings[0]).toBeVisible();
+  });
+
+  it("opens a recovery center for pending journals and uncertain print queues", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen
+        .getByText(
+          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+        )
+        .closest("button")!,
+    );
+
+    expect(
+      (await screen.findAllByRole("heading", { name: "Kurtarma merkezi" }))[0],
+    ).toBeVisible();
+    expect(
+      await screen.findByText("Sonuç bilinmiyor — otomatik tekrar yok"),
+    ).toBeVisible();
+    expect(await screen.findByText("Belirsiz yazdırma kuyruğu")).toBeVisible();
+  });
+
+  it("never offers undo for cloud history without a local journal", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen
+        .getByText("Yapılan işlemleri gör ve güvenle geri al.")
+        .closest("button")!,
+    );
+
+    await screen.findAllByRole("heading", { name: "Geçmiş" });
+    expect(
+      await screen.findAllByRole("button", { name: "Geri al" }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByText("Geri almak için bu cihazdaki yerel günlük gerekli."),
+    ).toBeVisible();
   });
 
   it("renders the restored v0.5.4 RFI and print operation forms", async () => {

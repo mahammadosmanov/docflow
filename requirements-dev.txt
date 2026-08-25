@@ -1,4 +1,0 @@
--r requirements.txt
-mypy==2.3.1
-pyinstaller==6.22.2
-pytest==9.1.1
