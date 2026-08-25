@@ -431,7 +431,12 @@ fn approved_xlsm_apply_preserves_package_and_undo_restores_exact_hash() {
     let cached = cache(&authority, &root, plan);
     let result = authority.apply(&cached.plan_id, &caller()).unwrap();
 
-    assert_eq!((result.applied, result.failed), (2, 0));
+    assert_eq!(
+        (result.applied, result.failed),
+        (2, 0),
+        "{:?}",
+        result.errors
+    );
     assert_eq!(result.meta["effectState"], "committed");
     assert_eq!(file_sha256(&backup).unwrap(), original_hash);
     let journal = authority.journals().read(&result.journal_id).unwrap();
@@ -543,7 +548,7 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
     let applied_backup = PathBuf::from(applied_plan.steps[0].dst.as_deref().unwrap());
     let applied = cache(&authority, &root, applied_plan);
     let applied_result = authority.apply(&applied.plan_id, &caller()).unwrap();
-    assert_eq!(applied_result.failed, 0);
+    assert_eq!(applied_result.failed, 0, "{:?}", applied_result.errors);
     let mut changed = fs::read(&workbook).unwrap();
     changed.extend_from_slice(b"later-user-edit");
     fs::write(&workbook, changed).unwrap();
