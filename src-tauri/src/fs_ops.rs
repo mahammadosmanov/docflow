@@ -548,7 +548,11 @@ impl FilesystemAuthority {
                 }
                 record.pending_step = None;
                 self.journals.write(record).map_err(step_unknown)?;
-                return Err(io_no_effect(error.into_inner()));
+                return Err(StepFailure::NoEffect(format!(
+                    "could not create {}: {}",
+                    directory.display(),
+                    error.into_inner()
+                )));
             }
             record.steps.push(actual);
             record.pending_step = None;
@@ -828,7 +832,10 @@ impl FilesystemAuthority {
             }
             record.pending_step = None;
             self.journals.write(record).map_err(step_unknown)?;
-            return Err(io_no_effect(error));
+            return Err(StepFailure::NoEffect(format!(
+                "workbook backup {}: {error}",
+                backup.display()
+            )));
         }
         let backup_hash = backup_anchor.sha256().map_err(|error| {
             StepFailure::OutcomeUnknown(format!("{}: {error}", backup.display()))
@@ -858,23 +865,36 @@ impl FilesystemAuthority {
             .map_err(io_no_effect)?;
         input_anchor
             .copy_no_clobber_from(&workbook_anchor)
-            .map_err(io_no_effect)?;
+            .map_err(|error| {
+                StepFailure::NoEffect(format!("workbook staging {}: {error}", input.display()))
+            })?;
         let updates = workbook_step_updates(step).map_err(step_no_effect)?;
         if let Err(error) = patch_workbook_sheets(&input, &output, &updates, Some(1)) {
-            return Err(StepFailure::NoEffect(error.to_string()));
+            return Err(StepFailure::NoEffect(format!(
+                "workbook patch {}: {error}",
+                output.display()
+            )));
         }
         if let Err(error) = verify_workbook_step(step, &output) {
-            return Err(StepFailure::NoEffect(error.message));
+            return Err(StepFailure::NoEffect(format!(
+                "workbook verification {}: {}",
+                output.display(),
+                error.message
+            )));
         }
         File::open(&output)
             .and_then(|file| file.sync_all())
-            .map_err(io_no_effect)?;
+            .map_err(|error| {
+                StepFailure::NoEffect(format!("workbook sync {}: {error}", output.display()))
+            })?;
         let output_anchor = workspace_capability
             .authorize(&output)
             .map_err(io_no_effect)?
             .anchor()
             .map_err(io_no_effect)?;
-        let output_hash = output_anchor.sha256().map_err(io_no_effect)?;
+        let output_hash = output_anchor.sha256().map_err(|error| {
+            StepFailure::NoEffect(format!("workbook hash {}: {error}", output.display()))
+        })?;
         if token.checkpoint().is_err() {
             return Err(StepFailure::Cancelled);
         }

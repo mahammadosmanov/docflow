@@ -158,9 +158,9 @@ try {
         Invoke-Checked $node @("tools/package_audit.mjs", "source") "Reject removed runtime source"
         Invoke-Checked $npm @("test") "Run Node and interface tests"
         Invoke-Checked $npm @("run", "build") "Build the interface and verify final source"
+        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--test", "rfi_log_native") "Test the Windows-critical RFI workbook path"
         Invoke-Checked $cargo @("fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check") "Check Rust formatting"
         Invoke-Checked $cargo @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings") "Lint the Rust backend"
-        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--test", "rfi_log_native") "Test the Windows-critical RFI workbook path"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--no-fail-fast") "Test the Rust backend"
         Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Rust backend"
     }
