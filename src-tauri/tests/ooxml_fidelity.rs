@@ -10,7 +10,7 @@ use docflow_lib::{
     ooxml::{CellUpdate, patch_workbook_sheets},
 };
 use tempfile::TempDir;
-use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileOptions};
+use zip::{CompressionMethod, DateTime, System, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -19,6 +19,7 @@ fn package(path: &Path, macros: bool) {
     let mut writer = ZipWriter::new(file);
     writer.set_comment("DocFlow fixture").unwrap();
     let options = SimpleFileOptions::default()
+        .system(System::Unix)
         .compression_method(CompressionMethod::Deflated)
         .last_modified_time(DateTime::from_date_and_time(2024, 5, 4, 3, 2, 0).unwrap())
         .unix_permissions(0o640);
