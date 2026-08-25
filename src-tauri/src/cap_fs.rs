@@ -893,9 +893,11 @@ fn rename_open_handle(
     replace: bool,
 ) -> io::Result<()> {
     use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
-    use windows_sys::Win32::{
-        Foundation::HANDLE,
-        Storage::FileSystem::{FILE_RENAME_INFO, FileRenameInfo, SetFileInformationByHandle},
+    use windows_sys::{
+        Wdk::Storage::FileSystem::{
+            FILE_RENAME_INFORMATION, FileRenameInformation, NtSetInformationFile,
+        },
+        Win32::{Foundation::HANDLE, System::IO::IO_STATUS_BLOCK},
     };
 
     let wide = destination.encode_wide().collect::<Vec<_>>();
@@ -906,25 +908,27 @@ fn rename_open_handle(
         ));
     }
     let bytes = wide.len() * 2;
-    let header = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
-    let mut buffer = vec![0_u8; header + bytes];
-    let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
+    let buffer_len = std::mem::size_of::<FILE_RENAME_INFORMATION>() + bytes;
+    let mut buffer = vec![0_usize; buffer_len.div_ceil(std::mem::size_of::<usize>())];
+    let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists = replace;
         (*info).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
         (*info).FileNameLength = bytes as u32;
         std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
     }
-    if unsafe {
-        SetFileInformationByHandle(
+    let mut status_block = IO_STATUS_BLOCK::default();
+    let status = unsafe {
+        NtSetInformationFile(
             source.as_raw_handle() as HANDLE,
-            FileRenameInfo,
+            &mut status_block,
             buffer.as_ptr().cast(),
-            buffer.len() as u32,
+            buffer_len as u32,
+            FileRenameInformation,
         )
-    } == 0
-    {
-        Err(io::Error::last_os_error())
+    };
+    if status < 0 {
+        Err(ntstatus_error(status))
     } else {
         Ok(())
     }
@@ -1008,4 +1012,25 @@ fn windows_file_identity(file: &File) -> io::Result<(u32, u64)> {
         information.dwVolumeSerialNumber,
         (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn windows_rename_uses_the_native_root_relative_information_contract() {
+        let source = include_str!("cap_fs.rs");
+        let rename = source
+            .split("fn rename_open_handle(")
+            .nth(1)
+            .expect("Windows rename implementation must remain inspectable")
+            .split("fn delete_open_handle(")
+            .next()
+            .expect("Windows rename implementation must remain bounded");
+
+        assert!(rename.contains("NtSetInformationFile"));
+        assert!(rename.contains("FILE_RENAME_INFORMATION"));
+        assert!(rename.contains("FileRenameInformation"));
+        assert!(rename.contains("RootDirectory"));
+        assert!(!rename.contains("SetFileInformationByHandle"));
+    }
 }
