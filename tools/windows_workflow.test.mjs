@@ -26,3 +26,18 @@ test("release tools use fileURLToPath instead of URL pathname on Windows", () =>
     assert.doesNotMatch(source, /new URL\([^\n]*import\.meta\.url\)\.pathname/u, path);
   }
 });
+
+test("CI workflows pin the verified Rust toolchain", () => {
+  for (const path of [
+    ".github/workflows/quality.yml",
+    ".github/workflows/windows-release.yml",
+  ]) {
+    const source = readFileSync(resolve(root, path), "utf8");
+    assert.match(
+      source,
+      /uses:\s+dtolnay\/rust-toolchain@master\s+with:\s+toolchain:\s+"1\.97\.1"/u,
+      path,
+    );
+    assert.doesNotMatch(source, /dtolnay\/rust-toolchain@stable/u, path);
+  }
+});
