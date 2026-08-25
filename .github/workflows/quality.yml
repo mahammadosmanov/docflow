@@ -30,6 +30,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.97.1"
+          components: rustfmt, clippy
 
       - name: Install project dependencies
         run: |

@@ -35,7 +35,7 @@ test("CI workflows pin the verified Rust toolchain", () => {
     const source = readFileSync(resolve(root, path), "utf8");
     assert.match(
       source,
-      /uses:\s+dtolnay\/rust-toolchain@master\s+with:\s+toolchain:\s+"1\.97\.1"/u,
+      /uses:\s+dtolnay\/rust-toolchain@master\s+with:\s+toolchain:\s+"1\.97\.1"\s+components:\s+rustfmt, clippy/u,
       path,
     );
     assert.doesNotMatch(source, /dtolnay\/rust-toolchain@stable/u, path);
