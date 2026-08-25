@@ -1,7 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { auditDeclaredLicenses } from "./license_audit.mjs";
+import {
+  auditDeclaredLicenses,
+  parseNativeOcrChecksumLine,
+} from "./license_audit.mjs";
+
+test("native OCR checksum parser accepts LF and CRLF but rejects traversal", () => {
+  const hash = "a".repeat(64);
+  assert.deepEqual(parseNativeOcrChecksumLine(`${hash}  ./tessdata/eng.traineddata`), {
+    expected: hash,
+    relativePath: "tessdata/eng.traineddata",
+  });
+  assert.deepEqual(parseNativeOcrChecksumLine(`${hash}  ./libtesseract-5.dll\r`), {
+    expected: hash,
+    relativePath: "libtesseract-5.dll",
+  });
+  assert.equal(parseNativeOcrChecksumLine(`${hash}  ./../outside.dll`), null);
+  assert.equal(parseNativeOcrChecksumLine(`${hash}  ./nested\\outside.dll`), null);
+});
 
 test("license audit rejects missing, Affero, and commercial declarations", () => {
   const failures = auditDeclaredLicenses(

@@ -92,21 +92,35 @@ function sha256(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+export function parseNativeOcrChecksumLine(line) {
+  const match = line.match(/^([0-9a-fA-F]{64})\s+\.\/([^\r\n]+)\r?$/u);
+  if (!match) return null;
+  const relativePath = match[2];
+  const segments = relativePath.split("/");
+  if (
+    relativePath.includes("\\") ||
+    segments.some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    return null;
+  }
+  return { expected: match[1].toLowerCase(), relativePath };
+}
+
 function auditNativeOcr(root) {
   const resourceRoot = join(root, "src-tauri/resources/tesseract");
   const checksumPath = join(resourceRoot, "SHA256SUMS");
   const failures = [];
   if (!existsSync(checksumPath)) return ["Tesseract SHA256SUMS is missing"];
   const entries = readFileSync(checksumPath, "utf8")
-    .split("\n")
+    .split(/\r?\n/u)
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/^([0-9a-fA-F]{64})\s+\.\/(.+)$/u);
-      if (!match) {
+      const entry = parseNativeOcrChecksumLine(line);
+      if (!entry) {
         failures.push(`malformed Tesseract checksum line: ${line}`);
         return null;
       }
-      return { expected: match[1].toLowerCase(), relativePath: match[2] };
+      return entry;
     })
     .filter(Boolean);
   for (const entry of entries) {
@@ -166,7 +180,7 @@ export function runAudit(root = REPOSITORY_ROOT, target = hostTarget()) {
         join(root, "src-tauri/resources/tesseract/SHA256SUMS"),
         "utf8",
       )
-        .split("\n")
+        .split(/\r?\n/u)
         .filter(Boolean).length,
       failures: failures.length,
     },
