@@ -882,7 +882,10 @@ impl FilesystemAuthority {
                 error.message
             )));
         }
-        File::open(&output)
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&output)
             .and_then(|file| file.sync_all())
             .map_err(|error| {
                 StepFailure::NoEffect(format!("workbook sync {}: {error}", output.display()))
@@ -1634,6 +1637,23 @@ fn sync_directory(_path: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workbook_output_sync_uses_a_writable_handle_for_windows() {
+        let source = include_str!("fs_ops.rs");
+        let workbook_update = source
+            .split("fn execute_workbook_update(")
+            .nth(1)
+            .expect("workbook update implementation must remain inspectable")
+            .split("fn execute_pdf_first_page_replace(")
+            .next()
+            .expect("workbook update implementation must remain bounded");
+
+        assert!(workbook_update.contains("OpenOptions::new()"));
+        assert!(workbook_update.contains(".read(true)"));
+        assert!(workbook_update.contains(".write(true)"));
+        assert!(!workbook_update.contains("File::open(&output)"));
+    }
 
     #[test]
     fn pdf_publish_retries_transient_access_errors_without_overwriting() {
