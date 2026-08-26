@@ -383,7 +383,7 @@ fn archive_ambiguity_requires_an_allowlisted_rfi_no_pdf_selection() {
     let (signed_root, archive_root, review_root) = roots(&fixture);
     write_signed(&signed_root.join("signed.pdf"), false);
     let first = Path::new("Other").join(filename_for(CODE));
-    let second = Path::new("Package/Civil").join(filename_for(CODE));
+    let second = Path::new("Package").join("Civil").join(filename_for(CODE));
     write_rich_archive(&archive_root.join(&first));
     write_rich_archive(&archive_root.join(&second));
 
