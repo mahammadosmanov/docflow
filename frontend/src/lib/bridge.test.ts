@@ -55,4 +55,24 @@ describe("TauriBridge", () => {
     expect(progress).toEqual([{ phase: "scan", done: 1, total: 2 }]);
     await expect(response).resolves.toEqual({ planId: "plan-1" });
   });
+
+  it("normalizes serialized backend errors", async () => {
+    const bridge = new TauriBridge();
+    invokeMock.mockRejectedValue({
+      code: "validation",
+      message: "error.preset.duplicate",
+    });
+
+    const response = bridge.call("settings/savePreset", {
+      opId: "files.batch_print",
+      name: "A4 standard",
+      values: { paper: "A4" },
+    });
+
+    await expect(response).rejects.toBeInstanceOf(Error);
+    await expect(response).rejects.toMatchObject({
+      code: "validation",
+      message: "error.preset.duplicate",
+    });
+  });
 });

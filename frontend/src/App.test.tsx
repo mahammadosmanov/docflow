@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -10,8 +11,27 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App, humanError, isPlanEditorReady, PlanView } from "./App";
 import { makeStrings } from "./i18n";
-import { resetBridgeForTests } from "./lib/bridge";
+import { MockBridge, resetBridgeForTests } from "./lib/bridge";
 import type { Plan } from "./types";
+
+function interceptMockBridge(
+  intercept: (
+    method: string,
+    params: Record<string, unknown>,
+  ) => { handled: boolean; value?: unknown },
+) {
+  const originalCall = MockBridge.prototype.call;
+  return vi
+    .spyOn(MockBridge.prototype, "call")
+    .mockImplementation(function (this: MockBridge, method, ...args) {
+      const result = intercept(
+        method,
+        (args[0] ?? {}) as Record<string, unknown>,
+      );
+      if (result.handled) return Promise.resolve(result.value) as never;
+      return Reflect.apply(originalCall, this, [method, ...args]);
+    });
+}
 
 async function signIn() {
   expect(
@@ -35,12 +55,402 @@ async function signIn() {
 afterEach(() => {
   cleanup();
   resetBridgeForTests();
+  vi.restoreAllMocks();
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-font");
   document.documentElement.removeAttribute("data-compact");
 });
 
 describe("DocFlow shell", () => {
+  it("operation presets load only for capability-enabled operations", async () => {
+    const call = vi.spyOn(MockBridge.prototype, "call");
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Taramaları İşle/ }),
+    );
+    await screen.findByRole("heading", { name: "Ayarlar" });
+    expect(
+      call.mock.calls.filter(([method]) => method === "settings/presets"),
+    ).toHaveLength(0);
+
+    cleanup();
+    resetBridgeForTests();
+    call.mockClear();
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    await waitFor(() =>
+      expect(
+        call.mock.calls.filter(([method]) => method === "settings/presets"),
+      ).toHaveLength(1),
+    );
+  });
+
+  it("operation presets apply scalar values while preserving files exactly", async () => {
+    const call = interceptMockBridge((method) =>
+      method === "settings/presets"
+        ? {
+            handled: true,
+            value: [
+              {
+                id: "preset-1",
+                name: "A3 disconnected",
+                values: {
+                  printer: "Disconnected Printer",
+                  paper: "A3",
+                  copies: 4,
+                  files: [
+                    {
+                      selectionId: "forged-selection",
+                      displayPath: "/forged.pdf",
+                      name: "forged.pdf",
+                    },
+                  ],
+                },
+              },
+            ],
+          }
+        : { handled: false },
+    );
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+
+    fireEvent.change(screen.getByLabelText("Kayıtlı ön ayar"), {
+      target: { value: "preset-1" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ön ayarı uygula" }),
+    );
+    expect(
+      screen.getByRole("combobox", { name: /^Yazıcı/ }),
+    ).toHaveValue("Disconnected Printer");
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    await waitFor(() =>
+      expect(
+        call.mock.calls.some(([method]) => method === "engine/preview"),
+      ).toBe(true),
+    );
+    const previewCall = call.mock.calls.find(
+      ([method]) => method === "engine/preview",
+    );
+    const previewValues = (
+      previewCall?.[1] as { values: Record<string, unknown> }
+    ).values;
+    expect(previewValues).toMatchObject({
+      printer: "Disconnected Printer",
+      paper: "A3",
+      copies: 4,
+    });
+    expect(previewValues.files).toStrictEqual([
+      {
+        selectionId: "demo-selection-files-0",
+        displayPath: "/Users/demo/Documents/first.pdf",
+        name: "first.pdf",
+      },
+      {
+        selectionId: "demo-selection-files-1",
+        displayPath: "/Users/demo/Documents/second.docx",
+        name: "second.docx",
+      },
+    ]);
+  });
+
+  it("stale saved params do not replace preset or user form values", async () => {
+    let resolveParams!: (values: Record<string, unknown>) => void;
+    const paramsResult = new Promise<Record<string, unknown>>((resolve) => {
+      resolveParams = resolve;
+    });
+    interceptMockBridge((method) => {
+      if (method === "settings/params") {
+        return { handled: true, value: paramsResult };
+      }
+      if (method === "settings/presets") {
+        return {
+          handled: true,
+          value: [
+            {
+              id: "preset-1",
+              name: "A3 run",
+              values: { paper: "A3", copies: 4 },
+            },
+          ],
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.change(await screen.findByLabelText("Kayıtlı ön ayar"), {
+      target: { value: "preset-1" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ön ayarı uygula" }),
+    );
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
+      "A3",
+    );
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /^Kopya sayısı/ }),
+      { target: { value: "7" } },
+    );
+
+    await act(async () => {
+      resolveParams({ paper: "A4", copies: 2 });
+      await paramsResult;
+    });
+
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
+      "A3",
+    );
+    expect(
+      screen.getByRole("spinbutton", { name: /^Kopya sayısı/ }),
+    ).toHaveValue(7);
+  });
+
+  it("operation presets save only current bool choice and int values", async () => {
+    let presets: unknown[] = [];
+    let savedParams: Record<string, unknown> | null = null;
+    const call = interceptMockBridge((method, params) => {
+      if (method === "settings/presets") {
+        return { handled: true, value: presets };
+      }
+      if (method === "settings/savePreset") {
+        savedParams = params;
+        const saved = {
+          id: "preset-saved",
+          name: String(params.name),
+          values: params.values,
+        };
+        presets = [saved];
+        return { handled: true, value: saved };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /^Kopya sayısı/ }),
+      {
+        target: { value: "3" },
+      },
+    );
+    fireEvent.change(screen.getByLabelText("Yeni ön ayar adı"), {
+      target: { value: "Site A3" },
+    });
+    const saveButton = screen.getByRole("button", {
+      name: "Ön ayarı kaydet",
+    });
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
+
+    await waitFor(() =>
+      expect(call.mock.calls.map(([method]) => method)).toContain(
+        "settings/savePreset",
+      ),
+    );
+    expect(savedParams).not.toBeNull();
+    expect(savedParams).toStrictEqual({
+      opId: "files.batch_print",
+      name: "Site A3",
+      values: {
+        printer: "Office Printer",
+        copies: 3,
+        paper: "A4",
+        orientation: "auto",
+        scaling: "fit",
+        color: "printer",
+        duplex: "printer",
+        collate: true,
+        retries: 0,
+        on_error: "pause",
+        timeout_minutes: 30,
+      },
+    });
+    expect(
+      call.mock.calls.filter(([method]) => method === "settings/presets"),
+    ).toHaveLength(2);
+  });
+
+  it("operation presets replace a duplicate only after explicit confirmation", async () => {
+    const preset = {
+      id: "preset-existing",
+      name: "A4 standard",
+      values: { paper: "A4", copies: 1 },
+    };
+    const saveRequests: Record<string, unknown>[] = [];
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const call = interceptMockBridge((method, params) => {
+      if (method === "settings/presets") {
+        return { handled: true, value: [preset] };
+      }
+      if (method === "settings/savePreset") {
+        saveRequests.push(params);
+        return params.replace === true
+          ? { handled: true, value: preset }
+          : {
+              handled: true,
+              value: Promise.reject(new Error("error.preset.duplicate")),
+            };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.change(
+      await screen.findByLabelText("Yeni ön ayar adı"),
+      { target: { value: "A4 standard" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ön ayarı kaydet" }),
+    );
+
+    await waitFor(() => expect(saveRequests).toHaveLength(2));
+    expect(confirm).toHaveBeenCalledWith(
+      "A4 standard adlı ön ayar zaten var. Değiştirilsin mi?",
+    );
+    expect(saveRequests[0]).not.toHaveProperty("replace");
+    expect(saveRequests[1]).toMatchObject({
+      opId: "files.batch_print",
+      name: "A4 standard",
+      replace: true,
+    });
+    expect(
+      call.mock.calls.filter(([method]) => method === "settings/presets"),
+    ).toHaveLength(2);
+  });
+
+  it("operation presets delete only after confirmation and command success", async () => {
+    const first = {
+      id: "preset-first",
+      name: "A3 duplex",
+      values: { paper: "A3", duplex: "long" },
+    };
+    const second = {
+      id: "preset-second",
+      name: "A4 simplex",
+      values: { paper: "A4", duplex: "simplex" },
+    };
+    let presets = [first, second];
+    let resolveDelete!: () => void;
+    const deleteResult = new Promise<{ ok: true }>((resolve) => {
+      resolveDelete = () => {
+        presets = [second];
+        resolve({ ok: true });
+      };
+    });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const call = interceptMockBridge((method, params) => {
+      if (method === "settings/presets") {
+        return { handled: true, value: presets };
+      }
+      if (method === "settings/deletePreset") {
+        expect(confirm).toHaveBeenCalled();
+        expect(params).toStrictEqual({
+          opId: "files.batch_print",
+          presetId: "preset-first",
+        });
+        return { handled: true, value: deleteResult };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    const select = await screen.findByLabelText("Kayıtlı ön ayar");
+    fireEvent.change(select, { target: { value: "preset-first" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ön ayarı sil" }),
+    );
+
+    expect(confirm).toHaveBeenCalledWith(
+      "A3 duplex adlı ön ayar silinsin mi?",
+    );
+    expect(screen.getByRole("option", { name: "A3 duplex" })).toBeVisible();
+
+    resolveDelete();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("option", { name: "A3 duplex" }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.getByRole("option", { name: "A4 simplex" }),
+    ).toBeVisible();
+    expect(
+      call.mock.calls.filter(([method]) => method === "settings/presets"),
+    ).toHaveLength(2);
+  });
+
+  it("operation presets show localized command errors", async () => {
+    const writeError = Object.assign(
+      new Error("settings could not be saved"),
+      { code: "settings_write_failed" },
+    );
+    const call = interceptMockBridge((method) => {
+      if (method === "settings/presets") {
+        return { handled: true, value: [] };
+      }
+      if (method === "settings/savePreset") {
+        return {
+          handled: true,
+          value: Promise.reject(writeError),
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.change(
+      await screen.findByLabelText("Yeni ön ayar adı"),
+      { target: { value: "Unavailable" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ön ayarı kaydet" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Ön ayar ayarları kaydedilemedi. Tekrar deneyin.",
+      ),
+    ).toBeVisible();
+    expect(
+      call.mock.calls.filter(([method]) => method === "settings/presets"),
+    ).toHaveLength(1);
+  });
+
   it("localizes the invalid RFI workbook error in every supported language", () => {
     const expected = {
       tr: "Geçerli bir makro etkin .xlsm veya standart .xlsx RFI Log dosyası seç.",

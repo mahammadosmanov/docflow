@@ -471,6 +471,58 @@ h2 {
   display: grid;
   gap: calc(14px * var(--space));
 }
+.preset-toolbar {
+  margin-bottom: calc(20px * var(--space));
+  padding: 14px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.preset-toolbar-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.preset-toolbar-heading h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+.preset-toolbar-heading small,
+.preset-toolbar > small {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+.preset-toolbar-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+}
+.preset-toolbar-row.preset-save-row {
+  grid-template-columns: minmax(180px, 1fr) auto;
+}
+.preset-toolbar .field {
+  min-width: 0;
+  gap: 5px;
+}
+.preset-name input {
+  min-width: 0;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  outline: 0;
+}
+.preset-name input:focus {
+  border-color: var(--text);
+}
 .field {
   display: grid;
   gap: 7px;
@@ -1766,6 +1818,18 @@ textarea:focus-visible {
   }
   .sheet-count-grid {
     grid-template-columns: repeat(2, minmax(110px, 1fr));
+  }
+  .preset-toolbar-row,
+  .preset-toolbar-row.preset-save-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .preset-select,
+  .preset-name,
+  .preset-save-row .button {
+    grid-column: 1 / -1;
+  }
+  .preset-toolbar-row .button {
+    width: 100%;
   }
   .admin-row {
     flex-wrap: wrap;

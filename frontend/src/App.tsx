@@ -42,6 +42,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -61,6 +62,7 @@ import type {
   HistoryPayload,
   HistoryRow,
   OperationDef,
+  OperationPreset,
   OperationResult,
   ParamDef,
   PathSelection,
@@ -99,6 +101,24 @@ function isPathSelection(value: unknown): value is PathSelection {
 
 export function humanError(error: unknown, s: Strings): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (/error\.preset\.nameInvalid|preset[_ .-]?name[_ .-]?invalid/i.test(raw))
+    return s.t("error.preset.nameInvalid");
+  if (
+    /error\.preset\.duplicate|duplicate[_ .-]?preset|preset.*already exists/i.test(
+      raw,
+    )
+  )
+    return s.t("error.preset.duplicate");
+  if (/error\.preset\.limit|preset[_ .-]?(?:capacity|limit)/i.test(raw))
+    return s.t("error.preset.limit");
+  if (
+    /error\.preset\.stale|preset[_ .-]?(?:missing|stale|not found)/i.test(
+      raw,
+    )
+  )
+    return s.t("error.preset.stale");
+  if (/error\.preset\.write|preset.*(?:write|persist|save).*fail/i.test(raw))
+    return s.t("error.preset.write");
   if (/^(?:Error:\s*)?error\.rfi\.workbookInvalid$/.test(raw))
     return s.t("error.rfi.workbookInvalid");
   if (/email_required/i.test(raw)) return s.t("auth.emailSignInHelp");
@@ -115,6 +135,13 @@ export function humanError(error: unknown, s: Strings): string {
   if (/weak_password|Password should be/i.test(raw))
     return s.t("auth.err.weakPassword");
   return raw.replace(/^Error:\s*/, "");
+}
+
+function isDuplicatePresetError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  return /error\.preset\.duplicate|duplicate[_ .-]?preset|preset.*already exists/i.test(
+    raw,
+  );
 }
 
 function applyAppearance(prefs: AppPrefs): void {
@@ -767,6 +794,7 @@ function OperationScreen({
   );
   const [values, setValues] =
     useState<Record<string, unknown>>(defaults);
+  const valuesRevision = useRef(0);
   const [stage, setStage] = useState<
     "form" | "previewing" | "preview" | "applying" | "result"
   >("form");
@@ -782,11 +810,13 @@ function OperationScreen({
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
+    const hydrationRevision = ++valuesRevision.current;
     void bridge
       .call("settings/params", {
         opId: operation.id,
       })
       .then((saved) => {
+        if (valuesRevision.current !== hydrationRevision) return;
         const known = new Set(
           operation.schema.map((item) => item.name),
         );
@@ -987,6 +1017,22 @@ function OperationScreen({
                   <p>{s.t(operation.descriptionKey)}</p>
                 </div>
               </div>
+              {operation.supportsPresets && (
+                <PresetToolbar
+                  bridge={bridge}
+                  operation={operation}
+                  values={values}
+                  s={s}
+                  onApply={(preset) => {
+                    valuesRevision.current += 1;
+                    setValues((current) => ({
+                      ...current,
+                      ...preset.values,
+                    }));
+                  }}
+                  onError={setError}
+                />
+              )}
               <div className="form-stack">
                 {operation.schema
                   .filter((param) =>
@@ -1003,12 +1049,13 @@ function OperationScreen({
                     value={values[param.name]}
                     values={values}
                     s={s}
-                    onChange={(value) =>
+                    onChange={(value) => {
+                      valuesRevision.current += 1;
                       setValues((current) => ({
                         ...current,
                         [param.name]: value,
-                      }))
-                    }
+                      }));
+                    }}
                   />
                 ))}
               </div>
@@ -1140,6 +1187,229 @@ function OperationScreen({
   );
 }
 
+type PresetToolbarProps = {
+  bridge: Bridge;
+  operation: OperationDef;
+  values: Record<string, unknown>;
+  s: Strings;
+  onApply: (preset: OperationPreset) => void;
+  onError: (message: string) => void;
+};
+
+function presetCapableValues(
+  operation: OperationDef,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const allowed = new Set(
+    operation.schema
+      .filter((param) =>
+        param.kind === "bool" ||
+        param.kind === "choice" ||
+        param.kind === "int",
+      )
+      .map((param) => param.name),
+  );
+  return Object.fromEntries(
+    Object.entries(values).filter(([name]) => allowed.has(name)),
+  );
+}
+
+function presetCommandError(error: unknown, s: Strings): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "settings_write_failed"
+  ) {
+    return s.t("error.preset.write");
+  }
+  return humanError(error, s);
+}
+
+function PresetToolbar({
+  bridge,
+  operation,
+  values,
+  s,
+  onApply,
+  onError,
+}: PresetToolbarProps) {
+  const [presets, setPresets] = useState<OperationPreset[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const loadPresets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await bridge.call("settings/presets", {
+        opId: operation.id,
+      });
+      setPresets(next);
+      return next;
+    } catch (reason) {
+      onError(presetCommandError(reason, s));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [bridge, onError, operation.id, s]);
+
+  useEffect(() => {
+    if (!operation.supportsPresets) return;
+    void loadPresets();
+  }, [loadPresets, operation.supportsPresets]);
+
+  const selected = presets.find((preset) => preset.id === selectedId);
+  const applyPreset = () => {
+    if (!selected) return;
+    onApply({
+      ...selected,
+      values: presetCapableValues(operation, selected.values),
+    });
+  };
+  const savePreset = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName || busy) return;
+    setBusy(true);
+    setStatus("");
+    onError("");
+    try {
+      const presetValues = presetCapableValues(operation, values);
+      let saved: OperationPreset;
+      try {
+        saved = await bridge.call("settings/savePreset", {
+          opId: operation.id,
+          name: trimmedName,
+          values: presetValues,
+        });
+      } catch (reason) {
+        if (
+          !isDuplicatePresetError(reason) ||
+          !window.confirm(
+            s.t("preset.confirm.replace", { name: trimmedName }),
+          )
+        ) {
+          throw reason;
+        }
+        saved = await bridge.call("settings/savePreset", {
+          opId: operation.id,
+          name: trimmedName,
+          values: presetValues,
+          replace: true,
+        });
+      }
+      const next = await loadPresets();
+      if (next) {
+        setSelectedId(saved.id);
+        setName("");
+        setStatus(s.t("preset.saved", { name: saved.name }));
+      }
+    } catch (reason) {
+      onError(presetCommandError(reason, s));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const deletePreset = async () => {
+    if (
+      !selected ||
+      busy ||
+      !window.confirm(
+        s.t("preset.confirm.delete", { name: selected.name }),
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setStatus("");
+    onError("");
+    try {
+      await bridge.call("settings/deletePreset", {
+        opId: operation.id,
+        presetId: selected.id,
+      });
+      const deletedName = selected.name;
+      const next = await loadPresets();
+      if (next) {
+        setSelectedId("");
+        setStatus(s.t("preset.deleted", { name: deletedName }));
+      }
+    } catch (reason) {
+      onError(presetCommandError(reason, s));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="preset-toolbar" aria-labelledby="preset-title">
+      <div className="preset-toolbar-heading">
+        <h3 id="preset-title">{s.t("preset.title")}</h3>
+        {!loading && presets.length === 0 && (
+          <small>{s.t("preset.empty")}</small>
+        )}
+      </div>
+      <div className="preset-toolbar-row">
+        <label className="field preset-select">
+          <span>{s.t("preset.select")}</span>
+          <select
+            value={selectedId}
+            disabled={loading || busy}
+            onChange={(event) => setSelectedId(event.target.value)}
+          >
+            <option value="">{s.t("preset.select.placeholder")}</option>
+            {presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={!selected || busy}
+          onClick={applyPreset}
+        >
+          {s.t("preset.apply")}
+        </Button>
+        <Button
+          type="button"
+          variant="danger"
+          icon={<Trash2 />}
+          disabled={!selected || busy}
+          onClick={deletePreset}
+        >
+          {s.t("preset.delete")}
+        </Button>
+      </div>
+      <div className="preset-toolbar-row preset-save-row">
+        <label className="field preset-name">
+          <span>{s.t("preset.name")}</span>
+          <input
+            type="text"
+            value={name}
+            disabled={busy}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <Button
+          type="button"
+          icon={busy ? <LoaderCircle className="spin" /> : <Save />}
+          disabled={!name.trim() || busy}
+          onClick={savePreset}
+        >
+          {s.t("preset.save")}
+        </Button>
+      </div>
+      {status && <small role="status">{status}</small>}
+    </section>
+  );
+}
+
 function SchemaField({
   bridge,
   operationId,
@@ -1176,13 +1446,19 @@ function SchemaField({
     );
   }
   if (param.kind === "choice") {
+    const currentChoice = String(value ?? "");
+    const choiceIsTemporarilyUnavailable =
+      currentChoice.length > 0 && !param.choices.includes(currentChoice);
     return (
       <label className="field">
         <span>{s.t(param.labelKey)}</span>
         <select
-          value={String(value ?? "")}
+          value={currentChoice}
           onChange={(event) => onChange(event.target.value)}
         >
+          {choiceIsTemporarilyUnavailable && (
+            <option value={currentChoice}>{currentChoice}</option>
+          )}
           {param.choices.map((choice) => (
             <option key={choice} value={choice}>
               {param.choiceLabels?.[choice]
