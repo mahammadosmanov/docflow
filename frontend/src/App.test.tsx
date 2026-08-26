@@ -823,6 +823,62 @@ describe("DocFlow shell", () => {
     }
   });
 
+  it("submits one edited print page range without changing the other files or their order", async () => {
+    const call = vi.spyOn(MockBridge.prototype, "call");
+
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    expect(
+      await screen.findByRole("columnheader", { name: "Sayfa aralığı" }),
+    ).toBeVisible();
+    const pageRanges = screen.getAllByRole("textbox");
+    expect(pageRanges).toHaveLength(2);
+    expect(pageRanges[0]).toHaveValue("all");
+    expect(pageRanges[1]).toHaveValue("all");
+
+    fireEvent.change(pageRanges[0], { target: { value: "2-3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uygula" }));
+
+    await waitFor(() =>
+      expect(
+        call.mock.calls.filter(([method]) => method === "engine/revise"),
+      ).toHaveLength(1),
+    );
+    const reviseCall = call.mock.calls.find(
+      ([method]) => method === "engine/revise",
+    );
+    const rows = (reviseCall?.[1] as { rows: Record<string, unknown>[] }).rows;
+    expect(
+      rows.map(({ _rowId, file, path, pageRange }) => ({
+        _rowId,
+        file,
+        path,
+        pageRange,
+      })),
+    ).toStrictEqual([
+      {
+        _rowId: "file-1",
+        file: "first.pdf",
+        path: "/Users/demo/Documents/first.pdf",
+        pageRange: "2-3",
+      },
+      {
+        _rowId: "file-2",
+        file: "second.docx",
+        path: "/Users/demo/Documents/second.docx",
+        pageRange: "all",
+      },
+    ]);
+  });
+
   it("opens preferences before authentication", async () => {
     render(<App />);
     await screen.findByRole("heading", { name: "DocFlow" });

@@ -433,6 +433,7 @@ export class MockBridge implements Bridge {
   private auth: AuthState = signedOut;
   private prefs: AppPrefs = { ...defaultPrefs };
   private params: Record<string, unknown> = {};
+  private printPlan: Plan | null = null;
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -536,6 +537,7 @@ export class MockBridge implements Bridge {
             file: path.split(/[\\/]/).pop() ?? path,
             path,
             format: path.split(".").pop()?.toUpperCase() ?? "FILE",
+            pageRange: "all",
             printer: "Office Printer",
             paper: index ? "A3" : "A4",
             orientation: "auto",
@@ -544,7 +546,7 @@ export class MockBridge implements Bridge {
             duplex: "printer",
             copies: 1,
           }));
-          result = {
+          const plan = {
             planId: "demo-print-plan",
             opId: "files.batch_print",
             warnings: [],
@@ -562,6 +564,7 @@ export class MockBridge implements Bridge {
                   { key: "status", labelKey: "print.col.status", kind: "readonly", width: 90, bulk: false },
                   { key: "file", labelKey: "print.col.file", kind: "readonly", width: 260, bulk: false },
                   { key: "format", labelKey: "print.col.format", kind: "readonly", width: 76, bulk: false },
+                  { key: "pageRange", labelKey: "print.col.pageRange", helpKey: "print.col.pageRange.help", kind: "text", width: 112, bulk: false },
                   { key: "printer", labelKey: "print.col.printer", kind: "choice", width: 180 },
                   { key: "paper", labelKey: "print.col.paper", kind: "choice", width: 88 },
                   { key: "orientation", labelKey: "print.col.orientation", kind: "choice", width: 110 },
@@ -590,6 +593,8 @@ export class MockBridge implements Bridge {
               meta: {},
             })),
           } satisfies Plan;
+          this.printPlan = plan;
+          result = plan;
           break;
         }
         if (params.opId === "rfi.log_add") {
@@ -709,6 +714,35 @@ export class MockBridge implements Bridge {
             },
           ],
         } satisfies Plan;
+        break;
+      }
+      case "engine/revise": {
+        if (!this.printPlan || params.planId !== this.printPlan.planId) {
+          throw new Error("Unknown demo print plan");
+        }
+        const rows = Array.isArray(params.rows)
+          ? params.rows.map((row) => ({ ...row }))
+          : [];
+        const editor = this.printPlan.meta.editor as Record<string, unknown>;
+        const revised = {
+          ...this.printPlan,
+          planId: "demo-print-plan-revised",
+          meta: {
+            ...this.printPlan.meta,
+            editor: { ...editor, rows },
+          },
+          steps: rows
+            .filter((row) => row.enabled !== false)
+            .map((row) => ({
+              kind: "print" as const,
+              src: String(row.path),
+              dst: String(row.path),
+              noteKey: "note.print.queued",
+              meta: {},
+            })),
+        } satisfies Plan;
+        this.printPlan = revised;
+        result = revised;
         break;
       }
       case "engine/apply":
