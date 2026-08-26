@@ -4,6 +4,14 @@ use std::collections::BTreeMap;
 
 pub type JsonObject = Map<String, Value>;
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationPreset {
+    pub id: String,
+    pub name: String,
+    pub values: JsonObject,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ParamKind {
     #[serde(rename = "folder")]
@@ -93,6 +101,8 @@ pub struct OperationDef {
     pub title_key: String,
     pub description_key: String,
     pub schema: ParamSchema,
+    #[serde(default)]
+    pub supports_presets: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -281,6 +291,30 @@ pub struct PrintQueueSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn operation_supports_presets_serializes_enabled_and_defaults_disabled() {
+        let enabled = OperationDef {
+            id: "files.batch_print".to_string(),
+            title_key: "op.files.batch_print.title".to_string(),
+            description_key: "op.files.batch_print.desc".to_string(),
+            schema: ParamSchema { params: Vec::new() },
+            supports_presets: true,
+        };
+        assert_eq!(
+            serde_json::to_value(enabled).expect("enabled operation should serialize")["supportsPresets"],
+            serde_json::json!(true)
+        );
+
+        let disabled: OperationDef = serde_json::from_value(serde_json::json!({
+            "id": "rfi.process_scans",
+            "titleKey": "op.rfi.process_scans.title",
+            "descriptionKey": "op.rfi.process_scans.desc",
+            "schema": []
+        }))
+        .expect("legacy operation without preset capability should deserialize");
+        assert!(!disabled.supports_presets);
+    }
 
     #[test]
     fn protocol_one_plan_and_journal_snapshots_preserve_nulls_and_omissions() {

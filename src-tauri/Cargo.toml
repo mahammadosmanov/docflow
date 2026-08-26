@@ -34,6 +34,7 @@ uuid = { version = "1", features = ["v4"] }
 unicode-normalization = "0.1"
 zeroize = "1"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
+unicode-casefold = "0.2.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3.7"

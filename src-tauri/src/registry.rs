@@ -59,6 +59,7 @@ fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
         title_key: format!("op.{id}.title"),
         description_key: format!("op.{id}.desc"),
         schema: ParamSchema { params: schema },
+        supports_presets: false,
     }
 }
 
@@ -203,7 +204,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             .map(|value| ((*value).to_string(), format!("{prefix}.{value}")))
             .collect()
     };
-    let batch_print = operation(
+    let mut batch_print = operation(
         "files.batch_print",
         vec![
             parameter(
@@ -343,6 +344,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             ),
         ],
     );
+    batch_print.supports_presets = true;
 
     let stage_signed_pages = operation(
         "rfi.stage_signed_first_pages",

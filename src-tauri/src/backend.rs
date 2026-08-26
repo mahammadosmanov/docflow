@@ -24,6 +24,12 @@ pub(crate) enum BackendMethod {
     SettingsParams,
     #[serde(rename = "settings/saveParams")]
     SettingsSaveParams,
+    #[serde(rename = "settings/presets")]
+    SettingsPresets,
+    #[serde(rename = "settings/savePreset")]
+    SettingsSavePreset,
+    #[serde(rename = "settings/deletePreset")]
+    SettingsDeletePreset,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -78,7 +84,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 28] = [
+    pub(crate) const ALL: [Self; 31] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -92,6 +98,9 @@ impl BackendMethod {
         Self::SettingsReset,
         Self::SettingsParams,
         Self::SettingsSaveParams,
+        Self::SettingsPresets,
+        Self::SettingsSavePreset,
+        Self::SettingsDeletePreset,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -120,6 +129,9 @@ impl BackendMethod {
             Self::SettingsReset => "settings/reset",
             Self::SettingsParams => "settings/params",
             Self::SettingsSaveParams => "settings/saveParams",
+            Self::SettingsPresets => "settings/presets",
+            Self::SettingsSavePreset => "settings/savePreset",
+            Self::SettingsDeletePreset => "settings/deletePreset",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",

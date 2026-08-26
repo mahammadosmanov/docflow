@@ -14,7 +14,10 @@ use crate::{
     backend::BackendMethod,
     clipboard,
     cloud::CloudHistory,
-    contracts::{AppPrefs, Bootstrap, ParamKind, PrintQueueSummary, ProgressEvent, StepKind},
+    contracts::{
+        AppPrefs, Bootstrap, JsonObject, OperationDef, ParamKind, PrintQueueSummary, ProgressEvent,
+        StepKind,
+    },
     credentials::OsCredentialStore,
     errors::BackendError,
     fs_ops::FilesystemAuthority,
@@ -38,7 +41,7 @@ use crate::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
     },
     rfi_log,
-    settings::{SettingsStore, default_settings_path},
+    settings::{PresetStoreError, SettingsStore, default_settings_path},
 };
 
 const SUPABASE_URL: &str = "https://ndpkgbfmshceffwhpqoz.supabase.co";
@@ -171,6 +174,35 @@ impl NativeBackend {
                 self.settings
                     .save_params(&request.op_id, values)
                     .map_err(|_| BackendError::settings_write())?;
+                Ok(json!({"ok": true}))
+            }
+            BackendMethod::SettingsPresets => {
+                let request: OperationIdParams = decode(params)?;
+                validate_operation_id(&request.op_id)?;
+                let operation = self.preset_operation(&request.op_id)?;
+                encode(
+                    self.settings
+                        .presets_for(&operation)
+                        .map_err(preset_store_error)?,
+                )
+            }
+            BackendMethod::SettingsSavePreset => {
+                let request: SavePresetParams = decode(params)?;
+                validate_operation_id(&request.op_id)?;
+                let operation = self.preset_operation(&request.op_id)?;
+                encode(
+                    self.settings
+                        .save_preset(&operation, &request.name, request.values, request.replace)
+                        .map_err(preset_store_error)?,
+                )
+            }
+            BackendMethod::SettingsDeletePreset => {
+                let request: DeletePresetParams = decode(params)?;
+                validate_operation_id(&request.op_id)?;
+                let operation = self.preset_operation(&request.op_id)?;
+                self.settings
+                    .delete_preset(&operation, &request.preset_id)
+                    .map_err(preset_store_error)?;
                 Ok(json!({"ok": true}))
             }
             BackendMethod::AuthSignIn => {
@@ -327,6 +359,19 @@ impl NativeBackend {
 
     fn selected_params(&self, operation_id: &str) -> Result<Map<String, Value>, BackendError> {
         filter_saved_operation_params(operation_id, self.settings.params_for(operation_id))
+    }
+
+    fn preset_operation(&self, operation_id: &str) -> Result<OperationDef, BackendError> {
+        let operation = operation_registry(self.registry_facts())
+            .into_iter()
+            .find(|operation| operation.id == operation_id)
+            .ok_or_else(|| BackendError::validation("unknown operation ID"))?;
+        if !operation.supports_presets {
+            return Err(BackendError::validation(
+                "operation does not support presets",
+            ));
+        }
+        Ok(operation)
     }
 
     fn materialize_preview(&self, params: Value) -> Result<Value, BackendError> {
@@ -973,6 +1018,17 @@ fn filter_saved_operation_params(
     Ok(values)
 }
 
+fn preset_store_error(error: PresetStoreError) -> BackendError {
+    match error {
+        PresetStoreError::InvalidName => BackendError::validation("error.preset.nameInvalid"),
+        PresetStoreError::InvalidValue => BackendError::validation("preset value is invalid"),
+        PresetStoreError::DuplicateName => BackendError::validation("error.preset.duplicate"),
+        PresetStoreError::LimitReached => BackendError::validation("error.preset.limit"),
+        PresetStoreError::Missing => BackendError::validation("error.preset.missing"),
+        PresetStoreError::Write(_) => BackendError::settings_write(),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EmptyParams {}
@@ -988,6 +1044,23 @@ struct OperationIdParams {
 struct SaveParams {
     op_id: String,
     values: Map<String, Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavePresetParams {
+    op_id: String,
+    name: String,
+    values: JsonObject,
+    #[serde(default)]
+    replace: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DeletePresetParams {
+    op_id: String,
+    preset_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1757,6 +1830,182 @@ mod tests {
         assert_eq!(filtered.get("email_provider"), Some(&json!("gemini")));
         assert!(!filtered.contains_key("gemini_api_key"));
         assert!(!filtered.contains_key("unknown"));
+    }
+
+    #[test]
+    fn settings_presets_commands_are_capability_checked_filtered_and_typed() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+
+        let saved = backend
+            .dispatch(
+                BackendMethod::SettingsSavePreset,
+                json!({
+                    "opId": "files.batch_print",
+                    "name": "Office",
+                    "values": {
+                        "paper": "A4",
+                        "copies": 2,
+                        "collate": true,
+                        "files": [{"selectionId": "forged"}],
+                        "email_text": "must not persist",
+                        "nested": {"bad": true}
+                    }
+                }),
+            )
+            .unwrap();
+        assert_eq!(saved["name"], "Office");
+        assert_eq!(
+            saved["values"],
+            json!({
+                "paper": "A4",
+                "copies": 2,
+                "collate": true
+            })
+        );
+
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::SettingsSavePreset,
+                    json!({
+                        "opId": "files.batch_print",
+                        "name": "office",
+                        "values": {"copies": 3}
+                    }),
+                )
+                .unwrap_err()
+                .message,
+            "error.preset.duplicate"
+        );
+        let replaced = backend
+            .dispatch(
+                BackendMethod::SettingsSavePreset,
+                json!({
+                    "opId": "files.batch_print",
+                    "name": "office",
+                    "values": {"copies": 3},
+                    "replace": true
+                }),
+            )
+            .unwrap();
+        assert_eq!(replaced["id"], saved["id"]);
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::SettingsPresets,
+                    json!({"opId": "files.batch_print"}),
+                )
+                .unwrap(),
+            json!([replaced])
+        );
+
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::SettingsSavePreset,
+                    json!({
+                        "opId": "files.batch_print",
+                        "name": "Bad choice",
+                        "values": {"paper": "Tabloid"}
+                    }),
+                )
+                .unwrap_err()
+                .code,
+            "validation"
+        );
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::SettingsPresets,
+                    json!({"opId": "rfi.process_scans"}),
+                )
+                .unwrap_err()
+                .code,
+            "validation"
+        );
+
+        backend
+            .dispatch(
+                BackendMethod::SettingsDeletePreset,
+                json!({
+                    "opId": "files.batch_print",
+                    "presetId": saved["id"]
+                }),
+            )
+            .unwrap();
+        assert_eq!(
+            backend
+                .dispatch(
+                    BackendMethod::SettingsPresets,
+                    json!({"opId": "files.batch_print"}),
+                )
+                .unwrap(),
+            json!([])
+        );
+    }
+
+    #[test]
+    fn settings_save_preset_sanitizes_existing_stored_values_before_rewrite() {
+        let temporary = tempfile::tempdir().unwrap();
+        let settings_path = temporary.path().join("settings.json");
+        let existing_id = uuid::Uuid::new_v4().to_string();
+        std::fs::write(
+            &settings_path,
+            serde_json::to_vec(&json!({
+                "operationPresets": {
+                    "files.batch_print": [{
+                        "id": existing_id.clone(),
+                        "name": "Stored",
+                        "values": {
+                            "paper": "A4",
+                            "copies": 2,
+                            "collate": true,
+                            "files": [{"selectionId": "forged"}],
+                            "email_text": "must not persist",
+                            "gemini_api_key": "must not persist",
+                            "retries": "3",
+                            "duplex": "sideways",
+                            "unknownArray": [1, 2, 3],
+                            "unknownObject": {"bad": true}
+                        }
+                    }]
+                },
+                "custom": {"keep": true}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let backend = test_backend(&temporary);
+
+        backend
+            .dispatch(
+                BackendMethod::SettingsSavePreset,
+                json!({
+                    "opId": "files.batch_print",
+                    "name": "New",
+                    "values": {"copies": 1}
+                }),
+            )
+            .unwrap();
+
+        let persisted: Value =
+            serde_json::from_slice(&std::fs::read(settings_path).unwrap()).unwrap();
+        let stored = persisted["operationPresets"]["files.batch_print"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|preset| preset["id"] == existing_id)
+            .unwrap();
+        assert_eq!(
+            stored["values"],
+            json!({
+                "paper": "A4",
+                "copies": 2,
+                "collate": true
+            })
+        );
+        assert_eq!(persisted["custom"], json!({"keep": true}));
     }
 
     #[test]

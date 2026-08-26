@@ -5,6 +5,7 @@ import type {
   Bootstrap,
   HistoryPayload,
   OperationResult,
+  OperationPreset,
   PathSelection,
   Plan,
   PrintQueueSummary,
@@ -49,6 +50,20 @@ export interface FrontendCommandMap {
   >;
   "settings/saveParams": CommandSpec<
     { opId: string; values: Record<string, unknown> },
+    Ok
+  >;
+  "settings/presets": CommandSpec<{ opId: string }, OperationPreset[]>;
+  "settings/savePreset": CommandSpec<
+    {
+      opId: string;
+      name: string;
+      values: Record<string, unknown>;
+      replace?: boolean;
+    },
+    OperationPreset
+  >;
+  "settings/deletePreset": CommandSpec<
+    { opId: string; presetId: string },
     Ok
   >;
   "engine/preview": CommandSpec<
@@ -114,6 +129,9 @@ export const FRONTEND_METHODS = [
   "settings/reset",
   "settings/params",
   "settings/saveParams",
+  "settings/presets",
+  "settings/savePreset",
+  "settings/deletePreset",
   "engine/preview",
   "engine/apply",
   "engine/cancel",

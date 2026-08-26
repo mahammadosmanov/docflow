@@ -94,6 +94,7 @@ const demoOperation: OperationDef = {
   id: "rfi.process_scans",
   titleKey: "op.rfi.process_scans.title",
   descriptionKey: "op.rfi.process_scans.desc",
+  supportsPresets: false,
   schema: [
     {
       name: "source",
@@ -135,6 +136,7 @@ const demoRfiOperation: OperationDef = {
   id: "rfi.log_add",
   titleKey: "op.rfi.log_add.title",
   descriptionKey: "op.rfi.log_add.desc",
+  supportsPresets: false,
   schema: [
     {
       name: "workbook",
@@ -201,6 +203,7 @@ const demoPrintOperation: OperationDef = {
   id: "files.batch_print",
   titleKey: "op.files.batch_print.title",
   descriptionKey: "op.files.batch_print.desc",
+  supportsPresets: true,
   schema: [
     {
       name: "files",
@@ -341,6 +344,7 @@ const demoSignedPagesOperation: OperationDef = {
   id: "rfi.stage_signed_first_pages",
   titleKey: "op.rfi.stage_signed_first_pages.title",
   descriptionKey: "op.rfi.stage_signed_first_pages.desc",
+  supportsPresets: false,
   schema: [
     {
       name: "signed_scans",

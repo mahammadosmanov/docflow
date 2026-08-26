@@ -27,6 +27,13 @@ export interface OperationDef {
   titleKey: string;
   descriptionKey: string;
   schema: ParamDef[];
+  supportsPresets: boolean;
+}
+
+export interface OperationPreset {
+  id: string;
+  name: string;
+  values: Record<string, unknown>;
 }
 
 export interface Step {
