@@ -138,3 +138,47 @@ fn initialize_runtime() -> Result<RuntimeGuard, String> {
     };
     Ok(RuntimeGuard(initialized))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, os::windows::ffi::OsStrExt};
+
+    #[test]
+    fn opens_a_pdf_through_an_extended_length_canonical_path() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut directory = fs::canonicalize(fixture.path()).unwrap();
+        while directory.as_os_str().encode_wide().count() < 300 {
+            directory.push("docflow-extended-path-segment");
+        }
+        fs::create_dir_all(&directory).unwrap();
+        let pdf = directory.join("scan.pdf");
+        fs::write(&pdf, minimal_pdf()).unwrap();
+
+        assert!(pdf.as_os_str().encode_wide().count() > 260);
+        assert_eq!(page_count(&pdf).unwrap(), 1);
+    }
+
+    fn minimal_pdf() -> Vec<u8> {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+        ];
+        let mut bytes = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (index, object) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+        }
+        let xref = bytes.len();
+        bytes.extend_from_slice(b"xref\n0 4\n0000000000 65535 f \n");
+        for offset in offsets {
+            bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        bytes.extend_from_slice(
+            format!("trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes(),
+        );
+        bytes
+    }
+}
