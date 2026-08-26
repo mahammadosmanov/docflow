@@ -10,6 +10,8 @@ use std::{
 };
 
 use docflow_lib::{
+    operations::batch_print::validate_job,
+    page_range::PageRangeCapability,
     paths::CallerIdentity,
     print_queue::{
         BatchPrintParams, PrintAdapter, PrintFailure, PrintJob, PrintJobSupport, PrintService,
@@ -27,7 +29,9 @@ struct FakeAdapter {
     inventory: PrinterInventory,
     outcomes: Mutex<VecDeque<Result<(), PrintFailure>>>,
     submitted: Mutex<Vec<PrintJob>>,
+    inspected_settings: Mutex<Vec<PrintSettings>>,
     inspected: AtomicUsize,
+    pdf_page_count: Mutex<Option<u32>>,
     unsupported_paper: Mutex<Option<String>>,
     submit_gate: Mutex<Option<SubmitGate>>,
 }
@@ -46,6 +50,10 @@ impl FakeAdapter {
     fn push(&self, outcome: Result<(), PrintFailure>) {
         self.outcomes.lock().unwrap().push_back(outcome);
     }
+
+    fn set_pdf_page_count(&self, page_count: u32) {
+        *self.pdf_page_count.lock().unwrap() = Some(page_count);
+    }
 }
 
 impl PrintAdapter for FakeAdapter {
@@ -60,13 +68,22 @@ impl PrintAdapter for FakeAdapter {
         settings: &PrintSettings,
     ) -> Result<PrintJobSupport, PrintFailure> {
         self.inspected.fetch_add(1, Ordering::SeqCst);
+        self.inspected_settings
+            .lock()
+            .unwrap()
+            .push(settings.clone());
         if self.unsupported_paper.lock().unwrap().as_deref() == Some(settings.paper.as_str()) {
             return Err(PrintFailure::unsupported_options(
                 "paper is unsupported by the test printer",
             ));
         }
         match path.extension().and_then(|value| value.to_str()) {
-            Some("pdf") => Ok(PrintJobSupport::controlled()),
+            Some("pdf") => Ok(PrintJobSupport::controlled_pdf(
+                *self.pdf_page_count.lock().unwrap(),
+            )),
+            Some("png" | "jpg" | "jpeg" | "bmp" | "tif" | "tiff") => {
+                Ok(PrintJobSupport::single_page())
+            }
             Some("docx") => Ok(PrintJobSupport::native_application()),
             _ => Err(PrintFailure::unsupported("unsupported test format")),
         }
@@ -122,7 +139,7 @@ impl PrintAdapter for ParentSwapAdapter {
             std::fs::rename(&self.visible_parent, &self.pinned_parent).unwrap();
             symlink(&self.outside_parent, &self.visible_parent).unwrap();
         }
-        Ok(PrintJobSupport::controlled())
+        Ok(PrintJobSupport::controlled_pdf(None))
     }
 
     fn submit(&self, job: &PrintJob, _cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {
@@ -298,6 +315,405 @@ fn revise_preserves_row_identity_and_applies_per_file_selection_and_settings() {
         assert_eq!(job["orientation"], "landscape");
         assert_eq!(job["color"], "grayscale");
     }
+}
+
+#[test]
+fn preview_defaults_page_range_to_all() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(3);
+    let service = print_service(&root, adapter);
+
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+
+    assert_eq!(plan.meta["editor"]["rows"][0]["pageRange"], "all");
+    assert_eq!(plan.meta["jobs"][0]["pageRange"], "all");
+    assert_eq!(plan.steps[0].meta["pageRange"], "all");
+    assert!(
+        plan.meta["editor"]["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|column| column["key"] == "pageRange" && column["kind"] == "text")
+    );
+}
+
+#[test]
+fn revise_canonicalizes_per_file_page_ranges() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("first.pdf");
+    let second = root.path().join("second.pdf");
+    std::fs::write(&first, b"first").unwrap();
+    std::fs::write(&second, b"second").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(10);
+    let service = print_service(&root, adapter);
+    let plan = service
+        .preview(
+            &caller(),
+            params(vec![first.clone(), second.clone()]),
+            |_| {},
+        )
+        .unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!(" 3, 1-2,2 ");
+    rows[1]["pageRange"] = json!("7, 5-6");
+
+    let revised = service.revise(&caller(), &plan.plan_id, &rows).unwrap();
+
+    assert_eq!(
+        revised
+            .steps
+            .iter()
+            .map(|step| (
+                step.src.as_deref().unwrap(),
+                step.meta["pageRange"].as_str().unwrap()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (first.to_str().unwrap(), "1-3"),
+            (second.to_str().unwrap(), "5-7"),
+        ]
+    );
+    assert_eq!(revised.meta["editor"]["rows"][0]["pageRange"], "1-3");
+    assert_eq!(revised.meta["editor"]["rows"][1]["pageRange"], "5-7");
+    assert_eq!(revised.meta["jobs"][0]["pageRange"], "1-3");
+    assert_eq!(revised.meta["jobs"][1]["pageRange"], "5-7");
+}
+
+#[test]
+fn out_of_bounds_pdf_revision_leaves_the_prior_plan_usable() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(2);
+    let service = print_service(&root, adapter.clone());
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!("3");
+
+    let error = service.revise(&caller(), &plan.plan_id, &rows).unwrap_err();
+
+    assert_eq!(error.message, "error.print.pageRangeBounds");
+    assert_eq!(
+        service
+            .apply(&plan.plan_id, &caller(), |_| {})
+            .unwrap()
+            .applied,
+        1
+    );
+    assert_eq!(adapter.submitted.lock().unwrap()[0].page_range, "all");
+}
+
+#[test]
+fn approved_pdf_range_is_rechecked_against_page_count_before_submission() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(3);
+    let service = print_service(&root, adapter.clone());
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!("3");
+    let revised = service.revise(&caller(), &plan.plan_id, &rows).unwrap();
+    adapter.set_pdf_page_count(2);
+
+    let result = service.apply(&revised.plan_id, &caller(), |_| {}).unwrap();
+
+    assert_eq!((result.applied, result.failed), (0, 1));
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn image_page_one_canonicalizes_to_all_and_other_pages_fail() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.png");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter.clone());
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!("1");
+
+    let revised = service.revise(&caller(), &plan.plan_id, &rows).unwrap();
+
+    assert_eq!(revised.meta["editor"]["rows"][0]["pageRange"], "all");
+    assert_eq!(revised.meta["jobs"][0]["pageRange"], "all");
+    let mut invalid = revised.meta["editor"]["rows"].as_array().unwrap().clone();
+    invalid[0]["pageRange"] = json!("2");
+    let error = service
+        .revise(&caller(), &revised.plan_id, &invalid)
+        .unwrap_err();
+    assert_eq!(error.message, "error.print.pageRangeImageUnsupported");
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn native_application_numeric_page_range_fails_before_apply() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.docx");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter.clone());
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!("1");
+
+    let error = service.revise(&caller(), &plan.plan_id, &rows).unwrap_err();
+
+    assert_eq!(error.message, "error.print.pageRangeNativeUnsupported");
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn canonical_page_ranges_persist_through_copies_retries_queue_journal_and_resume() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("first.pdf");
+    let second = root.path().join("second.pdf");
+    std::fs::write(&first, b"first").unwrap();
+    std::fs::write(&second, b"second").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(10);
+    adapter.push(Ok(()));
+    adapter.push(Err(PrintFailure::failed("first failure")));
+    adapter.push(Err(PrintFailure::failed("retry failure")));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![first, second]);
+    values.copies = 2;
+    values.retries = 1;
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["pageRange"] = json!("3,1-2");
+    rows[1]["pageRange"] = json!("5");
+    let revised = service.revise(&caller(), &plan.plan_id, &rows).unwrap();
+
+    assert_eq!(revised.steps[0].meta["pageRange"], "1-3");
+    assert_eq!(revised.steps[1].meta["pageRange"], "5");
+    assert_eq!(
+        revised.meta["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|job| job["pageRange"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["1-3", "5", "1-3", "5"]
+    );
+    let planned_job: PrintJob = serde_json::from_value(revised.meta["jobs"][0].clone()).unwrap();
+    assert_eq!(planned_job.settings().page_range, "1-3");
+
+    let result = service.apply(&revised.plan_id, &caller(), |_| {}).unwrap();
+    let queue_id = result.meta["queueId"].as_str().unwrap();
+    assert_eq!(
+        adapter
+            .submitted
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|job| job.page_range.as_str())
+            .collect::<Vec<_>>(),
+        vec!["1-3", "5", "5"]
+    );
+    assert!(
+        adapter
+            .inspected_settings
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|settings| settings.page_range == "1-3")
+    );
+    let saved: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            root.path()
+                .join("print-queues")
+                .join(format!("{queue_id}.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        saved["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|job| job["pageRange"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["1-3", "5", "1-3", "5"]
+    );
+    let journal_file = std::fs::read_dir(root.path().join("journal"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let journal: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(journal_file).unwrap()).unwrap();
+    assert_eq!(journal["steps"][0]["meta"]["pageRange"], "1-3");
+
+    let restarted = print_service(&root, adapter);
+    let resumed = restarted.resume(&caller(), queue_id).unwrap();
+    assert_eq!(
+        resumed.meta["editor"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["pageRange"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["1-3", "5", "1-3", "5"]
+    );
+}
+
+#[test]
+fn legacy_queue_without_page_range_resumes_as_all() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let queue_id = "33333333-3333-4333-8333-333333333333";
+    let queue_root = root.path().join("print-queues");
+    std::fs::create_dir_all(&queue_root).unwrap();
+    std::fs::write(
+        queue_root.join(format!("{queue_id}.json")),
+        serde_json::to_vec(&json!({
+            "version": 1,
+            "queueId": queue_id,
+            "ownerId": "operator",
+            "sessionId": "session",
+            "createdAt": "2026-08-25T00:00:00+00:00",
+            "updatedAt": "2026-08-25T00:00:01+00:00",
+            "status": "paused",
+            "currentJobId": null,
+            "jobs": [{
+                "jobId": "file-1-c1",
+                "path": file,
+                "printer": "Office Printer",
+                "verb": "docflow",
+                "format": "PDF",
+                "signature": {},
+                "status": "pending",
+                "attempts": 0,
+                "error": ""
+            }]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(3);
+    let service = print_service(&root, adapter);
+
+    let resumed = service.resume(&caller(), queue_id).unwrap();
+
+    assert_eq!(resumed.meta["editor"]["rows"][0]["pageRange"], "all");
+    assert_eq!(resumed.meta["jobs"][0]["pageRange"], "all");
+}
+
+#[test]
+fn owned_persisted_queue_with_empty_page_range_is_rejected_on_resume() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let queue_id = "44444444-4444-4444-8444-444444444444";
+    let queue_root = root.path().join("print-queues");
+    std::fs::create_dir_all(&queue_root).unwrap();
+    std::fs::write(
+        queue_root.join(format!("{queue_id}.json")),
+        serde_json::to_vec(&json!({
+            "version": 1,
+            "queueId": queue_id,
+            "ownerId": "operator",
+            "sessionId": "session",
+            "createdAt": "2026-08-25T00:00:00+00:00",
+            "updatedAt": "2026-08-25T00:00:01+00:00",
+            "status": "paused",
+            "currentJobId": null,
+            "jobs": [{
+                "jobId": "file-1-c1",
+                "path": file,
+                "printer": "Office Printer",
+                "verb": "docflow",
+                "format": "PDF",
+                "pageRange": "",
+                "signature": {},
+                "status": "pending",
+                "attempts": 0,
+                "error": ""
+            }]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(3);
+    let service = print_service(&root, adapter);
+
+    let error = service.resume(&caller(), queue_id).unwrap_err();
+
+    assert_eq!(error.message, "error.print.pageRangeInvalid");
+}
+
+#[test]
+fn forged_job_with_invalid_page_range_fails_validation_without_submission() {
+    let adapter = FakeAdapter::default();
+    let job = PrintJob {
+        job_id: "forged-c1".to_string(),
+        path: "/approved/forged.pdf".to_string(),
+        printer: "Office Printer".to_string(),
+        verb: "docflow".to_string(),
+        format: "PDF".to_string(),
+        page_range: "0".to_string(),
+        ..PrintJob::default()
+    };
+
+    let error = validate_job(&job).unwrap_err();
+
+    assert_eq!(error.message, "error.print.pageRangeInvalid");
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+    assert_eq!(
+        PrintJobSupport::controlled_pdf(Some(4)).page_range,
+        PageRangeCapability::Pdf {
+            page_count: Some(4)
+        }
+    );
 }
 
 #[test]

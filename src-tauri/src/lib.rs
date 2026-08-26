@@ -16,6 +16,7 @@ mod native;
 pub mod ocr;
 pub mod ooxml;
 pub mod operations;
+pub mod page_range;
 mod path_selection;
 pub mod paths;
 pub mod pdf;

@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
+    page_range::{PageRange, PageRangeCapability, canonical_for},
     print_queue::{
         BatchPrintParams, PrintAdapter, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
         file_signature,
@@ -174,17 +175,20 @@ pub fn revise<A: PrintAdapter + ?Sized>(
             return Err(BackendError::validation("copies must be between 1 and 99"));
         }
         let path = PathBuf::from(string_field(original, "path"));
+        let parsed_page_range = PageRange::parse(&string_field(raw, "pageRange"))?.canonical();
         let settings = PrintSettings {
             paper: choice(raw, "paper", PAPER_CHOICES, "A4"),
             orientation: choice(raw, "orientation", ORIENTATION_CHOICES, "auto"),
             scaling: choice(raw, "scaling", SCALING_CHOICES, "fit"),
             color: choice(raw, "color", COLOR_CHOICES, "printer"),
             duplex: choice(raw, "duplex", DUPLEX_CHOICES, "printer"),
+            page_range: parsed_page_range.clone(),
             timeout_minutes: unsigned_field(original, "timeoutMinutes").unwrap_or(30) as u32,
         };
         let support = adapter
             .inspect(&path, &printer, &settings)
             .map_err(|error| error.into_backend_error())?;
+        let page_range = canonical_for(&parsed_page_range, &support.page_range)?;
         let mut row = original.clone();
         row.insert(
             "enabled".to_string(),
@@ -213,6 +217,7 @@ pub fn revise<A: PrintAdapter + ?Sized>(
         );
         row.insert("copies".to_string(), json!(copies));
         row.insert("verb".to_string(), Value::String(support.verb));
+        row.insert("pageRange".to_string(), Value::String(page_range));
         rows.push(row);
     }
     let warnings = plan
@@ -295,6 +300,7 @@ pub fn resume_plan(state: &Value, inventory: &PrinterInventory) -> Result<Plan, 
         copy_or_default(&mut row, saved, "scaling", json!("fit"));
         copy_or_default(&mut row, saved, "color", json!("printer"));
         copy_or_default(&mut row, saved, "duplex", json!("printer"));
+        copy_or_default(&mut row, saved, "pageRange", json!("all"));
         row.insert("copies".to_string(), json!(1));
         copy_or_default(&mut row, saved, "retries", json!(0));
         copy_or_default(&mut row, saved, "onError", json!("pause"));
@@ -335,7 +341,22 @@ pub fn validate_job(job: &PrintJob) -> Result<(), BackendError> {
             "print plan contains an invalid job",
         ));
     }
+    let canonical = canonical_for(&job.page_range, &job_page_range_capability(job))?;
+    if canonical != job.page_range {
+        return Err(BackendError::validation("error.print.pageRangeInvalid"));
+    }
     Ok(())
+}
+
+fn job_page_range_capability(job: &PrintJob) -> PageRangeCapability {
+    if matches!(job.verb.as_str(), "printto" | "print") {
+        return PageRangeCapability::AllOnly;
+    }
+    match job.format.as_str() {
+        "PDF" => PageRangeCapability::Pdf { page_count: None },
+        "PNG" | "JPG" | "JPEG" | "BMP" | "TIF" | "TIFF" => PageRangeCapability::SinglePage,
+        _ => PageRangeCapability::AllOnly,
+    }
 }
 
 fn plan_from_rows(
@@ -363,6 +384,7 @@ fn plan_from_rows(
                 "scaling",
                 "color",
                 "duplex",
+                "pageRange",
             ] {
                 if let Some(value) = row.get(key) {
                     meta.insert(key.to_string(), value.clone());
@@ -461,6 +483,7 @@ fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
         scaling: string_field(row, "scaling"),
         color: string_field(row, "color"),
         duplex: string_field(row, "duplex"),
+        page_range: string_field(row, "pageRange"),
         timeout_minutes: unsigned_field(row, "timeoutMinutes").unwrap_or(30) as u32,
         retries: unsigned_field(row, "retries").unwrap_or_default() as u32,
         on_error: string_field(row, "onError"),
@@ -497,6 +520,7 @@ fn row_from_file(
     row.insert("scaling".to_string(), json!(settings.scaling));
     row.insert("color".to_string(), json!(settings.color));
     row.insert("duplex".to_string(), json!(settings.duplex));
+    row.insert("pageRange".to_string(), json!("all"));
     row.insert("copies".to_string(), json!(settings.copies));
     row.insert("retries".to_string(), json!(settings.retries));
     row.insert("onError".to_string(), json!(settings.on_error));
@@ -548,6 +572,7 @@ impl NormalizedSettings {
             scaling: self.scaling.clone(),
             color: self.color.clone(),
             duplex: self.duplex.clone(),
+            page_range: "all".to_string(),
             timeout_minutes: self.timeout_minutes,
         }
     }
@@ -566,6 +591,7 @@ fn editor(rows: Vec<Map<String, Value>>, printers: Vec<String>) -> Value {
             {"key":"status","labelKey":"print.col.status","kind":"readonly","width":90,"bulk":false},
             {"key":"file","labelKey":"print.col.file","kind":"readonly","width":260,"bulk":false},
             {"key":"format","labelKey":"print.col.format","kind":"readonly","width":76,"bulk":false},
+            {"key":"pageRange","labelKey":"print.col.pageRange","helpKey":"print.col.pageRange.help","kind":"text","width":112,"bulk":false},
             {"key":"printer","labelKey":"print.col.printer","kind":"choice","width":190},
             {"key":"paper","labelKey":"print.col.paper","kind":"choice","width":88},
             {"key":"orientation","labelKey":"print.col.orientation","kind":"choice","width":112},

@@ -321,6 +321,7 @@ mod tests {
             color: "grayscale".to_string(),
             duplex: "short".to_string(),
             timeout_minutes: 30,
+            page_range: "all".to_string(),
         }
     }
 

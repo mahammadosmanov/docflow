@@ -20,12 +20,17 @@ use crate::{
     fs_ops::atomic_replace,
     journal::{JournalRecord, JournalState, JournalStore},
     operations::batch_print,
+    page_range::{PageRangeCapability, canonical_for},
     paths::{CallerIdentity, GrantAccess, GrantScope, PathGrantStore, PathIntent},
     plan_store::{BackendOrigin, PlanBinding, PlanStore},
     progress::{CancellationRegistry, GlobalMutationLock},
 };
 
 pub const DEFAULT_TIMEOUT_MINUTES: u32 = 30;
+
+fn default_page_range() -> String {
+    "all".to_string()
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PrinterInventory {
@@ -64,6 +69,7 @@ impl PrinterInventory {
 pub struct PrintJobSupport {
     pub verb: String,
     pub settings_limited: bool,
+    pub page_range: PageRangeCapability,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -73,6 +79,7 @@ pub struct PrintSettings {
     pub scaling: String,
     pub color: String,
     pub duplex: String,
+    pub page_range: String,
     pub timeout_minutes: u32,
 }
 
@@ -81,6 +88,23 @@ impl PrintJobSupport {
         Self {
             verb: "docflow".to_string(),
             settings_limited: false,
+            page_range: PageRangeCapability::AllOnly,
+        }
+    }
+
+    pub fn controlled_pdf(page_count: Option<u32>) -> Self {
+        Self {
+            verb: "docflow".to_string(),
+            settings_limited: false,
+            page_range: PageRangeCapability::Pdf { page_count },
+        }
+    }
+
+    pub fn single_page() -> Self {
+        Self {
+            verb: "docflow".to_string(),
+            settings_limited: false,
+            page_range: PageRangeCapability::SinglePage,
         }
     }
 
@@ -88,6 +112,7 @@ impl PrintJobSupport {
         Self {
             verb: "printto".to_string(),
             settings_limited: true,
+            page_range: PageRangeCapability::AllOnly,
         }
     }
 }
@@ -227,6 +252,8 @@ pub struct PrintJob {
     pub scaling: String,
     pub color: String,
     pub duplex: String,
+    #[serde(default = "default_page_range")]
+    pub page_range: String,
     pub timeout_minutes: u32,
     pub retries: u32,
     pub on_error: String,
@@ -258,6 +285,7 @@ impl Default for PrintJob {
             scaling: "fit".to_string(),
             color: "printer".to_string(),
             duplex: "printer".to_string(),
+            page_range: default_page_range(),
             timeout_minutes: DEFAULT_TIMEOUT_MINUTES,
             retries: 0,
             on_error: "pause".to_string(),
@@ -280,6 +308,7 @@ impl PrintJob {
             scaling: self.scaling.clone(),
             color: self.color.clone(),
             duplex: self.duplex.clone(),
+            page_range: self.page_range.clone(),
             timeout_minutes: self.timeout_minutes,
         }
     }
@@ -666,6 +695,10 @@ impl PrintService {
             return Err(BackendError::operation_in_progress());
         }
         let mut state = self.queues.load_adopted(caller, queue_id)?;
+        for (index, job) in state.jobs.iter_mut().enumerate() {
+            job.normalize_legacy(index);
+            batch_print::validate_job(job)?;
+        }
         if state.recover_interrupted() {
             self.queues.save(&mut state)?;
         }
@@ -1218,6 +1251,11 @@ impl PrintService {
             return Err(PrintFailure::failed(
                 "print capability changed after preview",
             ));
+        }
+        let canonical = canonical_for(&job.page_range, &support.page_range)
+            .map_err(|error| PrintFailure::failed(error.message))?;
+        if canonical != job.page_range {
+            return Err(PrintFailure::failed("error.print.pageRangeInvalid"));
         }
         let mut staged_job = job.clone();
         staged_job.path = staged_path.to_string_lossy().into_owned();

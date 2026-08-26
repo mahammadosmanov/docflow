@@ -43,6 +43,7 @@ use windows_sys::Win32::{
     },
 };
 
+use crate::page_range::PageRangeCapability;
 use crate::platform::{
     WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
     classify_windows_submitted_job_status, windows_missing_submitted_job,
@@ -103,6 +104,7 @@ impl PrintAdapter for WindowsPrintAdapter {
             return Ok(PrintJobSupport {
                 verb: "print".to_string(),
                 settings_limited: true,
+                page_range: PageRangeCapability::AllOnly,
             });
         }
         Err(PrintFailure::unsupported(
@@ -1305,6 +1307,7 @@ mod tests {
             scaling: "shrink".to_string(),
             color: "grayscale".to_string(),
             duplex: "short".to_string(),
+            page_range: "all".to_string(),
             timeout_minutes: 30,
         }
     }

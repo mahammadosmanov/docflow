@@ -1,6 +1,16 @@
 #[cfg(target_os = "windows")]
+pub mod page_range {
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub enum PageRangeCapability {
+        AllOnly,
+    }
+}
+
+#[cfg(target_os = "windows")]
 pub mod print_queue {
     use std::path::Path;
+
+    use crate::page_range::PageRangeCapability;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum PrintFailureKind {
@@ -55,6 +65,7 @@ pub mod print_queue {
         pub scaling: String,
         pub color: String,
         pub duplex: String,
+        pub page_range: String,
         pub timeout_minutes: u32,
     }
 
@@ -62,6 +73,7 @@ pub mod print_queue {
     pub struct PrintJobSupport {
         pub verb: String,
         pub settings_limited: bool,
+        pub page_range: PageRangeCapability,
     }
 
     impl PrintJobSupport {
@@ -69,6 +81,7 @@ pub mod print_queue {
             Self {
                 verb: "docflow".to_string(),
                 settings_limited: false,
+                page_range: PageRangeCapability::AllOnly,
             }
         }
 
@@ -76,6 +89,7 @@ pub mod print_queue {
             Self {
                 verb: "printto".to_string(),
                 settings_limited: true,
+                page_range: PageRangeCapability::AllOnly,
             }
         }
     }
@@ -108,6 +122,7 @@ pub mod print_queue {
         pub scaling: String,
         pub color: String,
         pub duplex: String,
+        pub page_range: String,
         pub timeout_minutes: u32,
     }
 
@@ -119,6 +134,7 @@ pub mod print_queue {
                 scaling: self.scaling.clone(),
                 color: self.color.clone(),
                 duplex: self.duplex.clone(),
+                page_range: self.page_range.clone(),
                 timeout_minutes: self.timeout_minutes,
             }
         }
