@@ -97,6 +97,19 @@ pub(crate) fn windows_missing_submitted_job() -> crate::print_queue::PrintFailur
     )
 }
 
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn validate_windows_image_frame_count(
+    frame_count: u32,
+) -> Result<(), crate::print_queue::PrintFailure> {
+    if frame_count == 1 {
+        Ok(())
+    } else {
+        Err(crate::print_queue::PrintFailure::unsupported(
+            "Windows controlled image printing requires exactly one image frame",
+        ))
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "windows")]
@@ -238,6 +251,67 @@ mod tests {
             );
             assert!(failure.uncertain);
         }
+    }
+
+    #[test]
+    fn windows_image_frame_count_preflight_requires_exactly_one_frame() {
+        assert!(validate_windows_image_frame_count(1).is_ok());
+
+        for frame_count in [0, 2] {
+            let failure = validate_windows_image_frame_count(frame_count).unwrap_err();
+            assert_eq!(
+                failure.kind,
+                crate::print_queue::PrintFailureKind::Unsupported
+            );
+            assert_eq!(
+                failure.message,
+                "Windows controlled image printing requires exactly one image frame"
+            );
+            assert!(!failure.uncertain);
+        }
+    }
+
+    #[test]
+    fn windows_image_frame_preflight_precedes_printer_context_and_spool_submission() {
+        let source = include_str!("windows/printing.rs");
+        let print_image = source
+            .split("fn print_image(")
+            .nth(1)
+            .expect("Windows image print implementation")
+            .split("fn draw_image_frames(")
+            .next()
+            .expect("Windows image print body");
+        let preflight = print_image
+            .find("validate_windows_image_frame_count(frame_count)?")
+            .expect("image frame-count preflight");
+
+        assert!(preflight < print_image.find("validated_devmode(").unwrap());
+        assert!(preflight < print_image.find("CreateDCW(").unwrap());
+        assert!(preflight < print_image.find("StartDocW(").unwrap());
+    }
+
+    #[test]
+    fn windows_image_inspection_preflights_frames_before_driver_validation() {
+        let source = include_str!("windows/printing.rs");
+        let inspect = source
+            .split("fn inspect(")
+            .nth(1)
+            .expect("Windows image inspection implementation")
+            .split("fn submit(")
+            .next()
+            .expect("Windows image inspection body");
+        let image_branch = inspect
+            .split("if CONTROLLED_IMAGE_FORMATS.contains(&extension.as_str())")
+            .nth(1)
+            .expect("controlled image inspection branch")
+            .split("if !safe_extension")
+            .next()
+            .expect("controlled image inspection body");
+        let preflight = image_branch
+            .find("validate_windows_image_frame_count(frame_count)?")
+            .expect("image frame-count preflight");
+
+        assert!(preflight < image_branch.find("validated_devmode(").unwrap());
     }
 
     #[test]

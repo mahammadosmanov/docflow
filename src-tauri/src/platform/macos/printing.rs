@@ -16,7 +16,7 @@ const LPOPTIONS: &str = "/usr/bin/lpoptions";
 const CANCEL: &str = "/usr/bin/cancel";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
-const CONTROLLED_FORMATS: &[&str] = &["pdf", "png", "jpg", "jpeg", "bmp", "tif", "tiff"];
+const CONTROLLED_FORMATS: &[&str] = &["pdf", "png", "jpg", "jpeg", "bmp"];
 
 #[derive(Default)]
 pub struct MacOsPrintAdapter;
@@ -362,6 +362,22 @@ mod tests {
                 .iter()
                 .all(|option| !option.starts_with("page-ranges="))
         );
+    }
+
+    #[test]
+    fn cups_controlled_formats_exclude_unpreflighted_tiff() {
+        for extension in ["pdf", "png", "jpg", "jpeg", "bmp"] {
+            assert!(
+                CONTROLLED_FORMATS.contains(&extension),
+                "{extension} must remain a controlled CUPS format"
+            );
+        }
+        for extension in ["tif", "tiff"] {
+            assert!(
+                !CONTROLLED_FORMATS.contains(&extension),
+                "{extension} must fail closed before CUPS submission"
+            );
+        }
     }
 
     #[test]

@@ -46,9 +46,9 @@ use windows_sys::Win32::{
 use crate::page_range::{PageRangeCapability, selected_pdf_pages};
 use crate::platform::{
     WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
-    classify_windows_submitted_job_status, windows_missing_submitted_job,
-    windows_post_submission_cancellation, windows_post_submission_failure,
-    windows_post_submission_observation_error,
+    classify_windows_submitted_job_status, validate_windows_image_frame_count,
+    windows_missing_submitted_job, windows_post_submission_cancellation,
+    windows_post_submission_failure, windows_post_submission_observation_error,
 };
 use crate::print_queue::{
     PrintAdapter, PrintFailure, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
@@ -88,6 +88,10 @@ impl PrintAdapter for WindowsPrintAdapter {
             return Ok(PrintJobSupport::controlled_pdf(Some(page_count)));
         }
         if CONTROLLED_IMAGE_FORMATS.contains(&extension.as_str()) {
+            let _runtime = GdiPlusRuntime::start()?;
+            let image = GdiPlusImage::load(path)?;
+            let (_, frame_count) = image.frame_dimension()?;
+            validate_windows_image_frame_count(frame_count)?;
             let _ = validated_devmode(printer, settings)?;
             return Ok(PrintJobSupport::single_page());
         }
@@ -516,11 +520,6 @@ impl GdiPlusImage {
                 selected_count = count;
             }
         }
-        if selected_count == 0 || selected_count > 10_000 {
-            return Err(PrintFailure::unsupported(
-                "Windows image has an invalid frame count",
-            ));
-        }
         Ok((selected, selected_count))
     }
 
@@ -584,7 +583,8 @@ impl Drop for GdiPlusImage {
 fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {
     let _runtime = GdiPlusRuntime::start()?;
     let image = GdiPlusImage::load(Path::new(&job.path))?;
-    let (frame_dimension, frames) = image.frame_dimension()?;
+    let (frame_dimension, frame_count) = image.frame_dimension()?;
+    validate_windows_image_frame_count(frame_count)?;
     if cancelled() {
         return Err(PrintFailure::cancelled(
             "cancelled before Windows image print submission",
@@ -626,7 +626,7 @@ fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), Print
         devmode.as_mut_ptr::<DEVMODEW>(),
         &image,
         frame_dimension.as_ref(),
-        frames,
+        frame_count,
         &job.settings(),
         deadline,
         cancelled,
