@@ -43,7 +43,7 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::page_range::PageRangeCapability;
+use crate::page_range::{PageRangeCapability, selected_pdf_pages};
 use crate::platform::{
     WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
     classify_windows_submitted_job_status, windows_missing_submitted_job,
@@ -84,11 +84,12 @@ impl PrintAdapter for WindowsPrintAdapter {
         let extension = extension(path);
         if extension == "pdf" {
             let _ = validated_devmode(printer, settings)?;
-            return Ok(PrintJobSupport::controlled());
+            let page_count = crate::windows_pdf::page_count(path).map_err(PrintFailure::failed)?;
+            return Ok(PrintJobSupport::controlled_pdf(Some(page_count)));
         }
         if CONTROLLED_IMAGE_FORMATS.contains(&extension.as_str()) {
             let _ = validated_devmode(printer, settings)?;
-            return Ok(PrintJobSupport::controlled());
+            return Ok(PrintJobSupport::single_page());
         }
         if !safe_extension(&extension) {
             return Err(PrintFailure::unsupported(
@@ -731,12 +732,14 @@ fn render_pdf_pages(
     deadline: Instant,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(), PrintFailure> {
-    let pages = crate::windows_pdf::page_count(path).map_err(PrintFailure::failed)?;
+    let page_count = crate::windows_pdf::page_count(path).map_err(PrintFailure::failed)?;
+    let pages = selected_pdf_pages(&settings.page_range, page_count)
+        .map_err(|error| PrintFailure::failed(error.message))?;
     let temporary = tempfile::Builder::new()
         .prefix("docflow-print-")
         .tempdir()
         .map_err(|_| PrintFailure::failed("Windows print workspace is unavailable"))?;
-    for page in 0..pages {
+    for page in pages {
         if cancelled() {
             return Err(PrintFailure::cancelled(
                 "Windows PDF job was cancelled while rendering",

@@ -93,7 +93,15 @@ impl PageRange {
 
     pub fn resolve_zero_based(&self, page_count: u32) -> Result<Vec<u32>, BackendError> {
         match self {
-            Self::All => Ok((0..page_count).collect()),
+            Self::All => {
+                if usize::try_from(page_count)
+                    .ok()
+                    .is_none_or(|page_count| page_count > MAX_SELECTED_PAGES)
+                {
+                    return Err(BackendError::validation(RANGE_BOUNDS_KEY));
+                }
+                Ok((0..page_count).collect())
+            }
             Self::Pages(pages) => {
                 if pages.last().is_some_and(|page| *page > page_count) {
                     return Err(BackendError::validation(RANGE_BOUNDS_KEY));
@@ -127,6 +135,11 @@ pub fn canonical_for(raw: &str, capability: &PageRangeCapability) -> Result<Stri
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn selected_pdf_pages(raw: &str, page_count: u32) -> Result<Vec<u32>, BackendError> {
+    PageRange::parse(raw)?.resolve_zero_based(page_count)
+}
+
 fn positive_page(raw: &str) -> Result<u32, BackendError> {
     let raw = raw.trim();
     if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -153,7 +166,9 @@ fn invalid_range() -> BackendError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PageRange, PageRangeCapability, canonical_for};
+    use super::{
+        MAX_SELECTED_PAGES, PageRange, PageRangeCapability, canonical_for, selected_pdf_pages,
+    };
 
     #[test]
     fn parses_all_case_insensitively() {
@@ -177,6 +192,50 @@ mod tests {
                 .resolve_zero_based(5)
                 .unwrap(),
             vec![0, 1, 2, 4]
+        );
+    }
+
+    #[test]
+    fn selected_pdf_pages_resolve_canonical_ranges_to_exact_indexes() {
+        assert_eq!(selected_pdf_pages("2-3", 4).unwrap(), vec![1, 2]);
+        assert_eq!(selected_pdf_pages("3,1-2,2", 4).unwrap(), vec![0, 1, 2]);
+        assert_eq!(selected_pdf_pages("all", 4).unwrap(), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn all_page_ranges_reject_page_counts_above_the_selection_limit() {
+        let limit = u32::try_from(MAX_SELECTED_PAGES).unwrap();
+        let over_limit = limit + 1;
+
+        assert_eq!(
+            PageRange::All.resolve_zero_based(limit).unwrap().len(),
+            MAX_SELECTED_PAGES
+        );
+        assert_eq!(
+            PageRange::All
+                .resolve_zero_based(over_limit)
+                .unwrap_err()
+                .message,
+            "error.print.pageRangeBounds"
+        );
+        assert_eq!(
+            selected_pdf_pages("all", over_limit).unwrap_err().message,
+            "error.print.pageRangeBounds"
+        );
+        assert_eq!(
+            canonical_for(
+                "all",
+                &PageRangeCapability::Pdf {
+                    page_count: Some(over_limit),
+                },
+            )
+            .unwrap_err()
+            .message,
+            "error.print.pageRangeBounds"
+        );
+        assert_eq!(
+            selected_pdf_pages("1,1000001", over_limit).unwrap(),
+            vec![0, 1_000_000]
         );
     }
 

@@ -66,7 +66,11 @@ impl PrintAdapter for MacOsPrintAdapter {
             return Err(PrintFailure::failed("printer name is invalid"));
         }
         validate_reported_options(printer, settings)?;
-        Ok(PrintJobSupport::controlled())
+        if extension == "pdf" {
+            Ok(PrintJobSupport::controlled_pdf(None))
+        } else {
+            Ok(PrintJobSupport::single_page())
+        }
     }
 
     fn submit(&self, job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {
@@ -140,6 +144,9 @@ pub fn cups_options(settings: &PrintSettings) -> Vec<String> {
         "long" => options.push("sides=two-sided-long-edge".to_string()),
         "short" => options.push("sides=two-sided-short-edge".to_string()),
         _ => {}
+    }
+    if settings.page_range != "all" {
+        options.push(format!("page-ranges={}", settings.page_range));
     }
     options
 }
@@ -337,6 +344,98 @@ mod tests {
                 "print-color-mode=monochrome",
                 "sides=two-sided-short-edge",
             ]
+        );
+    }
+
+    #[test]
+    fn cups_options_forward_a_canonical_pdf_page_range() {
+        let mut settings = settings();
+        settings.page_range = "1-3,5".to_string();
+
+        assert!(cups_options(&settings).contains(&"page-ranges=1-3,5".to_string()));
+    }
+
+    #[test]
+    fn all_pages_emit_no_cups_page_range_option() {
+        assert!(
+            cups_options(&settings())
+                .iter()
+                .all(|option| !option.starts_with("page-ranges="))
+        );
+    }
+
+    #[test]
+    fn lp_arguments_keep_the_pdf_range_separate_and_delimit_the_path() {
+        let job = PrintJob {
+            path: "/tmp/report.pdf".to_string(),
+            printer: "Test_PDF".to_string(),
+            page_range: "1-3,5".to_string(),
+            ..PrintJob::default()
+        };
+
+        let args = lp_arguments(&job);
+        let range_positions = args
+            .iter()
+            .enumerate()
+            .filter_map(|(index, argument)| {
+                (argument == OsStr::new("page-ranges=1-3,5")).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(range_positions.len(), 1);
+        assert_eq!(args[range_positions[0] - 1], OsStr::new("-o"));
+        assert_eq!(
+            &args[args.len() - 2..],
+            [OsStr::new("--"), OsStr::new("/tmp/report.pdf")]
+        );
+    }
+
+    #[test]
+    fn pdf_inspection_reports_numeric_page_range_support() {
+        let support = MacOsPrintAdapter
+            .inspect(Path::new("report.pdf"), "Test_PDF", &settings())
+            .unwrap();
+
+        assert_eq!(
+            support.page_range,
+            crate::page_range::PageRangeCapability::Pdf { page_count: None }
+        );
+    }
+
+    #[test]
+    fn static_image_inspection_reports_single_page_support() {
+        let support = MacOsPrintAdapter
+            .inspect(Path::new("scan.png"), "Test_PDF", &settings())
+            .unwrap();
+
+        assert_eq!(
+            support.page_range,
+            crate::page_range::PageRangeCapability::SinglePage
+        );
+    }
+
+    #[test]
+    fn static_image_numeric_ranges_fail_before_submission() {
+        let support = MacOsPrintAdapter
+            .inspect(Path::new("scan.png"), "Test_PDF", &settings())
+            .unwrap();
+
+        assert_eq!(
+            crate::page_range::canonical_for("2", &support.page_range)
+                .unwrap_err()
+                .message,
+            "error.print.pageRangeImageUnsupported"
+        );
+    }
+
+    #[test]
+    fn office_files_remain_unsupported_before_submission() {
+        let failure = MacOsPrintAdapter
+            .inspect(Path::new("report.docx"), "Test_PDF", &settings())
+            .unwrap_err();
+
+        assert_eq!(
+            failure.kind,
+            crate::print_queue::PrintFailureKind::Unsupported
         );
     }
 

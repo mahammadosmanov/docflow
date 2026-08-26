@@ -2,7 +2,20 @@
 pub mod page_range {
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub enum PageRangeCapability {
+        Pdf { page_count: Option<u32> },
+        SinglePage,
         AllOnly,
+    }
+
+    pub struct PageRangeError {
+        pub message: String,
+    }
+
+    pub fn selected_pdf_pages(
+        _raw: &str,
+        page_count: u32,
+    ) -> Result<Vec<u32>, PageRangeError> {
+        Ok((0..page_count).collect())
     }
 }
 
@@ -82,6 +95,22 @@ pub mod print_queue {
                 verb: "docflow".to_string(),
                 settings_limited: false,
                 page_range: PageRangeCapability::AllOnly,
+            }
+        }
+
+        pub fn controlled_pdf(page_count: Option<u32>) -> Self {
+            Self {
+                verb: "docflow".to_string(),
+                settings_limited: false,
+                page_range: PageRangeCapability::Pdf { page_count },
+            }
+        }
+
+        pub fn single_page() -> Self {
+            Self {
+                verb: "docflow".to_string(),
+                settings_limited: false,
+                page_range: PageRangeCapability::SinglePage,
             }
         }
 
@@ -180,3 +209,20 @@ pub mod platform;
 
 #[cfg(target_os = "windows")]
 pub use platform::windows::printing;
+
+#[cfg(target_os = "windows")]
+pub fn platform_page_range_api_fixture() {
+    let settings = print_queue::PrintSettings {
+        paper: "A4".to_string(),
+        orientation: "auto".to_string(),
+        scaling: "fit".to_string(),
+        color: "printer".to_string(),
+        duplex: "printer".to_string(),
+        page_range: "all".to_string(),
+        timeout_minutes: 30,
+    };
+    let pdf = print_queue::PrintJobSupport::controlled_pdf(Some(4));
+    let image = print_queue::PrintJobSupport::single_page();
+
+    let _fixture = (settings, pdf, image);
+}
