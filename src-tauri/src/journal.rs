@@ -397,21 +397,48 @@ fn atomic_replace(temporary: &Path, target: &Path) -> Result<(), BackendError> {
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
-    let result = unsafe {
-        MoveFileExW(
-            temporary.as_ptr(),
-            target.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if result == 0 {
-        Err(journal_io(
-            "journal could not be atomically replaced",
-            io::Error::last_os_error(),
-        ))
-    } else {
-        Ok(())
+    retry_windows_atomic_replace(
+        || {
+            let result = unsafe {
+                MoveFileExW(
+                    temporary.as_ptr(),
+                    target.as_ptr(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            };
+            if result == 0 {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        },
+        std::thread::sleep,
+    )
+    .map_err(|error| journal_io("journal could not be atomically replaced", error))
+}
+
+#[cfg(windows)]
+fn retry_windows_atomic_replace<R, W>(mut replace: R, mut wait: W) -> io::Result<()>
+where
+    R: FnMut() -> io::Result<()>,
+    W: FnMut(std::time::Duration),
+{
+    const MAX_ATTEMPTS: usize = 20;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
+    for attempt in 0..MAX_ATTEMPTS {
+        match replace() {
+            Ok(()) => return Ok(()),
+            Err(error)
+                if matches!(error.raw_os_error(), Some(5 | 32 | 33))
+                    && attempt + 1 < MAX_ATTEMPTS =>
+            {
+                wait(RETRY_DELAY);
+            }
+            Err(error) => return Err(error),
+        }
     }
+    unreachable!("journal replacement retry loop always returns")
 }
 
 #[cfg(unix)]
@@ -428,4 +455,75 @@ fn sync_directory(_path: &Path) -> Result<(), BackendError> {
 
 fn journal_io(context: &str, error: io::Error) -> BackendError {
     BackendError::journal_invalid(format!("{context}: {error}"))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::{cell::Cell, time::Duration};
+
+    use super::*;
+
+    #[test]
+    fn journal_replace_retries_transient_windows_access_denied() {
+        let attempts = Cell::new(0);
+        let mut waits = Vec::new();
+
+        retry_windows_atomic_replace(
+            || {
+                let attempt = attempts.get() + 1;
+                attempts.set(attempt);
+                if attempt < 3 {
+                    Err(io::Error::from_raw_os_error(5))
+                } else {
+                    Ok(())
+                }
+            },
+            |duration| waits.push(duration),
+        )
+        .unwrap();
+
+        assert_eq!(attempts.get(), 3);
+        assert_eq!(
+            waits,
+            [Duration::from_millis(100), Duration::from_millis(100)]
+        );
+    }
+
+    #[test]
+    fn journal_store_survives_a_transient_windows_file_lock() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let fixture = tempfile::tempdir().unwrap();
+        let store = JournalStore::new(fixture.path());
+        let mut record = JournalRecord::new(
+            "journal-lock-test",
+            "rfi.process_scans",
+            "2026-08-26T00-00-00Z",
+            "owner",
+            "session",
+            "digest",
+        );
+        record.state = Some(JournalState::Applying);
+        store.write(&record).unwrap();
+
+        let target = store.path_for(&record);
+        let blocker = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(target)
+            .unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(250));
+            drop(blocker);
+        });
+
+        record.state = Some(JournalState::Committed);
+        store.write(&record).unwrap();
+        release.join().unwrap();
+
+        assert_eq!(
+            store.read(&record.journal_id).unwrap().state,
+            Some(JournalState::Committed)
+        );
+    }
 }

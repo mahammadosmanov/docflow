@@ -437,6 +437,7 @@ fn run_tesseract(
     let output = fs::File::create(&output_path)
         .map_err(|error| OcrFailure::Document(format!("OCR output: {error}")))?;
     let mut command = Command::new(executable);
+    configure_tesseract_process(&mut command);
     command
         .arg(image)
         .arg("stdout")
@@ -498,6 +499,21 @@ fn run_tesseract(
     fs::read_to_string(output_path)
         .map_err(|error| OcrFailure::Document(format!("OCR output decode: {error}")))
 }
+
+#[cfg(windows)]
+fn tesseract_windows_creation_flags() -> u32 {
+    windows_sys::Win32::System::Threading::CREATE_NO_WINDOW
+}
+
+#[cfg(windows)]
+fn configure_tesseract_process(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(tesseract_windows_creation_flags());
+}
+
+#[cfg(not(windows))]
+fn configure_tesseract_process(_command: &mut Command) {}
 
 #[cfg(target_os = "macos")]
 fn first_page_text(path: &Path) -> Result<String, OcrFailure> {
@@ -677,5 +693,11 @@ mod tests {
                 .iter()
                 .all(|value| matches!(value, 0 | 255))
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn tesseract_launch_suppresses_the_windows_console() {
+        assert_eq!(tesseract_windows_creation_flags(), 0x0800_0000);
     }
 }
