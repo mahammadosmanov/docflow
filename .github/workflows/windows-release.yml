@@ -195,16 +195,34 @@ jobs:
           }
           $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
 
+          $uploadHeaders = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
           foreach ($asset in @($installer, $checksum)) {
             $assetName = [System.Uri]::EscapeDataString($asset.Name)
-            & gh api --method POST `
-              --hostname uploads.github.com `
-              -H "Content-Type: application/octet-stream" `
-              --input $asset.FullName `
-              "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$assetName" |
-              Out-Null
-            if ($LASTEXITCODE -ne 0) {
-              throw "Uploading $($asset.Name) to the unpublished draft failed."
+            $uploadUri = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$assetName"
+            $uploaded = $null
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              try {
+                $uploaded = Invoke-RestMethod `
+                  -Uri $uploadUri `
+                  -Method Post `
+                  -Headers $uploadHeaders `
+                  -ContentType "application/octet-stream" `
+                  -InFile $asset.FullName
+                break
+              }
+              catch {
+                if ($attempt -eq 3) {
+                  throw
+                }
+                Start-Sleep -Seconds (5 * $attempt)
+              }
+            }
+            if ($uploaded.name -ne $asset.Name -or $uploaded.size -ne $asset.Length) {
+              throw "GitHub returned mismatched metadata for uploaded asset $($asset.Name)."
             }
           }
 

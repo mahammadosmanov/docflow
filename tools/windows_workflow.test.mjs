@@ -75,8 +75,11 @@ test("manual Windows runs can deliver only to an exact unpublished draft", () =>
   assert.match(source, /gh api --method POST[^]*repos\/\$env:GITHUB_REPOSITORY\/releases/u);
   assert.match(source, /if \(-not \$release\.draft\)/u);
   assert.match(source, /\$release\.target_commitish -ne \$env:GITHUB_SHA/u);
-  assert.match(source, /--hostname uploads\.github\.com/u);
-  assert.match(source, /--input \$asset\.FullName/u);
+  assert.match(source, /https:\/\/uploads\.github\.com\/repos\/\$env:GITHUB_REPOSITORY/u);
+  assert.match(source, /Invoke-RestMethod[^]*-InFile \$asset\.FullName/u);
+  assert.match(source, /for \(\$attempt = 1; \$attempt -le 3; \$attempt\+\+\)/u);
+  assert.doesNotMatch(source, /--hostname uploads\.github\.com/u);
   assert.match(source, /releases\/\$\(\$release\.id\)\/assets/u);
+  assert.match(source, /\$uploaded\.size -ne \$asset\.Length/u);
   assert.match(source, /\$uploaded\.size -ne \$expected\.Length/u);
 });
