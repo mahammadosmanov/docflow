@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { App, isPlanEditorReady, PlanView } from "./App";
+import { App, humanError, isPlanEditorReady, PlanView } from "./App";
 import { makeStrings } from "./i18n";
 import { resetBridgeForTests } from "./lib/bridge";
 import type { Plan } from "./types";
@@ -41,6 +41,24 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("localizes the invalid RFI workbook error in every supported language", () => {
+    const expected = {
+      tr: "Geçerli bir makro etkin .xlsm veya standart .xlsx RFI Log dosyası seç.",
+      en: "Select a valid macro-enabled .xlsm or standard .xlsx RFI Log workbook.",
+      az: "Etibarlı makro aktiv .xlsm və ya standart .xlsx RFI Log faylı seçin.",
+      ru: "Выберите допустимый RFI Log с поддержкой макросов .xlsm или стандартный .xlsx.",
+    } as const;
+
+    for (const [locale, message] of Object.entries(expected)) {
+      expect(
+        humanError(
+          new Error("error.rfi.workbookInvalid"),
+          makeStrings(locale as keyof typeof expected),
+        ),
+      ).toBe(message);
+    }
+  });
+
   it("requires an archive choice for every enabled ambiguous signed-page row", () => {
     const editor = { requiredFields: ["archiveFile"] };
     expect(
@@ -251,6 +269,7 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
     );
     expect(await screen.findByText("RFI Log Excel dosyası")).toBeVisible();
+    expect(screen.getByText(/\.xlsm.*\.xlsx/)).toBeVisible();
     expect(screen.getByText("Sheet'ler ve RFI adetleri")).toBeVisible();
     expect(screen.getByText("Talep mailini buraya yapıştır")).toBeVisible();
     expect(

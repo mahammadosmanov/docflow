@@ -81,6 +81,18 @@ describe("frontend authority boundary", () => {
     for (const keys of locales.slice(1)) expect(keys).toEqual(locales[0]);
   });
 
+  it("keeps the native Excel picker label in every locale catalog", () => {
+    const label = "Excel (.xlsm, .xlsx)";
+    expect(read("src-tauri/src/backend.rs")).toContain(`Some(("${label}"`);
+
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      expect(catalog["dialog.filter.excelWorkbook"]).toBe(label);
+    }
+  });
+
   it("defines localized bootstrap failure title and retry text in every catalog", () => {
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(

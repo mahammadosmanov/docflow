@@ -97,8 +97,10 @@ function isPathSelection(value: unknown): value is PathSelection {
   );
 }
 
-function humanError(error: unknown, s: Strings): string {
+export function humanError(error: unknown, s: Strings): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (/^(?:Error:\s*)?error\.rfi\.workbookInvalid$/.test(raw))
+    return s.t("error.rfi.workbookInvalid");
   if (/email_required/i.test(raw)) return s.t("auth.emailSignInHelp");
   if (/invalid_credentials|Invalid login/i.test(raw))
     return s.t("auth.err.credentials");

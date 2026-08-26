@@ -345,6 +345,20 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
 }
 
 #[test]
+fn missing_workbook_error_returns_the_localized_message_key() {
+    let error = preview(
+        &Map::new(),
+        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        None,
+        |_| {},
+        || false,
+    )
+    .unwrap_err();
+
+    assert_eq!(error.message, "error.rfi.workbookInvalid");
+}
+
+#[test]
 fn native_preview_preserves_multi_sheet_overflow_and_cancellation_contracts() {
     let fixture = TempDir::new().unwrap();
     let workbook = fixture.path().join("RFI Log.xlsx");

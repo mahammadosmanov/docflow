@@ -32,6 +32,7 @@ const MAX_PHYSICAL_ROWS: usize = 500;
 const MAX_ROW_TEXT_CHARS: usize = 20_000;
 const MAX_WARNING_CHARS: usize = 500;
 const MAX_TABLE_BYTES: usize = 8 * 1024 * 1024;
+const WORKBOOK_SELECTION_ERROR: &str = "error.rfi.workbookInvalid";
 
 type WorkbookUpdates = BTreeMap<String, BTreeMap<(u32, u32), CellUpdate>>;
 
@@ -861,7 +862,7 @@ fn workbook_path(values: &Map<String, Value>) -> Result<PathBuf, BackendError> {
     let raw = values
         .get("workbook")
         .and_then(Value::as_str)
-        .ok_or_else(|| BackendError::validation("gecerli bir .xlsx RFI Log dosyasi secin"))?;
+        .ok_or_else(|| BackendError::validation(WORKBOOK_SELECTION_ERROR))?;
     let path = PathBuf::from(raw);
     let extension = path
         .extension()
@@ -869,9 +870,7 @@ fn workbook_path(values: &Map<String, Value>) -> Result<PathBuf, BackendError> {
         .unwrap_or_default()
         .to_ascii_lowercase();
     if !matches!(extension.as_str(), "xlsx" | "xlsm") || !path.is_file() {
-        return Err(BackendError::validation(
-            "gecerli bir .xlsx veya .xlsm RFI Log dosyasi secin",
-        ));
+        return Err(BackendError::validation(WORKBOOK_SELECTION_ERROR));
     }
     fs::canonicalize(path)
         .map_err(|_| BackendError::path_invalid("workbook path cannot be canonicalized"))

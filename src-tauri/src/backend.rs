@@ -178,6 +178,16 @@ pub(crate) struct BackendRouter {
     native: Arc<NativeBackend>,
 }
 
+fn path_dialog_filter(
+    operation_id: &str,
+    parameter_name: &str,
+) -> Option<(&'static str, &'static [&'static str])> {
+    match (operation_id, parameter_name) {
+        ("rfi.log_add", "workbook") => Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"])),
+        _ => None,
+    }
+}
+
 impl BackendRouter {
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         Ok(Self {
@@ -283,9 +293,14 @@ impl BackendRouter {
         let mode = self
             .native
             .selection_mode(&request.op_id, &request.param_name)?;
+        let filter = path_dialog_filter(&request.op_id, &request.param_name);
         let app = self.app.clone();
         let paths = tauri::async_runtime::spawn_blocking(move || {
             let dialog = app.dialog().file();
+            let dialog = match filter {
+                Some((name, extensions)) => dialog.add_filter(name, extensions),
+                None => dialog,
+            };
             let selected = match mode {
                 PathSelectionMode::Folder => dialog
                     .blocking_pick_folder()
@@ -536,6 +551,15 @@ mod tests {
         assert!(!bridge.contains("method: string"));
         assert!(!bridge.contains("backend_call"));
         assert!(bridge.contains("frontend_call"));
+    }
+
+    #[test]
+    fn rfi_log_workbook_picker_offers_macro_enabled_and_standard_excel_files() {
+        assert_eq!(
+            path_dialog_filter("rfi.log_add", "workbook"),
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
+        );
+        assert_eq!(path_dialog_filter("rfi.process_scans", "source"), None);
     }
 
     #[test]
