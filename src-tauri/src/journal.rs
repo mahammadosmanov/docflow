@@ -492,6 +492,7 @@ mod tests {
     #[test]
     fn journal_store_survives_a_transient_windows_file_lock() {
         use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{FILE_SHARE_READ, FILE_SHARE_WRITE};
 
         let fixture = tempfile::tempdir().unwrap();
         let store = JournalStore::new(fixture.path());
@@ -509,7 +510,7 @@ mod tests {
         let target = store.path_for(&record);
         let blocker = OpenOptions::new()
             .read(true)
-            .share_mode(0)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .open(target)
             .unwrap();
         let release = std::thread::spawn(move || {
