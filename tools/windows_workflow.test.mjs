@@ -72,8 +72,11 @@ test("manual Windows runs can deliver only to an exact unpublished draft", () =>
   const source = readFileSync(resolve(root, ".github/workflows/windows-release.yml"), "utf8");
 
   assert.match(source, /draft_delivery_tag:/u);
+  assert.match(source, /gh api --method POST[^]*repos\/\$env:GITHUB_REPOSITORY\/releases/u);
   assert.match(source, /if \(-not \$release\.draft\)/u);
   assert.match(source, /\$release\.target_commitish -ne \$env:GITHUB_SHA/u);
-  assert.match(source, /gh release upload \$env:DRAFT_DELIVERY_TAG/u);
+  assert.match(source, /--hostname uploads\.github\.com/u);
+  assert.match(source, /--input \$asset\.FullName/u);
   assert.match(source, /releases\/\$\(\$release\.id\)\/assets/u);
+  assert.match(source, /\$uploaded\.size -ne \$expected\.Length/u);
 });

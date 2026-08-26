@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       draft_delivery_tag:
-        description: "Existing unpublished draft release tag for quota-independent installer delivery"
+        description: "Unique unpublished draft tag to create for quota-independent installer delivery"
         required: false
         type: string
   push:
@@ -164,14 +164,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
-          $release = & gh api `
-            "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:DRAFT_DELIVERY_TAG" |
+          $releasePayload = @{
+            tag_name = $env:DRAFT_DELIVERY_TAG
+            target_commitish = $env:GITHUB_SHA
+            name = "Temporary DocFlow Windows delivery"
+            body = "Unpublished temporary delivery channel. Delete after local verification."
+            draft = $true
+            prerelease = $false
+          } | ConvertTo-Json
+          $release = $releasePayload |
+            & gh api --method POST `
+              "repos/$env:GITHUB_REPOSITORY/releases" `
+              --input - |
             ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or -not $release) {
-            throw "Draft delivery release $env:DRAFT_DELIVERY_TAG was not found."
+            throw "Creating draft delivery release $env:DRAFT_DELIVERY_TAG failed."
           }
           if (-not $release.draft) {
-            throw "Delivery release $env:DRAFT_DELIVERY_TAG is published; refusing to modify it."
+            throw "GitHub created a published delivery release; refusing to upload assets."
           }
           if ($release.target_commitish -ne $env:GITHUB_SHA) {
             throw "Draft delivery release targets $($release.target_commitish), not $env:GITHUB_SHA."
@@ -185,21 +195,27 @@ jobs:
           }
           $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
 
-          & gh release upload $env:DRAFT_DELIVERY_TAG `
-            $installer.FullName `
-            $checksum.FullName `
-            --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) {
-            throw "Uploading the installer to the unpublished draft failed."
+          foreach ($asset in @($installer, $checksum)) {
+            $assetName = [System.Uri]::EscapeDataString($asset.Name)
+            & gh api --method POST `
+              --hostname uploads.github.com `
+              -H "Content-Type: application/octet-stream" `
+              --input $asset.FullName `
+              "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$assetName" |
+              Out-Null
+            if ($LASTEXITCODE -ne 0) {
+              throw "Uploading $($asset.Name) to the unpublished draft failed."
+            }
           }
 
-          $assetNames = @(
-            & gh api "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets" `
-              --jq '.[].name'
+          $uploadedAssets = @(
+            & gh api "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets" |
+              ConvertFrom-Json
           )
-          foreach ($expected in @($installer.Name, $checksum.Name)) {
-            if ($expected -notin $assetNames) {
-              throw "Draft delivery release is missing uploaded asset $expected."
+          foreach ($expected in @($installer, $checksum)) {
+            $uploaded = $uploadedAssets | Where-Object { $_.name -eq $expected.Name }
+            if (-not $uploaded -or $uploaded.size -ne $expected.Length) {
+              throw "Draft delivery release has no exact uploaded asset $($expected.Name)."
             }
           }
 
