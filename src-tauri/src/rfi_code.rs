@@ -45,11 +45,22 @@ pub fn canonical_and_find(value: &str) -> (String, RfiMatch) {
 }
 
 fn find_canonical(text: &str) -> RfiMatch {
-    if let Some(captures) = strict().captures(text) {
-        return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
+    for captures in strict().captures_iter(text) {
+        if !followed_by_numeric(text, captures.get(0).expect("strict match exists").end()) {
+            return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
+        }
+    }
+    for captures in wrapped_number().captures_iter(text) {
+        if !followed_by_numeric(text, captures.get(0).expect("wrapped match exists").end()) {
+            return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
+        }
     }
 
-    for token in loose().find_iter(text).map(|candidate| candidate.as_str()) {
+    for candidate in loose().find_iter(text) {
+        if followed_by_numeric(text, candidate.end()) {
+            continue;
+        }
+        let token = candidate.as_str();
         let fixed = repair(token);
         if let Some(captures) = strict().captures(&fixed) {
             return build(&captures[1], &captures[2], RfiMethod::Repaired, 0.8);
@@ -99,8 +110,16 @@ fn find_canonical(text: &str) -> RfiMatch {
 fn strict() -> &'static Regex {
     static STRICT: OnceLock<Regex> = OnceLock::new();
     STRICT.get_or_init(|| {
-        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-(\d{4})")
+        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{4})")
             .expect("the strict RFI pattern is valid")
+    })
+}
+
+fn wrapped_number() -> &'static Regex {
+    static WRAPPED_NUMBER: OnceLock<Regex> = OnceLock::new();
+    WRAPPED_NUMBER.get_or_init(|| {
+        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-[\t ]*(?:\r?\n[\t ]*){1,2}([0-9]{4})")
+            .expect("the wrapped RFI number pattern is valid")
     })
 }
 
@@ -110,6 +129,10 @@ fn loose() -> &'static Regex {
         Regex::new(r"[A-Z0-9]{2,4}(?:-[A-Z0-9]{2,4}){5,6}")
             .expect("the loose RFI candidate pattern is valid")
     })
+}
+
+fn followed_by_numeric(text: &str, end: usize) -> bool {
+    text[end..].chars().next().is_some_and(char::is_numeric)
 }
 
 fn repair(token: &str) -> String {

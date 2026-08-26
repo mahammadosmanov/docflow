@@ -46,6 +46,47 @@ fn rfi_matching_preserves_nfc_uppercase_and_the_strict_anchor() {
 }
 
 #[test]
+fn rfi_matching_recovers_a_number_wrapped_after_the_final_anchor_hyphen() {
+    let wrapped = find("RFI No: AZE-SUN-INT-QMS-RFI-CIV-\n0064");
+    let blank_line = find("RFI No: AZE-SUN-INT-QMS-RFI-CIV-\r\n \r\n0064");
+
+    assert_eq!(wrapped.code, "AZE-SUN-INT-QMS-RFI-CIV-0064");
+    assert_eq!(wrapped.method, RfiMethod::Strict);
+    assert_eq!(wrapped.confidence, 1.0);
+    assert_eq!(blank_line.code, wrapped.code);
+    assert!(
+        !find("AZE-SUN-INT-QMS-RFI-CIV-\nRemarks 0064").ok(),
+        "unrelated text must not be joined into a false RFI label"
+    );
+    assert!(
+        !find("AZE-SUN-INT-QMS-RFI-CIV-\n\n\n0064").ok(),
+        "wrapped recovery must not cross more than one blank line"
+    );
+    for malformed in [
+        "AZE-SUN-INT-QMS-RFI-CIV-00645",
+        "AZE-SUN-INT-QMS-RFI-CIV-٠٠٦٤",
+        "AZE-SUN-INT-QMS-RFI-CIV-0064٥",
+        "AZE-SUN-INT-QMS-RFI-CIV-\n00645",
+        "AZE-SUN-INT-QMS-RFI-CIV-\n٠٠٦٤",
+    ] {
+        assert!(
+            !find(malformed).ok(),
+            "RFI numbers must be exactly four ASCII digits: {malformed}"
+        );
+    }
+    assert_eq!(
+        find("AZE-SUN-INT-QMS-RFI-CIV-0064REQUEST").code,
+        "AZE-SUN-INT-QMS-RFI-CIV-0064",
+        "OCR-concatenated trailing letters remain valid"
+    );
+    assert_eq!(
+        find("AZE-SUN-INT-QMS-RFI-CIV-00645 AZE-SUN-INT-QMS-RFI-MEC-0107").code,
+        "AZE-SUN-INT-QMS-RFI-MEC-0107",
+        "a malformed candidate must not hide a later valid code"
+    );
+}
+
+#[test]
 fn canonical_rfi_matching_exposes_the_single_normalized_value() {
     let (normalized, matched) = canonical_and_find("aze-sun-int-qms-rfi-civ-0064");
 

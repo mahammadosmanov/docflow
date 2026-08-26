@@ -196,6 +196,33 @@ pub fn write_signed(path: &Path, extra_page: bool) {
     fs::write(path, pdf.finish()).unwrap();
 }
 
+pub fn write_signed_with_indirect_stream_length(path: &Path) {
+    let mut pdf = ClassicPdf {
+        root: 1,
+        ..ClassicPdf::default()
+    };
+    let content = format!("BT /F1 16 Tf 36 700 Td (SIGNED FIRST PAGE {CODE}) Tj ET\n");
+    pdf.object(1, b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
+    pdf.object(2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec());
+    pdf.object(
+        3,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources 5 0 R /Contents 6 0 R >>"
+            .to_vec(),
+    );
+    pdf.object(5, b"<< /Font << /F1 9 0 R >> >>".to_vec());
+    pdf.object(
+        6,
+        format!("<< /Length 10 0 R >>\nstream\n{content}endstream").into_bytes(),
+    );
+    pdf.object(
+        9,
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(),
+    );
+    pdf.object(10, content.len().to_string().into_bytes());
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, pdf.finish()).unwrap();
+}
+
 pub fn write_encrypted(path: &Path) {
     let mut pdf = ClassicPdf {
         root: 1,

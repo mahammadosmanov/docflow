@@ -19,7 +19,7 @@ use docflow_lib::{
 use serde_json::{Value, json};
 use support::pdf_fixture::{
     CODE, write_encrypted, write_object_stream_pdf, write_rich_archive, write_signed,
-    write_signed_document, write_tagged_document,
+    write_signed_document, write_signed_with_indirect_stream_length, write_tagged_document,
 };
 
 #[derive(Default)]
@@ -148,6 +148,76 @@ fn incremental_first_page_replacement_preserves_the_rich_archive_graph_and_prefi
     assert_eq!(output_facts.pages[1].annotations, 3);
     assert_eq!(output_facts.pages[1].links, 1);
     assert_eq!(output_facts.pages[1].widgets, 1);
+}
+
+#[test]
+fn valid_indirect_stream_length_is_inspected_and_staged_without_fidelity_loss() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let archive = fixture.path().join("archive.pdf");
+    let signed = fixture.path().join("signed.pdf");
+    let output = fixture.path().join("output.pdf");
+    write_rich_archive(&archive);
+    write_signed_with_indirect_stream_length(&signed);
+
+    let signed_facts = inspect(&signed).expect("valid indirect /Length must be resolved");
+    assert_eq!(signed_facts.page_count, 1);
+
+    replace_first_page_incremental(&archive, &signed, &output).unwrap();
+    let completed = inspect(&output).unwrap();
+    assert_eq!(completed.page_count, 3);
+    assert_eq!(
+        completed.pages[0].content_hash,
+        signed_facts.pages[0].content_hash
+    );
+}
+
+#[test]
+fn malformed_and_cyclic_indirect_stream_lengths_fail_closed() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let malformed = fixture.path().join("malformed-length.pdf");
+    let cyclic = fixture.path().join("cyclic-length.pdf");
+    write_signed_with_indirect_stream_length(&malformed);
+    write_signed_with_indirect_stream_length(&cyclic);
+
+    let mut malformed_bytes = fs::read(&malformed).unwrap();
+    let length_object = malformed_bytes
+        .windows(b"10 0 obj\n".len())
+        .position(|window| window == b"10 0 obj\n")
+        .map(|offset| offset + b"10 0 obj\n".len())
+        .unwrap();
+    let length_end = malformed_bytes[length_object..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map(|offset| length_object + offset)
+        .unwrap();
+    assert_eq!(
+        length_end - length_object,
+        2,
+        "fixture length is two digits"
+    );
+    malformed_bytes[length_object..length_end].copy_from_slice(b"[]");
+    fs::write(&malformed, malformed_bytes).unwrap();
+
+    let mut cyclic_bytes = fs::read(&cyclic).unwrap();
+    let reference = cyclic_bytes
+        .windows(b"/Length 10 0 R".len())
+        .position(|window| window == b"/Length 10 0 R")
+        .unwrap();
+    cyclic_bytes[reference..reference + b"/Length 10 0 R".len()].copy_from_slice(b"/Length 06 0 R");
+    fs::write(&cyclic, cyclic_bytes).unwrap();
+
+    assert!(
+        inspect(&malformed)
+            .unwrap_err()
+            .to_string()
+            .contains("not a non-negative integer")
+    );
+    assert!(
+        inspect(&cyclic)
+            .unwrap_err()
+            .to_string()
+            .contains("cyclic or too deep")
+    );
 }
 
 #[test]

@@ -540,11 +540,24 @@ impl ParsedPdf {
     }
 
     fn get_object(&self, id: ObjectId) -> Result<PdfObject, PdfError> {
+        self.get_object_resolving_lengths(id, &mut HashSet::new())
+    }
+
+    fn get_object_resolving_lengths(
+        &self,
+        id: ObjectId,
+        resolving: &mut HashSet<ObjectId>,
+    ) -> Result<PdfObject, PdfError> {
+        if resolving.len() > MAX_DEPTH || !resolving.insert(id) {
+            return Err(PdfError::new(
+                "PDF stream /Length reference is cyclic or too deep",
+            ));
+        }
         let entry = self
             .entries
             .get(&id.0)
             .ok_or_else(|| PdfError::new(format!("PDF object {} is missing", id.0)))?;
-        match entry {
+        let result = match entry {
             XrefEntry::Offset { offset, generation } => {
                 if *generation != id.1 {
                     return Err(PdfError::new(format!(
@@ -552,7 +565,15 @@ impl ParsedPdf {
                         id.0
                     )));
                 }
-                let parsed = parse_indirect_object(&self.bytes, *offset)?;
+                let parsed = parse_indirect_object(&self.bytes, *offset, |length_id| {
+                    self.get_object_resolving_lengths(length_id, resolving)?
+                        .as_usize()
+                        .ok_or_else(|| {
+                            PdfError::new(
+                                "PDF stream indirect /Length is not a non-negative integer",
+                            )
+                        })
+                })?;
                 if parsed.id != id {
                     return Err(PdfError::new(format!(
                         "PDF cross-reference for object {} is inconsistent",
@@ -565,9 +586,11 @@ impl ParsedPdf {
                 if id.1 != 0 {
                     return Err(PdfError::new("compressed PDF object has a generation"));
                 }
-                self.get_compressed_object(*stream, *index, id.0)
+                self.get_compressed_object(*stream, *index, id.0, resolving)
             }
-        }
+        };
+        resolving.remove(&id);
+        result
     }
 
     fn get_compressed_object(
@@ -575,8 +598,9 @@ impl ParsedPdf {
         stream_id: u32,
         index: usize,
         expected_number: u32,
+        resolving: &mut HashSet<ObjectId>,
     ) -> Result<PdfObject, PdfError> {
-        let stream = self.get_object((stream_id, 0))?;
+        let stream = self.get_object_resolving_lengths((stream_id, 0), resolving)?;
         let PdfObject::Stream { dictionary, data } = stream else {
             return Err(PdfError::new("object stream reference is not a stream"));
         };
@@ -1076,7 +1100,11 @@ fn parse_xref_section(bytes: &[u8], offset: usize) -> Result<XrefSection, PdfErr
     if parser.consume_keyword(b"xref") {
         parse_classic_xref(parser)
     } else {
-        let indirect = parse_indirect_object(bytes, offset)?;
+        let indirect = parse_indirect_object(bytes, offset, |_| {
+            Err(PdfError::new(
+                "xref stream entries, including /Length, must be direct objects",
+            ))
+        })?;
         let PdfObject::Stream { dictionary, data } = indirect.object else {
             return Err(PdfError::new("startxref does not point to xref data"));
         };
@@ -1219,7 +1247,14 @@ struct IndirectObject {
     object: PdfObject,
 }
 
-fn parse_indirect_object(bytes: &[u8], offset: usize) -> Result<IndirectObject, PdfError> {
+fn parse_indirect_object<F>(
+    bytes: &[u8],
+    offset: usize,
+    mut resolve_length: F,
+) -> Result<IndirectObject, PdfError>
+where
+    F: FnMut(ObjectId) -> Result<usize, PdfError>,
+{
     let mut parser = Parser::at(bytes, offset)?;
     let number = u32::try_from(parser.read_unsigned()?)
         .map_err(|_| PdfError::new("PDF object number overflow"))?;
@@ -1235,12 +1270,18 @@ fn parse_indirect_object(bytes: &[u8], offset: usize) -> Result<IndirectObject, 
             parser.skip_space_and_comments();
             if parser.consume_keyword(b"stream") {
                 parser.consume_stream_eol()?;
-                let length = dictionary
+                let length_object = dictionary
                     .get(b"Length".as_slice())
-                    .and_then(PdfObject::as_usize)
-                    .ok_or_else(|| {
-                        PdfError::new("PDF stream uses an unsupported indirect or invalid /Length")
-                    })?;
+                    .ok_or_else(|| PdfError::new("PDF stream has no /Length"))?;
+                let length = if let Some(length) = length_object.as_usize() {
+                    length
+                } else if let Some(reference) = length_object.as_reference() {
+                    resolve_length(reference)?
+                } else {
+                    return Err(PdfError::new(
+                        "PDF stream /Length is not a non-negative integer or reference",
+                    ));
+                };
                 let end = parser
                     .position
                     .checked_add(length)
