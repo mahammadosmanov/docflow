@@ -2,8 +2,12 @@ use std::{os::windows::ffi::OsStrExt, path::Path};
 
 use windows::{
     Data::Pdf::{PdfDocument, PdfPageRenderOptions},
-    Storage::{CreationCollisionOption, FileAccessMode, StorageFile, StorageFolder},
-    Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
+    Storage::{
+        CreationCollisionOption, FileAccessMode, StorageFolder, Streams::IRandomAccessStream,
+    },
+    Win32::System::WinRT::{
+        CreateRandomAccessStreamOnFile, RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize,
+    },
     core::{HRESULT, HSTRING},
 };
 
@@ -27,14 +31,7 @@ pub fn render_first_page_png(input: &Path, output: &Path, dpi: i32) -> Result<()
 
 pub fn page_count(input: &Path) -> Result<u32, String> {
     let _runtime = initialize_runtime()?;
-    let hstring =
-        |value: &std::ffi::OsStr| HSTRING::from_wide(&value.encode_wide().collect::<Vec<_>>());
-    let input_file = StorageFile::GetFileFromPathAsync(&hstring(input.as_os_str()))
-        .and_then(|operation| operation.get())
-        .map_err(|error| format!("Windows could not open the PDF: {error}"))?;
-    let document = PdfDocument::LoadFromFileAsync(&input_file)
-        .and_then(|operation| operation.get())
-        .map_err(|error| format!("Windows could not load the PDF: {error}"))?;
+    let (document, _input_stream) = load_document(input)?;
     let count = document
         .PageCount()
         .map_err(|error| format!("Windows could not inspect the PDF: {error}"))?;
@@ -57,12 +54,7 @@ pub fn render_page_png(
 
     let hstring =
         |value: &std::ffi::OsStr| HSTRING::from_wide(&value.encode_wide().collect::<Vec<_>>());
-    let input_file = StorageFile::GetFileFromPathAsync(&hstring(input.as_os_str()))
-        .and_then(|operation| operation.get())
-        .map_err(|error| format!("Windows could not open the PDF: {error}"))?;
-    let document = PdfDocument::LoadFromFileAsync(&input_file)
-        .and_then(|operation| operation.get())
-        .map_err(|error| format!("Windows could not load the PDF: {error}"))?;
+    let (document, _input_stream) = load_document(input)?;
     let page_count = document
         .PageCount()
         .map_err(|error| format!("Windows could not inspect the PDF: {error}"))?;
@@ -128,6 +120,17 @@ pub fn render_page_png(
         return Err("Windows could not flush the PDF image".to_string());
     }
     Ok((width as u32, height as u32))
+}
+
+fn load_document(input: &Path) -> Result<(PdfDocument, IRandomAccessStream), String> {
+    const STGM_READ: u32 = 0;
+    let input = HSTRING::from_wide(&input.as_os_str().encode_wide().collect::<Vec<_>>());
+    let stream: IRandomAccessStream = unsafe { CreateRandomAccessStreamOnFile(&input, STGM_READ) }
+        .map_err(|error| format!("Windows could not open the PDF stream: {error}"))?;
+    let document = PdfDocument::LoadFromStreamAsync(&stream)
+        .and_then(|operation| operation.get())
+        .map_err(|error| format!("Windows could not load the PDF: {error}"))?;
+    Ok((document, stream))
 }
 
 fn initialize_runtime() -> Result<RuntimeGuard, String> {
