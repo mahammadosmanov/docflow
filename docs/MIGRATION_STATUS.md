@@ -74,6 +74,9 @@ certification remain separate unchecked gates and are never implied by a source 
     forms, annotations, links, page boxes/rotation, object streams, and unrelated catalog
     structures; encrypted, digitally signed, tagged, malformed, page-one-widget, and other
     unsupported fidelity cases fail closed with reviewable warnings
+  - archive discovery accepts only case-insensitive exact `RFI No. <canonical-code>.pdf`
+    basenames; multiple valid matches require an archive-root-relative user selection whose
+    precomputed path and hashes are rebound into the revised plan and revalidated during apply
   - 102 Rust tests (14 focused signed-page corpus tests) plus fmt/Clippy/check, 150 Python
     compatibility tests plus mypy/version check, and 10 frontend tests plus build passed on
     macOS; a rendered 144-DPI output visually confirmed the signed rotated/cropped first page
@@ -132,7 +135,7 @@ certification remain separate unchecked gates and are never implied by a source 
     behavior-to-Rust evidence is indexed in `docs/PARITY_CLOSURE.md`
   - Node version/checksum/source/package/license tools, Rust packaged smoke, and
     no-runtime Windows/macOS scripts replace every canonical repository command
-  - 18 Node tooling tests, 17 frontend tests/build, and a maintained 168-test
+  - 18 Node tooling tests, 19 frontend tests/build, and a maintained 168-test
     cross-platform Rust inventory (the canonical macOS run executes 164; target-specific
     tests are certified separately), with fmt, warnings-denied Clippy, check, source audit, and a
     281-Cargo/173-npm/60-native-resource host license audit passing without the retired runtime

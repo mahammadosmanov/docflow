@@ -353,14 +353,16 @@ fn preview_matches_the_frozen_compatibility_oracle_for_duplicates_misses_ambigui
 }
 
 #[test]
-fn archive_lookup_accepts_a_unique_pdf_whose_filename_contains_the_exact_rfi_code() {
+fn archive_lookup_ignores_nonstandard_names_even_when_the_path_contains_the_rfi_code() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
     write_signed(&signed_root.join("signed.pdf"), false);
-    let archive = archive_root
-        .join("Package/Civil")
-        .join(format!("Archived {CODE} approved copy.pdf"));
-    write_rich_archive(&archive);
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(format!("Archived {CODE} approved copy.pdf")),
+    );
+    write_rich_archive(&archive_root.join(CODE).join("approved.pdf"));
 
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
@@ -370,31 +372,20 @@ fn archive_lookup_accepts_a_unique_pdf_whose_filename_contains_the_exact_rfi_cod
     )
     .unwrap();
 
-    assert_eq!(
-        plan.steps
-            .iter()
-            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
-            .count(),
-        1
-    );
-    assert!(
-        plan.warnings
-            .iter()
-            .all(|warning| warning.key != "warn.rfi.archiveMissing")
-    );
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings.len(), 1);
+    assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
 }
 
 #[test]
-fn archive_lookup_accepts_a_unique_pdf_inside_an_exact_rfi_code_directory() {
+fn archive_ambiguity_requires_an_allowlisted_rfi_no_pdf_selection() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
     write_signed(&signed_root.join("signed.pdf"), false);
-    write_rich_archive(
-        &archive_root
-            .join("Package/Civil")
-            .join(CODE)
-            .join("approved.pdf"),
-    );
+    let first = Path::new("Other").join(filename_for(CODE));
+    let second = Path::new("Package/Civil").join(filename_for(CODE));
+    write_rich_archive(&archive_root.join(&first));
+    write_rich_archive(&archive_root.join(&second));
 
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
@@ -404,44 +395,127 @@ fn archive_lookup_accepts_a_unique_pdf_inside_an_exact_rfi_code_directory() {
     )
     .unwrap();
 
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings.len(), 1);
+    assert_eq!(plan.warnings[0].key, "warn.rfi.archiveAmbiguous");
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["enabled"], true);
+    assert_eq!(rows[0]["code"], CODE);
+    assert_eq!(rows[0]["archiveFile"], "");
     assert_eq!(
-        plan.steps
-            .iter()
-            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
-            .count(),
-        1
+        plan.meta["editor"]["requiredFields"],
+        json!(["archiveFile"])
     );
+    assert_eq!(
+        plan.meta["editor"]["choicesByValue"]["archiveFile"]["values"][CODE],
+        json!([
+            "",
+            format!("signed-{CODE}-candidate-1"),
+            format!("signed-{CODE}-candidate-2")
+        ])
+    );
+    assert_eq!(
+        plan.meta["editor"]["choiceLabels"]["archiveFile"][&format!("signed-{CODE}-candidate-1")],
+        json!(first.to_string_lossy())
+    );
+    assert_eq!(
+        plan.meta["editor"]["choiceLabels"]["archiveFile"][&format!("signed-{CODE}-candidate-2")],
+        json!(second.to_string_lossy())
+    );
+
+    let mut selected = rows.clone();
+    selected[0]["archiveFile"] = json!(format!("signed-{CODE}-candidate-2"));
+    let revised = revise(&plan, &json!({"rows": selected})).unwrap();
+    let replacements = revised
+        .steps
+        .iter()
+        .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+        .collect::<Vec<_>>();
+    assert_eq!(replacements.len(), 1);
+    let canonical_archive_root = fs::canonicalize(&archive_root).unwrap();
+    let canonical_review_root = fs::canonicalize(&review_root).unwrap();
+    assert_eq!(
+        replacements[0].src.as_deref(),
+        Some(
+            canonical_archive_root
+                .join(&second)
+                .to_string_lossy()
+                .as_ref()
+        )
+    );
+    assert_eq!(
+        replacements[0].dst.as_deref(),
+        Some(
+            canonical_review_root
+                .join(&second)
+                .to_string_lossy()
+                .as_ref()
+        )
+    );
+
+    let authority =
+        FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+    let cached = cache_stage_plan(
+        &authority,
+        revised,
+        &signed_root,
+        &archive_root,
+        &review_root,
+    );
+    fs::write(archive_root.join(&second), b"changed after selection").unwrap();
+    let result = authority
+        .apply(
+            &cached.plan_id,
+            &CallerIdentity::new("owner-1", "session-1"),
+        )
+        .unwrap();
+    assert_eq!(result.failed, 1);
+    assert!(!review_root.join(&second).exists());
+
+    let mut missing = rows.clone();
+    missing[0]["archiveFile"] = json!("");
+    assert!(revise(&plan, &json!({"rows": missing})).is_err());
+
+    let mut forged = rows.clone();
+    forged[0]["archiveFile"] = json!("Forged/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf");
+    assert!(revise(&plan, &json!({"rows": forged})).is_err());
+
+    let mut disabled = rows.clone();
+    disabled[0]["enabled"] = json!(false);
+    let skipped = revise(&plan, &json!({"rows": disabled})).unwrap();
     assert!(
-        plan.warnings
+        skipped
+            .steps
             .iter()
-            .all(|warning| warning.key != "warn.rfi.archiveMissing")
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
     );
 }
 
 #[test]
-fn archive_lookup_rejects_numeric_tails_multiple_codes_and_non_pdf_files() {
+fn archive_lookup_rejects_numeric_tails_suffixes_and_non_pdf_files() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
     write_signed(&signed_root.join("signed.pdf"), false);
     write_rich_archive(
         &archive_root
             .join("Package/Civil")
-            .join(format!("Archived {CODE}5.pdf")),
-    );
-    write_rich_archive(
-        &archive_root
-            .join(CODE)
-            .join("AZE-SUN-INT-QMS-RFI-MEC-0107.pdf"),
+            .join(format!("RFI No. {CODE}5.pdf")),
     );
     write_rich_archive(
         &archive_root
             .join("Package/Civil")
-            .join(format!("Archived {CODE}٥.pdf")),
+            .join(format!("RFI No. {CODE} approved.pdf")),
     );
     write_rich_archive(
         &archive_root
             .join("Package/Civil")
-            .join(format!("Archived {CODE}.txt")),
+            .join(format!("RFI No. {CODE}٥.pdf")),
+    );
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(format!("RFI No. {CODE}.txt")),
     );
 
     let plan = preview(
@@ -466,7 +540,9 @@ fn preview_preserves_scan_subfolders_and_surfaces_pdf_fidelity_warnings() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
     let nested_signed = signed_root.join("incoming/day-1/signed.pdf");
-    let archive = archive_root.join("Package/Civil").join(filename_for(CODE));
+    let archive = archive_root
+        .join("Package/Civil")
+        .join(format!("rfi no. {}.PdF", CODE.to_ascii_lowercase()));
     write_signed(&nested_signed, true);
     write_rich_archive(&archive);
 
@@ -610,11 +686,7 @@ fn archive_lookup_never_follows_direct_pdf_symlinks() {
     write_signed(&signed_root.join("signed.pdf"), false);
     let outside_archive = fixture.path().join("outside-archive.pdf");
     write_rich_archive(&outside_archive);
-    symlink(
-        &outside_archive,
-        archive_root.join(format!("Archived {CODE}.pdf")),
-    )
-    .unwrap();
+    symlink(&outside_archive, archive_root.join(filename_for(CODE))).unwrap();
 
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),

@@ -2,20 +2,19 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    sync::OnceLock,
 };
 
-use regex::Regex;
 use serde_json::{Value, json};
 
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
+    naming::filename_for,
     operations::process_scans::{OcrAdapter, OcrFailure},
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
-    rfi_code::{RfiMethod, canonical},
+    rfi_code::RfiMethod,
 };
 
 const OPERATION_ID: &str = "rfi.stage_signed_first_pages";
@@ -35,6 +34,11 @@ struct Candidate {
     path: PathBuf,
     confidence: f64,
     method: String,
+}
+
+struct PreparedArchive {
+    relative: PathBuf,
+    steps: Vec<Step>,
 }
 
 pub fn preview<A, P, C>(
@@ -132,8 +136,13 @@ where
     }
 
     let archive_matches = archive_index(&archive_root, unique.keys().cloned().collect())?;
-    let mut planned_directories = BTreeSet::new();
     let mut editor_rows = Vec::new();
+    let mut archive_choices = JsonObject::new();
+    let mut archive_choice_labels = JsonObject::from_iter([(
+        String::new(),
+        Value::String("rfi.signed.archive.choose".to_string()),
+    )]);
+    let mut candidate_steps = JsonObject::new();
     for (code, candidate) in unique {
         if cancelled() {
             return Err(BackendError::cancelled());
@@ -144,95 +153,6 @@ where
                 .push(warning("warn.rfi.archiveMissing", &code));
             continue;
         }
-        if matches.len() > 1 {
-            let names = matches
-                .iter()
-                .filter_map(|path| path.strip_prefix(&archive_root).ok())
-                .map(|path| path.to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join(", ");
-            plan.warnings.push(warning(
-                "warn.rfi.archiveAmbiguous",
-                &truncate(&format!("{code} — {names}"), 300),
-            ));
-            continue;
-        }
-        let archive_pdf = &matches[0];
-        let relative = archive_pdf
-            .strip_prefix(&archive_root)
-            .map_err(|_| BackendError::path_invalid("archive match escaped the selected root"))?;
-        let destination = review_root.join(relative);
-        if destination.exists() {
-            let stale_temps = stale_hardlink_temps(&destination, &review_root);
-            let destination_hash = if stale_temps.is_empty() {
-                None
-            } else {
-                file_sha256(&destination).ok()
-            };
-            if let Some(destination_hash) = destination_hash {
-                for stale_temp in stale_temps {
-                    let mut meta = JsonObject::new();
-                    meta.insert(
-                        "reviewRoot".to_string(),
-                        Value::String(review_root.to_string_lossy().into_owned()),
-                    );
-                    meta.insert(
-                        "destinationSha256".to_string(),
-                        Value::String(destination_hash.clone()),
-                    );
-                    plan.steps.push(Step {
-                        kind: StepKind::CleanupTemp,
-                        src: Some(stale_temp.to_string_lossy().into_owned()),
-                        dst: Some(destination.to_string_lossy().into_owned()),
-                        note_key: Some("note.rfi.cleanupStaleTemp".to_string()),
-                        meta,
-                    });
-                }
-                plan.warnings.push(warning(
-                    "warn.rfi.staleTempFound",
-                    &relative.to_string_lossy(),
-                ));
-            } else {
-                plan.warnings.push(warning(
-                    "warn.rfi.reviewExists",
-                    &relative.to_string_lossy(),
-                ));
-            }
-            continue;
-        }
-        if destination
-            .ancestors()
-            .take_while(|path| *path != review_root)
-            .any(|path| {
-                fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
-            })
-        {
-            plan.warnings.push(warning(
-                "warn.rfi.reviewPathBlocked",
-                &relative.to_string_lossy(),
-            ));
-            continue;
-        }
-        let archive_facts = match inspect(archive_pdf) {
-            Ok(facts) if fidelity_supported(&facts, PdfRole::Archive) => facts,
-            Ok(facts) => {
-                plan.warnings.push(warning(
-                    "warn.rfi.pdfFidelityUnsupported",
-                    &truncate(
-                        &format!("{code} — {}", fidelity_reason(&facts, PdfRole::Archive)),
-                        300,
-                    ),
-                ));
-                continue;
-            }
-            Err(error) => {
-                plan.warnings.push(warning(
-                    "warn.rfi.pdfFidelityUnsupported",
-                    &truncate(&format!("{code} — {error}"), 300),
-                ));
-                continue;
-            }
-        };
         let signed_facts = match inspect(&candidate.path) {
             Ok(facts) if fidelity_supported(&facts, PdfRole::SignedScan) => facts,
             Ok(facts) => {
@@ -257,90 +177,97 @@ where
                 continue;
             }
         };
-        if archive_facts.page_count == 0 || signed_facts.page_count == 0 {
+        if signed_facts.page_count == 0 {
             plan.warnings.push(warning(
                 "warn.rfi.pdfFidelityUnsupported",
                 &format!("{code} — PDF has no pages"),
             ));
             continue;
         }
-        if archive_facts.pages[0].widgets > 0 || signed_facts.pages[0].widgets > 0 {
+        if signed_facts.pages[0].widgets > 0 {
             plan.warnings.push(warning(
                 "warn.rfi.pdfFidelityUnsupported",
                 &format!("{code} — page-one form widgets require manual review"),
             ));
             continue;
         }
-        let archive_hash = file_sha256(archive_pdf)
-            .map_err(|_| BackendError::path_invalid("archive PDF could not be hashed"))?;
         let signed_hash = file_sha256(&candidate.path)
             .map_err(|_| BackendError::path_invalid("signed PDF could not be hashed"))?;
-
-        add_directory_steps(
-            destination
-                .parent()
-                .ok_or_else(|| BackendError::path_invalid("review destination has no parent"))?,
-            &review_root,
-            &mut planned_directories,
-            &mut plan.steps,
-        )?;
+        let row_id = format!("signed-{code}");
+        let mut prepared = Vec::new();
+        for archive_pdf in &matches {
+            if let Some(candidate_plan) = prepare_archive_candidate(
+                &code,
+                &row_id,
+                &candidate,
+                archive_pdf,
+                &signed_facts,
+                &signed_hash,
+                &signed_root,
+                &archive_root,
+                &review_root,
+                &mut plan,
+            )? {
+                prepared.push(candidate_plan);
+            }
+        }
+        if prepared.is_empty() {
+            continue;
+        }
         if signed_facts.page_count > 1 {
             plan.warnings.push(warning(
                 "warn.rfi.signedExtraPages",
                 &display_name(&candidate.path),
             ));
         }
-        let row_id = format!("signed-{code}");
-        let mut meta = JsonObject::new();
-        meta.insert("code".to_string(), Value::String(code.clone()));
-        meta.insert(
-            "signedPdf".to_string(),
-            Value::String(candidate.path.to_string_lossy().into_owned()),
-        );
-        meta.insert(
-            "signedRoot".to_string(),
-            Value::String(signed_root.to_string_lossy().into_owned()),
-        );
-        meta.insert(
-            "archiveRoot".to_string(),
-            Value::String(archive_root.to_string_lossy().into_owned()),
-        );
-        meta.insert(
-            "reviewRoot".to_string(),
-            Value::String(review_root.to_string_lossy().into_owned()),
-        );
-        meta.insert(
-            "relativePath".to_string(),
-            Value::String(relative.to_string_lossy().into_owned()),
-        );
-        meta.insert("confidence".to_string(), Value::from(candidate.confidence));
-        meta.insert("method".to_string(), Value::String(candidate.method));
-        meta.insert("archiveSha256".to_string(), Value::String(archive_hash));
-        meta.insert("signedSha256".to_string(), Value::String(signed_hash));
-        meta.insert(
-            "archivePageCount".to_string(),
-            Value::from(archive_facts.page_count as u64),
-        );
-        meta.insert(
-            "signedPageCount".to_string(),
-            Value::from(signed_facts.page_count as u64),
-        );
-        meta.insert("rowId".to_string(), Value::String(row_id.clone()));
-        plan.steps.push(Step {
-            kind: StepKind::PdfFirstPageReplace,
-            src: Some(archive_pdf.to_string_lossy().into_owned()),
-            dst: Some(destination.to_string_lossy().into_owned()),
-            note_key: Some("note.rfi.signedFirstPageStaged".to_string()),
-            meta,
-        });
+        let ambiguous = prepared.len() > 1;
+        if ambiguous {
+            let names = prepared
+                .iter()
+                .map(|item| item.relative.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(", ");
+            plan.warnings.push(warning(
+                "warn.rfi.archiveAmbiguous",
+                &truncate(&format!("{code} — {names}"), 300),
+            ));
+        }
+        let mut selected = String::new();
+        let mut choices = Vec::with_capacity(prepared.len() + usize::from(ambiguous));
+        if ambiguous {
+            choices.push(Value::String(String::new()));
+        }
+        let mut row_candidates = JsonObject::new();
+        for (index, item) in prepared.iter().enumerate() {
+            let token = format!("{row_id}-candidate-{}", index + 1);
+            let relative = item.relative.to_string_lossy().into_owned();
+            if !ambiguous && index == 0 {
+                selected.clone_from(&token);
+            }
+            choices.push(Value::String(token.clone()));
+            archive_choice_labels.insert(token.clone(), Value::String(relative));
+            row_candidates.insert(
+                token,
+                serde_json::to_value(&item.steps).expect("candidate steps serialize"),
+            );
+        }
+        if !ambiguous {
+            extend_candidate_steps(&mut plan.steps, &prepared[0].steps);
+        }
+        archive_choices.insert(code.clone(), Value::Array(choices));
+        candidate_steps.insert(row_id.clone(), Value::Object(row_candidates));
         editor_rows.push(json!({
             "_rowId": row_id,
             "enabled": true,
             "code": code,
             "signedFile": display_name(&candidate.path),
-            "archiveFile": relative.to_string_lossy(),
+            "archiveFile": selected,
         }));
     }
+    plan.meta.insert(
+        "archiveCandidateSteps".to_string(),
+        Value::Object(candidate_steps),
+    );
     plan.meta.insert(
         "editor".to_string(),
         json!({
@@ -350,11 +277,21 @@ where
             "selectionEnabled": false,
             "bulkEnabled": false,
             "duplicateEnabled": false,
+            "requiredFields": ["archiveFile"],
+            "choicesByValue": {
+                "archiveFile": {
+                    "dependsOn": "code",
+                    "values": archive_choices,
+                }
+            },
+            "choiceLabels": {
+                "archiveFile": archive_choice_labels
+            },
             "columns": [
                 {"key": "enabled", "labelKey": "rfi.signed.column.enabled", "kind": "bool"},
                 {"key": "code", "labelKey": "rfi.signed.column.code", "kind": "readonly"},
                 {"key": "signedFile", "labelKey": "rfi.signed.column.scan", "kind": "readonly"},
-                {"key": "archiveFile", "labelKey": "rfi.signed.column.archive", "kind": "readonly"}
+                {"key": "archiveFile", "labelKey": "rfi.signed.column.archive", "kind": "choice", "bulk": false}
             ],
             "rows": editor_rows,
         }),
@@ -404,44 +341,17 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
             "signed-page review row identity is invalid",
         ));
     }
-    let enabled = supplied_rows
-        .iter()
-        .filter(|row| row.get("enabled").and_then(Value::as_bool).unwrap_or(false))
-        .filter_map(|row| row.get("_rowId").and_then(Value::as_str))
-        .collect::<BTreeSet<_>>();
-    let enabled_destinations = plan
+    let cached_candidates = plan
+        .meta
+        .get("archiveCandidateSteps")
+        .and_then(Value::as_object)
+        .ok_or_else(|| BackendError::validation("signed-page archive candidates are missing"))?;
+    let mut steps = plan
         .steps
         .iter()
-        .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
-        .filter(|step| {
-            step.meta
-                .get("rowId")
-                .and_then(Value::as_str)
-                .is_some_and(|row_id| enabled.contains(row_id))
-        })
-        .filter_map(|step| step.dst.as_deref())
-        .map(PathBuf::from)
-        .collect::<Vec<_>>();
-    let steps = plan
-        .steps
-        .iter()
-        .filter(|step| match step.kind {
-            StepKind::PdfFirstPageReplace => step
-                .meta
-                .get("rowId")
-                .and_then(Value::as_str)
-                .is_some_and(|row_id| enabled.contains(row_id)),
-            StepKind::Mkdir => step.dst.as_deref().is_some_and(|directory| {
-                let directory = Path::new(directory);
-                enabled_destinations
-                    .iter()
-                    .any(|destination| destination.starts_with(directory))
-            }),
-            StepKind::CleanupTemp => true,
-            _ => false,
-        })
+        .filter(|step| step.kind == StepKind::CleanupTemp)
         .cloned()
-        .collect();
+        .collect::<Vec<_>>();
     let mut meta = plan.meta.clone();
     let mut revised_rows = existing_rows.clone();
     for row in &mut revised_rows {
@@ -450,9 +360,58 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        row.as_object_mut().expect("validated editor row").insert(
-            "enabled".to_string(),
-            Value::Bool(enabled.contains(row_id.as_str())),
+        let supplied = supplied_rows
+            .iter()
+            .find(|candidate| {
+                candidate.get("_rowId").and_then(Value::as_str) == Some(row_id.as_str())
+            })
+            .expect("validated row identities");
+        let enabled = supplied
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| BackendError::validation("signed-page row state is invalid"))?;
+        let selected = supplied
+            .get("archiveFile")
+            .and_then(Value::as_str)
+            .ok_or_else(|| BackendError::validation("signed-page archive selection is invalid"))?;
+        let choices = cached_candidates
+            .get(&row_id)
+            .and_then(Value::as_object)
+            .ok_or_else(|| BackendError::validation("signed-page archive choices are invalid"))?;
+        if !selected.is_empty() && !choices.contains_key(selected) {
+            return Err(BackendError::validation(
+                "signed-page archive selection was not offered by preview",
+            ));
+        }
+        if enabled {
+            if selected.is_empty() {
+                return Err(BackendError::validation(
+                    "signed-page archive selection is required",
+                ));
+            }
+            let selected_steps: Vec<Step> = serde_json::from_value(
+                choices
+                    .get(selected)
+                    .expect("selected candidate is allowlisted")
+                    .clone(),
+            )
+            .map_err(|_| BackendError::validation("signed-page candidate plan is invalid"))?;
+            if selected_steps.iter().any(|step| {
+                !matches!(step.kind, StepKind::Mkdir | StepKind::PdfFirstPageReplace)
+                    || (step.kind == StepKind::PdfFirstPageReplace
+                        && step.meta.get("rowId").and_then(Value::as_str) != Some(row_id.as_str()))
+            }) {
+                return Err(BackendError::validation(
+                    "signed-page candidate plan contains an invalid step",
+                ));
+            }
+            extend_candidate_steps(&mut steps, &selected_steps);
+        }
+        let revised = row.as_object_mut().expect("validated editor row");
+        revised.insert("enabled".to_string(), Value::Bool(enabled));
+        revised.insert(
+            "archiveFile".to_string(),
+            Value::String(selected.to_string()),
         );
     }
     meta.get_mut("editor")
@@ -466,6 +425,184 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         warnings: plan.warnings.clone(),
         meta,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_archive_candidate(
+    code: &str,
+    row_id: &str,
+    candidate: &Candidate,
+    archive_pdf: &Path,
+    signed_facts: &PdfInspection,
+    signed_hash: &str,
+    signed_root: &Path,
+    archive_root: &Path,
+    review_root: &Path,
+    plan: &mut Plan,
+) -> Result<Option<PreparedArchive>, BackendError> {
+    let relative = archive_pdf
+        .strip_prefix(archive_root)
+        .map_err(|_| BackendError::path_invalid("archive match escaped the selected root"))?
+        .to_path_buf();
+    let destination = review_root.join(&relative);
+    if destination.exists() {
+        let stale_temps = stale_hardlink_temps(&destination, review_root);
+        let destination_hash = if stale_temps.is_empty() {
+            None
+        } else {
+            file_sha256(&destination).ok()
+        };
+        if let Some(destination_hash) = destination_hash {
+            for stale_temp in stale_temps {
+                let mut meta = JsonObject::new();
+                meta.insert(
+                    "reviewRoot".to_string(),
+                    Value::String(review_root.to_string_lossy().into_owned()),
+                );
+                meta.insert(
+                    "destinationSha256".to_string(),
+                    Value::String(destination_hash.clone()),
+                );
+                plan.steps.push(Step {
+                    kind: StepKind::CleanupTemp,
+                    src: Some(stale_temp.to_string_lossy().into_owned()),
+                    dst: Some(destination.to_string_lossy().into_owned()),
+                    note_key: Some("note.rfi.cleanupStaleTemp".to_string()),
+                    meta,
+                });
+            }
+            plan.warnings.push(warning(
+                "warn.rfi.staleTempFound",
+                &relative.to_string_lossy(),
+            ));
+        } else {
+            plan.warnings.push(warning(
+                "warn.rfi.reviewExists",
+                &relative.to_string_lossy(),
+            ));
+        }
+        return Ok(None);
+    }
+    if destination
+        .ancestors()
+        .take_while(|path| *path != review_root)
+        .any(|path| {
+            fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+        })
+    {
+        plan.warnings.push(warning(
+            "warn.rfi.reviewPathBlocked",
+            &relative.to_string_lossy(),
+        ));
+        return Ok(None);
+    }
+    let archive_facts = match inspect(archive_pdf) {
+        Ok(facts) if fidelity_supported(&facts, PdfRole::Archive) => facts,
+        Ok(facts) => {
+            plan.warnings.push(warning(
+                "warn.rfi.pdfFidelityUnsupported",
+                &truncate(
+                    &format!("{code} — {}", fidelity_reason(&facts, PdfRole::Archive)),
+                    300,
+                ),
+            ));
+            return Ok(None);
+        }
+        Err(error) => {
+            plan.warnings.push(warning(
+                "warn.rfi.pdfFidelityUnsupported",
+                &truncate(&format!("{code} — {error}"), 300),
+            ));
+            return Ok(None);
+        }
+    };
+    if archive_facts.page_count == 0 {
+        plan.warnings.push(warning(
+            "warn.rfi.pdfFidelityUnsupported",
+            &format!("{code} — PDF has no pages"),
+        ));
+        return Ok(None);
+    }
+    if archive_facts.pages[0].widgets > 0 {
+        plan.warnings.push(warning(
+            "warn.rfi.pdfFidelityUnsupported",
+            &format!("{code} — page-one form widgets require manual review"),
+        ));
+        return Ok(None);
+    }
+    let archive_hash = file_sha256(archive_pdf)
+        .map_err(|_| BackendError::path_invalid("archive PDF could not be hashed"))?;
+    let mut steps = Vec::new();
+    add_directory_steps(
+        destination
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("review destination has no parent"))?,
+        review_root,
+        &mut BTreeSet::new(),
+        &mut steps,
+    )?;
+    let mut meta = JsonObject::new();
+    meta.insert("code".to_string(), Value::String(code.to_string()));
+    meta.insert(
+        "signedPdf".to_string(),
+        Value::String(candidate.path.to_string_lossy().into_owned()),
+    );
+    meta.insert(
+        "signedRoot".to_string(),
+        Value::String(signed_root.to_string_lossy().into_owned()),
+    );
+    meta.insert(
+        "archiveRoot".to_string(),
+        Value::String(archive_root.to_string_lossy().into_owned()),
+    );
+    meta.insert(
+        "reviewRoot".to_string(),
+        Value::String(review_root.to_string_lossy().into_owned()),
+    );
+    meta.insert(
+        "relativePath".to_string(),
+        Value::String(relative.to_string_lossy().into_owned()),
+    );
+    meta.insert("confidence".to_string(), Value::from(candidate.confidence));
+    meta.insert(
+        "method".to_string(),
+        Value::String(candidate.method.clone()),
+    );
+    meta.insert("archiveSha256".to_string(), Value::String(archive_hash));
+    meta.insert(
+        "signedSha256".to_string(),
+        Value::String(signed_hash.to_string()),
+    );
+    meta.insert(
+        "archivePageCount".to_string(),
+        Value::from(archive_facts.page_count as u64),
+    );
+    meta.insert(
+        "signedPageCount".to_string(),
+        Value::from(signed_facts.page_count as u64),
+    );
+    meta.insert("rowId".to_string(), Value::String(row_id.to_string()));
+    steps.push(Step {
+        kind: StepKind::PdfFirstPageReplace,
+        src: Some(archive_pdf.to_string_lossy().into_owned()),
+        dst: Some(destination.to_string_lossy().into_owned()),
+        note_key: Some("note.rfi.signedFirstPageStaged".to_string()),
+        meta,
+    });
+    Ok(Some(PreparedArchive { relative, steps }))
+}
+
+fn extend_candidate_steps(target: &mut Vec<Step>, candidate: &[Step]) {
+    for step in candidate {
+        if step.kind == StepKind::Mkdir
+            && target.iter().any(|existing| {
+                existing.kind == StepKind::Mkdir && existing.dst.as_deref() == step.dst.as_deref()
+            })
+        {
+            continue;
+        }
+        target.push(step.clone());
+    }
 }
 
 fn empty_plan() -> Plan {
@@ -589,13 +726,16 @@ fn archive_index(
     root: &Path,
     codes: BTreeSet<String>,
 ) -> Result<BTreeMap<String, Vec<PathBuf>>, BackendError> {
-    let mut matches = codes
+    let wanted = codes
         .iter()
-        .cloned()
+        .map(|code| (filename_for(code).to_ascii_lowercase(), code.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut matches = codes
+        .into_iter()
         .map(|code| (code, Vec::new()))
         .collect::<BTreeMap<_, _>>();
     let mut visited = 0usize;
-    collect_archive(root, root, &codes, &mut matches, &mut visited)?;
+    collect_archive(root, root, &wanted, &mut matches, &mut visited)?;
     for values in matches.values_mut() {
         values.sort();
     }
@@ -605,7 +745,7 @@ fn archive_index(
 fn collect_archive(
     root: &Path,
     directory: &Path,
-    wanted: &BTreeSet<String>,
+    wanted: &BTreeMap<String, String>,
     output: &mut BTreeMap<String, Vec<PathBuf>>,
     visited: &mut usize,
 ) -> Result<(), BackendError> {
@@ -630,49 +770,21 @@ fn collect_archive(
         if !metadata.is_file() || metadata.file_type().is_symlink() {
             continue;
         }
-        if !entry
-            .path()
-            .extension()
-            .and_then(|value| value.to_str())
-            .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
-        {
-            continue;
-        }
-        let entry_path = entry.path();
-        let Some(code) =
-            archive_code_from_path(root, &entry_path).filter(|code| wanted.contains(code))
-        else {
+        let Some(name) = entry.file_name().to_str().map(str::to_ascii_lowercase) else {
             continue;
         };
+        let Some(code) = wanted.get(&name) else {
+            continue;
+        };
+        let entry_path = entry.path();
         let resolved = fs::canonicalize(entry_path)
             .map_err(|_| BackendError::path_invalid("archive PDF could not be resolved"))?;
         if !resolved.starts_with(root) || !resolved.is_file() {
             return Err(BackendError::path_escape());
         }
-        output.entry(code).or_default().push(resolved);
+        output.entry(code.clone()).or_default().push(resolved);
     }
     Ok(())
-}
-
-fn archive_code_from_path(root: &Path, path: &Path) -> Option<String> {
-    static CODE: OnceLock<Regex> = OnceLock::new();
-    let pattern = CODE.get_or_init(|| {
-        Regex::new(r"AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}")
-            .expect("the archive RFI filename pattern is valid")
-    });
-    let relative = path.strip_prefix(root).ok()?;
-    let canonical = canonical(&relative.to_string_lossy());
-    let codes = pattern
-        .find_iter(&canonical)
-        .filter(|candidate| {
-            !canonical[candidate.end()..]
-                .chars()
-                .next()
-                .is_some_and(char::is_numeric)
-        })
-        .map(|candidate| candidate.as_str().to_string())
-        .collect::<BTreeSet<_>>();
-    (codes.len() == 1).then(|| codes.into_iter().next().expect("one archive RFI code"))
 }
 
 fn add_directory_steps(

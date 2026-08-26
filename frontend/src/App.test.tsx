@@ -6,10 +6,12 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "./App";
+import { App, isPlanEditorReady, PlanView } from "./App";
+import { makeStrings } from "./i18n";
 import { resetBridgeForTests } from "./lib/bridge";
+import type { Plan } from "./types";
 
 async function signIn() {
   expect(
@@ -39,6 +41,81 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("requires an archive choice for every enabled ambiguous signed-page row", () => {
+    const editor = { requiredFields: ["archiveFile"] };
+    expect(
+      isPlanEditorReady(editor, [
+        { enabled: true, archiveFile: "" },
+        { enabled: true, archiveFile: "Package/RFI No. CODE.pdf" },
+      ]),
+    ).toBe(false);
+    expect(
+      isPlanEditorReady(editor, [
+        { enabled: true, archiveFile: "Other/RFI No. CODE.pdf" },
+      ]),
+    ).toBe(true);
+    expect(
+      isPlanEditorReady(editor, [{ enabled: false, archiveFile: "" }]),
+    ).toBe(true);
+  });
+
+  it("shows archive-root-relative candidates and enables apply only after selection", () => {
+    const first = "Other/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf";
+    const second = "Package/Civil/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf";
+    const editor = {
+      requiredFields: ["archiveFile"],
+      columns: [
+        { key: "enabled", labelKey: "rfi.signed.column.enabled", kind: "bool" },
+        { key: "code", labelKey: "rfi.signed.column.code", kind: "readonly" },
+        { key: "archiveFile", labelKey: "rfi.signed.column.archive", kind: "choice" },
+      ],
+      choicesByValue: {
+        archiveFile: {
+          dependsOn: "code",
+          values: { CODE: ["", "signed-CODE-candidate-1", "signed-CODE-candidate-2"] },
+        },
+      },
+      choiceLabels: {
+        archiveFile: {
+          "": "rfi.signed.archive.choose",
+          "signed-CODE-candidate-1": first,
+          "signed-CODE-candidate-2": second,
+        },
+      },
+    };
+    const initialRows = [
+      { _rowId: "signed-CODE", enabled: true, code: "CODE", archiveFile: "" },
+    ];
+    const plan: Plan = {
+      planId: "plan-1",
+      opId: "rfi.stage_signed_first_pages",
+      steps: [],
+      warnings: [],
+      meta: { editor },
+    };
+    const onRowsChange = vi.fn();
+    const props = {
+      plan,
+      s: makeStrings("tr"),
+      error: "",
+      onCancel: vi.fn(),
+      onApply: vi.fn(),
+      onEditorRowsChange: onRowsChange,
+    };
+    const view = render(<PlanView {...props} editorRows={initialRows} />);
+
+    expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
+    const archive = screen.getByRole("combobox");
+    expect(within(archive).getByRole("option", { name: first })).toBeVisible();
+    expect(within(archive).getByRole("option", { name: second })).toBeVisible();
+
+    fireEvent.change(archive, { target: { value: "signed-CODE-candidate-2" } });
+    const selectedRows = onRowsChange.mock.calls[0][0] as Record<string, unknown>[];
+    expect(selectedRows[0].archiveFile).toBe("signed-CODE-candidate-2");
+    view.rerender(<PlanView {...props} editorRows={selectedRows} />);
+    expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
+  });
+
   it("requires account email and explains that username sign-in is unavailable", async () => {
     render(<App />);
 

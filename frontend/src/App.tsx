@@ -2075,7 +2075,28 @@ function EditablePlanTable({
   );
 }
 
-function PlanView({
+export function isPlanEditorReady(
+  editor: Record<string, unknown>,
+  rows: Record<string, unknown>[],
+): boolean {
+  const requiredFields = Array.isArray(editor.requiredFields)
+    ? editor.requiredFields.filter(
+        (field): field is string => typeof field === "string",
+      )
+    : [];
+  return rows.every(
+    (row) =>
+      row.enabled === false ||
+      requiredFields.every((field) => {
+        const value = row[field];
+        return typeof value === "string"
+          ? value.trim().length > 0
+          : value !== null && value !== undefined;
+      }),
+  );
+}
+
+export function PlanView({
   plan,
   s,
   error,
@@ -2097,6 +2118,15 @@ function PlanView({
     plan.meta?.editor && typeof plan.meta.editor === "object"
       ? (plan.meta.editor as Record<string, unknown>)
       : null;
+  const editorReady =
+    !editor || !editorRows || isPlanEditorReady(editor, editorRows);
+  const editorCanMaterializeStep = Boolean(
+    Array.isArray(editor?.requiredFields) &&
+      editor.requiredFields.length > 0 &&
+      editorRows?.some((row) => row.enabled !== false),
+  );
+  const canApply =
+    editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);
   return (
     <div className="flow-layout">
       {plan.warnings.length > 0 && (
@@ -2146,7 +2176,7 @@ function PlanView({
         right={
           <Button
             icon={<Play />}
-            disabled={!plan.steps.length}
+            disabled={!canApply}
             onClick={onApply}
           >
             {s.t("action.apply")}
