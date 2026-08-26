@@ -353,6 +353,115 @@ fn preview_matches_the_frozen_compatibility_oracle_for_duplicates_misses_ambigui
 }
 
 #[test]
+fn archive_lookup_accepts_a_unique_pdf_whose_filename_contains_the_exact_rfi_code() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("signed.pdf"), false);
+    let archive = archive_root
+        .join("Package/Civil")
+        .join(format!("Archived {CODE} approved copy.pdf"));
+    write_rich_archive(&archive);
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &FixtureOcr::one(&["signed.pdf"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+            .count(),
+        1
+    );
+    assert!(
+        plan.warnings
+            .iter()
+            .all(|warning| warning.key != "warn.rfi.archiveMissing")
+    );
+}
+
+#[test]
+fn archive_lookup_accepts_a_unique_pdf_inside_an_exact_rfi_code_directory() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("signed.pdf"), false);
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(CODE)
+            .join("approved.pdf"),
+    );
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &FixtureOcr::one(&["signed.pdf"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+            .count(),
+        1
+    );
+    assert!(
+        plan.warnings
+            .iter()
+            .all(|warning| warning.key != "warn.rfi.archiveMissing")
+    );
+}
+
+#[test]
+fn archive_lookup_rejects_numeric_tails_multiple_codes_and_non_pdf_files() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("signed.pdf"), false);
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(format!("Archived {CODE}5.pdf")),
+    );
+    write_rich_archive(
+        &archive_root
+            .join(CODE)
+            .join("AZE-SUN-INT-QMS-RFI-MEC-0107.pdf"),
+    );
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(format!("Archived {CODE}٥.pdf")),
+    );
+    write_rich_archive(
+        &archive_root
+            .join("Package/Civil")
+            .join(format!("Archived {CODE}.txt")),
+    );
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &FixtureOcr::one(&["signed.pdf"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
+    assert_eq!(plan.warnings.len(), 1);
+    assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
+}
+
+#[test]
 fn preview_preserves_scan_subfolders_and_surfaces_pdf_fidelity_warnings() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
@@ -489,6 +598,35 @@ fn recursive_discovery_never_follows_signed_or_archive_directory_symlinks() {
     .unwrap();
     assert!(archive_plan.steps.is_empty());
     assert_eq!(archive_plan.warnings[0].key, "warn.rfi.archiveMissing");
+}
+
+#[cfg(unix)]
+#[test]
+fn archive_lookup_never_follows_direct_pdf_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("signed.pdf"), false);
+    let outside_archive = fixture.path().join("outside-archive.pdf");
+    write_rich_archive(&outside_archive);
+    symlink(
+        &outside_archive,
+        archive_root.join(format!("Archived {CODE}.pdf")),
+    )
+    .unwrap();
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &FixtureOcr::one(&["signed.pdf"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings.len(), 1);
+    assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
 }
 
 #[test]

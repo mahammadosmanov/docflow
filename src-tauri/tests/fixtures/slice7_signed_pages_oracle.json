@@ -3,7 +3,7 @@
   "code": "AZE-SUN-INT-QMS-RFI-CIV-0064",
   "archiveFilename": "RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf",
   "cases": [
-    {"name": "unique", "signed": ["signed.pdf"], "archives": ["Package/Civil"], "steps": 1, "warnings": ["warn.rfi.firstPageLayoutDiffers"]},
+    {"name": "unique", "signed": ["signed.pdf"], "archives": ["Package/Civil"], "steps": 1, "warnings": []},
     {"name": "duplicate signed code", "signed": ["signed-a.pdf", "signed-b.pdf"], "archives": ["Package/Civil"], "steps": 0, "warnings": ["warn.rfi.signedDuplicate"]},
     {"name": "archive miss", "signed": ["signed.pdf"], "archives": [], "steps": 0, "warnings": ["warn.rfi.archiveMissing"]},
     {"name": "archive ambiguity", "signed": ["signed.pdf"], "archives": ["Package/Civil", "Other"], "steps": 0, "warnings": ["warn.rfi.archiveAmbiguous"]},

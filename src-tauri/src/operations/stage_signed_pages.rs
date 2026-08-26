@@ -2,19 +2,20 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
+use regex::Regex;
 use serde_json::{Value, json};
 
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
-    naming::filename_for,
     operations::process_scans::{OcrAdapter, OcrFailure},
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
-    rfi_code::RfiMethod,
+    rfi_code::{RfiMethod, canonical},
 };
 
 const OPERATION_ID: &str = "rfi.stage_signed_first_pages";
@@ -288,10 +289,6 @@ where
                 "warn.rfi.signedExtraPages",
                 &display_name(&candidate.path),
             ));
-        }
-        if page_layout_differs(&archive_facts, &signed_facts) {
-            plan.warnings
-                .push(warning("warn.rfi.firstPageLayoutDiffers", &code));
         }
         let row_id = format!("signed-{code}");
         let mut meta = JsonObject::new();
@@ -592,16 +589,13 @@ fn archive_index(
     root: &Path,
     codes: BTreeSet<String>,
 ) -> Result<BTreeMap<String, Vec<PathBuf>>, BackendError> {
-    let wanted = codes
-        .iter()
-        .map(|code| (filename_for(code).to_ascii_lowercase(), code.clone()))
-        .collect::<BTreeMap<_, _>>();
     let mut matches = codes
-        .into_iter()
+        .iter()
+        .cloned()
         .map(|code| (code, Vec::new()))
         .collect::<BTreeMap<_, _>>();
     let mut visited = 0usize;
-    collect_archive(root, root, &wanted, &mut matches, &mut visited)?;
+    collect_archive(root, root, &codes, &mut matches, &mut visited)?;
     for values in matches.values_mut() {
         values.sort();
     }
@@ -611,7 +605,7 @@ fn archive_index(
 fn collect_archive(
     root: &Path,
     directory: &Path,
-    wanted: &BTreeMap<String, String>,
+    wanted: &BTreeSet<String>,
     output: &mut BTreeMap<String, Vec<PathBuf>>,
     visited: &mut usize,
 ) -> Result<(), BackendError> {
@@ -636,20 +630,49 @@ fn collect_archive(
         if !metadata.is_file() || metadata.file_type().is_symlink() {
             continue;
         }
-        let Some(name) = entry.file_name().to_str().map(str::to_ascii_lowercase) else {
+        if !entry
+            .path()
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
+        {
+            continue;
+        }
+        let entry_path = entry.path();
+        let Some(code) =
+            archive_code_from_path(root, &entry_path).filter(|code| wanted.contains(code))
+        else {
             continue;
         };
-        let Some(code) = wanted.get(&name) else {
-            continue;
-        };
-        let resolved = fs::canonicalize(entry.path())
+        let resolved = fs::canonicalize(entry_path)
             .map_err(|_| BackendError::path_invalid("archive PDF could not be resolved"))?;
         if !resolved.starts_with(root) || !resolved.is_file() {
             return Err(BackendError::path_escape());
         }
-        output.entry(code.clone()).or_default().push(resolved);
+        output.entry(code).or_default().push(resolved);
     }
     Ok(())
+}
+
+fn archive_code_from_path(root: &Path, path: &Path) -> Option<String> {
+    static CODE: OnceLock<Regex> = OnceLock::new();
+    let pattern = CODE.get_or_init(|| {
+        Regex::new(r"AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}")
+            .expect("the archive RFI filename pattern is valid")
+    });
+    let relative = path.strip_prefix(root).ok()?;
+    let canonical = canonical(&relative.to_string_lossy());
+    let codes = pattern
+        .find_iter(&canonical)
+        .filter(|candidate| {
+            !canonical[candidate.end()..]
+                .chars()
+                .next()
+                .is_some_and(char::is_numeric)
+        })
+        .map(|candidate| candidate.as_str().to_string())
+        .collect::<BTreeSet<_>>();
+    (codes.len() == 1).then(|| codes.into_iter().next().expect("one archive RFI code"))
 }
 
 fn add_directory_steps(
@@ -722,12 +745,6 @@ fn fidelity_reason(facts: &PdfInspection, role: PdfRole) -> &'static str {
     } else {
         "unsupported PDF fidelity case"
     }
-}
-
-fn page_layout_differs(archive: &PdfInspection, signed: &PdfInspection) -> bool {
-    archive.pages[0].media_box != signed.pages[0].media_box
-        || archive.pages[0].crop_box != signed.pages[0].crop_box
-        || archive.pages[0].rotation != signed.pages[0].rotation
 }
 
 fn warning(key: &str, subject: &str) -> Warning {

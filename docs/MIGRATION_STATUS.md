@@ -132,8 +132,8 @@ certification remain separate unchecked gates and are never implied by a source 
     behavior-to-Rust evidence is indexed in `docs/PARITY_CLOSURE.md`
   - Node version/checksum/source/package/license tools, Rust packaged smoke, and
     no-runtime Windows/macOS scripts replace every canonical repository command
-  - 18 Node tooling tests, 17 frontend tests/build, and a maintained 164-test
-    cross-platform Rust inventory (the canonical macOS run executes 160; target-specific
+  - 18 Node tooling tests, 17 frontend tests/build, and a maintained 168-test
+    cross-platform Rust inventory (the canonical macOS run executes 164; target-specific
     tests are certified separately), with fmt, warnings-denied Clippy, check, source audit, and a
     281-Cargo/173-npm/60-native-resource host license audit passing without the retired runtime
   - an unsigned arm64 `.app` builds and its full tree/Mach-O audit passes; the identical
