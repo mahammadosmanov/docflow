@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use crate::print_queue::PrintAdapter;
 
-// S2 defines the target-independent seam; S3 supplies its production Windows consumer.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(any(target_os = "windows", test))]
 pub(crate) mod excel;
+#[cfg(any(target_os = "windows", test))]
+pub(crate) mod excel_windows_contract;
 
 #[cfg(any(target_os = "windows", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -346,5 +347,70 @@ mod tests {
         ] {
             assert!(implementation.contains(required), "missing {required}");
         }
+    }
+
+    #[test]
+    fn windows_excel_adapter_is_direct_late_bound_com_without_process_or_visibility_mutation() {
+        let source = include_str!("windows/excel.rs");
+        for required in [
+            "CoInitializeEx",
+            "CoUninitialize",
+            "CLSIDFromProgID",
+            "CoCreateInstance",
+            "IDispatch",
+            "DISPPARAMS",
+            "VARIANT",
+            "DISPID_PROPERTYPUT",
+            "DISP_E_PARAMNOTFOUND",
+            "encode_dispatch_parameters",
+            "build_com_operation_plan",
+            "validate_dispatch_member",
+            "open_zone_identifier",
+            "into_exported_pdf",
+            "quarantine_after_teardown_failure",
+        ] {
+            assert!(source.contains(required), "missing {required}");
+        }
+        for forbidden in [
+            "powershell",
+            "vbscript",
+            "std::process",
+            "Command::new",
+            "Worksheet.PrintOut",
+            "CalculateFull",
+            "RefreshAll",
+            "UpdateLink",
+            "ProtectedViewWindows",
+            "Kill",
+        ] {
+            assert!(!source.contains(forbidden), "forbidden {forbidden}");
+        }
+    }
+
+    #[test]
+    fn windows_platform_check_compiles_real_excel_capability_and_supervisor_boundaries() {
+        let harness = include_str!("../../platform-checks/windows-printing/src/lib.rs");
+        assert!(harness.contains("../../../src/cap_fs.rs"));
+        assert!(harness.contains("../../../src/platform/excel.rs"));
+        assert!(!harness.contains("pub mod cap_fs {"));
+        assert!(!harness.contains("pub(crate) struct ExcelExportRequest"));
+        assert!(!harness.contains("pub(crate) struct StagedWorkbook"));
+    }
+
+    #[test]
+    fn production_print_service_installs_excel_pipeline_only_on_windows() {
+        let source = include_str!("../native.rs");
+        let construction = source
+            .split("let print = PrintService::new(")
+            .nth(1)
+            .expect("production PrintService constructor")
+            .split("Ok(Self {")
+            .next()
+            .expect("bounded production construction");
+        assert!(construction.contains("platform::production_print_adapter()"));
+        assert!(construction.contains("#[cfg(target_os = \"windows\")]"));
+        assert!(construction.contains(
+            ".with_excel_pipeline(platform::windows::excel::production_excel_pipeline())"
+        ));
     }
 }

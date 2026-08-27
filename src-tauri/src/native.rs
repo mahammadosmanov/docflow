@@ -121,6 +121,9 @@ impl NativeBackend {
             mutation_lock.clone(),
             platform::production_print_adapter(),
         );
+        #[cfg(target_os = "windows")]
+        let print =
+            print.with_excel_pipeline(platform::windows::excel::production_excel_pipeline());
         Ok(Self {
             settings,
             auth,

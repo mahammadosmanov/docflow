@@ -274,6 +274,18 @@ impl AnchoredPath {
         Ok(file)
     }
 
+    #[cfg(windows)]
+    pub(crate) fn open_zone_identifier(&self) -> io::Result<Option<File>> {
+        let verified_source = self.open_read()?;
+        let stream = match self.parent.open_zone_identifier_stream(&self.name) {
+            Ok(stream) => Ok(Some(stream)),
+            Err(error) if error.raw_os_error() == Some(2) => Ok(None),
+            Err(error) => Err(error),
+        };
+        drop(verified_source);
+        stream
+    }
+
     pub(crate) fn open_mutable(&self) -> io::Result<File> {
         let file = self.parent.open_file_no_follow(&self.name, true)?;
         self.validate_expected_identity(&file)?;
@@ -769,6 +781,17 @@ impl PlatformDirectory {
         )
     }
 
+    fn open_zone_identifier_stream(&self, name: &OsStr) -> io::Result<File> {
+        let mut stream_name = name.to_os_string();
+        stream_name.push(":Zone.Identifier:$DATA");
+        nt_open_relative(
+            &self.0,
+            &stream_name,
+            NtLeafKind::ReadFile,
+            NtDisposition::Open,
+        )
+    }
+
     fn create_file_new(&self, name: &OsStr) -> io::Result<File> {
         nt_open_relative(
             &self.0,
@@ -1088,5 +1111,41 @@ mod tests {
         assert!(rename.contains("FileRenameInformation"));
         assert!(rename.contains("RootDirectory"));
         assert!(!rename.contains("SetFileInformationByHandle"));
+    }
+
+    #[test]
+    fn windows_zone_identifier_open_is_identity_checked_and_root_relative() {
+        let source = include_str!("cap_fs.rs")
+            .rsplit_once("#[cfg(test)]\nmod tests")
+            .expect("production capability source")
+            .0;
+        let anchored = source
+            .split("pub(crate) fn open_zone_identifier(")
+            .nth(1)
+            .expect("AnchoredPath must expose one bounded Zone.Identifier reader")
+            .split("pub(crate) fn identity(")
+            .next()
+            .expect("Zone.Identifier reader must remain in the anchored API");
+        assert!(anchored.contains("self.open_read()?"));
+        assert!(anchored.contains("self.parent.open_zone_identifier_stream(&self.name)"));
+        let identity_open = anchored.find("self.open_read()?").unwrap();
+        let stream_open = anchored
+            .find("self.parent.open_zone_identifier_stream(&self.name)")
+            .unwrap();
+        let identity_close = anchored.find("drop(verified_source)").unwrap();
+        assert!(identity_open < stream_open);
+        assert!(stream_open < identity_close);
+
+        let windows_directory = source
+            .split("fn open_zone_identifier_stream(")
+            .nth(1)
+            .expect("Windows directory capability must own ADS opening")
+            .split("fn create_file_new(")
+            .next()
+            .expect("ADS opening must remain bounded");
+        assert!(windows_directory.contains("nt_open_relative("));
+        assert!(windows_directory.contains("Zone.Identifier:$DATA"));
+        assert!(!windows_directory.contains("self.canonical"));
+        assert!(!windows_directory.contains("std::fs::File::open"));
     }
 }

@@ -145,7 +145,7 @@ impl ExcelWorkerRuntime for ThreadWorkerRuntime {
                     result,
                 });
             })
-            .map_err(|_| PrintFailure::failed("Excel export worker could not start"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelWorkerStartFailed"))?;
         Ok(Box::new(ThreadWorkerHandle {
             receiver,
             join: Some(join),
@@ -316,7 +316,7 @@ impl ExcelExportPipeline {
             .clock
             .now()
             .checked_add(Duration::from_secs(u64::from(job.timeout_minutes) * 60))
-            .ok_or_else(|| PrintFailure::unsupported("Excel export deadline is invalid"))?;
+            .ok_or_else(|| PrintFailure::unsupported("error.print.excelDeadlineInvalid"))?;
         if self.breaker.load(Ordering::Acquire) {
             return Err(PrintFailure::unsupported(
                 "error.print.excelExportQuarantined",
@@ -328,14 +328,13 @@ impl ExcelExportPipeline {
                 "error.print.worksheetPageRangeAllOnly",
             ));
         }
-        let worksheet = job
-            .worksheet
-            .clone()
-            .ok_or_else(|| PrintFailure::unsupported("worksheet export metadata is missing"))?;
+        let worksheet = job.worksheet.clone().ok_or_else(|| {
+            PrintFailure::unsupported("error.print.excelWorksheetMetadataMissing")
+        })?;
         let safety = job
             .workbook_safety
             .clone()
-            .ok_or_else(|| PrintFailure::unsupported("workbook safety metadata is missing"))?;
+            .ok_or_else(|| PrintFailure::unsupported("error.print.excelSafetyMetadataMissing"))?;
         self.pre_worker_fence(deadline, &cancellation)?;
         self.policy.validate_source(source, &safety)?;
         self.pre_worker_fence(deadline, &cancellation)?;
@@ -364,7 +363,7 @@ impl ExcelExportPipeline {
                 Err(_) => {
                     drop(staged_workbook);
                     return Err(self.prefer_cleanup_review(PrintFailure::unsupported(
-                        "Excel export generation is exhausted",
+                        "error.print.excelGenerationExhausted",
                     )));
                 }
             };
@@ -403,7 +402,7 @@ impl ExcelExportPipeline {
                 let teardown = self.teardown_loser(worker.as_mut());
                 return Err(self.classify_loser(
                     teardown,
-                    PrintFailure::failed("Excel export worker stopped"),
+                    PrintFailure::failed("error.print.excelWorkerStopped"),
                 ));
             }
         };
@@ -431,10 +430,10 @@ impl ExcelExportPipeline {
                 Ok(mut artifact) => finish_without_submit(
                     &self.breaker,
                     &mut artifact,
-                    PrintFailure::failed("Excel export response is stale"),
+                    PrintFailure::failed("error.print.excelResponseStale"),
                 ),
                 Err(_) => Err(self
-                    .prefer_cleanup_review(PrintFailure::failed("Excel export response is stale"))),
+                    .prefer_cleanup_review(PrintFailure::failed("error.print.excelResponseStale"))),
             };
         }
         let mut artifact = match response.result {
@@ -579,7 +578,7 @@ impl ExcelExportPipeline {
             || response_generation != generation
             || self.generation.load(Ordering::Acquire) != generation
         {
-            return Some(PrintFailure::failed("Excel export response is stale"));
+            return Some(PrintFailure::failed("error.print.excelResponseStale"));
         }
         if cancellation.is_cancelled() {
             return Some(clean_cancelled());
@@ -808,7 +807,7 @@ impl StagedWorkbook {
         cleanup_quarantine: Arc<Mutex<BTreeSet<PathBuf>>>,
     ) -> Result<Self, PrintFailure> {
         let workspace = tempfile::tempdir()
-            .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelStagingUnavailable"))?;
         let mut staged = Self {
             workbook: None,
             root: None,
@@ -822,12 +821,12 @@ impl StagedWorkbook {
             cleanup_failure: false,
         };
         let root = CapabilityRoot::open(staged.workspace_path())
-            .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelStagingUnavailable"))?;
         staged.root = Some(root);
         let source_name = Path::new(source_path)
             .file_name()
             .filter(|name| !name.is_empty())
-            .ok_or_else(|| PrintFailure::failed("print file name is unavailable"))?;
+            .ok_or_else(|| PrintFailure::failed("error.print.excelSourceNameUnavailable"))?;
         staged.workbook_path = staged.workspace_path().join(source_name);
         let workbook = staged
             .root
@@ -835,7 +834,7 @@ impl StagedWorkbook {
             .expect("live staged workbook owns its capability root")
             .authorize(&staged.workbook_path)
             .and_then(|path| path.anchor())
-            .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelStagingUnavailable"))?;
         staged.workbook = Some(workbook);
         let workbook = staged
             .workbook
@@ -843,14 +842,14 @@ impl StagedWorkbook {
             .expect("live staged workbook owns its workbook anchor");
         workbook
             .copy_no_clobber_from_file(source_file)
-            .map_err(|_| PrintFailure::failed("private print staging failed"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelStagingFailed"))?;
         if workbook
             .sha256()
-            .map_err(|_| PrintFailure::failed("private print staging verification failed"))?
+            .map_err(|_| PrintFailure::failed("error.print.excelStagingVerificationFailed"))?
             != approved_signature.sha256.as_deref().unwrap_or_default()
         {
             return Err(PrintFailure::failed(
-                "private print staging verification failed",
+                "error.print.excelStagingVerificationFailed",
             ));
         }
         Ok(staged)
@@ -864,6 +863,10 @@ impl StagedWorkbook {
         self.workspace_path().join("worksheet.pdf")
     }
 
+    pub(crate) fn quarantine_after_teardown_failure(&self) {
+        self.cleanup_breaker.store(true, Ordering::Release);
+    }
+
     pub(crate) fn into_exported_pdf(self) -> Result<ExportedWorksheetPdf, PrintFailure> {
         let pdf_path = self.pdf_output_path();
         let pdf = self
@@ -872,13 +875,13 @@ impl StagedWorkbook {
             .expect("live staged workbook owns its capability root")
             .authorize(&pdf_path)
             .and_then(|path| path.anchor())
-            .map_err(|_| PrintFailure::failed("private PDF export is unavailable"))?;
+            .map_err(|_| PrintFailure::failed("error.print.excelPrivatePdfUnavailable"))?;
         if pdf
             .len()
-            .map_err(|_| PrintFailure::failed("private PDF export is unavailable"))?
+            .map_err(|_| PrintFailure::failed("error.print.excelPrivatePdfUnavailable"))?
             == 0
         {
-            return Err(PrintFailure::failed("worksheet PDF export is empty"));
+            return Err(PrintFailure::failed("error.print.excelPrivatePdfEmpty"));
         }
         Ok(ExportedWorksheetPdf {
             pdf: Some(pdf),
@@ -1031,6 +1034,25 @@ impl Drop for ExportedWorksheetPdf {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn production_excel_failures_are_localization_keys() {
+        let source = include_str!("excel.rs");
+        let production = source
+            .split_once("\n#[cfg(test)]\nmod tests")
+            .map(|(production, _)| production)
+            .expect("Excel production source precedes its tests");
+        let failure_literal = regex::Regex::new(
+            r#"PrintFailure::(?:failed|unsupported|uncertain|cancelled)\(\s*\"([^\"]+)\""#,
+        )
+        .unwrap();
+        let raw = failure_literal
+            .captures_iter(production)
+            .map(|capture| capture[1].to_string())
+            .filter(|message| !message.starts_with("error."))
+            .collect::<Vec<_>>();
+        assert!(raw.is_empty(), "unlocalized Excel failures: {raw:?}");
+    }
+
     mod export_supervisor {
         use std::{
             collections::BTreeSet,
@@ -1046,6 +1068,9 @@ mod tests {
             time::{Duration, Instant},
         };
 
+        use crate::platform::excel_windows_contract::{
+            AnchoredWorkbookSourcePolicy, ZoneIdentifierReader,
+        };
         use crate::{
             cap_fs::CapabilityRoot,
             journal::FilesystemObjectIdentity,
@@ -1136,6 +1161,32 @@ mod tests {
             ) -> Result<(), PrintFailure> {
                 self.events.lock().unwrap().push("policy");
                 Err(PrintFailure::unsupported("source policy rejected workbook"))
+            }
+        }
+
+        struct InternetZoneReader;
+
+        impl ZoneIdentifierReader for InternetZoneReader {
+            fn read_zone_identifier(
+                &self,
+                _source: &crate::cap_fs::AnchoredPath,
+            ) -> std::io::Result<Option<Vec<u8>>> {
+                Ok(Some(b"[ZoneTransfer]\r\nZoneId=3\r\n".to_vec()))
+            }
+        }
+
+        struct LaunchCountingRuntime {
+            launches: Arc<AtomicUsize>,
+        }
+
+        impl ExcelWorkerRuntime for LaunchCountingRuntime {
+            fn launch(
+                &self,
+                _exporter: Arc<dyn WorksheetPdfExporter>,
+                _request: ExcelExportRequest,
+            ) -> Result<Box<dyn ExcelWorkerHandle>, PrintFailure> {
+                self.launches.fetch_add(1, Ordering::AcqRel);
+                Err(PrintFailure::failed("worker must not launch"))
             }
         }
 
@@ -2083,6 +2134,45 @@ mod tests {
         }
 
         #[test]
+        fn internet_zone_policy_rejection_has_zero_staging_worker_com_and_submit_calls() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let launches = Arc::new(AtomicUsize::new(0));
+            let pipeline = ExcelExportPipeline::for_testing_with_runtime(
+                Arc::new(AnchoredWorkbookSourcePolicy::new(InternetZoneReader)),
+                Arc::new(RecordingExporter {
+                    events: Arc::clone(&events),
+                    requests: Arc::clone(&requests),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+                Arc::new(SystemMonotonicClock),
+                Arc::new(LaunchCountingRuntime {
+                    launches: Arc::clone(&launches),
+                }),
+                Duration::from_secs(2),
+            );
+            let cancellation = CancellationRegistry::default().register("plan");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+
+            assert_eq!(failure.message, "error.print.excelSourceMotwBlocked");
+            assert_eq!(source_file.stream_position().unwrap(), 0);
+            assert_eq!(launches.load(Ordering::Acquire), 0);
+            assert!(events.lock().unwrap().is_empty());
+            assert!(requests.lock().unwrap().is_empty());
+            assert!(submitted.lock().unwrap().is_empty());
+        }
+
+        #[test]
         fn non_all_range_is_rejected_before_policy_staging_or_worker_launch() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let requests = Arc::new(Mutex::new(Vec::new()));
@@ -2131,6 +2221,16 @@ mod tests {
                 *events.lock().unwrap(),
                 ["pdf", "workbook", "root", "workspace"]
             );
+        }
+
+        #[test]
+        fn exporter_teardown_failure_marker_trips_the_process_breaker() {
+            let (staged, _events) = StagedWorkbook::fixture_with_drop_probe();
+            assert!(!staged.cleanup_breaker.load(Ordering::Acquire));
+
+            staged.quarantine_after_teardown_failure();
+
+            assert!(staged.cleanup_breaker.load(Ordering::Acquire));
         }
 
         #[test]

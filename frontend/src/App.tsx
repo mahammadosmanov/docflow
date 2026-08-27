@@ -104,6 +104,11 @@ function isPathSelection(value: unknown): value is PathSelection {
 
 export function humanError(error: unknown, s: Strings): string {
   const raw = error instanceof Error ? error.message : String(error);
+  const localizedKey = raw.match(/^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+)$/)?.[1];
+  if (localizedKey) {
+    const localized = s.t(localizedKey);
+    if (localized !== localizedKey) return localized;
+  }
   if (/error\.preset\.nameInvalid|preset[_ .-]?name[_ .-]?invalid/i.test(raw))
     return s.t("error.preset.nameInvalid");
   if (

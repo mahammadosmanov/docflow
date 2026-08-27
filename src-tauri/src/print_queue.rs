@@ -813,6 +813,7 @@ pub struct PrintService {
     mutation_lock: GlobalMutationLock,
     cancellations: CancellationRegistry,
     adapter: Arc<dyn PrintAdapter>,
+    #[cfg(any(target_os = "windows", test))]
     excel_pipeline: Option<Arc<crate::platform::excel::ExcelExportPipeline>>,
 }
 
@@ -832,12 +833,12 @@ impl PrintService {
             mutation_lock,
             cancellations: CancellationRegistry::default(),
             adapter,
+            #[cfg(any(target_os = "windows", test))]
             excel_pipeline: None,
         }
     }
 
-    // S2 keeps production wiring additive; S3 installs the Windows pipeline.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(any(target_os = "windows", test))]
     pub(crate) fn with_excel_pipeline(
         mut self,
         pipeline: Arc<crate::platform::excel::ExcelExportPipeline>,
@@ -1775,11 +1776,16 @@ impl PrintService {
             {
                 return Err(PrintFailure::failed("error.print.worksheetChanged"));
             }
-            let pipeline = self
-                .excel_pipeline
-                .as_ref()
-                .ok_or_else(|| PrintFailure::unsupported("error.print.excelUnavailable"))?;
-            return pipeline.export_and_submit(job, &source, &mut source_file, cancellation);
+            #[cfg(any(target_os = "windows", test))]
+            {
+                let pipeline = self
+                    .excel_pipeline
+                    .as_ref()
+                    .ok_or_else(|| PrintFailure::unsupported("error.print.excelUnavailable"))?;
+                return pipeline.export_and_submit(job, &source, &mut source_file, cancellation);
+            }
+            #[cfg(not(any(target_os = "windows", test)))]
+            return Err(PrintFailure::unsupported("error.print.excelUnavailable"));
         }
         let workspace = tempfile::tempdir()
             .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;

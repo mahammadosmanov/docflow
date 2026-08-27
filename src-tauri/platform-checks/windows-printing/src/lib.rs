@@ -11,19 +11,19 @@ pub mod page_range {
         pub message: String,
     }
 
-    pub fn selected_pdf_pages(
-        _raw: &str,
-        page_count: u32,
-    ) -> Result<Vec<u32>, PageRangeError> {
+    pub fn selected_pdf_pages(_raw: &str, page_count: u32) -> Result<Vec<u32>, PageRangeError> {
         Ok((0..page_count).collect())
     }
 }
 
 #[cfg(target_os = "windows")]
 pub mod print_queue {
-    use std::path::Path;
+    use std::{fs::File, path::Path};
 
-    use crate::page_range::PageRangeCapability;
+    use crate::{
+        ooxml::{WorkbookSafetyFacts, WorksheetDescriptor},
+        page_range::PageRangeCapability,
+    };
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum PrintFailureKind {
@@ -69,6 +69,20 @@ pub mod print_queue {
         pub fn cancelled(message: impl Into<String>, uncertain: bool) -> Self {
             Self::new(PrintFailureKind::Cancelled, message, uncertain)
         }
+    }
+
+    #[derive(Clone, Debug, Default, Eq, PartialEq)]
+    pub struct FileSignature {
+        pub size: u64,
+        pub mtime_ns: u64,
+        pub sha256: Option<String>,
+    }
+
+    pub fn file_signature_from_open_file(
+        _file: &mut File,
+        _include_sha256: bool,
+    ) -> std::io::Result<FileSignature> {
+        Ok(FileSignature::default())
     }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -153,6 +167,9 @@ pub mod print_queue {
         pub duplex: String,
         pub page_range: String,
         pub timeout_minutes: u32,
+        pub signature: FileSignature,
+        pub worksheet: Option<WorksheetDescriptor>,
+        pub workbook_safety: Option<WorkbookSafetyFacts>,
     }
 
     impl PrintJob {
@@ -177,11 +194,7 @@ pub mod print_queue {
             printer: &str,
             settings: &PrintSettings,
         ) -> Result<PrintJobSupport, PrintFailure>;
-        fn submit(
-            &self,
-            job: &PrintJob,
-            cancelled: &dyn Fn() -> bool,
-        ) -> Result<(), PrintFailure>;
+        fn submit(&self, job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure>;
     }
 }
 
@@ -204,11 +217,187 @@ pub mod windows_pdf {
 }
 
 #[cfg(target_os = "windows")]
-#[path = "../../../src/platform/mod.rs"]
-pub mod platform;
+pub mod journal {
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub enum FilesystemObjectIdentity {
+        Unix { device: u64, inode: u64 },
+        Windows { volume_serial: u32, file_index: u64 },
+    }
+}
 
 #[cfg(target_os = "windows")]
-pub use platform::windows::printing;
+#[path = "../../../src/cap_fs.rs"]
+pub mod cap_fs;
+
+#[cfg(target_os = "windows")]
+pub mod ooxml {
+    #[derive(Clone, Debug, Default, Eq, PartialEq)]
+    pub struct WorkbookSafetyFacts {
+        pub has_vba_project: bool,
+        pub has_xlm_macro_sheet: bool,
+        pub has_workbook_protection: bool,
+        pub external_link_count: u32,
+        pub connection_count: u32,
+        pub query_table_count: u32,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum WorksheetVisibility {
+        Visible,
+        Hidden,
+        VeryHidden,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct WorksheetDescriptor {
+        pub workbook_index: u32,
+        pub sheet_id: u32,
+        pub relationship_id: String,
+        pub relationship_type: String,
+        pub part_path: String,
+        pub name: String,
+        pub visibility: WorksheetVisibility,
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub mod progress {
+    #[derive(Clone, Default)]
+    pub struct CancellationToken;
+
+    impl CancellationToken {
+        pub fn is_cancelled(&self) -> bool {
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[path = "../../../src/platform/windows/printing.rs"]
+pub mod printing_impl;
+
+#[cfg(target_os = "windows")]
+#[path = "../../../src/platform/excel_windows_contract.rs"]
+pub mod excel_windows_contract_impl;
+
+#[cfg(target_os = "windows")]
+#[path = "../../../src/platform/excel.rs"]
+pub mod excel_impl;
+
+#[cfg(target_os = "windows")]
+#[path = "../../../src/platform/windows/excel.rs"]
+pub mod excel_windows_impl;
+
+#[cfg(target_os = "windows")]
+pub mod platform {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(crate) enum WindowsSubmittedJobStatus {
+        Complete,
+        Uncertain,
+        Pending,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(crate) enum WindowsPostSubmissionObservation {
+        PrinterOpen,
+        JobEnumeration,
+        JobRead,
+        StatusFault,
+    }
+
+    pub(crate) fn windows_post_submission_observation_error(
+        stage: WindowsPostSubmissionObservation,
+    ) -> crate::print_queue::PrintFailure {
+        let message = match stage {
+            WindowsPostSubmissionObservation::PrinterOpen => {
+                "Windows could not open the printer after job submission"
+            }
+            WindowsPostSubmissionObservation::JobEnumeration => {
+                "Windows print queue could not be enumerated after job submission"
+            }
+            WindowsPostSubmissionObservation::JobRead => {
+                "Windows spool job state could not be read after submission"
+            }
+            WindowsPostSubmissionObservation::StatusFault => {
+                "Windows spooler reported a fault after the job was submitted"
+            }
+        };
+        crate::print_queue::PrintFailure::uncertain(message)
+    }
+
+    pub(crate) fn windows_post_submission_failure(
+        failure: crate::print_queue::PrintFailure,
+    ) -> crate::print_queue::PrintFailure {
+        if failure.kind == crate::print_queue::PrintFailureKind::Cancelled {
+            crate::print_queue::PrintFailure::cancelled(failure.message, true)
+        } else {
+            crate::print_queue::PrintFailure::uncertain(failure.message)
+        }
+    }
+
+    pub(crate) fn windows_post_submission_cancellation(
+        request_accepted: bool,
+    ) -> crate::print_queue::PrintFailure {
+        crate::print_queue::PrintFailure::cancelled(
+            if request_accepted {
+                "Windows accepted cancellation of an active spool job"
+            } else {
+                "Windows could not confirm cancellation of an active spool job"
+            },
+            true,
+        )
+    }
+
+    pub(crate) const fn classify_windows_submitted_job_status(
+        status: u32,
+    ) -> WindowsSubmittedJobStatus {
+        const UNCERTAIN: u32 = 0x0000_0002
+            | 0x0000_0004
+            | 0x0000_0020
+            | 0x0000_0040
+            | 0x0000_0100
+            | 0x0000_0200
+            | 0x0000_0400;
+        const COMPLETE: u32 = 0x0000_0080 | 0x0000_1000;
+
+        if status & UNCERTAIN != 0 {
+            WindowsSubmittedJobStatus::Uncertain
+        } else if status & COMPLETE != 0 {
+            WindowsSubmittedJobStatus::Complete
+        } else {
+            WindowsSubmittedJobStatus::Pending
+        }
+    }
+
+    pub(crate) fn windows_missing_submitted_job() -> crate::print_queue::PrintFailure {
+        crate::print_queue::PrintFailure::uncertain(
+            "Windows can no longer observe the submitted spool job",
+        )
+    }
+
+    pub(crate) fn validate_windows_image_frame_count(
+        frame_count: u32,
+    ) -> Result<(), crate::print_queue::PrintFailure> {
+        if frame_count == 1 {
+            Ok(())
+        } else {
+            Err(crate::print_queue::PrintFailure::unsupported(
+                "Windows controlled image printing requires exactly one image frame",
+            ))
+        }
+    }
+
+    pub use crate::excel_impl as excel;
+    pub use crate::excel_windows_contract_impl as excel_windows_contract;
+
+    pub mod windows {
+        pub use crate::excel_windows_impl as excel;
+        pub use crate::printing_impl as printing;
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub use printing_impl as printing;
 
 #[cfg(target_os = "windows")]
 pub fn platform_page_range_api_fixture() {
@@ -225,4 +414,40 @@ pub fn platform_page_range_api_fixture() {
     let image = print_queue::PrintJobSupport::single_page();
 
     let _fixture = (settings, pdf, image);
+}
+
+#[cfg(target_os = "windows")]
+pub fn platform_excel_api_fixture() {
+    let _ = excel_windows_impl::production_excel_pipeline();
+    let _ = platform::excel::ExcelExportPipeline::export_and_submit;
+    let _ = cap_fs::CapabilityRoot::canonical;
+    let _ = cap_fs::CapabilityRoot::identity;
+    let _ = cap_fs::CapabilityRoot::authorize_directory;
+    let _ = cap_fs::AuthorizedPath::with_expected_identity;
+    let _ = cap_fs::AuthorizedPath::missing_directories;
+    let _ = cap_fs::MissingDirectoryCursor::next_path;
+    let _ = cap_fs::MissingDirectoryCursor::create_next;
+    let _ = |error: cap_fs::CapabilityEffectError| {
+        let _ = error.is_outcome_unknown();
+        let _ = error.into_inner();
+    };
+    let _ = cap_fs::AnchoredPath::absolute;
+    let _ = cap_fs::AnchoredPath::open_mutable;
+    let _ = cap_fs::AnchoredPath::identity;
+    let _ = cap_fs::AnchoredPath::same_file_as;
+    let _ = cap_fs::AnchoredPath::remove_file;
+    let _ = cap_fs::AnchoredPath::remove_dir;
+    let _ = cap_fs::AnchoredPath::remove_file_durable;
+    let _ = cap_fs::AnchoredPath::remove_dir_durable;
+    let _ = cap_fs::AnchoredPath::copy_no_clobber_from;
+    let _ = cap_fs::AnchoredPath::write_no_clobber;
+    let _ = cap_fs::AnchoredPath::move_no_clobber_to;
+    let _ = cap_fs::AnchoredPath::replace_with;
+    let _ = cap_fs::AnchoredPath::temporary_sibling;
+    let _ = |request: platform::excel::ExcelExportRequest| {
+        let _ = request.approved_signature;
+    };
+    let _ = |pdf: &platform::excel::ExportedWorksheetPdf| {
+        let _ = pdf.pdf_path();
+    };
 }

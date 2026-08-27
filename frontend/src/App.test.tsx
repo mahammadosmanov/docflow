@@ -487,6 +487,45 @@ describe("DocFlow shell", () => {
     }
   });
 
+  it("localizes every reachable Excel source export and cleanup error key", () => {
+    const keys = [
+      "error.print.excelExportTimedOut",
+      "error.print.excelExportCancelled",
+      "error.print.excelExportQuarantined",
+      "error.print.exportCleanupRequiresReview",
+      "error.print.excelSourceMotwBlocked",
+      "error.print.excelWorkbookUnsafe",
+      "error.print.excelComContractInvalid",
+      "error.print.excelComFailed",
+      "error.print.excelExportDestinationExists",
+      "error.print.excelExportFailed",
+      "error.print.excelExportMalformedPdf",
+      "error.print.excelControlledPdfUnavailable",
+      "error.print.excelWorkerStartFailed",
+      "error.print.excelDeadlineInvalid",
+      "error.print.excelWorksheetMetadataMissing",
+      "error.print.excelSafetyMetadataMissing",
+      "error.print.excelGenerationExhausted",
+      "error.print.excelWorkerStopped",
+      "error.print.excelResponseStale",
+      "error.print.excelStagingUnavailable",
+      "error.print.excelSourceNameUnavailable",
+      "error.print.excelStagingFailed",
+      "error.print.excelStagingVerificationFailed",
+      "error.print.excelPrivatePdfUnavailable",
+      "error.print.excelPrivatePdfEmpty",
+    ];
+
+    for (const locale of ["tr", "en", "ru", "az"] as const) {
+      const strings = makeStrings(locale);
+      for (const key of keys) {
+        const localized = strings.t(key);
+        expect(localized, `${locale}:${key}`).not.toBe(key);
+        expect(humanError(new Error(key), strings)).toBe(localized);
+      }
+    }
+  });
+
   it("requires an archive choice for every enabled ambiguous signed-page row", () => {
     const editor = { requiredFields: ["archiveFile"] };
     expect(
