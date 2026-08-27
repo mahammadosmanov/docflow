@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    fs::{self, File},
     path::{Path, PathBuf},
 };
 
@@ -10,10 +10,13 @@ use uuid::Uuid;
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
+    ooxml::{
+        WorkbookSafetyFacts, WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
+    },
     page_range::{PageRange, PageRangeCapability, canonical_for},
     print_queue::{
-        BatchPrintParams, PrintAdapter, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
-        file_signature,
+        BatchPrintParams, FileSignature, PrintAdapter, PrintJob, PrintJobSupport, PrintSettings,
+        PrinterInventory, file_signature_from_open_file,
     },
 };
 
@@ -34,11 +37,28 @@ pub fn preview<A, P>(
     params: &BatchPrintParams,
     inventory: &PrinterInventory,
     adapter: &A,
-    mut progress: P,
+    progress: P,
 ) -> Result<Plan, BackendError>
 where
     A: PrintAdapter + ?Sized,
     P: FnMut(ProgressEvent),
+{
+    preview_with_workbook_opener(params, inventory, adapter, progress, |path| {
+        File::open(path).map_err(|_| "warn.print.workbookDiscoveryFailed")
+    })
+}
+
+pub(crate) fn preview_with_workbook_opener<A, P, O>(
+    params: &BatchPrintParams,
+    inventory: &PrinterInventory,
+    adapter: &A,
+    mut progress: P,
+    mut open_workbook: O,
+) -> Result<Plan, BackendError>
+where
+    A: PrintAdapter + ?Sized,
+    P: FnMut(ProgressEvent),
+    O: FnMut(&Path) -> Result<File, &'static str>,
 {
     if inventory.printers.is_empty() {
         return Ok(warning_plan("warn.print.noPrinters", ""));
@@ -85,6 +105,23 @@ where
             total: files.len() as u64,
             subject: String::new(),
         });
+        if is_excel_workbook(path) {
+            match open_workbook(path).and_then(|file| rows_from_workbook(path, &normalized, file)) {
+                Ok(workbook_rows) => {
+                    if rows.len() + workbook_rows.len() > MAX_FILES {
+                        return Ok(warning_plan(
+                            "warn.print.expandedOrderTooLarge",
+                            &MAX_FILES.to_string(),
+                        ));
+                    }
+                    rows.extend(workbook_rows);
+                }
+                Err(warning_key) => {
+                    warnings.push(warning(warning_key, display_name(path)));
+                }
+            }
+            continue;
+        }
         if !regular_file(path) {
             warnings.push(warning("warn.print.fileMissing", display_name(path)));
             continue;
@@ -93,6 +130,12 @@ where
             Ok(support) => {
                 if support.settings_limited {
                     warnings.push(warning("warn.print.settingsLimited", display_name(path)));
+                }
+                if rows.len() == MAX_FILES {
+                    return Ok(warning_plan(
+                        "warn.print.expandedOrderTooLarge",
+                        &MAX_FILES.to_string(),
+                    ));
                 }
                 rows.push(row_from_file(path, index, &normalized, &support)?);
             }
@@ -111,6 +154,12 @@ where
         total: files.len() as u64,
         subject: String::new(),
     });
+    if rows.len() > MAX_FILES {
+        return Ok(warning_plan(
+            "warn.print.expandedOrderTooLarge",
+            &MAX_FILES.to_string(),
+        ));
+    }
     Ok(plan_from_rows(
         rows,
         inventory,
@@ -166,6 +215,13 @@ pub fn revise<A: PrintAdapter + ?Sized>(
         let original = original_by_id
             .get(row_id)
             .ok_or_else(|| BackendError::validation("invalid print row identity"))?;
+        for field in ["signature", "worksheet", "workbookSafety"] {
+            if raw.get(field) != original.get(field) {
+                return Err(BackendError::validation(
+                    "immutable print row metadata changed",
+                ));
+            }
+        }
         let printer = string_field(raw, "printer");
         if !inventory.contains(&printer) {
             return Err(BackendError::validation("printer is unavailable"));
@@ -185,14 +241,34 @@ pub fn revise<A: PrintAdapter + ?Sized>(
             page_range: parsed_page_range.clone(),
             timeout_minutes: unsigned_field(original, "timeoutMinutes").unwrap_or(30) as u32,
         };
-        let support = adapter
-            .inspect(&path, &printer, &settings)
-            .map_err(|error| error.into_backend_error())?;
-        let page_range = canonical_for(&parsed_page_range, &support.page_range)?;
+        let worksheet_row = original.get("worksheet").is_some();
+        let support = if worksheet_row {
+            PrintJobSupport::controlled()
+        } else {
+            adapter
+                .inspect(&path, &printer, &settings)
+                .map_err(|error| error.into_backend_error())?
+        };
+        let page_range = if worksheet_row {
+            if string_field(raw, "pageRange") != "all" {
+                return Err(BackendError::validation(
+                    "error.print.worksheetPageRangeAllOnly",
+                ));
+            }
+            "all".to_string()
+        } else {
+            canonical_for(&parsed_page_range, &support.page_range)?
+        };
+        let default_enabled = original.get("worksheet").is_none()
+            || original.get("worksheetVisibility").and_then(Value::as_str) == Some("visible");
         let mut row = original.clone();
         row.insert(
             "enabled".to_string(),
-            Value::Bool(raw.get("enabled").and_then(Value::as_bool).unwrap_or(true)),
+            Value::Bool(
+                raw.get("enabled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(default_enabled),
+            ),
         );
         row.insert("printer".to_string(), Value::String(printer));
         row.insert(
@@ -219,6 +295,15 @@ pub fn revise<A: PrintAdapter + ?Sized>(
         row.insert("verb".to_string(), Value::String(support.verb));
         row.insert("pageRange".to_string(), Value::String(page_range));
         rows.push(row);
+    }
+    if originals.iter().any(|row| row.get("worksheet").is_some())
+        && !rows
+            .iter()
+            .any(|row| row.get("enabled").and_then(Value::as_bool).unwrap_or(true))
+    {
+        return Err(BackendError::validation(
+            "print queue requires an enabled worksheet row",
+        ));
     }
     let warnings = plan
         .warnings
@@ -307,6 +392,20 @@ pub fn resume_plan(state: &Value, inventory: &PrinterInventory) -> Result<Plan, 
         copy_or_default(&mut row, saved, "timeoutMinutes", json!(30));
         copy_or_default(&mut row, saved, "verb", json!(""));
         copy_or_default(&mut row, saved, "signature", json!({}));
+        if let Some(worksheet) = saved.get("worksheet") {
+            row.insert("worksheet".to_string(), worksheet.clone());
+            row.insert(
+                "worksheetName".to_string(),
+                worksheet.get("name").cloned().unwrap_or(Value::Null),
+            );
+            row.insert(
+                "worksheetVisibility".to_string(),
+                worksheet.get("visibility").cloned().unwrap_or(Value::Null),
+            );
+        }
+        if let Some(safety) = saved.get("workbookSafety") {
+            row.insert("workbookSafety".to_string(), safety.clone());
+        }
         rows.push(row);
     }
     Ok(plan_from_rows(
@@ -341,6 +440,32 @@ pub fn validate_job(job: &PrintJob) -> Result<(), BackendError> {
             "print plan contains an invalid job",
         ));
     }
+    if let Some(worksheet) = job.worksheet.as_ref() {
+        if !matches!(job.format.as_str(), "XLSX" | "XLSM")
+            || job.verb != "docflow"
+            || job.page_range != "all"
+            || !job.signature.has_valid_sha256()
+            || job
+                .workbook_safety
+                .as_ref()
+                .is_none_or(workbook_safety_is_unsafe)
+            || worksheet.workbook_index == 0
+            || worksheet.sheet_id == 0
+            || worksheet.relationship_id.is_empty()
+            || worksheet.part_path.is_empty()
+            || worksheet.name.is_empty()
+        {
+            return Err(BackendError::validation(if job.page_range != "all" {
+                "error.print.worksheetPageRangeAllOnly"
+            } else {
+                "print plan contains invalid worksheet metadata"
+            }));
+        }
+    } else if job.workbook_safety.is_some() {
+        return Err(BackendError::validation(
+            "print plan contains invalid worksheet metadata",
+        ));
+    }
     let canonical = canonical_for(&job.page_range, &job_page_range_capability(job))?;
     if canonical != job.page_range {
         return Err(BackendError::validation("error.print.pageRangeInvalid"));
@@ -349,6 +474,9 @@ pub fn validate_job(job: &PrintJob) -> Result<(), BackendError> {
 }
 
 fn job_page_range_capability(job: &PrintJob) -> PageRangeCapability {
+    if job.worksheet.is_some() {
+        return PageRangeCapability::AllOnly;
+    }
     if matches!(job.verb.as_str(), "printto" | "print") {
         return PageRangeCapability::AllOnly;
     }
@@ -490,9 +618,17 @@ fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
         copy,
         signature: row
             .get("signature")
-            .and_then(Value::as_object)
             .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
             .unwrap_or_default(),
+        worksheet: row
+            .get("worksheet")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok()),
+        workbook_safety: row
+            .get("workbookSafety")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok()),
         status: None,
         attempts: None,
         error: None,
@@ -507,6 +643,8 @@ fn row_from_file(
     settings: &NormalizedSettings,
     support: &PrintJobSupport,
 ) -> Result<Map<String, Value>, BackendError> {
+    let mut file =
+        File::open(path).map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
     let mut row = Map::new();
     row.insert("_rowId".to_string(), json!(format!("file-{}", index + 1)));
     row.insert("enabled".to_string(), json!(true));
@@ -531,9 +669,78 @@ fn row_from_file(
     row.insert("verb".to_string(), json!(support.verb));
     row.insert(
         "signature".to_string(),
-        Value::Object(file_signature(path)?),
+        json!(file_signature_from_open_file(&mut file, false)?),
     );
     Ok(row)
+}
+
+fn rows_from_workbook(
+    path: &Path,
+    settings: &NormalizedSettings,
+    mut file: File,
+) -> Result<Vec<Map<String, Value>>, &'static str> {
+    let signature = file_signature_from_open_file(&mut file, true)
+        .map_err(|_| "warn.print.workbookDiscoveryFailed")?;
+    let discovery = ordered_workbook_discovery(&mut file).map_err(|error| {
+        if error.to_string() == "workbook has too many worksheets" {
+            "warn.print.workbookTooManyWorksheets"
+        } else {
+            "warn.print.workbookDiscoveryFailed"
+        }
+    })?;
+    if let Some(warning_key) = workbook_safety_warning(&discovery.safety) {
+        return Err(warning_key);
+    }
+    Ok(discovery
+        .worksheets
+        .into_iter()
+        .map(|worksheet| {
+            row_from_worksheet(path, settings, &signature, &discovery.safety, worksheet)
+        })
+        .collect())
+}
+
+fn row_from_worksheet(
+    path: &Path,
+    settings: &NormalizedSettings,
+    signature: &FileSignature,
+    safety: &WorkbookSafetyFacts,
+    worksheet: WorksheetDescriptor,
+) -> Map<String, Value> {
+    let mut row = Map::new();
+    row.insert("_rowId".to_string(), json!(Uuid::new_v4().to_string()));
+    row.insert(
+        "enabled".to_string(),
+        json!(worksheet.visibility == WorksheetVisibility::Visible),
+    );
+    row.insert("status".to_string(), json!("ready"));
+    row.insert("file".to_string(), json!(display_name(path)));
+    row.insert("path".to_string(), json!(path));
+    row.insert("format".to_string(), json!(file_format(path)));
+    row.insert("worksheetName".to_string(), json!(worksheet.name));
+    row.insert(
+        "worksheetVisibility".to_string(),
+        json!(worksheet.visibility),
+    );
+    row.insert("worksheet".to_string(), json!(worksheet));
+    row.insert("signature".to_string(), json!(signature));
+    row.insert("workbookSafety".to_string(), json!(safety));
+    row.insert("printer".to_string(), json!(settings.printer));
+    row.insert("paper".to_string(), json!(settings.paper));
+    row.insert("orientation".to_string(), json!(settings.orientation));
+    row.insert("scaling".to_string(), json!(settings.scaling));
+    row.insert("color".to_string(), json!(settings.color));
+    row.insert("duplex".to_string(), json!(settings.duplex));
+    row.insert("pageRange".to_string(), json!("all"));
+    row.insert("copies".to_string(), json!(settings.copies));
+    row.insert("retries".to_string(), json!(settings.retries));
+    row.insert("onError".to_string(), json!(settings.on_error));
+    row.insert(
+        "timeoutMinutes".to_string(),
+        json!(settings.timeout_minutes),
+    );
+    row.insert("verb".to_string(), json!("docflow"));
+    row
 }
 
 struct NormalizedSettings {
@@ -579,6 +786,27 @@ impl NormalizedSettings {
 }
 
 fn editor(rows: Vec<Map<String, Value>>, printers: Vec<String>) -> Value {
+    let reorderable = rows.iter().any(|row| row.get("worksheet").is_some());
+    let mut columns = vec![
+        json!({"key":"enabled","labelKey":"print.col.include","kind":"bool","width":64}),
+        json!({"key":"status","labelKey":"print.col.status","kind":"readonly","width":90,"bulk":false}),
+        json!({"key":"file","labelKey":"print.col.file","kind":"readonly","width":260,"bulk":false}),
+        json!({"key":"format","labelKey":"print.col.format","kind":"readonly","width":76,"bulk":false}),
+    ];
+    if reorderable {
+        columns.push(json!({"key":"worksheetName","labelKey":"print.col.worksheet","kind":"readonly","width":180,"bulk":false}));
+        columns.push(json!({"key":"worksheetVisibility","labelKey":"print.col.worksheetVisibility","kind":"readonly","width":112,"bulk":false}));
+    }
+    columns.extend([
+        json!({"key":"pageRange","labelKey":"print.col.pageRange","helpKey":"print.col.pageRange.help","kind":"text","width":112,"bulk":false}),
+        json!({"key":"printer","labelKey":"print.col.printer","kind":"choice","width":190}),
+        json!({"key":"paper","labelKey":"print.col.paper","kind":"choice","width":88}),
+        json!({"key":"orientation","labelKey":"print.col.orientation","kind":"choice","width":112}),
+        json!({"key":"scaling","labelKey":"print.col.scaling","kind":"choice","width":104}),
+        json!({"key":"color","labelKey":"print.col.color","kind":"choice","width":110}),
+        json!({"key":"duplex","labelKey":"print.col.duplex","kind":"choice","width":116}),
+        json!({"key":"copies","labelKey":"print.col.copies","kind":"int","width":76}),
+    ]);
     json!({
         "kind": "recordTable",
         "layout": "compact",
@@ -586,20 +814,7 @@ fn editor(rows: Vec<Map<String, Value>>, printers: Vec<String>) -> Value {
         "rowCountKey": "print.editor.rowCount",
         "groupField": "format",
         "selectionGroupFields": ["format"],
-        "columns": [
-            {"key":"enabled","labelKey":"print.col.include","kind":"bool","width":64},
-            {"key":"status","labelKey":"print.col.status","kind":"readonly","width":90,"bulk":false},
-            {"key":"file","labelKey":"print.col.file","kind":"readonly","width":260,"bulk":false},
-            {"key":"format","labelKey":"print.col.format","kind":"readonly","width":76,"bulk":false},
-            {"key":"pageRange","labelKey":"print.col.pageRange","helpKey":"print.col.pageRange.help","kind":"text","width":112,"bulk":false},
-            {"key":"printer","labelKey":"print.col.printer","kind":"choice","width":190},
-            {"key":"paper","labelKey":"print.col.paper","kind":"choice","width":88},
-            {"key":"orientation","labelKey":"print.col.orientation","kind":"choice","width":112},
-            {"key":"scaling","labelKey":"print.col.scaling","kind":"choice","width":104},
-            {"key":"color","labelKey":"print.col.color","kind":"choice","width":110},
-            {"key":"duplex","labelKey":"print.col.duplex","kind":"choice","width":116},
-            {"key":"copies","labelKey":"print.col.copies","kind":"int","width":76}
-        ],
+        "columns": columns,
         "rows": rows,
         "choices": {
             "printer": printers,
@@ -618,8 +833,29 @@ fn editor(rows: Vec<Map<String, Value>>, printers: Vec<String>) -> Value {
         },
         "bulkEnabled": true,
         "selectionEnabled": true,
-        "duplicateEnabled": false
+        "duplicateEnabled": false,
+        "reorderable": reorderable
     })
+}
+
+fn workbook_safety_warning(safety: &WorkbookSafetyFacts) -> Option<&'static str> {
+    if safety.has_xlm_macro_sheet {
+        Some("warn.print.workbookUnsafeXlm")
+    } else if safety.has_workbook_protection {
+        Some("warn.print.workbookUnsafeProtection")
+    } else if safety.external_link_count > 0 {
+        Some("warn.print.workbookUnsafeExternalLinks")
+    } else if safety.connection_count > 0 {
+        Some("warn.print.workbookUnsafeConnections")
+    } else if safety.query_table_count > 0 {
+        Some("warn.print.workbookUnsafeQueryTables")
+    } else {
+        None
+    }
+}
+
+fn workbook_safety_is_unsafe(safety: &WorkbookSafetyFacts) -> bool {
+    workbook_safety_warning(safety).is_some()
 }
 
 fn choice_labels(prefix: &str, choices: &[&str]) -> Map<String, Value> {
@@ -670,6 +906,12 @@ fn file_format(path: &Path) -> String {
         .filter(|value| !value.is_empty())
         .unwrap_or("file")
         .to_uppercase()
+}
+
+fn is_excel_workbook(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "xlsx" | "xlsm"))
 }
 
 fn display_name(path: &Path) -> String {

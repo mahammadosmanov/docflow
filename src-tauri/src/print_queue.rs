@@ -1,14 +1,15 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::{self, File, OpenOptions},
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
@@ -18,10 +19,19 @@ use crate::{
     },
     errors::BackendError,
     fs_ops::atomic_replace,
-    journal::{JournalRecord, JournalState, JournalStore},
+    journal::{
+        FilesystemObjectIdentity, GrantRootIdentity, JournalRecord, JournalState, JournalStore,
+    },
+    ooxml::{
+        OrderedWorkbookDiscovery, WorkbookSafetyFacts, WorksheetDescriptor,
+        ordered_workbook_discovery,
+    },
     operations::batch_print,
     page_range::{PageRangeCapability, canonical_for},
-    paths::{CallerIdentity, GrantAccess, GrantScope, PathGrantStore, PathIntent},
+    paths::{
+        CallerIdentity, GrantAccess, GrantScope, PathGrantStore, PathIntent, ProvisionalPathGrants,
+        VerifiedPersistedSource,
+    },
     plan_store::{BackendOrigin, PlanBinding, PlanStore},
     progress::{CancellationRegistry, GlobalMutationLock},
 };
@@ -30,6 +40,30 @@ pub const DEFAULT_TIMEOUT_MINUTES: u32 = 30;
 
 fn default_page_range() -> String {
     "all".to_string()
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct FileSignature {
+    pub size: u64,
+    pub mtime_ns: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+}
+
+impl FileSignature {
+    fn is_legacy_empty(&self) -> bool {
+        self.size == 0 && self.mtime_ns == 0 && self.sha256.is_none()
+    }
+
+    pub fn has_valid_sha256(&self) -> bool {
+        self.sha256.as_deref().is_some_and(|sha256| {
+            sha256.len() == 64
+                && sha256
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -239,8 +273,8 @@ impl Default for BatchPrintParams {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PrintJob {
     pub job_id: String,
     pub path: String,
@@ -259,7 +293,11 @@ pub struct PrintJob {
     pub on_error: String,
     pub copy: u32,
     #[serde(default)]
-    pub signature: Map<String, Value>,
+    pub signature: FileSignature,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worksheet: Option<WorksheetDescriptor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workbook_safety: Option<WorkbookSafetyFacts>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -270,6 +308,35 @@ pub struct PrintJob {
     pub completed_at: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct PrintJobUnchecked {
+    job_id: String,
+    path: String,
+    printer: String,
+    verb: String,
+    format: String,
+    paper: String,
+    orientation: String,
+    scaling: String,
+    color: String,
+    duplex: String,
+    page_range: String,
+    timeout_minutes: u32,
+    retries: u32,
+    on_error: String,
+    copy: u32,
+    signature: FileSignature,
+    worksheet: Option<WorksheetDescriptor>,
+    workbook_safety: Option<WorkbookSafetyFacts>,
+    status: Option<String>,
+    attempts: Option<u32>,
+    error: Option<String>,
+    completed_at: Option<String>,
+    #[serde(flatten)]
+    extra: Map<String, Value>,
 }
 
 impl Default for PrintJob {
@@ -290,13 +357,110 @@ impl Default for PrintJob {
             retries: 0,
             on_error: "pause".to_string(),
             copy: 1,
-            signature: Map::new(),
+            signature: FileSignature::default(),
+            worksheet: None,
+            workbook_safety: None,
             status: None,
             attempts: None,
             error: None,
             completed_at: None,
             extra: Map::new(),
         }
+    }
+}
+
+impl Default for PrintJobUnchecked {
+    fn default() -> Self {
+        let job = PrintJob::default();
+        Self {
+            job_id: job.job_id,
+            path: job.path,
+            printer: job.printer,
+            verb: job.verb,
+            format: job.format,
+            paper: job.paper,
+            orientation: job.orientation,
+            scaling: job.scaling,
+            color: job.color,
+            duplex: job.duplex,
+            page_range: job.page_range,
+            timeout_minutes: job.timeout_minutes,
+            retries: job.retries,
+            on_error: job.on_error,
+            copy: job.copy,
+            signature: job.signature,
+            worksheet: job.worksheet,
+            workbook_safety: job.workbook_safety,
+            status: job.status,
+            attempts: job.attempts,
+            error: job.error,
+            completed_at: job.completed_at,
+            extra: job.extra,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PrintJob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let object = value
+            .as_object()
+            .ok_or_else(|| D::Error::custom("print job must be an object"))?;
+        let worksheet_present = object.contains_key("worksheet");
+        let safety_present = object.contains_key("workbookSafety");
+        let signature_present = object.contains_key("signature");
+        for field in ["worksheet", "workbookSafety", "signature"] {
+            if object.get(field).is_some_and(Value::is_null) {
+                return Err(D::Error::custom(format!(
+                    "print job field {field} cannot be null"
+                )));
+            }
+        }
+        let unchecked: PrintJobUnchecked =
+            serde_json::from_value(value).map_err(D::Error::custom)?;
+        if worksheet_present {
+            if !signature_present
+                || !safety_present
+                || unchecked.worksheet.is_none()
+                || unchecked.workbook_safety.is_none()
+                || !unchecked.signature.has_valid_sha256()
+            {
+                return Err(D::Error::custom("incomplete worksheet print metadata"));
+            }
+        } else if safety_present
+            || unchecked.workbook_safety.is_some()
+            || unchecked.signature.sha256.is_some()
+        {
+            return Err(D::Error::custom("orphan worksheet print metadata"));
+        }
+        Ok(Self {
+            job_id: unchecked.job_id,
+            path: unchecked.path,
+            printer: unchecked.printer,
+            verb: unchecked.verb,
+            format: unchecked.format,
+            paper: unchecked.paper,
+            orientation: unchecked.orientation,
+            scaling: unchecked.scaling,
+            color: unchecked.color,
+            duplex: unchecked.duplex,
+            page_range: unchecked.page_range,
+            timeout_minutes: unchecked.timeout_minutes,
+            retries: unchecked.retries,
+            on_error: unchecked.on_error,
+            copy: unchecked.copy,
+            signature: unchecked.signature,
+            worksheet: unchecked.worksheet,
+            workbook_safety: unchecked.workbook_safety,
+            status: unchecked.status,
+            attempts: unchecked.attempts,
+            error: unchecked.error,
+            completed_at: unchecked.completed_at,
+            extra: unchecked.extra,
+        })
     }
 }
 
@@ -358,8 +522,20 @@ struct QueueState {
     status: String,
     current_job_id: Option<String>,
     jobs: Vec<PrintJob>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    grant_root_identities: Vec<GrantRootIdentity>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    source_identities: Vec<QueueSourceIdentity>,
     #[serde(flatten)]
     extra: Map<String, Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueSourceIdentity {
+    path: String,
+    canonical_path: String,
+    identity: FilesystemObjectIdentity,
 }
 
 impl QueueState {
@@ -499,13 +675,16 @@ impl PrintQueueStore {
         let path = self.path(queue_id)?;
         let decoded = match fs::read(&path) {
             Ok(encoded) if encoded.len() <= 16 * 1024 * 1024 => {
-                serde_json::from_slice::<QueueState>(&encoded).ok()
+                serde_json::from_slice::<QueueState>(&encoded)
+                    .map_err(|_| BackendError::validation("invalid saved print queue"))?
             }
-            Ok(_) => None,
-            Err(_) => None,
-        }
-        .or_else(|| lock(&self.memory).get(queue_id).cloned())
-        .ok_or_else(|| BackendError::validation("invalid saved print queue"))?;
+            Ok(_) => return Err(BackendError::validation("invalid saved print queue")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => lock(&self.memory)
+                .get(queue_id)
+                .cloned()
+                .ok_or_else(|| BackendError::validation("invalid saved print queue"))?,
+            Err(_) => return Err(BackendError::validation("invalid saved print queue")),
+        };
         if decoded.queue_id != queue_id || decoded.jobs.len() > 25_000 {
             return Err(BackendError::validation("invalid saved print queue"));
         }
@@ -566,12 +745,13 @@ impl PrintQueueStore {
             if self.is_active(queue_id) {
                 continue;
             }
-            let Ok(mut state) = self.load_adopted(caller, queue_id) else {
+            let Ok(mut state) = self.load(queue_id) else {
                 continue;
             };
-            if state.recover_interrupted() {
-                self.save(&mut state)?;
+            if state.authorize_owner(caller).is_err() {
+                continue;
             }
+            state.recover_interrupted();
             let summary = state.summary();
             if summary.resumable > 0 {
                 return Ok(Some(summary));
@@ -587,12 +767,11 @@ impl PrintQueueStore {
             if self.is_active(&state.queue_id) {
                 continue;
             }
-            let Ok(mut state) = self.adopt(caller, state) else {
+            let mut state = state;
+            if state.authorize_owner(caller).is_err() {
                 continue;
-            };
-            if state.recover_interrupted() {
-                self.save(&mut state)?;
             }
+            state.recover_interrupted();
             let summary = state.summary();
             if summary.resumable > 0 {
                 return Ok(Some(summary));
@@ -672,8 +851,59 @@ impl PrintService {
         F: FnMut(ProgressEvent),
     {
         let inventory = self.inventory()?;
-        let plan = batch_print::preview(&params, &inventory, self.adapter.as_ref(), progress)?;
-        self.cache_with_file_grants(caller, plan)
+        let binding = self.issue_file_binding(caller, &params.files)?;
+        let mut workbook_files = HashMap::<PathBuf, File>::new();
+        for path in &params.files {
+            if !matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some(value) if value.eq_ignore_ascii_case("xlsx") || value.eq_ignore_ascii_case("xlsm")
+            ) {
+                continue;
+            }
+            let opened = self
+                .grants
+                .authorize_for_plan(
+                    &binding.grant_ids,
+                    caller,
+                    &binding.operation_id,
+                    path,
+                    PathIntent::Read,
+                )
+                .and_then(|canonical_path| {
+                    self.grants.authorize_capability_for_plan(
+                        &binding.grant_ids,
+                        caller,
+                        &binding.operation_id,
+                        &canonical_path,
+                        PathIntent::Read,
+                    )
+                })
+                .and_then(|authorized| {
+                    authorized
+                        .anchor()
+                        .map_err(|_| BackendError::path_invalid("print file is unavailable"))
+                })
+                .and_then(|anchored| {
+                    anchored
+                        .open_read()
+                        .map_err(|_| BackendError::path_invalid("print file is unavailable"))
+                });
+            if let Ok(file) = opened {
+                workbook_files.entry(path.clone()).or_insert(file);
+            }
+        }
+        let plan = batch_print::preview_with_workbook_opener(
+            &params,
+            &inventory,
+            self.adapter.as_ref(),
+            progress,
+            |path| {
+                workbook_files
+                    .remove(path)
+                    .ok_or("warn.print.workbookDiscoveryFailed")
+            },
+        )?;
+        self.plans.insert_bound(BackendOrigin::Rust, binding, plan)
     }
 
     pub fn revise(
@@ -686,27 +916,38 @@ impl PrintService {
         let binding = claimed.binding.ok_or_else(BackendError::plan_unavailable)?;
         let inventory = self.inventory()?;
         let revised = batch_print::revise(&claimed.plan, rows, &inventory, self.adapter.as_ref())?;
+        self.revalidate_worksheet_plan(&binding, caller, &revised)?;
         self.plans
             .insert_bound(BackendOrigin::Rust, binding, revised)
     }
 
     pub fn resume(&self, caller: &CallerIdentity, queue_id: &str) -> Result<Plan, BackendError> {
-        if self.queues.is_active(queue_id) {
-            return Err(BackendError::operation_in_progress());
-        }
-        let mut state = self.queues.load_adopted(caller, queue_id)?;
+        self.queues.begin(queue_id)?;
+        let _active_queue = PrintQueueActiveRegistration {
+            store: &self.queues,
+            queue_id: queue_id.to_string(),
+        };
+        let mut state = self.queues.load(queue_id)?;
+        state.authorize_owner(caller)?;
         for (index, job) in state.jobs.iter_mut().enumerate() {
             job.normalize_legacy(index);
             batch_print::validate_job(job)?;
         }
-        if state.recover_interrupted() {
-            self.queues.save(&mut state)?;
-        }
+        state.recover_interrupted();
         let inventory = self.inventory()?;
         let value = serde_json::to_value(&state)
             .map_err(|_| BackendError::protocol("print queue encoding failed"))?;
         let plan = batch_print::resume_plan(&value, &inventory)?;
-        self.cache_with_file_grants(caller, plan)
+        let (binding, provisional_grants) =
+            self.prepare_resume_file_binding(caller, &state, &plan)?;
+        state.session_id = caller.session_id.clone();
+        state.authorize_session(caller)?;
+        self.queues.save(&mut state)?;
+        let cached = self
+            .plans
+            .insert_bound(BackendOrigin::Rust, binding, plan)?;
+        provisional_grants.commit();
+        Ok(cached)
     }
 
     pub fn latest(
@@ -729,6 +970,18 @@ impl PrintService {
         self.plans
             .snapshot(plan_id)
             .is_some_and(|snapshot| snapshot.origin == BackendOrigin::Rust)
+    }
+
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    pub fn active_grant_count_for_testing(&self) -> usize {
+        self.grants.active_grant_count_for_testing()
+    }
+
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    pub fn active_plan_count_for_testing(&self) -> usize {
+        self.plans.active_plan_count_for_testing()
     }
 
     pub fn cancel(&self, plan_id: &str) -> bool {
@@ -768,6 +1021,7 @@ impl PrintService {
             .binding
             .as_ref()
             .ok_or_else(BackendError::plan_unavailable)?;
+        self.revalidate_worksheet_plan(binding, caller, &claim.claimed.plan)?;
         let roots =
             self.grants
                 .roots_for_plan(&binding.grant_ids, caller, &binding.operation_id)?;
@@ -794,7 +1048,15 @@ impl PrintService {
             job.normalize_legacy(index);
             batch_print::validate_job(job)?;
         }
-        let mut state = self.state_for_plan(&claim.claimed.plan, &jobs, caller)?;
+        let (queue_root_identities, source_identities) =
+            self.source_identities_for_plan(binding, caller, &jobs, &root_identities)?;
+        let mut state = self.state_for_plan(
+            &claim.claimed.plan,
+            &jobs,
+            caller,
+            &queue_root_identities,
+            &source_identities,
+        )?;
         self.queues.begin(&state.queue_id)?;
         let _active_queue = PrintQueueActiveRegistration {
             store: &self.queues,
@@ -958,14 +1220,15 @@ impl PrintService {
                         saved.status = Some("failed".to_string());
                         self.queues.save(&mut state)?;
                         result.failed += 1;
-                        result.errors.push(warning(
-                            "error.print.failed",
-                            format!(
-                                "{}: {}",
-                                display_name(&job.path),
-                                redact_error(&error.message)
-                            ),
-                        ));
+                        let redacted = redact_error(&error.message);
+                        result.errors.push(if is_localized_print_error(&redacted) {
+                            warning(&redacted, display_name(&job.path))
+                        } else {
+                            warning(
+                                "error.print.failed",
+                                format!("{}: {redacted}", display_name(&job.path)),
+                            )
+                        });
                         if job.on_error == "pause" {
                             result.errors.push(warning(
                                 "error.print.queuePaused",
@@ -1052,38 +1315,111 @@ impl PrintService {
         Ok(claimed)
     }
 
-    fn cache_with_file_grants(
-        &self,
+    fn prepare_resume_file_binding<'a>(
+        &'a self,
         caller: &CallerIdentity,
-        plan: Plan,
-    ) -> Result<Plan, BackendError> {
+        state: &QueueState,
+        plan: &Plan,
+    ) -> Result<(PlanBinding, ProvisionalPathGrants<'a>), BackendError> {
+        let (binding, provisional_grants) = self.issue_resume_file_binding(caller, state)?;
+        validate_verified_resume_plan_sources(plan, provisional_grants.verified_sources())?;
+        self.revalidate_worksheet_plan(&binding, caller, plan)?;
+        Ok((binding, provisional_grants))
+    }
+
+    fn issue_resume_file_binding<'a>(
+        &'a self,
+        caller: &CallerIdentity,
+        state: &QueueState,
+    ) -> Result<(PlanBinding, ProvisionalPathGrants<'a>), BackendError> {
+        let queue_paths = state
+            .jobs
+            .iter()
+            .map(|job| job.path.clone())
+            .collect::<HashSet<_>>();
+        let source_paths = state
+            .source_identities
+            .iter()
+            .map(|source| source.path.clone())
+            .collect::<HashSet<_>>();
+        if queue_paths.is_empty()
+            || queue_paths != source_paths
+            || source_paths.len() != state.source_identities.len()
+        {
+            return Err(persisted_source_reselection_required());
+        }
+        let canonical_parents = state
+            .source_identities
+            .iter()
+            .map(|source| {
+                Path::new(&source.canonical_path)
+                    .parent()
+                    .map(|parent| parent.to_string_lossy().into_owned())
+                    .ok_or_else(persisted_source_reselection_required)
+            })
+            .collect::<Result<HashSet<_>, _>>()?;
+        let persisted_roots = state
+            .grant_root_identities
+            .iter()
+            .map(|root| root.root.clone())
+            .collect::<HashSet<_>>();
+        if canonical_parents != persisted_roots
+            || persisted_roots.len() != state.grant_root_identities.len()
+        {
+            return Err(persisted_source_reselection_required());
+        }
         let scope = GrantScope::new(
             &caller.owner_id,
             &caller.session_id,
             Uuid::new_v4().to_string(),
             "files.batch_print",
         );
-        let mut candidate_paths = plan
-            .steps
+        let expected_sources = state
+            .source_identities
             .iter()
-            .filter_map(|step| step.src.clone())
+            .map(|source| {
+                (
+                    PathBuf::from(&source.path),
+                    PathBuf::from(&source.canonical_path),
+                    source.identity.clone(),
+                )
+            })
             .collect::<Vec<_>>();
-        if let Some(jobs) = plan.meta.get("jobs").and_then(Value::as_array) {
-            candidate_paths.extend(jobs.iter().filter_map(row_path));
-        }
-        if let Some(rows) = plan
-            .meta
-            .get("editor")
-            .and_then(Value::as_object)
-            .and_then(|editor| editor.get("rows"))
-            .and_then(Value::as_array)
-        {
-            candidate_paths.extend(rows.iter().filter_map(row_path));
-        }
+        let provisional_grants = self.grants.issue_persisted_read_capabilities(
+            &scope,
+            &state.grant_root_identities,
+            &expected_sources,
+        )?;
+        let grant_ids = provisional_grants
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        Ok((
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                "files.batch_print",
+                grant_ids,
+            ),
+            provisional_grants,
+        ))
+    }
+
+    fn issue_file_binding(
+        &self,
+        caller: &CallerIdentity,
+        candidate_paths: &[PathBuf],
+    ) -> Result<PlanBinding, BackendError> {
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            Uuid::new_v4().to_string(),
+            "files.batch_print",
+        );
         let mut parents = Vec::new();
         let mut seen = HashSet::new();
         for path in candidate_paths {
-            let path = Path::new(&path);
             let Some(parent) = path.parent() else {
                 return Err(BackendError::path_invalid(
                     "print file has no parent directory",
@@ -1102,16 +1438,12 @@ impl PrintService {
             .into_iter()
             .map(|grant| grant.grant_id)
             .collect::<Vec<_>>();
-        self.plans.insert_bound(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                &caller.owner_id,
-                &caller.session_id,
-                "files.batch_print",
-                grant_ids,
-            ),
-            plan,
-        )
+        Ok(PlanBinding::new(
+            &caller.owner_id,
+            &caller.session_id,
+            "files.batch_print",
+            grant_ids,
+        ))
     }
 
     fn state_for_plan(
@@ -1119,6 +1451,8 @@ impl PrintService {
         plan: &Plan,
         jobs: &[PrintJob],
         caller: &CallerIdentity,
+        grant_root_identities: &[GrantRootIdentity],
+        source_identities: &[QueueSourceIdentity],
     ) -> Result<QueueState, BackendError> {
         let queue_id = plan
             .meta
@@ -1135,19 +1469,82 @@ impl PrintService {
         if !resume_queue_id.is_empty() {
             let mut state = self.queues.load(resume_queue_id)?;
             state.authorize_session(caller)?;
-            for planned in jobs {
-                let saved = state
-                    .jobs
-                    .iter_mut()
-                    .find(|saved| saved.job_id == planned.job_id)
-                    .ok_or_else(|| BackendError::validation("saved print job no longer exists"))?;
-                let attempts = saved.attempts;
-                *saved = planned.clone();
-                saved.status = Some("pending".to_string());
-                saved.attempts = attempts;
-                saved.error = Some(String::new());
+            let rows = plan
+                .meta
+                .get("editor")
+                .and_then(Value::as_object)
+                .and_then(|editor| editor.get("rows"))
+                .and_then(Value::as_array)
+                .ok_or_else(|| BackendError::validation("print plan has no rows"))?;
+            let mut saved_by_id = HashMap::new();
+            for saved in state.jobs.drain(..) {
+                if saved_by_id.insert(saved.job_id.clone(), saved).is_some() {
+                    return Err(BackendError::validation(
+                        "saved print job identity is duplicated",
+                    ));
+                }
             }
+            let mut planned_by_id = HashMap::new();
+            for planned in jobs {
+                if planned_by_id
+                    .insert(planned.job_id.clone(), planned)
+                    .is_some()
+                {
+                    return Err(BackendError::validation(
+                        "planned print job identity is duplicated",
+                    ));
+                }
+            }
+            let mut reordered = Vec::with_capacity(rows.len());
+            let mut displayed = HashSet::new();
+            for row in rows {
+                let job_id = row
+                    .get("_resumeJobId")
+                    .and_then(Value::as_str)
+                    .filter(|job_id| !job_id.is_empty())
+                    .ok_or_else(|| {
+                        BackendError::validation("saved print job identity is missing")
+                    })?;
+                if !displayed.insert(job_id.to_string()) {
+                    return Err(BackendError::validation(
+                        "saved print job identity is duplicated",
+                    ));
+                }
+                let saved = saved_by_id
+                    .remove(job_id)
+                    .ok_or_else(|| BackendError::validation("saved print job no longer exists"))?;
+                let enabled = row.get("enabled").and_then(Value::as_bool).unwrap_or(true);
+                if enabled {
+                    if !matches!(
+                        saved.status.as_deref(),
+                        Some("pending" | "failed" | "cancelled" | "uncertain")
+                    ) {
+                        return Err(BackendError::validation("saved print job is not resumable"));
+                    }
+                    let planned = planned_by_id.remove(job_id).ok_or_else(|| {
+                        BackendError::validation("enabled saved print job is missing from the plan")
+                    })?;
+                    let mut next = planned.clone();
+                    next.status = Some("pending".to_string());
+                    next.attempts = saved.attempts;
+                    next.error = Some(String::new());
+                    next.completed_at = None;
+                    reordered.push(next);
+                } else {
+                    if planned_by_id.contains_key(job_id) {
+                        return Err(BackendError::validation(
+                            "disabled saved print job is present in the plan",
+                        ));
+                    }
+                    reordered.push(saved);
+                }
+            }
+            if !saved_by_id.is_empty() || !planned_by_id.is_empty() {
+                return Err(BackendError::validation("saved print job set changed"));
+            }
+            state.jobs = reordered;
             state.status = "ready".to_string();
+            state.current_job_id = None;
             return Ok(state);
         }
         let created = utc_now();
@@ -1170,8 +1567,143 @@ impl PrintService {
                     job
                 })
                 .collect(),
+            grant_root_identities: grant_root_identities.to_vec(),
+            source_identities: source_identities.to_vec(),
             extra: Map::new(),
         })
+    }
+
+    fn source_identities_for_plan(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        jobs: &[PrintJob],
+        all_root_identities: &[GrantRootIdentity],
+    ) -> Result<(Vec<GrantRootIdentity>, Vec<QueueSourceIdentity>), BackendError> {
+        let mut seen = HashSet::new();
+        let mut sources = Vec::new();
+        for job in jobs {
+            if !seen.insert(job.path.clone()) {
+                continue;
+            }
+            let canonical_path = self.grants.authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                Path::new(&job.path),
+                PathIntent::Read,
+            )?;
+            let identity = self
+                .grants
+                .authorize_capability_for_plan(
+                    &binding.grant_ids,
+                    caller,
+                    &binding.operation_id,
+                    &canonical_path,
+                    PathIntent::Read,
+                )?
+                .anchor()
+                .and_then(|source| source.identity())
+                .map_err(|_| BackendError::path_invalid("print file identity is unavailable"))?;
+            sources.push(QueueSourceIdentity {
+                path: job.path.clone(),
+                canonical_path: canonical_path.to_string_lossy().into_owned(),
+                identity,
+            });
+        }
+        let root_paths = sources
+            .iter()
+            .filter_map(|source| Path::new(&source.canonical_path).parent())
+            .map(|parent| parent.to_string_lossy().into_owned())
+            .collect::<HashSet<_>>();
+        let roots = all_root_identities
+            .iter()
+            .filter(|root| root_paths.contains(&root.root))
+            .cloned()
+            .collect::<Vec<_>>();
+        if roots.len() != root_paths.len() || sources.is_empty() {
+            return Err(BackendError::path_invalid(
+                "print file capability identity is unavailable",
+            ));
+        }
+        Ok((roots, sources))
+    }
+
+    fn revalidate_worksheet_plan(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        plan: &Plan,
+    ) -> Result<(), BackendError> {
+        let rows = plan
+            .meta
+            .get("editor")
+            .and_then(Value::as_object)
+            .and_then(|editor| editor.get("rows"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| BackendError::validation("print plan has no rows"))?;
+        let mut discoveries = HashMap::<String, (FileSignature, OrderedWorkbookDiscovery)>::new();
+        for row in rows {
+            let Some(worksheet_value) = row.get("worksheet") else {
+                continue;
+            };
+            let path = row
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BackendError::validation("invalid worksheet print row"))?;
+            let expected_signature: FileSignature =
+                serde_json::from_value(row.get("signature").cloned().unwrap_or(Value::Null))
+                    .map_err(|_| BackendError::validation("invalid worksheet file signature"))?;
+            let expected_worksheet: WorksheetDescriptor =
+                serde_json::from_value(worksheet_value.clone())
+                    .map_err(|_| BackendError::validation("invalid worksheet descriptor"))?;
+            let expected_safety: WorkbookSafetyFacts =
+                serde_json::from_value(row.get("workbookSafety").cloned().unwrap_or(Value::Null))
+                    .map_err(|_| BackendError::validation("invalid workbook safety facts"))?;
+            if !discoveries.contains_key(path) {
+                let canonical_path = self.grants.authorize_for_plan(
+                    &binding.grant_ids,
+                    caller,
+                    &binding.operation_id,
+                    Path::new(path),
+                    PathIntent::Read,
+                )?;
+                let source = self
+                    .grants
+                    .authorize_capability_for_plan(
+                        &binding.grant_ids,
+                        caller,
+                        &binding.operation_id,
+                        &canonical_path,
+                        PathIntent::Read,
+                    )?
+                    .anchor()
+                    .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
+                let mut source_file = source
+                    .open_read()
+                    .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
+                let actual_signature = file_signature_from_open_file(&mut source_file, true)?;
+                if actual_signature != expected_signature {
+                    return Err(BackendError::validation("error.print.workbookChanged"));
+                }
+                let discovery = ordered_workbook_discovery(&mut source_file)
+                    .map_err(|_| BackendError::validation("error.print.worksheetChanged"))?;
+                discoveries.insert(path.to_string(), (actual_signature, discovery));
+            }
+            let (actual_signature, discovery) = discoveries
+                .get(path)
+                .ok_or_else(|| BackendError::validation("error.print.worksheetChanged"))?;
+            if actual_signature != &expected_signature {
+                return Err(BackendError::validation("error.print.workbookChanged"));
+            }
+            if discovery.safety != expected_safety
+                || workbook_safety_is_unsafe(&discovery.safety)
+                || !discovery.worksheets.contains(&expected_worksheet)
+            {
+                return Err(BackendError::validation("error.print.worksheetChanged"));
+            }
+        }
+        Ok(())
     }
 
     fn submit_approved_job<C>(
@@ -1215,14 +1747,27 @@ impl PrintService {
         if !metadata.is_file() {
             return Err(PrintFailure::failed("print file is unavailable"));
         }
-        if !job.signature.is_empty()
-            && file_signature_from_open_file(&source_file)
+        if !job.signature.is_legacy_empty()
+            && file_signature_from_open_file(&mut source_file, job.worksheet.is_some())
                 .map_err(|error| PrintFailure::failed(error.message))?
                 != job.signature
         {
-            return Err(PrintFailure::failed(
-                "file changed after the queue was previewed",
-            ));
+            return Err(PrintFailure::failed(if job.worksheet.is_some() {
+                "error.print.workbookChanged"
+            } else {
+                "file changed after the queue was previewed"
+            }));
+        }
+        if let Some(worksheet) = job.worksheet.as_ref() {
+            let discovery = ordered_workbook_discovery(&mut source_file)
+                .map_err(|_| PrintFailure::failed("error.print.worksheetChanged"))?;
+            if job.workbook_safety.as_ref() != Some(&discovery.safety)
+                || workbook_safety_is_unsafe(&discovery.safety)
+                || !discovery.worksheets.contains(worksheet)
+            {
+                return Err(PrintFailure::failed("error.print.worksheetChanged"));
+            }
+            return Err(PrintFailure::unsupported("error.print.excelUnavailable"));
         }
         let workspace = tempfile::tempdir()
             .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;
@@ -1274,11 +1819,54 @@ fn journal_effect_state(state: Option<JournalState>) -> &'static str {
     }
 }
 
-fn row_path(row: &Value) -> Option<String> {
-    row.as_object()
-        .and_then(|object| object.get("path"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
+fn persisted_source_reselection_required() -> BackendError {
+    BackendError::validation("error.print.queueSourceReselectionRequired")
+}
+
+fn validate_verified_resume_plan_sources(
+    plan: &Plan,
+    verified_sources: &[VerifiedPersistedSource],
+) -> Result<(), BackendError> {
+    let verified_paths = verified_sources
+        .iter()
+        .map(|source| source.path.as_path())
+        .collect::<HashSet<_>>();
+    if verified_paths.is_empty() {
+        return Err(persisted_source_reselection_required());
+    }
+    let jobs = plan
+        .meta
+        .get("jobs")
+        .and_then(Value::as_array)
+        .ok_or_else(persisted_source_reselection_required)?;
+    if jobs.iter().any(|job| {
+        job.get("path")
+            .and_then(Value::as_str)
+            .is_none_or(|path| !verified_paths.contains(Path::new(path)))
+    }) {
+        return Err(persisted_source_reselection_required());
+    }
+    let rows = plan
+        .meta
+        .get("editor")
+        .and_then(Value::as_object)
+        .and_then(|editor| editor.get("rows"))
+        .and_then(Value::as_array)
+        .ok_or_else(persisted_source_reselection_required)?;
+    let row_paths = rows
+        .iter()
+        .map(|row| {
+            row.get("path")
+                .and_then(Value::as_str)
+                .map(Path::new)
+                .filter(|path| verified_paths.contains(path))
+                .ok_or_else(persisted_source_reselection_required)
+        })
+        .collect::<Result<HashSet<_>, _>>()?;
+    if row_paths != verified_paths {
+        return Err(persisted_source_reselection_required());
+    }
+    Ok(())
 }
 
 struct PrintCancellationRegistration<'a> {
@@ -1303,13 +1891,16 @@ impl Drop for PrintQueueActiveRegistration<'_> {
     }
 }
 
-pub fn file_signature(path: &Path) -> Result<Map<String, Value>, BackendError> {
-    let file =
+pub fn file_signature(path: &Path) -> Result<FileSignature, BackendError> {
+    let mut file =
         File::open(path).map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
-    file_signature_from_open_file(&file)
+    file_signature_from_open_file(&mut file, false)
 }
 
-fn file_signature_from_open_file(file: &File) -> Result<Map<String, Value>, BackendError> {
+pub fn file_signature_from_open_file(
+    file: &mut File,
+    include_sha256: bool,
+) -> Result<FileSignature, BackendError> {
     let metadata = file
         .metadata()
         .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
@@ -1318,12 +1909,43 @@ fn file_signature_from_open_file(file: &File) -> Result<Map<String, Value>, Back
         .map_err(|_| BackendError::path_invalid("print file timestamp is unavailable"))?;
     let mtime_ns = modified
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
+        .map_err(|_| BackendError::path_invalid("print file timestamp is unavailable"))?
         .as_nanos();
-    let mut signature = Map::new();
-    signature.insert("size".to_string(), json!(metadata.len()));
-    signature.insert("mtimeNs".to_string(), json!(mtime_ns));
-    Ok(signature)
+    let mtime_ns = u64::try_from(mtime_ns)
+        .map_err(|_| BackendError::path_invalid("print file timestamp is unavailable"))?;
+    let sha256 = if include_sha256 {
+        file.seek(SeekFrom::Start(0))
+            .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
+        let mut digest = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
+            if read == 0 {
+                break;
+            }
+            digest.update(&buffer[..read]);
+        }
+        Some(format!("{:x}", digest.finalize()))
+    } else {
+        None
+    };
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
+    Ok(FileSignature {
+        size: metadata.len(),
+        mtime_ns,
+        sha256,
+    })
+}
+
+fn workbook_safety_is_unsafe(safety: &WorkbookSafetyFacts) -> bool {
+    safety.has_xlm_macro_sheet
+        || safety.has_workbook_protection
+        || safety.external_link_count > 0
+        || safety.connection_count > 0
+        || safety.query_table_count > 0
 }
 
 pub fn default_queue_root(app_data_dir: &Path) -> PathBuf {
@@ -1404,6 +2026,16 @@ fn warning(key: &str, subject: impl Into<String>) -> Warning {
     }
 }
 
+fn is_localized_print_error(message: &str) -> bool {
+    message.strip_prefix("error.print.").is_some_and(|suffix| {
+        !suffix.is_empty()
+            && suffix.len() <= 64
+            && suffix
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '.')
+    })
+}
+
 fn redact_error(message: &str) -> String {
     let single_line = message
         .chars()
@@ -1421,4 +2053,19 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protected_workbook_safety_is_unsafe_for_resume_and_apply() {
+        let safety = WorkbookSafetyFacts {
+            has_workbook_protection: true,
+            ..WorkbookSafetyFacts::default()
+        };
+
+        assert!(workbook_safety_is_unsafe(&safety));
+    }
 }

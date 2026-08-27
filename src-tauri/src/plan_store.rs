@@ -247,6 +247,11 @@ impl PlanStore {
         })
     }
 
+    #[cfg(debug_assertions)]
+    pub(crate) fn active_plan_count_for_testing(&self) -> usize {
+        lock_plans(&self.plans).len()
+    }
+
     #[cfg(test)]
     fn claim(&self, plan_id: &str) -> Result<ClaimedPlan, BackendError> {
         self.claim_checked(plan_id, None)

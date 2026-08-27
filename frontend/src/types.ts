@@ -67,6 +67,10 @@ export interface Plan {
   meta: Record<string, unknown>;
 }
 
+export interface EditorMetadata extends Record<string, unknown> {
+  reorderable?: boolean;
+}
+
 export interface OperationResult {
   applied: number;
   failed: number;

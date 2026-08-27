@@ -42,14 +42,17 @@ fn workbook_fixture(path: &Path, macros: bool) {
         writer.write_all(bytes).unwrap();
     };
     add("[Content_Types].xml", b"content-types-sentinel");
-    add("_rels/.rels", b"root-relationships-sentinel");
+    add(
+        "_rels/.rels",
+        br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+    );
     add(
         "xl/workbook.xml",
         format!(r#"<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="{MAIN}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="CIV" sheetId="1" r:id="rId1"/><sheet name="MEC" sheetId="2" r:id="rId2"/><sheet name="Sheet1" sheetId="3" r:id="rId3"/><sheet name="Unrelated" sheetId="4" r:id="rId4"/></sheets><calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1"/></workbook>"#).as_bytes(),
     );
     add(
         "xl/_rels/workbook.xml.rels",
-        b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId2\" Target=\"worksheets/sheet2.xml\"/><Relationship Id=\"rId3\" Target=\"worksheets/sheet3.xml\"/><Relationship Id=\"rId4\" Target=\"worksheets/sheet4.xml\"/></Relationships>",
+        b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet2.xml\"/><Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet3.xml\"/><Relationship Id=\"rId4\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet4.xml\"/></Relationships>",
     );
     let civ_headers = [
         "RFI No.",
@@ -178,7 +181,8 @@ fn workbook_fixture(path: &Path, macros: bool) {
         ("xl/theme/theme1.xml", b"theme-sentinel".as_slice()),
         (
             "xl/worksheets/_rels/sheet1.xml.rels",
-            b"relationships-sentinel".as_slice(),
+            br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdDraw" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#
+                .as_slice(),
         ),
         ("xl/drawings/drawing1.xml", b"drawing-sentinel".as_slice()),
         ("xl/comments1.xml", b"comments-sentinel".as_slice()),
@@ -428,7 +432,7 @@ fn approved_xlsm_apply_preserves_package_and_undo_restores_exact_hash() {
     let original_hash = file_sha256(&workbook).unwrap();
     assert_eq!(
         original_hash,
-        "fcae2a005577ace2c8f925b28817de93e2d6d686a2f21714fd42ed74b98bd3b4"
+        "324c5c2e673184b1a4bcaac43ba5d52c1eb2ebc200391b31c5738e7fb6699dcd"
     );
     let original_members = members(&workbook);
     let plan = preview(
@@ -507,7 +511,7 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
     let original_hash = file_sha256(&workbook).unwrap();
     assert_eq!(
         original_hash,
-        "628c72a5163a77608d050184b6aebd2ceaf5dd422a8e43d3a51693b108b10a58"
+        "3a1a2c22d39b632528a63525507cb1f9b89a6b3f1bad6a265aac87f77e030ef5"
     );
     let authority =
         FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));

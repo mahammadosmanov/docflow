@@ -89,7 +89,8 @@ fn package(path: &Path, macros: bool) {
         ("xl/theme/theme1.xml", b"theme-sentinel".as_slice()),
         (
             "xl/worksheets/_rels/sheet1.xml.rels",
-            b"worksheet-relationships-sentinel".as_slice(),
+            br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdDraw" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#
+                .as_slice(),
         ),
         ("xl/drawings/drawing1.xml", b"drawing-sentinel".as_slice()),
         ("xl/comments1.xml", b"comments-sentinel".as_slice()),
@@ -164,7 +165,7 @@ fn targeted_patch_preserves_all_untouched_members_and_zip_properties() {
     package(&source, true);
     assert_eq!(
         file_sha256(&source).unwrap(),
-        "3eea82b94fb411eb205b8bf4ba93d3585c4f4300d16a47e06be5bf905ddacaca"
+        "2c3fb5effe531f10ec62ed690c12d2caa517aa1607fe06085a0f51245b6abd9f"
     );
     let (before_names, before_comment, before) = evidence(&source);
 

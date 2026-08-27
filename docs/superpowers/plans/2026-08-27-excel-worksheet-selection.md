@@ -15,12 +15,12 @@
 - `.xlsx` and `.xlsm` only; legacy `.xls` remains unsupported.
 - Discovery never starts Excel and never reads cell values.
 - Source workbook bytes never change.
-- Worksheet identity is `(workbookIndex, sheetId, relationshipId, partPath, name, visibility)` and is revalidated before export.
+- Worksheet identity is `(workbookIndex, sheetId, relationshipId, relationshipType, partPath, name, visibility)` and is revalidated before export.
 - Visible sheets default enabled; hidden/veryHidden default disabled and require explicit opt-in.
 - Worksheet rows accept `pageRange = all` only in this delivery.
 - Excel COM never prints directly; it exports one worksheet to one private PDF.
 - Macro execution, events, alerts, link updates, recent-file registration, and external refresh are disabled before workbook open.
-- Excel 4/XLM macro sheets, external links, connections, query tables, and Internet/Restricted Zone MOTW fail closed in v1.
+- Excel 4/XLM macro sheets, external links, connections, query tables, workbook protection, and Internet/Restricted Zone MOTW fail closed before COM `Open` in v1.
 - No physical print submission in automated tests.
 - Windows/Excel/printer runtime smoke remains external until executed on the exact installer.
 
@@ -56,8 +56,8 @@
 
 **Interfaces:**
 - Produces `WorksheetVisibility::{Visible, Hidden, VeryHidden}`.
-- Produces `WorksheetDescriptor { workbook_index, sheet_id, relationship_id, part_path, name, visibility }`.
-- Produces `WorkbookSafetyFacts { has_vba_project, has_xlm_macro_sheet, external_link_count, connection_count, query_table_count }`.
+- Produces `WorksheetDescriptor { workbook_index, sheet_id, relationship_id, relationship_type, part_path, name, visibility }`.
+- Produces `WorkbookSafetyFacts { has_vba_project, has_xlm_macro_sheet, has_workbook_protection, external_link_count, connection_count, query_table_count }`.
 - Produces `OrderedWorkbookDiscovery { worksheets, safety }` from `ordered_workbook_discovery<R: Read + Seek>(source: &mut R)`; discovery never reopens a path.
 - Preserves the existing `sheet_infos_from_path` behavior by projecting ordered descriptors into its current name-keyed map only after duplicate checks.
 
@@ -313,11 +313,11 @@ release reverse order
 CoUninitialize
 ```
 
-Tests reject any missing/reordered safety setter before `Open`, any calculate/refresh/update-link call, and any request whose safety facts or source `Zone.Identifier` require Protected View. Missing zone stream is allowed; malformed/Internet/Restricted zone or any other read error fails closed.
+Tests reject any missing/reordered safety setter before `Open`, any calculate/refresh/update-link call, and any request with workbook protection or whose other safety facts or source `Zone.Identifier` require Protected View. Missing zone stream is allowed; malformed/Internet/Restricted zone or any other read error fails closed.
 
 - [ ] **Step 5: Implement production late-bound COM**
 
-Only after Step 4 is observed RED, add `platform/windows/excel.rs`, implement the production `WorkbookSourcePolicy` MOTW parser and late-bound COM adapter, and adapt the private Windows PDF renderer through `ControlledPdfSubmitter`. Use the existing direct `windows` crate with only required COM/OLE features. Never spawn PowerShell/VBScript or interpolate commands. Bound BSTR/string lengths and HRESULT mapping. Move the owned `ExcelExportRequest` onto one STA worker. The worker can only return an artifact/result over a channel. The supervisor compares request ID + generation + deadline + owned atomic cancellation before calling the submitter. Late results are dropped. If bounded teardown fails, atomically trip a process-lifetime one-way circuit breaker before returning; later exports fail until restart. Never terminate, attach to, or reuse an Excel process outside the request.
+Only after Step 4 is observed RED, add `platform/windows/excel.rs`, implement the production `WorkbookSourcePolicy` MOTW parser and late-bound COM adapter, and adapt the private Windows PDF renderer through `ControlledPdfSubmitter`. The source policy rejects `has_workbook_protection` before COM `Open`; do not infer passwords or mutate protection. Use the existing direct `windows` crate with only required COM/OLE features. Never spawn PowerShell/VBScript or interpolate commands. Bound BSTR/string lengths and HRESULT mapping. Move the owned `ExcelExportRequest` onto one STA worker. The worker can only return an artifact/result over a channel. The supervisor compares request ID + generation + deadline + owned atomic cancellation before calling the submitter. Late results are dropped. If bounded teardown fails, atomically trip a process-lifetime one-way circuit breaker before returning; later exports fail until restart. Never terminate, attach to, or reuse an Excel process outside the request.
 
 - [ ] **Step 6: Implement immutable private staging**
 
@@ -339,7 +339,23 @@ If the macOS host lacks Windows SDK headers/link libraries, record that as envir
 
 - [ ] **Step 9: Run local/fake/full gates**
 
-Run exporter fake tests, batch-print tests, Rust suite, fmt, clippy, `npm test`, `npm run build`, source/license audits, Windows platform-check, and diff-check without launching Excel or a printer.
+Run the literal root gates, then the focused fake/platform and diff gates, without launching Excel or a printer:
+
+```bash
+node tools/version_manager.mjs check
+node tools/package_audit.mjs source
+npm test
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+npm run audit:licenses
+cargo test --manifest-path src-tauri/Cargo.toml platform::excel::tests::export_supervisor -- --nocapture
+cargo test --manifest-path src-tauri/Cargo.toml --test batch_print -- --nocapture
+cargo check --manifest-path src-tauri/platform-checks/windows-printing/Cargo.toml --target x86_64-pc-windows-msvc
+git diff --check
+```
 
 - [ ] **Step 10: Commit verified source slice**
 
@@ -377,7 +393,23 @@ A retry revalidates and re-exports from the authorized source; it never trusts/r
 
 - [ ] **Step 5: Verify local source gates**
 
-Run focused fake/platform tests, full Rust suite, source/license audits, fmt, clippy, `npm test`, `npm run build`, Windows printing platform-check, and diff-check.
+Run the literal root gates, then the focused fake/platform and diff gates:
+
+```bash
+node tools/version_manager.mjs check
+node tools/package_audit.mjs source
+npm test
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+npm run audit:licenses
+cargo test --manifest-path src-tauri/Cargo.toml platform::excel::tests -- --nocapture
+cargo test --manifest-path src-tauri/Cargo.toml --test batch_print -- --nocapture
+cargo check --manifest-path src-tauri/platform-checks/windows-printing/Cargo.toml --target x86_64-pc-windows-msvc
+git diff --check
+```
 
 - [ ] **Step 6: Commit verified integration**
 

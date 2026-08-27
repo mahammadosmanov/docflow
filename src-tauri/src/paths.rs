@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::OsString,
     fs,
     path::{Component, Path, PathBuf},
@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     cap_fs::{AuthorizedPath, CapabilityRoot},
     errors::BackendError,
-    journal::GrantRootIdentity,
+    journal::{FilesystemObjectIdentity, GrantRootIdentity},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,6 +94,42 @@ pub struct PathGrantStore {
 struct StoredPathGrant {
     grant: PathGrant,
     capability: CapabilityRoot,
+    expected_read_identities: HashMap<PathBuf, FilesystemObjectIdentity>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct VerifiedPersistedSource {
+    pub(crate) path: PathBuf,
+}
+
+#[must_use = "provisional path grants are revoked unless committed"]
+pub(crate) struct ProvisionalPathGrants<'a> {
+    store: &'a PathGrantStore,
+    grants: Vec<PathGrant>,
+    verified_sources: Vec<VerifiedPersistedSource>,
+    committed: bool,
+}
+
+impl ProvisionalPathGrants<'_> {
+    pub(crate) fn grants(&self) -> &[PathGrant] {
+        &self.grants
+    }
+
+    pub(crate) fn verified_sources(&self) -> &[VerifiedPersistedSource] {
+        &self.verified_sources
+    }
+
+    pub(crate) fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for ProvisionalPathGrants<'_> {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.store.revoke_grant_ids(&self.grants);
+        }
+    }
 }
 
 impl PathGrantStore {
@@ -141,9 +177,121 @@ impl PathGrantStore {
             StoredPathGrant {
                 grant: grant.clone(),
                 capability,
+                expected_read_identities: HashMap::new(),
             },
         );
         Ok(grant)
+    }
+
+    pub(crate) fn issue_persisted_read_capabilities<'a>(
+        &'a self,
+        scope: &GrantScope,
+        expected_roots: &[GrantRootIdentity],
+        expected_sources: &[(PathBuf, PathBuf, FilesystemObjectIdentity)],
+    ) -> Result<ProvisionalPathGrants<'a>, BackendError> {
+        if expected_roots.is_empty() || expected_sources.is_empty() {
+            return Err(persisted_source_reselection_required());
+        }
+        let mut prepared = Vec::with_capacity(expected_roots.len());
+        let mut seen_roots = HashSet::new();
+        for expected in expected_roots {
+            let root = PathBuf::from(&expected.root);
+            reject_lexical_escape(&root)?;
+            let canonical =
+                fs::canonicalize(&root).map_err(|_| persisted_source_reselection_required())?;
+            if canonical != root || !seen_roots.insert(canonical.clone()) || !canonical.is_dir() {
+                return Err(persisted_source_reselection_required());
+            }
+            let capability = CapabilityRoot::open(&canonical)
+                .map_err(|_| persisted_source_reselection_required())?;
+            if capability
+                .identity()
+                .map_err(|_| persisted_source_reselection_required())?
+                != expected.identity
+            {
+                return Err(persisted_source_reselection_required());
+            }
+            prepared.push((canonical, capability, HashMap::new()));
+        }
+
+        let mut seen_sources = HashSet::new();
+        let mut verified_sources = Vec::with_capacity(expected_sources.len());
+        for (source, expected_canonical, expected_identity) in expected_sources {
+            reject_lexical_escape(source)
+                .and_then(|()| reject_lexical_escape(expected_canonical))
+                .map_err(|_| persisted_source_reselection_required())?;
+            if !seen_sources.insert(source.clone()) {
+                return Err(persisted_source_reselection_required());
+            }
+            let resolved_source =
+                fs::canonicalize(source).map_err(|_| persisted_source_reselection_required())?;
+            if resolved_source != *expected_canonical {
+                return Err(persisted_source_reselection_required());
+            }
+            let matched_index = prepared
+                .iter()
+                .enumerate()
+                .filter(|(_, (root, _, _))| expected_canonical.starts_with(root))
+                .max_by_key(|(_, (root, _, _))| root.components().count())
+                .map(|(index, _)| index)
+                .ok_or_else(persisted_source_reselection_required)?;
+            let (_, capability, expected_read_identities) = &mut prepared[matched_index];
+            let anchored = capability
+                .authorize(&resolved_source)
+                .and_then(|authorized| authorized.anchor())
+                .map_err(|_| persisted_source_reselection_required())?;
+            if anchored
+                .identity()
+                .map_err(|_| persisted_source_reselection_required())?
+                != *expected_identity
+            {
+                return Err(persisted_source_reselection_required());
+            }
+            if expected_read_identities
+                .insert(expected_canonical.clone(), expected_identity.clone())
+                .is_some()
+            {
+                return Err(persisted_source_reselection_required());
+            }
+            verified_sources.push(VerifiedPersistedSource {
+                path: source.clone(),
+            });
+        }
+
+        let now = SystemTime::now();
+        let mut grants = lock_grants(&self.grants);
+        grants.retain(|_, stored| !expired(stored.grant.created_at, now, self.ttl));
+        let mut issued = Vec::with_capacity(prepared.len());
+        for (root, capability, expected_read_identities) in prepared {
+            let grant_id = loop {
+                let candidate = Uuid::new_v4().to_string();
+                if !grants.contains_key(&candidate) {
+                    break candidate;
+                }
+            };
+            let grant = PathGrant {
+                grant_id: grant_id.clone(),
+                root,
+                access: GrantAccess::Read,
+                scope: scope.clone(),
+                created_at: now,
+            };
+            grants.insert(
+                grant_id,
+                StoredPathGrant {
+                    grant: grant.clone(),
+                    capability,
+                    expected_read_identities,
+                },
+            );
+            issued.push(grant);
+        }
+        Ok(ProvisionalPathGrants {
+            store: self,
+            grants: issued,
+            verified_sources,
+            committed: false,
+        })
     }
 
     pub fn authorize(
@@ -155,7 +303,7 @@ impl PathGrantStore {
     ) -> Result<PathBuf, BackendError> {
         reject_lexical_escape(candidate)?;
         let now = SystemTime::now();
-        let grant = {
+        let stored = {
             let mut grants = lock_grants(&self.grants);
             if grants
                 .get(grant_id)
@@ -165,9 +313,10 @@ impl PathGrantStore {
             }
             grants
                 .get(grant_id)
-                .map(|stored| stored.grant.clone())
+                .cloned()
                 .ok_or_else(BackendError::path_grant_unavailable)?
         };
+        let grant = &stored.grant;
         if grant.scope != *scope {
             return Err(BackendError::path_grant_scope_mismatch());
         }
@@ -180,6 +329,19 @@ impl PathGrantStore {
         }
         if intent == PathIntent::Read && !resolved.exists() {
             return Err(BackendError::path_invalid("source path does not exist"));
+        }
+        if !stored.expected_read_identities.is_empty() {
+            let expected_identity = stored
+                .expected_read_identities
+                .get(&resolved)
+                .ok_or_else(persisted_source_reselection_required)?;
+            stored
+                .capability
+                .authorize(&resolved)
+                .map(|authorized| authorized.with_expected_identity(expected_identity.clone()))
+                .and_then(|authorized| authorized.anchor())
+                .and_then(|anchored| anchored.open_read())
+                .map_err(|_| persisted_source_reselection_required())?;
         }
         Ok(resolved)
     }
@@ -364,6 +526,19 @@ impl PathGrantStore {
         lock_grants(&self.grants).retain(|_, stored| stored.grant.scope.caller != *caller);
     }
 
+    fn revoke_grant_ids(&self, grants: &[PathGrant]) {
+        let grant_ids = grants
+            .iter()
+            .map(|grant| grant.grant_id.as_str())
+            .collect::<HashSet<_>>();
+        lock_grants(&self.grants).retain(|grant_id, _| !grant_ids.contains(grant_id.as_str()));
+    }
+
+    #[cfg(debug_assertions)]
+    pub(crate) fn active_grant_count_for_testing(&self) -> usize {
+        lock_grants(&self.grants).len()
+    }
+
     pub(crate) fn authorize_capability_for_plan(
         &self,
         grant_ids: &[String],
@@ -442,12 +617,24 @@ impl PathGrantStore {
                 stored.capability.authorize(candidate)
             };
             match authorized {
-                Ok(path) => return Ok(path),
+                Ok(path) if stored.expected_read_identities.is_empty() => return Ok(path),
+                Ok(path) => {
+                    let Some(expected_identity) = stored.expected_read_identities.get(candidate)
+                    else {
+                        last_error = Some(persisted_source_reselection_required());
+                        continue;
+                    };
+                    return Ok(path.with_expected_identity(expected_identity.clone()));
+                }
                 Err(_) => last_error = Some(BackendError::path_escape()),
             }
         }
         Err(last_error.unwrap_or_else(BackendError::path_grant_unavailable))
     }
+}
+
+fn persisted_source_reselection_required() -> BackendError {
+    BackendError::validation("error.print.queueSourceReselectionRequired")
 }
 
 fn reject_lexical_escape(path: &Path) -> Result<(), BackendError> {

@@ -1376,7 +1376,13 @@ textarea:focus {
   position: sticky;
   right: 0;
   min-width: 76px;
+  color: var(--muted);
+  text-align: center;
   white-space: nowrap;
+}
+.editor-row-actions button svg {
+  width: 14px;
+  height: 14px;
 }
 .editor-row-actions button:disabled {
   opacity: 0.25;

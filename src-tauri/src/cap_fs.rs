@@ -106,6 +106,7 @@ impl CapabilityRoot {
             absolute: absolute.to_path_buf(),
             relative: relative.to_path_buf(),
             root: self.clone(),
+            expected_identity: None,
         })
     }
 }
@@ -115,9 +116,18 @@ pub(crate) struct AuthorizedPath {
     absolute: PathBuf,
     relative: PathBuf,
     root: CapabilityRoot,
+    expected_identity: Option<FilesystemObjectIdentity>,
 }
 
 impl AuthorizedPath {
+    pub(crate) fn with_expected_identity(
+        mut self,
+        expected_identity: FilesystemObjectIdentity,
+    ) -> Self {
+        self.expected_identity = Some(expected_identity);
+        self
+    }
+
     pub(crate) fn anchor(&self) -> io::Result<AnchoredPath> {
         let name = self
             .relative
@@ -139,6 +149,7 @@ impl AuthorizedPath {
             absolute: self.absolute.clone(),
             parent: directory,
             name,
+            expected_identity: self.expected_identity.clone(),
         })
     }
 
@@ -249,6 +260,7 @@ pub(crate) struct AnchoredPath {
     absolute: PathBuf,
     parent: PlatformDirectory,
     name: OsString,
+    expected_identity: Option<FilesystemObjectIdentity>,
 }
 
 impl AnchoredPath {
@@ -257,11 +269,20 @@ impl AnchoredPath {
     }
 
     pub(crate) fn open_read(&self) -> io::Result<File> {
-        self.parent.open_file_no_follow(&self.name, false)
+        let file = self.parent.open_file_no_follow(&self.name, false)?;
+        self.validate_expected_identity(&file)?;
+        Ok(file)
     }
 
     pub(crate) fn open_mutable(&self) -> io::Result<File> {
-        self.parent.open_file_no_follow(&self.name, true)
+        let file = self.parent.open_file_no_follow(&self.name, true)?;
+        self.validate_expected_identity(&file)?;
+        Ok(file)
+    }
+
+    pub(crate) fn identity(&self) -> io::Result<FilesystemObjectIdentity> {
+        let file = self.open_read()?;
+        file_identity(&file)
     }
 
     pub(crate) fn len(&self) -> io::Result<u64> {
@@ -384,7 +405,21 @@ impl AnchoredPath {
                 .join(&name),
             parent: self.parent.try_clone()?,
             name,
+            expected_identity: None,
         })
+    }
+
+    fn validate_expected_identity(&self, file: &File) -> io::Result<()> {
+        let Some(expected) = self.expected_identity.as_ref() else {
+            return Ok(());
+        };
+        if &file_identity(file)? != expected {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "capability leaf identity changed",
+            ));
+        }
+        Ok(())
     }
 
     fn create_temporary(&self) -> io::Result<(OsString, File)> {
@@ -401,6 +436,27 @@ impl AnchoredPath {
             io::ErrorKind::AlreadyExists,
             "could not allocate a capability-relative temporary file",
         ))
+    }
+}
+
+fn file_identity(file: &File) -> io::Result<FilesystemObjectIdentity> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = file.metadata()?;
+        Ok(FilesystemObjectIdentity::Unix {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        })
+    }
+    #[cfg(windows)]
+    {
+        let (volume_serial, file_index) = windows_file_identity(file)?;
+        Ok(FilesystemObjectIdentity::Windows {
+            volume_serial,
+            file_index,
+        })
     }
 }
 

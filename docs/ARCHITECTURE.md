@@ -84,6 +84,11 @@ the pinned directory or fails closed.
 - protocol-1 DTO casing/nullability and operation IDs: unchanged
 - Supabase `app_users` and `history` schema: compatible, with history steps inert
 
+Legacy print-queue fields remain readable, but queues written before source/root
+filesystem identities were persisted are not automatically resumable. The UI presents a
+localized discard-and-reselect migration; trusting their stored path strings would violate
+the capability boundary.
+
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified
 readback. A downgrade requires sign-in again.

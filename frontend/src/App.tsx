@@ -1,6 +1,8 @@
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   BadgeCheck,
   CalendarDays,
   Check,
@@ -59,6 +61,7 @@ import type {
   AppUser,
   AuthState,
   Bootstrap,
+  EditorMetadata,
   HistoryPayload,
   HistoryRow,
   OperationDef,
@@ -121,6 +124,8 @@ export function humanError(error: unknown, s: Strings): string {
     return s.t("error.preset.write");
   if (/^(?:Error:\s*)?error\.rfi\.workbookInvalid$/.test(raw))
     return s.t("error.rfi.workbookInvalid");
+  if (/^(?:Error:\s*)?error\.print\.queueSourceReselectionRequired$/.test(raw))
+    return s.t("error.print.queueSourceReselectionRequired");
   if (/email_required/i.test(raw)) return s.t("auth.emailSignInHelp");
   if (/invalid_credentials|Invalid login/i.test(raw))
     return s.t("auth.err.credentials");
@@ -1828,7 +1833,7 @@ function EditablePlanTable({
   s,
   onChange,
 }: {
-  editor: Record<string, unknown>;
+  editor: EditorMetadata;
   rows: Record<string, unknown>[];
   s: Strings;
   onChange: (rows: Record<string, unknown>[]) => void;
@@ -2017,6 +2022,14 @@ function EditablePlanTable({
     const group = rows[index][groupField];
     if (rows.filter((row) => row[groupField] === group).length <= 1) return;
     onChange(rows.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  const move = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
   };
 
   const selectionGroupFields = Array.isArray(editor.selectionGroupFields)
@@ -2212,7 +2225,9 @@ function EditablePlanTable({
                   {s.t(column.labelKey)}
                 </th>
               ))}
-              {editor.duplicateEnabled === true && <th aria-label="actions" />}
+              {(editor.reorderable === true || editor.duplicateEnabled === true) && (
+                <th aria-label={s.t("editor.rowActions")} />
+              )}
             </tr>
           </thead>
           <tbody>
@@ -2251,6 +2266,8 @@ function EditablePlanTable({
                     const displayText =
                       column.key === "status"
                         ? s.t(`print.status.${text}`)
+                        : column.key === "worksheetVisibility" && text
+                          ? s.t(`print.worksheet.visibility.${text}`)
                         : displayEditorValue(column, text);
                     const choices = choicesFor(column, row);
                     const suggestions = Array.isArray(autocomplete[column.key])
@@ -2324,23 +2341,49 @@ function EditablePlanTable({
                       </td>
                     );
                   })}
-                  {editor.duplicateEnabled === true && (
+                  {(editor.reorderable === true || editor.duplicateEnabled === true) && (
                     <td className="editor-row-actions">
-                      <button
-                        type="button"
-                        title={s.t("rfi.action.duplicate")}
-                        onClick={() => duplicate(rowIndex)}
-                      >
-                        <Copy />
-                      </button>
-                      <button
-                        type="button"
-                        title={s.t("rfi.action.removeDuplicate")}
-                        disabled={groupCount <= 1}
-                        onClick={() => remove(rowIndex)}
-                      >
-                        <Trash2 />
-                      </button>
+                      {editor.reorderable === true && (
+                        <>
+                          <button
+                            type="button"
+                            aria-label={s.t("action.moveUp")}
+                            title={s.t("action.moveUp")}
+                            disabled={rowIndex === 0}
+                            onClick={() => move(rowIndex, -1)}
+                          >
+                            <ArrowUp />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={s.t("action.moveDown")}
+                            title={s.t("action.moveDown")}
+                            disabled={rowIndex === rows.length - 1}
+                            onClick={() => move(rowIndex, 1)}
+                          >
+                            <ArrowDown />
+                          </button>
+                        </>
+                      )}
+                      {editor.duplicateEnabled === true && (
+                        <>
+                          <button
+                            type="button"
+                            title={s.t("rfi.action.duplicate")}
+                            onClick={() => duplicate(rowIndex)}
+                          >
+                            <Copy />
+                          </button>
+                          <button
+                            type="button"
+                            title={s.t("rfi.action.removeDuplicate")}
+                            disabled={groupCount <= 1}
+                            onClick={() => remove(rowIndex)}
+                          >
+                            <Trash2 />
+                          </button>
+                        </>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -2399,9 +2442,9 @@ export function PlanView({
   const editorReady =
     !editor || !editorRows || isPlanEditorReady(editor, editorRows);
   const editorCanMaterializeStep = Boolean(
-    Array.isArray(editor?.requiredFields) &&
-      editor.requiredFields.length > 0 &&
-      editorRows?.some((row) => row.enabled !== false),
+    editorRows?.some((row) => row.enabled !== false) &&
+      ((Array.isArray(editor?.requiredFields) && editor.requiredFields.length > 0) ||
+        (plan.opId === "files.batch_print" && editor?.kind === "recordTable")),
   );
   const canApply =
     editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);

@@ -59,6 +59,7 @@ pub struct WorksheetDescriptor {
     pub workbook_index: u32,
     pub sheet_id: u32,
     pub relationship_id: String,
+    pub relationship_type: String,
     pub part_path: String,
     pub name: String,
     pub visibility: WorksheetVisibility,
@@ -80,7 +81,7 @@ Rules:
 - `workbook_index` is 1-based and immutable within the approved plan.
 - Parse absent `state` as `visible`; accept only `visible`, `hidden`, and `veryHidden`.
 - Preserve exact sheet name, `sheetId`, `r:id`, normalized worksheet part path, and relationship type.
-- Accept only relationships whose type ends in `/worksheet` and whose target resolves under `xl/` without traversal.
+- Accept only the exact Transitional `http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet` or Strict `http://purl.oclc.org/ooxml/officeDocument/relationships/worksheet` relationship URI, and require its target to resolve under `xl/` without traversal.
 - Reject duplicate names, duplicate sheet IDs, duplicate relationship IDs, duplicate part paths, missing targets, external targets, non-worksheet relationships, and zero worksheets.
 - Bound worksheet count to 250 per workbook and total expanded preview rows to the existing `MAX_FILES` limit of 250.
 - Inspect workbook protection, external links/connections, and macro-sheet relationships as safety facts for the Windows exporter. Ordinary formulas and print areas are allowed.
@@ -110,6 +111,7 @@ Discovery also returns bounded `WorkbookSafetyFacts` without reading cells:
 pub struct WorkbookSafetyFacts {
     pub has_vba_project: bool,
     pub has_xlm_macro_sheet: bool,
+    pub has_workbook_protection: bool,
     pub external_link_count: u32,
     pub connection_count: u32,
     pub query_table_count: u32,
@@ -119,7 +121,9 @@ pub struct WorkbookSafetyFacts {
 `.xlsm` may contain VBA, but it is opened only after `AutomationSecurity =
 ForceDisable`. Excel 4/XLM macro sheets, external workbook links, data connections,
 and query tables are rejected in v1 because the exporter cannot prove that opening
-them is side-effect-free. Unknown or malformed relationship classes fail closed.
+them is side-effect-free. Workbook protection is carried as an immutable fact and the
+Task 3 source policy rejects it before COM `Open`; v1 does not infer sheet protection,
+password state, or decryptability. Unknown or malformed relationship classes fail closed.
 
 If OOXML discovery fails, no rows from that workbook are authorized; add one localized warning and continue other files using existing preview semantics.
 
@@ -152,6 +156,7 @@ and revise/apply compare the same type rather than constructing ad-hoc maps.
     "workbookIndex": 2,
     "sheetId": 17,
     "relationshipId": "rId4",
+    "relationshipType": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
     "partPath": "xl/worksheets/sheet3.xml",
     "name": "MEC",
     "visibility": "hidden"
@@ -160,6 +165,7 @@ and revise/apply compare the same type rather than constructing ad-hoc maps.
   "workbookSafety": {
     "hasVbaProject": false,
     "hasXlmMacroSheet": false,
+    "hasWorkbookProtection": false,
     "externalLinkCount": 0,
     "connectionCount": 0,
     "queryTableCount": 0
@@ -170,6 +176,13 @@ and revise/apply compare the same type rather than constructing ad-hoc maps.
 ```
 
 `PrintJob` gains a serde-defaulted optional `worksheet` descriptor. Old queues remain file-level jobs when the field is absent.
+
+Queue JSON remains field-compatible, including legacy file-level jobs and missing
+page-range defaults. A queue created before persisted source/root filesystem identities
+cannot be resumed safely from stored path strings alone: Resume fails closed with
+`error.print.queueSourceReselectionRequired`, and the existing resume card keeps its
+Discard action so the user can discard the stale queue and explicitly reselect the files.
+No automatic migration converts an unverified visible path into a capability.
 
 The worksheet descriptor, signature, and safety facts are not editable. The user may
 edit only existing print settings, row enablement, and row order. The generic editor
@@ -186,7 +199,7 @@ and hidden rows remain movable, and `engine/revise` receives the exact displayed
 4. compares every immutable worksheet field to the original row;
 5. revalidates the source workbook signature;
 6. reruns OOXML discovery;
-7. matches the exact tuple `(workbook_index, sheet_id, relationship_id, part_path, name, visibility)`;
+7. matches the exact tuple `(workbook_index, sheet_id, relationship_id, relationship_type, part_path, name, visibility)`;
 8. rejects any drift before replacing the cached plan;
 9. requires `pageRange == "all"` for Excel worksheet rows in this slice.
 
@@ -372,7 +385,9 @@ Every production behavior follows an observed focused RED.
 - A selected worksheet becomes exactly one private PDF and one controlled print job per physical copy.
 - Presets never contain file or worksheet selection.
 - The source workbook hash and metadata remain unchanged.
-- Existing non-Excel print behavior and legacy queues remain compatible.
+- Existing non-Excel print behavior and legacy queue fields remain compatible; queues
+  predating persisted filesystem identities use the explicit discard-and-reselect
+  migration instead of automatic resume.
 - Local/cross-platform automated tests never start Excel or print physically.
 - All supported locale keys exist.
 

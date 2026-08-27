@@ -469,6 +469,24 @@ describe("DocFlow shell", () => {
     }
   });
 
+  it("localizes the legacy print queue reselection migration in every supported language", () => {
+    const expected = {
+      tr: "Bu eski yazdırma kuyruğu güvenle devam ettirilemez. Kuyruğu silip dosyaları yeniden seç.",
+      en: "This older print queue cannot be resumed safely. Discard it, then reselect the files.",
+      az: "Bu köhnə çap növbəsini təhlükəsiz davam etdirmək olmur. Növbəni silin, sonra faylları yenidən seçin.",
+      ru: "Эту старую очередь печати нельзя безопасно продолжить. Удалите её и заново выберите файлы.",
+    } as const;
+
+    for (const [locale, message] of Object.entries(expected)) {
+      expect(
+        humanError(
+          new Error("error.print.queueSourceReselectionRequired"),
+          makeStrings(locale as keyof typeof expected),
+        ),
+      ).toBe(message);
+    }
+  });
+
   it("requires an archive choice for every enabled ambiguous signed-page row", () => {
     const editor = { requiredFields: ["archiveFile"] };
     expect(
@@ -876,6 +894,213 @@ describe("DocFlow shell", () => {
         path: "/Users/demo/Documents/second.docx",
         pageRange: "all",
       },
+    ]);
+  });
+
+  it("reorders worksheet rows before revise", async () => {
+    const worksheetRows = [
+      {
+        _rowId: "worksheet-mec",
+        enabled: false,
+        status: "ready",
+        file: "book.xlsx",
+        path: "/Users/demo/Documents/book.xlsx",
+        format: "XLSX",
+        worksheetName: "MEC",
+        worksheetVisibility: "visible",
+        worksheet: {
+          workbookIndex: 1,
+          sheetId: 17,
+          relationshipId: "rId1",
+          relationshipType:
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+          partPath: "xl/worksheets/sheet1.xml",
+          name: "MEC",
+          visibility: "visible",
+        },
+        signature: { size: 123, mtimeNs: 456, sha256: "a".repeat(64) },
+        workbookSafety: {
+          hasVbaProject: false,
+          hasXlmMacroSheet: false,
+          hasWorkbookProtection: false,
+          externalLinkCount: 0,
+          connectionCount: 0,
+          queryTableCount: 0,
+        },
+        pageRange: "all",
+        printer: "Office Printer",
+        paper: "A4",
+        orientation: "auto",
+        scaling: "fit",
+        color: "printer",
+        duplex: "printer",
+        copies: 1,
+      },
+      {
+        _rowId: "worksheet-hidden",
+        enabled: false,
+        status: "ready",
+        file: "book.xlsx",
+        path: "/Users/demo/Documents/book.xlsx",
+        format: "XLSX",
+        worksheetName: "Hidden",
+        worksheetVisibility: "hidden",
+        worksheet: {
+          workbookIndex: 2,
+          sheetId: 44,
+          relationshipId: "rId2",
+          relationshipType:
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+          partPath: "xl/worksheets/sheet2.xml",
+          name: "Hidden",
+          visibility: "hidden",
+        },
+        signature: { size: 123, mtimeNs: 456, sha256: "a".repeat(64) },
+        workbookSafety: {
+          hasVbaProject: false,
+          hasXlmMacroSheet: false,
+          hasWorkbookProtection: false,
+          externalLinkCount: 0,
+          connectionCount: 0,
+          queryTableCount: 0,
+        },
+        pageRange: "all",
+        printer: "Office Printer",
+        paper: "A4",
+        orientation: "auto",
+        scaling: "fit",
+        color: "printer",
+        duplex: "printer",
+        copies: 1,
+      },
+      {
+        _rowId: "worksheet-very-hidden",
+        enabled: false,
+        status: "ready",
+        file: "book.xlsx",
+        path: "/Users/demo/Documents/book.xlsx",
+        format: "XLSX",
+        worksheetName: "VeryHidden",
+        worksheetVisibility: "veryHidden",
+        worksheet: {
+          workbookIndex: 3,
+          sheetId: 45,
+          relationshipId: "rId3",
+          relationshipType:
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+          partPath: "xl/worksheets/sheet3.xml",
+          name: "VeryHidden",
+          visibility: "veryHidden",
+        },
+        signature: { size: 123, mtimeNs: 456, sha256: "a".repeat(64) },
+        workbookSafety: {
+          hasVbaProject: false,
+          hasXlmMacroSheet: false,
+          hasWorkbookProtection: false,
+          externalLinkCount: 0,
+          connectionCount: 0,
+          queryTableCount: 0,
+        },
+        pageRange: "all",
+        printer: "Office Printer",
+        paper: "A4",
+        orientation: "auto",
+        scaling: "fit",
+        color: "printer",
+        duplex: "printer",
+        copies: 1,
+      },
+    ];
+    const editor = {
+      kind: "recordTable",
+      titleKey: "print.editor.title",
+      rowCountKey: "print.editor.rowCount",
+      reorderable: true,
+      columns: [
+        { key: "enabled", labelKey: "print.col.include", kind: "bool" },
+        { key: "worksheetName", labelKey: "print.col.worksheet", kind: "readonly" },
+        {
+          key: "worksheetVisibility",
+          labelKey: "print.col.worksheetVisibility",
+          kind: "readonly",
+        },
+      ],
+      rows: worksheetRows,
+    };
+    const worksheetPlan: Plan = {
+      planId: "worksheet-plan",
+      opId: "files.batch_print",
+      warnings: [],
+      meta: { editor },
+      steps: [],
+    };
+    const call = interceptMockBridge((method, params) => {
+      if (method === "engine/preview") {
+        return { handled: true, value: worksheetPlan };
+      }
+      if (method === "engine/revise") {
+        return {
+          handled: true,
+          value: {
+            ...worksheetPlan,
+            planId: "worksheet-plan-revised",
+            meta: {
+              editor: {
+                ...editor,
+                rows: params.rows,
+              },
+            },
+          },
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    expect(
+      await screen.findByRole("columnheader", { name: "Çalışma sayfası" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("columnheader", { name: "Görünürlük" }),
+    ).toBeVisible();
+    const hiddenRow = (await screen.findByText("Hidden")).closest("tr");
+    expect(hiddenRow).not.toBeNull();
+    expect(within(hiddenRow!).getByText("Gizli")).toBeVisible();
+    const apply = screen.getByRole("button", { name: "Uygula" });
+    expect(apply).toBeDisabled();
+    fireEvent.click(
+      within(hiddenRow!).getByRole("checkbox", { name: "Yazdır" }),
+    );
+    expect(apply).toBeEnabled();
+    fireEvent.click(within(hiddenRow!).getByRole("button", { name: "Yukarı taşı" }));
+    fireEvent.click(apply);
+
+    await waitFor(() =>
+      expect(
+        call.mock.calls.filter(([method]) => method === "engine/revise"),
+      ).toHaveLength(1),
+    );
+    const reviseCall = call.mock.calls.find(
+      ([method]) => method === "engine/revise",
+    );
+    const rows = (reviseCall?.[1] as { rows: Record<string, unknown>[] }).rows;
+    expect(rows.map((row) => row._rowId)).toStrictEqual([
+      "worksheet-hidden",
+      "worksheet-mec",
+      "worksheet-very-hidden",
+    ]);
+    expect(rows).toStrictEqual([
+      { ...worksheetRows[1], enabled: true },
+      worksheetRows[0],
+      worksheetRows[2],
     ]);
   });
 
