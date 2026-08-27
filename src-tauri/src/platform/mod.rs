@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use crate::print_queue::PrintAdapter;
 
+// S2 defines the target-independent seam; S3 supplies its production Windows consumer.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) mod excel;
+
 #[cfg(any(target_os = "windows", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WindowsSubmittedJobStatus {

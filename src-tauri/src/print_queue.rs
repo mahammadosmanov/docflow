@@ -33,7 +33,7 @@ use crate::{
         VerifiedPersistedSource,
     },
     plan_store::{BackendOrigin, PlanBinding, PlanStore},
-    progress::{CancellationRegistry, GlobalMutationLock},
+    progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
 };
 
 pub const DEFAULT_TIMEOUT_MINUTES: u32 = 30;
@@ -813,6 +813,7 @@ pub struct PrintService {
     mutation_lock: GlobalMutationLock,
     cancellations: CancellationRegistry,
     adapter: Arc<dyn PrintAdapter>,
+    excel_pipeline: Option<Arc<crate::platform::excel::ExcelExportPipeline>>,
 }
 
 impl PrintService {
@@ -831,7 +832,18 @@ impl PrintService {
             mutation_lock,
             cancellations: CancellationRegistry::default(),
             adapter,
+            excel_pipeline: None,
         }
+    }
+
+    // S2 keeps production wiring additive; S3 installs the Windows pipeline.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn with_excel_pipeline(
+        mut self,
+        pipeline: Arc<crate::platform::excel::ExcelExportPipeline>,
+    ) -> Self {
+        self.excel_pipeline = Some(pipeline);
+        self
     }
 
     pub fn inventory(&self) -> Result<PrinterInventory, BackendError> {
@@ -1132,8 +1144,7 @@ impl PrintService {
                 record.state = Some(JournalState::Applying);
                 self.journals.write(&record)?;
 
-                let submitted =
-                    self.submit_approved_job(job, binding, caller, || token.checkpoint().is_err());
+                let submitted = self.submit_approved_job(job, binding, caller, token.clone());
                 match submitted {
                     Ok(()) => {
                         let saved = &mut state.jobs[saved_index];
@@ -1706,16 +1717,13 @@ impl PrintService {
         Ok(())
     }
 
-    fn submit_approved_job<C>(
+    fn submit_approved_job(
         &self,
         job: &PrintJob,
         binding: &PlanBinding,
         caller: &CallerIdentity,
-        cancelled: C,
-    ) -> Result<(), PrintFailure>
-    where
-        C: Fn() -> bool,
-    {
+        cancellation: CancellationToken,
+    ) -> Result<(), PrintFailure> {
         let canonical_path = self
             .grants
             .authorize_for_plan(
@@ -1767,7 +1775,11 @@ impl PrintService {
             {
                 return Err(PrintFailure::failed("error.print.worksheetChanged"));
             }
-            return Err(PrintFailure::unsupported("error.print.excelUnavailable"));
+            let pipeline = self
+                .excel_pipeline
+                .as_ref()
+                .ok_or_else(|| PrintFailure::unsupported("error.print.excelUnavailable"))?;
+            return pipeline.export_and_submit(job, &source, &mut source_file, cancellation);
         }
         let workspace = tempfile::tempdir()
             .map_err(|_| PrintFailure::failed("private print staging is unavailable"))?;
@@ -1804,7 +1816,8 @@ impl PrintService {
         }
         let mut staged_job = job.clone();
         staged_job.path = staged_path.to_string_lossy().into_owned();
-        self.adapter.submit(&staged_job, &cancelled)
+        self.adapter
+            .submit(&staged_job, &|| cancellation.is_cancelled())
     }
 }
 

@@ -42,11 +42,15 @@ pub struct CancellationToken {
 
 impl CancellationToken {
     pub fn checkpoint(&self) -> Result<(), BackendError> {
-        if self.cancelled.load(Ordering::Acquire) {
+        if self.is_cancelled() {
             Err(BackendError::cancelled())
         } else {
             Ok(())
         }
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
     }
 }
 
