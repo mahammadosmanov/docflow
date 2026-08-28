@@ -339,6 +339,21 @@ Queue order is the exact enabled revised row order. Copies/collation expand work
 
 ## 9. Security and privacy
 
+- **Trust boundary:** DocFlow defends against stale plans, source drift, visible-name
+  replacement, accidental interference, and untrusted workbook content. Processes running
+  under the same Windows user/logon token are inside the trusted desktop principal and are
+  not treated as mutually hostile. Excel's supported built-in `ExportAsFixedFormat` API
+  accepts a pathname, not a caller-owned stream or handle; Windows cannot grant that
+  pathname to Excel while denying another process with the identical token. A stronger
+  same-token provenance claim would require replacing Office's PDF encoder through a
+  custom `IMsoDocExporter`, a separate security principal/service, or a signed filesystem
+  filter and is outside this slice.
+- The exporter writes only into a randomly named private capability-owned workspace. After
+  COM teardown, DocFlow immediately anchors the resulting PDF identity, validates through
+  that capability, retains the exact validated bytes in memory, and renders those bytes.
+  It never reopens the visible PDF pathname for inspection or submission. This guarantees
+  `validated bytes == rendered bytes`; it does not claim cryptographic attribution of the
+  pre-validation bytes to Excel against a malicious process with the same user token.
 - The source workbook is read-only and never saved.
 - No workbook cell values enter logs, cloud metadata, queue summaries, or preset storage.
 - Queue/job metadata contains only source capability identity, file signature, and worksheet identity/state.
@@ -383,6 +398,9 @@ Every production behavior follows an observed focused RED.
 - The user can disable and reorder worksheet rows; revised enabled order is exact.
 - Worksheet identity and workbook signature are revalidated at revise and immediately before export.
 - A selected worksheet becomes exactly one private PDF and one controlled print job per physical copy.
+- The controlled renderer consumes the exact in-memory bytes validated from the
+  identity-pinned private PDF capability; visible-name replacement before validation fails,
+  and replacement after validation cannot change submitted bytes.
 - Presets never contain file or worksheet selection.
 - The source workbook hash and metadata remain unchanged.
 - Existing non-Excel print behavior and legacy queue fields remain compatible; queues

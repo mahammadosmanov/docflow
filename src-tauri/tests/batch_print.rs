@@ -10,6 +10,8 @@ use std::{
     time::Duration,
 };
 
+#[cfg(unix)]
+use docflow_lib::print_queue::file_signature;
 use docflow_lib::{
     ooxml::{WorkbookSafetyFacts, WorksheetDescriptor, WorksheetVisibility},
     operations::batch_print::validate_job,
@@ -17,8 +19,7 @@ use docflow_lib::{
     paths::CallerIdentity,
     print_queue::{
         BatchPrintParams, FileSignature, PrintAdapter, PrintFailure, PrintJob, PrintJobSupport,
-        PrintService, PrintSettings, PrinterInventory, file_signature,
-        file_signature_from_open_file,
+        PrintService, PrintSettings, PrinterInventory, file_signature_from_open_file,
     },
     progress::GlobalMutationLock,
 };

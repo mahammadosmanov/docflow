@@ -4,13 +4,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::{contracts::Step, errors::BackendError};
 
 const MAX_JOURNAL_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_JOURNAL_STEPS: usize = 100_000;
+const MAX_CLEANUP_REVIEW_EVIDENCE_PER_JOB: usize = 16;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -61,6 +62,123 @@ pub struct UndoRecovery {
     pub phase: UndoRecoveryPhase,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupReviewEntry {
+    pub warning_key: String,
+    pub locator: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CleanupReviewEvidence {
+    entries: Vec<CleanupReviewEntry>,
+}
+
+impl CleanupReviewEvidence {
+    pub(crate) fn single(warning_key: impl Into<String>, locator: impl Into<String>) -> Self {
+        Self {
+            entries: vec![CleanupReviewEntry {
+                warning_key: warning_key.into(),
+                locator: locator.into(),
+            }],
+        }
+    }
+
+    pub(crate) fn append(
+        &mut self,
+        warning_key: impl Into<String>,
+        locator: impl Into<String>,
+    ) -> Result<bool, ()> {
+        let locator = locator.into();
+        if self.entries.iter().any(|entry| entry.locator == locator) {
+            return Ok(false);
+        }
+        if self.entries.len() >= MAX_CLEANUP_REVIEW_EVIDENCE_PER_JOB {
+            return Err(());
+        }
+        self.entries.push(CleanupReviewEntry {
+            warning_key: warning_key.into(),
+            locator,
+        });
+        Ok(true)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &CleanupReviewEntry> {
+        self.entries.iter()
+    }
+}
+
+impl std::ops::Deref for CleanupReviewEvidence {
+    type Target = CleanupReviewEntry;
+
+    fn deref(&self) -> &Self::Target {
+        self.entries
+            .last()
+            .expect("cleanup-review evidence is never empty")
+    }
+}
+
+impl Serialize for CleanupReviewEvidence {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self.entries.as_slice() {
+            [single] => single.serialize(serializer),
+            entries => entries.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for CleanupReviewEvidence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum WireEvidence {
+            Single(CleanupReviewEntry),
+            Multiple(Vec<CleanupReviewEntry>),
+        }
+
+        let entries = match WireEvidence::deserialize(deserializer)? {
+            WireEvidence::Single(entry) => vec![entry],
+            WireEvidence::Multiple(entries) => entries,
+        };
+        if entries.is_empty() {
+            return Err(serde::de::Error::custom(
+                "cleanup review evidence must not be empty",
+            ));
+        }
+        let mut deduplicated = Vec::with_capacity(entries.len());
+        for entry in entries {
+            if deduplicated
+                .iter()
+                .all(|existing: &CleanupReviewEntry| existing.locator != entry.locator)
+            {
+                deduplicated.push(entry);
+            }
+        }
+        if deduplicated.len() > MAX_CLEANUP_REVIEW_EVIDENCE_PER_JOB {
+            return Err(serde::de::Error::custom(format!(
+                "cleanup review evidence limit is {MAX_CLEANUP_REVIEW_EVIDENCE_PER_JOB} distinct locators"
+            )));
+        }
+        Ok(Self {
+            entries: deduplicated,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct JournalCleanupReview {
+    pub(crate) job_id: String,
+    pub(crate) warning_key: String,
+    pub(crate) locator: String,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalRecord {
@@ -88,6 +206,8 @@ pub struct JournalRecord {
     pub pending_undo: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub undo_recovery: Option<UndoRecovery>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) cleanup_reviews: Vec<JournalCleanupReview>,
 }
 
 impl JournalRecord {
@@ -114,6 +234,7 @@ impl JournalRecord {
             undone_steps: Vec::new(),
             pending_undo: None,
             undo_recovery: None,
+            cleanup_reviews: Vec::new(),
         }
     }
 

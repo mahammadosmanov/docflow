@@ -3,12 +3,13 @@ use std::{
     fmt, fs,
     io::{Read, Write},
     path::Path,
+    sync::Arc,
 };
 
 use flate2::read::ZlibDecoder;
 use sha2::{Digest, Sha256};
 
-const MAX_PDF_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const MAX_PDF_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_OBJECTS: usize = 1_000_000;
 const MAX_DEPTH: usize = 128;
 const MAX_DECOMPRESSED_STREAM: usize = 256 * 1024 * 1024;
@@ -84,7 +85,7 @@ enum XrefEntry {
 
 #[derive(Clone, Debug)]
 struct ParsedPdf {
-    bytes: Vec<u8>,
+    bytes: Arc<[u8]>,
     entries: BTreeMap<u32, XrefEntry>,
     trailers: Vec<Dictionary>,
     last_xref: usize,
@@ -145,6 +146,14 @@ impl std::error::Error for PdfError {}
 
 pub fn inspect(path: &Path) -> Result<PdfInspection, PdfError> {
     ParsedPdf::load(path)?.inspect()
+}
+
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn inspect_bytes(bytes: Arc<[u8]>) -> Result<PdfInspection, PdfError> {
+    if bytes.is_empty() || bytes.len() as u64 > MAX_PDF_BYTES {
+        return Err(PdfError::new("PDF file size is unsupported"));
+    }
+    ParsedPdf::parse(bytes)?.inspect()
 }
 
 pub fn replace_first_page_incremental(
@@ -484,7 +493,8 @@ impl ParsedPdf {
         Self::parse(read_bounded(path)?)
     }
 
-    fn parse(bytes: Vec<u8>) -> Result<Self, PdfError> {
+    fn parse(bytes: impl Into<Arc<[u8]>>) -> Result<Self, PdfError> {
+        let bytes = bytes.into();
         if !bytes.starts_with(b"%PDF-") {
             return Err(PdfError::new("file is not a PDF"));
         }

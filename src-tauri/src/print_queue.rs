@@ -12,6 +12,9 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
 use crate::{
     contracts::{
         JsonObject, OperationResult, Plan, PrintQueueSummary, ProgressEvent, Step, StepKind,
@@ -20,7 +23,8 @@ use crate::{
     errors::BackendError,
     fs_ops::atomic_replace,
     journal::{
-        FilesystemObjectIdentity, GrantRootIdentity, JournalRecord, JournalState, JournalStore,
+        CleanupReviewEvidence, FilesystemObjectIdentity, GrantRootIdentity, JournalCleanupReview,
+        JournalRecord, JournalState, JournalStore,
     },
     ooxml::{
         OrderedWorkbookDiscovery, WorkbookSafetyFacts, WorksheetDescriptor,
@@ -160,52 +164,110 @@ pub enum PrintFailureKind {
     Cancelled,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RetryDisposition {
+    Retryable,
+    #[cfg(any(target_os = "windows", test))]
+    CleanupQuarantined,
+    Never,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CleanupReview {
+    pub(crate) warning_key: &'static str,
+    pub(crate) locator: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct PrintSubmissionOutcome {
+    pub(crate) cleanup_review: Option<CleanupReview>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrintFailure {
     pub kind: PrintFailureKind,
     pub message: String,
     pub uncertain: bool,
+    retry_disposition: RetryDisposition,
+    pub(crate) cleanup_review: Option<CleanupReview>,
 }
 
 impl PrintFailure {
-    pub fn failed(message: impl Into<String>) -> Self {
+    fn new(
+        kind: PrintFailureKind,
+        message: impl Into<String>,
+        uncertain: bool,
+        retry_disposition: RetryDisposition,
+    ) -> Self {
         Self {
-            kind: PrintFailureKind::Failed,
+            kind,
             message: message.into(),
-            uncertain: false,
+            uncertain,
+            retry_disposition,
+            cleanup_review: None,
         }
+    }
+
+    pub fn failed(message: impl Into<String>) -> Self {
+        Self::new(
+            PrintFailureKind::Failed,
+            message,
+            false,
+            RetryDisposition::Retryable,
+        )
     }
 
     pub fn unsupported(message: impl Into<String>) -> Self {
-        Self {
-            kind: PrintFailureKind::Unsupported,
-            message: message.into(),
-            uncertain: false,
-        }
+        Self::new(
+            PrintFailureKind::Unsupported,
+            message,
+            false,
+            RetryDisposition::Never,
+        )
     }
 
     pub fn unsupported_options(message: impl Into<String>) -> Self {
-        Self {
-            kind: PrintFailureKind::UnsupportedOptions,
-            message: message.into(),
-            uncertain: false,
-        }
+        Self::new(
+            PrintFailureKind::UnsupportedOptions,
+            message,
+            false,
+            RetryDisposition::Never,
+        )
     }
 
     pub fn uncertain(message: impl Into<String>) -> Self {
-        Self {
-            kind: PrintFailureKind::Uncertain,
-            message: message.into(),
-            uncertain: true,
-        }
+        Self::new(
+            PrintFailureKind::Uncertain,
+            message,
+            true,
+            RetryDisposition::Never,
+        )
     }
 
     pub fn cancelled(message: impl Into<String>, uncertain: bool) -> Self {
-        Self {
-            kind: PrintFailureKind::Cancelled,
-            message: message.into(),
+        Self::new(
+            PrintFailureKind::Cancelled,
+            message,
             uncertain,
-        }
+            RetryDisposition::Never,
+        )
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn with_cleanup_review(mut self, cleanup_review: CleanupReview) -> Self {
+        self.cleanup_review = Some(cleanup_review);
+        self
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn has_cleanup_review(&self) -> bool {
+        self.cleanup_review.is_some()
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn with_retry_disposition(mut self, disposition: RetryDisposition) -> Self {
+        self.retry_disposition = disposition;
+        self
     }
 
     pub fn is_unsupported(&self) -> bool {
@@ -223,6 +285,26 @@ impl PrintFailure {
             }
             _ => BackendError::request_failed(self.message),
         }
+    }
+}
+
+fn retry_disposition_allows_retry(failure: &PrintFailure) -> bool {
+    failure.retry_disposition == RetryDisposition::Retryable
+}
+
+fn submission_primary_classification(
+    submitted: &Result<PrintSubmissionOutcome, PrintFailure>,
+) -> &'static str {
+    match submitted {
+        Ok(_) => "completed",
+        Err(failure) => match failure.kind {
+            PrintFailureKind::Failed => "failed",
+            PrintFailureKind::Unsupported => "unsupported",
+            PrintFailureKind::UnsupportedOptions => "unsupported_options",
+            PrintFailureKind::Uncertain => "uncertain",
+            PrintFailureKind::Cancelled if failure.uncertain => "cancelled_uncertain",
+            PrintFailureKind::Cancelled => "cancelled",
+        },
     }
 }
 
@@ -306,6 +388,8 @@ pub struct PrintJob {
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cleanup_review: Option<CleanupReviewEvidence>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -335,6 +419,7 @@ struct PrintJobUnchecked {
     attempts: Option<u32>,
     error: Option<String>,
     completed_at: Option<String>,
+    cleanup_review: Option<CleanupReviewEvidence>,
     #[serde(flatten)]
     extra: Map<String, Value>,
 }
@@ -364,6 +449,7 @@ impl Default for PrintJob {
             attempts: None,
             error: None,
             completed_at: None,
+            cleanup_review: None,
             extra: Map::new(),
         }
     }
@@ -395,6 +481,7 @@ impl Default for PrintJobUnchecked {
             attempts: job.attempts,
             error: job.error,
             completed_at: job.completed_at,
+            cleanup_review: job.cleanup_review,
             extra: job.extra,
         }
     }
@@ -459,6 +546,7 @@ impl<'de> Deserialize<'de> for PrintJob {
             attempts: unchecked.attempts,
             error: unchecked.error,
             completed_at: unchecked.completed_at,
+            cleanup_review: unchecked.cleanup_review,
             extra: unchecked.extra,
         })
     }
@@ -603,6 +691,10 @@ pub struct PrintQueueStore {
     memory: Mutex<HashMap<String, QueueState>>,
     active: Mutex<HashSet<String>>,
     writes: Mutex<()>,
+    #[cfg(test)]
+    save_fail_on: AtomicUsize,
+    #[cfg(test)]
+    save_count: AtomicUsize,
 }
 
 impl PrintQueueStore {
@@ -612,7 +704,17 @@ impl PrintQueueStore {
             memory: Mutex::new(HashMap::new()),
             active: Mutex::new(HashSet::new()),
             writes: Mutex::new(()),
+            #[cfg(test)]
+            save_fail_on: AtomicUsize::new(0),
+            #[cfg(test)]
+            save_count: AtomicUsize::new(0),
         }
+    }
+
+    #[cfg(test)]
+    fn fail_on_save(&self, save_number: usize) {
+        self.save_fail_on.store(save_number, AtomicOrdering::SeqCst);
+        self.save_count.store(0, AtomicOrdering::SeqCst);
     }
 
     fn begin(&self, queue_id: &str) -> Result<(), BackendError> {
@@ -639,6 +741,14 @@ impl PrintQueueStore {
         if encoded.len() > 16 * 1024 * 1024 {
             return Err(BackendError::validation(
                 "print queue exceeds the size limit",
+            ));
+        }
+        #[cfg(test)]
+        if self.save_count.fetch_add(1, AtomicOrdering::SeqCst) + 1
+            == self.save_fail_on.load(AtomicOrdering::SeqCst)
+        {
+            return Err(BackendError::request_failed(
+                "injected print queue save failure",
             ));
         }
         let _write = lock(&self.writes);
@@ -815,6 +925,10 @@ pub struct PrintService {
     adapter: Arc<dyn PrintAdapter>,
     #[cfg(any(target_os = "windows", test))]
     excel_pipeline: Option<Arc<crate::platform::excel::ExcelExportPipeline>>,
+    #[cfg(test)]
+    journal_write_fail_on: Option<usize>,
+    #[cfg(test)]
+    journal_write_count: AtomicUsize,
 }
 
 impl PrintService {
@@ -835,6 +949,10 @@ impl PrintService {
             adapter,
             #[cfg(any(target_os = "windows", test))]
             excel_pipeline: None,
+            #[cfg(test)]
+            journal_write_fail_on: None,
+            #[cfg(test)]
+            journal_write_count: AtomicUsize::new(0),
         }
     }
 
@@ -845,6 +963,64 @@ impl PrintService {
     ) -> Self {
         self.excel_pipeline = Some(pipeline);
         self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_journal_failure_on_write(mut self, write_number: usize) -> Self {
+        self.journal_write_fail_on = Some(write_number);
+        self.journal_write_count.store(0, AtomicOrdering::SeqCst);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_queue_failure_on_save(self, save_number: usize) -> Self {
+        self.queues.fail_on_save(save_number);
+        self
+    }
+
+    fn write_journal(&self, record: &JournalRecord) -> Result<(), BackendError> {
+        #[cfg(test)]
+        if self.journal_write_fail_on.is_some_and(|write_number| {
+            self.journal_write_count
+                .fetch_add(1, AtomicOrdering::SeqCst)
+                + 1
+                == write_number
+        }) {
+            return Err(BackendError::journal_invalid(
+                "injected print journal write failure",
+            ));
+        }
+        self.journals.write(record)
+    }
+
+    fn persist_cleanup_review(
+        &self,
+        state: &mut QueueState,
+        record: &JournalRecord,
+        primary_classification: &'static str,
+        review: &CleanupReview,
+    ) -> Result<(), BackendError> {
+        let journal_error = self.write_journal(record).err();
+        let queue_error = self.queues.save(state).err();
+        let (mut error, secondary) = match (journal_error, queue_error) {
+            (None, None) => return Ok(()),
+            (Some(error), None) | (None, Some(error)) => (error, None),
+            (Some(journal), Some(queue)) => (
+                queue,
+                Some(format!(
+                    "cleanup evidence journal also failed: {}",
+                    journal.message
+                )),
+            ),
+        };
+        if let Some(secondary) = secondary {
+            error.message = format!("{}; {secondary}", error.message);
+        }
+        error.message = format!(
+            "{} [cleanupEvidence: primaryClassification={primary_classification}; warningKey={}; locator={}]",
+            error.message, review.warning_key, review.locator
+        );
+        Err(error)
     }
 
     pub fn inventory(&self) -> Result<PrinterInventory, BackendError> {
@@ -1089,7 +1265,18 @@ impl PrintService {
             .collect();
         record.grant_root_identities = root_identities;
         record.state = Some(JournalState::Applying);
-        self.journals.write(&record)?;
+        for saved in &state.jobs {
+            if let Some(evidence) = saved.cleanup_review.as_ref() {
+                record
+                    .cleanup_reviews
+                    .extend(evidence.iter().map(|review| JournalCleanupReview {
+                        job_id: saved.job_id.clone(),
+                        warning_key: review.warning_key.clone(),
+                        locator: review.locator.clone(),
+                    }));
+            }
+        }
+        self.write_journal(&record)?;
 
         let mut result = OperationResult {
             applied: 0,
@@ -1143,11 +1330,47 @@ impl PrintService {
                 let pending = journal_step(job);
                 record.pending_step = Some(pending.clone());
                 record.state = Some(JournalState::Applying);
-                self.journals.write(&record)?;
+                self.write_journal(&record)?;
 
                 let submitted = self.submit_approved_job(job, binding, caller, token.clone());
+                let cleanup_review = match &submitted {
+                    Ok(outcome) => outcome.cleanup_review.as_ref(),
+                    Err(failure) => failure.cleanup_review.as_ref(),
+                };
+                if let Some(review) = cleanup_review {
+                    let primary_classification = submission_primary_classification(&submitted);
+                    result
+                        .errors
+                        .push(warning(review.warning_key, review.locator.clone()));
+                    let appended =
+                        if let Some(evidence) = state.jobs[saved_index].cleanup_review.as_mut() {
+                            evidence
+                                .append(review.warning_key, review.locator.clone())
+                                .unwrap_or(true)
+                        } else {
+                            state.jobs[saved_index].cleanup_review =
+                                Some(CleanupReviewEvidence::single(
+                                    review.warning_key,
+                                    review.locator.clone(),
+                                ));
+                            true
+                        };
+                    if appended {
+                        record.cleanup_reviews.push(JournalCleanupReview {
+                            job_id: job.job_id.clone(),
+                            warning_key: review.warning_key.to_string(),
+                            locator: review.locator.clone(),
+                        });
+                    }
+                    self.persist_cleanup_review(
+                        &mut state,
+                        &record,
+                        primary_classification,
+                        review,
+                    )?;
+                }
                 match submitted {
-                    Ok(()) => {
+                    Ok(_outcome) => {
                         let saved = &mut state.jobs[saved_index];
                         saved.status = Some("completed".to_string());
                         saved.completed_at = Some(utc_now());
@@ -1155,7 +1378,7 @@ impl PrintService {
                         state.current_job_id = None;
                         record.steps.push(pending);
                         record.pending_step = None;
-                        self.journals.write(&record)?;
+                        self.write_journal(&record)?;
                         self.queues.save(&mut state)?;
                         result.applied += 1;
                         completed = true;
@@ -1185,7 +1408,7 @@ impl PrintService {
                         if !error.uncertain {
                             cancelled_state = record.state;
                         }
-                        self.journals.write(&record)?;
+                        self.write_journal(&record)?;
                         self.queues.save(&mut state)?;
                         result.errors.push(warning(
                             if error.uncertain {
@@ -1206,7 +1429,7 @@ impl PrintService {
                         state.status = "paused".to_string();
                         record.pending_step = Some(pending);
                         record.state = Some(JournalState::RecoveryRequired);
-                        self.journals.write(&record)?;
+                        self.write_journal(&record)?;
                         self.queues.save(&mut state)?;
                         result.errors.push(warning(
                             "warn.print.stateUncertain",
@@ -1220,9 +1443,9 @@ impl PrintService {
                         saved.error = Some(redact_error(&error.message));
                         state.current_job_id = None;
                         record.pending_step = None;
-                        self.journals.write(&record)?;
+                        self.write_journal(&record)?;
                         if saved.attempts.unwrap_or_default() < attempts_allowed
-                            && error.kind == PrintFailureKind::Failed
+                            && retry_disposition_allows_retry(&error)
                             && token.checkpoint().is_ok()
                         {
                             saved.status = Some("pending".to_string());
@@ -1286,7 +1509,7 @@ impl PrintService {
                     JournalState::NoEffectRetryable
                 }
             }));
-            self.journals.write(&record)?;
+            self.write_journal(&record)?;
         }
         let summary = state.summary();
         result.meta = serde_json::to_value(&summary)
@@ -1541,6 +1764,7 @@ impl PrintService {
                     next.attempts = saved.attempts;
                     next.error = Some(String::new());
                     next.completed_at = None;
+                    next.cleanup_review = saved.cleanup_review.clone();
                     reordered.push(next);
                 } else {
                     if planned_by_id.contains_key(job_id) {
@@ -1724,7 +1948,7 @@ impl PrintService {
         binding: &PlanBinding,
         caller: &CallerIdentity,
         cancellation: CancellationToken,
-    ) -> Result<(), PrintFailure> {
+    ) -> Result<PrintSubmissionOutcome, PrintFailure> {
         let canonical_path = self
             .grants
             .authorize_for_plan(
@@ -1824,6 +2048,7 @@ impl PrintService {
         staged_job.path = staged_path.to_string_lossy().into_owned();
         self.adapter
             .submit(&staged_job, &|| cancellation.is_cancelled())
+            .map(|()| PrintSubmissionOutcome::default())
     }
 }
 
@@ -2077,6 +2302,63 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cleanup_review_wire_collection_deduplicates_exact_locator() {
+        let mut job = serde_json::to_value(PrintJob::default()).unwrap();
+        let evidence = json!({
+            "warningKey": "error.print.exportCleanupRequiresReview",
+            "locator": "docflow-excel-retained"
+        });
+        job["cleanupReview"] = json!([evidence.clone(), evidence.clone()]);
+
+        let deduplicated: PrintJob = serde_json::from_value(job).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(deduplicated).unwrap()["cleanupReview"],
+            evidence
+        );
+    }
+
+    #[test]
+    fn cleanup_review_wire_collection_enforces_its_distinct_locator_bound() {
+        let evidence = |index| {
+            json!({
+                "warningKey": "error.print.exportCleanupRequiresReview",
+                "locator": format!("docflow-excel-{index}")
+            })
+        };
+        let mut job = serde_json::to_value(PrintJob::default()).unwrap();
+        job["cleanupReview"] = json!((0..16).map(evidence).collect::<Vec<_>>());
+        let accepted: PrintJob = serde_json::from_value(job.clone()).unwrap();
+        assert_eq!(
+            serde_json::to_value(accepted).unwrap()["cleanupReview"]
+                .as_array()
+                .unwrap()
+                .len(),
+            16
+        );
+
+        job["cleanupReview"] = json!((0..17).map(evidence).collect::<Vec<_>>());
+        let error = serde_json::from_value::<PrintJob>(job).unwrap_err();
+        assert!(error.to_string().contains("cleanup review evidence limit"));
+    }
+
+    #[test]
+    fn cleanup_evidence_is_not_retry_authority_but_quarantine_disposition_is() {
+        let review = CleanupReview {
+            warning_key: "error.print.exportCleanupRequiresReview",
+            locator: "docflow-excel-test".to_string(),
+        };
+        let retryable = PrintFailure::failed("pre-effect failure").with_cleanup_review(review);
+
+        assert!(retry_disposition_allows_retry(&retryable));
+        assert!(retryable.cleanup_review.is_some());
+
+        let quarantined = retryable.with_retry_disposition(RetryDisposition::CleanupQuarantined);
+        assert!(!retry_disposition_allows_retry(&quarantined));
+        assert!(quarantined.cleanup_review.is_some());
+    }
 
     #[test]
     fn protected_workbook_safety_is_unsafe_for_resume_and_apply() {

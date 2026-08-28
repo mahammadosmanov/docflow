@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     fs::File,
-    io,
+    io::{self, Read},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, MutexGuard, OnceLock, TryLockError,
@@ -19,7 +19,10 @@ use uuid::Uuid;
 use crate::{
     cap_fs::{AnchoredPath, CapabilityRoot},
     ooxml::{WorkbookSafetyFacts, WorksheetDescriptor},
-    print_queue::{FileSignature, PrintFailure, PrintJob, file_signature_from_open_file},
+    print_queue::{
+        CleanupReview, FileSignature, PrintFailure, PrintJob, PrintSubmissionOutcome,
+        RetryDisposition, file_signature_from_open_file,
+    },
     progress::CancellationToken,
 };
 
@@ -58,11 +61,19 @@ pub(crate) struct ExcelExportRequest {
     pub(crate) request_id: Uuid,
     pub(crate) generation: u64,
     pub(crate) staged_workbook: StagedWorkbook,
-    pub(crate) approved_signature: FileSignature,
     pub(crate) safety: WorkbookSafetyFacts,
     pub(crate) worksheet: WorksheetDescriptor,
     pub(crate) deadline: Instant,
     pub(crate) cancellation: CancellationToken,
+}
+
+impl ExcelExportRequest {
+    fn cleanup_review(&self) -> CleanupReview {
+        CleanupReview {
+            warning_key: "error.print.exportCleanupRequiresReview",
+            locator: self.staged_workbook.cleanup_locator(),
+        }
+    }
 }
 
 pub(crate) trait WorksheetPdfExporter: Send + Sync {
@@ -84,6 +95,7 @@ pub(crate) trait ControlledPdfSubmitter: Send + Sync {
         job: &PrintJob,
         pdf: &ExportedWorksheetPdf,
         cancellation: CancellationToken,
+        deadline: Instant,
     ) -> Result<(), PrintFailure>;
 }
 
@@ -311,7 +323,7 @@ impl ExcelExportPipeline {
         source: &AnchoredPath,
         source_file: &mut File,
         cancellation: CancellationToken,
-    ) -> Result<(), PrintFailure> {
+    ) -> Result<PrintSubmissionOutcome, PrintFailure> {
         let deadline = self
             .clock
             .now()
@@ -373,12 +385,12 @@ impl ExcelExportPipeline {
             request_id,
             generation,
             staged_workbook,
-            approved_signature: job.signature.clone(),
             safety,
             worksheet,
             deadline,
             cancellation: cancellation.clone(),
         };
+        let unproven_cleanup_review = request.cleanup_review();
         let mut worker = match self.runtime.launch(Arc::clone(&self.exporter), request) {
             Ok(worker) => worker,
             Err(failure) => return Err(self.prefer_cleanup_review(failure)),
@@ -388,7 +400,11 @@ impl ExcelExportPipeline {
             WorkerWait::Cancelled => {
                 self.invalidate_generation(generation);
                 let teardown = self.teardown_loser(worker.as_mut());
-                return Err(self.classify_loser(teardown, clean_cancelled()));
+                return Err(self.classify_loser(
+                    teardown,
+                    clean_cancelled(),
+                    unproven_cleanup_review,
+                ));
             }
             WorkerWait::TimedOut => {
                 self.invalidate_generation(generation);
@@ -396,6 +412,7 @@ impl ExcelExportPipeline {
                 return Err(self.classify_loser(
                     teardown,
                     PrintFailure::failed("error.print.excelExportTimedOut"),
+                    unproven_cleanup_review,
                 ));
             }
             WorkerWait::Disconnected => {
@@ -403,21 +420,21 @@ impl ExcelExportPipeline {
                 return Err(self.classify_loser(
                     teardown,
                     PrintFailure::failed("error.print.excelWorkerStopped"),
+                    unproven_cleanup_review,
                 ));
             }
         };
         if !self.finish_worker(worker.as_mut()) {
             self.invalidate_generation(generation);
-            let cleanup_failed = match response.result {
-                Ok(mut artifact) => artifact.cleanup().is_err(),
-                Err(_) => self.breaker.load(Ordering::Acquire),
+            let failure = match response.result {
+                Ok(mut artifact) => {
+                    let _ = artifact.cleanup();
+                    quarantined_failure()
+                }
+                Err(failure) => failure,
             };
             self.trip_breaker();
-            return Err(if cleanup_failed {
-                cleanup_review_failure()
-            } else {
-                quarantined_failure()
-            });
+            return Err(self.prefer_cleanup_review(failure));
         }
         let response_request_id = response.request_id;
         let response_generation = response.generation;
@@ -477,37 +494,76 @@ impl ExcelExportPipeline {
             return finish_without_submit(&self.breaker, &mut artifact, failure);
         }
 
+        if let Err(failure) = artifact.validate_for_submission() {
+            return finish_without_submit(&self.breaker, &mut artifact, failure);
+        }
+        if let Some(failure) = self.export_fence_failure(
+            request_id,
+            generation,
+            response_request_id,
+            response_generation,
+            deadline,
+            &cancellation,
+        ) {
+            self.invalidate_generation(generation);
+            return finish_without_submit(&self.breaker, &mut artifact, failure);
+        }
+
         let mut controlled_job = job.clone();
         controlled_job.page_range = "all".to_string();
-        let submitted = self
-            .submitter
-            .submit_pdf(&controlled_job, &artifact, cancellation.clone());
+        let submitted =
+            self.submitter
+                .submit_pdf(&controlled_job, &artifact, cancellation.clone(), deadline);
+        let cleanup_locator = artifact.cleanup_locator();
         let cleanup = artifact.cleanup();
         match (submitted, cleanup) {
-            (result, Ok(())) => result,
+            (result, Ok(())) => result.map(|()| PrintSubmissionOutcome::default()),
             (Ok(()), Err(_)) => {
                 self.breaker.store(true, Ordering::Release);
-                Err(PrintFailure::uncertain(
-                    "error.print.exportCleanupRequiresReview",
-                ))
+                Ok(PrintSubmissionOutcome {
+                    cleanup_review: Some(CleanupReview {
+                        warning_key: "error.print.exportCleanupRequiresReview",
+                        locator: cleanup_locator,
+                    }),
+                })
             }
-            (Err(failure), Err(_)) if failure.uncertain => {
+            (Err(failure), Err(_)) => {
                 self.breaker.store(true, Ordering::Release);
-                Err(failure)
-            }
-            (Err(_), Err(_)) => {
-                self.breaker.store(true, Ordering::Release);
-                Err(cleanup_review_failure())
+                Err(failure
+                    .with_retry_disposition(RetryDisposition::CleanupQuarantined)
+                    .with_cleanup_review(CleanupReview {
+                        warning_key: "error.print.exportCleanupRequiresReview",
+                        locator: cleanup_locator,
+                    }))
             }
         }
     }
 
     fn prefer_cleanup_review(&self, failure: PrintFailure) -> PrintFailure {
-        if self.breaker.load(Ordering::Acquire) {
-            cleanup_review_failure()
-        } else {
-            failure
-        }
+        self.cleanup_review()
+            .map(|review| {
+                failure
+                    .clone()
+                    .with_retry_disposition(RetryDisposition::CleanupQuarantined)
+                    .with_cleanup_review(review)
+            })
+            .unwrap_or(failure)
+    }
+
+    fn cleanup_review(&self) -> Option<CleanupReview> {
+        self.quarantine
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .find_map(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .filter(|name| !name.is_empty())
+                    .map(|locator| CleanupReview {
+                        warning_key: "error.print.exportCleanupRequiresReview",
+                        locator: locator.to_string(),
+                    })
+            })
     }
 
     fn acquire_operation(
@@ -606,7 +662,14 @@ impl ExcelExportPipeline {
             let wait = deadline
                 .saturating_duration_since(now)
                 .min(WORKER_POLL_INTERVAL);
-            match worker.poll(wait) {
+            let poll = worker.poll(wait);
+            if cancellation.is_cancelled() {
+                return WorkerWait::Cancelled;
+            }
+            if self.clock.now() >= deadline {
+                return WorkerWait::TimedOut;
+            }
+            match poll {
                 WorkerPoll::Response(response) => return WorkerWait::Response(response),
                 WorkerPoll::Pending => {}
                 WorkerPoll::Disconnected => return WorkerWait::Disconnected,
@@ -710,16 +773,18 @@ impl ExcelExportPipeline {
         &self,
         teardown: LoserTeardown,
         finished_failure: PrintFailure,
+        unproven_cleanup_review: CleanupReview,
     ) -> PrintFailure {
         match teardown {
-            LoserTeardown::CleanupFailed => cleanup_review_failure(),
-            LoserTeardown::Finished => self.prefer_cleanup_review(finished_failure),
-            LoserTeardown::Failed if self.breaker.load(Ordering::Acquire) => {
-                cleanup_review_failure()
+            LoserTeardown::CleanupFailed | LoserTeardown::Finished => {
+                self.prefer_cleanup_review(finished_failure)
             }
             LoserTeardown::Failed => {
                 self.trip_breaker();
-                quarantined_failure()
+                attach_unproven_cleanup_review(
+                    self.prefer_cleanup_review(finished_failure),
+                    unproven_cleanup_review,
+                )
             }
         }
     }
@@ -761,18 +826,20 @@ fn finish_without_submit(
     breaker: &AtomicBool,
     artifact: &mut ExportedWorksheetPdf,
     failure: PrintFailure,
-) -> Result<(), PrintFailure> {
+) -> Result<PrintSubmissionOutcome, PrintFailure> {
+    let cleanup_locator = artifact.cleanup_locator();
     match artifact.cleanup() {
         Ok(()) => Err(failure),
         Err(_) => {
             breaker.store(true, Ordering::Release);
-            Err(cleanup_review_failure())
+            Err(failure
+                .with_retry_disposition(RetryDisposition::CleanupQuarantined)
+                .with_cleanup_review(CleanupReview {
+                    warning_key: "error.print.exportCleanupRequiresReview",
+                    locator: cleanup_locator,
+                }))
         }
     }
-}
-
-fn cleanup_review_failure() -> PrintFailure {
-    PrintFailure::unsupported("error.print.exportCleanupRequiresReview")
 }
 
 fn clean_cancelled() -> PrintFailure {
@@ -781,6 +848,19 @@ fn clean_cancelled() -> PrintFailure {
 
 fn quarantined_failure() -> PrintFailure {
     PrintFailure::unsupported("error.print.excelExportQuarantined")
+}
+
+fn attach_unproven_cleanup_review(
+    failure: PrintFailure,
+    cleanup_review: CleanupReview,
+) -> PrintFailure {
+    if failure.has_cleanup_review() {
+        failure
+    } else {
+        failure
+            .with_retry_disposition(RetryDisposition::CleanupQuarantined)
+            .with_cleanup_review(cleanup_review)
+    }
 }
 
 pub(crate) struct StagedWorkbook {
@@ -806,7 +886,9 @@ impl StagedWorkbook {
         cleanup_breaker: Arc<AtomicBool>,
         cleanup_quarantine: Arc<Mutex<BTreeSet<PathBuf>>>,
     ) -> Result<Self, PrintFailure> {
-        let workspace = tempfile::tempdir()
+        let workspace = tempfile::Builder::new()
+            .prefix("docflow-excel-")
+            .tempdir()
             .map_err(|_| PrintFailure::failed("error.print.excelStagingUnavailable"))?;
         let mut staged = Self {
             workbook: None,
@@ -859,6 +941,16 @@ impl StagedWorkbook {
         &self.workbook_path
     }
 
+    fn cleanup_locator(&self) -> String {
+        self.workspace
+            .as_ref()
+            .and_then(|workspace| workspace.path().file_name())
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("docflow-excel-cleanup")
+            .to_string()
+    }
+
     pub(crate) fn pdf_output_path(&self) -> PathBuf {
         self.workspace_path().join("worksheet.pdf")
     }
@@ -869,12 +961,19 @@ impl StagedWorkbook {
 
     pub(crate) fn into_exported_pdf(self) -> Result<ExportedWorksheetPdf, PrintFailure> {
         let pdf_path = self.pdf_output_path();
-        let pdf = self
+        let authorized_pdf = self
             .root
             .as_ref()
             .expect("live staged workbook owns its capability root")
             .authorize(&pdf_path)
-            .and_then(|path| path.anchor())
+            .map_err(|_| PrintFailure::failed("error.print.excelPrivatePdfUnavailable"))?;
+        let pdf_identity = authorized_pdf
+            .anchor()
+            .and_then(|pdf| pdf.identity())
+            .map_err(|_| PrintFailure::failed("error.print.excelPrivatePdfUnavailable"))?;
+        let pdf = authorized_pdf
+            .with_expected_identity(pdf_identity)
+            .anchor()
             .map_err(|_| PrintFailure::failed("error.print.excelPrivatePdfUnavailable"))?;
         if pdf
             .len()
@@ -886,7 +985,7 @@ impl StagedWorkbook {
         Ok(ExportedWorksheetPdf {
             pdf: Some(pdf),
             workspace: Some(self),
-            pdf_path,
+            validated_bytes: None,
         })
     }
 
@@ -961,7 +1060,7 @@ impl StagedWorkbook {
     #[cfg(test)]
     fn fixture_exported_pdf(self) -> ExportedWorksheetPdf {
         let pdf_path = self.pdf_output_path();
-        std::fs::write(&pdf_path, b"%PDF-1.4\n").unwrap();
+        std::fs::write(&pdf_path, fixture_pdf_bytes(2)).unwrap();
         self.into_exported_pdf().unwrap()
     }
 
@@ -1003,13 +1102,44 @@ impl Drop for StagedWorkbook {
 pub(crate) struct ExportedWorksheetPdf {
     // The PDF anchor closes before StagedWorkbook closes the workbook/root/workspace.
     pdf: Option<AnchoredPath>,
+
     workspace: Option<StagedWorkbook>,
-    pdf_path: PathBuf,
+    validated_bytes: Option<Arc<[u8]>>,
 }
 
 impl ExportedWorksheetPdf {
-    pub(crate) fn pdf_path(&self) -> &Path {
-        &self.pdf_path
+    fn validate_for_submission(&mut self) -> Result<(), PrintFailure> {
+        let mut source = self
+            .pdf
+            .as_ref()
+            .ok_or_else(|| PrintFailure::failed("error.print.excelExportMalformedPdf"))?
+            .open_read()
+            .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+        let declared_len = source
+            .metadata()
+            .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?
+            .len();
+        let bytes = read_pdf_bytes_bounded(&mut source, declared_len, crate::pdf::MAX_PDF_BYTES)?;
+        let inspection = crate::pdf::inspect_bytes(Arc::clone(&bytes))
+            .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+        if inspection.page_count == 0 {
+            return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
+        }
+        self.validated_bytes = Some(bytes);
+        Ok(())
+    }
+
+    pub(crate) fn validated_bytes(&self) -> Result<&[u8], PrintFailure> {
+        self.validated_bytes
+            .as_deref()
+            .ok_or_else(|| PrintFailure::failed("error.print.excelExportMalformedPdf"))
+    }
+
+    fn cleanup_locator(&self) -> String {
+        self.workspace
+            .as_ref()
+            .map(StagedWorkbook::cleanup_locator)
+            .unwrap_or_else(|| "docflow-excel-cleanup".to_string())
     }
 
     fn cleanup(&mut self) -> io::Result<()> {
@@ -1026,10 +1156,73 @@ impl ExportedWorksheetPdf {
     }
 }
 
+fn read_pdf_bytes_bounded(
+    reader: impl Read,
+    declared_len: u64,
+    max_bytes: u64,
+) -> Result<Arc<[u8]>, PrintFailure> {
+    if declared_len == 0 || declared_len > max_bytes {
+        return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
+    }
+    let capacity = usize::try_from(declared_len)
+        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    reader
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+    if bytes.len() as u64 != declared_len || bytes.len() as u64 > max_bytes {
+        return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
+    }
+    Ok(Arc::from(bytes))
+}
+
 impl Drop for ExportedWorksheetPdf {
     fn drop(&mut self) {
         let _ = self.cleanup();
     }
+}
+
+#[cfg(test)]
+fn fixture_pdf_bytes(page_count: usize) -> Vec<u8> {
+    let page_ids = (0..page_count).map(|index| index + 3).collect::<Vec<_>>();
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        format!(
+            "<< /Type /Pages /Kids [{}] /Count {page_count} >>",
+            page_ids
+                .iter()
+                .map(|id| format!("{id} 0 R"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+    ];
+    objects.extend(
+        page_ids
+            .iter()
+            .map(|_| "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string()),
+    );
+    let mut bytes = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    bytes
 }
 
 #[cfg(test)]
@@ -1090,13 +1283,13 @@ mod tests {
             ExcelWorkerHandle, ExcelWorkerRuntime, ExportedWorksheetPdf, MonotonicClock,
             StagedWorkbook, SystemMonotonicClock, ThreadWorkerRuntime, WorkbookSourcePolicy,
             WorkerJoin, WorkerPoll, WorkerResponse, WorksheetPdfExporter, process_excel_guards,
+            read_pdf_bytes_bounded,
         };
 
         #[derive(Clone, Debug, Eq, PartialEq)]
         struct RequestObservation {
             request_id: uuid::Uuid,
             generation: u64,
-            signature: FileSignature,
             safety: WorkbookSafetyFacts,
             worksheet: WorksheetDescriptor,
             deadline: Instant,
@@ -1204,7 +1397,6 @@ mod tests {
                 self.requests.lock().unwrap().push(RequestObservation {
                     request_id: request.request_id,
                     generation: request.generation,
-                    signature: request.approved_signature.clone(),
                     safety: request.safety.clone(),
                     worksheet: request.worksheet.clone(),
                     deadline: request.deadline,
@@ -1215,10 +1407,30 @@ mod tests {
             }
         }
 
+        impl WorksheetPdfExporter for SequencedPdfExporter {
+            fn export_pdf(
+                &self,
+                request: ExcelExportRequest,
+            ) -> Result<ExportedWorksheetPdf, PrintFailure> {
+                self.events.lock().unwrap().push("export");
+                let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                let mut bytes = multi_page_pdf(2);
+                bytes.extend_from_slice(format!("\n% attempt-{attempt}\n").as_bytes());
+                let pdf_path = request.staged_workbook.pdf_output_path();
+                std::fs::write(pdf_path, bytes).unwrap();
+                request.staged_workbook.into_exported_pdf()
+            }
+        }
+
         struct SourceMutatingExporter {
             events: Arc<Mutex<Vec<&'static str>>>,
             source_path: PathBuf,
             staged_paths: Arc<Mutex<Vec<PathBuf>>>,
+        }
+
+        struct SourceReplacingExporter {
+            events: Arc<Mutex<Vec<&'static str>>>,
+            source_path: PathBuf,
         }
 
         impl WorksheetPdfExporter for SourceMutatingExporter {
@@ -1237,8 +1449,42 @@ mod tests {
             }
         }
 
+        impl WorksheetPdfExporter for SourceReplacingExporter {
+            fn export_pdf(
+                &self,
+                request: ExcelExportRequest,
+            ) -> Result<ExportedWorksheetPdf, PrintFailure> {
+                self.events.lock().unwrap().push("export");
+                let artifact = request.staged_workbook.fixture_exported_pdf();
+                std::fs::rename(
+                    &self.source_path,
+                    self.source_path.with_extension("approved-original"),
+                )
+                .unwrap();
+                std::fs::write(&self.source_path, b"valid replacement workbook bytes").unwrap();
+                Ok(artifact)
+            }
+        }
+
         struct CleanupFailingExporter {
             events: Arc<Mutex<Vec<&'static str>>>,
+        }
+
+        struct BytesExporter {
+            events: Arc<Mutex<Vec<&'static str>>>,
+            bytes: Vec<u8>,
+        }
+
+        impl WorksheetPdfExporter for BytesExporter {
+            fn export_pdf(
+                &self,
+                request: ExcelExportRequest,
+            ) -> Result<ExportedWorksheetPdf, PrintFailure> {
+                self.events.lock().unwrap().push("export");
+                let pdf_path = request.staged_workbook.pdf_output_path();
+                std::fs::write(pdf_path, &self.bytes).unwrap();
+                request.staged_workbook.into_exported_pdf()
+            }
         }
 
         impl WorksheetPdfExporter for CleanupFailingExporter {
@@ -1362,16 +1608,55 @@ mod tests {
             }
         }
 
-        type SubmittedPdfs = Arc<Mutex<Vec<(String, String, Vec<u8>)>>>;
+        struct SubmittedPdf {
+            worksheet: String,
+            printer: String,
+            settings: PrintSettings,
+            page_range: String,
+            pdf: Vec<u8>,
+            cancellation: crate::progress::CancellationToken,
+            deadline: Instant,
+        }
+
+        type SubmittedPdfs = Arc<Mutex<Vec<SubmittedPdf>>>;
 
         struct RecordingSubmitter {
             events: Arc<Mutex<Vec<&'static str>>>,
             submitted: SubmittedPdfs,
         }
 
+        struct DeadlineRecordingSubmitter {
+            deadlines: Arc<Mutex<Vec<Instant>>>,
+        }
+
+        impl ControlledPdfSubmitter for DeadlineRecordingSubmitter {
+            fn submit_pdf(
+                &self,
+                _job: &PrintJob,
+                pdf: &ExportedWorksheetPdf,
+                _cancellation: crate::progress::CancellationToken,
+                deadline: Instant,
+            ) -> Result<(), PrintFailure> {
+                let _ = pdf.validated_bytes()?;
+                self.deadlines.lock().unwrap().push(deadline);
+                Ok(())
+            }
+        }
+
         struct OutcomeSubmitter {
             events: Arc<Mutex<Vec<&'static str>>>,
             outcome: Result<(), PrintFailure>,
+        }
+
+        struct SequencedPdfExporter {
+            events: Arc<Mutex<Vec<&'static str>>>,
+            attempts: Arc<AtomicUsize>,
+        }
+
+        struct FailOnceCapturingSubmitter {
+            events: Arc<Mutex<Vec<&'static str>>>,
+            attempts: Arc<AtomicUsize>,
+            submitted: Arc<Mutex<Vec<Vec<u8>>>>,
         }
 
         #[derive(Default)]
@@ -1687,20 +1972,117 @@ mod tests {
             }
         }
 
+        struct RetainingRequestRuntime {
+            clock: Arc<AdvancingClock>,
+            retained_path: Arc<Mutex<Option<PathBuf>>>,
+            release: Mutex<Option<mpsc::Sender<()>>>,
+            finished: Arc<(Mutex<bool>, std::sync::Condvar)>,
+        }
+
+        impl RetainingRequestRuntime {
+            fn new(clock: Arc<AdvancingClock>) -> Self {
+                Self {
+                    clock,
+                    retained_path: Arc::new(Mutex::new(None)),
+                    release: Mutex::new(None),
+                    finished: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
+                }
+            }
+
+            fn release_and_wait(&self) {
+                self.release
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .expect("retained worker release sender")
+                    .send(())
+                    .unwrap();
+                let (finished, changed) = &*self.finished;
+                let finished = finished.lock().unwrap();
+                let (finished, wait) = changed
+                    .wait_timeout_while(finished, Duration::from_secs(2), |finished| !*finished)
+                    .unwrap();
+                assert!(
+                    *finished && !wait.timed_out(),
+                    "retained worker did not exit"
+                );
+            }
+        }
+
+        impl ExcelWorkerRuntime for RetainingRequestRuntime {
+            fn launch(
+                &self,
+                _exporter: Arc<dyn WorksheetPdfExporter>,
+                request: ExcelExportRequest,
+            ) -> Result<Box<dyn ExcelWorkerHandle>, PrintFailure> {
+                *self.retained_path.lock().unwrap() =
+                    Some(request.staged_workbook.workspace_path().to_path_buf());
+                let (release, released) = mpsc::channel();
+                *self.release.lock().unwrap() = Some(release);
+                let finished = Arc::clone(&self.finished);
+                let join = std::thread::spawn(move || {
+                    let _ = released.recv();
+                    drop(request);
+                    let (done, changed) = &*finished;
+                    *done.lock().unwrap() = true;
+                    changed.notify_all();
+                });
+                self.clock.advance();
+                Ok(Box::new(RetainingRequestWorker { join: Some(join) }))
+            }
+        }
+
+        struct RetainingRequestWorker {
+            join: Option<std::thread::JoinHandle<()>>,
+        }
+
+        impl ExcelWorkerHandle for RetainingRequestWorker {
+            fn poll(&mut self, _wait: Duration) -> WorkerPoll {
+                WorkerPoll::Pending
+            }
+
+            fn join_status(&mut self) -> WorkerJoin {
+                let Some(join) = self.join.as_ref() else {
+                    return WorkerJoin::Finished;
+                };
+                if !join.is_finished() {
+                    return WorkerJoin::Pending;
+                }
+                let join = self.join.take().expect("finished retained worker join");
+                if join.join().is_ok() {
+                    WorkerJoin::Finished
+                } else {
+                    WorkerJoin::Failed
+                }
+            }
+        }
+
         impl ControlledPdfSubmitter for RecordingSubmitter {
             fn submit_pdf(
                 &self,
                 job: &PrintJob,
                 pdf: &ExportedWorksheetPdf,
                 cancellation: crate::progress::CancellationToken,
+                deadline: Instant,
             ) -> Result<(), PrintFailure> {
                 assert!(!cancellation.is_cancelled());
+                assert_eq!(job.printer, "Office Printer");
+                assert_eq!(job.paper, "A4");
+                assert_eq!(job.orientation, "auto");
+                assert_eq!(job.scaling, "fit");
+                assert_eq!(job.color, "printer");
+                assert_eq!(job.duplex, "printer");
+                assert_eq!(job.page_range, "all");
                 self.events.lock().unwrap().push("submit");
-                self.submitted.lock().unwrap().push((
-                    job.worksheet.as_ref().unwrap().name.clone(),
-                    job.page_range.clone(),
-                    std::fs::read(pdf.pdf_path()).unwrap(),
-                ));
+                self.submitted.lock().unwrap().push(SubmittedPdf {
+                    worksheet: job.worksheet.as_ref().unwrap().name.clone(),
+                    printer: job.printer.clone(),
+                    settings: job.settings(),
+                    page_range: job.page_range.clone(),
+                    pdf: pdf.validated_bytes()?.to_vec(),
+                    cancellation,
+                    deadline,
+                });
                 Ok(())
             }
         }
@@ -1711,9 +2093,33 @@ mod tests {
                 _job: &PrintJob,
                 _pdf: &ExportedWorksheetPdf,
                 _cancellation: crate::progress::CancellationToken,
+                _deadline: Instant,
             ) -> Result<(), PrintFailure> {
                 self.events.lock().unwrap().push("submit");
                 self.outcome.clone()
+            }
+        }
+
+        impl ControlledPdfSubmitter for FailOnceCapturingSubmitter {
+            fn submit_pdf(
+                &self,
+                _job: &PrintJob,
+                pdf: &ExportedWorksheetPdf,
+                _cancellation: crate::progress::CancellationToken,
+                _deadline: Instant,
+            ) -> Result<(), PrintFailure> {
+                self.events.lock().unwrap().push("submit");
+                self.submitted
+                    .lock()
+                    .unwrap()
+                    .push(pdf.validated_bytes()?.to_vec());
+                if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    ))
+                } else {
+                    Ok(())
+                }
             }
         }
 
@@ -1769,6 +2175,34 @@ mod tests {
             let signature =
                 crate::print_queue::file_signature_from_open_file(&mut file, true).unwrap();
             (directory, source, signature)
+        }
+
+        fn multi_page_pdf(page_count: usize) -> Vec<u8> {
+            super::super::fixture_pdf_bytes(page_count)
+        }
+
+        #[test]
+        fn oversized_pdf_is_rejected_before_reader_is_touched() {
+            struct PanicOnRead;
+
+            impl std::io::Read for PanicOnRead {
+                fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+                    panic!("oversized PDF must fail before reading or allocating");
+                }
+            }
+
+            let failure = read_pdf_bytes_bounded(PanicOnRead, 65, 64).unwrap_err();
+
+            assert_eq!(failure.message, "error.print.excelExportMalformedPdf");
+        }
+
+        #[test]
+        fn concurrently_growing_pdf_is_rejected_by_bounded_read() {
+            let reader = std::io::Cursor::new(vec![b'x'; 65]);
+
+            let failure = read_pdf_bytes_bounded(reader, 64, 64).unwrap_err();
+
+            assert_eq!(failure.message, "error.print.excelExportMalformedPdf");
         }
 
         fn write_workbook(path: &Path) {
@@ -1952,8 +2386,9 @@ mod tests {
                     .unwrap_err();
                 assert_eq!(
                     panic_failure.kind,
-                    crate::print_queue::PrintFailureKind::Unsupported
+                    crate::print_queue::PrintFailureKind::Failed
                 );
+                assert_eq!(panic_failure.message, "error.print.excelWorkerStopped");
                 assert!(!panic_paths.lock().unwrap()[0].exists());
 
                 let rejected_events = Arc::new(Mutex::new(Vec::new()));
@@ -2038,19 +2473,66 @@ mod tests {
             assert_ne!(requests[0].request_id, requests[1].request_id);
             assert_eq!(requests[0].generation, 1);
             assert_eq!(requests[1].generation, 2);
-            assert_eq!(requests[0].signature, signature);
             assert_eq!(requests[0].safety, safety());
             assert_eq!(requests[0].worksheet, descriptor("CIV", 2));
             assert!(requests[0].deadline > Instant::now());
             assert_eq!(requests[0].workbook_bytes, b"approved workbook bytes");
             assert!(!requests[0].cancelled);
-            assert_eq!(
-                *submitted.lock().unwrap(),
-                [
-                    ("CIV".to_string(), "all".to_string(), b"%PDF-1.4\n".to_vec()),
-                    ("MEC".to_string(), "all".to_string(), b"%PDF-1.4\n".to_vec()),
-                ]
+            let expected_pdf = multi_page_pdf(2);
+            let submitted = submitted.lock().unwrap();
+            assert_eq!(submitted.len(), 2);
+            for (index, (submission, expected_name)) in
+                submitted.iter().zip(["CIV", "MEC"]).enumerate()
+            {
+                assert_eq!(submission.worksheet, expected_name);
+                assert_eq!(submission.printer, "Office Printer");
+                assert_eq!(submission.settings.paper, "A4");
+                assert_eq!(submission.settings.orientation, "auto");
+                assert_eq!(submission.settings.scaling, "fit");
+                assert_eq!(submission.settings.color, "printer");
+                assert_eq!(submission.settings.duplex, "printer");
+                assert_eq!(submission.settings.page_range, "all");
+                assert_eq!(submission.settings.timeout_minutes, 1);
+                assert_eq!(submission.page_range, "all");
+                assert_eq!(submission.pdf, expected_pdf);
+                assert!(submission.cancellation.same_state(&cancellation));
+                assert_eq!(submission.deadline, requests[index].deadline);
+            }
+        }
+
+        #[test]
+        fn submitter_receives_the_exact_export_request_deadline() {
+            let base = Instant::now();
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let deadlines = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = ExcelExportPipeline::for_testing_with_runtime(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(RecordingExporter {
+                    events,
+                    requests: Arc::clone(&requests),
+                }),
+                Arc::new(DeadlineRecordingSubmitter {
+                    deadlines: Arc::clone(&deadlines),
+                }),
+                Arc::new(FixedClock(base)),
+                Arc::new(ImmediateRuntime),
+                Duration::from_secs(1),
             );
+            let cancellation = CancellationRegistry::default().register("deadline");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap();
+
+            let expected = base + Duration::from_secs(60);
+            assert_eq!(requests.lock().unwrap()[0].deadline, expected);
+            assert_eq!(*deadlines.lock().unwrap(), [expected]);
         }
 
         #[test]
@@ -2094,6 +2576,48 @@ mod tests {
 
             assert_eq!(*observations.lock().unwrap(), [expected]);
             assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+        }
+
+        #[test]
+        fn cancellation_before_export_has_zero_policy_export_and_submit_calls() {
+            const REQUEST_ID: &str = "cancel-before-export";
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(RecordingExporter {
+                    events: Arc::clone(&events),
+                    requests: Arc::clone(&requests),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+            );
+            let cancellations = CancellationRegistry::default();
+            let cancellation = cancellations.register(REQUEST_ID);
+            assert!(cancellations.cancel(REQUEST_ID));
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+
+            assert_eq!(
+                failure.kind,
+                crate::print_queue::PrintFailureKind::Cancelled
+            );
+            assert_eq!(failure.message, "error.print.excelExportCancelled");
+            assert!(!failure.uncertain);
+            assert_eq!(source_file.stream_position().unwrap(), 0);
+            assert!(events.lock().unwrap().is_empty());
+            assert!(requests.lock().unwrap().is_empty());
+            assert!(submitted.lock().unwrap().is_empty());
         }
 
         #[test]
@@ -2208,6 +2732,76 @@ mod tests {
             assert!(events.lock().unwrap().is_empty());
             assert!(requests.lock().unwrap().is_empty());
             assert!(submitted.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn validated_pdf_bytes_survive_visible_leaf_substitution() {
+            let (staged, _events) = StagedWorkbook::fixture_with_drop_probe();
+            let expected = multi_page_pdf(2);
+            let pdf_path = staged.pdf_output_path();
+            std::fs::write(&pdf_path, &expected).unwrap();
+            let mut exported = staged.into_exported_pdf().unwrap();
+
+            exported.validate_for_submission().unwrap();
+            let displaced = pdf_path.with_extension("validated.pdf");
+            std::fs::rename(&pdf_path, &displaced).unwrap();
+            std::fs::write(&pdf_path, b"%PDF-1.4\nsubstituted").unwrap();
+
+            assert_eq!(exported.validated_bytes().unwrap(), expected);
+            assert_ne!(std::fs::read(&pdf_path).unwrap(), expected);
+            std::fs::remove_file(&pdf_path).unwrap();
+        }
+
+        #[test]
+        fn exported_pdf_rejects_visible_leaf_substitution_before_validation() {
+            let (staged, _events) = StagedWorkbook::fixture_with_drop_probe();
+            let pdf_path = staged.pdf_output_path();
+            std::fs::write(&pdf_path, multi_page_pdf(2)).unwrap();
+            let mut exported = staged.into_exported_pdf().unwrap();
+
+            let displaced = pdf_path.with_extension("original.pdf");
+            std::fs::rename(&pdf_path, &displaced).unwrap();
+            std::fs::write(&pdf_path, multi_page_pdf(1)).unwrap();
+
+            let failure = exported.validate_for_submission().unwrap_err();
+            assert_eq!(failure.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert!(!failure.uncertain);
+            assert!(exported.validated_bytes().is_err());
+            std::fs::remove_file(&pdf_path).unwrap();
+        }
+
+        #[test]
+        fn empty_or_malformed_pdf_never_reaches_submitter() {
+            for bytes in [Vec::new(), b"%PDF-1.4\nmalformed".to_vec()] {
+                let events = Arc::new(Mutex::new(Vec::new()));
+                let submitted = Arc::new(Mutex::new(Vec::new()));
+                let pipeline = ExcelExportPipeline::for_testing(
+                    Arc::new(RecordingPolicy {
+                        events: Arc::clone(&events),
+                    }),
+                    Arc::new(BytesExporter {
+                        events: Arc::clone(&events),
+                        bytes,
+                    }),
+                    Arc::new(RecordingSubmitter {
+                        events: Arc::clone(&events),
+                        submitted: Arc::clone(&submitted),
+                    }),
+                );
+                let cancellation = CancellationRegistry::default().register("invalid-pdf");
+                let (_directory, source, signature) = source_fixture();
+                let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+                let mut source_file = source.open_read().unwrap();
+
+                let failure = pipeline
+                    .export_and_submit(&job, &source, &mut source_file, cancellation)
+                    .unwrap_err();
+
+                assert_eq!(failure.kind, crate::print_queue::PrintFailureKind::Failed);
+                assert!(!failure.uncertain);
+                assert!(submitted.lock().unwrap().is_empty());
+                assert_eq!(*events.lock().unwrap(), ["policy", "export"]);
+            }
         }
 
         #[test]
@@ -2427,10 +3021,8 @@ mod tests {
                 .export_and_submit(&job, &source, &mut source_file, cancellation)
                 .unwrap_err();
 
-            assert_eq!(
-                first.kind,
-                crate::print_queue::PrintFailureKind::Unsupported
-            );
+            assert_eq!(first.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(first.message, "error.print.excelWorkerStopped");
             assert_eq!(
                 second.kind,
                 crate::print_queue::PrintFailureKind::Unsupported
@@ -2443,7 +3035,7 @@ mod tests {
         }
 
         #[test]
-        fn pre_submit_cleanup_failure_trips_breaker_without_retry_or_submit() {
+        fn pre_submit_cleanup_failure_preserves_primary_failure_and_trips_breaker() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
             let pipeline = ExcelExportPipeline::for_testing_with_runtime(
@@ -2465,17 +3057,33 @@ mod tests {
             let (_directory, source, signature) = source_fixture();
             let job = worksheet_job(source.absolute(), signature, "MEC", 1);
 
-            for _ in 0..2 {
-                let mut source_file = source.open_read().unwrap();
-                let failure = pipeline
-                    .export_and_submit(&job, &source, &mut source_file, cancellation.clone())
-                    .unwrap_err();
-                assert_eq!(
-                    failure.kind,
-                    crate::print_queue::PrintFailureKind::Unsupported
-                );
-                assert!(!failure.uncertain);
-            }
+            let mut source_file = source.open_read().unwrap();
+            let first = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation.clone())
+                .unwrap_err();
+            let cleanup = first
+                .cleanup_review
+                .as_ref()
+                .expect("cleanup review warning");
+            assert_eq!(first.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(first.message, "error.print.excelResponseStale");
+            assert!(!first.uncertain);
+            assert_eq!(
+                cleanup.warning_key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert!(cleanup.locator.starts_with("docflow-excel-"));
+
+            let mut source_file = source.open_read().unwrap();
+            let second = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+            assert_eq!(
+                second.kind,
+                crate::print_queue::PrintFailureKind::Unsupported
+            );
+            assert_eq!(second.message, "error.print.excelExportQuarantined");
+            assert!(second.cleanup_review.is_none());
 
             assert_eq!(*events.lock().unwrap(), ["policy", "export"]);
             assert!(submitted.lock().unwrap().is_empty());
@@ -2506,11 +3114,15 @@ mod tests {
             let first = pipeline
                 .export_and_submit(&job, &source, &mut source_file, cancellation.clone())
                 .unwrap_err();
+            assert_eq!(first.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(first.message, "fake export failed");
+            assert!(!first.uncertain);
+            let review = first.cleanup_review.as_ref().expect("cleanup review");
             assert_eq!(
-                first.kind,
-                crate::print_queue::PrintFailureKind::Unsupported
+                review.warning_key,
+                "error.print.exportCleanupRequiresReview"
             );
-            assert_eq!(first.message, "error.print.exportCleanupRequiresReview");
+            assert!(review.locator.starts_with("docflow-excel-"));
 
             let mut source_file = source.open_read().unwrap();
             let second = pipeline
@@ -2527,27 +3139,737 @@ mod tests {
         }
 
         #[test]
-        fn post_submit_cleanup_failure_preserves_or_conservatively_classifies_effect() {
-            let cases = [
-                (
-                    Ok(()),
-                    PrintFailure::uncertain("error.print.exportCleanupRequiresReview"),
-                ),
-                (
-                    Err(PrintFailure::uncertain("printer outcome unknown")),
-                    PrintFailure::uncertain("printer outcome unknown"),
-                ),
-                (
-                    Err(PrintFailure::cancelled("cancel outcome unknown", true)),
-                    PrintFailure::cancelled("cancel outcome unknown", true),
-                ),
-                (
-                    Err(PrintFailure::failed("printer rejected before effect")),
-                    PrintFailure::unsupported("error.print.exportCleanupRequiresReview"),
-                ),
-            ];
+        fn retry_reexports_and_never_reuses_a_prior_controlled_pdf() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let export_attempts = Arc::new(AtomicUsize::new(0));
+            let submit_attempts = Arc::new(AtomicUsize::new(0));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(SequencedPdfExporter {
+                    events: Arc::clone(&events),
+                    attempts: Arc::clone(&export_attempts),
+                }),
+                Arc::new(FailOnceCapturingSubmitter {
+                    events: Arc::clone(&events),
+                    attempts: Arc::clone(&submit_attempts),
+                    submitted: Arc::clone(&submitted),
+                }),
+            ));
+            let service = PrintService::new(
+                directory.path().join("queues"),
+                directory.path().join("journals"),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(pipeline);
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        retries: 1,
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
 
-            for (outcome, expected) in cases {
+            let result = service.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+
+            assert_eq!(result.applied, 1);
+            assert_eq!(result.failed, 0);
+            assert_eq!(export_attempts.load(Ordering::SeqCst), 2);
+            assert_eq!(submit_attempts.load(Ordering::SeqCst), 2);
+            assert_eq!(
+                *events.lock().unwrap(),
+                ["policy", "export", "submit", "policy", "export", "submit"]
+            );
+            let submitted = submitted.lock().unwrap();
+            assert_eq!(submitted.len(), 2);
+            assert_ne!(submitted[0], submitted[1]);
+        }
+
+        #[test]
+        fn post_submit_cleanup_failure_is_completed_with_non_sensitive_warning_locator() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Ok(()),
+                }),
+            );
+            let cancellation = CancellationRegistry::default().register("plan");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let outcome = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap();
+            let review = outcome.cleanup_review.expect("cleanup review warning");
+
+            assert_eq!(
+                review.warning_key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert!(review.locator.starts_with("docflow-excel-"));
+            assert!(!review.locator.contains(std::path::MAIN_SEPARATOR));
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn completed_cleanup_warning_is_reported_without_retrying_export_or_submit() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let adapter = Arc::new(PreviewAdapter::default());
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Ok(()),
+                }),
+            ));
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                adapter,
+            )
+            .with_excel_pipeline(pipeline.clone());
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        retries: 3,
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+
+            let result = service.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+
+            assert_eq!((result.applied, result.failed), (1, 0));
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            assert_eq!(result.errors.len(), 1);
+            assert_eq!(
+                result.errors[0].key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert!(result.errors[0].subject.starts_with("docflow-excel-"));
+            assert!(!result.errors[0].subject.contains(std::path::MAIN_SEPARATOR));
+
+            let queue_id = result.meta["queueId"].as_str().unwrap();
+            let queue: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(queue_root.join(format!("{queue_id}.json"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["warningKey"],
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["locator"],
+                result.errors[0].subject
+            );
+            let journal_id = result.meta["auditJournalId"].as_str().unwrap();
+            let journal = crate::journal::JournalStore::new(journal_root)
+                .read(journal_id)
+                .unwrap();
+            let journal = serde_json::to_value(journal).unwrap();
+            assert_eq!(
+                journal["cleanupReviews"][0]["warningKey"],
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert_eq!(
+                journal["cleanupReviews"][0]["locator"],
+                result.errors[0].subject
+            );
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn cleanup_locator_is_durable_when_outcome_journal_write_fails() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Ok(()),
+                }),
+            ));
+            let queue_root = directory.path().join("queues");
+            let service = PrintService::new(
+                queue_root.clone(),
+                directory.path().join("journals"),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(pipeline.clone())
+            .with_test_journal_failure_on_write(3);
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+            let queue_id = revised.meta["queueId"].as_str().unwrap().to_string();
+
+            service
+                .apply(&revised.plan_id, &caller, |_| {})
+                .expect_err("injected outcome journal write failure");
+
+            let queue: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(queue_root.join(format!("{queue_id}.json"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["warningKey"],
+                "error.print.exportCleanupRequiresReview"
+            );
+            let locator = queue["jobs"][0]["cleanupReview"]["locator"]
+                .as_str()
+                .expect("durable cleanup locator");
+            assert!(locator.starts_with("docflow-excel-"));
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn cleanup_locator_is_journaled_when_evidence_queue_checkpoint_fails() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    )),
+                }),
+            ));
+            let journal_root = directory.path().join("journals");
+            let service = PrintService::new(
+                directory.path().join("queues"),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(pipeline.clone())
+            .with_test_queue_failure_on_save(3);
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+
+            let error = service
+                .apply(&revised.plan_id, &caller, |_| {})
+                .expect_err("injected cleanup-evidence queue checkpoint failure");
+
+            let journals = std::fs::read_dir(&journal_root)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| {
+                    entry.path().extension().and_then(|value| value.to_str()) == Some("json")
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(journals.len(), 1);
+            let journal: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(journals[0].path()).unwrap()).unwrap();
+            let locator = journal["cleanupReviews"][0]["locator"]
+                .as_str()
+                .expect("cleanup locator must be journaled before queue checkpoint");
+            assert!(locator.starts_with("docflow-excel-"));
+            assert!(!locator.contains(std::path::MAIN_SEPARATOR));
+
+            assert_eq!(error.code, "backend_request_failed");
+            assert!(error.message.contains("injected print queue save failure"));
+            assert!(error.message.contains("primaryClassification=failed"));
+            assert!(
+                error
+                    .message
+                    .contains("warningKey=error.print.exportCleanupRequiresReview")
+            );
+            assert!(error.message.contains(&format!("locator={locator}")));
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn restart_resume_second_cleanup_failure_preserves_both_distinct_locators() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let caller = CallerIdentity::new("operator", "session");
+
+            let first_events = Arc::new(Mutex::new(Vec::new()));
+            let first_pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&first_events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&first_events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&first_events),
+                    outcome: Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    )),
+                }),
+            ));
+            let first_service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(first_pipeline.clone())
+            .with_test_journal_failure_on_write(3);
+            let plan = first_service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = first_service.revise(&caller, &plan.plan_id, &rows).unwrap();
+            let queue_id = revised.meta["queueId"].as_str().unwrap().to_string();
+
+            first_service
+                .apply(&revised.plan_id, &caller, |_| {})
+                .expect_err("first outcome journal write must fail");
+            let queue_path = queue_root.join(format!("{queue_id}.json"));
+            let first_queue: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&queue_path).unwrap()).unwrap();
+            let first_locator = first_queue["jobs"][0]["cleanupReview"]["locator"]
+                .as_str()
+                .expect("first cleanup locator")
+                .to_string();
+
+            let second_events = Arc::new(Mutex::new(Vec::new()));
+            let second_pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&second_events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&second_events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&second_events),
+                    outcome: Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    )),
+                }),
+            ));
+            let restarted = PrintService::new(
+                queue_root,
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(second_pipeline.clone());
+            let resumed = restarted.resume(&caller, &queue_id).unwrap();
+            assert!(
+                resumed.meta["jobs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|job| job.get("cleanupReview").is_none())
+            );
+            let mut resume_rows = resumed.meta["editor"]["rows"].as_array().unwrap().clone();
+            resume_rows[0]["enabled"] = serde_json::Value::Bool(true);
+            let revised = restarted
+                .revise(&caller, &resumed.plan_id, &resume_rows)
+                .unwrap();
+            assert!(
+                revised.meta["jobs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|job| job.get("cleanupReview").is_none())
+            );
+
+            let result = restarted.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+            let second_locator = result
+                .errors
+                .iter()
+                .find(|warning| warning.key == "error.print.exportCleanupRequiresReview")
+                .expect("second cleanup warning")
+                .subject
+                .clone();
+            assert_ne!(first_locator, second_locator);
+
+            let second_queue: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&queue_path).unwrap()).unwrap();
+            let queue_locators = second_queue["jobs"][0]["cleanupReview"]
+                .as_array()
+                .expect("multiple cleanup reviews serialize as a collection")
+                .iter()
+                .map(|review| review["locator"].as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(queue_locators, [&first_locator, &second_locator]);
+
+            let journal_id = result.meta["auditJournalId"].as_str().unwrap();
+            let journal = crate::journal::JournalStore::new(journal_root)
+                .read(journal_id)
+                .unwrap();
+            assert_eq!(
+                journal
+                    .cleanup_reviews
+                    .iter()
+                    .map(|review| review.locator.as_str())
+                    .collect::<Vec<_>>(),
+                [&first_locator, &second_locator]
+            );
+            assert_eq!(
+                *first_events.lock().unwrap(),
+                ["policy", "export", "submit"]
+            );
+            assert_eq!(
+                *second_events.lock().unwrap(),
+                ["policy", "export", "submit"]
+            );
+            first_pipeline.clear_test_quarantine();
+            second_pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn failed_cleanup_warning_is_not_retried_or_counted_as_another_attempt() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    )),
+                }),
+            ));
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(pipeline.clone());
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        retries: 3,
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+
+            let result = service.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+            let queue_id = result.meta["queueId"].as_str().unwrap();
+            let queue: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(queue_root.join(format!("{queue_id}.json"))).unwrap(),
+            )
+            .unwrap();
+
+            assert_eq!(queue["jobs"][0]["attempts"], 1);
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["warningKey"],
+                "error.print.exportCleanupRequiresReview"
+            );
+            let journal_id = result.meta["auditJournalId"].as_str().unwrap();
+            let journal = crate::journal::JournalStore::new(journal_root)
+                .read(journal_id)
+                .unwrap();
+            assert_eq!(journal.cleanup_reviews.len(), 1);
+            assert_eq!(
+                journal.cleanup_reviews[0].warning_key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            assert_eq!(result.failed, 1);
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|warning| { warning.key == "error.print.exportCleanupRequiresReview" })
+            );
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn uncertain_cleanup_warning_is_reported_without_retrying_export_or_submit() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let adapter = Arc::new(PreviewAdapter::default());
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Err(PrintFailure::uncertain("printer outcome unknown")),
+                }),
+            ));
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                adapter,
+            )
+            .with_excel_pipeline(pipeline.clone());
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        retries: 3,
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+
+            let result = service.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            assert!(result.errors.iter().any(|warning| {
+                warning.key == "warn.print.stateUncertain" && warning.subject == "book.xlsx"
+            }));
+            let cleanup = result
+                .errors
+                .iter()
+                .find(|warning| warning.key == "error.print.exportCleanupRequiresReview")
+                .expect("cleanup warning");
+            assert!(cleanup.subject.starts_with("docflow-excel-"));
+            assert!(!cleanup.subject.contains(std::path::MAIN_SEPARATOR));
+            let queue_id = result.meta["queueId"].as_str().unwrap();
+            let queue: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(queue_root.join(format!("{queue_id}.json"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(queue["jobs"][0]["status"], "uncertain");
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["locator"],
+                cleanup.subject
+            );
+            let journal_id = result.meta["auditJournalId"].as_str().unwrap();
+            let journal = crate::journal::JournalStore::new(journal_root)
+                .read(journal_id)
+                .unwrap();
+            assert_eq!(
+                journal.state,
+                Some(crate::journal::JournalState::RecoveryRequired)
+            );
+            assert_eq!(journal.cleanup_reviews.len(), 1);
+            assert_eq!(journal.cleanup_reviews[0].locator, cleanup.subject);
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn cancelled_cleanup_warning_survives_queue_and_journal_readback() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(CleanupFailingExporter {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&events),
+                    outcome: Err(PrintFailure::cancelled(
+                        "error.print.syntheticCancelled",
+                        false,
+                    )),
+                }),
+            ));
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(pipeline.clone());
+            let caller = CallerIdentity::new("operator", "session");
+            let plan = service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook],
+                        printer: "Office Printer".to_string(),
+                        retries: 3,
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+            rows[2]["enabled"] = serde_json::Value::Bool(false);
+            let revised = service.revise(&caller, &plan.plan_id, &rows).unwrap();
+
+            let result = service.apply(&revised.plan_id, &caller, |_| {}).unwrap();
+            let cleanup = result
+                .errors
+                .iter()
+                .find(|warning| warning.key == "error.print.exportCleanupRequiresReview")
+                .expect("cleanup warning");
+            let queue_id = result.meta["queueId"].as_str().unwrap();
+            let queue: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(queue_root.join(format!("{queue_id}.json"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(queue["jobs"][0]["status"], "cancelled");
+            assert_eq!(queue["jobs"][0]["attempts"], 1);
+            assert_eq!(
+                queue["jobs"][0]["cleanupReview"]["locator"],
+                cleanup.subject
+            );
+            let journal_id = result.meta["auditJournalId"].as_str().unwrap();
+            let journal = crate::journal::JournalStore::new(journal_root)
+                .read(journal_id)
+                .unwrap();
+            assert_eq!(
+                journal.state,
+                Some(crate::journal::JournalState::CancelledClean)
+            );
+            assert_eq!(journal.cleanup_reviews.len(), 1);
+            assert_eq!(journal.cleanup_reviews[0].locator, cleanup.subject);
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            pipeline.clear_test_quarantine();
+        }
+
+        #[test]
+        fn post_submit_cleanup_failure_preserves_renderer_failure_classification() {
+            for renderer_failure in [
+                PrintFailure::uncertain("printer outcome unknown"),
+                PrintFailure::cancelled("cancel outcome unknown", true),
+                PrintFailure::failed("printer rejected before effect"),
+            ] {
                 let events = Arc::new(Mutex::new(Vec::new()));
                 let pipeline = ExcelExportPipeline::for_testing(
                     Arc::new(RecordingPolicy {
@@ -2558,7 +3880,7 @@ mod tests {
                     }),
                     Arc::new(OutcomeSubmitter {
                         events: Arc::clone(&events),
-                        outcome,
+                        outcome: Err(renderer_failure.clone()),
                     }),
                 );
                 let cancellation = CancellationRegistry::default().register("plan");
@@ -2569,8 +3891,19 @@ mod tests {
                 let actual = pipeline
                     .export_and_submit(&job, &source, &mut source_file, cancellation)
                     .unwrap_err();
+                let review = actual
+                    .cleanup_review
+                    .as_ref()
+                    .expect("cleanup review warning");
 
-                assert_eq!(actual, expected);
+                assert_eq!(actual.kind, renderer_failure.kind);
+                assert_eq!(actual.message, renderer_failure.message);
+                assert_eq!(actual.uncertain, renderer_failure.uncertain);
+                assert_eq!(
+                    review.warning_key,
+                    "error.print.exportCleanupRequiresReview"
+                );
+                assert!(review.locator.starts_with("docflow-excel-"));
                 assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
                 pipeline.clear_test_quarantine();
             }
@@ -2645,11 +3978,209 @@ mod tests {
                     .lock()
                     .unwrap()
                     .iter()
-                    .map(|(name, range, _)| (name.as_str(), range.as_str()))
+                    .map(|submission| {
+                        (
+                            submission.worksheet.as_str(),
+                            submission.page_range.as_str(),
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 [("CIV", "all"), ("MEC", "all")]
             );
             assert!(adapter.native_submits.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn persisted_worksheet_resume_revalidates_reexports_and_submits_in_revised_order() {
+            let directory = tempfile::tempdir().unwrap();
+            let workbook = directory.path().join("book.xlsx");
+            write_workbook(&workbook);
+            let queue_root = directory.path().join("queues");
+            let journal_root = directory.path().join("journals");
+            let caller = CallerIdentity::new("operator", "session");
+
+            let first_events = Arc::new(Mutex::new(Vec::new()));
+            let first_pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&first_events),
+                }),
+                Arc::new(BytesExporter {
+                    events: Arc::clone(&first_events),
+                    bytes: multi_page_pdf(1),
+                }),
+                Arc::new(OutcomeSubmitter {
+                    events: Arc::clone(&first_events),
+                    outcome: Err(PrintFailure::failed(
+                        "error.print.syntheticPreEffectFailure",
+                    )),
+                }),
+            ));
+            let first_service = PrintService::new(
+                queue_root.clone(),
+                journal_root.clone(),
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(first_pipeline);
+            let plan = first_service
+                .preview(
+                    &caller,
+                    BatchPrintParams {
+                        files: vec![workbook.clone()],
+                        printer: "Office Printer".to_string(),
+                        timeout_minutes: 1,
+                        ..BatchPrintParams::default()
+                    },
+                    |_| {},
+                )
+                .unwrap();
+            let first = first_service.apply(&plan.plan_id, &caller, |_| {}).unwrap();
+            assert_eq!((first.applied, first.failed), (0, 1));
+            assert_eq!(
+                *first_events.lock().unwrap(),
+                ["policy", "export", "submit"]
+            );
+            let queue_id = first.meta["queueId"].as_str().unwrap();
+            let queue_path = queue_root.join(format!("{queue_id}.json"));
+            let adversarial_pdf = directory.path().join("ambient-export.pdf");
+            std::fs::write(&adversarial_pdf, multi_page_pdf(1)).unwrap();
+            let mut persisted: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&queue_path).unwrap()).unwrap();
+            for job in persisted["jobs"].as_array_mut().unwrap() {
+                job["exportedPdfPath"] = serde_json::json!(adversarial_pdf);
+                job["cleanupReview"] = serde_json::json!({
+                    "warningKey": "error.print.exportCleanupRequiresReview",
+                    "locator": "ambient-export.pdf"
+                });
+            }
+            std::fs::write(&queue_path, serde_json::to_vec_pretty(&persisted).unwrap()).unwrap();
+
+            let resumed_events = Arc::new(Mutex::new(Vec::new()));
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let resumed_pipeline = Arc::new(ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&resumed_events),
+                }),
+                Arc::new(RecordingExporter {
+                    events: Arc::clone(&resumed_events),
+                    requests: Arc::clone(&requests),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&resumed_events),
+                    submitted: Arc::clone(&submitted),
+                }),
+            ));
+            let resumed_service = PrintService::new(
+                queue_root.clone(),
+                journal_root,
+                Duration::from_secs(300),
+                GlobalMutationLock::default(),
+                Arc::new(PreviewAdapter::default()),
+            )
+            .with_excel_pipeline(resumed_pipeline);
+            let resumed = resumed_service.resume(&caller, queue_id).unwrap();
+            let rows = resumed.meta["editor"]["rows"].as_array().unwrap();
+            let by_name = |name: &str| {
+                rows.iter()
+                    .find(|row| row["worksheetName"] == name)
+                    .unwrap()
+                    .clone()
+            };
+            let civ = by_name("CIV");
+            let mec = by_name("MEC");
+            let revised = resumed_service
+                .revise(&caller, &resumed.plan_id, &[civ, mec])
+                .unwrap();
+
+            let result = resumed_service
+                .apply(&revised.plan_id, &caller, |_| {})
+                .unwrap();
+
+            assert_eq!((result.applied, result.failed), (2, 0));
+            assert_eq!(
+                *resumed_events.lock().unwrap(),
+                ["policy", "export", "submit", "policy", "export", "submit"]
+            );
+            let approved_source = std::fs::read(&workbook).unwrap();
+            let requests = requests.lock().unwrap();
+            assert_eq!(requests.len(), 2);
+            assert_ne!(requests[0].request_id, requests[1].request_id);
+            assert_eq!(requests[0].worksheet.name, "CIV");
+            assert_eq!(requests[1].worksheet.name, "MEC");
+            assert!(
+                requests
+                    .iter()
+                    .all(|request| request.workbook_bytes == approved_source)
+            );
+            let submitted = submitted.lock().unwrap();
+            assert_eq!(submitted.len(), 2);
+            assert_eq!(submitted[0].worksheet, "CIV");
+            assert_eq!(submitted[1].worksheet, "MEC");
+            assert!(
+                submitted
+                    .iter()
+                    .all(|submission| submission.pdf == multi_page_pdf(2))
+            );
+            let persisted: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(queue_path).unwrap()).unwrap();
+            assert_eq!(
+                persisted["jobs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|job| job["worksheet"]["name"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                ["CIV", "MEC"]
+            );
+            assert!(persisted["jobs"][0].get("exportedPdfPath").is_none());
+            assert_eq!(
+                persisted["jobs"][0]["cleanupReview"],
+                serde_json::json!({
+                    "warningKey": "error.print.exportCleanupRequiresReview",
+                    "locator": "ambient-export.pdf"
+                })
+            );
+            assert!(persisted["jobs"][1].get("exportedPdfPath").is_none());
+            assert_eq!(
+                persisted["jobs"][1]["cleanupReview"],
+                serde_json::json!({
+                    "warningKey": "error.print.exportCleanupRequiresReview",
+                    "locator": "ambient-export.pdf"
+                })
+            );
+        }
+
+        #[test]
+        fn source_leaf_substitution_after_export_blocks_all_submission() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let (_directory, source, signature) = source_fixture();
+            let pipeline = ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(SourceReplacingExporter {
+                    events: Arc::clone(&events),
+                    source_path: source.absolute().to_path_buf(),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+            );
+            let cancellation = CancellationRegistry::default().register("source-swap");
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+
+            assert_eq!(failure.message, "error.print.workbookChanged");
+            assert_eq!(*events.lock().unwrap(), ["policy", "export"]);
+            assert!(submitted.lock().unwrap().is_empty());
         }
 
         #[test]
@@ -3185,7 +4716,7 @@ mod tests {
         }
 
         #[test]
-        fn panic_unwind_cleanup_failure_outranks_failed_join_quarantine() {
+        fn panic_unwind_cleanup_failure_attaches_review_to_worker_stopped_primary() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
             let staged_paths = Arc::new(Mutex::new(Vec::new()));
@@ -3213,11 +4744,18 @@ mod tests {
 
             assert_eq!(staged_paths.lock().unwrap().len(), 1);
             assert!(staged_paths.lock().unwrap()[0].exists());
-            assert_cleanup_review_failure(&pipeline, &failure, &events, &submitted);
+            assert_cleanup_review_failure(
+                &pipeline,
+                &failure,
+                crate::print_queue::PrintFailureKind::Failed,
+                "error.print.excelWorkerStopped",
+                &events,
+                &submitted,
+            );
         }
 
         #[test]
-        fn error_response_cleanup_failure_outranks_failed_join_quarantine() {
+        fn error_response_cleanup_failure_attaches_review_to_cancelled_primary() {
             const REQUEST_ID: &str = "cleanup-error-failed-join";
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
@@ -3249,11 +4787,18 @@ mod tests {
                 .export_and_submit(&job, &source, &mut source_file, cancellation)
                 .unwrap_err();
 
-            assert_cleanup_review_failure(&pipeline, &failure, &events, &submitted);
+            assert_cleanup_review_failure(
+                &pipeline,
+                &failure,
+                crate::print_queue::PrintFailureKind::Cancelled,
+                "error.print.excelExportCancelled",
+                &events,
+                &submitted,
+            );
         }
 
         #[test]
-        fn received_response_cleanup_failure_outranks_failed_join() {
+        fn received_response_cleanup_failure_attaches_review_to_quarantined_primary() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
             let pipeline = ExcelExportPipeline::for_testing_with_runtime(
@@ -3280,11 +4825,18 @@ mod tests {
                 .export_and_submit(&job, &source, &mut source_file, cancellation)
                 .unwrap_err();
 
-            assert_cleanup_review_failure(&pipeline, &failure, &events, &submitted);
+            assert_cleanup_review_failure(
+                &pipeline,
+                &failure,
+                crate::print_queue::PrintFailureKind::Unsupported,
+                "error.print.excelExportQuarantined",
+                &events,
+                &submitted,
+            );
         }
 
         #[test]
-        fn cancelled_failed_join_loser_cleanup_failure_outranks_quarantine() {
+        fn cancelled_failed_join_loser_cleanup_failure_preserves_cancelled_primary() {
             const REQUEST_ID: &str = "cleanup-cancel-failed-join";
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
@@ -3316,11 +4868,18 @@ mod tests {
                 .export_and_submit(&job, &source, &mut source_file, cancellation)
                 .unwrap_err();
 
-            assert_cleanup_review_failure(&pipeline, &failure, &events, &submitted);
+            assert_cleanup_review_failure(
+                &pipeline,
+                &failure,
+                crate::print_queue::PrintFailureKind::Cancelled,
+                "error.print.excelExportCancelled",
+                &events,
+                &submitted,
+            );
         }
 
         #[test]
-        fn timeout_failed_join_loser_cleanup_failure_outranks_quarantine() {
+        fn timeout_failed_join_loser_cleanup_failure_preserves_timeout_primary() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let submitted = Arc::new(Mutex::new(Vec::new()));
             let clock = Arc::new(AdvancingClock::new());
@@ -3349,12 +4908,21 @@ mod tests {
                 .export_and_submit(&job, &source, &mut source_file, cancellation)
                 .unwrap_err();
 
-            assert_cleanup_review_failure(&pipeline, &failure, &events, &submitted);
+            assert_cleanup_review_failure(
+                &pipeline,
+                &failure,
+                crate::print_queue::PrintFailureKind::Failed,
+                "error.print.excelExportTimedOut",
+                &events,
+                &submitted,
+            );
         }
 
         fn assert_cleanup_review_failure(
             pipeline: &ExcelExportPipeline,
             failure: &PrintFailure,
+            expected_kind: crate::print_queue::PrintFailureKind,
+            expected_message: &str,
             events: &Arc<Mutex<Vec<&'static str>>>,
             submitted: &SubmittedPdfs,
         ) {
@@ -3365,11 +4933,15 @@ mod tests {
                 .iter()
                 .cloned()
                 .collect::<Vec<_>>();
+            assert_eq!(failure.kind, expected_kind);
+            assert_eq!(failure.message, expected_message);
+            assert!(!failure.uncertain);
+            let review = failure.cleanup_review.as_ref().expect("cleanup review");
             assert_eq!(
-                failure.kind,
-                crate::print_queue::PrintFailureKind::Unsupported
+                review.warning_key,
+                "error.print.exportCleanupRequiresReview"
             );
-            assert_eq!(failure.message, "error.print.exportCleanupRequiresReview");
+            assert!(review.locator.starts_with("docflow-excel-"));
             assert!(pipeline.breaker.load(Ordering::Acquire));
             assert_eq!(retained.len(), 1);
             assert!(retained[0].exists());
@@ -3414,11 +4986,15 @@ mod tests {
                 .cloned()
                 .collect::<Vec<_>>();
 
+            assert_eq!(failure.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(failure.message, "error.print.excelExportTimedOut");
+            assert!(!failure.uncertain);
+            let review = failure.cleanup_review.as_ref().expect("cleanup review");
             assert_eq!(
-                failure.kind,
-                crate::print_queue::PrintFailureKind::Unsupported
+                review.warning_key,
+                "error.print.exportCleanupRequiresReview"
             );
-            assert_eq!(failure.message, "error.print.exportCleanupRequiresReview");
+            assert!(review.locator.starts_with("docflow-excel-"));
             assert!(pipeline.breaker.load(Ordering::Acquire));
             assert_eq!(retained.len(), 1);
             assert!(retained[0].exists());
@@ -3469,9 +5045,16 @@ mod tests {
 
             assert_eq!(
                 failure.kind,
-                crate::print_queue::PrintFailureKind::Unsupported
+                crate::print_queue::PrintFailureKind::Cancelled
             );
-            assert_eq!(failure.message, "error.print.exportCleanupRequiresReview");
+            assert_eq!(failure.message, "error.print.excelExportCancelled");
+            assert!(!failure.uncertain);
+            let review = failure.cleanup_review.as_ref().expect("cleanup review");
+            assert_eq!(
+                review.warning_key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert!(review.locator.starts_with("docflow-excel-"));
             assert!(pipeline.breaker.load(Ordering::Acquire));
             assert_eq!(retained.len(), 1);
             assert!(retained[0].exists());
@@ -3544,19 +5127,262 @@ mod tests {
             let (_directory, source, signature) = source_fixture();
             let job = worksheet_job(source.absolute(), signature, "MEC", 1);
 
-            for _ in 0..2 {
+            for expected in [
+                (
+                    crate::print_queue::PrintFailureKind::Failed,
+                    "error.print.excelExportTimedOut",
+                ),
+                (
+                    crate::print_queue::PrintFailureKind::Unsupported,
+                    "error.print.excelExportQuarantined",
+                ),
+            ] {
                 let mut source_file = source.open_read().unwrap();
                 let failure = pipeline
                     .export_and_submit(&job, &source, &mut source_file, cancellation.clone())
                     .unwrap_err();
-                assert_eq!(
-                    failure.kind,
-                    crate::print_queue::PrintFailureKind::Unsupported
-                );
+                assert_eq!(failure.kind, expected.0);
+                assert_eq!(failure.message, expected.1);
                 assert!(!failure.uncertain);
             }
 
             assert_eq!(*events.lock().unwrap(), ["policy"]);
+            assert!(submitted.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn timeout_live_request_reports_retained_workspace_locator() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let clock = Arc::new(AdvancingClock::new());
+            let runtime = Arc::new(RetainingRequestRuntime::new(Arc::clone(&clock)));
+            let pipeline = ExcelExportPipeline::for_testing_with_runtime(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(RecordingExporter {
+                    events: Arc::clone(&events),
+                    requests: Arc::new(Mutex::new(Vec::new())),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+                clock,
+                runtime.clone(),
+                Duration::from_secs(1),
+            );
+            let cancellation = CancellationRegistry::default().register("live-request");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+            let retained_path = runtime
+                .retained_path
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("worker-owned request path");
+            let retained_locator = retained_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap()
+                .to_string();
+            let workspace_was_live = retained_path.exists();
+            let cleanup_review = failure.cleanup_review.clone();
+            runtime.release_and_wait();
+
+            assert!(
+                workspace_was_live,
+                "request was not retained past teardown grace"
+            );
+            assert!(!retained_path.exists());
+            assert_eq!(failure.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(failure.message, "error.print.excelExportTimedOut");
+            let cleanup_review = cleanup_review.expect("unproven cleanup review evidence");
+            assert_eq!(cleanup_review.locator, retained_locator);
+            assert!(cleanup_review.locator.starts_with("docflow-excel-"));
+            assert!(!cleanup_review.locator.contains(std::path::MAIN_SEPARATOR));
+            assert_eq!(
+                cleanup_review.warning_key,
+                "error.print.exportCleanupRequiresReview"
+            );
+            assert_eq!(*events.lock().unwrap(), ["policy"]);
+            assert!(submitted.lock().unwrap().is_empty());
+        }
+
+        struct PlainFailingExporter;
+
+        impl WorksheetPdfExporter for PlainFailingExporter {
+            fn export_pdf(
+                &self,
+                _request: ExcelExportRequest,
+            ) -> Result<ExportedWorksheetPdf, PrintFailure> {
+                Err(PrintFailure::failed("error.print.syntheticExporterFailure"))
+            }
+        }
+
+        struct PollCancellingRuntime {
+            cancellations: Arc<CancellationRegistry>,
+            request_id: &'static str,
+        }
+
+        impl ExcelWorkerRuntime for PollCancellingRuntime {
+            fn launch(
+                &self,
+                exporter: Arc<dyn WorksheetPdfExporter>,
+                request: ExcelExportRequest,
+            ) -> Result<Box<dyn ExcelWorkerHandle>, PrintFailure> {
+                let request_id = request.request_id;
+                let generation = request.generation;
+                let result = exporter.export_pdf(request);
+                Ok(Box::new(PollCancellingWorker {
+                    response: Some(WorkerResponse {
+                        request_id,
+                        generation,
+                        result,
+                    }),
+                    cancellations: Arc::clone(&self.cancellations),
+                    request_id: self.request_id,
+                }))
+            }
+        }
+
+        struct PollCancellingWorker {
+            response: Option<WorkerResponse>,
+            cancellations: Arc<CancellationRegistry>,
+            request_id: &'static str,
+        }
+
+        impl ExcelWorkerHandle for PollCancellingWorker {
+            fn poll(&mut self, _wait: Duration) -> WorkerPoll {
+                let Some(response) = self.response.take() else {
+                    return WorkerPoll::Pending;
+                };
+                assert!(self.cancellations.cancel(self.request_id));
+                WorkerPoll::Response(Box::new(response))
+            }
+
+            fn join_status(&mut self) -> WorkerJoin {
+                WorkerJoin::Finished
+            }
+        }
+
+        #[test]
+        fn cancellation_during_response_poll_preserves_cancelled_primary_for_error_response() {
+            const REQUEST_ID: &str = "poll-cancel-error-response";
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let cancellations = Arc::new(CancellationRegistry::default());
+            let cancellation = cancellations.register(REQUEST_ID);
+            let pipeline = ExcelExportPipeline::for_testing_with_runtime(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(PlainFailingExporter),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+                Arc::new(SystemMonotonicClock),
+                Arc::new(PollCancellingRuntime {
+                    cancellations,
+                    request_id: REQUEST_ID,
+                }),
+                Duration::from_secs(1),
+            );
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+
+            assert_eq!(
+                failure.kind,
+                crate::print_queue::PrintFailureKind::Cancelled
+            );
+            assert_eq!(failure.message, "error.print.excelExportCancelled");
+            assert!(submitted.lock().unwrap().is_empty());
+        }
+
+        struct PollExpiringRuntime {
+            clock: Arc<AdvancingClock>,
+        }
+
+        impl ExcelWorkerRuntime for PollExpiringRuntime {
+            fn launch(
+                &self,
+                exporter: Arc<dyn WorksheetPdfExporter>,
+                request: ExcelExportRequest,
+            ) -> Result<Box<dyn ExcelWorkerHandle>, PrintFailure> {
+                let request_id = request.request_id;
+                let generation = request.generation;
+                let result = exporter.export_pdf(request);
+                Ok(Box::new(PollExpiringWorker {
+                    response: Some(WorkerResponse {
+                        request_id,
+                        generation,
+                        result,
+                    }),
+                    clock: Arc::clone(&self.clock),
+                }))
+            }
+        }
+
+        struct PollExpiringWorker {
+            response: Option<WorkerResponse>,
+            clock: Arc<AdvancingClock>,
+        }
+
+        impl ExcelWorkerHandle for PollExpiringWorker {
+            fn poll(&mut self, _wait: Duration) -> WorkerPoll {
+                let Some(response) = self.response.take() else {
+                    return WorkerPoll::Pending;
+                };
+                self.clock.advance();
+                WorkerPoll::Response(Box::new(response))
+            }
+
+            fn join_status(&mut self) -> WorkerJoin {
+                WorkerJoin::Finished
+            }
+        }
+
+        #[test]
+        fn deadline_during_response_poll_preserves_timeout_primary_for_error_response() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let clock = Arc::new(AdvancingClock::new());
+            let pipeline = ExcelExportPipeline::for_testing_with_runtime(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(PlainFailingExporter),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+                Arc::clone(&clock) as Arc<dyn MonotonicClock>,
+                Arc::new(PollExpiringRuntime { clock }),
+                Duration::from_secs(1),
+            );
+            let cancellation =
+                CancellationRegistry::default().register("poll-expire-error-response");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            let failure = pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap_err();
+
+            assert_eq!(failure.kind, crate::print_queue::PrintFailureKind::Failed);
+            assert_eq!(failure.message, "error.print.excelExportTimedOut");
             assert!(submitted.lock().unwrap().is_empty());
         }
     }

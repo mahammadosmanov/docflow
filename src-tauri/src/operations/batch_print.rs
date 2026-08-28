@@ -633,6 +633,7 @@ fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
         attempts: None,
         error: None,
         completed_at: None,
+        cleanup_review: None,
         extra: Map::new(),
     }
 }

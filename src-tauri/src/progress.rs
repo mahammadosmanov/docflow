@@ -52,6 +52,11 @@ impl CancellationToken {
     pub(crate) fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Acquire)
     }
+
+    #[cfg(test)]
+    pub(crate) fn same_state(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.cancelled, &other.cancelled)
+    }
 }
 
 #[derive(Default)]

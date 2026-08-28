@@ -3,9 +3,47 @@ use std::sync::Arc;
 use crate::print_queue::PrintAdapter;
 
 #[cfg(any(target_os = "windows", test))]
+pub(crate) mod controlled_submit;
+#[cfg(any(target_os = "windows", test))]
 pub(crate) mod excel;
 #[cfg(any(target_os = "windows", test))]
 pub(crate) mod excel_windows_contract;
+
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn consume_controlled_page_bytes<T>(
+    render: impl FnOnce() -> Result<Vec<u8>, crate::print_queue::PrintFailure>,
+    consume: impl FnOnce(&[u8]) -> Result<T, crate::print_queue::PrintFailure>,
+) -> Result<T, crate::print_queue::PrintFailure> {
+    let rendered = render()?;
+    consume(&rendered)
+}
+
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn map_controlled_print_failure(
+    mut failure: crate::print_queue::PrintFailure,
+) -> crate::print_queue::PrintFailure {
+    if failure.message.starts_with("error.print.") {
+        return failure;
+    }
+    failure.message = match failure.kind {
+        crate::print_queue::PrintFailureKind::Failed => "error.print.excelPrintPreparationFailed",
+        crate::print_queue::PrintFailureKind::Unsupported => {
+            "error.print.excelControlledPdfUnavailable"
+        }
+        crate::print_queue::PrintFailureKind::UnsupportedOptions => {
+            "error.print.excelPrintOptionsRejected"
+        }
+        crate::print_queue::PrintFailureKind::Uncertain => {
+            "error.print.excelPrintCompletionUnconfirmed"
+        }
+        crate::print_queue::PrintFailureKind::Cancelled if failure.uncertain => {
+            "error.print.excelPrintCancelledUnconfirmed"
+        }
+        crate::print_queue::PrintFailureKind::Cancelled => "error.print.excelExportCancelled",
+    }
+    .to_string();
+    failure
+}
 
 #[cfg(any(target_os = "windows", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -173,6 +211,108 @@ mod tests {
     use super::*;
 
     #[test]
+    fn controlled_route_maps_raw_helper_failures_before_and_after_start_doc() {
+        let cases = [
+            (
+                crate::print_queue::PrintFailure::failed("raw devmode failure"),
+                crate::print_queue::PrintFailureKind::Failed,
+                false,
+                "error.print.excelPrintPreparationFailed",
+            ),
+            (
+                crate::print_queue::PrintFailure::unsupported_options("raw option failure"),
+                crate::print_queue::PrintFailureKind::UnsupportedOptions,
+                false,
+                "error.print.excelPrintOptionsRejected",
+            ),
+            (
+                windows_post_submission_failure(crate::print_queue::PrintFailure::failed(
+                    "raw renderer failure",
+                )),
+                crate::print_queue::PrintFailureKind::Uncertain,
+                true,
+                "error.print.excelPrintCompletionUnconfirmed",
+            ),
+            (
+                windows_post_submission_failure(crate::print_queue::PrintFailure::cancelled(
+                    "raw cancellation failure",
+                    false,
+                )),
+                crate::print_queue::PrintFailureKind::Cancelled,
+                true,
+                "error.print.excelPrintCancelledUnconfirmed",
+            ),
+        ];
+
+        for (raw, expected_kind, expected_uncertainty, expected_key) in cases {
+            let mapped = map_controlled_print_failure(raw);
+            assert_eq!(mapped.kind, expected_kind);
+            assert_eq!(mapped.uncertain, expected_uncertainty);
+            assert_eq!(mapped.message, expected_key);
+        }
+
+        let already_stable =
+            crate::print_queue::PrintFailure::failed("error.print.excelPrinterContextUnavailable");
+        assert_eq!(
+            map_controlled_print_failure(already_stable.clone()),
+            already_stable
+        );
+    }
+
+    #[test]
+    fn controlled_route_error_keys_have_all_operator_localizations() {
+        let catalogs = [
+            include_str!("../../../frontend/src/locales/app_en.arb"),
+            include_str!("../../../frontend/src/locales/app_az.arb"),
+            include_str!("../../../frontend/src/locales/app_ru.arb"),
+            include_str!("../../../frontend/src/locales/app_tr.arb"),
+        ];
+        let keys = [
+            "error.print.excelPrintPreparationFailed",
+            "error.print.excelPrintOptionsRejected",
+            "error.print.excelPrintCancelledUnconfirmed",
+            "error.print.excelPrintCompletionUnconfirmed",
+        ];
+
+        for catalog in catalogs {
+            let catalog: serde_json::Value = serde_json::from_str(catalog).unwrap();
+            for key in keys {
+                let translation = catalog[key]
+                    .as_str()
+                    .expect("localized controlled-route key");
+                assert!(!translation.trim().is_empty());
+                assert_ne!(translation, key);
+            }
+        }
+    }
+
+    #[test]
+    fn controlled_page_adapter_consumes_exact_rendered_bytes_without_path_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let ambient = directory.path().join("page.png");
+        std::fs::write(&ambient, b"validated rendered page").unwrap();
+        let consumed = std::sync::Mutex::new(Vec::new());
+
+        consume_controlled_page_bytes(
+            || Ok(std::fs::read(&ambient).unwrap()),
+            |bytes| {
+                let displaced = ambient.with_extension("approved-original");
+                std::fs::rename(&ambient, displaced).unwrap();
+                std::fs::write(&ambient, b"substituted rendered page").unwrap();
+                consumed.lock().unwrap().extend_from_slice(bytes);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(*consumed.lock().unwrap(), b"validated rendered page");
+        assert_eq!(
+            std::fs::read(ambient).unwrap(),
+            b"substituted rendered page"
+        );
+    }
+
+    #[test]
     fn submitted_windows_printer_fault_statuses_are_always_uncertain() {
         for status in [
             0x0000_0002,
@@ -320,19 +460,6 @@ mod tests {
     }
 
     #[test]
-    fn windows_source_routes_successful_abort_and_set_job_through_uncertain_classifiers() {
-        let source = include_str!("windows/printing.rs");
-        assert_eq!(
-            source
-                .matches("windows_post_submission_failure(error)")
-                .count(),
-            2,
-            "both PDF and image render branches must classify errors after StartDocW"
-        );
-        assert!(source.contains("windows_post_submission_cancellation(cancel_requested)"));
-    }
-
-    #[test]
     fn windows_root_identity_uses_volume_serial_and_file_index_from_the_open_handle() {
         let source = include_str!("../cap_fs.rs");
         let implementation = source
@@ -395,6 +522,44 @@ mod tests {
         assert!(!harness.contains("pub mod cap_fs {"));
         assert!(!harness.contains("pub(crate) struct ExcelExportRequest"));
         assert!(!harness.contains("pub(crate) struct StagedWorkbook"));
+    }
+
+    #[test]
+    fn production_excel_pipeline_uses_only_validated_in_memory_controlled_pdf_submission() {
+        let excel = include_str!("windows/excel.rs");
+        let construction = excel
+            .split("pub(crate) fn production_excel_pipeline()")
+            .nth(1)
+            .expect("production Excel pipeline constructor")
+            .split("fn bounded_path(")
+            .next()
+            .expect("bounded production Excel construction");
+        assert!(construction.contains("WindowsControlledPdfSubmitter"));
+        assert!(!construction.contains("ControlledPdfUnavailable"));
+
+        let printing = include_str!("windows/printing.rs");
+        let submitter = printing
+            .split("impl ControlledPdfSubmitter for WindowsControlledPdfSubmitter")
+            .nth(1)
+            .expect("controlled PDF submitter implementation")
+            .split("fn enumerate_printers(")
+            .next()
+            .expect("bounded controlled PDF submitter implementation");
+        assert!(submitter.contains("pdf.validated_bytes()?"));
+        assert!(submitter.contains("submit_controlled_pdf("));
+        for forbidden in [
+            "pdf.pdf_path()",
+            "job.path",
+            "WindowsPrintAdapter",
+            ".inspect(",
+            ".submit(",
+            "print_with_native_application",
+        ] {
+            assert!(
+                !submitter.contains(forbidden),
+                "controlled PDF submitter used forbidden route {forbidden}"
+            );
+        }
     }
 
     #[test]

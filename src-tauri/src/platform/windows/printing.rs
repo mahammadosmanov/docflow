@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     ffi::OsStr,
     fs::File,
-    io::BufReader,
+    io::{BufRead, BufReader, Cursor, Seek},
     mem::{size_of, size_of_val},
     os::windows::ffi::OsStrExt,
     path::Path,
@@ -44,15 +44,21 @@ use windows_sys::Win32::{
 };
 
 use crate::page_range::{PageRangeCapability, selected_pdf_pages};
+use crate::platform::controlled_submit::{
+    ControlledSubmitEffects, SubmitSignals, SubmitSnapshot, execute_controlled_submit,
+};
+use crate::platform::excel::{ControlledPdfSubmitter, ExportedWorksheetPdf};
 use crate::platform::{
     WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
-    classify_windows_submitted_job_status, validate_windows_image_frame_count,
+    classify_windows_submitted_job_status, consume_controlled_page_bytes,
+    map_controlled_print_failure, validate_windows_image_frame_count,
     windows_missing_submitted_job, windows_post_submission_cancellation,
     windows_post_submission_failure, windows_post_submission_observation_error,
 };
 use crate::print_queue::{
     PrintAdapter, PrintFailure, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
 };
+use crate::progress::CancellationToken;
 
 const PDF_DPI: i32 = 300;
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -140,6 +146,21 @@ impl PrintAdapter for WindowsPrintAdapter {
         } else {
             print_with_native_application(job, cancelled)
         }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct WindowsControlledPdfSubmitter;
+
+impl ControlledPdfSubmitter for WindowsControlledPdfSubmitter {
+    fn submit_pdf(
+        &self,
+        job: &PrintJob,
+        pdf: &ExportedWorksheetPdf,
+        cancellation: CancellationToken,
+        deadline: Instant,
+    ) -> Result<(), PrintFailure> {
+        submit_controlled_pdf(job, pdf.validated_bytes()?, &cancellation, deadline)
     }
 }
 
@@ -437,6 +458,153 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
         ));
     }
     wait_for_job(&job.printer, job_id as u32, deadline, cancelled)
+}
+
+fn submit_controlled_pdf(
+    job: &PrintJob,
+    pdf_bytes: &[u8],
+    cancellation: &CancellationToken,
+    deadline: Instant,
+) -> Result<(), PrintFailure> {
+    submit_controlled_pdf_inner(job, pdf_bytes, cancellation, deadline)
+        .map_err(map_controlled_print_failure)
+}
+
+struct WindowsControlledSubmitSignals<'a> {
+    cancellation: &'a CancellationToken,
+    deadline: Instant,
+}
+
+impl SubmitSignals for WindowsControlledSubmitSignals<'_> {
+    fn sample(&self) -> SubmitSnapshot {
+        SubmitSnapshot {
+            cancelled: self.cancellation.is_cancelled(),
+            deadline_expired: Instant::now() >= self.deadline,
+        }
+    }
+}
+
+struct WindowsControlledSubmitEffects<'a> {
+    context: &'a mut DeviceContext,
+    devmode: *mut DEVMODEW,
+    document_info: &'a DOCINFOW,
+    document: &'a crate::windows_pdf::InMemoryPdf,
+    pages: &'a [u32],
+    settings: &'a PrintSettings,
+    printer: &'a str,
+    cancellation: &'a CancellationToken,
+    deadline: Instant,
+}
+
+impl ControlledSubmitEffects for WindowsControlledSubmitEffects<'_> {
+    type JobId = u32;
+
+    fn start_doc(&mut self) -> Result<Self::JobId, PrintFailure> {
+        let job_id = unsafe { StartDocW(self.context.0, self.document_info) };
+        if job_id <= 0 {
+            Err(PrintFailure::failed("error.print.excelPrintJobRejected"))
+        } else {
+            u32::try_from(job_id)
+                .map_err(|_| PrintFailure::failed("error.print.excelPrintJobRejected"))
+        }
+    }
+
+    fn abort_doc(&mut self) -> bool {
+        (unsafe { AbortDoc(self.context.0) }) > 0
+    }
+
+    fn render_pages(&mut self) -> Result<(), PrintFailure> {
+        render_in_memory_pdf_pages(
+            self.context,
+            self.devmode,
+            InMemoryPdfRenderRequest {
+                document: self.document,
+                pages: self.pages,
+                settings: self.settings,
+                deadline: self.deadline,
+                cancelled: &|| self.cancellation.is_cancelled(),
+            },
+        )
+    }
+
+    fn end_doc(&mut self) -> Result<(), PrintFailure> {
+        if unsafe { EndDoc(self.context.0) } > 0 {
+            Ok(())
+        } else {
+            Err(PrintFailure::failed(
+                "error.print.excelPrintCompletionUnconfirmed",
+            ))
+        }
+    }
+
+    fn observe_job(&mut self, job_id: Self::JobId) -> Result<(), PrintFailure> {
+        wait_for_job(self.printer, job_id, self.deadline, &|| {
+            self.cancellation.is_cancelled()
+        })
+    }
+}
+
+fn submit_controlled_pdf_inner(
+    job: &PrintJob,
+    pdf_bytes: &[u8],
+    cancellation: &CancellationToken,
+    deadline: Instant,
+) -> Result<(), PrintFailure> {
+    if job.page_range != "all" {
+        return Err(PrintFailure::unsupported_options(
+            "error.print.worksheetPageRangeAllOnly",
+        ));
+    }
+
+    let document = crate::windows_pdf::InMemoryPdf::load(pdf_bytes)
+        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+    let page_count = document
+        .page_count()
+        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+    let pages = selected_pdf_pages("all", page_count)
+        .map_err(|error| PrintFailure::failed(error.message))?;
+    let mut devmode = validated_devmode(&job.printer, &job.settings())?;
+    let printer = wide(&job.printer);
+    let driver = wide("WINSPOOL");
+    let hdc = unsafe {
+        CreateDCW(
+            driver.as_ptr(),
+            printer.as_ptr(),
+            null(),
+            devmode.as_mut_ptr::<DEVMODEW>(),
+        )
+    };
+    if hdc.is_null() {
+        return Err(PrintFailure::failed(
+            "error.print.excelPrinterContextUnavailable",
+        ));
+    }
+    let mut context = DeviceContext(hdc);
+    let title = wide("DocFlow - Excel worksheet");
+    let document_info = DOCINFOW {
+        cbSize: size_of::<DOCINFOW>() as i32,
+        lpszDocName: title.as_ptr(),
+        lpszOutput: null(),
+        lpszDatatype: null(),
+        fwType: 0,
+    };
+    let signals = WindowsControlledSubmitSignals {
+        cancellation,
+        deadline,
+    };
+    let settings = job.settings();
+    let mut effects = WindowsControlledSubmitEffects {
+        context: &mut context,
+        devmode: devmode.as_mut_ptr::<DEVMODEW>(),
+        document_info: &document_info,
+        document: &document,
+        pages: &pages,
+        settings: &settings,
+        printer: &job.printer,
+        cancellation,
+        deadline,
+    };
+    execute_controlled_submit(&signals, &mut effects)
 }
 
 struct GdiPlusRuntime(usize);
@@ -769,6 +937,60 @@ fn render_pdf_pages(
     Ok(())
 }
 
+struct InMemoryPdfRenderRequest<'a> {
+    document: &'a crate::windows_pdf::InMemoryPdf,
+    pages: &'a [u32],
+    settings: &'a PrintSettings,
+    deadline: Instant,
+    cancelled: &'a dyn Fn() -> bool,
+}
+
+fn render_in_memory_pdf_pages(
+    context: &mut DeviceContext,
+    devmode: *mut DEVMODEW,
+    request: InMemoryPdfRenderRequest<'_>,
+) -> Result<(), PrintFailure> {
+    for &page in request.pages {
+        if (request.cancelled)() {
+            return Err(PrintFailure::cancelled(
+                "Windows PDF job was cancelled while rendering",
+                false,
+            ));
+        }
+        if Instant::now() >= request.deadline {
+            return Err(PrintFailure::failed(
+                "Windows PDF rendering exceeded the print timeout",
+            ));
+        }
+        let bitmap = consume_controlled_page_bytes(
+            || {
+                request
+                    .document
+                    .render_page_png_bytes(PDF_DPI, page)
+                    .map_err(PrintFailure::failed)
+            },
+            decode_png_bytes,
+        )?;
+        reset_auto_orientation(
+            context,
+            devmode,
+            request.settings,
+            bitmap.width,
+            bitmap.height,
+        )?;
+        if unsafe { StartPage(context.0) } <= 0 {
+            return Err(PrintFailure::failed("Windows could not start a PDF page"));
+        }
+        let printed = draw_bitmap(context.0, &bitmap, &request.settings.scaling);
+        let ended = unsafe { EndPage(context.0) } > 0;
+        printed?;
+        if !ended {
+            return Err(PrintFailure::failed("Windows could not finish a PDF page"));
+        }
+    }
+    Ok(())
+}
+
 fn reset_auto_orientation(
     context: &mut DeviceContext,
     devmode: *mut DEVMODEW,
@@ -808,7 +1030,15 @@ struct Bitmap {
 fn decode_png(path: &Path) -> Result<Bitmap, PrintFailure> {
     let file = File::open(path)
         .map_err(|_| PrintFailure::failed("Windows could not read a rendered PDF page"))?;
-    let mut decoder = png::Decoder::new(BufReader::new(file));
+    decode_png_reader(BufReader::new(file))
+}
+
+fn decode_png_bytes(bytes: &[u8]) -> Result<Bitmap, PrintFailure> {
+    decode_png_reader(Cursor::new(bytes))
+}
+
+fn decode_png_reader(reader: impl BufRead + Seek) -> Result<Bitmap, PrintFailure> {
+    let mut decoder = png::Decoder::new(reader);
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder
         .read_info()

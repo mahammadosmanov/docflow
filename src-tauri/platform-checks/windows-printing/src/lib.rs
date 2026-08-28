@@ -1,3 +1,9 @@
+#![cfg(not(test))]
+
+// This crate is a compile-only production boundary mirror. The real root crate's
+// Windows `--all-targets` gate owns test-cfg compilation; this nested harness has
+// no independent test scaffolding to compile or maintain.
+
 #[cfg(target_os = "windows")]
 pub mod page_range {
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -34,11 +40,28 @@ pub mod print_queue {
         Cancelled,
     }
 
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(crate) enum RetryDisposition {
+        CleanupQuarantined,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct CleanupReview {
+        pub(crate) warning_key: &'static str,
+        pub(crate) locator: String,
+    }
+
+    #[derive(Clone, Debug, Default, Eq, PartialEq)]
+    pub struct PrintSubmissionOutcome {
+        pub(crate) cleanup_review: Option<CleanupReview>,
+    }
+
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct PrintFailure {
         pub kind: PrintFailureKind,
         pub message: String,
         pub uncertain: bool,
+        cleanup_review: Option<CleanupReview>,
     }
 
     impl PrintFailure {
@@ -47,6 +70,7 @@ pub mod print_queue {
                 kind,
                 message: message.into(),
                 uncertain,
+                cleanup_review: None,
             }
         }
 
@@ -68,6 +92,19 @@ pub mod print_queue {
 
         pub fn cancelled(message: impl Into<String>, uncertain: bool) -> Self {
             Self::new(PrintFailureKind::Cancelled, message, uncertain)
+        }
+
+        pub(crate) fn with_cleanup_review(mut self, cleanup_review: CleanupReview) -> Self {
+            self.cleanup_review = Some(cleanup_review);
+            self
+        }
+
+        pub(crate) fn has_cleanup_review(&self) -> bool {
+            self.cleanup_review.is_some()
+        }
+
+        pub(crate) fn with_retry_disposition(self, _disposition: RetryDisposition) -> Self {
+            self
         }
     }
 
@@ -199,20 +236,24 @@ pub mod print_queue {
 }
 
 #[cfg(target_os = "windows")]
-pub mod windows_pdf {
-    use std::path::Path;
+#[path = "../../../src/windows_pdf.rs"]
+pub mod windows_pdf;
 
-    pub fn page_count(_input: &Path) -> Result<u32, String> {
-        Ok(1)
+pub mod pdf {
+    use std::sync::Arc;
+
+    pub(crate) const MAX_PDF_BYTES: u64 = 256 * 1024 * 1024;
+
+    pub struct PdfInspection {
+        pub page_count: u32,
     }
 
-    pub fn render_page_png(
-        _input: &Path,
-        _output: &Path,
-        _dpi: i32,
-        _page_index: u32,
-    ) -> Result<(u32, u32), String> {
-        Ok((1, 1))
+    pub(crate) fn inspect_bytes(bytes: Arc<[u8]>) -> Result<PdfInspection, String> {
+        if bytes.is_empty() {
+            Err("empty PDF".to_string())
+        } else {
+            Ok(PdfInspection { page_count: 1 })
+        }
     }
 }
 
@@ -272,9 +313,19 @@ pub mod progress {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
+pub fn platform_pdf_api_fixture() {
+    let _ = pdf::inspect_bytes;
+    let _ = pdf::MAX_PDF_BYTES;
+}
+
 #[cfg(target_os = "windows")]
 #[path = "../../../src/platform/windows/printing.rs"]
 pub mod printing_impl;
+
+#[cfg(target_os = "windows")]
+#[path = "../../../src/platform/controlled_submit.rs"]
+pub(crate) mod controlled_submit_impl;
 
 #[cfg(target_os = "windows")]
 #[path = "../../../src/platform/excel_windows_contract.rs"]
@@ -290,6 +341,45 @@ pub mod excel_windows_impl;
 
 #[cfg(target_os = "windows")]
 pub mod platform {
+    pub(crate) use crate::controlled_submit_impl as controlled_submit;
+
+    pub(crate) fn consume_controlled_page_bytes<T>(
+        render: impl FnOnce() -> Result<Vec<u8>, crate::print_queue::PrintFailure>,
+        consume: impl FnOnce(&[u8]) -> Result<T, crate::print_queue::PrintFailure>,
+    ) -> Result<T, crate::print_queue::PrintFailure> {
+        let rendered = render()?;
+        consume(&rendered)
+    }
+
+    pub(crate) fn map_controlled_print_failure(
+        mut failure: crate::print_queue::PrintFailure,
+    ) -> crate::print_queue::PrintFailure {
+        if failure.message.starts_with("error.print.") {
+            return failure;
+        }
+        failure.message = match failure.kind {
+            crate::print_queue::PrintFailureKind::Failed => {
+                "error.print.excelPrintPreparationFailed"
+            }
+            crate::print_queue::PrintFailureKind::Unsupported => {
+                "error.print.excelControlledPdfUnavailable"
+            }
+            crate::print_queue::PrintFailureKind::UnsupportedOptions => {
+                "error.print.excelPrintOptionsRejected"
+            }
+            crate::print_queue::PrintFailureKind::Cancelled if failure.uncertain => {
+                "error.print.excelPrintCancelledUnconfirmed"
+            }
+            crate::print_queue::PrintFailureKind::Cancelled => "error.print.excelExportCancelled",
+            crate::print_queue::PrintFailureKind::Uncertain => {
+                "error.print.excelPrintCompletionUnconfirmed"
+            }
+        }
+        .to_string();
+        failure
+    }
+
+
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub(crate) enum WindowsSubmittedJobStatus {
         Complete,
@@ -418,6 +508,7 @@ pub fn platform_page_range_api_fixture() {
 
 #[cfg(target_os = "windows")]
 pub fn platform_excel_api_fixture() {
+    let _ = pdf::inspect_bytes;
     let _ = excel_windows_impl::production_excel_pipeline();
     let _ = platform::excel::ExcelExportPipeline::export_and_submit;
     let _ = cap_fs::CapabilityRoot::canonical;
@@ -444,10 +535,5 @@ pub fn platform_excel_api_fixture() {
     let _ = cap_fs::AnchoredPath::move_no_clobber_to;
     let _ = cap_fs::AnchoredPath::replace_with;
     let _ = cap_fs::AnchoredPath::temporary_sibling;
-    let _ = |request: platform::excel::ExcelExportRequest| {
-        let _ = request.approved_signature;
-    };
-    let _ = |pdf: &platform::excel::ExportedWorksheetPdf| {
-        let _ = pdf.pdf_path();
-    };
+    let _ = platform::excel::ExportedWorksheetPdf::validated_bytes;
 }

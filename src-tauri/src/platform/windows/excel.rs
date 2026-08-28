@@ -20,8 +20,7 @@ use crate::{
     cap_fs::AnchoredPath,
     platform::{
         excel::{
-            ControlledPdfSubmitter, ExcelExportPipeline, ExcelExportRequest, ExportedWorksheetPdf,
-            WorksheetPdfExporter,
+            ExcelExportPipeline, ExcelExportRequest, ExportedWorksheetPdf, WorksheetPdfExporter,
         },
         excel_windows_contract::{
             AnchoredWorkbookSourcePolicy, ComObject, ComOperation, ComPlanRequest, ComValue,
@@ -30,7 +29,7 @@ use crate::{
             validate_workbook_safety,
         },
     },
-    print_queue::{PrintFailure, PrintJob},
+    print_queue::PrintFailure,
     progress::CancellationToken,
 };
 
@@ -66,7 +65,6 @@ impl WorksheetPdfExporter for WindowsExcelExporter {
     ) -> Result<ExportedWorksheetPdf, PrintFailure> {
         let ExcelExportRequest {
             staged_workbook,
-            approved_signature: _,
             safety,
             worksheet,
             deadline,
@@ -111,14 +109,9 @@ impl WorksheetPdfExporter for WindowsExcelExporter {
             ));
         }
         execution?;
+        let exported_pdf = staged_workbook.into_exported_pdf()?;
         check_worker_fence(deadline, &cancellation)?;
-
-        let page_count = crate::windows_pdf::page_count(&pdf_output_path)
-            .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
-        if page_count == 0 {
-            return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
-        }
-        staged_workbook.into_exported_pdf()
+        Ok(exported_pdf)
     }
 }
 
@@ -128,23 +121,8 @@ pub(crate) fn production_excel_pipeline() -> Arc<ExcelExportPipeline> {
             WindowsZoneIdentifierReader,
         )),
         Arc::new(WindowsExcelExporter),
-        Arc::new(ControlledPdfUnavailable),
+        Arc::new(super::printing::WindowsControlledPdfSubmitter),
     ))
-}
-
-struct ControlledPdfUnavailable;
-
-impl ControlledPdfSubmitter for ControlledPdfUnavailable {
-    fn submit_pdf(
-        &self,
-        _job: &PrintJob,
-        _pdf: &ExportedWorksheetPdf,
-        _cancellation: CancellationToken,
-    ) -> Result<(), PrintFailure> {
-        Err(PrintFailure::unsupported(
-            "error.print.excelControlledPdfUnavailable",
-        ))
-    }
 }
 
 fn bounded_path(path: &std::path::Path) -> Result<String, PrintFailure> {

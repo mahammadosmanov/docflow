@@ -545,9 +545,9 @@ where
     }
 }
 
-fn sync_parent_directory(parent: &Path) -> io::Result<()> {
+fn sync_parent_directory(_parent: &Path) -> io::Result<()> {
     #[cfg(unix)]
-    fs::File::open(parent)?.sync_all()?;
+    fs::File::open(_parent)?.sync_all()?;
     Ok(())
 }
 
