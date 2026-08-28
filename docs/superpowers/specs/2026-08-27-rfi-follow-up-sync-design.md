@@ -181,6 +181,14 @@ const MAX_HEADER_ROWS: u32 = 32;
 const MAX_HEADER_COLUMNS: u32 = 64;
 const MAX_FOLLOW_UP_DATA_ROWS: u32 = 10_000;
 const MAX_PREVIEW_ROWS: usize = 500;
+const MAX_SOURCE_EVIDENCE_PER_RFI: usize = 500;
+const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 8 * 1024 * 1024;
+// ooxml.rs: crate-visible parser/apply contract
+pub(crate) const MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK: u64 = 1_000_000;
+pub(crate) const MAX_APPLY_MERGE_COMPARISONS: u64 = 2_000_000;
+
+// rfi_follow_up.rs: preview/revise source+target account
+const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 2_000_000;
 const MAX_CELL_TEXT_CHARS: usize = 20_000;
 ```
 
@@ -194,7 +202,7 @@ Normalization is deliberately narrow:
 
 There is no internal-whitespace collapse, punctuation deletion, substring extraction, wrapped-number recovery, OCR substitution, discipline repair, or fuzzy fallback. The existing permissive `rfi_code::find`/`canonical_and_find` functions are not used by this operation.
 
-Any source or Follow Up cell text longer than 20,000 Unicode scalar values fails preview. If a source sheet extends beyond row `10_009`, or a chosen Follow Up table extends more than 10,000 rows below its header, preview fails rather than silently truncating. More than 500 populated Follow Up review rows also fails rather than returning a partial plan.
+Any source or Follow Up cell text longer than 20,000 Unicode scalar values fails preview. If a source sheet extends beyond row `10_009`, or a chosen Follow Up table extends more than 10,000 rows below its header, preview fails rather than silently truncating. More than 500 populated Follow Up review rows also fails rather than returning a partial plan. A canonical RFI may contribute at most 500 source evidence rows across the four projected sheets. The 501st evidence row for the same canonical RFI fails the whole preview with `error.rfi.followUp.limitExceeded` before any per-target clone, row DTO, editor JSON, or step authority is built; it is never truncated or summarized. The count limit is not the memory bound: the complete serialized preview/editor plus immutable `FollowUpStepMeta` authority projection must also fit `MAX_PREVIEW_AUTHORITY_BYTES` (8 MiB). Exceeding either independent limit fails with `error.rfi.followUp.limitExceeded`; being exactly at a count boundary does not override the byte budget.
 
 ## 6. OOXML read and mutation APIs
 
@@ -247,7 +255,9 @@ impl WorksheetData {
 }
 ```
 
-The existing XML model already stores expanded element/attribute namespaces. Worksheet parsing now requires one root whose expanded name is `{http://schemas.openxmlformats.org/spreadsheetml/2006/main}worksheet` or `{http://purl.oclc.org/ooxml/spreadsheetml/main}worksheet`, exactly one direct canonical `sheetData` child, canonical direct `row` children, and canonical direct `c` children. Cell value/formula/inline-string children must also use that same accepted SpreadsheetML namespace. A local-name match is never sufficient. A canonical `<c>` outside `worksheet/sheetData/row`, a row/cell coordinate disagreement, a second canonical coordinate anywhere in the sheet, or a foreign-namespace element with local name `c` and a parseable `r` coordinate is malformed input. Duplicate coordinates are rejected before insertion into `WorksheetData.cells`; a later node can never overwrite earlier evidence in the `BTreeMap`.
+The existing XML model already stores expanded element/attribute namespaces. Worksheet parsing now requires one root whose expanded name is `{http://schemas.openxmlformats.org/spreadsheetml/2006/main}worksheet` or `{http://purl.oclc.org/ooxml/spreadsheetml/main}worksheet`, exactly one direct canonical `sheetData` child, canonical direct `row` children, and canonical direct `c` children. Every physical canonical row must have a valid in-range `row@r`, and that row identity must be unique across `sheetData`, including empty rows. The parser updates physical `max_row` from each validated row element before inspecting cells, so `<row r="10010"/>` enforces the row limit. Cells must agree with their containing row identity. Cell value/formula/inline-string children must use the same accepted namespace. A local-name match is never sufficient. A canonical `<c>` outside the hierarchy, duplicate physical row identity, row/cell disagreement, duplicate cell coordinate, or foreign shadow is malformed before map insertion. Thus disjoint cells from two `<row r="1">` elements can never synthesize one trusted logical row.
+
+`OoxmlError` becomes a structured error with crate-visible `OoxmlErrorKind::{Invalid, LimitExceeded}` and `pub(crate) fn kind(&self) -> OoxmlErrorKind`; constructors and the message remain private to `ooxml.rs`. `read_workbook_from_reader` keeps its existing signature and enforces the crate-visible parser constant internally. `rfi_follow_up::read_workbook_for_follow_up<R: Read + Seek>` is the only S5 reader adapter: it delegates to `read_workbook_from_reader` and maps only `LimitExceeded` to `error.rfi.followUp.limitExceeded`; malformed OOXML remains `error.rfi.followUp.workbookInvalid`. Focused tests exercise both branches through this adapter, so callers never parse error text.
 
 `sheetProtection` and `mergeCells/mergeCell@ref` are accepted only as canonical direct worksheet children under the same namespace. Merge ranges are validated for syntax, ordering, bounds, overlap, and the 10,000-range limit. Existing handle-based `ordered_workbook_discovery` supplies ordered `WorksheetDescriptor` identities/visibility and `WorkbookSafetyFacts`, including workbook protection. `package_has_signature` returns true for an OOXML signature-origin relationship or any member below `_xmlsignatures/` (case-insensitive package-path comparison); conflicting evidence is invalid, not safe. Strict and Transitional packages remain supported, but namespace shadowing does not.
 
@@ -289,6 +299,8 @@ where
     R1: Read + Seek,
     R2: Read + Seek;
 ```
+
+Guarded apply is a new validation pass and has a separate, explicit target-only work account rather than reusing stale preview counters. While parsing the fresh source handle, guarded patching charges every merge-overlap comparison to the same parser-produced workbook count. It rejects a count above `MAX_APPLY_MERGE_COMPARISONS`, initializes an internal `MergeComparisonBudget` with `MAX_APPLY_MERGE_COMPARISONS - parsed_count`, and charges every selected-cell merge-membership comparison before comparing a range. Thus fresh target overlap validation plus selected-cell membership is bounded by exactly 2,000,000 comparisons per guarded apply attempt. The budget is internal to `patch_workbook_sheets_guarded`; its unchanged public signature cannot receive a caller-forged/reset counter. A limit failure occurs before the first destination workbook byte; the caller-owned, already-journaled owner-only empty private-output handle may remain retained, but backup/displacement/canonical effect has not begun. The typed failure maps through the Task 5 apply boundary to `error.rfi.followUp.limitExceeded` without changing the cached plan's classification-time account.
 
 Rules:
 
@@ -357,7 +369,11 @@ struct SourceStatusEvidence {
 
 `status_cell=None` means the projected source status coordinate has no physical `<c>` element; its normalized status value is `""`. The projected `status_column` remains explicit so missing-cell evidence cannot be mistaken for a different column.
 
-A canonical RFI group produces an automatic proposed status only when every evidence row has a recognized source status and every recognized row maps to the same target value. Repeated identical `Completed` rows or repeated identical `Ongoing` rows are safe. Formula evidence is `sourceFormula`; an RFI/status evidence cell participating in a merged range is `sourceMerged`; an all-blank group is `sourceStatusBlank`; an all-identical nonblank unknown group is `sourceStatusUnknown`; and every mixed recognized/unknown/blank group, `Completed`/`Ongoing` mix, or multiple-unknown group is `sourceConflict`. None is selectable.
+A canonical RFI group produces an automatic proposed status only when every evidence row has a recognized source status and every recognized row maps to the same target value. Repeated identical `Completed` rows or repeated identical `Ongoing` rows are safe up to the explicit 500-evidence-per-RFI bound. Formula evidence is `sourceFormula`; an RFI/status evidence cell participating in a merged range is `sourceMerged`; an all-blank group is `sourceStatusBlank`; an all-identical nonblank unknown group is `sourceStatusUnknown`; and every mixed recognized/unknown/blank group, `Completed`/`Ongoing` mix, or multiple-unknown group is `sourceConflict`. None is selectable. Source merge/formula/status analysis is computed once per bounded canonical group and reused by target rows; classification must not repeat a linear merge-range scan for every duplicate target row.
+
+Merge overlap validation and later membership lookup use one auditable end-to-end comparison account even though parsing precedes classification. Each `WorkbookData` carries private parser-produced `merge_validation_comparisons: u64` and `merge_validation_complete: bool` facts exposed only by crate-visible read-only accessors; no setter/deserializer exists. `Default` is deliberately non-authoritative (`0/false`). The parser sets `complete=true` only after every worksheet's overlap validation succeeds. Production S5 classification rejects `false` as workbook-invalid before using the count; its tests obtain authoritative data through `read_workbook_for_follow_up`, not a forged default struct. During parse, every range-vs-range comparison used to reject overlapping canonical merge ranges consumes one checked unit before the comparison; a workbook fails with the typed worksheet-limit error before comparison `MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK + 1`, and exactly 1,000,000 validation comparisons are allowed across all of that workbook's worksheets. The facts are not accepted from JSON or a caller.
+
+S5 classification checked-adds the source and target parser counts, rejects a sum above `MAX_FOLLOW_UP_MERGE_COMPARISONS`, and initializes one mutable `MergeQueryBudget` with `MAX_FOLLOW_UP_MERGE_COMPARISONS - parsed_sum`. All S5 header, source-evidence, target-RFI, and target-status merge-membership calls consume that same remainder before each `CellRange` comparison. Therefore overlap validation plus membership across both workbooks cannot exceed exactly 2,000,000 range comparisons. Every S5 call site propagates the typed limit as `error.rfi.followUp.limitExceeded`, and no unbudgeted overlap or `merged_range_containing` path remains in Follow Up discovery/classification. This bounds the existing linear representations without expanding wide ranges into cells; maximum-count overlap and many-distinct-RFI fixtures fail predictably before CPU amplification, independent of the later serialization budget.
 
 ## 8. Bounded Follow Up layout discovery
 
@@ -453,6 +469,12 @@ struct FollowUpCellTarget {
     status_cell: CellSnapshot,
 }
 ```
+
+Before any `FollowUpRow.source_evidence` vector, editor `Value`, approved-update vector, or owned step meta is cloned/materialized, classification holds borrowed references to the bounded source groups and lightweight target facts. A private borrowed serialization projection mirrors every field that will be emitted into the complete preview/editor and immutable `FollowUpStepMeta`. It is written with `serde_json::to_writer` into a checked `CountingLimitWriter` that allocates no output bytes, uses checked `u64` addition, and returns `error.rfi.followUp.limitExceeded` before accepting byte `MAX_PREVIEW_AUTHORITY_BYTES + 1`. Only after this exact borrowed projection fits may the owned row/editor/step authority be built. Approximate `size_of`, record-count multiplication, timeout/OOM tests, and serialize-then-measure are forbidden substitutes. The final owned cache-candidate structure is serialized once more through the same bound after its final opaque plan ID is reserved and before plan caching so later DTO changes cannot make the preflight stale.
+
+S5 preview does not rely on the existing `PlanStore::insert_inner` assigning an ID after validation. `PlanStore::reserve_plan_id` returns an opaque `ReservedPlanId` with private ID storage; the type is crate-visible but is neither `Clone` nor serializable and cannot be constructed outside `plan_store.rs`. `ReservedPlanId::assign_to_empty(&self, &mut Plan)` rejects a nonempty `plan.plan_id`, then assigns its canonical lowercase hyphenated UUID without consuming the token. `insert_bound_reserved` consumes that exact token, acquires the existing plans mutex, requires `plan.plan_id` to equal the token's private ID, requires the key to be vacant, computes the digest over that unchanged plan, and inserts without rewriting any serialized field. A caller can budget-check the assigned plan but cannot substitute another canonical UUID and still pass insertion. Collision/mismatch/failure leaves the store unchanged; callers may retry the whole inert preview with a new token but never silently substitute an ID after budget validation. Existing `insert_bound`/`cache_plan` behavior remains unchanged for every other operation. `FilesystemAuthority::cache_reserved_plan` validates grants/binding and moves the token into the reserved API. Thus `validate_owned_plan_budget` sees the exact final cached bytes, and no post-cache validation or rollback is needed.
+
+`analyze_source_groups` builds one `SourceAnalysis` per bounded canonical RFI and classification looks it up for every target row. It does not call `analyze_source` or rescan merge ranges per target. A `#[cfg(test)]` analysis-call counter is allowed only inside this module to prove that 500 duplicate target rows referencing one source group invoke source analysis exactly once; it is not a production API or serialized field. A module-unit materialization counter likewise proves an over-budget borrowed projection returns before the first owned row/evidence clone. Both counters are absent from non-test builds.
 
 `FollowUpReviewTarget` represents every physical review row, including status-only rows with no RFI `<c>` and valid-RFI rows with no status `<c>`. `FollowUpCellTarget` is constructed only for `ready` rows after both cells are proven physical and safe; it is the exact preauthorized target carried into `FollowUpApprovedUpdate`.
 
@@ -564,7 +586,7 @@ When at least one row has `manual_review`, preview/revise emits exactly one `war
 
 ### 10.1 Step metadata
 
-Every plan, including a zero-step plan, stores this strict operation authority block at `plan.meta["rfiFollowUp"]` so a safe row can be re-enabled through `engine/revise` without regenerating paths or a backup name:
+Every plan, including a zero-step plan, stores this strict operation authority block at `plan.meta["rfiFollowUp"]` so a safe row can be re-enabled through `engine/revise` without regenerating paths or a backup name. A zero-step plan is revise-only: backend `engine/apply` rejects it with `error.rfi.followUp.noRowsSelected` before process/OS permit acquisition, claim, cancellation registration, journal/quota/filesystem access, or plan-state mutation. `S5AuthorityRecord::initial_step` is therefore constructed only after a nonempty exact one-step claim.
 
 ```rust
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -659,9 +681,9 @@ Under one `plans` mutex acquisition it finds the exact `plan_id` without an eage
 - `rfi.follow_up_sync` → new `execute_follow_up_workbook_update`;
 - every other operation → no-effect rejection.
 
-The existing `GlobalMutationLock` is process-local and is only the first lock tier. Apply first calls a read-only `inspect_available_bound_operation` that validates owner/session, availability, TTL, binding, and digest without changing plan state. For `rfi.follow_up_sync` only, it acquires the process-local permit, initializes/acquires permanent `.docflow-s5-mutation.lock` under the private journal root, and only then atomically claims the plan through `claim_for_apply_bound_under_permit`, which consumes that exact process permit and repeats all binding/state/TTL/digest/operation checks. Thus lock contention or unsafe lock state leaves the one-shot plan `Available`; no cancellation registration, journal read/write, quota scan, or workbook-directory access has occurred. Concurrent lock-file initialization is create-new-or-open-existing, verifies regular non-symlink/non-reparse identity, syncs a newly created file and parent, and never replaces/deletes it. Undo and recovery use the same lock order: process-local permit, then OS-wide lock. Unix reopens with `O_NOFOLLOW|O_CLOEXEC` and holds `flock(LOCK_EX|LOCK_NB)`; Windows reopens with `OPEN_EXISTING`, `FILE_FLAG_OPEN_REPARSE_POINT`, and share mode zero. The open handle is the permit, process death releases it, and S5 never deletes the lock file. Multiprocess tests prove process B's rejected apply leaves the exact plan available and retryable after A exits.
+The existing `GlobalMutationLock` is process-local and only the first tier. Nonzero S5 apply inspects without mutation, acquires process then OS permit, binds both into nonforgeable `S5PermitBundle`, obtains a validated root roster, and only then consumes both through `claim_s5_for_apply_bound_under_permit`, which repeats caller/state/TTL/digest/operation and exact grant-roster checks. Contention or unsafe lock/root state leaves the plan `Available`; no cancellation, journal, quota, or workbook access occurs. Undo and recovery use the same permit bundle; all S5 authority objects own it until terminal drop. The permanent lock file is create-new-or-open-existing, regular/non-reparse identity-checked, synced when new, and never deleted. Unix holds `flock(LOCK_EX|LOCK_NB)` on `O_NOFOLLOW|O_CLOEXEC`; Windows holds `OPEN_EXISTING|FILE_FLAG_OPEN_REPARSE_POINT` with share zero. The open handle lives inside the bundle and process death releases it.
 
-Every S5 journal transition additionally uses revision CAS. Old JSON defaults `revision` to zero. While both permits are held, `write_s5_cas` rereads and validates the exact disk record, requires journal ID and revision to match the caller's expected revision, checked-increments it, then performs the existing durable atomic replacement; mismatch returns `journal_changed` without writing. For an absent target plus expected revision zero, the first S5 write uses durable create-new/O_EXCL and parent sync; it never replacement-renames over an existing journal. Existing records use CAS replacement. Legacy non-S5 writes stay behavior-compatible, but legacy recovery rejects/delegates every record carrying an S5 discriminator and never rewrites it. The OS lock is cross-process authority; CAS is the stale-object defense.
+Every S5 journal transition additionally uses revision CAS. Old JSON defaults `revision` to zero. While both permits are held, `write_s5_cas` requires `expected_revision == token.revision()`, rereads and validates disk, requires journal ID/revision/provenance match, serializes the allowed candidate at checked `expected+1`, and durably creates/replaces. Only complete durable success updates the mutable token revision; any error leaves the in-memory token at the prior revision and forbids retry. A failure after possible namespace replacement is outcome-unknown and restart recovery rereads disk. Absent expected-zero uses O_EXCL+parent sync and never replaces; existing records use CAS replacement. Legacy write uses the same OS lock and rejects candidate or existing-target S5.
 
 Canonical replacement preserves security metadata and named streams as well as unnamed workbook bytes. Recreation requires exactly one hard link. Reparse, EFS/compressed/sparse/offline/recall/object-ID/transactional and other unmodeled property classes fail pre-effect; Unix likewise rejects unmodeled immutable/append-only/platform flags.
 
@@ -686,11 +708,11 @@ The Follow Up executor performs this sequence:
 3. open both anchored workbooks and require preview fingerprints, exact source evidence, exact target worksheet/layout, and selected target cell snapshots;
 4. require Follow Up mutable-open success; otherwise return `error.rfi.followUp.workbookLocked` with no artifact effect;
 5. with both mutation permits held, revalidate both workbooks and capture bounded target plus parent security. Every transition uses revision CAS. Bounded no-follow enumeration aggregates `.docflow-backups` and canonical parent, accepts only four exact S5 prefixes, and measures each regular artifact's checked logical charge including auxiliary records. Reject over 64 candidates, non-regular/inaccessible/unbounded entries, duplicate directory identity, or overflow. Apply uses the exact three-file/default-plus-three-auxiliary reservation above and fails before effect if projected count exceeds 64 or logical charge exceeds 8 GiB;
-6. call journaled `create_missing_directories` for the already lexically authorized `.docflow-backups` parent; in the same durable write that completes the final `Mkdir`, set `follow_up_phase=ArtifactParentReady`. Only after that write, anchor the parent and allocate `.docflow-s5-private-output-<journal-id>-<nonce>.<original-extension>` below it. Before creating the leaf, durably persist `pending_retained_artifact { role: PrivateOutput, path, locator }`; this write-ahead locator contains no identity claim and makes a crash before identity journaling conservatively discoverable;
-7. keep the source, atomically create owner-only private output, CAS-record identity, verify access, copy/verify EA/ADS, then write/verify OOXML through the owned wrapper; final recapture catches authorized metadata drift; One CAS write finalizes evidence and `PrivateOutputReady`;
+6. before the final missing shared `.docflow-backups` `Mkdir`, durably persist identity-free `pending_artifact_parent { path, locator }`. The no-clobber directory primitive returns typed `Created { anchored identity }`, `AlreadyExists`, or `CreatedIdentityUnknown`; it never infers ownership from a later pathname observation. Live `Created` followed by sync failure is known partial. `AlreadyExists` clears the pending intent and proceeds without an ownership claim. `CreatedIdentityUnknown`, or restart with intent plus a present directory, is `WarningOutcomeUnknown`: preserve the directory, keep the safe intent locator, and never record it as operation-created. Restart absence is exact no-effect. A successful completion CAS clears pending and sets `ArtifactParentReady`; it persists `created_artifact_parent` only for the live typed `Created(identity)` branch and leaves it absent for `AlreadyExists`. Then allocate the unique private-output leaf and durably persist `pending_retained_artifact { role, path, locator, creationState: intent }` before create;
+7. create the owner-only private output through `create_new_secured_identified`. `Created { file, identity }` changes pending state to `created(identity)` before bytes; `CreatedIdentityUnknown { file }` changes it to `created_identity_unknown` and routes to `WarningOutcomeUnknown`, never no-effect. If that terminal CAS fails, the earlier durable intent remains for bounded restart reconciliation; a present leaf is preserved as unknown rather than claimed. The identified path verifies access, replays/verifies EA/ADS, writes/verifies OOXML through the same owned wrapper, and finalizes evidence plus `PrivateOutputReady` in one CAS;
 8. cancellation checkpoint; cancellation here leaves both selected workbooks unchanged. Any operation-owned directory/private-output artifact already created is retained and journaled rather than unlinked by name;
 9. immediately before backup, reopen both original anchors, require complete workbook predicates, recapture security/streams from the identity-matched Follow Up handles, and require equality to the provisional snapshot;
-10. allocate backup in canonical parent, CAS-write pending `Copy`, atomically secure-create it with unnamed-stream zero sharing, verify descriptor, replay/verify EA/ADS, then copy/sync unnamed bytes; One CAS write records complete backup evidence and `BackupReady`;
+10. allocate backup in canonical parent and CAS-write `pending_retained_artifact { role: Backup, path, locator, creationState: intent }`; create it through `create_new_secured_identified`. Persist `created(identity)` before descriptor/auxiliary/default-byte work; `CreatedIdentityUnknown` is outcome-unknown. Verify descriptor, replay/verify EA/ADS, copy/sync unnamed bytes, then one CAS replaces pending with complete backup evidence and `BackupReady`;
 11. cancellation checkpoint; cancellation now leaves canonical Follow Up unchanged and retains the exact backup/private output with journal evidence;
 12. reopen both originals once more, require complete workbook predicates and mutable-open, recapture the complete Follow Up security/stream snapshot, and require equality. Any content or metadata drift is retained-artifact-only failure with canonical unchanged;
 13. allocate retained-original in the canonical parent. Before canonical effect, one CAS writes pending `RestoreBackup` and `pending_publication` with all locators/identities/byte hashes, complete security hashes, separate destination access/auxiliary hashes, empty created/retained identities, and phase `prepared`;
@@ -713,6 +735,25 @@ In addition to the DTOs and OOXML/authority symbols already declared above, impl
 
 ```rust
 // plan_store.rs
+pub(crate) struct ClaimedS5Apply { /* private ApplyClaim + S5PermitBundle + ValidatedGrantRootRoster */ }
+
+impl ClaimedS5Apply {
+    pub(crate) fn plan(&self) -> &Plan;
+    pub(crate) fn binding(&self) -> &PlanBinding;
+    pub(crate) fn digest(&self) -> &str;
+    pub(crate) fn created_at(&self) -> SystemTime;
+    pub(crate) fn caller(&self) -> &CallerIdentity;
+    pub(crate) fn roots(&self) -> &ValidatedGrantRootRoster;
+}
+
+pub(crate) fn claim_s5_for_apply_bound_under_permit(
+    &self,
+    plan_id: &str,
+    caller: &CallerIdentity,
+    permits: S5PermitBundle,
+    roots: ValidatedGrantRootRoster,
+) -> Result<ClaimedS5Apply, BackendError>;
+
 pub fn inspect_available_bound_operation(
     &self,
     plan_id: &str,
@@ -754,6 +795,9 @@ impl CapabilityRoot {
 }
 
 impl AuthorizedPath {
+    pub(crate) fn create_artifact_parent_no_clobber(
+        &self,
+    ) -> Result<ArtifactParentCreateOutcome, CapabilityEffectError>;
     pub(crate) fn s5_retained_storage_usage(
         &self,
         max_entries: usize,
@@ -766,6 +810,10 @@ impl AnchoredPath {
         &self,
         security: &CreationSecurityDescriptor,
     ) -> io::Result<SecuredCreatedFile>;
+    pub(crate) fn create_new_secured_identified(
+        &self,
+        security: &CreationSecurityDescriptor,
+    ) -> Result<SecuredCreateOutcome, CapabilityEffectError>;
     #[cfg(windows)]
     pub(crate) fn open_security_metadata(
         &self,
@@ -783,6 +831,22 @@ impl AnchoredPath {
         &self,
         expected: &ParentSecuritySnapshot,
     ) -> io::Result<()>;
+}
+
+pub(crate) enum ArtifactParentCreateOutcome {
+    Created { identity: FilesystemObjectIdentity },
+    AlreadyExists,
+    CreatedIdentityUnknown,
+}
+
+pub(crate) enum SecuredCreateOutcome {
+    Created {
+        file: SecuredCreatedFile,
+        identity: FilesystemObjectIdentity,
+    },
+    CreatedIdentityUnknown {
+        file: SecuredCreatedFile,
+    },
 }
 
 pub(crate) struct RetainedStorageUsage {
@@ -908,16 +972,183 @@ pub struct GrantRootAccessRecord {
 }
 
 pub(crate) struct InterprocessMutationPermit { /* held OS lock-file handle */ }
+pub(crate) struct S5PermitBundle { /* private GlobalMutationPermit + InterprocessMutationPermit */ }
+pub(crate) struct PendingS5Undo { /* private validated core + permit bundle + recorded roots */ }
+pub(crate) struct S5RecoverySession { /* private permit bundle + bounded entries + active validated roster */ }
+
+impl PendingS5Undo {
+    pub(crate) fn recorded_root_accesses(&self) -> &[GrantRootAccessRecord];
+}
 
 impl JournalStore {
+    pub fn read(&self, journal_id: &str) -> Result<JournalRecord, BackendError>; // legacy only; rejects an on-disk S5 record
+    pub fn write(&self, record: &JournalRecord) -> Result<(), BackendError>; // internally holds S5 OS lock; rejects candidate OR existing target S5
+    pub(crate) fn inspect_operation(&self, journal_id: &str) -> Result<String, BackendError>; // narrow op-id only
     pub(crate) fn try_acquire_mutation_lock(
         &self,
     ) -> Result<InterprocessMutationPermit, BackendError>;
+    pub(crate) fn bind_s5_permits(
+        &self,
+        process: GlobalMutationPermit,
+        interprocess: InterprocessMutationPermit,
+    ) -> S5PermitBundle;
     pub(crate) fn write_s5_cas(
         &self,
-        record: &mut JournalRecord,
+        record: &mut ValidatedS5Record, // token owns the permit bundle through its admission lease
         expected_revision: u64,
     ) -> Result<(), BackendError>;
+    pub(crate) fn begin_s5(
+        &self,
+        claim: ClaimedS5Apply,
+        caller: &CallerIdentity,
+    ) -> Result<ValidatedS5Record, BackendError>;
+    fn validate_s5_record(&self, record: JournalRecord) -> Result<ValidatedS5RecordCore, BackendError>;
+    pub(crate) fn inspect_s5_for_undo(
+        &self,
+        journal_id: &str,
+        caller: &CallerIdentity,
+        permits: S5PermitBundle,
+    ) -> Result<PendingS5Undo, BackendError>;
+    pub(crate) fn admit_s5_undo(
+        &self,
+        pending: PendingS5Undo,
+        roots: ValidatedGrantRootRoster,
+    ) -> Result<ValidatedS5Record, BackendError>;
+    pub(crate) fn begin_s5_recovery(
+        &self,
+        permits: S5PermitBundle,
+    ) -> Result<S5RecoverySession, BackendError>;
+}
+
+impl JournalRecord {
+    pub(crate) fn validate_for_history_projection(&self) -> Result<(), BackendError>;
+}
+
+pub(crate) const MAX_JOURNAL_ROOT_ENTRIES_SCANNED: usize = 4096;
+pub(crate) const MAX_PENDING_S5_RECORDS: usize = 256;
+pub(crate) const MAX_INVALID_S5_NOTICES: usize = 64;
+pub(crate) const MAX_INVALID_S5_NOTICE_BYTES: u64 = 4096;
+pub(crate) const MAX_RECOVERY_ENTRIES: usize = 256;
+struct ValidatedS5RecordCore {
+    record: JournalRecord,
+    immutable_provenance_sha256: [u8; 32],
+}
+pub(crate) struct ValidatedS5Record { core: ValidatedS5RecordCore, lease: S5MutationLease }
+enum S5MutationLease {
+    Apply(ClaimedS5Apply),
+    Undo { permits: S5PermitBundle, roots: ValidatedGrantRootRoster },
+}
+enum PendingS5Entry {
+    Valid(ValidatedS5RecordCore),
+    Invalid(InvalidS5JournalEnvelope),
+    Legacy(JournalRecord), // only when every S5 discriminator field is absent
+}
+struct PendingS5Scan { entries: Vec<PendingS5Entry> }
+struct InvalidS5JournalEnvelope { /* private, non-Clone token */ }
+pub(crate) struct RetainedLocators(Vec<String>); // private validated storage
+
+impl S5RecoverySession {
+    fn scan_pending_s5(&mut self) -> Result<PendingS5Scan, BackendError>;
+    pub(crate) fn next_root_accesses(&self) -> Option<&[GrantRootAccessRecord]>;
+    pub(crate) fn recover_next(
+        &mut self,
+        roots: Option<ValidatedGrantRootRoster>,
+        caller: &CallerIdentity,
+    ) -> Result<Option<RecoveryEntry>, BackendError>; // classification, quarantine, transition and CAS stay internal
+}
+
+impl RetainedLocators {
+    pub(crate) fn first(&self) -> &str;
+    pub(crate) fn as_slice(&self) -> &[String];
+}
+
+impl ValidatedS5Record {
+    pub(crate) fn apply_transition(&mut self, transition: S5Transition) -> Result<(), BackendError>;
+    pub(crate) fn journal_id(&self) -> &str;
+    pub(crate) fn approved_step(&self) -> &Step;
+    pub(crate) fn completed_steps(&self) -> &[Step];
+    pub(crate) fn plan(&self) -> Option<&Plan>; // apply lease only
+    pub(crate) fn binding(&self) -> Option<&PlanBinding>; // apply lease only
+    pub(crate) fn roots(&self) -> &ValidatedGrantRootRoster;
+    pub(crate) fn retained_locators(&self) -> Result<RetainedLocators, BackendError>;
+    pub(crate) fn revision(&self) -> u64;
+    pub(crate) fn phase(&self) -> Option<FollowUpJournalPhase>;
+    pub(crate) fn pending_publication(&self) -> Option<&RetainedPublication>;
+    pub(crate) fn pending_artifact_parent(&self) -> Option<&PendingArtifactParent>;
+    pub(crate) fn pending_retained_artifact(&self) -> Option<&PendingRetainedArtifact>;
+    pub(crate) fn retained_evidence(&self) -> &[RetainedArtifactEvidence];
+    pub(crate) fn prepare_failed_partial(&mut self, notice: RecoveryNotice) -> Result<(), BackendError>;
+    pub(crate) fn prepare_outcome_unknown(&mut self, notice: RecoveryNotice) -> Result<(), BackendError>;
+}
+
+pub(crate) enum S5Transition {
+    SetPendingArtifactParent(PendingArtifactParent),
+    ResolveArtifactParent(ArtifactParentCreateOutcome),
+    SetPendingRetainedArtifact(PendingRetainedArtifact),
+    MarkPendingRetainedCreated(FilesystemObjectIdentity),
+    MarkPendingRetainedIdentityUnknown,
+    FinalizeRetainedArtifact { evidence: RetainedArtifactEvidence, phase: FollowUpJournalPhase },
+    InitializePublication(RetainedPublication), // prepared-only; exactly once
+    RecordRetainedPublicationEvidence(RetainedArtifactEvidence),
+    RecordCanonicalSecured { identity: FilesystemObjectIdentity, descriptor_sha256: String },
+    RecordCanonicalAuxiliaryReady { auxiliary_sha256: String, auxiliary_charge_bytes: u64 },
+    MarkCanonicalBytesStarted,
+    MarkCanonicalVerifying,
+    FinalizeApplySuccess { completed_step: Step, evidence: Vec<RetainedArtifactEvidence> },
+    FinalizeUndoSuccess { completed_step: Step, evidence: Vec<RetainedArtifactEvidence> },
+    FinalizeRecovery { terminal: S5RecoveryTerminal, notice: Option<RecoveryNotice>, evidence: Vec<RetainedArtifactEvidence> },
+    PrepareFailedPartial(RecoveryNotice),
+    PrepareOutcomeUnknown(RecoveryNotice),
+}
+
+pub(crate) enum S5RecoveryTerminal { CompletedApply, CompletedUndo, FailedPartial, OutcomeUnknown }
+
+impl PendingS5Scan {
+    fn len(&self) -> usize;
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InvalidS5JournalNotice {
+    pub(crate) journal_id: String,
+    pub(crate) source_identity: FilesystemObjectIdentity,
+    pub(crate) source_sha256: String,
+    pub(crate) warning_key: String,
+    pub(crate) locator: String, // exact journal:<validated-id>;record
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct S5AuthorityRecord {
+    initial_step: Step,
+    source_path: String,
+    source_identity: FilesystemObjectIdentity,
+    target_path: String,
+    target_identity: FilesystemObjectIdentity,
+    approved_updates_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PendingArtifactParent {
+    pub(crate) path: String,
+    pub(crate) locator: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreatedArtifactParent {
+    pub(crate) path: String,
+    pub(crate) locator: String,
+    pub(crate) identity: FilesystemObjectIdentity,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingArtifactCreationState {
+    Intent,
+    Created(FilesystemObjectIdentity),
+    CreatedIdentityUnknown,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -926,7 +1157,7 @@ pub struct PendingRetainedArtifact {
     pub(crate) role: RetainedArtifactRole,
     pub(crate) path: String,
     pub(crate) locator: String,
-    pub(crate) identity: Option<FilesystemObjectIdentity>,
+    pub(crate) creation_state: PendingArtifactCreationState,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -980,8 +1211,15 @@ pub struct RecoveryNotice {
     pub locator: String,
 }
 
+impl RecoveryNotice {
+    pub(crate) fn from_warning(warning: &Warning) -> Self;
+}
+
 // New additive JournalRecord fields:
 // pending_publication: Option<RetainedPublication>
+// s5_authority: Option<S5AuthorityRecord> (immutable after initial create)
+// pending_artifact_parent: Option<PendingArtifactParent>
+// created_artifact_parent: Option<CreatedArtifactParent> (live typed Created only)
 // pending_retained_artifact: Option<PendingRetainedArtifact>
 // retained_evidence: Vec<RetainedArtifactEvidence>
 // recovery_notice: Option<RecoveryNotice>
@@ -1003,7 +1241,7 @@ pub(crate) enum PublicationCancellation<'a> {
 
 pub(crate) fn execute_retained_publication<R, V>(
     journals: &JournalStore,
-    record: &mut JournalRecord,
+    record: &mut ValidatedS5Record,
     canonical: &AnchoredPath,
     retained: &AnchoredPath,
     publication_source: &mut R,
@@ -1018,8 +1256,7 @@ where
 
 pub(crate) fn reconcile_retained_publication(
     journals: &JournalStore,
-    record: &mut JournalRecord,
-    roots: &[CapabilityRoot],
+    record: &mut ValidatedS5Record,
 ) -> Result<Option<RecoveryEntry>, BackendError>;
 
 // rfi_follow_up.rs
@@ -1101,16 +1338,28 @@ pub fn recover_pending(
 ) -> Result<Vec<RecoveryEntry>, BackendError>;
 
 // paths.rs
-pub(crate) fn root_accesses_for_plan(
-    &self,
-    grant_ids: &[String],
-    caller: &CallerIdentity,
-    operation_id: &str,
-) -> Result<Vec<GrantRootAccessRecord>, BackendError>;
+pub(crate) struct ValidatedGrantRootRoster { /* private records + reopened CapabilityRoot handles */ }
 
-pub(crate) fn reopen_recorded_roots(
-    records: &[GrantRootAccessRecord],
-) -> Result<Vec<CapabilityRoot>, BackendError>;
+impl ValidatedGrantRootRoster {
+    pub(crate) fn records(&self) -> &[GrantRootAccessRecord];
+    pub(crate) fn roots(&self) -> &[CapabilityRoot];
+}
+
+impl PathGrantStore {
+    pub(crate) fn root_accesses_for_plan(
+        &self,
+        grant_ids: &[String],
+        caller: &CallerIdentity,
+        operation_id: &str,
+    ) -> Result<ValidatedGrantRootRoster, BackendError>;
+
+    pub(crate) fn reopen_recorded_roots(
+        &self,
+        records: &[GrantRootAccessRecord],
+        caller: &CallerIdentity,
+        operation_id: &str,
+    ) -> Result<ValidatedGrantRootRoster, BackendError>;
+}
 
 fn execute_follow_up_workbook_update(
     &self,
@@ -1118,12 +1367,16 @@ fn execute_follow_up_workbook_update(
     binding: &PlanBinding,
     caller: &CallerIdentity,
     token: &CancellationToken,
-    record: &mut JournalRecord,
+    record: &mut ValidatedS5Record,
 ) -> Result<u64, StepFailure>;
 
 enum StepFailure {
     NoEffect(String),
     WarningNoEffect(Warning),
+    FailedPartial {
+        warning: Warning,
+        retained: RetainedLocators,
+    },
     OutcomeUnknown(String),
     WarningOutcomeUnknown(Warning),
     Cancelled,
@@ -1131,11 +1384,28 @@ enum StepFailure {
 
 // FilesystemAuthority::apply step-result match
 Err(StepFailure::WarningOutcomeUnknown(warning)) => {
+    let notice = RecoveryNotice::from_warning(&warning);
+    let expected_revision = record.revision();
+    record.prepare_outcome_unknown(notice)?;
     result.failed += 1;
     result.errors.push(warning); // preserve key + locator subject verbatim
-    record.state = Some(JournalState::RecoveryRequired);
     insert_effect_state(&mut result, "outcome_unknown");
-    let expected_revision = record.revision;
+    self.journals.write_s5_cas(&mut record, expected_revision)?;
+    return Ok(result);
+}
+
+Err(StepFailure::FailedPartial { warning, retained }) => {
+    // canonical outcome is known unchanged; operation-owned artifacts exist
+    let notice = RecoveryNotice {
+        warning_key: warning.key.clone(),
+        locator: retained.first().to_owned(),
+    };
+    result.failed += 1;
+    result.errors.push(warning);
+    insert_effect_state(&mut result, "partial");
+    insert_retained_locators(&mut result, retained.as_slice());
+    let expected_revision = record.revision();
+    record.prepare_failed_partial(notice)?;
     self.journals.write_s5_cas(&mut record, expected_revision)?;
     return Ok(result);
 }
@@ -1153,15 +1423,25 @@ The operation keeps the local journal as sole executable history and adds only b
 
 ### 11.1 Durable transaction record, retained evidence, and result mapping
 
-Private-output creation is write-ahead journaled: `pending_retained_artifact` contains path/locator before secure-create, then owned-handle identity before bytes. A crash preserves any present unknown leaf. Final evidence and pending-clear share one CAS. Backup has separate pending `Copy`. Before displacement, pending publication durably binds original/backup/source identities and byte/full-security hashes, separate destination access/auxiliary hashes, auxiliary charge, and canonical/retained/source locators. The private-output handle stays open from creation and final verification through apply publication. Undo opens the recorded backup once, validates identity plus byte/security hashes through that handle, and keeps it open through publication.
+Private-output and backup creation share the exact write-ahead `PendingRetainedArtifact` lifecycle: `intent` before secure-create, `created(identity)` before any descriptor/auxiliary/default-byte work, or `created_identity_unknown` after create with failed identity acquisition. A crash preserves any present unknown leaf. Final evidence and pending-clear share one CAS. Before displacement, pending publication durably binds original/backup/source identities and byte/full-security hashes, separate destination access/auxiliary hashes, auxiliary charge, and canonical/retained/source locators. The private-output handle stays open from creation and final verification through apply publication. Undo opens the recorded backup once, validates identity plus byte/security hashes through that handle, and keeps it open through publication.
 
-`JournalRecord::validate_record` requires bounded paths under persisted roots; backup, retained and canonical share the pinned canonical parent while private output uses its private parent. All hashes are lowercase 64-hex. Every retained evidence row requires checked `default_stream_bytes`, `auxiliary_charge_bytes`, and their exact `logical_charge_bytes` sum. `CanonicalSecured` requires created identity plus descriptor predicate; `CanonicalAuxiliaryReady` additionally requires auxiliary digest and charge and still precedes unnamed bytes. Active publication corresponds to exactly one pending Follow Up apply or undo `RestoreBackup`. S5 records require a complete one-to-one `grant_root_accesses` roster matching every deduplicated legacy root+identity, the strongest original bound access for each root, and a writable root containing canonical/backup/evidence. A distinct source-only root must be read-only; a shared source/target parent is writable only because the target grant requires it. `retained_evidence` validates every role/path/identity/hash/locator but is never executable authority. Old non-S5 records have the additive fields absent/empty and deserialize unchanged. Cloud history continues to project only existing metadata; it never receives `PendingRetainedArtifact`, `RetainedPublication`, `RetainedArtifactEvidence`, workbook paths, hashes, identities, statuses, or `RecoveryNotice`.
+`JournalRecord::validate_record` requires bounded paths under persisted roots; backup, retained and canonical share the pinned canonical parent while private output uses its private parent. All hashes are lowercase 64-hex. Every retained evidence row requires checked `default_stream_bytes`, `auxiliary_charge_bytes`, and their exact `logical_charge_bytes` sum. `CanonicalSecured` requires created identity plus descriptor predicate; `CanonicalAuxiliaryReady` additionally requires auxiliary digest and charge and still precedes unnamed bytes. Active publication corresponds to exactly one pending Follow Up apply or undo `RestoreBackup`. S5 records require a complete one-to-one `grant_root_accesses` roster matching every deduplicated legacy root+identity, the strongest original bound access for each root, and a writable root containing canonical/backup/evidence. A distinct source-only root must be read-only; a shared source/target parent is writable only because the target grant requires it. `retained_evidence` validates every role/path/identity/hash/locator but is never executable authority. Old non-S5 records have the additive fields absent/empty and deserialize unchanged. Cloud history continues to project only existing metadata. Local history first performs a mutation-free lexical scan capped by `MAX_JOURNAL_ROOT_ENTRIES_SCANNED`; entry 4097 returns an empty fail-closed projection. It excludes exact notice names before parsing, removes the arbitrary-JSON fallback, requires successful `JournalRecord` deserialization and `validate_for_history_projection` (the same structural validator, without minting mutation authority), then projects only existing HistoryRow fields, and applies its requested row limit only after a valid row is produced; sidecars or malformed JSON cannot consume the limit or become rows. It never receives S5 authority/pending/evidence/publication/path/hash/identity/status/recovery fields.
 
 Successful apply appends evidence for backup, private output, and displaced original; undo appends displaced applied evidence. UI exposes only ordered role/locator projections. S5 never auto-unlinks evidence. The two-directory 64-file/8-GiB logical-payload preflight uses the same default-plus-auxiliary charge for existing usage and reservations: apply charges two original default streams, bounded private default output, and three auxiliary copies; undo charges current applied default plus auxiliary. Arithmetic is checked and exact-at-limit is allowed. Authorized external edits after an artifact's verified linearization point are ordinary user filesystem mutations outside S5 quota authority and are rejected as drift by any later S5 operation; S5 itself never writes unreserved auxiliary payload.
 
-Unresolved states set `JournalState::RecoveryRequired`, set phase `recovery_required` when an active publication exists, and persist `RecoveryNotice { warningKey: "error.rfi.followUp.recoveryRequired", locator }` before returning `StepFailure::WarningOutcomeUnknown(Warning { key, subject: locator })`. The `apply` result loop adds that exact warning, sets `meta.effectState = "outcome_unknown"`, keeps the recovery journal, and returns immediately. This new branch is separate from existing generic `OutcomeUnknown(String)` and `WarningNoEffect(Warning)` behavior, so localized key, bounded locator, and effect state are preserved without raw-path fallback.
+`S5PermitBundle` is the only holder of the process-local and OS-wide permits. `ValidatedGrantRootRoster` is the only holder of the verified records plus reopened capability roots. `ClaimedS5Apply` consumes both opaque values only after exact one-to-one roster/claimed-plan grant identity+access validation and exposes the exact immutable plan/binding/digest/caller/root projections needed by `begin_s5`; it is non-Clone/non-Serialize and cannot outlive either permit. `begin_s5` consumes the claim into `ValidatedS5Record`, whose private lease keeps the claim, permits, and roots alive through executor/publication/CAS. Undo uses the targeted owner-checked `PendingS5Undo` path and consumes a replay-validated roster into the same token. Recovery instead owns a `S5RecoverySession`; for a valid core, `next_root_accesses` exposes only its immutable recorded roster, `FilesystemAuthority` asks `PathGrantStore::reopen_recorded_roots` for an opaque roster, and `recover_next` consumes/revalidates that roster before effect and retains it through transition/CAS. `None` is accepted only for invalid/legacy entries that perform no workbook-root mutation; cores/envelopes never escape. No caller-built raw record, grant vector, generic claim, or independently held token can enter S5 mutation.
+
+Each transition is lease-gated: apply tokens can use only apply/common variants, undo tokens only undo/common variants, and `FinalizeRecovery` is callable only inside `S5RecoverySession`; mismatched variants fail before clone mutation. No whole-object publication rewrite exists after `InitializePublication`. Evidence variants fill exactly one previously absent identity/hash/security predicate for the exact expected phase. `FinalizeApplySuccess`, `FinalizeUndoSuccess`, and `FinalizeRecovery` each validate their exact terminal predecessor, completed Step, evidence roles and immutable authority, then atomically append/deduplicate evidence, append the completed step where applicable, set terminal journal state/result, and clear pending publication/artifact/retained state plus `followUpPhase` in one transition and one CAS. Legacy `read` refuses to return on-disk S5 and narrow `inspect_operation` supplies routing only. Legacy `write` internally holds the same OS mutation lock from existing-target inspection through durable replacement, validates both candidate and existing target, and refuses when either is S5, so clearing candidate discriminators cannot downgrade an existing journal. Only token/session CAS may persist S5. Tests enumerate every candidate discriminator and the exact read-S5/clear-all/write-existing downgrade.
+
+Pre-displacement failures evaluate typed creation outcomes plus validated journal evidence on every error path. A live `Created` directory is immediately copied into in-memory `created_artifact_parent`; the next completion or terminal CAS durably records that exact identity. Only the live typed create branch may set this field—recovery and pathname observation may not. That field, an identified private leaf, completed step, retained evidence, or effectful phase is known effect; bare intent is not. `CreatedIdentityUnknown`, or restart intent whose leaf/name is present without durable identity, is outcome-unknown rather than no-effect or known partial. When canonical is proven unchanged and operation ownership is proven, the executor returns `FailedPartial`; the apply handler alone prepares the terminal transition and performs one CAS. Empty/partial identified private outputs, size-limit failures after bytes, pre-displacement drift, backup failure, and parent-sync after typed `Created` use this branch. CAS failure claims no terminal result and leaves earlier durable evidence for recovery.
+
+Post-displacement unresolved paths return `StepFailure::WarningOutcomeUnknown` with a validated safe locator. Its apply-loop handler is the sole terminal CAS owner: `prepare_outcome_unknown` atomically validates the in-memory `RecoveryRequired` state/phase/notice, result projection sets `effectState=outcome_unknown`, and `write_s5_cas` writes exactly once. CAS failure leaves the last durable active-publication record for recovery and claims no terminal result. This branch remains distinct from known partial and no-effect.
 
 The locator is non-secret and bounded: `journal:<journal-id>;root:<grant-root-index>;leaf:<operation-owned-leaf-name>`. Absolute local paths remain only in the validated journal. `RecoveryEntry` adds optional `warningKey`/`locator`; the recovery UI localizes the key and displays the locator.
+
+Invalid raw S5 journal bytes are never rewritten through CAS. `begin_s5_recovery` consumes a permit bundle; its private scan performs one mutation-free journal-root iteration and stops fail-closed at `MAX_JOURNAL_ROOT_ENTRIES_SCANNED + 1`. It separately caps valid/invalid cores, notices, and results; preflights the complete existing-notice/invalid-ID union before mutation; excludes notice names from journal candidates; and enforces journal bytes, duplicate-free exact wire keys, and filename-ID parity.
+
+The exact notice filename is `.invalid-s5-<source_sha256>.json`, where the suffix is the envelope’s lowercase 64-hex source hash; no raw journal ID enters a filename. This lexical class is excluded from journal candidates and `cloud.rs` local history before any requested limit. `S5RecoverySession::recover_next` alone can consume its internal invalid envelope or validated core. Quarantine reopens the exact root-relative source and requires identity/hash parity before create-new owner-only notice+fsync. Existing notices are no-follow regular/non-reparse owner-only, at most 4096 bytes, and duplicate-free parsed. Originals remain untouched. The session retains both permits through every notice/CAS and emits at most 256 results; no iterator exports a core or envelope.
 
 ### 11.2 Exact hash-and-identity crash classification
 
@@ -1183,11 +1463,11 @@ For apply, `O/Iₒ` is the expected original hash/identity, `A/Ic` is the public
 
 A post-displacement directory flush error and every create/write/file-sync/name-resolution uncertainty are classified from these exact states; the effect is never blindly retried. Recovery may durably complete a no-effect or exact-applied journal classification, but it does not delete evidence or move a retained object back to canonical. Any unrecorded identity remains untouched and `RecoveryRequired`.
 
-`JournalStore` exposes validated pending records but never reconciles them without both filesystem mutation fences. `FilesystemAuthority::recover_pending(caller)` acquires the process-local `GlobalMutationPermit` and then journal-root `InterprocessMutationPermit` before journal enumeration/read; it holds both through every revision-CAS classification write. Concurrent same-process or second-process apply, undo, or recovery returns `operation_in_progress`, and a stale record cannot overwrite a newer write. It first handles a Follow Up pending backup/private-output creation that predates durable identity evidence: destination absent is known no effect, but any present leaf is preserved and marked recovery-required even when its hash matches. A live synchronous `AlreadyExists` is clean only if clearing the pending record itself is durably successful. For `Applying` S5 records without an active pending object, `follow_up_phase` is mandatory and closed: `ArtifactParentReady`, `PrivateOutputReady`, or `BackupReady` proves canonical was not touched, preserves all recorded artifacts, and transitions durably to `RecoveryRequired` with a bounded locator; `PublicationActive` requires `pending_publication` and uses the exact identity/hash matrix. Missing, impossible, or contradictory S5 phase/evidence is itself recovery-required, never delegated or skipped. Only non-S5 records with every S5 field absent use legacy disposition logic. `NativeBackend::recovery()` calls `self.filesystem.recover_pending(&caller)` rather than pathname-only `self.journals.recover_pending()`. Repeated serialized recovery calls are idempotent because only exact durably recorded identities/hashes are recognized and no evidence cleanup is attempted.
+`FilesystemAuthority::recover_pending(caller)` acquires process-local then journal-root permits, calls the declared bounded `scan_pending_s5`, and consumes each opaque entry while holding both permits. Pending parent intent plus absence is no effect; presence is preserved as outcome-unknown and never creates provenance. A pre-existing durable `created_artifact_parent` is accepted only when current identity matches and is then known partial; mismatch/access ambiguity is outcome-unknown. Pending private/backup intent plus absence is no effect; presence without durable created identity is preserved outcome-unknown. `created(identity)` plus exact identity is known partial. `created_identity_unknown` is outcome-unknown. Closed phases use the publication matrix. Invalid tokens use the notice path. Only non-S5 records with every S5 field absent use legacy logic. Native recovery calls this route, never pathname-only `JournalStore::recover_pending`; repeated calls remain bounded and idempotent.
 
 ### 11.3 Cancellation
 
-Apply cancellation before any private-artifact-directory effect is `CancelledClean`; cancellation after a retained directory/private output/backup but before canonical displacement is `CancelledPartial`, with canonical unchanged and every artifact journaled. Replace the legacy steps-only predicate with `journal_has_effect(record)`: partial is true when completed steps are nonempty, `pending_retained_artifact` is present, `retained_evidence` is nonempty, or `follow_up_phase` is present. The cancellation result projects all retained locators. Apply passes `PublicationCancellation::Apply(token)`; the helper performs the final clean checkpoint immediately before it sets phase `displacing` and invokes the first canonical effect.
+Apply cancellation before any proven artifact effect is `CancelledClean`; after a typed `Created`, identified retained artifact, backup, or effectful phase it is `CancelledPartial`. A `CreatedIdentityUnknown` or restart-present bare intent is outcome-unknown, not clean or known partial. Cancellation and non-cancellation share this exact typed classifier. Apply passes `PublicationCancellation::Apply(token)`; the final clean checkpoint remains immediately before displacement.
 
 There is no cancellation checkpoint or clean-cancellation semantics after displacement begins. A late cancellation is deferred while the helper reaches either exact applied classification or durable recovery-required classification. If implementation ever observes cancellation between retained-leaf validation and create-new canonical, it must return localized `WarningOutcomeUnknown`/recovery-required because canonical has already been displaced; it may not report clean cancellation or restore the retained leaf.
 
@@ -1322,7 +1602,7 @@ Automated tests synthesize inert OOXML packages and never start Office. They ass
 - Preview reads both workbooks through caller/session/operation-bound anchored capabilities and mutates nothing; its internal DTO decodes exact snake_case registry keys.
 - The only automatic source mappings are exact `Completed → Completed` and `Ongoing → In Progress`.
 - RFI equality uses the exact full canonical string; no fuzzy, substring, or placement inference exists.
-- Worksheet evidence comes only from the canonical Strict/Transitional `worksheet/sheetData/row/c` hierarchy; duplicate coordinates and foreign-namespace shadows fail closed.
+- Worksheet evidence comes only from the canonical Strict/Transitional hierarchy; duplicate physical row IDs, duplicate coordinates, empty high-row extent, and foreign shadows fail closed.
 - Header discovery is unique and bounded to 32 rows × 64 columns; data and preview limits fail closed.
 - Safe rows alone default enabled. Blank/unknown/missing-cell/formula/merged/unmatched/duplicate/conflicting/unknown-target rows are visible, manual-only, and disabled. Already-synchronized rows are visible and disabled.
 - The user can toggle only safe `ready` bool checkboxes; revise rejects all representable row/metadata forgeries and source drift.
@@ -1335,10 +1615,11 @@ Automated tests synthesize inert OOXML packages and never start Office. They ass
 - Original/applied byte/security hashes, expected original and backup identities/byte/security hashes, exact private-output identity/hash, and unique retained locator are revision-CAS durable before canonical displacement.
 - Apply and undo retain destination-no-clobber, create canonical O_EXCL with non-null original descriptor and `ShareAccess=0`, verify/CAS `canonical_secured`, replay/verify auxiliary streams, CAS `canonical_auxiliary_ready`, then stream unnamed bytes. No pre-hardening handle can be captured; publication is not atomic.
 - Successful apply permanently retains the exact displaced original in addition to the verified backup/private output. Successful undo permanently retains the backup and displaced applied leaf. S5 performs no automatic retained-leaf, backup, or operation-created-directory cleanup.
-- S5 apply acquires process-local and OS-wide permits before consuming the plan; contention leaves the same plan Available. Apply/undo/recovery serialize quota and every S5 transition with revision CAS, including terminal warning classification.
+- Zero-step apply is backend-rejected before mutation and remains revise-only. Nonzero apply, targeted undo, and recovery use opaque sessions that own both permits and validated roots through every operation/CAS; raw legacy read/write cannot service or downgrade S5.
+- Invalid S5 notice sidecars are excluded before local-history limiting and never become history rows.
 - Journal recovery is wired through `FilesystemAuthority` and recognizes only exact durably recorded canonical/retained/created/source/backup identities plus byte/security hashes. Wrong or unrecorded identities remain untouched and recovery-required; a mismatched retained leaf is never restored.
 - Undo rejects destination overrides, is non-cancellable after admission, verifies complete applied/backup byte/security/stream predicates, secures the empty replacement before bytes, preserves racers, and restores exact original bytes/metadata/streams.
-- `StepFailure::WarningOutcomeUnknown(Warning)` preserves `error.rfi.followUp.recoveryRequired`, bounded locator, and `effectState=outcome_unknown` for every post-displacement unresolved result.
+- `StepFailure::FailedPartial` preserves the original localized failure key, validated locators, and `effectState=partial` when canonical is unchanged and operation ownership is proven. `StepFailure::WarningOutcomeUnknown(Warning)` covers both pre-displacement create/provenance ambiguity (`CreatedIdentityUnknown` or restart-present bare intent) and every post-displacement unresolved outcome; it preserves the recovery-required key, bounded locator, and `effectState=outcome_unknown`.
 - Apply cancellation is explicit: the final clean checkpoint is before displacement; undo is non-cancellable and there is no clean-cancellation semantics after the first canonical effect.
 - Existing `rfi.log_add`, print, generic protocol, legacy journal, and frontend compatibility suites remain green.
 - `frontend/src/lib/bridge.ts` and `docs/RELEASE_SAFETY.md` agree with the canonical five-operation roster.
