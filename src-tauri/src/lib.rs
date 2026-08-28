@@ -28,6 +28,7 @@ pub mod progress;
 pub mod registry;
 pub mod review;
 pub mod rfi_code;
+pub mod rfi_follow_up;
 pub mod rfi_log;
 pub mod settings;
 pub mod smoke;

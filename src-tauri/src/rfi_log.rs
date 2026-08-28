@@ -86,6 +86,24 @@ struct Layout {
     row_col: Option<u32>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct RfiStatusColumns {
+    pub sheet: &'static str,
+    pub rfi_column: u32,
+    pub status_column: u32,
+}
+
+pub(crate) fn status_columns() -> [RfiStatusColumns; 4] {
+    DISCIPLINES.map(|discipline| {
+        let projection = layout(discipline).expect("canonical RFI Log discipline has a layout");
+        RfiStatusColumns {
+            sheet: projection.sheet,
+            rfi_column: 1,
+            status_column: projection.status_col,
+        }
+    })
+}
+
 fn layout(discipline: &str) -> Option<Layout> {
     match discipline {
         "CIV" => Some(Layout {

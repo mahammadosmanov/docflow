@@ -29,6 +29,9 @@ const MAX_STATE_BYTES: usize = 16;
 const MAX_U32_ATTRIBUTE_BYTES: usize = 10;
 const MAX_XML_DEPTH: usize = 256;
 const MAX_XML_NODES: usize = 1_000_000;
+const MAX_MERGED_RANGES: usize = 10_000;
+const MAX_WORKSHEET_ROWS: u32 = 1_048_576;
+const MAX_WORKSHEET_COLUMNS: u32 = 16_384;
 const TRANSITIONAL_WORKBOOK_NAMESPACE: &str =
     "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const STRICT_WORKBOOK_NAMESPACE: &str = "http://purl.oclc.org/ooxml/spreadsheetml/main";
@@ -117,12 +120,22 @@ pub struct CellData {
     pub style: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CellRange {
+    pub first_row: u32,
+    pub first_column: u32,
+    pub last_row: u32,
+    pub last_column: u32,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WorksheetData {
     pub max_row: u32,
     pub max_column: u32,
     pub cells: BTreeMap<(u32, u32), CellData>,
     pub column_widths: BTreeMap<u32, f64>,
+    pub has_sheet_protection: bool,
+    pub merged_ranges: Vec<CellRange>,
 }
 
 impl WorksheetData {
@@ -135,6 +148,15 @@ impl WorksheetData {
 
     pub fn cell(&self, row: u32, column: u32) -> Option<&CellData> {
         self.cells.get(&(row, column))
+    }
+
+    pub fn merged_range_containing(&self, row: u32, column: u32) -> Option<&CellRange> {
+        self.merged_ranges.iter().find(|range| {
+            range.first_row <= row
+                && row <= range.last_row
+                && range.first_column <= column
+                && column <= range.last_column
+        })
     }
 }
 
@@ -149,18 +171,41 @@ impl WorkbookData {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OoxmlErrorKind {
+    Invalid,
+    LimitExceeded,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OoxmlError(String);
+pub struct OoxmlError {
+    kind: OoxmlErrorKind,
+    message: String,
+}
 
 impl OoxmlError {
     fn invalid(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            kind: OoxmlErrorKind::Invalid,
+            message: message.into(),
+        }
+    }
+
+    fn limit_exceeded(message: impl Into<String>) -> Self {
+        Self {
+            kind: OoxmlErrorKind::LimitExceeded,
+            message: message.into(),
+        }
+    }
+
+    pub fn kind(&self) -> OoxmlErrorKind {
+        self.kind
     }
 }
 
 impl fmt::Display for OoxmlError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str(&self.message)
     }
 }
 
@@ -361,7 +406,9 @@ pub fn ordered_workbook_discovery<R: Read + Seek>(
         child_elements_expanded(sheets, b"sheet", &WORKBOOK_NAMESPACES).enumerate()
     {
         if index >= MAX_WORKSHEETS {
-            return Err(OoxmlError::invalid("workbook has too many worksheets"));
+            return Err(OoxmlError::limit_exceeded(
+                "workbook has too many worksheets",
+            ));
         }
         let name = bounded_unqualified_attribute(
             element,
@@ -473,9 +520,15 @@ pub fn ordered_workbook_discovery<R: Read + Seek>(
 pub fn read_workbook(source: &Path) -> Result<WorkbookData, OoxmlError> {
     validate_source(source)?;
     let mut input = File::open(source)?;
-    let infos = project_sheet_infos(ordered_workbook_discovery(&mut input)?);
-    input.seek(SeekFrom::Start(0))?;
-    let mut archive = open_archive(input)?;
+    read_workbook_from_reader(&mut input)
+}
+
+pub fn read_workbook_from_reader<R: Read + Seek>(
+    source: &mut R,
+) -> Result<WorkbookData, OoxmlError> {
+    let infos = project_sheet_infos(ordered_workbook_discovery(source)?);
+    source.seek(SeekFrom::Start(0))?;
+    let mut archive = open_archive(source)?;
     let workbook_parts = authenticated_workbook_parts(&mut archive)?;
     let relationships = parse_document(&read_entry(&mut archive, &workbook_parts.relationships)?)?;
     let shared_strings = match internal_relationship_target_for_class(
@@ -494,11 +547,94 @@ pub fn read_workbook(source: &Path) -> Result<WorkbookData, OoxmlError> {
     Ok(WorkbookData { sheets })
 }
 
+pub fn package_has_signature<R: Read + Seek>(source: &mut R) -> Result<bool, OoxmlError> {
+    const TRANSITIONAL_SIGNATURE_ORIGIN: &str =
+        "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin";
+    const STRICT_SIGNATURE_ORIGIN: &str =
+        "http://purl.oclc.org/ooxml/package/relationships/digital-signature/origin";
+
+    let mut archive = open_archive(source)?;
+    let relationships = parse_document(&read_entry(&mut archive, "_rels/.rels")?)?;
+    let root = validate_relationship_document_namespace(&relationships, "package")?;
+    let mut signature_target = None;
+    for relationship in relationship_elements(root) {
+        let relationship_type = bounded_unqualified_attribute(
+            relationship,
+            b"Type",
+            MAX_RELATIONSHIP_TYPE_BYTES,
+            "package relationship type",
+        )?
+        .ok_or_else(|| OoxmlError::invalid("package relationship type is missing"))?;
+        if !matches!(
+            relationship_type.as_str(),
+            TRANSITIONAL_SIGNATURE_ORIGIN | STRICT_SIGNATURE_ORIGIN
+        ) {
+            continue;
+        }
+        if signature_target.is_some() {
+            return Err(OoxmlError::invalid(
+                "package signature relationship is ambiguous",
+            ));
+        }
+        bounded_unqualified_attribute(
+            relationship,
+            b"Id",
+            MAX_RELATIONSHIP_ID_BYTES,
+            "package signature relationship identity",
+        )?
+        .ok_or_else(|| OoxmlError::invalid("package signature relationship identity is missing"))?;
+        if relationship_target_mode_is_external(relationship, "package signature")? {
+            return Err(OoxmlError::invalid(
+                "external package signature relationship target is not allowed",
+            ));
+        }
+        let target = bounded_unqualified_attribute(
+            relationship,
+            b"Target",
+            MAX_RELATIONSHIP_TARGET_BYTES,
+            "package signature relationship target",
+        )?
+        .ok_or_else(|| OoxmlError::invalid("package signature relationship target is missing"))?;
+        let target = normalize_package_root_target(&target)?;
+        if !is_signature_member(&target) {
+            return Err(OoxmlError::invalid(
+                "package signature relationship target is invalid",
+            ));
+        }
+        signature_target = Some(target);
+    }
+
+    if let Some(target) = signature_target.as_deref()
+        && !has_entry(&mut archive, target)?
+    {
+        return Err(OoxmlError::invalid(
+            "package signature relationship target is missing",
+        ));
+    }
+    let mut has_signature_member = false;
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index)?;
+        has_signature_member |= is_signature_member(entry.name());
+    }
+    Ok(signature_target.is_some() || has_signature_member)
+}
+
+fn is_signature_member(name: &str) -> bool {
+    name.split('/')
+        .next()
+        .is_some_and(|part| part.eq_ignore_ascii_case("_xmlsignatures"))
+}
+
 fn validate_source(source: &Path) -> Result<(), OoxmlError> {
     let metadata = fs::symlink_metadata(source)?;
-    if !metadata.file_type().is_file() || metadata.len() > MAX_PACKAGE_BYTES {
+    if !metadata.file_type().is_file() {
         return Err(OoxmlError::invalid(
-            "workbook package is invalid or too large",
+            "workbook package is not a regular file",
+        ));
+    }
+    if metadata.len() > MAX_PACKAGE_BYTES {
+        return Err(OoxmlError::limit_exceeded(
+            "workbook package exceeded the size limit",
         ));
     }
     Ok(())
@@ -554,8 +690,11 @@ fn preflight_archive<R: Read + Seek>(source: &mut R) -> Result<ZipPreflightFacts
     const CENTRAL_DIRECTORY_HEADER_SIGNATURE: &[u8; 4] = b"PK\x01\x02";
 
     let source_len = source.seek(SeekFrom::End(0))?;
-    if source_len == 0 || source_len > MAX_PACKAGE_BYTES {
-        return Err(OoxmlError::invalid(
+    if source_len == 0 {
+        return Err(OoxmlError::invalid("workbook source is empty"));
+    }
+    if source_len > MAX_PACKAGE_BYTES {
+        return Err(OoxmlError::limit_exceeded(
             "workbook source exceeded the size limit",
         ));
     }
@@ -589,7 +728,9 @@ fn preflight_archive<R: Read + Seek>(source: &mut R) -> Result<ZipPreflightFacts
         return Err(OoxmlError::invalid("workbook ZIP metadata is invalid"));
     }
     if usize::from(entry_count) > MAX_ENTRIES {
-        return Err(OoxmlError::invalid("workbook ZIP entry count is invalid"));
+        return Err(OoxmlError::limit_exceeded(
+            "workbook ZIP entry count is invalid",
+        ));
     }
     if entry_count == u16::MAX || directory_size == u32::MAX || directory_offset == u32::MAX {
         return Err(OoxmlError::invalid("workbook ZIP metadata is invalid"));
@@ -709,15 +850,24 @@ fn preflight_archive<R: Read + Seek>(source: &mut R) -> Result<ZipPreflightFacts
 }
 
 fn validate_archive<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<(), OoxmlError> {
-    if archive.is_empty() || archive.len() > MAX_ENTRIES {
+    if archive.is_empty() {
         return Err(OoxmlError::invalid("workbook ZIP entry count is invalid"));
+    }
+    if archive.len() > MAX_ENTRIES {
+        return Err(OoxmlError::limit_exceeded(
+            "workbook ZIP entry count is invalid",
+        ));
     }
     let mut names = BTreeSet::new();
     let mut total = 0_u64;
     for index in 0..archive.len() {
         let entry = archive.by_index(index)?;
+        if entry.size() > MAX_ENTRY_BYTES {
+            return Err(OoxmlError::limit_exceeded(
+                "workbook member exceeded the size limit",
+            ));
+        }
         if entry.encrypted()
-            || entry.size() > MAX_ENTRY_BYTES
             || entry.enclosed_name().is_none()
             || !names.insert(entry.name().to_string())
         {
@@ -725,7 +875,7 @@ fn validate_archive<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<(), O
         }
         total = total.saturating_add(entry.size());
         if total > MAX_UNCOMPRESSED_BYTES {
-            return Err(OoxmlError::invalid(
+            return Err(OoxmlError::limit_exceeded(
                 "workbook uncompressed data exceeded the size limit",
             ));
         }
@@ -741,7 +891,7 @@ fn read_entry<R: Read + Seek>(
         .by_name(name)
         .map_err(|_| OoxmlError::invalid(format!("workbook member not found: {name}")))?;
     if entry.size() > MAX_ENTRY_BYTES {
-        return Err(OoxmlError::invalid(
+        return Err(OoxmlError::limit_exceeded(
             "workbook member exceeded the size limit",
         ));
     }
@@ -751,7 +901,7 @@ fn read_entry<R: Read + Seek>(
         .take(MAX_ENTRY_BYTES + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_ENTRY_BYTES {
-        return Err(OoxmlError::invalid(
+        return Err(OoxmlError::limit_exceeded(
             "workbook member exceeded the size limit",
         ));
     }
@@ -1489,71 +1639,455 @@ fn patch_sheet_xml(
 
 fn shared_strings(raw: &[u8]) -> Result<Vec<String>, OoxmlError> {
     let document = parse_document(raw)?;
-    Ok(descendants(&document.nodes)
-        .filter(|element| has_local_name(element, b"si"))
-        .map(descendant_text)
-        .collect())
+    let root = document_root_local(&document, b"sst", "shared strings root is invalid")?;
+    let namespace = root
+        .namespace
+        .as_deref()
+        .filter(|namespace| {
+            matches!(
+                *namespace,
+                value
+                    if value == TRANSITIONAL_WORKBOOK_NAMESPACE.as_bytes()
+                        || value == STRICT_WORKBOOK_NAMESPACE.as_bytes()
+            )
+        })
+        .ok_or_else(|| OoxmlError::invalid("shared strings namespace is invalid"))?;
+    let mut strings = Vec::new();
+    let mut canonical_items = BTreeSet::new();
+    for item in child_elements_in_namespace(root, b"si", namespace) {
+        canonical_items.insert(item as *const XmlElement as usize);
+        strings.push(canonical_inline_string(item, namespace)?);
+    }
+    for item in descendants(&document.nodes).filter(|element| has_local_name(element, b"si")) {
+        if item.namespace.as_deref() != Some(namespace)
+            || !canonical_items.contains(&(item as *const XmlElement as usize))
+        {
+            return Err(OoxmlError::invalid(
+                "shared string is outside the canonical hierarchy",
+            ));
+        }
+    }
+    Ok(strings)
 }
 
 fn worksheet_data(raw: &[u8], shared_strings: &[String]) -> Result<WorksheetData, OoxmlError> {
     let document = parse_document(raw)?;
-    let mut data = WorksheetData::default();
-    for element in descendants(&document.nodes) {
-        if has_local_name(element, b"col") {
-            let Some(first) =
-                attribute(element, b"min").and_then(|value| value.parse::<u32>().ok())
-            else {
+    let root = document_root_local(&document, b"worksheet", "worksheet root is invalid")?;
+    let namespace = root
+        .namespace
+        .as_deref()
+        .filter(|namespace| {
+            matches!(
+                *namespace,
+                value
+                    if value == TRANSITIONAL_WORKBOOK_NAMESPACE.as_bytes()
+                        || value == STRICT_WORKBOOK_NAMESPACE.as_bytes()
+            )
+        })
+        .ok_or_else(|| OoxmlError::invalid("worksheet namespace is invalid"))?;
+    let sheet_data = single_child_element_in_namespace(
+        root,
+        b"sheetData",
+        namespace,
+        "worksheet sheetData is invalid",
+    )?;
+    let mut data = WorksheetData {
+        has_sheet_protection: optional_single_child_element_in_namespace(
+            root,
+            b"sheetProtection",
+            namespace,
+            "worksheet protection is invalid",
+        )?
+        .is_some(),
+        merged_ranges: worksheet_merged_ranges(root, namespace)?,
+        ..WorksheetData::default()
+    };
+
+    for columns in child_elements_in_namespace(root, b"cols", namespace) {
+        for column in child_elements_in_namespace(columns, b"col", namespace) {
+            let first = bounded_unqualified_attribute(
+                column,
+                b"min",
+                MAX_U32_ATTRIBUTE_BYTES,
+                "worksheet column minimum",
+            )?
+            .and_then(|value| value.parse::<u32>().ok());
+            let last = bounded_unqualified_attribute(
+                column,
+                b"max",
+                MAX_U32_ATTRIBUTE_BYTES,
+                "worksheet column maximum",
+            )?
+            .and_then(|value| value.parse::<u32>().ok());
+            let width =
+                bounded_unqualified_attribute(column, b"width", 64, "worksheet column width")?
+                    .and_then(|value| value.parse::<f64>().ok());
+            let (Some(first), Some(last), Some(width)) = (first, last, width) else {
                 continue;
             };
-            let Some(last) = attribute(element, b"max").and_then(|value| value.parse::<u32>().ok())
-            else {
-                continue;
-            };
-            let Some(width) =
-                attribute(element, b"width").and_then(|value| value.parse::<f64>().ok())
-            else {
-                continue;
-            };
-            for column in first..=last.min(16_384) {
+            if first == 0
+                || first > last
+                || last > MAX_WORKSHEET_COLUMNS
+                || !width.is_finite()
+                || width < 0.0
+            {
+                return Err(OoxmlError::invalid("worksheet column is invalid"));
+            }
+            for column in first..=last {
                 data.column_widths.insert(column, width);
             }
-            continue;
         }
-        if !has_local_name(element, b"c") {
-            continue;
+    }
+
+    let mut canonical_cells = BTreeSet::new();
+    let mut row_numbers = BTreeSet::new();
+    let mut coordinates = BTreeSet::new();
+    for row in child_elements_in_namespace(sheet_data, b"row", namespace) {
+        let row_number = bounded_unqualified_attribute(
+            row,
+            b"r",
+            MAX_U32_ATTRIBUTE_BYTES,
+            "worksheet row identity",
+        )?
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|row| (1..=MAX_WORKSHEET_ROWS).contains(row))
+        .ok_or_else(|| OoxmlError::invalid("worksheet row identity is invalid"))?;
+        if !row_numbers.insert(row_number) {
+            return Err(OoxmlError::invalid("duplicate worksheet row identity"));
         }
-        let reference = attribute(element, b"r")
-            .and_then(|value| parse_reference(&value))
-            .ok_or_else(|| OoxmlError::invalid("worksheet cell reference is invalid"))?;
-        let cell_type = attribute(element, b"t").unwrap_or_default();
-        let raw_value = child_element(element, b"v")
+        data.max_row = data.max_row.max(row_number);
+        for cell in child_elements_in_namespace(row, b"c", namespace) {
+            canonical_cells.insert(cell as *const XmlElement as usize);
+            reject_noncanonical_cell_value_shadows(cell, namespace)?;
+            let reference =
+                bounded_unqualified_attribute(cell, b"r", 32, "worksheet cell reference")?
+                    .and_then(|value| parse_reference(&value))
+                    .filter(|(cell_row, column)| {
+                        *cell_row == row_number
+                            && (1..=MAX_WORKSHEET_ROWS).contains(cell_row)
+                            && (1..=MAX_WORKSHEET_COLUMNS).contains(column)
+                    })
+                    .ok_or_else(|| OoxmlError::invalid("worksheet cell reference is invalid"))?;
+            if !coordinates.insert(reference) {
+                return Err(OoxmlError::invalid("duplicate worksheet cell reference"));
+            }
+            let cell_type = bounded_unqualified_attribute(cell, b"t", 32, "worksheet cell type")?
+                .unwrap_or_default();
+            let raw_value = optional_single_child_element_in_namespace(
+                cell,
+                b"v",
+                namespace,
+                "worksheet cell value is invalid",
+            )?
             .map(element_text)
             .unwrap_or_default();
-        let value = match cell_type.as_str() {
-            "inlineStr" => child_element(element, b"is")
-                .map(descendant_text)
-                .unwrap_or_default(),
-            "s" => raw_value
-                .parse::<usize>()
-                .ok()
-                .and_then(|index| shared_strings.get(index))
-                .cloned()
-                .ok_or_else(|| OoxmlError::invalid("shared string index is invalid"))?,
-            _ => raw_value,
-        };
-        let formula = child_element(element, b"f").map(element_text);
-        data.max_row = data.max_row.max(reference.0);
-        data.max_column = data.max_column.max(reference.1);
-        data.cells.insert(
-            reference,
-            CellData {
-                value,
-                formula,
-                style: attribute(element, b"s"),
-            },
-        );
+            let inline = optional_single_child_element_in_namespace(
+                cell,
+                b"is",
+                namespace,
+                "worksheet inline string is invalid",
+            )?;
+            let value = match cell_type.as_str() {
+                "inlineStr" => inline
+                    .map(|inline| canonical_inline_string(inline, namespace))
+                    .transpose()?
+                    .unwrap_or_default(),
+                "s" => raw_value
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| shared_strings.get(index))
+                    .cloned()
+                    .ok_or_else(|| OoxmlError::invalid("shared string index is invalid"))?,
+                _ => raw_value,
+            };
+            let formula = optional_single_child_element_in_namespace(
+                cell,
+                b"f",
+                namespace,
+                "worksheet cell formula is invalid",
+            )?
+            .map(element_text);
+            let style = bounded_unqualified_attribute(
+                cell,
+                b"s",
+                MAX_U32_ATTRIBUTE_BYTES,
+                "worksheet cell style",
+            )?;
+            data.max_row = data.max_row.max(reference.0);
+            data.max_column = data.max_column.max(reference.1);
+            data.cells.insert(
+                reference,
+                CellData {
+                    value,
+                    formula,
+                    style,
+                },
+            );
+        }
+    }
+
+    for element in descendants(&document.nodes).filter(|element| has_local_name(element, b"c")) {
+        if element.namespace.as_deref() == Some(namespace) {
+            if !canonical_cells.contains(&(element as *const XmlElement as usize)) {
+                return Err(OoxmlError::invalid(
+                    "worksheet cell is outside the canonical hierarchy",
+                ));
+            }
+        } else if bounded_unqualified_attribute(
+            element,
+            b"r",
+            32,
+            "foreign worksheet cell reference",
+        )?
+        .and_then(|value| parse_reference(&value))
+        .is_some()
+        {
+            return Err(OoxmlError::invalid(
+                "foreign namespace worksheet cell shadow is invalid",
+            ));
+        }
     }
     Ok(data)
+}
+
+fn child_elements_in_namespace<'a>(
+    element: &'a XmlElement,
+    local_name: &'a [u8],
+    namespace: &'a [u8],
+) -> impl Iterator<Item = &'a XmlElement> {
+    element.children.iter().filter_map(move |node| match node {
+        XmlNode::Element(child)
+            if has_local_name(child, local_name)
+                && child.namespace.as_deref() == Some(namespace) =>
+        {
+            Some(child)
+        }
+        _ => None,
+    })
+}
+
+fn optional_single_child_element_in_namespace<'a>(
+    parent: &'a XmlElement,
+    local_name: &[u8],
+    namespace: &[u8],
+    error: &str,
+) -> Result<Option<&'a XmlElement>, OoxmlError> {
+    let mut found = None;
+    for node in &parent.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        if !has_local_name(child, local_name) {
+            continue;
+        }
+        if child.namespace.as_deref() != Some(namespace) || found.is_some() {
+            return Err(OoxmlError::invalid(error));
+        }
+        found = Some(child);
+    }
+    Ok(found)
+}
+
+fn single_child_element_in_namespace<'a>(
+    parent: &'a XmlElement,
+    local_name: &[u8],
+    namespace: &[u8],
+    error: &str,
+) -> Result<&'a XmlElement, OoxmlError> {
+    optional_single_child_element_in_namespace(parent, local_name, namespace, error)?
+        .ok_or_else(|| OoxmlError::invalid(error))
+}
+
+fn canonical_inline_string(element: &XmlElement, namespace: &[u8]) -> Result<String, OoxmlError> {
+    let mut text = String::new();
+    for node in &element.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        require_namespace(
+            child,
+            namespace,
+            "worksheet inline string namespace is invalid",
+        )?;
+        if has_local_name(child, b"t") {
+            text.push_str(&element_text(child));
+        } else if has_local_name(child, b"r") {
+            append_canonical_rich_text(child, namespace, &mut text)?;
+        } else if has_local_name(child, b"rPh") || has_local_name(child, b"phoneticPr") {
+            validate_descendant_namespace(child, namespace)?;
+        } else {
+            return Err(OoxmlError::invalid(
+                "worksheet inline string hierarchy is invalid",
+            ));
+        }
+    }
+    Ok(text)
+}
+
+fn append_canonical_rich_text(
+    element: &XmlElement,
+    namespace: &[u8],
+    output: &mut String,
+) -> Result<(), OoxmlError> {
+    for node in &element.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        require_namespace(
+            child,
+            namespace,
+            "worksheet inline string namespace is invalid",
+        )?;
+        if has_local_name(child, b"t") {
+            output.push_str(&element_text(child));
+        } else if has_local_name(child, b"rPr") {
+            validate_descendant_namespace(child, namespace)?;
+        } else {
+            return Err(OoxmlError::invalid(
+                "worksheet rich text hierarchy is invalid",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn require_namespace(
+    element: &XmlElement,
+    namespace: &[u8],
+    error: &str,
+) -> Result<(), OoxmlError> {
+    if element.namespace.as_deref() == Some(namespace) {
+        Ok(())
+    } else {
+        Err(OoxmlError::invalid(error))
+    }
+}
+
+fn validate_descendant_namespace(element: &XmlElement, namespace: &[u8]) -> Result<(), OoxmlError> {
+    for node in &element.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        require_namespace(child, namespace, "worksheet rich text namespace is invalid")?;
+        validate_descendant_namespace(child, namespace)?;
+    }
+    Ok(())
+}
+
+fn reject_noncanonical_cell_value_shadows(
+    cell: &XmlElement,
+    namespace: &[u8],
+) -> Result<(), OoxmlError> {
+    for node in &cell.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        if [b"f".as_slice(), b"v".as_slice(), b"is".as_slice()]
+            .iter()
+            .any(|name| has_local_name(child, name))
+        {
+            require_namespace(
+                child,
+                namespace,
+                "worksheet cell value namespace is invalid",
+            )?;
+        }
+        reject_nested_cell_value_shadow(child)?;
+    }
+    Ok(())
+}
+
+fn reject_nested_cell_value_shadow(element: &XmlElement) -> Result<(), OoxmlError> {
+    for node in &element.children {
+        let XmlNode::Element(child) = node else {
+            continue;
+        };
+        if [b"f".as_slice(), b"v".as_slice(), b"is".as_slice()]
+            .iter()
+            .any(|name| has_local_name(child, name))
+        {
+            return Err(OoxmlError::invalid(
+                "worksheet cell value is outside the canonical hierarchy",
+            ));
+        }
+        reject_nested_cell_value_shadow(child)?;
+    }
+    Ok(())
+}
+
+fn worksheet_merged_ranges(
+    root: &XmlElement,
+    namespace: &[u8],
+) -> Result<Vec<CellRange>, OoxmlError> {
+    let Some(merge_cells) = optional_single_child_element_in_namespace(
+        root,
+        b"mergeCells",
+        namespace,
+        "worksheet merge collection is invalid",
+    )?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut ranges = Vec::new();
+    for node in &merge_cells.children {
+        let XmlNode::Element(element) = node else {
+            continue;
+        };
+        if !has_local_name(element, b"mergeCell") {
+            continue;
+        }
+        if element.namespace.as_deref() != Some(namespace) {
+            return Err(OoxmlError::invalid("worksheet merge range is invalid"));
+        }
+        if ranges.len() >= MAX_MERGED_RANGES {
+            return Err(OoxmlError::limit_exceeded(
+                "worksheet merge range count exceeded the limit",
+            ));
+        }
+        let reference =
+            bounded_unqualified_attribute(element, b"ref", 64, "worksheet merge range")?
+                .ok_or_else(|| OoxmlError::invalid("worksheet merge range is invalid"))?;
+        let (first, last) = reference
+            .split_once(':')
+            .and_then(|(first, last)| Some((parse_reference(first)?, parse_reference(last)?)))
+            .ok_or_else(|| OoxmlError::invalid("worksheet merge range is invalid"))?;
+        let range = CellRange {
+            first_row: first.0,
+            first_column: first.1,
+            last_row: last.0,
+            last_column: last.1,
+        };
+        if range.first_row == 0
+            || range.first_column == 0
+            || range.first_row > range.last_row
+            || range.first_column > range.last_column
+            || range.last_row > MAX_WORKSHEET_ROWS
+            || range.last_column > MAX_WORKSHEET_COLUMNS
+            || ranges.iter().any(|existing: &CellRange| {
+                existing.first_row <= range.last_row
+                    && range.first_row <= existing.last_row
+                    && existing.first_column <= range.last_column
+                    && range.first_column <= existing.last_column
+            })
+        {
+            return Err(OoxmlError::invalid("worksheet merge range is invalid"));
+        }
+        ranges.push(range);
+    }
+    if let Some(declared) = bounded_unqualified_attribute(
+        merge_cells,
+        b"count",
+        MAX_U32_ATTRIBUTE_BYTES,
+        "worksheet merge count",
+    )? {
+        let declared = declared
+            .parse::<usize>()
+            .map_err(|_| OoxmlError::invalid("worksheet merge count is invalid"))?;
+        if declared != ranges.len() {
+            return Err(OoxmlError::invalid("worksheet merge count is invalid"));
+        }
+    }
+    Ok(ranges)
 }
 
 fn patch_calc_chain(
@@ -1815,7 +2349,9 @@ fn parse_document_with_limits(
     max_nodes: usize,
 ) -> Result<XmlDocument, OoxmlError> {
     if raw.len() as u64 > MAX_ENTRY_BYTES {
-        return Err(OoxmlError::invalid("XML member exceeded the size limit"));
+        return Err(OoxmlError::limit_exceeded(
+            "XML member exceeded the size limit",
+        ));
     }
     let mut reader = NsReader::from_reader(raw);
     reader.config_mut().trim_text(false);
@@ -1827,7 +2363,9 @@ fn parse_document_with_limits(
             Event::Start(start) => {
                 record_xml_node(&mut node_count, max_nodes)?;
                 if stack.len() >= max_depth {
-                    return Err(OoxmlError::invalid("XML element depth exceeded the limit"));
+                    return Err(OoxmlError::limit_exceeded(
+                        "XML element depth exceeded the limit",
+                    ));
                 }
                 validate_raw_qualified_attribute_names(&start)?;
                 let namespace =
@@ -1844,7 +2382,9 @@ fn parse_document_with_limits(
             Event::Empty(start) => {
                 record_xml_node(&mut node_count, max_nodes)?;
                 if stack.len() >= max_depth {
-                    return Err(OoxmlError::invalid("XML element depth exceeded the limit"));
+                    return Err(OoxmlError::limit_exceeded(
+                        "XML element depth exceeded the limit",
+                    ));
                 }
                 validate_raw_qualified_attribute_names(&start)?;
                 let namespace =
@@ -1926,9 +2466,11 @@ fn expanded_attributes(
 fn record_xml_node(node_count: &mut usize, max_nodes: usize) -> Result<(), OoxmlError> {
     *node_count = node_count
         .checked_add(1)
-        .ok_or_else(|| OoxmlError::invalid("XML node count exceeded the limit"))?;
+        .ok_or_else(|| OoxmlError::limit_exceeded("XML node count exceeded the limit"))?;
     if *node_count > max_nodes {
-        return Err(OoxmlError::invalid("XML node count exceeded the limit"));
+        return Err(OoxmlError::limit_exceeded(
+            "XML node count exceeded the limit",
+        ));
     }
     Ok(())
 }
@@ -2181,7 +2723,7 @@ fn bounded_expanded_attribute(
         }
         let raw = attribute.value.as_slice();
         if raw.len() > max_bytes {
-            return Err(OoxmlError::invalid(format!(
+            return Err(OoxmlError::limit_exceeded(format!(
                 "{field} exceeded the size limit"
             )));
         }
@@ -2190,7 +2732,7 @@ fn bounded_expanded_attribute(
         let decoded =
             unescape(encoded).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
         if decoded.len() > max_bytes {
-            return Err(OoxmlError::invalid(format!(
+            return Err(OoxmlError::limit_exceeded(format!(
                 "{field} exceeded the size limit"
             )));
         }
@@ -2217,7 +2759,7 @@ fn bounded_qualified_attribute(
         }
         let raw = attribute.value.as_ref();
         if raw.len() > max_bytes {
-            return Err(OoxmlError::invalid(format!(
+            return Err(OoxmlError::limit_exceeded(format!(
                 "{field} exceeded the size limit"
             )));
         }
@@ -2226,7 +2768,7 @@ fn bounded_qualified_attribute(
         let decoded =
             unescape(encoded).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
         if decoded.len() > max_bytes {
-            return Err(OoxmlError::invalid(format!(
+            return Err(OoxmlError::limit_exceeded(format!(
                 "{field} exceeded the size limit"
             )));
         }
@@ -2296,12 +2838,6 @@ fn remove_attribute(element: &mut XmlElement, local: &[u8]) {
 }
 
 fn element_text(element: &XmlElement) -> String {
-    let mut output = String::new();
-    collect_text(element, &mut output);
-    output
-}
-
-fn descendant_text(element: &XmlElement) -> String {
     let mut output = String::new();
     collect_text(element, &mut output);
     output
@@ -2396,8 +2932,9 @@ mod tests {
     use zip::{ZipWriter, write::SimpleFileOptions};
 
     use super::{
-        CellUpdate, WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
-        parse_document_with_limits, patch_workbook_sheets, read_workbook, sheet_infos_from_path,
+        CellUpdate, OoxmlErrorKind, WorksheetDescriptor, WorksheetVisibility,
+        ordered_workbook_discovery, parse_document_with_limits, patch_workbook_sheets,
+        read_workbook, sheet_infos_from_path,
     };
 
     const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2917,6 +3454,7 @@ mod tests {
         };
 
         assert_eq!(error.to_string(), "XML element depth exceeded the limit");
+        assert_eq!(error.kind(), OoxmlErrorKind::LimitExceeded);
     }
 
     #[test]
@@ -2927,6 +3465,7 @@ mod tests {
         };
 
         assert_eq!(error.to_string(), "XML node count exceeded the limit");
+        assert_eq!(error.kind(), OoxmlErrorKind::LimitExceeded);
     }
 
     #[test]

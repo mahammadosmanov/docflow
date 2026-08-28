@@ -1,18 +1,278 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Cursor, Read, Seek, SeekFrom, Write},
     path::Path,
 };
 
 use docflow_lib::{
     fs_ops::file_sha256,
-    ooxml::{CellUpdate, patch_workbook_sheets},
+    ooxml::{
+        CellUpdate, WorksheetVisibility, ordered_workbook_discovery, package_has_signature,
+        patch_workbook_sheets, read_workbook_from_reader,
+    },
 };
 use tempfile::TempDir;
 use zip::{CompressionMethod, DateTime, System, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const STRICT_MAIN: &str = "http://purl.oclc.org/ooxml/spreadsheetml/main";
+const OFFICE_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const STRICT_OFFICE_REL: &str = "http://purl.oclc.org/ooxml/officeDocument/relationships";
+const PACKAGE_REL: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+fn worksheet_facts_package(
+    namespace: &str,
+    sheets: &[(&str, Option<&str>, &str)],
+    workbook_protected: bool,
+    signed: bool,
+) -> Cursor<Vec<u8>> {
+    worksheet_facts_package_with_shared_strings(namespace, sheets, workbook_protected, signed, None)
+}
+
+fn worksheet_facts_package_with_shared_strings(
+    namespace: &str,
+    sheets: &[(&str, Option<&str>, &str)],
+    workbook_protected: bool,
+    signed: bool,
+    shared_strings: Option<&str>,
+) -> Cursor<Vec<u8>> {
+    let office_relationship_namespace = if namespace == STRICT_MAIN {
+        STRICT_OFFICE_REL
+    } else {
+        OFFICE_REL
+    };
+    let mut workbook_sheets = String::new();
+    let mut workbook_relationships = String::new();
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+    for (index, (name, state, worksheet)) in sheets.iter().enumerate() {
+        let ordinal = index + 1;
+        let state = state
+            .map(|value| format!(r#" state="{value}""#))
+            .unwrap_or_default();
+        workbook_sheets.push_str(&format!(
+            r#"<sheet name="{name}" sheetId="{ordinal}" r:id="rId{ordinal}"{state}/>"#
+        ));
+        workbook_relationships.push_str(&format!(
+            r#"<Relationship Id="rId{ordinal}" Type="{office_relationship_namespace}/worksheet" Target="worksheets/sheet{ordinal}.xml"/>"#
+        ));
+        writer
+            .start_file(format!("xl/worksheets/sheet{ordinal}.xml"), options)
+            .unwrap();
+        writer.write_all(worksheet.as_bytes()).unwrap();
+    }
+    if shared_strings.is_some() {
+        workbook_relationships.push_str(&format!(
+            r#"<Relationship Id="rIdSharedStrings" Type="{office_relationship_namespace}/sharedStrings" Target="sharedStrings.xml"/>"#
+        ));
+    }
+
+    let signature_relationship = if signed {
+        r#"<Relationship Id="rIdSignature" Type="http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin" Target="_xmlsignatures/origin.sigs"/>"#
+    } else {
+        ""
+    };
+    let package_relationships = format!(
+        r#"<Relationships xmlns="{PACKAGE_REL}"><Relationship Id="rIdWorkbook" Type="{office_relationship_namespace}/officeDocument" Target="xl/workbook.xml"/>{signature_relationship}</Relationships>"#
+    );
+    let protection = if workbook_protected {
+        "<workbookProtection lockStructure=\"1\"/>"
+    } else {
+        ""
+    };
+    let workbook = format!(
+        r#"<workbook xmlns="{namespace}" xmlns:r="{office_relationship_namespace}">{protection}<sheets>{workbook_sheets}</sheets></workbook>"#
+    );
+    let relationships =
+        format!(r#"<Relationships xmlns="{PACKAGE_REL}">{workbook_relationships}</Relationships>"#);
+
+    for (name, bytes) in [
+        ("[Content_Types].xml", b"content-types".as_slice()),
+        ("_rels/.rels", package_relationships.as_bytes()),
+        ("xl/workbook.xml", workbook.as_bytes()),
+        ("xl/_rels/workbook.xml.rels", relationships.as_bytes()),
+    ] {
+        writer.start_file(name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    if signed {
+        writer
+            .start_file("_xmlsignatures/origin.sigs", options)
+            .unwrap();
+        writer.write_all(b"signature-origin").unwrap();
+    }
+    if let Some(shared_strings) = shared_strings {
+        writer.start_file("xl/sharedStrings.xml", options).unwrap();
+        writer.write_all(shared_strings.as_bytes()).unwrap();
+    }
+    writer.finish().unwrap()
+}
+
+#[test]
+fn worksheet_facts_accept_only_canonical_strict_or_transitional_hierarchy() {
+    for namespace in [MAIN, STRICT_MAIN] {
+        let worksheet = format!(
+            r#"<worksheet xmlns="{namespace}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>canonical</t></is></c></row></sheetData></worksheet>"#
+        );
+        let mut source = worksheet_facts_package(
+            namespace,
+            &[("Facts", None, worksheet.as_str())],
+            false,
+            false,
+        );
+        let workbook = read_workbook_from_reader(&mut source).unwrap();
+        assert_eq!(workbook.sheet("Facts").unwrap().value(2, 1), "canonical");
+    }
+
+    for worksheet in [
+        format!(r#"<worksheet xmlns="{MAIN}"><cols/></worksheet>"#),
+        format!(
+            r#"<worksheet xmlns="{MAIN}"><sheetData/><sheetData><row r="2"><c r="A2"/></row></sheetData></worksheet>"#
+        ),
+        format!(r#"<worksheet xmlns="{MAIN}"><sheetData><c r="A2"/></sheetData></worksheet>"#),
+        format!(
+            r#"<worksheet xmlns="{MAIN}"><sheetData><row r="3"><c r="A2"/></row></sheetData></worksheet>"#
+        ),
+    ] {
+        let mut source =
+            worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+        assert!(
+            read_workbook_from_reader(&mut source).is_err(),
+            "{worksheet}"
+        );
+    }
+}
+
+#[test]
+fn worksheet_facts_reject_duplicate_coordinates_before_indexing() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>first</t></is></c><c r="A2" t="inlineStr"><is><t>second</t></is></c></row></sheetData></worksheet>"#
+    );
+    let mut source =
+        worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+
+    assert!(read_workbook_from_reader(&mut source).is_err());
+}
+
+#[test]
+fn worksheet_facts_reject_foreign_namespace_cell_shadowing() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}" xmlns:foreign="urn:foreign"><sheetData><row r="2"><foreign:c r="A2" t="inlineStr"><foreign:is><foreign:t>shadow</foreign:t></foreign:is></foreign:c></row></sheetData></worksheet>"#
+    );
+    let mut source =
+        worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+
+    assert!(read_workbook_from_reader(&mut source).is_err());
+}
+
+#[test]
+fn worksheet_facts_reject_foreign_inline_wrapper_shadowing() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}" xmlns:evil="urn:evil"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><evil:r><t>shadow</t></evil:r></is></c></row></sheetData></worksheet>"#
+    );
+    let mut source =
+        worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+
+    assert!(read_workbook_from_reader(&mut source).is_err());
+}
+
+#[test]
+fn worksheet_facts_reject_formula_outside_canonical_cell_child_chain() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}" xmlns:evil="urn:evil"><sheetData><row r="2"><c r="A2"><evil:wrapper><f>LOOKUP()</f></evil:wrapper><v>Completed</v></c></row></sheetData></worksheet>"#
+    );
+    let mut source =
+        worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+
+    assert!(read_workbook_from_reader(&mut source).is_err());
+}
+
+#[test]
+fn worksheet_facts_reject_duplicate_physical_row_identities() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2"/></row><row r="2"><c r="B2"/></row></sheetData></worksheet>"#
+    );
+    let mut source =
+        worksheet_facts_package(MAIN, &[("Facts", None, worksheet.as_str())], false, false);
+
+    assert!(read_workbook_from_reader(&mut source).is_err());
+}
+
+#[test]
+fn worksheet_facts_reject_noncanonical_shared_string_namespace_or_hierarchy() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="s"><v>0</v></c></row></sheetData></worksheet>"#
+    );
+    let shared_strings = [
+        r#"<sst xmlns="urn:evil"><si><t>shadow</t></si></sst>"#.to_string(),
+        format!(
+            r#"<sst xmlns="{MAIN}" xmlns:evil="urn:evil"><evil:si><t>shadow</t></evil:si></sst>"#
+        ),
+        format!(
+            r#"<sst xmlns="{MAIN}" xmlns:evil="urn:evil"><si><evil:wrapper><t>shadow</t></evil:wrapper></si></sst>"#
+        ),
+    ];
+
+    for shared in shared_strings {
+        let mut source = worksheet_facts_package_with_shared_strings(
+            MAIN,
+            &[("Facts", None, worksheet.as_str())],
+            false,
+            false,
+            Some(&shared),
+        );
+        assert!(read_workbook_from_reader(&mut source).is_err(), "{shared}");
+    }
+}
+
+#[test]
+fn worksheet_facts_capture_formula_merge_protection_signature_and_visibility() {
+    let hidden = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetProtection sheet="1"/><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>merged</t></is></c></row><row r="3"><c r="C3"><f>1+1</f><v>2</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="A2:B2"/></mergeCells></worksheet>"#
+    );
+    let very_hidden = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1"/></row></sheetData></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(
+        MAIN,
+        &[
+            ("Hidden", Some("hidden"), hidden.as_str()),
+            ("VeryHidden", Some("veryHidden"), very_hidden.as_str()),
+        ],
+        true,
+        true,
+    );
+
+    let discovery = ordered_workbook_discovery(&mut source).unwrap();
+    assert!(discovery.safety.has_workbook_protection);
+    assert_eq!(
+        discovery
+            .worksheets
+            .iter()
+            .map(|sheet| sheet.visibility)
+            .collect::<Vec<_>>(),
+        vec![WorksheetVisibility::Hidden, WorksheetVisibility::VeryHidden]
+    );
+    source.seek(SeekFrom::Start(0)).unwrap();
+    assert!(package_has_signature(&mut source).unwrap());
+    source.seek(SeekFrom::Start(0)).unwrap();
+    let workbook = read_workbook_from_reader(&mut source).unwrap();
+    let sheet = workbook.sheet("Hidden").unwrap();
+    assert!(sheet.has_sheet_protection);
+    assert_eq!(sheet.cell(3, 3).unwrap().formula.as_deref(), Some("1+1"));
+    let merged = sheet.merged_range_containing(2, 2).unwrap();
+    assert_eq!(
+        (
+            merged.first_row,
+            merged.first_column,
+            merged.last_row,
+            merged.last_column,
+        ),
+        (2, 1, 2, 2)
+    );
+}
 
 fn package(path: &Path, macros: bool) {
     let file = File::create(path).expect("fixture package");
