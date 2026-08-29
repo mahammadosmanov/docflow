@@ -1622,15 +1622,25 @@ struct PlatformDirectory(File);
 impl PlatformDirectory {
     fn open_ambient(path: &Path, access: DirectoryAccess) -> io::Result<Self> {
         use std::os::windows::fs::OpenOptionsExt;
-        use windows_sys::Win32::Storage::FileSystem::{
-            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
-            FILE_SHARE_READ, FILE_SHARE_WRITE,
+        use windows_sys::Win32::{
+            Foundation::{GENERIC_READ, GENERIC_WRITE},
+            Storage::FileSystem::{
+                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE,
+            },
         };
 
         let mut options = std::fs::OpenOptions::new();
         options
-            .read(true)
-            .write(access == DirectoryAccess::ReadWrite)
+            .access_mode(
+                GENERIC_READ
+                    | FILE_TRAVERSE
+                    | if access == DirectoryAccess::ReadWrite {
+                        GENERIC_WRITE
+                    } else {
+                        0
+                    },
+            )
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
             .open(path)
@@ -1876,7 +1886,7 @@ fn nt_open_relative(
             },
             Storage::FileSystem::{
                 DELETE, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-                FILE_SHARE_READ, FILE_SHARE_WRITE, SYNCHRONIZE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE, SYNCHRONIZE,
             },
             System::IO::IO_STATUS_BLOCK,
         },
@@ -1904,11 +1914,11 @@ fn nt_open_relative(
     };
     let (access, options) = match kind {
         NtLeafKind::Directory => (
-            GENERIC_READ | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            GENERIC_READ | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::MutableDirectory => (
-            GENERIC_READ | GENERIC_WRITE | DELETE | SYNCHRONIZE,
+            GENERIC_READ | GENERIC_WRITE | FILE_TRAVERSE | DELETE | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::ReadFile => (
