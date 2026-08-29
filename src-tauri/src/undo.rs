@@ -357,20 +357,47 @@ fn restore_backup(step: &Step, roots: &[CapabilityRoot]) -> Result<(), UndoStepF
         .map_err(UndoStepFailure::NoEffect)?;
     verify_hash_from_meta(&workbook, step, "appliedSha256", "applied workbook")
         .map_err(UndoStepFailure::NoEffect)?;
-    let temporary = workbook
-        .temporary_sibling("restore")
-        .map_err(UndoStepFailure::NoEffect)?;
-    temporary
-        .copy_no_clobber_from(&backup)
-        .map_err(UndoStepFailure::NoEffect)?;
-    if let Err(error) = verify_hash_from_meta(&temporary, step, "originalSha256", "restore copy") {
-        let _ = temporary.remove_file();
-        return Err(UndoStepFailure::NoEffect(error));
+    #[cfg(windows)]
+    {
+        let applied_hash = step
+            .meta
+            .get("appliedSha256")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                UndoStepFailure::NoEffect(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "applied workbook hash is missing",
+                ))
+            })?;
+        return workbook
+            .overwrite_verified_from(&backup, applied_hash)
+            .map_err(|error| {
+                if error.kind() == io::ErrorKind::InvalidData {
+                    UndoStepFailure::NoEffect(error)
+                } else {
+                    UndoStepFailure::OutcomeUnknown(error)
+                }
+            });
     }
-    if let Err(error) = workbook.replace_with(&temporary) {
-        return Err(UndoStepFailure::OutcomeUnknown(error));
+    #[cfg(not(windows))]
+    {
+        let temporary = workbook
+            .temporary_sibling("restore")
+            .map_err(UndoStepFailure::NoEffect)?;
+        temporary
+            .copy_no_clobber_from(&backup)
+            .map_err(UndoStepFailure::NoEffect)?;
+        if let Err(error) =
+            verify_hash_from_meta(&temporary, step, "originalSha256", "restore copy")
+        {
+            let _ = temporary.remove_file();
+            return Err(UndoStepFailure::NoEffect(error));
+        }
+        if let Err(error) = workbook.replace_with(&temporary) {
+            return Err(UndoStepFailure::OutcomeUnknown(error));
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 fn verify_hash_from_meta(

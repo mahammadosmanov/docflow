@@ -1085,6 +1085,35 @@ impl AnchoredPath {
         }
     }
 
+    #[cfg(any(windows, test))]
+    pub(crate) fn overwrite_verified_from(
+        &self,
+        source: &AnchoredPath,
+        expected_current_sha256: &str,
+    ) -> io::Result<()> {
+        self.require_write()?;
+        let mut input = source.open_read()?;
+        let source_sha256 = sha256_open_file(&mut input)?;
+        let source_permissions = input.metadata()?.permissions();
+        let mut output = self.open_mutable()?;
+        if sha256_open_file(&mut output)? != expected_current_sha256 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "destination changed before pinned restore",
+            ));
+        }
+        input.seek(SeekFrom::Start(0))?;
+        output.seek(SeekFrom::Start(0))?;
+        output.set_len(0)?;
+        io::copy(&mut input, &mut output)?;
+        output.set_permissions(source_permissions)?;
+        output.sync_all()?;
+        if sha256_open_file(&mut output)? != source_sha256 {
+            return Err(io::Error::other("pinned restore verification failed"));
+        }
+        self.parent.sync_all()
+    }
+
     pub(crate) fn retain_current_name_no_clobber(
         &self,
         retained: &AnchoredPath,
@@ -1147,19 +1176,8 @@ impl AnchoredPath {
     }
 
     pub(crate) fn sha256(&self) -> io::Result<String> {
-        use sha2::{Digest, Sha256};
-
         let mut file = self.open_read()?;
-        let mut digest = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let read = file.read(&mut buffer)?;
-            if read == 0 {
-                break;
-            }
-            digest.update(&buffer[..read]);
-        }
-        Ok(format!("{:x}", digest.finalize()))
+        sha256_open_file(&mut file)
     }
 
     pub(crate) fn temporary_sibling(&self, label: &str) -> io::Result<Self> {
@@ -1242,6 +1260,23 @@ pub(crate) fn file_identity(file: &File) -> io::Result<FilesystemObjectIdentity>
             file_index,
         })
     }
+}
+
+fn sha256_open_file(file: &mut File) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
+
+    file.seek(SeekFrom::Start(0))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    file.seek(SeekFrom::Start(0))?;
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 fn validate_relative(path: &Path) -> io::Result<()> {
@@ -2188,6 +2223,31 @@ mod tests {
         file.write_all(b"retained").unwrap();
         file.sync_all().unwrap();
         assert_eq!(std::fs::read(path).unwrap(), b"retained");
+    }
+
+    #[test]
+    fn pinned_overwrite_verifies_current_handle_before_restoring_exact_source_bytes() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let backup_path = fixture.path().join("backup.xlsx");
+        let workbook_path = fixture.path().join("workbook.xlsx");
+        std::fs::write(&backup_path, b"original workbook").unwrap();
+        std::fs::write(&workbook_path, b"applied workbook").unwrap();
+        let backup = root.authorize(&backup_path).unwrap().anchor().unwrap();
+        let workbook = root.authorize(&workbook_path).unwrap().anchor().unwrap();
+        let applied_hash = workbook.sha256().unwrap();
+
+        workbook
+            .overwrite_verified_from(&backup, &applied_hash)
+            .unwrap();
+        assert_eq!(std::fs::read(&workbook_path).unwrap(), b"original workbook");
+
+        std::fs::write(&workbook_path, b"later edit").unwrap();
+        let error = workbook
+            .overwrite_verified_from(&backup, &applied_hash)
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(std::fs::read(&workbook_path).unwrap(), b"later edit");
     }
 
     #[test]
