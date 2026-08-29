@@ -770,11 +770,11 @@ impl FilesystemAuthority {
         let parent_outcome = private_parent
             .create_artifact_parent_no_clobber()
             .map_err(|_| follow_up_outcome(record))?;
-        if matches!(parent_outcome, ArtifactParentCreateOutcome::Created { .. }) {
-            private_parent
-                .anchor()
-                .and_then(|path| path.sync_parent())
-                .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        if matches!(parent_outcome, ArtifactParentCreateOutcome::Created { .. })
+            && let Err(error) = private_parent.anchor().and_then(|path| path.sync_parent())
+        {
+            eprintln!("[docflow-cap-fs] artifact parent sync failed: {error}");
+            return Err(follow_up_partial("error.rfi.followUp.recoveryRequired"));
         }
         s5_transition(
             &self.journals,
