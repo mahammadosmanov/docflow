@@ -369,7 +369,7 @@ fn restore_backup(step: &Step, roots: &[CapabilityRoot]) -> Result<(), UndoStepF
                     "applied workbook hash is missing",
                 ))
             })?;
-        return workbook
+        workbook
             .overwrite_verified_from(&backup, applied_hash)
             .map_err(|error| {
                 if error.kind() == io::ErrorKind::InvalidData {
@@ -377,7 +377,7 @@ fn restore_backup(step: &Step, roots: &[CapabilityRoot]) -> Result<(), UndoStepF
                 } else {
                     UndoStepFailure::OutcomeUnknown(error)
                 }
-            });
+            })
     }
     #[cfg(not(windows))]
     {

@@ -8,9 +8,9 @@ use std::{
 
 use crate::journal::FilesystemObjectIdentity;
 
-#[cfg(unix)]
+#[cfg(any(unix, test))]
 const MAX_SECURITY_AUXILIARY_RECORDS: usize = 128;
-#[cfg(unix)]
+#[cfg(any(unix, test))]
 const MAX_SECURITY_AUXILIARY_BYTES: u64 = 1024 * 1024;
 
 #[cfg(test)]

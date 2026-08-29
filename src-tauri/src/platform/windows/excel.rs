@@ -179,23 +179,23 @@ struct ExcelDispatchSession {
 impl ExcelDispatchSession {
     fn cleanup(&mut self) -> Result<(), PrintFailure> {
         let mut failed = false;
-        if !self.workbook_closed {
-            if let Some(workbook) = self.workbook.as_ref() {
-                let mut arguments = values_to_variants(&[ComValue::Bool(false)]);
-                if invoke(workbook, "Close", DISPATCH_METHOD, &mut arguments, false).is_err() {
-                    failed = true;
-                } else {
-                    self.workbook_closed = true;
-                }
+        if !self.workbook_closed
+            && let Some(workbook) = self.workbook.as_ref()
+        {
+            let mut arguments = values_to_variants(&[ComValue::Bool(false)]);
+            if invoke(workbook, "Close", DISPATCH_METHOD, &mut arguments, false).is_err() {
+                failed = true;
+            } else {
+                self.workbook_closed = true;
             }
         }
-        if !self.application_quit {
-            if let Some(application) = self.application.as_ref() {
-                if invoke(application, "Quit", DISPATCH_METHOD, &mut [], false).is_err() {
-                    failed = true;
-                } else {
-                    self.application_quit = true;
-                }
+        if !self.application_quit
+            && let Some(application) = self.application.as_ref()
+        {
+            if invoke(application, "Quit", DISPATCH_METHOD, &mut [], false).is_err() {
+                failed = true;
+            } else {
+                self.application_quit = true;
             }
         }
         self.worksheet.take();
@@ -450,7 +450,7 @@ fn invoke(
         .map_err(|_| com_failure())?;
 
     let mut named_dispids = encoded.named_dispids;
-    let mut parameters = DISPPARAMS {
+    let parameters = DISPPARAMS {
         rgvarg: if arguments.is_empty() {
             null_mut()
         } else {
@@ -471,7 +471,7 @@ fn invoke(
             &iid_null,
             0,
             flags,
-            &mut parameters,
+            &parameters,
             Some(&mut result),
             None,
             None,
