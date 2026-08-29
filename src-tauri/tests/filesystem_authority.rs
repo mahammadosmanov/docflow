@@ -356,7 +356,12 @@ fn approved_plan_applies_journals_and_undoes_losslessly_in_reverse() {
     );
 
     let undone = authority.undo(&result.journal_id, &caller(), None).unwrap();
-    assert_eq!((undone.applied, undone.failed), (3, 0));
+    assert_eq!(
+        (undone.applied, undone.failed),
+        (3, 0),
+        "{:?}",
+        undone.errors
+    );
     assert_eq!(fs::read(&input).unwrap(), b"%PDF sentinel");
     assert!(!output_dir.exists());
     assert_eq!(fs::read(root.join("unrelated.txt")).unwrap(), b"KEEP");

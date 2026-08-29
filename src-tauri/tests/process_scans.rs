@@ -483,7 +483,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
     );
 
     let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
-    assert_eq!(undone.failed, 0);
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
     assert_eq!(std::fs::read(source.join("older.pdf")).unwrap(), b"OLDER");
     assert_eq!(std::fs::read(source.join("newest.pdf")).unwrap(), b"NEWEST");
     assert_eq!(std::fs::read(source.join("broken.pdf")).unwrap(), b"BROKEN");
@@ -583,7 +583,7 @@ fn review_scan_and_put_delete_decisions_are_inert_canonical_rust_plans() {
     assert_eq!(std::fs::read_dir(&trash).unwrap().count(), 1);
 
     let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
-    assert_eq!(undone.failed, 0);
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
     assert!(put_source.is_file() && delete_source.is_file());
     assert!(std::fs::read_dir(&trash).unwrap().next().is_none());
     assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-0064").exists());

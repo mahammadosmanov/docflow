@@ -243,7 +243,7 @@ fn follow_up_retained_apply_revalidates_open_workbooks_at_every_boundary() {
 
     let result = authority.apply(&plan.plan_id, &caller).unwrap();
 
-    assert_eq!(result.applied, 1);
+    assert_eq!(result.applied, 1, "{:?}", result.errors);
     assert_eq!(result.failed, 0);
     assert_eq!(std::fs::read(&source_path).unwrap(), source_bytes);
     let (_, applied) = parsed(Cursor::new(std::fs::read(&target_path).unwrap()));
@@ -325,7 +325,7 @@ fn follow_up_retained_undo_restores_exact_backup_and_preserves_all_evidence() {
         )
         .unwrap();
     let applied = authority.apply(&plan.plan_id, &caller).unwrap();
-    assert_eq!(applied.applied, 1);
+    assert_eq!(applied.applied, 1, "{:?}", applied.errors);
     let applied_target = std::fs::read(&target_path).unwrap();
     assert_ne!(applied_target, original_target);
     let rejected = authority
@@ -420,7 +420,7 @@ fn follow_up_retained_recovery_completes_exact_applied_state_after_restart() {
         )
         .unwrap();
     let applied = authority.apply(&plan.plan_id, &caller).unwrap();
-    assert_eq!(applied.applied, 1);
+    assert_eq!(applied.applied, 1, "{:?}", applied.errors);
 
     let journal_file = std::fs::read_dir(&journal_path)
         .unwrap()
