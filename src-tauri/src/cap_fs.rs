@@ -1818,13 +1818,9 @@ impl PlatformDirectory {
         retry_windows_sharing_violation(|| {
             let source =
                 nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
-            let result = rename_open_handle(&source, &destination_parent, destination, replace);
-            #[cfg(test)]
-            if let Err(error) = &result {
-                eprintln!("[docflow-cap-fs] relative rename failed: {error}");
-            }
-            result
+            rename_open_handle(&source, &destination_parent, destination, replace)
         })
+        .map_err(|error| io::Error::new(error.kind(), format!("commit relative rename: {error}")))
     }
 
     fn sync_all(&self) -> io::Result<()> {
@@ -1996,9 +1992,10 @@ fn duplicate_rename_target_directory(parent: &File) -> io::Result<File> {
     };
     if ok == 0 {
         let error = io::Error::last_os_error();
-        #[cfg(test)]
-        eprintln!("[docflow-cap-fs] duplicate rename target failed: {error}");
-        return Err(error);
+        return Err(io::Error::new(
+            error.kind(),
+            format!("duplicate rename target: {error}"),
+        ));
     }
     if duplicated.is_null() {
         return Err(io::Error::other(
