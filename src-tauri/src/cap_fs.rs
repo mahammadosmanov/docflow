@@ -1085,6 +1085,15 @@ impl AnchoredPath {
     pub(crate) fn move_no_clobber_to(&self, destination: &AnchoredPath) -> io::Result<()> {
         self.require_write()?;
         destination.require_write()?;
+        #[cfg(windows)]
+        if self.parent.identity()? != destination.parent.identity()? {
+            let mut input = self.open_read()?;
+            destination.copy_no_clobber_from_file(&mut input)?;
+            drop(input);
+            self.remove_file()?;
+            self.parent.sync_all()?;
+            return Ok(());
+        }
         match self
             .parent
             .rename(&self.name, &destination.parent, &destination.name, false)
