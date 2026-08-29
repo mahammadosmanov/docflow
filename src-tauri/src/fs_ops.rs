@@ -767,9 +767,13 @@ impl FilesystemAuthority {
                 PathIntent::Write,
             )
             .map_err(follow_up_backend_partial)?;
-        let parent_outcome = private_parent
-            .create_artifact_parent_no_clobber()
-            .map_err(|_| follow_up_outcome(record))?;
+        let parent_outcome =
+            private_parent
+                .create_artifact_parent_no_clobber()
+                .map_err(|error| {
+                    eprintln!("[docflow-cap-fs] artifact parent capability failed: {error:?}");
+                    follow_up_outcome(record)
+                })?;
         if matches!(parent_outcome, ArtifactParentCreateOutcome::Created { .. }) {
             private_parent
                 .anchor()
