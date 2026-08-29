@@ -451,6 +451,15 @@ fn undo_quarantined_file(
             }
         });
     }
+    #[cfg(windows)]
+    if let Some(target) = recovery.target.as_deref() {
+        verify_expected_hash(&original, step, roots).map_err(UndoStepFailure::NoEffect)?;
+        let target = anchor_path_io(Path::new(target), roots).map_err(UndoStepFailure::NoEffect)?;
+        persist_recovery_phase(journals, record, UndoRecoveryPhase::Publishing)?;
+        return original
+            .move_no_clobber_to(&target)
+            .map_err(UndoStepFailure::OutcomeUnknown);
+    }
     if let Err(error) = original.move_no_clobber_to(&quarantine) {
         return Err(
             if matches!(
