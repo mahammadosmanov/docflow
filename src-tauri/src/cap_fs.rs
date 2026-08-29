@@ -1820,7 +1820,13 @@ impl PlatformDirectory {
             NtLeafKind::MutableDirectory,
             NtDisposition::Create,
         )?;
-        Ok(PlatformDirectory(directory).identity().ok())
+        match PlatformDirectory(directory).identity() {
+            Ok(identity) => Ok(Some(identity)),
+            Err(error) => {
+                eprintln!("[docflow-cap-fs] created directory handle identity failed: {error}");
+                Ok(None)
+            }
+        }
     }
 
     fn remove_file(&self, name: &OsStr) -> io::Result<()> {
