@@ -1014,20 +1014,38 @@ impl AnchoredPath {
     pub(crate) fn copy_no_clobber_from_file(&self, input: &mut File) -> io::Result<()> {
         self.require_write()?;
         input.seek(SeekFrom::Start(0))?;
-        let (temporary_name, mut output) = self.create_temporary()?;
-        let result = (|| {
-            io::copy(input, &mut output)?;
-            output.set_permissions(input.metadata()?.permissions())?;
-            output.sync_all()?;
-            drop(output);
-            self.parent
-                .rename(&temporary_name, &self.parent, &self.name, false)?;
-            self.parent.sync_all()
-        })();
-        if result.is_err() {
-            let _ = self.parent.remove_file(&temporary_name);
+        #[cfg(windows)]
+        {
+            let mut output = self.parent.create_file_new(&self.name)?;
+            let result = (|| {
+                io::copy(input, &mut output)?;
+                output.set_permissions(input.metadata()?.permissions())?;
+                output.sync_all()?;
+                self.parent.sync_all()
+            })();
+            if result.is_err() {
+                let _ = delete_open_handle(&output);
+                let _ = self.parent.sync_all();
+            }
+            result
         }
-        result
+        #[cfg(not(windows))]
+        {
+            let (temporary_name, mut output) = self.create_temporary()?;
+            let result = (|| {
+                io::copy(input, &mut output)?;
+                output.set_permissions(input.metadata()?.permissions())?;
+                output.sync_all()?;
+                drop(output);
+                self.parent
+                    .rename(&temporary_name, &self.parent, &self.name, false)?;
+                self.parent.sync_all()
+            })();
+            if result.is_err() {
+                let _ = self.parent.remove_file(&temporary_name);
+            }
+            result
+        }
     }
 
     pub(crate) fn write_no_clobber(&self, contents: &[u8]) -> io::Result<()> {
@@ -2450,5 +2468,24 @@ mod tests {
         .unwrap_err();
         assert_eq!(denied.raw_os_error(), Some(5));
         assert_eq!(denied_attempts, 1);
+    }
+
+    #[test]
+    fn windows_copy_no_clobber_uses_the_owned_destination_handle_without_rename() {
+        let source = include_str!("cap_fs.rs");
+        let copy = source
+            .split("pub(crate) fn copy_no_clobber_from_file")
+            .nth(1)
+            .and_then(|value| value.split("pub(crate) fn write_no_clobber").next())
+            .expect("bounded copy implementation");
+        let windows = copy
+            .split("#[cfg(windows)]")
+            .nth(1)
+            .and_then(|value| value.split("#[cfg(not(windows))]").next())
+            .expect("Windows copy branch");
+
+        assert!(windows.contains("create_file_new"));
+        assert!(windows.contains("output.sync_all()?"));
+        assert!(!windows.contains("rename("));
     }
 }
