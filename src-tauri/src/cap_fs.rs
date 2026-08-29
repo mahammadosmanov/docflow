@@ -28,7 +28,7 @@ pub(crate) fn inject_directory_sync_failure_after(successful_syncs: usize) {
     DIRECTORY_SYNC_FAILURE_COUNTDOWN.with(|countdown| countdown.set(Some(successful_syncs)));
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 fn inject_post_create_identity_failure_once() {
     POST_CREATE_IDENTITY_FAILURE.with(|injected| injected.set(true));
 }

@@ -23,7 +23,7 @@ thread_local! {
     static FAIL_QUARANTINE_DELETE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 fn inject_before_quarantine_restore<F>(hook: F)
 where
     F: FnOnce() + 'static,
@@ -43,7 +43,7 @@ fn run_before_quarantine_restore() {
 #[cfg(not(test))]
 fn run_before_quarantine_restore() {}
 
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 fn inject_quarantine_delete_failure() {
     FAIL_QUARANTINE_DELETE.with(|fail| fail.set(true));
 }
@@ -813,11 +813,13 @@ fn reject_lexical_path(path: &Path) -> Result<(), BackendError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(windows))]
     use crate::{
         contracts::JsonObject,
         journal::{GrantRootIdentity, JournalRecord},
     };
 
+    #[cfg(not(windows))]
     fn committed_copy_record(root: &Path, destination: &Path) -> JournalRecord {
         let capability = CapabilityRoot::open(root).unwrap();
         let mut meta = JsonObject::new();
