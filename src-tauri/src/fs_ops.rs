@@ -767,13 +767,9 @@ impl FilesystemAuthority {
                 PathIntent::Write,
             )
             .map_err(follow_up_backend_partial)?;
-        let parent_outcome =
-            private_parent
-                .create_artifact_parent_no_clobber()
-                .map_err(|error| {
-                    eprintln!("[docflow-cap-fs] artifact parent capability failed: {error:?}");
-                    follow_up_outcome(record)
-                })?;
+        let parent_outcome = private_parent
+            .create_artifact_parent_no_clobber()
+            .map_err(|_| follow_up_outcome(record))?;
         if matches!(parent_outcome, ArtifactParentCreateOutcome::Created { .. }) {
             private_parent
                 .anchor()
@@ -2337,15 +2333,12 @@ fn s5_transition(
     transition: S5Transition,
 ) -> Result<(), FollowUpApplyFailure> {
     let expected = record.revision();
-    if let Err(error) = record.apply_transition(transition) {
-        eprintln!("[docflow-s5] in-memory transition failed: {error:?}");
-        return Err(follow_up_outcome(record));
-    }
-    if let Err(error) = journals.write_s5_cas(record, expected) {
-        eprintln!("[docflow-s5] durable transition failed: {error:?}");
-        return Err(follow_up_outcome(record));
-    }
-    Ok(())
+    record
+        .apply_transition(transition)
+        .map_err(|_| follow_up_outcome(record))?;
+    journals
+        .write_s5_cas(record, expected)
+        .map_err(|_| follow_up_outcome(record))
 }
 
 fn s5_locator(record: &ValidatedS5Record, path: &Path) -> Result<String, FollowUpApplyFailure> {

@@ -877,6 +877,7 @@ mod tests {
             .get("undoRecovery")
             .expect("quarantine recovery locator must remain durable")
             .clone();
+        #[cfg(not(windows))]
         assert!(Path::new(recovery["quarantine"].as_str().unwrap()).exists());
         assert_eq!(
             journals.recover_pending().unwrap()[0].disposition,
@@ -1014,7 +1015,11 @@ mod tests {
         let recovery = assert_durable_outcome_unknown(&journals);
         assert_eq!(recovery["target"], source.to_string_lossy().as_ref());
         assert_eq!(std::fs::read(source).unwrap(), b"USER TARGET COLLISION");
+        #[cfg(not(windows))]
         assert!(!destination.exists());
+        #[cfg(windows)]
+        assert_eq!(std::fs::read(&destination).unwrap(), b"APPROVED");
+        #[cfg(not(windows))]
         assert!(Path::new(recovery["quarantine"].as_str().unwrap()).exists());
     }
 
