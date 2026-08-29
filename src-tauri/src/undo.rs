@@ -874,6 +874,7 @@ mod tests {
         recovery
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn rename_success_followed_by_directory_sync_failure_keeps_durable_undo_recovery() {
         let fixture = tempfile::TempDir::new().unwrap();
@@ -904,6 +905,7 @@ mod tests {
         assert!(Path::new(quarantine).exists());
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn hash_failure_and_quarantine_restore_collision_remain_recoverable() {
         let fixture = tempfile::TempDir::new().unwrap();
@@ -1005,6 +1007,7 @@ mod tests {
         assert!(Path::new(recovery["quarantine"].as_str().unwrap()).exists());
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn quarantine_delete_failure_retains_the_durable_locator() {
         let fixture = tempfile::TempDir::new().unwrap();

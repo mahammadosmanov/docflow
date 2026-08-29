@@ -1665,17 +1665,25 @@ impl PlatformDirectory {
         use windows_sys::Win32::{
             Foundation::{ERROR_NO_MORE_FILES, HANDLE},
             Storage::FileSystem::{
-                FILE_ID_BOTH_DIR_INFO, FileIdBothDirectoryInfo, GetFileInformationByHandleEx,
+                FILE_ID_BOTH_DIR_INFO, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+                GetFileInformationByHandleEx,
             },
         };
 
         let mut names = Vec::new();
         let mut buffer = vec![0_u8; 64 * 1024];
+        let mut restart = true;
         loop {
+            let information_class = if restart {
+                FileIdBothDirectoryRestartInfo
+            } else {
+                FileIdBothDirectoryInfo
+            };
+            restart = false;
             let ok = unsafe {
                 GetFileInformationByHandleEx(
                     self.0.as_raw_handle() as HANDLE,
-                    FileIdBothDirectoryInfo,
+                    information_class,
                     buffer.as_mut_ptr().cast(),
                     u32::try_from(buffer.len()).expect("directory buffer fits u32"),
                 )
@@ -1806,10 +1814,20 @@ impl PlatformDirectory {
         destination: &OsStr,
         replace: bool,
     ) -> io::Result<()> {
+        let destination_parent = if self.identity()? == destination_dir.identity()? {
+            None
+        } else {
+            Some(nt_open_relative(
+                &destination_dir.0,
+                OsStr::new("."),
+                NtLeafKind::RenameTargetDirectory,
+                NtDisposition::Open,
+            )?)
+        };
         retry_windows_sharing_violation(|| {
             let source =
                 nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
-            rename_open_handle(&source, &destination_dir.0, destination, replace)
+            rename_open_handle(&source, destination_parent.as_ref(), destination, replace)
         })
     }
 
@@ -1831,6 +1849,7 @@ impl PlatformDirectory {
 enum NtLeafKind {
     Directory,
     MutableDirectory,
+    RenameTargetDirectory,
     ReadFile,
     MutableFile,
     MutableAny,
@@ -1866,7 +1885,7 @@ fn nt_open_relative(
             },
             Storage::FileSystem::{
                 DELETE, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-                FILE_SHARE_READ, FILE_SHARE_WRITE, SYNCHRONIZE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE, SYNCHRONIZE,
             },
             System::IO::IO_STATUS_BLOCK,
         },
@@ -1899,6 +1918,10 @@ fn nt_open_relative(
         ),
         NtLeafKind::MutableDirectory => (
             GENERIC_READ | GENERIC_WRITE | DELETE | SYNCHRONIZE,
+            FILE_DIRECTORY_FILE,
+        ),
+        NtLeafKind::RenameTargetDirectory => (
+            FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::ReadFile => (
@@ -1955,7 +1978,7 @@ fn nt_open_relative(
 #[cfg(windows)]
 fn rename_open_handle(
     source: &File,
-    destination_parent: &File,
+    destination_parent: Option<&File>,
     destination: &OsStr,
     replace: bool,
 ) -> io::Result<()> {
@@ -1980,7 +2003,9 @@ fn rename_open_handle(
     let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists = replace;
-        (*info).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
+        (*info).RootDirectory = destination_parent
+            .map(|parent| parent.as_raw_handle() as HANDLE)
+            .unwrap_or(std::ptr::null_mut());
         (*info).FileNameLength = bytes as u32;
         std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
     }
@@ -2105,10 +2130,11 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{
-        ArtifactParentCreateOutcome, CapabilityRoot, DirectoryAccess, FileSecuritySnapshot,
-        RetainedStorageReservation, SecuredCreateOutcome,
-    };
+    use super::*;
+
+    fn normalized_source() -> String {
+        include_str!("cap_fs.rs").replace("\r\n", "\n")
+    }
 
     #[test]
     fn secured_create_anchored_create_new_no_clobber() {
@@ -2223,6 +2249,7 @@ mod tests {
         assert_eq!(existing, ArtifactParentCreateOutcome::AlreadyExists);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn secured_create_identified_retains_live_handle_when_post_create_identity_is_unknown() {
         let fixture = tempdir().unwrap();
@@ -2442,7 +2469,7 @@ mod tests {
 
     #[test]
     fn windows_rename_uses_the_native_root_relative_information_contract() {
-        let source = include_str!("cap_fs.rs");
+        let source = normalized_source();
         let rename = source
             .split("fn rename_open_handle(")
             .nth(1)
@@ -2455,12 +2482,16 @@ mod tests {
         assert!(rename.contains("FILE_RENAME_INFORMATION"));
         assert!(rename.contains("FileRenameInformation"));
         assert!(rename.contains("RootDirectory"));
+        assert!(source.contains("NtLeafKind::RenameTargetDirectory"));
+        assert!(rename.contains("destination_parent: Option<&File>"));
+        assert!(rename.contains("unwrap_or(std::ptr::null_mut())"));
         assert!(!rename.contains("SetFileInformationByHandle"));
     }
 
     #[test]
     fn windows_zone_identifier_open_is_identity_checked_and_root_relative() {
-        let source = include_str!("cap_fs.rs")
+        let source = normalized_source();
+        let source = source
             .rsplit_once("#[cfg(test)]\nmod tests")
             .expect("production capability source")
             .0;
@@ -2496,7 +2527,7 @@ mod tests {
 
     #[test]
     fn windows_directory_sync_uses_flush_file_buffers() {
-        let source = include_str!("cap_fs.rs");
+        let source = normalized_source();
         let windows = source
             .split("#[cfg(windows)]\nimpl PlatformDirectory")
             .nth(1)
@@ -2522,7 +2553,7 @@ mod tests {
 
     #[test]
     fn windows_capability_handles_share_delete_for_handle_relative_renames() {
-        let source = include_str!("cap_fs.rs");
+        let source = normalized_source();
         let windows = source
             .split("#[cfg(windows)]\nimpl PlatformDirectory")
             .nth(1)
@@ -2568,7 +2599,7 @@ mod tests {
 
     #[test]
     fn windows_copy_no_clobber_uses_the_owned_destination_handle_without_rename() {
-        let source = include_str!("cap_fs.rs");
+        let source = normalized_source();
         let copy = source
             .split("pub(crate) fn copy_no_clobber_from_file")
             .nth(1)

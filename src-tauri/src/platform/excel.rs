@@ -1229,7 +1229,7 @@ fn fixture_pdf_bytes(page_count: usize) -> Vec<u8> {
 mod tests {
     #[test]
     fn production_excel_failures_are_localization_keys() {
-        let source = include_str!("excel.rs");
+        let source = include_str!("excel.rs").replace("\r\n", "\n");
         let production = source
             .split_once("\n#[cfg(test)]\nmod tests")
             .map(|(production, _)| production)

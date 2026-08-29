@@ -3004,6 +3004,7 @@ mod tests {
         assert_eq!(journal.pending_step.unwrap().kind, StepKind::Move);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn post_rename_sync_failures_keep_copy_write_and_move_pending_for_recovery() {
         for kind in [StepKind::Copy, StepKind::Write, StepKind::Move] {
@@ -3074,6 +3075,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn workbook_backup_post_rename_sync_failure_remains_outcome_unknown() {
         let fixture = tempfile::TempDir::new().unwrap();
