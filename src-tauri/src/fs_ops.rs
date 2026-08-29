@@ -2337,12 +2337,15 @@ fn s5_transition(
     transition: S5Transition,
 ) -> Result<(), FollowUpApplyFailure> {
     let expected = record.revision();
-    record
-        .apply_transition(transition)
-        .map_err(|_| follow_up_outcome(record))?;
-    journals
-        .write_s5_cas(record, expected)
-        .map_err(|_| follow_up_outcome(record))
+    if let Err(error) = record.apply_transition(transition) {
+        eprintln!("[docflow-s5] in-memory transition failed: {error:?}");
+        return Err(follow_up_outcome(record));
+    }
+    if let Err(error) = journals.write_s5_cas(record, expected) {
+        eprintln!("[docflow-s5] durable transition failed: {error:?}");
+        return Err(follow_up_outcome(record));
+    }
+    Ok(())
 }
 
 fn s5_locator(record: &ValidatedS5Record, path: &Path) -> Result<String, FollowUpApplyFailure> {
