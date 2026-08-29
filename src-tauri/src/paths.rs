@@ -1047,7 +1047,10 @@ mod provisional_tests {
             .unwrap();
         let outcome = authorized.create_artifact_parent_no_clobber().unwrap();
         assert!(
-            matches!(outcome, ArtifactParentCreateOutcome::Created { .. }),
+            matches!(
+                outcome,
+                crate::cap_fs::ArtifactParentCreateOutcome::Created { .. }
+            ),
             "{outcome:?}"
         );
     }
