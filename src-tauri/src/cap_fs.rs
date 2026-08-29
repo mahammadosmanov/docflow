@@ -685,11 +685,44 @@ fn apply_creation_security(file: &File, security: &CreationSecurityDescriptor) -
     #[cfg(windows)]
     {
         let PlatformFileAccess::Windows { attributes } = security.access;
-        use std::os::windows::fs::MetadataExt;
+        use std::{
+            mem::size_of,
+            os::windows::{fs::MetadataExt, io::AsRawHandle},
+        };
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_BASIC_INFO, FileBasicInfo, GetFileInformationByHandleEx,
+            SetFileInformationByHandle,
+        };
+
+        let mut basic: FILE_BASIC_INFO = unsafe { std::mem::zeroed() };
+        if unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileBasicInfo,
+                (&raw mut basic).cast(),
+                size_of::<FILE_BASIC_INFO>() as u32,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        basic.FileAttributes = attributes;
+        if unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle(),
+                FileBasicInfo,
+                (&raw const basic).cast(),
+                size_of::<FILE_BASIC_INFO>() as u32,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        file.sync_all()?;
         if file.metadata()?.file_attributes() != attributes {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "complete Windows creation security requires the secured NtCreateFile path",
+                "Windows creation attributes could not be verified on the owned handle",
             ));
         }
     }
@@ -2704,5 +2737,20 @@ mod tests {
         assert!(windows.contains("create_file_new"));
         assert!(windows.contains("output.sync_all()?"));
         assert!(!windows.contains("rename("));
+    }
+
+    #[test]
+    fn windows_secured_creation_applies_attributes_through_the_owned_handle() {
+        let source = normalized_source();
+        let function = source
+            .split("fn apply_creation_security")
+            .nth(1)
+            .expect("creation security function")
+            .split("#[cfg(unix)]\nfn capture_unix_xattrs")
+            .next()
+            .expect("Windows creation security implementation");
+        assert!(function.contains("SetFileInformationByHandle"));
+        assert!(function.contains("FileBasicInfo"));
+        assert!(!function.contains("requires the secured NtCreateFile path"));
     }
 }
