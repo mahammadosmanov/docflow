@@ -8,7 +8,9 @@ use std::{
 
 use crate::journal::FilesystemObjectIdentity;
 
+#[cfg(unix)]
 const MAX_SECURITY_AUXILIARY_RECORDS: usize = 128;
+#[cfg(unix)]
 const MAX_SECURITY_AUXILIARY_BYTES: u64 = 1024 * 1024;
 
 #[cfg(test)]
@@ -1734,9 +1736,11 @@ impl PlatformDirectory {
         destination: &OsStr,
         replace: bool,
     ) -> io::Result<()> {
-        let source =
-            nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
-        rename_open_handle(&source, &destination_dir.0, destination, replace)
+        retry_windows_sharing_violation(|| {
+            let source =
+                nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
+            rename_open_handle(&source, &destination_dir.0, destination, replace)
+        })
     }
 
     fn sync_all(&self) -> io::Result<()> {
@@ -1960,6 +1964,24 @@ fn delete_open_handle(file: &File) -> io::Result<()> {
 fn ntstatus_error(status: windows_sys::Win32::Foundation::NTSTATUS) -> io::Error {
     let code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(status) };
     io::Error::from_raw_os_error(code as i32)
+}
+
+#[cfg(any(windows, test))]
+fn retry_windows_sharing_violation(
+    mut operation: impl FnMut() -> io::Result<()>,
+) -> io::Result<()> {
+    const MAX_ATTEMPTS: usize = 5;
+    for attempt in 0..MAX_ATTEMPTS {
+        match operation() {
+            Ok(()) => return Ok(()),
+            Err(error) if error.raw_os_error() == Some(32) && attempt + 1 < MAX_ATTEMPTS => {
+                #[cfg(windows)]
+                std::thread::sleep(std::time::Duration::from_millis(50 * (attempt as u64 + 1)));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("bounded retry loop always returns")
 }
 
 fn is_cross_device(error: &io::Error) -> bool {
@@ -2404,5 +2426,29 @@ mod tests {
 
         assert!(ambient_open.contains("FILE_SHARE_DELETE"));
         assert!(relative_open.contains("FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE"));
+    }
+
+    #[test]
+    fn windows_sharing_violation_retry_is_bounded_and_error_exact() {
+        let mut attempts = 0;
+        super::retry_windows_sharing_violation(|| {
+            attempts += 1;
+            if attempts < 3 {
+                Err(std::io::Error::from_raw_os_error(32))
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap();
+        assert_eq!(attempts, 3);
+
+        let mut denied_attempts = 0;
+        let denied = super::retry_windows_sharing_violation(|| {
+            denied_attempts += 1;
+            Err(std::io::Error::from_raw_os_error(5))
+        })
+        .unwrap_err();
+        assert_eq!(denied.raw_os_error(), Some(5));
+        assert_eq!(denied_attempts, 1);
     }
 }
