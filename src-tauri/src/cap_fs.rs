@@ -255,7 +255,10 @@ impl AuthorizedPath {
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 Ok(ArtifactParentCreateOutcome::AlreadyExists)
             }
-            Err(error) => Err(CapabilityEffectError::no_effect(error)),
+            Err(error) => {
+                eprintln!("[docflow-cap-fs] artifact parent create failed: {error}");
+                Err(CapabilityEffectError::no_effect(error))
+            }
         }
     }
 
