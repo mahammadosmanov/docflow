@@ -247,7 +247,10 @@ impl AuthorizedPath {
                 .and_then(|directory| directory.identity())
             {
                 Ok(identity) => Ok(ArtifactParentCreateOutcome::Created { identity }),
-                Err(_) => Ok(ArtifactParentCreateOutcome::CreatedIdentityUnknown),
+                Err(error) => {
+                    eprintln!("[docflow-cap-fs] artifact parent identity reopen failed: {error}");
+                    Ok(ArtifactParentCreateOutcome::CreatedIdentityUnknown)
+                }
             },
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 Ok(ArtifactParentCreateOutcome::AlreadyExists)
