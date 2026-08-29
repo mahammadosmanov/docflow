@@ -786,6 +786,7 @@ impl PathGrantStore {
         allow_root: bool,
     ) -> Result<AuthorizedPath, BackendError> {
         reject_lexical_escape(candidate)?;
+        let resolved = resolve_existing_ancestor(candidate)?;
         let now = SystemTime::now();
         let mut last_error = None;
         for grant_id in grant_ids {
@@ -813,14 +814,14 @@ impl PathGrantStore {
                 continue;
             }
             let authorized = if allow_root {
-                stored.capability.authorize_directory(candidate)
+                stored.capability.authorize_directory(&resolved)
             } else {
-                stored.capability.authorize(candidate)
+                stored.capability.authorize(&resolved)
             };
             match authorized {
                 Ok(path) if stored.expected_read_identities.is_empty() => return Ok(path),
                 Ok(path) => {
-                    let Some(expected_identity) = stored.expected_read_identities.get(candidate)
+                    let Some(expected_identity) = stored.expected_read_identities.get(&resolved)
                     else {
                         last_error = Some(persisted_source_reselection_required());
                         continue;
