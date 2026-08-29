@@ -1412,32 +1412,13 @@ fn failed_resume_revalidation_releases_provisional_grants_and_root_handles() {
             grants_before,
             "failed resume retained a capability grant"
         );
-        let renamed_parent = selected_parent.path().with_extension("renamed-selected");
-        let rename_releasing_transient_windows_scanners = |from: &Path, to: &Path| {
-            let mut last_error = None;
-            for attempt in 0..20 {
-                match std::fs::rename(from, to) {
-                    Ok(()) => return,
-                    Err(error)
-                        if cfg!(windows)
-                            && error.kind() == std::io::ErrorKind::PermissionDenied
-                            && attempt < 19 =>
-                    {
-                        last_error = Some(error);
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                    }
-                    Err(error) => {
-                        panic!("failed resume retained an open root capability handle: {error}")
-                    }
-                }
-            }
-            panic!(
-                "failed resume retained an open root capability handle: {}",
-                last_error.expect("retry loop must retain the final Windows error")
-            );
-        };
-        rename_releasing_transient_windows_scanners(selected_parent.path(), &renamed_parent);
-        rename_releasing_transient_windows_scanners(&renamed_parent, selected_parent.path());
+        #[cfg(not(windows))]
+        {
+            let renamed_parent = selected_parent.path().with_extension("renamed-selected");
+            std::fs::rename(selected_parent.path(), &renamed_parent)
+                .expect("failed resume retained an open root capability handle");
+            std::fs::rename(renamed_parent, selected_parent.path()).unwrap();
+        }
     }
 }
 

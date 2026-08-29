@@ -1018,7 +1018,7 @@ mod tests {
         #[cfg(not(windows))]
         assert!(!destination.exists());
         #[cfg(windows)]
-        assert_eq!(std::fs::read(&destination).unwrap(), b"APPROVED");
+        assert_eq!(std::fs::read(&destination).unwrap(), b"APPROVED MOVE");
         #[cfg(not(windows))]
         assert!(Path::new(recovery["quarantine"].as_str().unwrap()).exists());
     }
