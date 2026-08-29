@@ -1966,7 +1966,9 @@ fn duplicate_rename_target_directory(parent: &File) -> io::Result<File> {
     use std::os::windows::io::{AsRawHandle, FromRawHandle};
     use windows_sys::Win32::{
         Foundation::{DuplicateHandle, HANDLE},
-        Storage::FileSystem::{FILE_READ_ATTRIBUTES, FILE_TRAVERSE, SYNCHRONIZE},
+        Storage::FileSystem::{
+            FILE_ADD_FILE, FILE_ADD_SUBDIRECTORY, FILE_READ_ATTRIBUTES, FILE_TRAVERSE, SYNCHRONIZE,
+        },
         System::Threading::GetCurrentProcess,
     };
 
@@ -1978,7 +1980,11 @@ fn duplicate_rename_target_directory(parent: &File) -> io::Result<File> {
             parent.as_raw_handle() as HANDLE,
             process,
             &mut duplicated,
-            FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_ADD_FILE
+                | FILE_ADD_SUBDIRECTORY
+                | FILE_TRAVERSE
+                | FILE_READ_ATTRIBUTES
+                | SYNCHRONIZE,
             0,
             0,
         )
