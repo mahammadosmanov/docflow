@@ -1816,7 +1816,13 @@ impl PlatformDirectory {
     fn create_dir_identified(&self, name: &OsStr) -> io::Result<Option<FilesystemObjectIdentity>> {
         let directory =
             nt_open_relative(&self.0, name, NtLeafKind::Directory, NtDisposition::Create)?;
-        Ok(PlatformDirectory(directory).identity().ok())
+        match PlatformDirectory(directory).identity() {
+            Ok(identity) => Ok(Some(identity)),
+            Err(error) => {
+                eprintln!("[docflow-cap-fs] created readable directory identity failed: {error}");
+                Ok(None)
+            }
+        }
     }
 
     fn remove_file(&self, name: &OsStr) -> io::Result<()> {
@@ -1931,11 +1937,16 @@ fn nt_open_relative(
     };
     let (access, options) = match kind {
         NtLeafKind::Directory => (
-            GENERIC_READ | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            GENERIC_READ | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::MutableDirectory => (
-            GENERIC_READ | GENERIC_WRITE | FILE_TRAVERSE | DELETE | SYNCHRONIZE,
+            GENERIC_READ
+                | GENERIC_WRITE
+                | FILE_READ_ATTRIBUTES
+                | FILE_TRAVERSE
+                | DELETE
+                | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::ReadFile => (
