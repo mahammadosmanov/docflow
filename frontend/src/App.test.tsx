@@ -604,6 +604,99 @@ describe("DocFlow shell", () => {
     expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
   });
 
+  it("disables bool cells from row authority and localizes readonly key values", () => {
+    const rows = [
+      { _rowId: "one", selectable: false, enabled: false, reasonKey: "action.close" },
+      { _rowId: "two", selectable: true, enabled: true, reasonKey: "action.close" },
+    ];
+    const plan: Plan = {
+      planId: "plan-follow-up",
+      opId: "rfi.follow_up_sync",
+      steps: [],
+      warnings: [],
+      meta: {
+        editor: {
+          requiredFields: ["enabled"],
+          columns: [
+            {
+              key: "enabled",
+              labelKey: "rfi.signed.column.enabled",
+              kind: "bool",
+              disabledWhen: { field: "selectable", equals: false },
+            },
+            {
+              key: "reasonKey",
+              labelKey: "recovery.manual",
+              kind: "readonly",
+              display: "localizedKey",
+            },
+          ],
+          rows,
+        },
+      },
+    };
+    render(
+      <PlanView
+        plan={plan}
+        editorRows={rows}
+        s={makeStrings("tr")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+        onEditorRowsChange={vi.fn()}
+      />,
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes[0]).toBeDisabled();
+    expect(checkboxes[1]).toBeEnabled();
+    expect(screen.getAllByText("Kapat")).toHaveLength(2);
+  });
+
+  it("renders the bounded Outlook reply as inert plain-text and escaped-HTML preview", () => {
+    const plan: Plan = {
+      planId: "plan-outlook",
+      opId: "rfi.outlook_reply_draft",
+      steps: [
+        {
+          kind: "outlook_reply_draft",
+          src: "RFI response",
+          dst: null,
+          noteKey: "step.rfi.outlookReplyDraft",
+          meta: { displayOnly: true, sendAllowed: false },
+        },
+      ],
+      warnings: [],
+      meta: {
+        replyPreview: {
+          subject: "RFI response",
+          plainText: "Hello <script>alert(1)</script>",
+          html: "<div>Hello &lt;script&gt;alert(1)&lt;/script&gt;</div><br><br>",
+        },
+      },
+    };
+
+    const view = render(
+      <PlanView
+        plan={plan}
+        s={makeStrings("en")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Unsent Outlook reply preview" })).toBeVisible();
+    expect(screen.getByText("Hello <script>alert(1)</script>")).toBeVisible();
+    expect(
+      screen.getByText(
+        "<div>Hello &lt;script&gt;alert(1)&lt;/script&gt;</div><br><br>",
+      ),
+    ).toBeVisible();
+    expect(view.container.querySelector("script")).toBeNull();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+  });
+
   it("requires account email and explains that username sign-in is unavailable", async () => {
     render(<App />);
 
@@ -620,7 +713,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.6.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.1-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
@@ -1155,5 +1248,71 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
     expect(screen.getByText("Dil")).toBeVisible();
     expect(screen.getByText("Tema")).toBeVisible();
+  });
+
+  it("previews and explicitly copies a local redacted support bundle without sending it", async () => {
+    const content = `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        docflow: { version: "0.6.0" },
+        platform: { arch: "aarch64", os: "macos" },
+        components: {
+          ocr: {
+            engine: "tesseract",
+            languageDataAvailable: true,
+            status: "available",
+          },
+          sidecar: { required: false, status: "retired" },
+        },
+        recentErrorCodes: ["validation"],
+        privacy: { delivery: "local-only", redaction: "recursive" },
+      },
+      null,
+      2,
+    )}\n`;
+    const call = interceptMockBridge((method) =>
+      method === "support/diagnostics"
+        ? {
+            handled: true,
+            value: {
+              fileName: "docflow-support-diagnostics-v1.json",
+              mediaType: "application/json",
+              byteLength: content.length,
+              content,
+            },
+          }
+        : method === "support/copyDiagnostics"
+          ? { handled: true, value: { ok: true } }
+          : { handled: false },
+    );
+
+    render(<App />);
+    await screen.findByRole("heading", { name: "DocFlow" });
+    fireEvent.click(screen.getByRole("button", { name: "Ayarlar" }));
+    await screen.findByRole("heading", { name: "Ayarlar" });
+
+    expect(
+      screen.getByText(/hiçbir yere gönderilmez/i),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Destek paketini önizle" }),
+    );
+
+    const preview = await screen.findByLabelText("Destek paketi önizlemesi");
+    expect(preview).toHaveTextContent('"version": "0.6.0"');
+    expect(preview).toHaveTextContent('"status": "retired"');
+    expect(preview).toHaveTextContent('"recentErrorCodes"');
+    expect(
+      call.mock.calls.filter(([method]) => method === "support/diagnostics"),
+    ).toHaveLength(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Paketi panoya kopyala" }),
+    );
+    await screen.findByText("Destek paketi panoya kopyalandı.");
+    expect(call).toHaveBeenCalledWith("support/copyDiagnostics", { content });
+    expect(
+      call.mock.calls.some(([method]) => /upload|send|telemetry/i.test(method)),
+    ).toBe(false);
   });
 });

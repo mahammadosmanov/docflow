@@ -11,7 +11,9 @@ use uuid::Uuid;
 use crate::{
     contracts::Plan,
     errors::BackendError,
+    journal::S5PermitBundle,
     paths::CallerIdentity,
+    paths::ValidatedGrantRootRoster,
     progress::{GlobalMutationLock, GlobalMutationPermit},
 };
 
@@ -86,6 +88,59 @@ pub struct ApplyClaim {
     _mutation: GlobalMutationPermit,
 }
 
+pub(crate) struct ClaimedS5Apply {
+    claimed: ClaimedPlan,
+    caller: CallerIdentity,
+    _permits: S5PermitBundle,
+    roots: ValidatedGrantRootRoster,
+}
+
+impl ClaimedS5Apply {
+    pub(crate) fn plan(&self) -> &Plan {
+        &self.claimed.plan
+    }
+
+    pub(crate) fn binding(&self) -> &PlanBinding {
+        self.claimed
+            .binding
+            .as_ref()
+            .expect("S5 claims are always bound")
+    }
+
+    pub(crate) fn digest(&self) -> &str {
+        &self.claimed.digest
+    }
+
+    pub(crate) fn created_at(&self) -> SystemTime {
+        self.claimed.created_at
+    }
+
+    pub(crate) fn caller(&self) -> &CallerIdentity {
+        &self.caller
+    }
+
+    pub(crate) fn roots(&self) -> &ValidatedGrantRootRoster {
+        &self.roots
+    }
+}
+
+#[derive(Debug)]
+pub struct ReservedPlanId {
+    value: String,
+}
+
+impl ReservedPlanId {
+    pub fn assign_to_empty(&self, plan: &mut Plan) -> Result<(), BackendError> {
+        if !plan.plan_id.is_empty() {
+            return Err(BackendError::validation(
+                "reserved plan ID requires an empty plan ID",
+            ));
+        }
+        plan.plan_id.clone_from(&self.value);
+        Ok(())
+    }
+}
+
 pub struct PlanStore {
     ttl: Duration,
     plans: Mutex<HashMap<String, StoredPlan>>,
@@ -97,6 +152,55 @@ impl PlanStore {
             ttl,
             plans: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn reserve_plan_id(&self) -> ReservedPlanId {
+        ReservedPlanId {
+            value: Uuid::new_v4().to_string(),
+        }
+    }
+
+    pub fn insert_bound_reserved(
+        &self,
+        origin: BackendOrigin,
+        binding: PlanBinding,
+        reservation: ReservedPlanId,
+        plan: Plan,
+    ) -> Result<Plan, BackendError> {
+        if plan.op_id != binding.operation_id {
+            return Err(BackendError::validation(
+                "plan operation does not match its binding",
+            ));
+        }
+        if plan.plan_id != reservation.value
+            || Uuid::parse_str(&plan.plan_id)
+                .ok()
+                .is_none_or(|parsed| parsed.to_string() != plan.plan_id)
+        {
+            return Err(BackendError::validation(
+                "reserved plan ID does not match the plan",
+            ));
+        }
+        let digest = plan_digest(&plan)?;
+        let now = SystemTime::now();
+        let mut plans = lock_plans(&self.plans);
+        if plans.contains_key(&plan.plan_id) {
+            return Err(BackendError::validation("reserved plan ID is occupied"));
+        }
+        let plan_id = plan.plan_id.clone();
+        plans.insert(
+            plan_id,
+            StoredPlan {
+                plan: plan.clone(),
+                backend_plan_id: String::new(),
+                origin,
+                binding: Some(binding),
+                digest,
+                created_at: now,
+                state: PlanState::Available,
+            },
+        );
+        Ok(plan)
     }
 
     #[cfg(test)]
@@ -207,6 +311,101 @@ impl PlanStore {
         })
     }
 
+    pub fn claim_for_apply_bound_under_permit(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        mutation: GlobalMutationPermit,
+    ) -> Result<ApplyClaim, BackendError> {
+        let claimed = self.claim_bound(plan_id, caller)?;
+        Ok(ApplyClaim {
+            claimed,
+            _mutation: mutation,
+        })
+    }
+
+    pub fn inspect_available_bound_operation(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+    ) -> Result<String, BackendError> {
+        let now = SystemTime::now();
+        let plans = lock_plans(&self.plans);
+        let stored = plans
+            .get(plan_id)
+            .ok_or_else(BackendError::plan_unavailable)?;
+        if expired(stored.created_at, now, self.ttl) || stored.state != PlanState::Available {
+            return Err(BackendError::plan_unavailable());
+        }
+        let binding = stored
+            .binding
+            .as_ref()
+            .ok_or_else(BackendError::plan_unavailable)?;
+        if binding.owner_id != caller.owner_id {
+            return Err(BackendError::plan_owner_mismatch());
+        }
+        if binding.session_id != caller.session_id {
+            return Err(BackendError::plan_session_mismatch());
+        }
+        if plan_digest(&stored.plan)? != stored.digest {
+            return Err(BackendError::plan_unavailable());
+        }
+        Ok(stored.plan.op_id.clone())
+    }
+
+    pub(crate) fn claim_s5_for_apply_bound_under_permit(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        permits: S5PermitBundle,
+        roots: ValidatedGrantRootRoster,
+    ) -> Result<ClaimedS5Apply, BackendError> {
+        let now = SystemTime::now();
+        let claimed = {
+            let mut plans = lock_plans(&self.plans);
+            let stored = plans
+                .get_mut(plan_id)
+                .ok_or_else(BackendError::plan_unavailable)?;
+            if expired(stored.created_at, now, self.ttl)
+                || stored.state != PlanState::Available
+                || stored.plan.op_id != "rfi.follow_up_sync"
+                || plan_digest(&stored.plan)? != stored.digest
+            {
+                return Err(BackendError::plan_unavailable());
+            }
+            let binding = stored
+                .binding
+                .as_ref()
+                .ok_or_else(BackendError::plan_unavailable)?;
+            if binding.owner_id != caller.owner_id {
+                return Err(BackendError::plan_owner_mismatch());
+            }
+            if binding.session_id != caller.session_id {
+                return Err(BackendError::plan_session_mismatch());
+            }
+            if binding.operation_id != stored.plan.op_id
+                || !roots.matches_grants(&binding.grant_ids)
+            {
+                return Err(BackendError::plan_unavailable());
+            }
+            stored.state = PlanState::Claimed;
+            ClaimedPlan {
+                plan: stored.plan.clone(),
+                backend_plan_id: stored.backend_plan_id.clone(),
+                origin: stored.origin,
+                binding: stored.binding.clone(),
+                digest: stored.digest.clone(),
+                created_at: stored.created_at,
+            }
+        };
+        Ok(ClaimedS5Apply {
+            claimed,
+            caller: caller.clone(),
+            _permits: permits,
+            roots,
+        })
+    }
+
     pub fn resolve_bound(
         &self,
         plan_id: &str,
@@ -245,6 +444,49 @@ impl PlanStore {
             digest: stored.digest.clone(),
             created_at: stored.created_at,
         })
+    }
+
+    pub fn replace_bound_available(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        expected_digest: &str,
+        mut replacement: Plan,
+    ) -> Result<Plan, BackendError> {
+        let now = SystemTime::now();
+        let mut plans = lock_plans(&self.plans);
+        let stored = plans
+            .get_mut(plan_id)
+            .ok_or_else(BackendError::plan_unavailable)?;
+        if expired(stored.created_at, now, self.ttl) {
+            return Err(BackendError::plan_unavailable());
+        }
+        let binding = stored
+            .binding
+            .as_ref()
+            .ok_or_else(BackendError::plan_unavailable)?;
+        if binding.owner_id != caller.owner_id {
+            return Err(BackendError::plan_owner_mismatch());
+        }
+        if binding.session_id != caller.session_id {
+            return Err(BackendError::plan_session_mismatch());
+        }
+        if stored.state != PlanState::Available
+            || stored.digest != expected_digest
+            || plan_digest(&stored.plan)? != expected_digest
+        {
+            return Err(BackendError::plan_unavailable());
+        }
+        if replacement.op_id != stored.plan.op_id || replacement.op_id != binding.operation_id {
+            return Err(BackendError::validation(
+                "replacement plan operation does not match its binding",
+            ));
+        }
+        replacement.plan_id = plan_id.to_string();
+        let replacement_digest = plan_digest(&replacement)?;
+        stored.plan = replacement.clone();
+        stored.digest = replacement_digest;
+        Ok(replacement)
     }
 
     #[cfg(debug_assertions)]
@@ -334,7 +576,11 @@ fn plan_digest(plan: &Plan) -> Result<String, BackendError> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, SystemTime};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+        time::{Duration, SystemTime},
+    };
 
     use crate::contracts::{JsonObject, Plan, Step, StepKind};
 
@@ -433,5 +679,286 @@ mod tests {
                 .claim_for_apply(&waiting.plan_id, &mutation_lock)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn replace_bound_available_preserves_identity_binding_provenance_and_ttl() {
+        let store = PlanStore::new(Duration::from_secs(300));
+        let caller = CallerIdentity::new("owner", "session");
+        let binding = PlanBinding::new(
+            "owner",
+            "session",
+            "rfi.process_scans",
+            vec!["grant-a".to_string(), "grant-b".to_string()],
+        );
+        let review = store
+            .insert_bound(BackendOrigin::Rust, binding.clone(), plan())
+            .unwrap();
+        let before = store.snapshot(&review.plan_id).unwrap();
+        let original = store.resolve_bound(&review.plan_id, &caller).unwrap();
+        let mut replacement = original.plan.clone();
+        replacement.plan_id = "forged-replacement-id".to_string();
+        replacement.steps[0].dst = Some("/out/revised.pdf".to_string());
+
+        let revised = store
+            .replace_bound_available(&review.plan_id, &caller, &before.digest, replacement)
+            .unwrap();
+        let after = store.snapshot(&review.plan_id).unwrap();
+        let resolved = store.resolve_bound(&review.plan_id, &caller).unwrap();
+
+        assert_eq!(revised.plan_id, review.plan_id);
+        assert_eq!(resolved.plan, revised);
+        assert_eq!(resolved.backend_plan_id, original.backend_plan_id);
+        assert_eq!(resolved.origin, original.origin);
+        assert_eq!(after.binding, Some(binding));
+        assert_eq!(after.created_at, before.created_at);
+        assert_eq!(after.state, PlanState::Available);
+        assert_ne!(after.digest, before.digest);
+        assert_eq!(resolved.digest, after.digest);
+        assert_eq!(
+            store.claim(&review.plan_id).unwrap().plan.steps[0]
+                .dst
+                .as_deref(),
+            Some("/out/revised.pdf")
+        );
+    }
+
+    fn bound_store() -> (PlanStore, CallerIdentity, Plan, PlanRecordSnapshot) {
+        let store = PlanStore::new(Duration::from_secs(300));
+        let caller = CallerIdentity::new("owner", "session");
+        let review = store
+            .insert_bound(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    "owner",
+                    "session",
+                    "rfi.process_scans",
+                    vec!["grant".to_string()],
+                ),
+                plan(),
+            )
+            .unwrap();
+        let snapshot = store.snapshot(&review.plan_id).unwrap();
+        (store, caller, review, snapshot)
+    }
+
+    #[test]
+    fn replace_bound_available_rejects_wrong_authority_digest_operation_and_state_unchanged() {
+        for case in ["owner", "session", "digest", "operation", "claimed"] {
+            let (store, caller, review, before) = bound_store();
+            let mut replacement = review.clone();
+            replacement.steps[0].dst = Some("/out/revised.pdf".to_string());
+            let mut expected_digest = before.digest.clone();
+            let attempted_caller = match case {
+                "owner" => CallerIdentity::new("other", "session"),
+                "session" => CallerIdentity::new("owner", "other"),
+                _ => caller.clone(),
+            };
+            if case == "digest" {
+                expected_digest = "00".repeat(32);
+            }
+            if case == "operation" {
+                replacement.op_id = "other.operation".to_string();
+            }
+            if case == "claimed" {
+                store.claim(&review.plan_id).unwrap();
+            }
+            let snapshot_before_attempt = store.snapshot(&review.plan_id).unwrap();
+
+            assert!(
+                store
+                    .replace_bound_available(
+                        &review.plan_id,
+                        &attempted_caller,
+                        &expected_digest,
+                        replacement,
+                    )
+                    .is_err(),
+                "case {case} must fail"
+            );
+            assert_eq!(
+                store.snapshot(&review.plan_id).unwrap(),
+                snapshot_before_attempt,
+                "case {case} must not mutate stored authority"
+            );
+        }
+    }
+
+    #[test]
+    fn replace_bound_available_rejects_expired_entry_without_removing_it() {
+        let store = PlanStore::new(Duration::from_secs(1));
+        let caller = CallerIdentity::new("owner", "session");
+        let review = store
+            .insert_bound(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", "rfi.process_scans", Vec::new()),
+                plan(),
+            )
+            .unwrap();
+        let mut plans = lock_plans(&store.plans);
+        let stored = plans.get_mut(&review.plan_id).unwrap();
+        stored.created_at = SystemTime::UNIX_EPOCH;
+        let before = stored.clone();
+        drop(plans);
+
+        assert!(
+            store
+                .replace_bound_available(&review.plan_id, &caller, &before.digest, review.clone(),)
+                .is_err()
+        );
+        let plans = lock_plans(&store.plans);
+        let after = plans.get(&review.plan_id).unwrap();
+        assert_eq!(after.digest, before.digest);
+        assert_eq!(after.plan, before.plan);
+        assert_eq!(after.created_at, before.created_at);
+        assert_eq!(after.state, before.state);
+        assert_eq!(after.binding, before.binding);
+    }
+
+    #[test]
+    fn replace_bound_available_concurrent_revisions_allow_exactly_one_digest_transition() {
+        let (store, caller, review, before) = bound_store();
+        let store = Arc::new(store);
+        let barrier = Arc::new(Barrier::new(3));
+        let handles = ["one", "two"].map(|suffix| {
+            let store = Arc::clone(&store);
+            let barrier = Arc::clone(&barrier);
+            let caller = caller.clone();
+            let plan_id = review.plan_id.clone();
+            let digest = before.digest.clone();
+            let mut replacement = review.clone();
+            replacement.steps[0].dst = Some(format!("/out/{suffix}.pdf"));
+            thread::spawn(move || {
+                barrier.wait();
+                store.replace_bound_available(&plan_id, &caller, &digest, replacement)
+            })
+        });
+        barrier.wait();
+        let results = handles.map(|handle| handle.join().unwrap());
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert_ne!(
+            store.snapshot(&review.plan_id).unwrap().digest,
+            before.digest
+        );
+    }
+
+    #[test]
+    fn insert_bound_reserved_assigns_exact_id_and_reservation_is_store_inert() {
+        let store = PlanStore::new(Duration::from_secs(300));
+        let binding = PlanBinding::new(
+            "owner",
+            "session",
+            "rfi.process_scans",
+            vec!["grant".to_string()],
+        );
+        let reservation = store.reserve_plan_id();
+        assert!(lock_plans(&store.plans).is_empty());
+
+        let mut candidate = plan();
+        candidate.plan_id.clear();
+        reservation.assign_to_empty(&mut candidate).unwrap();
+        let assigned = candidate.plan_id.clone();
+        assert_eq!(Uuid::parse_str(&assigned).unwrap().to_string(), assigned);
+        let expected = candidate.clone();
+
+        let cached = store
+            .insert_bound_reserved(BackendOrigin::Rust, binding, reservation, candidate)
+            .unwrap();
+        assert_eq!(cached, expected);
+        assert_eq!(
+            store
+                .resolve_bound(&assigned, &CallerIdentity::new("owner", "session"))
+                .unwrap()
+                .plan,
+            expected
+        );
+    }
+
+    #[test]
+    fn s5_preclaim_returns_nonforgeable_exact_authority_and_rejects_roster_mismatch_inertly() {
+        use crate::{
+            journal::JournalStore,
+            paths::{GrantAccess, GrantScope, PathGrantStore},
+        };
+
+        let fixture = tempfile::tempdir().unwrap();
+        let source_root = fixture.path().join("source");
+        let target_root = fixture.path().join("target");
+        std::fs::create_dir_all(&source_root).unwrap();
+        std::fs::create_dir_all(&target_root).unwrap();
+        let caller = CallerIdentity::new("owner", "session");
+        let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+        let grants = PathGrantStore::new(Duration::from_secs(300));
+        let source = grants
+            .issue(&scope, &source_root, GrantAccess::Read)
+            .unwrap();
+        let target = grants
+            .issue(&scope, &target_root, GrantAccess::ReadWrite)
+            .unwrap();
+        let store = PlanStore::new(Duration::from_secs(300));
+        let mut candidate = plan();
+        candidate.op_id = "rfi.follow_up_sync".to_string();
+        let cached = store
+            .insert_bound(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    "owner",
+                    "session",
+                    "rfi.follow_up_sync",
+                    vec![source.grant_id.clone(), target.grant_id.clone()],
+                ),
+                candidate,
+            )
+            .unwrap();
+
+        let wrong_roster = grants
+            .root_accesses_for_plan(
+                std::slice::from_ref(&source.grant_id),
+                &caller,
+                "rfi.follow_up_sync",
+            )
+            .unwrap();
+        let journal = JournalStore::new(fixture.path().join("journals"));
+        let process = crate::progress::GlobalMutationLock::default();
+        let permits = journal.bind_s5_permits(
+            process.try_acquire().unwrap(),
+            journal.try_acquire_mutation_lock().unwrap(),
+        );
+        assert!(
+            store
+                .claim_s5_for_apply_bound_under_permit(
+                    &cached.plan_id,
+                    &caller,
+                    permits,
+                    wrong_roster,
+                )
+                .is_err()
+        );
+        assert_eq!(
+            store.snapshot(&cached.plan_id).unwrap().state,
+            PlanState::Available
+        );
+
+        let roots = grants
+            .root_accesses_for_plan(
+                &[source.grant_id, target.grant_id],
+                &caller,
+                "rfi.follow_up_sync",
+            )
+            .unwrap();
+        let permits = journal.bind_s5_permits(
+            process.try_acquire().unwrap(),
+            journal.try_acquire_mutation_lock().unwrap(),
+        );
+        let claim = store
+            .claim_s5_for_apply_bound_under_permit(&cached.plan_id, &caller, permits, roots)
+            .unwrap();
+        assert_eq!(claim.plan().plan_id, cached.plan_id);
+        assert_eq!(claim.binding().grant_ids.len(), 2);
+        assert_eq!(claim.digest().len(), 64);
+        assert_eq!(claim.caller(), &caller);
+        assert_eq!(claim.roots().records().len(), 2);
     }
 }

@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact four-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact six-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -55,6 +55,8 @@ and silent uninstall on a real Windows runner.
 | Process Scans | parser/OCR tests + image-only packaged smoke | OCR drift, false labels, missing engine/data |
 | Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |
+| RFI Follow Up | exact-match preview/revise/apply/undo and package-fidelity tests | Wrong-row updates, unsafe status projection, package damage, or recovery ambiguity |
+| Outlook reply draft | fake-adapter identity/call-order/conditional-undo tests + Windows compile | Wrong message, recipient synthesis, accidental send, or deletion of a changed draft |
 | Batch Print | fake-adapter queue/spooler tests | Order loss, duplicated jobs, uncertain recovery |
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |
 | Localization | four-catalog key equality | Raw keys or missing language strings |
@@ -68,6 +70,7 @@ These are never implied by source, macOS, or cross-compile success:
 - Windows clean-machine installer/startup/uninstall execution (automated in CI,
   but still pending until a workflow run from the exact source succeeds)
 - Microsoft Office open/recalculate, Excel COM, and Excel-native clipboard
+- Microsoft Outlook current-selection, Reply All, preserved signature/quote, auto-save, and unchanged-draft undo
 - Microsoft Print to PDF and representative physical/network printers
 - live Supabase RLS deployment and two-user verification
 - signing and macOS notarization with authorized credentials

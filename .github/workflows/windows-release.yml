@@ -116,13 +116,61 @@ jobs:
       - name: Smoke-test clean NSIS install, startup, package, and uninstall
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-          if (-not $installer) {
-            throw "The NSIS installer was not produced."
+          $installers = @(Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe")
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)."
           }
-          ./tools/smoke_windows_installer.ps1 -Installer $installer.FullName
+          $installer = $installers[0]
+          $evidencePath = Join-Path $installer.DirectoryName "DocFlow-windows-x64-smoke.json"
+          ./tools/smoke_windows_installer.ps1 `
+            -Installer $installer.FullName `
+            -EvidencePath $evidencePath
+          if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
+            throw "Windows installer smoke did not produce its evidence file."
+          }
+
+      - name: Bind artifact manifest to the exact commit and smoke evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundleDirectory = Resolve-Path "src-tauri\target\release\bundle\nsis"
+          $installers = @(Get-ChildItem -LiteralPath $bundleDirectory -File -Filter "*.exe")
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)."
+          }
+          $installer = $installers[0]
+          $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
+          $smokeEvidence = Get-Item -LiteralPath (Join-Path $bundleDirectory "DocFlow-windows-x64-smoke.json")
+          $smoke = Get-Content -LiteralPath $smokeEvidence -Raw | ConvertFrom-Json
+          $installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (
+            $smoke.result -ne "pass" -or
+            $smoke.installerSha256 -ne $installerSha256 -or
+            -not $smoke.uninstallVerified -or
+            $smoke.coldStartMilliseconds -lt 0 -or
+            $smoke.peakWorkingSetBytes -le 0
+          ) {
+            throw "Windows smoke evidence is incomplete or does not bind the installer."
+          }
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            commitSha = $env:GITHUB_SHA
+            version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+            workflowRunId = $env:GITHUB_RUN_ID
+            workflowRunAttempt = $env:GITHUB_RUN_ATTEMPT
+            runnerImage = $env:ImageOS
+            nodeVersion = (& node --version).Trim()
+            rustVersion = (& rustc --version).Trim()
+            installerFileName = $installer.Name
+            installerSizeBytes = $installer.Length
+            installerSha256 = $installerSha256
+            checksumFileName = $checksum.Name
+            checksumSha256 = (Get-FileHash -LiteralPath $checksum.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            smokeEvidenceFileName = $smokeEvidence.Name
+            smokeEvidenceSha256 = (Get-FileHash -LiteralPath $smokeEvidence.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $manifestPath = Join-Path $bundleDirectory "DocFlow-windows-x64-manifest.json"
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 
       - name: Record explicit manual certification gates
         shell: pwsh
@@ -146,6 +194,7 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.sha256
+            src-tauri/target/release/bundle/nsis/*.json
           if-no-files-found: error
           retention-days: 30
 
@@ -194,13 +243,15 @@ jobs:
             throw "The NSIS installer was not produced."
           }
           $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
+          $smokeEvidence = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-smoke.json")
+          $manifest = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-manifest.json")
 
           $uploadHeaders = @{
             Authorization = "Bearer $env:GH_TOKEN"
             Accept = "application/vnd.github+json"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
-          foreach ($asset in @($installer, $checksum)) {
+          foreach ($asset in @($installer, $checksum, $smokeEvidence, $manifest)) {
             $assetName = [System.Uri]::EscapeDataString($asset.Name)
             $uploadUri = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$assetName"
             $uploaded = $null
@@ -230,7 +281,7 @@ jobs:
             & gh api "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets" |
               ConvertFrom-Json
           )
-          foreach ($expected in @($installer, $checksum)) {
+          foreach ($expected in @($installer, $checksum, $smokeEvidence, $manifest)) {
             $uploaded = $uploadedAssets | Where-Object { $_.name -eq $expected.Name }
             if (-not $uploaded -or $uploaded.size -ne $expected.Length) {
               throw "Draft delivery release has no exact uploaded asset $($expected.Name)."
@@ -266,6 +317,8 @@ jobs:
           $checksumPath = Join-Path $env:RUNNER_TEMP "$($installer.Name).sha256"
           "$installerHash  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
           $checksum = Get-Item -LiteralPath $checksumPath
+          $smokeEvidence = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-smoke.json")
+          $manifest = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-manifest.json")
           $releaseFlags = @()
           if ($version.Contains("-")) {
             $releaseFlags += "--prerelease"
@@ -276,7 +329,7 @@ jobs:
             throw "Release $tag already exists; refusing to replace its assets."
           }
 
-          & gh release create $tag $installer.FullName $checksum.FullName `
+          & gh release create $tag $installer.FullName $checksum.FullName $smokeEvidence.FullName $manifest.FullName `
             --repo $env:GITHUB_REPOSITORY `
             --verify-tag `
             --title "DocFlow $version" `

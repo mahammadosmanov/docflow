@@ -8,6 +8,27 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.1 - 2026-08-29
+
+### Added
+
+- Exact, package-preserving RFI Follow Up preview, revision, apply, recovery,
+  and targeted undo with bounded authority and no-clobber publication.
+- Windows-only Outlook Reply All draft preparation that revalidates the exact
+  selected message, preserves the existing quote/signature, displays only an
+  unsent draft, and never synthesizes recipients or calls Send.
+- A bounded, redacted, local-only diagnostics preview/copy surface with no
+  telemetry or user-document scan.
+- Commit-bound Windows installer, checksum, smoke, cold-start, peak-memory,
+  package-audit, uninstall, and artifact-manifest evidence.
+
+### Safety
+
+- RFI matching is exact whole-value matching; only `Completed → Completed` and
+  `Ongoing → In Progress` are automatically selectable.
+- Outlook draft undo is available only for the exact unchanged durable draft;
+  otherwise it fails closed.
+
 ### Changed
 
 - The desktop application authority is fully Rust-owned; the retired application

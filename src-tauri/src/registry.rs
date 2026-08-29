@@ -194,6 +194,49 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let rfi_follow_up = operation(
+        "rfi.follow_up_sync",
+        vec![
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.followUp.rfiLogWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.followUp.rfiLogWorkbook.help"),
+            ),
+            parameter(
+                "follow_up_workbook",
+                ParamKind::File,
+                "param.rfi.followUp.followUpWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.followUp.followUpWorkbook.help"),
+            ),
+        ],
+    );
+
+    let outlook_reply_draft = operation(
+        "rfi.outlook_reply_draft",
+        vec![parameter(
+            "reply_text",
+            ParamKind::LongText,
+            "param.rfi.outlookReplyDraft.replyText",
+            json!(""),
+            true,
+            Vec::new(),
+            BTreeMap::new(),
+            Map::new(),
+            Some("param.rfi.outlookReplyDraft.replyText.help"),
+        )],
+    );
+
     let default_printer = facts
         .default_printer
         .or_else(|| facts.printers.first().cloned())
@@ -396,7 +439,14 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
-    vec![process_scans, rfi_log, batch_print, stage_signed_pages]
+    vec![
+        process_scans,
+        rfi_log,
+        rfi_follow_up,
+        outlook_reply_draft,
+        batch_print,
+        stage_signed_pages,
+    ]
 }
 
 #[cfg(test)]
@@ -405,8 +455,35 @@ mod tests {
 
     #[test]
     fn canonical_registry_matches_protocol_one_snapshot() {
-        let actual = serde_json::to_value(operation_registry(RegistryFacts::default()))
-            .expect("registry should serialize");
+        let operations = operation_registry(RegistryFacts::default());
+        assert_eq!(
+            operations
+                .iter()
+                .map(|operation| operation.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "rfi.process_scans",
+                "rfi.log_add",
+                "rfi.follow_up_sync",
+                "rfi.outlook_reply_draft",
+                "files.batch_print",
+                "rfi.stage_signed_first_pages",
+            ]
+        );
+        let follow_up = &operations[2];
+        assert_eq!(
+            follow_up.schema.validate(&Map::new()),
+            vec![
+                "error.param.required.rfi_log_workbook".to_string(),
+                "error.param.required.follow_up_workbook".to_string(),
+            ]
+        );
+        assert_eq!(
+            operations[3].schema.validate(&Map::new()),
+            vec!["error.param.required.reply_text".to_string()]
+        );
+
+        let actual = serde_json::to_value(operations).expect("registry should serialize");
         let expected: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/protocol1_operations.json"))
                 .expect("frozen protocol fixture should be valid JSON");

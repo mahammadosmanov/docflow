@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -10,16 +10,32 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
-    cap_fs::AnchoredPath,
+    cap_fs::{
+        AnchoredPath, ArtifactParentCreateOutcome, AuthorizedPath, CreationSecurityDescriptor,
+        FileSecuritySnapshot, RetainedStorageReservation, SecuredCreateOutcome,
+    },
     contracts::{JsonObject, OperationResult, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
-    journal::{JournalRecord, JournalState, JournalStore},
+    journal::{
+        FollowUpJournalPhase, JournalRecord, JournalState, JournalStore, MAX_S5_RETAINED_BYTES,
+        MAX_S5_RETAINED_FILES, PendingArtifactCreationState, PendingArtifactParent,
+        PendingRetainedArtifact, RecoveryNotice, RetainedArtifactEvidence, RetainedArtifactRole,
+        RetainedPublication, RetainedPublicationPhase, RetainedPublicationPurpose, S5Transition,
+        ValidatedS5Record,
+    },
+    leaf_transaction::{
+        PublicationCancellation, RetainedPublicationOutcome, execute_retained_publication,
+    },
     ooxml::patch_workbook_sheets,
-    paths::{CallerIdentity, GrantAccess, GrantScope, PathGrant, PathGrantStore, PathIntent},
+    paths::{
+        CallerIdentity, GrantAccess, GrantScope, PathGrant, PathGrantStore, PathIntent,
+        ProvisionalPathGrants,
+    },
     pdf::replace_first_page_incremental,
     pdf_publish::temporary_pdf_name_matches,
-    plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore},
+    plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore, ReservedPlanId},
     progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
+    rfi_follow_up,
     rfi_log::{verify_workbook_step, workbook_record_count, workbook_step_updates},
 };
 
@@ -178,6 +194,44 @@ impl FilesystemAuthority {
         self.grants.issue(scope, selected_root, access)
     }
 
+    pub(crate) fn issue_provisional_grants<'a>(
+        &'a self,
+        scope: &GrantScope,
+        requests: &[(PathBuf, GrantAccess)],
+    ) -> Result<ProvisionalPathGrants<'a>, BackendError> {
+        self.grants.issue_provisional(scope, requests)
+    }
+
+    pub(crate) fn anchor_granted_path(
+        &self,
+        grant: &PathGrant,
+        candidate: &Path,
+        intent: PathIntent,
+    ) -> Result<AnchoredPath, BackendError> {
+        self.grants
+            .authorize_capability_for_grant(grant, candidate, intent)?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("selected workbook cannot be anchored"))
+    }
+
+    pub(crate) fn reserve_plan_id(&self) -> ReservedPlanId {
+        self.plans.reserve_plan_id()
+    }
+
+    pub(crate) fn cache_reserved_plan(
+        &self,
+        origin: BackendOrigin,
+        binding: PlanBinding,
+        reservation: ReservedPlanId,
+        plan: Plan,
+    ) -> Result<Plan, BackendError> {
+        let caller = CallerIdentity::new(&binding.owner_id, &binding.session_id);
+        self.grants
+            .roots_for_plan(&binding.grant_ids, &caller, &binding.operation_id)?;
+        self.plans
+            .insert_bound_reserved(origin, binding, reservation, plan)
+    }
+
     pub fn cache_plan(
         &self,
         origin: BackendOrigin,
@@ -232,6 +286,39 @@ impl FilesystemAuthority {
         Ok(plan)
     }
 
+    pub(crate) fn anchor_bound_path(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        candidate: &Path,
+        intent: PathIntent,
+    ) -> Result<AnchoredPath, BackendError> {
+        self.grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                candidate,
+                intent,
+            )?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("bound workbook cannot be anchored"))
+    }
+
+    pub(crate) fn replace_cached_plan(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        plan_id: &str,
+        expected_digest: &str,
+        replacement: Plan,
+    ) -> Result<Plan, BackendError> {
+        self.grants
+            .roots_for_plan(&binding.grant_ids, caller, &binding.operation_id)?;
+        self.plans
+            .replace_bound_available(plan_id, caller, expected_digest, replacement)
+    }
+
     pub fn cancel(&self, plan_id: &str) -> bool {
         self.cancellations.cancel(plan_id)
     }
@@ -259,6 +346,15 @@ impl FilesystemAuthority {
     where
         F: FnMut(ProgressEvent),
     {
+        let inspected = self.plans.resolve_bound(plan_id, caller)?;
+        if inspected.plan.op_id == rfi_follow_up::OPERATION_ID {
+            if inspected.plan.steps.is_empty() {
+                return Err(BackendError::validation(
+                    "error.rfi.followUp.noRowsSelected",
+                ));
+            }
+            return self.apply_follow_up(plan_id, caller, progress);
+        }
         let claim = self
             .plans
             .claim_for_apply_bound(plan_id, caller, &self.mutation_lock)?;
@@ -389,6 +485,617 @@ impl FilesystemAuthority {
         Ok(result)
     }
 
+    fn apply_follow_up<F>(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        mut progress: F,
+    ) -> Result<OperationResult, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let inspected = self.plans.resolve_bound(plan_id, caller)?;
+        let binding = inspected
+            .binding
+            .clone()
+            .ok_or_else(BackendError::plan_unavailable)?;
+        let process = self.mutation_lock.try_acquire()?;
+        let interprocess = self.journals.try_acquire_mutation_lock()?;
+        let roots = self.grants.root_accesses_for_plan(
+            &binding.grant_ids,
+            caller,
+            &binding.operation_id,
+        )?;
+        let permits = self.journals.bind_s5_permits(process, interprocess);
+        let claim = self
+            .plans
+            .claim_s5_for_apply_bound_under_permit(plan_id, caller, permits, roots)?;
+        let mut record = self.journals.begin_s5(claim, caller)?;
+        let token = self.cancellations.register(plan_id);
+        let _registration = CancellationRegistration {
+            registry: &self.cancellations,
+            request_id: plan_id,
+        };
+        progress(ProgressEvent {
+            phase: "apply".to_string(),
+            done: 0,
+            total: 1,
+            subject: String::new(),
+        });
+        let result = match self.execute_follow_up_workbook_update(caller, &token, &mut record) {
+            Ok(changed) => {
+                let mut result = OperationResult {
+                    applied: changed,
+                    failed: 0,
+                    journal_id: record.journal_id().to_string(),
+                    errors: Vec::new(),
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "committed");
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                result
+            }
+            Err(FollowUpApplyFailure::NoEffect(warning)) => {
+                let expected = record.revision();
+                record.prepare_no_effect()?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                let mut result = OperationResult {
+                    applied: 0,
+                    failed: 1,
+                    journal_id: record.journal_id().to_string(),
+                    errors: vec![warning],
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "no_effect_retryable");
+                result
+            }
+            Err(FollowUpApplyFailure::Partial(warning)) => {
+                let locators = record.retained_locators()?;
+                let notice = RecoveryNotice {
+                    warning_key: warning.key.clone(),
+                    locator: locators.first().to_string(),
+                };
+                let expected = record.revision();
+                record.prepare_failed_partial(notice)?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                let mut result = OperationResult {
+                    applied: 0,
+                    failed: 1,
+                    journal_id: record.journal_id().to_string(),
+                    errors: vec![warning],
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "partial");
+                insert_retained_locators(&mut result, locators.as_slice());
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                result
+            }
+            Err(FollowUpApplyFailure::OutcomeUnknown(warning)) => {
+                let notice = RecoveryNotice::from_warning(&warning);
+                let expected = record.revision();
+                record.prepare_outcome_unknown(notice)?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                let mut result = OperationResult {
+                    applied: 0,
+                    failed: 1,
+                    journal_id: record.journal_id().to_string(),
+                    errors: vec![warning],
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "outcome_unknown");
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                result
+            }
+            Err(FollowUpApplyFailure::Cancelled) => {
+                let expected = record.revision();
+                record.prepare_cancelled()?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                let partial = !record.retained_evidence().is_empty();
+                let mut result = OperationResult {
+                    applied: 0,
+                    failed: 0,
+                    journal_id: record.journal_id().to_string(),
+                    errors: vec![Warning {
+                        key: "warn.operation.cancelled".to_string(),
+                        subject: String::new(),
+                    }],
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                result
+                    .meta
+                    .insert("cancelled".to_string(), Value::Bool(true));
+                insert_effect_state(
+                    &mut result,
+                    if partial {
+                        "cancelled_partial"
+                    } else {
+                        "cancelled_clean"
+                    },
+                );
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                result
+            }
+        };
+        progress(ProgressEvent {
+            phase: "apply".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        Ok(result)
+    }
+
+    fn execute_follow_up_workbook_update(
+        &self,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut ValidatedS5Record,
+    ) -> Result<u64, FollowUpApplyFailure> {
+        if record
+            .plan()
+            .is_none_or(|plan| plan.op_id != rfi_follow_up::OPERATION_ID)
+        {
+            return Err(follow_up_no_effect("error.rfi.followUp.workbookInvalid"));
+        }
+        let step = record.approved_step().clone();
+        let binding = record
+            .binding()
+            .cloned()
+            .ok_or_else(|| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+        let (source_path, target_path, backup_path) =
+            rfi_follow_up::step_workbook_paths(&step).map_err(follow_up_backend_no_effect)?;
+        let source_path = PathBuf::from(source_path);
+        let target_path = PathBuf::from(target_path);
+        let backup_path = PathBuf::from(backup_path);
+        let source = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &source_path,
+                PathIntent::Read,
+            )
+            .and_then(|path| {
+                path.anchor()
+                    .map_err(|_| BackendError::path_invalid("RFI Log workbook is unavailable"))
+            })
+            .map_err(follow_up_backend_no_effect)?;
+        let canonical = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &target_path,
+                PathIntent::Write,
+            )
+            .and_then(|path| {
+                path.anchor()
+                    .map_err(|_| BackendError::path_invalid("Follow Up workbook is unavailable"))
+            })
+            .map_err(follow_up_backend_no_effect)?;
+        let backup = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &backup_path,
+                PathIntent::Write,
+            )
+            .and_then(|path| {
+                path.anchor()
+                    .map_err(|_| BackendError::path_invalid("Follow Up backup cannot be anchored"))
+            })
+            .map_err(follow_up_backend_no_effect)?;
+        let mut source_file = source
+            .open_read()
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+        let mut original_file = canonical
+            .open_mutable()
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookLocked"))?;
+        rfi_follow_up::revalidate_open_workbooks(&step, &mut source_file, &mut original_file)
+            .map_err(follow_up_backend_no_effect)?;
+        if token.checkpoint().is_err() {
+            return Err(FollowUpApplyFailure::Cancelled);
+        }
+        let original_identity = crate::cap_fs::file_identity(&original_file)
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookChanged"))?;
+        let original_len = original_file
+            .metadata()
+            .map(|metadata| metadata.len())
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookChanged"))?;
+        let original_snapshot = FileSecuritySnapshot::capture(&original_file, None)
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+        let parent_snapshot = canonical
+            .capture_parent_security()
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookChanged"))?;
+        let creation = original_snapshot
+            .creation_descriptor(&parent_snapshot)
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+        let original_hash = canonical
+            .sha256()
+            .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookChanged"))?;
+        let canonical_parent_path = target_path
+            .parent()
+            .ok_or_else(|| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?
+            .to_path_buf();
+        let private_parent_path = canonical_parent_path.join(".docflow-backups");
+        let usage = s5_recorded_retained_usage(record, &canonical_parent_path)
+            .map_err(follow_up_backend_no_effect)?;
+        let reservation = RetainedStorageReservation::for_apply(
+            original_len,
+            original_snapshot.auxiliary_charge_bytes(),
+        )
+        .map_err(|_| follow_up_no_effect("error.rfi.followUp.retainedStorageFull"))?;
+        if usage
+            .0
+            .checked_add(reservation.file_count)
+            .is_none_or(|count| count > MAX_S5_RETAINED_FILES)
+            || usage
+                .1
+                .checked_add(reservation.logical_charge_bytes)
+                .is_none_or(|bytes| bytes > MAX_S5_RETAINED_BYTES)
+        {
+            return Err(follow_up_no_effect(
+                "error.rfi.followUp.retainedStorageFull",
+            ));
+        }
+
+        let parent_locator = s5_locator(record, &private_parent_path)?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::SetPendingArtifactParent(PendingArtifactParent {
+                path: private_parent_path.to_string_lossy().into_owned(),
+                locator: parent_locator,
+            }),
+        )?;
+        let private_parent = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &private_parent_path,
+                PathIntent::Write,
+            )
+            .map_err(follow_up_backend_partial)?;
+        let parent_outcome = private_parent
+            .create_artifact_parent_no_clobber()
+            .map_err(|_| follow_up_outcome(record))?;
+        if matches!(parent_outcome, ArtifactParentCreateOutcome::Created { .. }) {
+            private_parent
+                .anchor()
+                .and_then(|path| path.sync_parent())
+                .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        }
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::ResolveArtifactParent(parent_outcome),
+        )?;
+        if record
+            .pending_artifact_parent()
+            .is_some_and(|_| record.phase() == Some(FollowUpJournalPhase::ArtifactParentReady))
+        {
+            return Err(follow_up_outcome(record));
+        }
+
+        let extension = target_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| follow_up_partial("error.rfi.followUp.workbookInvalid"))?;
+        let private_path = private_parent_path.join(format!(
+            ".docflow-s5-private-output-{}-{}.{}",
+            record.journal_id(),
+            Uuid::new_v4().simple(),
+            extension
+        ));
+        let private_locator = s5_locator(record, &private_path)?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::SetPendingRetainedArtifact(PendingRetainedArtifact {
+                role: RetainedArtifactRole::PrivateOutput,
+                path: private_path.to_string_lossy().into_owned(),
+                locator: private_locator.clone(),
+                creation_state: PendingArtifactCreationState::Intent,
+            }),
+        )?;
+        let private = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &private_path,
+                PathIntent::Write,
+            )
+            .and_then(|path| {
+                path.anchor().map_err(|_| {
+                    BackendError::path_invalid("Follow Up private output cannot be anchored")
+                })
+            })
+            .map_err(follow_up_backend_partial)?;
+        let private_creation = CreationSecurityDescriptor::current_owner_only()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.workbookInvalid"))?;
+        let (mut private_file, private_identity) = match private
+            .create_new_secured_identified(&private_creation)
+            .map_err(|_| follow_up_outcome(record))?
+        {
+            SecuredCreateOutcome::Created { file, identity } => (file, identity),
+            SecuredCreateOutcome::CreatedIdentityUnknown { file } => {
+                drop(file);
+                s5_transition(
+                    &self.journals,
+                    record,
+                    S5Transition::MarkPendingRetainedIdentityUnknown,
+                )?;
+                return Err(follow_up_outcome(record));
+            }
+        };
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::MarkPendingRetainedCreated(private_identity.clone()),
+        )?;
+        rfi_follow_up::write_and_verify_private_output(
+            &step,
+            &mut original_file,
+            &mut private_file,
+        )
+        .map_err(follow_up_backend_partial)?;
+        private_file
+            .sync_all()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        let private_snapshot = private_file
+            .security_snapshot()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        let private_hash = private_file
+            .sha256()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        let private_len = private_file
+            .len()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.recoveryRequired"))?;
+        let private_evidence = retained_evidence(
+            RetainedArtifactRole::PrivateOutput,
+            &private_path,
+            private_identity.clone(),
+            private_hash.clone(),
+            &private_snapshot,
+            private_len,
+            private_locator,
+        )?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::FinalizeRetainedArtifact {
+                evidence: private_evidence,
+                phase: FollowUpJournalPhase::PrivateOutputReady,
+            },
+        )?;
+        if token.checkpoint().is_err() {
+            return Err(FollowUpApplyFailure::Cancelled);
+        }
+
+        rfi_follow_up::revalidate_open_workbooks(&step, &mut source_file, &mut original_file)
+            .map_err(follow_up_backend_partial)?;
+        canonical
+            .verify_parent_security(&parent_snapshot)
+            .map_err(|_| follow_up_partial("error.rfi.followUp.workbookChanged"))?;
+        let backup_locator = s5_locator(record, &backup_path)?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::SetPendingRetainedArtifact(PendingRetainedArtifact {
+                role: RetainedArtifactRole::Backup,
+                path: backup_path.to_string_lossy().into_owned(),
+                locator: backup_locator.clone(),
+                creation_state: PendingArtifactCreationState::Intent,
+            }),
+        )?;
+        let (mut backup_file, backup_identity) = match backup
+            .create_new_secured_identified(&creation)
+            .map_err(|_| follow_up_partial("error.rfi.followUp.backupExists"))?
+        {
+            SecuredCreateOutcome::Created { file, identity } => (file, identity),
+            SecuredCreateOutcome::CreatedIdentityUnknown { file } => {
+                drop(file);
+                s5_transition(
+                    &self.journals,
+                    record,
+                    S5Transition::MarkPendingRetainedIdentityUnknown,
+                )?;
+                return Err(follow_up_outcome(record));
+            }
+        };
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::MarkPendingRetainedCreated(backup_identity.clone()),
+        )?;
+        original_snapshot
+            .verify_created_access(&backup_file)
+            .and_then(|_| original_snapshot.replay_and_verify_auxiliary(&mut backup_file))
+            .map_err(|_| follow_up_partial("error.rfi.followUp.backupVerify"))?;
+        original_file
+            .seek(SeekFrom::Start(0))
+            .and_then(|_| std::io::copy(&mut original_file, &mut backup_file).map(|_| ()))
+            .and_then(|_| backup_file.sync_all())
+            .map_err(|_| follow_up_partial("error.rfi.followUp.backupVerify"))?;
+        original_snapshot
+            .verify_complete(&backup_file)
+            .map_err(|_| follow_up_partial("error.rfi.followUp.backupVerify"))?;
+        let backup_hash = backup_file
+            .sha256()
+            .map_err(|_| follow_up_partial("error.rfi.followUp.backupVerify"))?;
+        if backup_hash != original_hash {
+            return Err(follow_up_partial("error.rfi.followUp.backupVerify"));
+        }
+        let backup_evidence = retained_evidence(
+            RetainedArtifactRole::Backup,
+            &backup_path,
+            backup_identity.clone(),
+            backup_hash.clone(),
+            &original_snapshot,
+            original_len,
+            backup_locator,
+        )?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::FinalizeRetainedArtifact {
+                evidence: backup_evidence,
+                phase: FollowUpJournalPhase::BackupReady,
+            },
+        )?;
+        if token.checkpoint().is_err() {
+            return Err(FollowUpApplyFailure::Cancelled);
+        }
+
+        rfi_follow_up::revalidate_open_workbooks(&step, &mut source_file, &mut original_file)
+            .map_err(follow_up_backend_partial)?;
+        canonical
+            .verify_parent_security(&parent_snapshot)
+            .map_err(|_| follow_up_partial("error.rfi.followUp.workbookChanged"))?;
+        let retained_path = canonical_parent_path.join(format!(
+            ".docflow-s5-retained-original-{}-{}.{}",
+            record.journal_id(),
+            Uuid::new_v4().simple(),
+            extension
+        ));
+        let retained_locator = s5_locator(record, &retained_path)?;
+        let retained = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &retained_path,
+                PathIntent::Write,
+            )
+            .and_then(|path| {
+                path.anchor().map_err(|_| {
+                    BackendError::path_invalid("Follow Up retained original cannot be anchored")
+                })
+            })
+            .map_err(follow_up_backend_partial)?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::SetPendingRetainedArtifact(PendingRetainedArtifact {
+                role: RetainedArtifactRole::DisplacedOriginal,
+                path: retained_path.to_string_lossy().into_owned(),
+                locator: retained_locator,
+                creation_state: PendingArtifactCreationState::Intent,
+            }),
+        )?;
+        s5_transition(
+            &self.journals,
+            record,
+            S5Transition::InitializePublication(Box::new(RetainedPublication {
+                purpose: RetainedPublicationPurpose::Apply,
+                canonical: target_path.to_string_lossy().into_owned(),
+                retained: retained_path.to_string_lossy().into_owned(),
+                backup: backup_path.to_string_lossy().into_owned(),
+                publication_source: private_path.to_string_lossy().into_owned(),
+                expected_canonical_identity: original_identity,
+                expected_canonical_sha256: original_hash.clone(),
+                expected_backup_identity: backup_identity,
+                expected_backup_sha256: backup_hash,
+                publication_source_identity: private_identity,
+                publication_sha256: private_hash.clone(),
+                expected_canonical_security_sha256: original_snapshot.sha256(),
+                expected_backup_security_sha256: original_snapshot.sha256(),
+                publication_security_sha256: private_snapshot.sha256(),
+                expected_canonical_default_stream_bytes: original_len,
+                expected_canonical_auxiliary_charge_bytes: original_snapshot
+                    .auxiliary_charge_bytes(),
+                expected_canonical_logical_charge_bytes: original_len
+                    .checked_add(original_snapshot.auxiliary_charge_bytes())
+                    .ok_or_else(|| follow_up_partial("error.rfi.followUp.retainedStorageFull"))?,
+                destination_access_sha256: original_snapshot.access_sha256(),
+                destination_auxiliary_sha256: original_snapshot.auxiliary_sha256(),
+                destination_auxiliary_charge_bytes: original_snapshot.auxiliary_charge_bytes(),
+                retained_identity: None,
+                retained_sha256: None,
+                retained_security_sha256: None,
+                created_canonical_identity: None,
+                phase: RetainedPublicationPhase::Prepared,
+            })),
+        )?;
+        let source_for_publication = std::cell::RefCell::new(&mut source_file);
+        let original_for_publication = std::cell::RefCell::new(&mut original_file);
+        let outcome = execute_retained_publication(
+            &self.journals,
+            record,
+            &canonical,
+            &retained,
+            &mut private_file,
+            &creation,
+            &original_snapshot,
+            PublicationCancellation::Apply(token),
+            || {
+                let mut source = source_for_publication.borrow_mut();
+                let mut original = original_for_publication.borrow_mut();
+                rfi_follow_up::revalidate_open_workbooks(&step, &mut source, &mut original)
+            },
+            |created| {
+                let mut original = original_for_publication.borrow_mut();
+                rfi_follow_up::verify_patched_output(&step, &mut **original, created)
+            },
+        )
+        .map_err(|_| follow_up_outcome(record))?;
+        match outcome {
+            RetainedPublicationOutcome::CancelledBeforeDisplacement => {
+                Err(FollowUpApplyFailure::Cancelled)
+            }
+            RetainedPublicationOutcome::RecoveryRequired(notice) => {
+                Err(FollowUpApplyFailure::OutcomeUnknown(Warning {
+                    key: notice.warning_key,
+                    subject: notice.locator,
+                }))
+            }
+            RetainedPublicationOutcome::Published { created_identity } => {
+                let mut source = source_for_publication.borrow_mut();
+                let mut original = original_for_publication.borrow_mut();
+                rfi_follow_up::revalidate_open_workbooks(&step, &mut source, &mut original)
+                    .map_err(|_| follow_up_outcome(record))?;
+                let completed = Step {
+                    kind: StepKind::RestoreBackup,
+                    src: Some(backup_path.to_string_lossy().into_owned()),
+                    dst: Some(target_path.to_string_lossy().into_owned()),
+                    note_key: Some("note.rfi.followUp.workbookUpdate".to_string()),
+                    meta: serde_json::Map::from_iter([
+                        ("originalSha256".to_string(), Value::String(original_hash)),
+                        ("appliedSha256".to_string(), Value::String(private_hash)),
+                        (
+                            "createdCanonicalIdentity".to_string(),
+                            serde_json::to_value(created_identity)
+                                .map_err(|_| follow_up_outcome(record))?,
+                        ),
+                    ]),
+                };
+                s5_transition(
+                    &self.journals,
+                    record,
+                    S5Transition::FinalizeApplySuccess {
+                        completed_step: completed,
+                        evidence: Vec::new(),
+                    },
+                )?;
+                rfi_follow_up::changed_cell_count(&step).map_err(follow_up_backend_partial)
+            }
+        }
+    }
+
     fn cleanup_signed_page_directories(
         &self,
         binding: &PlanBinding,
@@ -447,8 +1154,285 @@ impl FilesystemAuthority {
         caller: &CallerIdentity,
         destination: Option<&Path>,
     ) -> Result<OperationResult, BackendError> {
+        if self.journals.inspect_operation(journal_id)? == rfi_follow_up::OPERATION_ID {
+            if destination.is_some() {
+                return Err(BackendError::validation(
+                    "RFI Follow Up undo does not accept a destination",
+                ));
+            }
+            return self.undo_follow_up(journal_id, caller);
+        }
         let _permit = self.mutation_lock.try_acquire()?;
         crate::undo::undo_journal(&self.journals, journal_id, caller, destination)
+    }
+
+    pub fn recover_pending(
+        &self,
+        caller: &CallerIdentity,
+    ) -> Result<Vec<crate::journal::RecoveryEntry>, BackendError> {
+        let process = self.mutation_lock.try_acquire()?;
+        let interprocess = self.journals.try_acquire_mutation_lock()?;
+        let permits = self.journals.bind_s5_permits(process, interprocess);
+        let mut session = self.journals.begin_s5_recovery(permits)?;
+        let mut recovered = Vec::new();
+        while session.has_next() {
+            let roots = session
+                .next_root_accesses()
+                .map(|records| {
+                    self.grants
+                        .reopen_recorded_roots(records, caller, rfi_follow_up::OPERATION_ID)
+                })
+                .transpose()?;
+            if let Some(entry) = session.recover_next(roots, caller)? {
+                recovered.push(entry);
+            }
+        }
+        recovered.sort_by(|left, right| left.journal_id.cmp(&right.journal_id));
+        Ok(recovered)
+    }
+
+    fn undo_follow_up(
+        &self,
+        journal_id: &str,
+        caller: &CallerIdentity,
+    ) -> Result<OperationResult, BackendError> {
+        let process = self.mutation_lock.try_acquire()?;
+        let interprocess = self.journals.try_acquire_mutation_lock()?;
+        let permits = self.journals.bind_s5_permits(process, interprocess);
+        let pending = self
+            .journals
+            .inspect_s5_for_undo(journal_id, caller, permits)?;
+        let roots = self.grants.reopen_recorded_roots(
+            pending.recorded_root_accesses(),
+            caller,
+            rfi_follow_up::OPERATION_ID,
+        )?;
+        let mut record = self.journals.admit_s5_undo(pending, roots)?;
+        let step = record
+            .completed_steps()
+            .first()
+            .cloned()
+            .ok_or_else(|| BackendError::journal_invalid("S5 undo step is missing"))?;
+        let backup_path = PathBuf::from(
+            step.src
+                .as_deref()
+                .ok_or_else(|| BackendError::journal_invalid("S5 backup path is missing"))?,
+        );
+        let canonical_path = PathBuf::from(
+            step.dst
+                .as_deref()
+                .ok_or_else(|| BackendError::journal_invalid("S5 canonical path is missing"))?,
+        );
+        let backup_evidence = record
+            .retained_evidence_for(RetainedArtifactRole::Backup)
+            .cloned()
+            .ok_or_else(|| BackendError::journal_invalid("S5 backup evidence is missing"))?;
+        if backup_evidence.path != backup_path.to_string_lossy() {
+            return Err(BackendError::journal_invalid(
+                "S5 backup evidence path is invalid",
+            ));
+        }
+        let expected_applied_hash = step
+            .meta
+            .get("appliedSha256")
+            .and_then(Value::as_str)
+            .ok_or_else(|| BackendError::journal_invalid("S5 applied hash is missing"))?
+            .to_string();
+        let expected_applied_identity: crate::journal::FilesystemObjectIdentity =
+            serde_json::from_value(
+                step.meta
+                    .get("createdCanonicalIdentity")
+                    .cloned()
+                    .ok_or_else(|| {
+                        BackendError::journal_invalid("S5 applied identity is missing")
+                    })?,
+            )
+            .map_err(|_| BackendError::journal_invalid("S5 applied identity is invalid"))?;
+        let canonical = authorize_s5_recorded(&record, &canonical_path)?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("S5 canonical workbook cannot be anchored"))?;
+        let backup = authorize_s5_recorded(&record, &backup_path)?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("S5 backup cannot be anchored"))?;
+        let mut current_file = canonical
+            .open_mutable()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+        let mut backup_file = backup
+            .open_read()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+        let current_identity = crate::cap_fs::file_identity(&current_file)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+        let backup_identity = crate::cap_fs::file_identity(&backup_file)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+        let current_hash = sha256_open_file(&mut current_file)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+        let backup_hash = sha256_open_file(&mut backup_file)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+        let current_snapshot = FileSecuritySnapshot::capture(&current_file, None)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+        let backup_snapshot = FileSecuritySnapshot::capture(&backup_file, None)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+        if current_identity != expected_applied_identity
+            || current_hash != expected_applied_hash
+            || current_snapshot.sha256() != backup_evidence.security_sha256
+            || backup_identity != backup_evidence.identity
+            || backup_hash != backup_evidence.sha256
+            || backup_snapshot.sha256() != backup_evidence.security_sha256
+        {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.workbookChanged",
+            ));
+        }
+        let current_len = current_file
+            .metadata()
+            .map(|metadata| metadata.len())
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+        let reservation = RetainedStorageReservation::for_undo(
+            current_len,
+            current_snapshot.auxiliary_charge_bytes(),
+        )
+        .map_err(|_| BackendError::validation("error.rfi.followUp.retainedStorageFull"))?;
+        let canonical_parent_path = canonical_path
+            .parent()
+            .ok_or_else(|| BackendError::journal_invalid("S5 canonical parent is unavailable"))?;
+        let usage = s5_recorded_retained_usage(&record, canonical_parent_path)?;
+        if usage
+            .0
+            .checked_add(reservation.file_count)
+            .is_none_or(|count| count > MAX_S5_RETAINED_FILES)
+            || usage
+                .1
+                .checked_add(reservation.logical_charge_bytes)
+                .is_none_or(|bytes| bytes > MAX_S5_RETAINED_BYTES)
+        {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.retainedStorageFull",
+            ));
+        }
+        let parent_snapshot = canonical
+            .capture_parent_security()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+        let creation = backup_snapshot
+            .creation_descriptor(&parent_snapshot)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+        let extension = canonical_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| BackendError::journal_invalid("S5 canonical extension is invalid"))?;
+        let retained_path = canonical_parent_path.join(format!(
+            ".docflow-s5-retained-applied-{}-{}.{}",
+            record.journal_id(),
+            Uuid::new_v4().simple(),
+            extension
+        ));
+        let retained = authorize_s5_recorded(&record, &retained_path)?
+            .anchor()
+            .map_err(|_| {
+                BackendError::path_invalid("S5 retained applied leaf cannot be anchored")
+            })?;
+        let retained_locator = s5_locator(&record, &retained_path)
+            .map_err(|_| BackendError::journal_invalid("S5 retained locator is invalid"))?;
+        transition_s5_backend(
+            &self.journals,
+            &mut record,
+            S5Transition::SetPendingRetainedArtifact(PendingRetainedArtifact {
+                role: RetainedArtifactRole::DisplacedApplied,
+                path: retained_path.to_string_lossy().into_owned(),
+                locator: retained_locator.clone(),
+                creation_state: PendingArtifactCreationState::Intent,
+            }),
+        )?;
+        transition_s5_backend(
+            &self.journals,
+            &mut record,
+            S5Transition::InitializePublication(Box::new(RetainedPublication {
+                purpose: RetainedPublicationPurpose::Undo,
+                canonical: canonical_path.to_string_lossy().into_owned(),
+                retained: retained_path.to_string_lossy().into_owned(),
+                backup: backup_path.to_string_lossy().into_owned(),
+                publication_source: backup_path.to_string_lossy().into_owned(),
+                expected_canonical_identity: current_identity,
+                expected_canonical_sha256: current_hash,
+                expected_backup_identity: backup_identity.clone(),
+                expected_backup_sha256: backup_hash.clone(),
+                publication_source_identity: backup_identity,
+                publication_sha256: backup_hash,
+                expected_canonical_security_sha256: current_snapshot.sha256(),
+                expected_backup_security_sha256: backup_snapshot.sha256(),
+                publication_security_sha256: backup_snapshot.sha256(),
+                expected_canonical_default_stream_bytes: current_len,
+                expected_canonical_auxiliary_charge_bytes: current_snapshot
+                    .auxiliary_charge_bytes(),
+                expected_canonical_logical_charge_bytes: current_len
+                    .checked_add(current_snapshot.auxiliary_charge_bytes())
+                    .ok_or_else(|| {
+                        BackendError::validation("error.rfi.followUp.retainedStorageFull")
+                    })?,
+                destination_access_sha256: backup_snapshot.access_sha256(),
+                destination_auxiliary_sha256: backup_snapshot.auxiliary_sha256(),
+                destination_auxiliary_charge_bytes: backup_snapshot.auxiliary_charge_bytes(),
+                retained_identity: None,
+                retained_sha256: None,
+                retained_security_sha256: None,
+                created_canonical_identity: None,
+                phase: RetainedPublicationPhase::Prepared,
+            })),
+        )?;
+        let outcome = execute_retained_publication(
+            &self.journals,
+            &mut record,
+            &canonical,
+            &retained,
+            &mut backup_file,
+            &creation,
+            &backup_snapshot,
+            PublicationCancellation::NotCancellable,
+            || Ok(()),
+            |_| Ok(()),
+        );
+        match outcome {
+            Ok(RetainedPublicationOutcome::Published { .. }) => {
+                transition_s5_backend(
+                    &self.journals,
+                    &mut record,
+                    S5Transition::FinalizeUndoSuccess {
+                        completed_step: step,
+                        evidence: Vec::new(),
+                    },
+                )?;
+                let mut result = OperationResult {
+                    applied: 1,
+                    failed: 0,
+                    journal_id: record.journal_id().to_string(),
+                    errors: Vec::new(),
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "committed");
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                Ok(result)
+            }
+            Ok(RetainedPublicationOutcome::CancelledBeforeDisplacement) => {
+                Err(BackendError::journal_invalid("S5 undo cannot be cancelled"))
+            }
+            Ok(RetainedPublicationOutcome::RecoveryRequired(notice)) => {
+                let expected = record.revision();
+                record.prepare_outcome_unknown(notice.clone())?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                Ok(s5_recovery_result(&record, notice))
+            }
+            Err(_) => {
+                let locator = record.retained_locators()?.first().to_string();
+                let notice = RecoveryNotice {
+                    warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
+                    locator,
+                };
+                let expected = record.revision();
+                record.prepare_outcome_unknown(notice.clone())?;
+                self.journals.write_s5_cas(&mut record, expected)?;
+                Ok(s5_recovery_result(&record, notice))
+            }
+        }
     }
 
     fn execute_step(
@@ -1299,6 +2283,240 @@ impl FilesystemAuthority {
         self.journals.write(record).map_err(step_unknown)?;
         Ok(1)
     }
+}
+
+enum FollowUpApplyFailure {
+    NoEffect(Warning),
+    Partial(Warning),
+    OutcomeUnknown(Warning),
+    Cancelled,
+}
+
+fn follow_up_warning(key: &str, subject: impl Into<String>) -> Warning {
+    Warning {
+        key: key.to_string(),
+        subject: subject.into(),
+    }
+}
+
+fn follow_up_no_effect(key: &str) -> FollowUpApplyFailure {
+    FollowUpApplyFailure::NoEffect(follow_up_warning(key, String::new()))
+}
+
+fn follow_up_partial(key: &str) -> FollowUpApplyFailure {
+    FollowUpApplyFailure::Partial(follow_up_warning(key, String::new()))
+}
+
+fn follow_up_backend_no_effect(error: BackendError) -> FollowUpApplyFailure {
+    follow_up_no_effect(&error.message)
+}
+
+fn follow_up_backend_partial(error: BackendError) -> FollowUpApplyFailure {
+    follow_up_partial(&error.message)
+}
+
+fn follow_up_outcome(record: &ValidatedS5Record) -> FollowUpApplyFailure {
+    let locator = record
+        .retained_locators()
+        .ok()
+        .map(|locators| locators.first().to_string())
+        .unwrap_or_else(|| format!("journal:{};root:0;leaf:record", record.journal_id()));
+    FollowUpApplyFailure::OutcomeUnknown(follow_up_warning(
+        "error.rfi.followUp.recoveryRequired",
+        locator,
+    ))
+}
+
+fn s5_transition(
+    journals: &JournalStore,
+    record: &mut ValidatedS5Record,
+    transition: S5Transition,
+) -> Result<(), FollowUpApplyFailure> {
+    let expected = record.revision();
+    record
+        .apply_transition(transition)
+        .map_err(|_| follow_up_outcome(record))?;
+    journals
+        .write_s5_cas(record, expected)
+        .map_err(|_| follow_up_outcome(record))
+}
+
+fn s5_locator(record: &ValidatedS5Record, path: &Path) -> Result<String, FollowUpApplyFailure> {
+    let roots = record
+        .roots()
+        .ok_or_else(|| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+    let index = roots
+        .roots()
+        .iter()
+        .position(|root| path.starts_with(root.canonical()))
+        .ok_or_else(|| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+    let leaf = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;
+    Ok(format!(
+        "journal:{};root:{index};leaf:{leaf}",
+        record.journal_id()
+    ))
+}
+
+fn retained_evidence(
+    role: RetainedArtifactRole,
+    path: &Path,
+    identity: crate::journal::FilesystemObjectIdentity,
+    sha256: String,
+    security: &FileSecuritySnapshot,
+    default_stream_bytes: u64,
+    locator: String,
+) -> Result<RetainedArtifactEvidence, FollowUpApplyFailure> {
+    let auxiliary_charge_bytes = security.auxiliary_charge_bytes();
+    let logical_charge_bytes = default_stream_bytes
+        .checked_add(auxiliary_charge_bytes)
+        .ok_or_else(|| follow_up_partial("error.rfi.followUp.retainedStorageFull"))?;
+    Ok(RetainedArtifactEvidence {
+        role,
+        path: path.to_string_lossy().into_owned(),
+        identity,
+        sha256,
+        security_sha256: security.sha256(),
+        default_stream_bytes,
+        auxiliary_charge_bytes,
+        logical_charge_bytes,
+        locator,
+    })
+}
+
+fn insert_retained_locators(result: &mut OperationResult, locators: &[String]) {
+    result.meta.insert(
+        "retainedLocators".to_string(),
+        Value::Array(locators.iter().cloned().map(Value::String).collect()),
+    );
+}
+
+fn insert_retained_evidence(result: &mut OperationResult, evidence: &[RetainedArtifactEvidence]) {
+    let order = [
+        RetainedArtifactRole::Backup,
+        RetainedArtifactRole::PrivateOutput,
+        RetainedArtifactRole::DisplacedOriginal,
+        RetainedArtifactRole::DisplacedApplied,
+    ];
+    let projection = order
+        .into_iter()
+        .filter_map(|role| evidence.iter().find(|item| item.role == role))
+        .map(|item| {
+            serde_json::json!({
+                "role": item.role.projection_key(),
+                "locator": item.locator,
+            })
+        })
+        .collect();
+    result
+        .meta
+        .insert("retainedEvidence".to_string(), Value::Array(projection));
+}
+
+fn authorize_s5_recorded(
+    record: &ValidatedS5Record,
+    path: &Path,
+) -> Result<AuthorizedPath, BackendError> {
+    record
+        .roots()
+        .ok_or_else(|| BackendError::journal_invalid("S5 root authority is unavailable"))?
+        .roots()
+        .iter()
+        .find_map(|root| root.authorize(path).ok())
+        .ok_or_else(BackendError::path_escape)
+}
+
+fn authorize_s5_recorded_directory(
+    record: &ValidatedS5Record,
+    path: &Path,
+) -> Result<AuthorizedPath, BackendError> {
+    record
+        .roots()
+        .ok_or_else(|| BackendError::journal_invalid("S5 root authority is unavailable"))?
+        .roots()
+        .iter()
+        .find_map(|root| root.authorize_directory(path).ok())
+        .ok_or_else(BackendError::path_escape)
+}
+
+fn s5_recorded_retained_usage(
+    record: &ValidatedS5Record,
+    canonical_parent: &Path,
+) -> Result<(usize, u64), BackendError> {
+    let canonical = authorize_s5_recorded_directory(record, canonical_parent)?;
+    let canonical_usage = canonical
+        .s5_retained_storage_usage(MAX_S5_RETAINED_FILES)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.retainedStorageFull"))?;
+    let private_parent = canonical_parent.join(".docflow-backups");
+    let private_usage = match authorize_s5_recorded_directory(record, &private_parent)?
+        .s5_retained_storage_usage(MAX_S5_RETAINED_FILES)
+    {
+        Ok(usage) => usage,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            crate::cap_fs::RetainedStorageUsage {
+                file_count: 0,
+                logical_charge_bytes: 0,
+            }
+        }
+        Err(_) => {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.retainedStorageFull",
+            ));
+        }
+    };
+    let count = canonical_usage
+        .file_count
+        .checked_add(private_usage.file_count)
+        .ok_or_else(|| BackendError::validation("error.rfi.followUp.retainedStorageFull"))?;
+    let bytes = canonical_usage
+        .logical_charge_bytes
+        .checked_add(private_usage.logical_charge_bytes)
+        .ok_or_else(|| BackendError::validation("error.rfi.followUp.retainedStorageFull"))?;
+    Ok((count, bytes))
+}
+
+fn transition_s5_backend(
+    journals: &JournalStore,
+    record: &mut ValidatedS5Record,
+    transition: S5Transition,
+) -> Result<(), BackendError> {
+    let expected = record.revision();
+    record.apply_transition(transition)?;
+    journals.write_s5_cas(record, expected)
+}
+
+fn s5_recovery_result(record: &ValidatedS5Record, notice: RecoveryNotice) -> OperationResult {
+    let mut result = OperationResult {
+        applied: 0,
+        failed: 1,
+        journal_id: record.journal_id().to_string(),
+        errors: vec![Warning {
+            key: notice.warning_key,
+            subject: notice.locator,
+        }],
+        meta: JsonObject::new(),
+        cloud_synced: None,
+    };
+    insert_effect_state(&mut result, "outcome_unknown");
+    insert_retained_evidence(&mut result, record.retained_evidence());
+    result
+}
+
+fn sha256_open_file(file: &mut File) -> io::Result<String> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    file.seek(SeekFrom::Start(0))?;
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 enum StepFailure {

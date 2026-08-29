@@ -30,8 +30,9 @@ use crate::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
         revise as revise_stage_signed_pages,
     },
+    outlook_reply_draft::{self, OutlookDraftService},
     path_selection::{PathSelection, PathSelectionStore, SelectionKind, SelectionScope},
-    paths::{CallerIdentity, GrantAccess, GrantScope},
+    paths::{CallerIdentity, GrantAccess, GrantScope, PathIntent},
     plan_store::{BackendOrigin, PlanBinding},
     platform,
     print_queue::{BatchPrintParams, PrintService, default_queue_root},
@@ -40,7 +41,7 @@ use crate::{
     review::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
     },
-    rfi_log,
+    rfi_follow_up, rfi_log,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
 };
 
@@ -55,10 +56,10 @@ pub(crate) struct NativeBackend {
     cloud: Arc<CloudHistory>,
     gemini: Arc<GeminiClient>,
     journals: JournalStore,
-    mutation_lock: GlobalMutationLock,
     filesystem: FilesystemAuthority,
     selections: PathSelectionStore,
     print: PrintService,
+    outlook: OutlookDraftService,
     process_session_id: Mutex<String>,
     app_data_dir: PathBuf,
 }
@@ -121,6 +122,12 @@ impl NativeBackend {
             mutation_lock.clone(),
             platform::production_print_adapter(),
         );
+        let outlook = OutlookDraftService::new(
+            &journal_dir,
+            Duration::from_secs(30 * 60),
+            mutation_lock,
+            platform::production_outlook_adapter(),
+        );
         #[cfg(target_os = "windows")]
         let print =
             print.with_excel_pipeline(platform::windows::excel::production_excel_pipeline());
@@ -130,10 +137,10 @@ impl NativeBackend {
             cloud,
             gemini,
             journals,
-            mutation_lock,
             filesystem,
             selections,
             print,
+            outlook,
             process_session_id: Mutex::new(uuid::Uuid::new_v4().to_string()),
             app_data_dir,
         })
@@ -145,6 +152,9 @@ impl NativeBackend {
         params: Value,
     ) -> Result<Value, BackendError> {
         match method {
+            BackendMethod::SupportDiagnostics | BackendMethod::SupportCopyDiagnostics => Err(
+                BackendError::protocol("support command reached the operation backend"),
+            ),
             BackendMethod::AppBootstrap => {
                 decode_empty(params)?;
                 let auth = self.auth.restore(now())?;
@@ -451,9 +461,10 @@ impl NativeBackend {
     }
 
     fn recovery(&self) -> Result<RecoveryPayload, BackendError> {
+        let caller = self.caller_identity()?;
         Ok(RecoveryPayload {
-            journals: self.journals.recover_pending()?,
-            print_queue: self.print.latest(&self.caller_identity()?)?,
+            journals: self.filesystem.recover_pending(&caller)?,
+            print_queue: self.print.latest(&caller)?,
         })
     }
 
@@ -563,6 +574,150 @@ impl NativeBackend {
         )?)
     }
 
+    pub(crate) fn preview_rfi_follow_up<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<RfiFollowUpPreviewValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != rfi_follow_up::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI Follow Up backend",
+            ));
+        }
+        let source_root = request
+            .values
+            .rfi_log_workbook
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
+            .to_path_buf();
+        let target_root = request
+            .values
+            .follow_up_workbook
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("Follow Up workbook has no parent"))?
+            .to_path_buf();
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let provisional = self.filesystem.issue_provisional_grants(
+            &scope,
+            &[
+                (source_root, GrantAccess::Read),
+                (target_root, GrantAccess::ReadWrite),
+            ],
+        )?;
+        let source_grant = &provisional.grants()[0];
+        let target_grant = &provisional.grants()[1];
+        let source_anchor = self.filesystem.anchor_granted_path(
+            source_grant,
+            &request.values.rfi_log_workbook,
+            PathIntent::Read,
+        )?;
+        let target_anchor = self.filesystem.anchor_granted_path(
+            target_grant,
+            &request.values.follow_up_workbook,
+            PathIntent::Write,
+        )?;
+        if source_anchor
+            .same_file_as(&target_anchor)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?
+        {
+            return Err(BackendError::validation(
+                "RFI Log and Follow Up workbooks must be different files",
+            ));
+        }
+        let mut source = source_anchor
+            .open_read()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?;
+        let mut target = target_anchor
+            .open_mutable()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 0,
+            total: 1,
+            subject: request
+                .values
+                .follow_up_workbook
+                .to_string_lossy()
+                .into_owned(),
+        });
+        let mut plan = rfi_follow_up::preview_from_open_files(
+            &request.values.rfi_log_workbook,
+            &request.values.follow_up_workbook,
+            &mut source,
+            &mut target,
+        )?;
+        let reservation = self.filesystem.reserve_plan_id();
+        reservation.assign_to_empty(&mut plan)?;
+        rfi_follow_up::validate_owned_plan_budget(&plan)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_reserved_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                grant_ids,
+            ),
+            reservation,
+            plan,
+        )?;
+        provisional.commit();
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(cached)
+    }
+
+    pub(crate) fn preview_outlook_reply_draft<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<OutlookReplyDraftValues> = decode(params)?;
+        if request.op_id != outlook_reply_draft::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust Outlook draft backend",
+            ));
+        }
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 0,
+            total: 1,
+            subject: String::new(),
+        });
+        let plan = self
+            .outlook
+            .preview(&self.caller_identity()?, &request.values.reply_text)?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(plan)
+    }
+
     pub(crate) fn preview_stage_signed_pages<F>(
         &self,
         params: Value,
@@ -656,6 +811,40 @@ impl NativeBackend {
             .filesystem
             .resolve_native_plan(&request.plan_id, &caller)?;
         let binding = claimed.binding.ok_or_else(BackendError::plan_unavailable)?;
+        if claimed.plan.op_id == rfi_follow_up::OPERATION_ID {
+            let (source_path, target_path) = rfi_follow_up::plan_workbook_paths(&claimed.plan)?;
+            let source_anchor = self.filesystem.anchor_bound_path(
+                &binding,
+                &caller,
+                std::path::Path::new(&source_path),
+                PathIntent::Read,
+            )?;
+            let target_anchor = self.filesystem.anchor_bound_path(
+                &binding,
+                &caller,
+                std::path::Path::new(&target_path),
+                PathIntent::Write,
+            )?;
+            let mut source = source_anchor
+                .open_read()
+                .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?;
+            let mut target = target_anchor
+                .open_mutable()
+                .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+            let revised = rfi_follow_up::revise_from_open_files(
+                &claimed.plan,
+                &request.rows,
+                &mut source,
+                &mut target,
+            )?;
+            return encode(self.filesystem.replace_cached_plan(
+                &binding,
+                &caller,
+                &request.plan_id,
+                &claimed.digest,
+                revised,
+            )?);
+        }
         let payload = json!({"rows": request.rows});
         let revised = match claimed.plan.op_id.as_str() {
             "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
@@ -697,6 +886,15 @@ impl NativeBackend {
         F: FnMut(ProgressEvent),
     {
         let caller = self.caller_identity()?;
+        if self.outlook.contains_plan(plan_id) {
+            let result = self
+                .outlook
+                .apply(plan_id, operation_id, &caller, &mut progress)?;
+            return Ok((
+                encode(result)?,
+                outlook_reply_draft::OPERATION_ID.to_string(),
+            ));
+        }
         if self.print.contains_plan(plan_id) {
             if operation_id.is_some_and(|operation_id| operation_id != "files.batch_print") {
                 return Err(BackendError::validation(
@@ -720,7 +918,9 @@ impl NativeBackend {
     }
 
     pub(crate) fn cancel_native_plan(&self, plan_id: &str) -> bool {
-        self.print.cancel(plan_id) || self.filesystem.cancel(plan_id)
+        self.outlook.cancel(plan_id)
+            || self.print.cancel(plan_id)
+            || self.filesystem.cancel(plan_id)
     }
 
     fn review_scan(&self, params: Value) -> Result<Value, BackendError> {
@@ -821,6 +1021,44 @@ impl NativeBackend {
             .get("journalId")
             .and_then(Value::as_str)
             .ok_or_else(BackendError::invalid_params)?;
+        let operation_id = self.journals.inspect_operation(journal_id)?;
+        if operation_id == outlook_reply_draft::OPERATION_ID && object.contains_key("destination") {
+            return Err(BackendError::validation(
+                "Outlook draft undo does not accept a destination",
+            ));
+        }
+        if operation_id == outlook_reply_draft::OPERATION_ID {
+            let cloud_id = object
+                .get("cloudId")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let result = self.outlook.undo(journal_id, &self.caller_identity()?)?;
+            if result.failed == 0
+                && let Some(cloud_id) = cloud_id
+            {
+                self.mark_undone(&cloud_id);
+            }
+            return encode(result).map(Some);
+        }
+        if operation_id == rfi_follow_up::OPERATION_ID && object.contains_key("destination") {
+            return Err(BackendError::validation(
+                "RFI Follow Up undo does not accept a destination",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        if operation_id == rfi_follow_up::OPERATION_ID {
+            let cloud_id = object
+                .get("cloudId")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let result = self.filesystem.undo(journal_id, &caller, None)?;
+            if result.failed == 0
+                && let Some(cloud_id) = cloud_id
+            {
+                self.mark_undone(&cloud_id);
+            }
+            return encode(result).map(Some);
+        }
         let record = self.journals.read(journal_id)?;
         if record.steps.iter().any(|step| step.kind == StepKind::Print) {
             return Err(BackendError::validation(
@@ -840,7 +1078,6 @@ impl NativeBackend {
         }) {
             return Ok(None);
         }
-        let caller = self.caller_identity()?;
         let destination = object
             .get("destination")
             .cloned()
@@ -857,9 +1094,9 @@ impl NativeBackend {
             .get("cloudId")
             .and_then(Value::as_str)
             .map(str::to_string);
-        let _permit = self.mutation_lock.try_acquire()?;
-        let result =
-            crate::undo::undo_journal(&self.journals, journal_id, &caller, destination.as_deref())?;
+        let result = self
+            .filesystem
+            .undo(journal_id, &caller, destination.as_deref())?;
         if result.failed == 0
             && let Some(cloud_id) = cloud_id
         {
@@ -890,6 +1127,7 @@ impl NativeBackend {
         self.filesystem.revoke(caller);
         self.selections.revoke(caller);
         self.print.revoke(caller);
+        self.outlook.revoke(caller);
     }
 
     fn rotate_session_authority(&self) {
@@ -1126,6 +1364,21 @@ struct ProcessScansValues {
     organize_into_rfi_folders: bool,
     #[serde(default)]
     keep_original: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RfiFollowUpPreviewValues {
+    #[serde(rename = "rfi_log_workbook")]
+    rfi_log_workbook: PathBuf,
+    #[serde(rename = "follow_up_workbook")]
+    follow_up_workbook: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OutlookReplyDraftValues {
+    reply_text: String,
 }
 
 #[derive(Deserialize)]
@@ -1448,7 +1701,6 @@ mod tests {
                 vec![DEFAULT_MODEL.to_string()],
             )),
             journals: JournalStore::new(&journal_dir),
-            mutation_lock: mutation_lock.clone(),
             filesystem: FilesystemAuthority::with_mutation_lock(
                 &journal_dir,
                 Duration::from_secs(60),
@@ -1459,8 +1711,14 @@ mod tests {
                 temporary.path().join("print-queues"),
                 &journal_dir,
                 Duration::from_secs(60),
-                mutation_lock,
+                mutation_lock.clone(),
                 platform::production_print_adapter(),
+            ),
+            outlook: OutlookDraftService::new(
+                &journal_dir,
+                Duration::from_secs(60),
+                mutation_lock,
+                platform::production_outlook_adapter(),
             ),
             process_session_id: Mutex::new("epoch-initial".to_string()),
             app_data_dir: temporary.path().to_path_buf(),
@@ -1499,6 +1757,32 @@ mod tests {
         assert_eq!(
             authenticated_caller_identity(&signed_in_state("owner"), "session").unwrap(),
             CallerIdentity::new("owner", "session")
+        );
+    }
+
+    #[test]
+    fn follow_up_preview_values_accept_only_exact_snake_case_keys() {
+        let exact: RfiFollowUpPreviewValues = decode(json!({
+            "rfi_log_workbook": "/source.xlsx",
+            "follow_up_workbook": "/target.xlsx"
+        }))
+        .unwrap();
+        assert_eq!(exact.rfi_log_workbook, PathBuf::from("/source.xlsx"));
+        assert_eq!(exact.follow_up_workbook, PathBuf::from("/target.xlsx"));
+        assert!(
+            decode::<RfiFollowUpPreviewValues>(json!({
+                "rfiLogWorkbook": "/source.xlsx",
+                "followUpWorkbook": "/target.xlsx"
+            }))
+            .is_err()
+        );
+        assert!(
+            decode::<RfiFollowUpPreviewValues>(json!({
+                "rfi_log_workbook": "/source.xlsx",
+                "follow_up_workbook": "/target.xlsx",
+                "unknown": true
+            }))
+            .is_err()
         );
     }
 

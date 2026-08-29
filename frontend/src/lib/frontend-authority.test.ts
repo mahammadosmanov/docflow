@@ -102,4 +102,58 @@ describe("frontend authority boundary", () => {
       expect(catalog["bootstrap.retry"]).toEqual(expect.any(String));
     }
   });
+
+  it("defines the RFI Follow Up operation, required errors, and release canon", () => {
+    const requiredKeys = [
+      "op.rfi.follow_up_sync.title",
+      "op.rfi.follow_up_sync.desc",
+      "param.rfi.followUp.rfiLogWorkbook",
+      "param.rfi.followUp.rfiLogWorkbook.help",
+      "param.rfi.followUp.followUpWorkbook",
+      "param.rfi.followUp.followUpWorkbook.help",
+      "error.param.required.rfi_log_workbook",
+      "error.param.required.follow_up_workbook",
+      "error.rfi.followUp.recoveryRequired",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+    const releaseSafety = read("docs/RELEASE_SAFETY.md");
+    expect(releaseSafety).toContain("exact six-operation registry");
+    expect(releaseSafety).toContain("RFI Follow Up");
+  });
+
+  it("defines the separate Windows Outlook draft boundary in every locale", () => {
+    const requiredKeys = [
+      "op.rfi.outlook_reply_draft.title",
+      "op.rfi.outlook_reply_draft.desc",
+      "param.rfi.outlookReplyDraft.replyText",
+      "param.rfi.outlookReplyDraft.replyText.help",
+      "error.param.required.reply_text",
+      "step.rfi.outlookReplyDraft",
+      "outlookDraft.previewTitle",
+      "outlookDraft.plainText",
+      "outlookDraft.html",
+      "warn.rfi.outlookDraft.unsent",
+      "warn.rfi.outlookDraft.undoConditional",
+      "warn.rfi.outlookDraft.undoUnavailable",
+      "error.rfi.outlookDraft.unsupportedPlatform",
+      "error.rfi.outlookDraft.selectionChanged",
+      "error.rfi.outlookDraft.draftMissingOrChanged",
+      "error.rfi.outlookDraft.undoUnavailable",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
 });

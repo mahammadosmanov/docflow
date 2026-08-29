@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.6.0",
+  "currentVersion": "0.7.0-rc.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -158,9 +158,17 @@
       "version": "0.6.0",
       "date": "2026-08-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.6.0",
       "summary": "Tauri 2 production baseline with complete v0.5.4 workflows, resilient printing, compact RFI editing, and safe signed-page staging."
+    },
+    {
+      "version": "0.7.0-rc.1",
+      "date": "2026-08-29",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.1",
+      "summary": "Release candidate with exact RFI Follow Up synchronization, unsent Outlook Reply All drafts, redacted local diagnostics, and commit-bound Windows evidence."
     }
   ]
 }

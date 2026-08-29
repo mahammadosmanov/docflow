@@ -167,6 +167,9 @@ pub fn undo_journal(
 }
 
 pub(crate) fn journal_is_safely_undoable(record: &JournalRecord) -> bool {
+    if record.op_id == crate::outlook_reply_draft::OPERATION_ID {
+        return crate::outlook_reply_draft::journal_is_safely_undoable(record);
+    }
     if record.steps.is_empty()
         || record.pending_step.is_some()
         || record.pending_undo.is_some()

@@ -2,8 +2,11 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{self, Write},
+    fs::File,
+    io::{self, Read, Seek, SeekFrom, Write},
+    path::Path,
     sync::OnceLock,
+    time::UNIX_EPOCH,
 };
 
 #[cfg(test)]
@@ -12,15 +15,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
+use uuid::Uuid;
 
 use crate::{
-    contracts::Warning,
+    cap_fs::file_identity,
+    contracts::{Plan, Step, StepKind, Warning},
     errors::BackendError,
     journal::FilesystemObjectIdentity,
     ooxml::{
-        CellData, OoxmlError, OoxmlErrorKind, OrderedWorkbookDiscovery, WorkbookData,
-        WorksheetData, WorksheetDescriptor, WorksheetVisibility,
+        CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
+        OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
+        WorksheetVisibility, ordered_workbook_discovery, package_has_signature,
+        patch_workbook_sheets_guarded, read_workbook_from_reader, verify_guarded_workbook_delta,
     },
     rfi_log::status_columns,
 };
@@ -103,7 +111,7 @@ struct FollowUpReviewTarget {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[allow(dead_code)]
-struct WorkbookFingerprint {
+pub(crate) struct WorkbookFingerprint {
     identity: FilesystemObjectIdentity,
     size: u64,
     mtime_ns: u64,
@@ -142,6 +150,17 @@ pub(crate) struct FollowUpStepMeta {
     follow_up_fingerprint: WorkbookFingerprint,
     layout: FollowUpLayout,
     updates: Vec<FollowUpApprovedUpdate>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpPlanMeta {
+    rfi_log_workbook: String,
+    follow_up_workbook: String,
+    backup_workbook: String,
+    rfi_log_fingerprint: WorkbookFingerprint,
+    follow_up_fingerprint: WorkbookFingerprint,
+    layout: FollowUpLayout,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -417,6 +436,346 @@ pub fn classify_workbooks(
         "warnings": warnings,
         "editor": editor,
     }))
+}
+
+pub fn preview_from_open_files(
+    rfi_log_path: &Path,
+    follow_up_path: &Path,
+    rfi_log: &mut File,
+    follow_up: &mut File,
+) -> Result<Plan, BackendError> {
+    let rfi_log_display = rfi_log_path.to_str().ok_or_else(workbook_invalid)?;
+    let follow_up_display = follow_up_path.to_str().ok_or_else(workbook_invalid)?;
+    let source_fingerprint = fingerprint_open_file(rfi_log)?;
+    let target_fingerprint = fingerprint_open_file(follow_up)?;
+    if source_fingerprint.identity == target_fingerprint.identity {
+        return Err(BackendError::validation(
+            "RFI Log and Follow Up workbooks must be different files",
+        ));
+    }
+
+    rfi_log
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let source_discovery =
+        ordered_workbook_discovery(rfi_log).map_err(map_follow_up_ooxml_error)?;
+    rfi_log
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let source_workbook = read_workbook_from_reader(rfi_log).map_err(map_follow_up_ooxml_error)?;
+
+    follow_up
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let target_has_signature =
+        package_has_signature(follow_up).map_err(map_follow_up_ooxml_error)?;
+    follow_up
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let target_discovery =
+        ordered_workbook_discovery(follow_up).map_err(map_follow_up_ooxml_error)?;
+    follow_up
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let target_workbook =
+        read_workbook_from_reader(follow_up).map_err(map_follow_up_ooxml_error)?;
+    let classification = classify_workbooks(
+        &source_discovery,
+        &source_workbook,
+        &target_discovery,
+        &target_workbook,
+        target_has_signature,
+    )?;
+    let extension = follow_up_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .filter(|value| matches!(*value, "xlsx" | "xlsm"))
+        .ok_or_else(workbook_invalid)?;
+    let backup = follow_up_path
+        .parent()
+        .ok_or_else(workbook_invalid)?
+        .join(format!(
+            ".docflow-s5-backup-{}.{}",
+            Uuid::new_v4().simple(),
+            extension
+        ));
+    let backup_display = backup.to_str().ok_or_else(workbook_invalid)?;
+    plan_from_classification(
+        rfi_log_display,
+        follow_up_display,
+        backup_display,
+        source_fingerprint,
+        target_fingerprint,
+        classification,
+    )
+}
+
+pub fn revise_from_open_files(
+    plan: &Plan,
+    submitted_rows: &[Value],
+    rfi_log: &mut File,
+    follow_up: &mut File,
+) -> Result<Plan, BackendError> {
+    if plan.op_id != OPERATION_ID {
+        return Err(BackendError::validation(
+            "plan is not an RFI Follow Up plan",
+        ));
+    }
+    let authority: FollowUpPlanMeta = serde_json::from_value(
+        plan.meta
+            .get("rfiFollowUp")
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    let original_rows: Vec<FollowUpRow> = serde_json::from_value(
+        plan.meta
+            .get("editor")
+            .and_then(|editor| editor.get("rows"))
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    let mut revised_rows = submitted_rows
+        .iter()
+        .cloned()
+        .map(|row| serde_json::from_value(row).map_err(|_| workbook_invalid()))
+        .collect::<Result<Vec<FollowUpRow>, BackendError>>()?;
+    if original_rows.len() != revised_rows.len() {
+        return Err(workbook_invalid());
+    }
+    for (original, revised) in original_rows.iter().zip(&revised_rows) {
+        if original.row_id != revised.row_id || !rows_equal_except_enabled(original, revised) {
+            return Err(workbook_invalid());
+        }
+        if revised.enabled
+            && (!original.selectable || original.disposition != FollowUpDisposition::Ready)
+        {
+            return Err(workbook_invalid());
+        }
+    }
+
+    let fresh = preview_from_open_files(
+        Path::new(&authority.rfi_log_workbook),
+        Path::new(&authority.follow_up_workbook),
+        rfi_log,
+        follow_up,
+    )?;
+    let fresh_authority: FollowUpPlanMeta = serde_json::from_value(
+        fresh
+            .meta
+            .get("rfiFollowUp")
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    if authority.rfi_log_workbook != fresh_authority.rfi_log_workbook
+        || authority.follow_up_workbook != fresh_authority.follow_up_workbook
+        || authority.rfi_log_fingerprint != fresh_authority.rfi_log_fingerprint
+        || authority.follow_up_fingerprint != fresh_authority.follow_up_fingerprint
+        || authority.layout != fresh_authority.layout
+    {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.workbookChanged",
+        ));
+    }
+    let fresh_rows: Vec<FollowUpRow> = serde_json::from_value(
+        fresh
+            .meta
+            .get("editor")
+            .and_then(|editor| editor.get("rows"))
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    if fresh_rows.len() != original_rows.len()
+        || original_rows
+            .iter()
+            .zip(&fresh_rows)
+            .any(|(original, fresh)| !rows_equal_except_enabled(original, fresh))
+    {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.workbookChanged",
+        ));
+    }
+    for (revised, fresh) in revised_rows.iter_mut().zip(fresh_rows) {
+        revised.enabled = revised.enabled && fresh.selectable;
+    }
+    let mut warnings = fresh.warnings;
+    warnings.retain(|warning| warning.key != "warn.rfi.followUp.noRowsSelected");
+    if revised_rows.iter().all(|row| !row.enabled) {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.noRowsSelected".to_string(),
+            subject: String::new(),
+        });
+    }
+    let columns = editor_columns();
+    let classification = json!({
+        "layout": authority.layout,
+        "rows": revised_rows,
+        "warnings": warnings,
+        "editor": editor_metadata(&revised_rows, columns),
+    });
+    let mut revised = plan_from_classification(
+        &authority.rfi_log_workbook,
+        &authority.follow_up_workbook,
+        &authority.backup_workbook,
+        fresh_authority.rfi_log_fingerprint,
+        fresh_authority.follow_up_fingerprint,
+        classification,
+    )?;
+    revised.plan_id.clone_from(&plan.plan_id);
+    validate_owned_plan_budget(&revised)?;
+    Ok(revised)
+}
+
+fn rows_equal_except_enabled(left: &FollowUpRow, right: &FollowUpRow) -> bool {
+    let mut left = left.clone();
+    let mut right = right.clone();
+    left.enabled = false;
+    right.enabled = false;
+    left == right
+}
+
+pub(crate) fn plan_workbook_paths(plan: &Plan) -> Result<(String, String), BackendError> {
+    let authority: FollowUpPlanMeta = serde_json::from_value(
+        plan.meta
+            .get("rfiFollowUp")
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    Ok((authority.rfi_log_workbook, authority.follow_up_workbook))
+}
+
+pub(crate) fn validate_owned_plan_budget(plan: &Plan) -> Result<(), BackendError> {
+    let mut writer = CountingLimitWriter {
+        count: 0,
+        limit: MAX_PREVIEW_AUTHORITY_BYTES,
+    };
+    serde_json::to_writer(&mut writer, plan).map_err(|_| limit_exceeded())
+}
+
+fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, BackendError> {
+    let metadata = file.metadata().map_err(|_| workbook_invalid())?;
+    let identity = file_identity(file).map_err(|_| workbook_invalid())?;
+    let mtime_ns = metadata
+        .modified()
+        .map_err(|_| workbook_invalid())?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| workbook_invalid())?
+        .as_nanos()
+        .try_into()
+        .map_err(|_| workbook_invalid())?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|_| workbook_invalid())?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| workbook_invalid())?;
+    Ok(WorkbookFingerprint {
+        identity,
+        size: metadata.len(),
+        mtime_ns,
+        sha256: format!("{:x}", digest.finalize()),
+    })
+}
+
+fn plan_from_classification(
+    rfi_log_workbook: &str,
+    follow_up_workbook: &str,
+    backup_workbook: &str,
+    rfi_log_fingerprint: WorkbookFingerprint,
+    follow_up_fingerprint: WorkbookFingerprint,
+    classification: Value,
+) -> Result<Plan, BackendError> {
+    let object = classification.as_object().ok_or_else(workbook_invalid)?;
+    let decode_field = |name: &str| object.get(name).cloned().ok_or_else(workbook_invalid);
+    let layout: FollowUpLayout =
+        serde_json::from_value(decode_field("layout")?).map_err(|_| workbook_invalid())?;
+    let rows: Vec<FollowUpRow> =
+        serde_json::from_value(decode_field("rows")?).map_err(|_| workbook_invalid())?;
+    let warnings: Vec<Warning> =
+        serde_json::from_value(decode_field("warnings")?).map_err(|_| workbook_invalid())?;
+    let editor = decode_field("editor")?;
+    let updates = rows
+        .iter()
+        .filter(|row| row.enabled)
+        .map(|row| {
+            if !row.selectable || row.disposition != FollowUpDisposition::Ready {
+                return Err(workbook_invalid());
+            }
+            Ok(FollowUpApprovedUpdate {
+                row_id: row.row_id.clone(),
+                canonical_rfi: row.rfi_no.clone(),
+                proposed_status: row.proposed_status.clone().ok_or_else(workbook_invalid)?,
+                target: FollowUpCellTarget {
+                    worksheet: row.target.worksheet.clone(),
+                    row: row.target.row,
+                    rfi_column: row.target.rfi_column,
+                    status_column: row.target.status_column,
+                    rfi_cell: row.target.rfi_cell.clone().ok_or_else(workbook_invalid)?,
+                    status_cell: row
+                        .target
+                        .status_cell
+                        .clone()
+                        .ok_or_else(workbook_invalid)?,
+                },
+                source_evidence: row.source_evidence.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, BackendError>>()?;
+    let plan_meta = FollowUpPlanMeta {
+        rfi_log_workbook: rfi_log_workbook.to_string(),
+        follow_up_workbook: follow_up_workbook.to_string(),
+        backup_workbook: backup_workbook.to_string(),
+        rfi_log_fingerprint: rfi_log_fingerprint.clone(),
+        follow_up_fingerprint: follow_up_fingerprint.clone(),
+        layout: layout.clone(),
+    };
+    let mut meta = serde_json::Map::new();
+    meta.insert("editor".to_string(), editor);
+    meta.insert(
+        "rfiFollowUp".to_string(),
+        serde_json::to_value(plan_meta).map_err(|_| workbook_invalid())?,
+    );
+    let steps = if updates.is_empty() {
+        Vec::new()
+    } else {
+        let step_meta = FollowUpStepMeta {
+            rfi_log_workbook: rfi_log_workbook.to_string(),
+            rfi_log_fingerprint,
+            follow_up_fingerprint,
+            layout,
+            updates,
+        };
+        let step_meta = serde_json::to_value(step_meta)
+            .map_err(|_| workbook_invalid())?
+            .as_object()
+            .cloned()
+            .ok_or_else(workbook_invalid)?;
+        vec![Step {
+            kind: StepKind::WorkbookUpdate,
+            src: Some(follow_up_workbook.to_string()),
+            dst: Some(backup_workbook.to_string()),
+            note_key: Some("note.rfi.followUp.workbookUpdate".to_string()),
+            meta: step_meta,
+        }]
+    };
+    Ok(Plan {
+        plan_id: String::new(),
+        op_id: OPERATION_ID.to_string(),
+        steps,
+        warnings,
+        meta,
+    })
 }
 
 fn scan_source(
@@ -870,26 +1229,134 @@ fn validate_projection_budget<T: Serialize>(projection: &T) -> Result<(), Backen
     serde_json::to_writer(&mut writer, projection).map_err(|_| limit_exceeded())
 }
 
-#[allow(dead_code)]
-pub(crate) fn decode_step_meta(value: Value) -> Result<FollowUpStepMeta, BackendError> {
-    let meta: FollowUpStepMeta = serde_json::from_value(value).map_err(|_| workbook_invalid())?;
+pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendError> {
+    if step.kind != StepKind::WorkbookUpdate {
+        return Err(workbook_invalid());
+    }
+    let meta: FollowUpStepMeta =
+        serde_json::from_value(Value::Object(step.meta.clone())).map_err(|_| workbook_invalid())?;
+    if meta.updates.is_empty() || meta.updates.len() > MAX_PREVIEW_ROWS {
+        return Err(workbook_invalid());
+    }
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
         if !row_ids.insert(update.row_id.as_str())
             || !targets.insert((
-                update.target.worksheet.sheet_id,
+                update.target.worksheet.part_path.as_str(),
                 update.target.row,
                 update.target.status_column,
             ))
             || canonical_rfi(&update.canonical_rfi).as_deref()
                 != Some(update.canonical_rfi.as_str())
             || !matches!(update.proposed_status.as_str(), "Completed" | "In Progress")
+            || update.target.worksheet != meta.layout.worksheet
+            || update.target.rfi_column != meta.layout.rfi_column
+            || update.target.status_column != meta.layout.status_column
+            || update.target.rfi_cell.value != update.canonical_rfi
+            || update.target.rfi_cell.formula.is_some()
+            || update.target.status_cell.formula.is_some()
         {
             return Err(workbook_invalid());
         }
     }
     Ok(meta)
+}
+
+pub type FollowUpGuardedUpdates = BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>;
+
+pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendError> {
+    let meta = decode_step_meta(step)?;
+    let mut updates_by_sheet = BTreeMap::<String, BTreeMap<(u32, u32), GuardedCellUpdate>>::new();
+    for update in meta.updates {
+        let coordinate = (update.target.row, update.target.status_column);
+        let guarded = GuardedCellUpdate {
+            expected: CellData {
+                value: update.target.status_cell.value,
+                formula: update.target.status_cell.formula,
+                style: update.target.status_cell.style,
+            },
+            replacement: CellUpdate::Text(update.proposed_status),
+        };
+        if updates_by_sheet
+            .entry(update.target.worksheet.name)
+            .or_default()
+            .insert(coordinate, guarded)
+            .is_some()
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    Ok(updates_by_sheet)
+}
+
+#[allow(dead_code)]
+pub(crate) fn verify_patched_output<R1, R2>(
+    step: &Step,
+    source: &mut R1,
+    private_output: &mut R2,
+) -> Result<(), BackendError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    let updates = guarded_updates(step)?;
+    verify_guarded_workbook_delta(source, private_output, &updates).map_err(|error| {
+        match error.kind() {
+            OoxmlErrorKind::LimitExceeded => limit_exceeded(),
+            OoxmlErrorKind::Invalid => {
+                BackendError::validation("error.rfi.followUp.patchVerification")
+            }
+        }
+    })
+}
+
+#[allow(dead_code)]
+pub(crate) fn changed_cell_count(step: &Step) -> Result<u64, BackendError> {
+    u64::try_from(decode_step_meta(step)?.updates.len()).map_err(|_| limit_exceeded())
+}
+
+pub(crate) fn step_workbook_paths(step: &Step) -> Result<(String, String, String), BackendError> {
+    let meta = decode_step_meta(step)?;
+    let target = step.src.clone().ok_or_else(workbook_invalid)?;
+    let backup = step.dst.clone().ok_or_else(workbook_invalid)?;
+    Ok((meta.rfi_log_workbook, target, backup))
+}
+
+pub(crate) fn revalidate_open_workbooks(
+    step: &Step,
+    rfi_log: &mut File,
+    follow_up: &mut File,
+) -> Result<(), BackendError> {
+    let meta = decode_step_meta(step)?;
+    let source = fingerprint_open_file(rfi_log)?;
+    let target = fingerprint_open_file(follow_up)?;
+    if source != meta.rfi_log_fingerprint || target != meta.follow_up_fingerprint {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.workbookChanged",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn write_and_verify_private_output<R>(
+    step: &Step,
+    source: &mut File,
+    destination: &mut R,
+) -> Result<(), BackendError>
+where
+    R: Read + Write + Seek,
+{
+    let updates = guarded_updates(step)?;
+    patch_workbook_sheets_guarded(source, destination, &updates).map_err(map_apply_ooxml_error)?;
+    verify_patched_output(step, source, destination)
+}
+
+fn map_apply_ooxml_error(error: OoxmlError) -> BackendError {
+    match error.kind() {
+        OoxmlErrorKind::LimitExceeded => limit_exceeded(),
+        OoxmlErrorKind::Invalid => workbook_invalid(),
+    }
 }
 
 fn validate_cell_text(worksheet: &WorksheetData) -> Result<(), BackendError> {
@@ -973,16 +1440,20 @@ mod tests {
     }
 
     fn approved_update() -> FollowUpApprovedUpdate {
+        let canonical_rfi = "AZE-SUN-INT-QMS-RFI-CIV-0001".to_string();
         FollowUpApprovedUpdate {
             row_id: "rfi-follow-up:7:2:2".to_string(),
-            canonical_rfi: "AZE-SUN-INT-QMS-RFI-CIV-0001".to_string(),
+            canonical_rfi: canonical_rfi.clone(),
             proposed_status: "Completed".to_string(),
             target: FollowUpCellTarget {
                 worksheet: descriptor(),
                 row: 2,
                 rfi_column: 1,
                 status_column: 2,
-                rfi_cell: CellSnapshot::default(),
+                rfi_cell: CellSnapshot {
+                    value: canonical_rfi,
+                    ..CellSnapshot::default()
+                },
                 status_cell: CellSnapshot::default(),
             },
             source_evidence: Vec::new(),
@@ -1021,19 +1492,107 @@ mod tests {
 
     #[test]
     fn follow_up_authority_rejects_unknown_fields_and_duplicate_updates() {
-        let valid = serde_json::to_value(step_meta(vec![approved_update()])).unwrap();
-        assert!(decode_step_meta(valid.clone()).is_ok());
-
-        let mut unknown = valid;
-        unknown
-            .as_object_mut()
+        let valid_meta = serde_json::to_value(step_meta(vec![approved_update()]))
             .unwrap()
+            .as_object()
+            .cloned()
+            .unwrap();
+        let valid = Step {
+            kind: StepKind::WorkbookUpdate,
+            src: Some("/target.xlsx".to_string()),
+            dst: Some("/backup.xlsx".to_string()),
+            note_key: Some("note.rfi.followUp.workbookUpdate".to_string()),
+            meta: valid_meta,
+        };
+        assert!(decode_step_meta(&valid).is_ok());
+
+        let mut unknown = valid.clone();
+        unknown
+            .meta
             .insert("unknown".to_string(), Value::Bool(true));
-        assert!(decode_step_meta(unknown).is_err());
+        assert!(decode_step_meta(&unknown).is_err());
 
         let update = approved_update();
-        let duplicate = serde_json::to_value(step_meta(vec![update.clone(), update])).unwrap();
-        assert!(decode_step_meta(duplicate).is_err());
+        let mut duplicate = valid;
+        duplicate.meta = serde_json::to_value(step_meta(vec![update.clone(), update]))
+            .unwrap()
+            .as_object()
+            .cloned()
+            .unwrap();
+        assert!(decode_step_meta(&duplicate).is_err());
+    }
+
+    #[test]
+    fn plan_from_classification_emits_one_exact_workbook_step_for_enabled_rows() {
+        let layout = FollowUpLayout {
+            worksheet: descriptor(),
+            header_row: 1,
+            rfi_column: 1,
+            status_column: 2,
+        };
+        let update = approved_update();
+        let row = FollowUpRow {
+            row_id: update.row_id.clone(),
+            sheet: "Follow Up".to_string(),
+            row: 2,
+            rfi_no: update.canonical_rfi.clone(),
+            source_statuses: vec!["Completed".to_string()],
+            current_status: String::new(),
+            proposed_status: Some(update.proposed_status.clone()),
+            disposition: FollowUpDisposition::Ready,
+            reason_key: "warn.rfi.followUp.reason.readyCompleted".to_string(),
+            selectable: true,
+            enabled: true,
+            target: FollowUpReviewTarget {
+                worksheet: descriptor(),
+                row: 2,
+                rfi_column: 1,
+                status_column: 2,
+                rfi_cell: Some(update.target.rfi_cell.clone()),
+                status_cell: Some(update.target.status_cell.clone()),
+            },
+            source_evidence: Vec::new(),
+        };
+        let columns = editor_columns();
+        let classification = json!({
+            "layout": layout,
+            "rows": [row],
+            "warnings": [],
+            "editor": editor_metadata(&[row], columns),
+        });
+
+        let plan = plan_from_classification(
+            "/source.xlsx",
+            "/follow-up.xlsx",
+            "/.docflow-s5-backup-test.xlsx",
+            fingerprint(),
+            fingerprint(),
+            classification,
+        )
+        .unwrap();
+
+        assert_eq!(plan.op_id, OPERATION_ID);
+        assert!(plan.plan_id.is_empty());
+        assert_eq!(plan.steps.len(), 1);
+        assert_eq!(
+            plan.steps[0].kind,
+            crate::contracts::StepKind::WorkbookUpdate
+        );
+        assert_eq!(plan.steps[0].src.as_deref(), Some("/follow-up.xlsx"));
+        assert_eq!(
+            plan.steps[0].dst.as_deref(),
+            Some("/.docflow-s5-backup-test.xlsx")
+        );
+        assert_eq!(
+            plan.steps[0].note_key.as_deref(),
+            Some("note.rfi.followUp.workbookUpdate")
+        );
+        assert_eq!(
+            decode_step_meta(&plan.steps[0]).unwrap().updates,
+            vec![update]
+        );
+        assert!(plan.meta.contains_key("editor"));
+        assert!(plan.meta.contains_key("rfiFollowUp"));
     }
 
     #[test]
@@ -1117,9 +1676,10 @@ mod tests {
             );
             target.cells.insert((row, 2), CellData::default());
         }
-        let target_workbook = WorkbookData {
-            sheets: BTreeMap::from([("Follow Up".to_string(), target)]),
-        };
+        let mut target_workbook = WorkbookData::default();
+        target_workbook
+            .sheets
+            .insert("Follow Up".to_string(), target);
 
         classify_workbooks(
             &source_discovery,

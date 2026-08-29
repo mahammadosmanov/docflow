@@ -189,6 +189,7 @@ pub enum StepKind {
     Print,
     PdfFirstPageReplace,
     CleanupTemp,
+    OutlookReplyDraft,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

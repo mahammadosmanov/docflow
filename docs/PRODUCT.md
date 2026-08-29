@@ -38,11 +38,13 @@ workbook behavior, print batches kept in order, and every change recoverable.
 |---|---|---|
 | Process Scans | Identify, rename, organize, and review RFI PDFs | Strict `-RFI-` anchor, no-overwrite, `_review/` fallback |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
+| Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order | Persistent resumable queue and journaled approved steps |
 | Signed-page staging | Replace page one in review copies | Archive read-only, separate roots, ambiguous matches rejected |
 | Review manager | Keep, place, or recoverably delete exceptions | Delete is a move to application trash |
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |
+| Support diagnostics | Preview and copy a redacted local support bundle | Bounded Rust DTO, recursive redaction, no upload or user-file scan |
 
 ## Non-goals
 
@@ -50,6 +52,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 - No document processing, filesystem authority, credentials, arbitrary network access,
   shell access, or process control in React or the webview.
 - No embedded interpreter, application sidecar, or second mutation backend.
+- No telemetry, hosted logging, or paid support service.
 - No silent auto-correction when source evidence is ambiguous.
 - No destructive delete or destination overwrite.
 - No unsupported claim that authentication prevents local binary modification.

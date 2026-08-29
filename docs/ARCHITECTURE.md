@@ -19,7 +19,7 @@ trusted command boundary and is the sole authority for authentication, operation
 schemas, plans, mutations, journals, cloud metadata, OCR, document processing,
 Office integration, and printing.
 
-Tesseract, PDF engines, Office, and operating-system print services remain native
+Tesseract, PDF engines, Office, Outlook desktop COM, and operating-system print services remain native
 dependencies where they are more reliable than reimplementation. Heavy adapters
 load only when a requested operation needs them. The application contains no
 embedded interpreter, secondary application runtime, or child-process IPC router.
@@ -43,6 +43,13 @@ artifacts; macOS package audits also inspect Mach-O dynamic links.
 - Rust commands enforce authorization in addition to Supabase RLS.
 - No localhost server, eval, remote script, or service-role key is used.
 
+Support diagnostics are collected through a closed, read-only Rust command. The
+fixed bundle contains only the DocFlow version, platform, retired-sidecar state,
+pathless OCR availability, and at most 20 stable recent error codes. Recursive
+denylist, content, path, depth, item, and byte bounds apply before the deterministic
+JSON crosses into the webview. Collection does not scan user files or send data;
+copying the validated preview to the local clipboard is a separate explicit action.
+
 ## Operation contract
 
 ```text
@@ -59,6 +66,9 @@ through Serde/TypeScript golden fixtures.
 ## Safety invariants
 
 - Preview never mutates filesystem, cloud, Office, or printer state.
+- Diagnostics preview is local and side-effect-free; there is no telemetry or
+  hosted logging path.
+- Outlook reply apply revalidates the exact selected MailItem, calls ReplyAll, prepends bounded escaped content, and displays only an unsent draft; it never sends or synthesizes recipients.
 - Apply executes only the cached approved plan; it never recalculates.
 - Every step is durably journaled as pending before execution.
 - Existing destinations are never overwritten, including race-time collisions.

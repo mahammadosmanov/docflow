@@ -10,9 +10,11 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    cap_fs::{AuthorizedPath, CapabilityRoot},
+    cap_fs::{AuthorizedPath, CapabilityRoot, DirectoryAccess},
     errors::BackendError,
-    journal::{FilesystemObjectIdentity, GrantRootIdentity},
+    journal::{
+        FilesystemObjectIdentity, GrantRootAccessRecord, GrantRootIdentity, PersistedRootAccess,
+    },
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,6 +92,26 @@ pub struct PathGrantStore {
     grants: Mutex<HashMap<String, StoredPathGrant>>,
 }
 
+pub(crate) struct ValidatedGrantRootRoster {
+    records: Vec<GrantRootAccessRecord>,
+    roots: Vec<CapabilityRoot>,
+    grant_ids: Vec<String>,
+}
+
+impl ValidatedGrantRootRoster {
+    pub(crate) fn records(&self) -> &[GrantRootAccessRecord] {
+        &self.records
+    }
+
+    pub(crate) fn roots(&self) -> &[CapabilityRoot] {
+        &self.roots
+    }
+
+    pub(crate) fn matches_grants(&self, grant_ids: &[String]) -> bool {
+        self.grant_ids == grant_ids
+    }
+}
+
 #[derive(Clone)]
 struct StoredPathGrant {
     grant: PathGrant,
@@ -154,7 +176,11 @@ impl PathGrantStore {
                 "selected path grant root is not a directory",
             ));
         }
-        let capability = CapabilityRoot::open(&root)
+        let directory_access = match access {
+            GrantAccess::Read => DirectoryAccess::ReadOnly,
+            GrantAccess::Write | GrantAccess::ReadWrite => DirectoryAccess::ReadWrite,
+        };
+        let capability = CapabilityRoot::open_with_access(&root, directory_access)
             .map_err(|_| BackendError::path_invalid("selected path cannot be opened safely"))?;
         let now = SystemTime::now();
         let mut grants = lock_grants(&self.grants);
@@ -183,6 +209,34 @@ impl PathGrantStore {
         Ok(grant)
     }
 
+    pub(crate) fn issue_provisional<'a>(
+        &'a self,
+        scope: &GrantScope,
+        requests: &[(PathBuf, GrantAccess)],
+    ) -> Result<ProvisionalPathGrants<'a>, BackendError> {
+        if requests.is_empty() || requests.len() > 8 {
+            return Err(BackendError::validation(
+                "provisional path grant count is invalid",
+            ));
+        }
+        let mut issued = Vec::with_capacity(requests.len());
+        for (root, access) in requests {
+            match self.issue(scope, root, *access) {
+                Ok(grant) => issued.push(grant),
+                Err(error) => {
+                    self.revoke_grant_ids(&issued);
+                    return Err(error);
+                }
+            }
+        }
+        Ok(ProvisionalPathGrants {
+            store: self,
+            grants: issued,
+            verified_sources: Vec::new(),
+            committed: false,
+        })
+    }
+
     pub(crate) fn issue_persisted_read_capabilities<'a>(
         &'a self,
         scope: &GrantScope,
@@ -202,8 +256,9 @@ impl PathGrantStore {
             if canonical != root || !seen_roots.insert(canonical.clone()) || !canonical.is_dir() {
                 return Err(persisted_source_reselection_required());
             }
-            let capability = CapabilityRoot::open(&canonical)
-                .map_err(|_| persisted_source_reselection_required())?;
+            let capability =
+                CapabilityRoot::open_with_access(&canonical, DirectoryAccess::ReadOnly)
+                    .map_err(|_| persisted_source_reselection_required())?;
             if capability
                 .identity()
                 .map_err(|_| persisted_source_reselection_required())?
@@ -522,6 +577,119 @@ impl PathGrantStore {
         Ok(roots)
     }
 
+    pub(crate) fn root_accesses_for_plan(
+        &self,
+        grant_ids: &[String],
+        caller: &CallerIdentity,
+        operation_id: &str,
+    ) -> Result<ValidatedGrantRootRoster, BackendError> {
+        if grant_ids.is_empty() || grant_ids.len() > 8 {
+            return Err(BackendError::path_grant_unavailable());
+        }
+        let now = SystemTime::now();
+        let mut seen_grants = HashSet::new();
+        let mut entries = Vec::<(GrantRootAccessRecord, CapabilityRoot)>::new();
+        let mut grants = lock_grants(&self.grants);
+        for grant_id in grant_ids {
+            if !seen_grants.insert(grant_id.clone()) {
+                return Err(BackendError::path_grant_unavailable());
+            }
+            if grants
+                .get(grant_id)
+                .is_some_and(|stored| expired(stored.grant.created_at, now, self.ttl))
+            {
+                grants.remove(grant_id);
+            }
+            let stored = grants
+                .get(grant_id)
+                .ok_or_else(BackendError::path_grant_unavailable)?;
+            if stored.grant.scope.caller != *caller
+                || stored.grant.scope.operation_id != operation_id
+            {
+                return Err(BackendError::path_grant_scope_mismatch());
+            }
+            let access = match stored.grant.access {
+                GrantAccess::Read => PersistedRootAccess::ReadOnly,
+                GrantAccess::Write | GrantAccess::ReadWrite => PersistedRootAccess::ReadWrite,
+            };
+            let root = stored.grant.root.to_string_lossy().into_owned();
+            let identity = stored
+                .capability
+                .identity()
+                .map_err(|_| BackendError::path_invalid("granted root identity is unavailable"))?;
+            if let Some((record, capability)) =
+                entries.iter_mut().find(|(record, _)| record.root == root)
+            {
+                if record.identity != identity {
+                    return Err(BackendError::path_invalid(
+                        "granted root identity changed during admission",
+                    ));
+                }
+                if access == PersistedRootAccess::ReadWrite {
+                    record.access = PersistedRootAccess::ReadWrite;
+                    *capability = stored.capability.clone();
+                }
+            } else {
+                entries.push((
+                    GrantRootAccessRecord {
+                        root,
+                        identity,
+                        access,
+                    },
+                    stored.capability.clone(),
+                ));
+            }
+        }
+        let (records, roots): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
+        Ok(ValidatedGrantRootRoster {
+            records,
+            roots,
+            grant_ids: grant_ids.to_vec(),
+        })
+    }
+
+    pub(crate) fn reopen_recorded_roots(
+        &self,
+        records: &[GrantRootAccessRecord],
+        _caller: &CallerIdentity,
+        _operation_id: &str,
+    ) -> Result<ValidatedGrantRootRoster, BackendError> {
+        if records.is_empty() || records.len() > 8 {
+            return Err(BackendError::path_grant_unavailable());
+        }
+        let mut seen = HashSet::new();
+        let mut roots = Vec::with_capacity(records.len());
+        for record in records {
+            let root = PathBuf::from(&record.root);
+            reject_lexical_escape(&root)?;
+            if !seen.insert(record.root.clone())
+                || fs::canonicalize(&root).map_err(|_| BackendError::path_grant_unavailable())?
+                    != root
+            {
+                return Err(BackendError::path_grant_unavailable());
+            }
+            let access = match record.access {
+                PersistedRootAccess::ReadOnly => DirectoryAccess::ReadOnly,
+                PersistedRootAccess::ReadWrite => DirectoryAccess::ReadWrite,
+            };
+            let capability = CapabilityRoot::open_with_access(&root, access)
+                .map_err(|_| BackendError::path_grant_unavailable())?;
+            if capability
+                .identity()
+                .map_err(|_| BackendError::path_grant_unavailable())?
+                != record.identity
+            {
+                return Err(BackendError::path_grant_unavailable());
+            }
+            roots.push(capability);
+        }
+        Ok(ValidatedGrantRootRoster {
+            records: records.to_vec(),
+            roots,
+            grant_ids: Vec::new(),
+        })
+    }
+
     pub fn revoke(&self, caller: &CallerIdentity) {
         lock_grants(&self.grants).retain(|_, stored| stored.grant.scope.caller != *caller);
     }
@@ -573,6 +741,39 @@ impl PathGrantStore {
             intent,
             true,
         )
+    }
+
+    pub(crate) fn authorize_capability_for_grant(
+        &self,
+        grant: &PathGrant,
+        candidate: &Path,
+        intent: PathIntent,
+    ) -> Result<AuthorizedPath, BackendError> {
+        reject_lexical_escape(candidate)?;
+        let now = SystemTime::now();
+        let stored = {
+            let mut grants = lock_grants(&self.grants);
+            if grants
+                .get(&grant.grant_id)
+                .is_some_and(|stored| expired(stored.grant.created_at, now, self.ttl))
+            {
+                grants.remove(&grant.grant_id);
+            }
+            grants
+                .get(&grant.grant_id)
+                .cloned()
+                .ok_or_else(BackendError::path_grant_unavailable)?
+        };
+        if stored.grant != *grant {
+            return Err(BackendError::path_grant_scope_mismatch());
+        }
+        if !grant.access.allows(intent) {
+            return Err(BackendError::path_access_denied());
+        }
+        stored
+            .capability
+            .authorize(candidate)
+            .map_err(|_| BackendError::path_escape())
     }
 
     fn authorize_capability_for_plan_inner(
@@ -763,4 +964,50 @@ fn lock_grants(
     grants
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod provisional_tests {
+    use super::*;
+
+    #[test]
+    fn issue_provisional_revokes_uncommitted_grants_and_preserves_committed_grants() {
+        let fixture = tempfile::tempdir().unwrap();
+        let first = fixture.path().join("first");
+        let second = fixture.path().join("second");
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+        let store = PathGrantStore::new(Duration::from_secs(300));
+        let scope = GrantScope::new("owner", "session", "request", "op.test");
+
+        let dropped_id = {
+            let provisional = store
+                .issue_provisional(
+                    &scope,
+                    &[
+                        (first.clone(), GrantAccess::Read),
+                        (second.clone(), GrantAccess::ReadWrite),
+                    ],
+                )
+                .unwrap();
+            provisional.grants()[0].grant_id.clone()
+        };
+        assert!(
+            store
+                .authorize(&dropped_id, &scope, &first, PathIntent::Read)
+                .is_err()
+        );
+
+        let provisional = store
+            .issue_provisional(&scope, &[(first.clone(), GrantAccess::Read)])
+            .unwrap();
+        let committed_id = provisional.grants()[0].grant_id.clone();
+        provisional.commit();
+        assert_eq!(
+            store
+                .authorize(&committed_id, &scope, &first, PathIntent::Read)
+                .unwrap(),
+            fs::canonicalize(first).unwrap()
+        );
+    }
 }

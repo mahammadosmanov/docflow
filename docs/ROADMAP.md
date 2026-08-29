@@ -9,11 +9,11 @@ the historical tracker.
 - Ship the Tauri 2 production baseline as `v0.6.0`.
 - Calibrate OCR against representative real scans and retain at least 95% accuracy.
 - Exercise the signed-page workflow on OneDrive-backed Windows folders.
+- Maintain the read-only redacted local diagnostics support bundle.
 - Keep version, changelog, installer, and release metadata synchronized.
 
 ## Next — safe operational maturity
 
-- Add a read-only in-app diagnostics/export bundle for support reports.
 - Add checksums to every published installer and surface them in release notes.
 - Expand fixture coverage for every production workbook family without committing
   private documents.

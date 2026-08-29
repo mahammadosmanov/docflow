@@ -115,6 +115,16 @@ impl NativeOcr {
             tesseract,
         }
     }
+
+    pub(crate) fn support_status(&self) -> (bool, bool) {
+        let engine_available = self.tesseract.as_deref().is_some_and(bundled_regular_file);
+        let language_data_available = engine_available
+            && self
+                .tessdata
+                .as_deref()
+                .is_some_and(|directory| bundled_regular_file(&directory.join("eng.traineddata")));
+        (engine_available, language_data_available)
+    }
 }
 
 impl OcrAdapter for NativeOcr {

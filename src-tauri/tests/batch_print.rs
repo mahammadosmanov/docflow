@@ -1937,7 +1937,14 @@ fn canonical_page_ranges_persist_through_copies_retries_queue_journal_and_resume
     );
     let journal_file = std::fs::read_dir(root.path().join("journal"))
         .unwrap()
-        .next()
+        .find(|entry| {
+            entry.as_ref().is_ok_and(|entry| {
+                entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+        })
         .unwrap()
         .unwrap()
         .path();
@@ -2130,6 +2137,14 @@ fn queue_is_persisted_and_journaled_before_failure_then_resumes_and_discards() {
     assert!(!saved["jobs"][1]["error"].as_str().unwrap().contains('\n'));
     let journal_files = std::fs::read_dir(root.path().join("journal"))
         .unwrap()
+        .filter(|entry| {
+            entry.as_ref().is_ok_and(|entry| {
+                entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
     assert_eq!(journal_files.len(), 1);

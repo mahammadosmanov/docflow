@@ -8,8 +8,9 @@ use std::{
 use docflow_lib::{
     fs_ops::file_sha256,
     ooxml::{
-        CellUpdate, WorksheetVisibility, ordered_workbook_discovery, package_has_signature,
-        patch_workbook_sheets, read_workbook_from_reader,
+        CellData, CellUpdate, GuardedCellUpdate, WorksheetVisibility, ordered_workbook_discovery,
+        package_has_signature, patch_workbook_sheets, patch_workbook_sheets_guarded,
+        read_workbook_from_reader, verify_guarded_workbook_delta,
     },
 };
 use tempfile::TempDir;
@@ -108,6 +109,322 @@ fn worksheet_facts_package_with_shared_strings(
         writer.write_all(shared_strings.as_bytes()).unwrap();
     }
     writer.finish().unwrap()
+}
+
+fn cursor_member(source: &Cursor<Vec<u8>>, name: &str) -> Vec<u8> {
+    let mut archive = ZipArchive::new(source.clone()).unwrap();
+    let mut member = archive.by_name(name).unwrap();
+    let mut bytes = Vec::new();
+    member.read_to_end(&mut bytes).unwrap();
+    bytes
+}
+
+fn replace_cursor_member(
+    source: &Cursor<Vec<u8>>,
+    name: &str,
+    replacement: Vec<u8>,
+) -> Cursor<Vec<u8>> {
+    let mut archive = ZipArchive::new(source.clone()).unwrap();
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    writer
+        .set_raw_comment(archive.comment().to_vec().into_boxed_slice())
+        .unwrap();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).unwrap();
+        if entry.name() == name {
+            let entry_name = entry.name().to_string();
+            let mut options = entry.options().into_full_options();
+            if !entry.comment().is_empty() {
+                options = options.with_file_comment(entry.comment());
+            }
+            drop(entry);
+            writer.start_file(entry_name, options).unwrap();
+            writer.write_all(&replacement).unwrap();
+        } else {
+            writer.raw_copy_file(entry).unwrap();
+        }
+    }
+    writer.finish().unwrap()
+}
+
+#[test]
+fn guarded_follow_up_patch_changes_only_authorized_value_events() {
+    for namespace in [MAIN, STRICT_MAIN] {
+        let worksheet = format!(
+            r#"<worksheet xmlns="{namespace}" xmlns:x="urn:sentinel"><sheetData><row r="2" spans="1:3" customFormat="1"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0006</t></is></c><c r="B2" s="7" x:keep="yes" x:t="sentinel"><extLst><ext uri="urn:keep"><x:payload>unchanged</x:payload></ext></extLst></c><c r="C2" t="inlineStr"><is><t>do not change</t></is></c></row></sheetData><dataValidations count="1"><dataValidation type="list" sqref="B2"><formula1>Statuses</formula1></dataValidation></dataValidations><hyperlinks><hyperlink ref="C2" location="Sheet1!A1"/></hyperlinks><extLst><ext uri="urn:sheet"><x:payload>sheet sentinel</x:payload></ext></extLst></worksheet>"#
+        );
+        let mut source = worksheet_facts_package(
+            namespace,
+            &[("Follow Up", None, worksheet.as_str())],
+            false,
+            false,
+        );
+        let before_workbook = cursor_member(&source, "xl/workbook.xml");
+        let before_relationships = cursor_member(&source, "xl/_rels/workbook.xml.rels");
+        let updates = BTreeMap::from([(
+            "Follow Up".to_string(),
+            BTreeMap::from([(
+                (2, 2),
+                GuardedCellUpdate {
+                    expected: CellData {
+                        value: String::new(),
+                        formula: None,
+                        style: Some("7".to_string()),
+                    },
+                    replacement: CellUpdate::Text("Completed".to_string()),
+                },
+            )]),
+        )]);
+        let mut destination = Cursor::new(Vec::new());
+
+        patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).unwrap();
+        source.seek(SeekFrom::Start(0)).unwrap();
+        destination.seek(SeekFrom::Start(0)).unwrap();
+        verify_guarded_workbook_delta(&mut source, &mut destination, &updates).unwrap();
+
+        assert_eq!(
+            cursor_member(&destination, "xl/workbook.xml"),
+            before_workbook
+        );
+        assert_eq!(
+            cursor_member(&destination, "xl/_rels/workbook.xml.rels"),
+            before_relationships
+        );
+        let patched =
+            String::from_utf8(cursor_member(&destination, "xl/worksheets/sheet1.xml")).unwrap();
+        assert!(patched.contains(
+            r#"<c r="B2" s="7" x:keep="yes" x:t="sentinel" t="inlineStr"><is><t>Completed</t></is><extLst>"#
+        ));
+        assert!(patched.contains("do not change"));
+        assert!(patched.contains("sheet sentinel"));
+    }
+}
+
+#[test]
+fn guarded_follow_up_verifier_compares_expanded_events_not_attribute_quote_bytes() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0006</t></is></c><c r="B2" s="7"/></row></sheetData></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(
+        MAIN,
+        &[("Follow Up", None, worksheet.as_str())],
+        false,
+        false,
+    );
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (2, 2),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("7".to_string()),
+                },
+                replacement: CellUpdate::Text("Completed".to_string()),
+            },
+        )]),
+    )]);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).unwrap();
+    let worksheet_bytes = cursor_member(&destination, "xl/worksheets/sheet1.xml");
+    let lexical = String::from_utf8(worksheet_bytes)
+        .unwrap()
+        .replacen(r#"<row r="2">"#, r#"<row r='2'>"#, 1)
+        .into_bytes();
+    let mut equivalent = replace_cursor_member(&destination, "xl/worksheets/sheet1.xml", lexical);
+
+    source.seek(SeekFrom::Start(0)).unwrap();
+    verify_guarded_workbook_delta(&mut source, &mut equivalent, &updates).unwrap();
+}
+
+#[test]
+fn guarded_follow_up_verifier_rejects_unapproved_event_and_package_deltas() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}" xmlns:x="urn:sentinel"><sheetData><row r="2" spans="1:3"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0006</t></is></c><c r="B2" s="7"/><c r="C2" t="inlineStr"><is><t>keep</t></is></c></row></sheetData><dataValidations count="1"><dataValidation type="list" sqref="B2"><formula1>Statuses</formula1></dataValidation></dataValidations><extLst><ext uri="urn:sheet"><x:payload>sentinel</x:payload></ext></extLst></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(
+        MAIN,
+        &[("Follow Up", None, worksheet.as_str())],
+        false,
+        false,
+    );
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (2, 2),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("7".to_string()),
+                },
+                replacement: CellUpdate::Text("Completed".to_string()),
+            },
+        )]),
+    )]);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).unwrap();
+    let sheet = String::from_utf8(cursor_member(&destination, "xl/worksheets/sheet1.xml")).unwrap();
+    let workbook = String::from_utf8(cursor_member(&destination, "xl/workbook.xml")).unwrap();
+    let tampered = [
+        (
+            "xl/worksheets/sheet1.xml",
+            sheet.replacen(r#"spans="1:3""#, r#"spans="1:4""#, 1),
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            sheet.replacen(">keep<", ">changed<", 1),
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            sheet.replacen(">Statuses<", ">Other<", 1),
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            sheet.replacen(">sentinel<", ">changed<", 1),
+        ),
+        (
+            "xl/workbook.xml",
+            workbook.replacen("<workbook ", "<workbook calcId=\"1\" ", 1),
+        ),
+    ];
+    for (name, bytes) in tampered {
+        let mut candidate = replace_cursor_member(&destination, name, bytes.into_bytes());
+        source.seek(SeekFrom::Start(0)).unwrap();
+        let error =
+            verify_guarded_workbook_delta(&mut source, &mut candidate, &updates).expect_err(name);
+        assert_eq!(error.kind(), docflow_lib::ooxml::OoxmlErrorKind::Invalid);
+    }
+}
+
+#[test]
+fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0006</t></is></c><c r="B2" s="7"/></row></sheetData></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(
+        MAIN,
+        &[("Follow Up", None, worksheet.as_str())],
+        false,
+        false,
+    );
+    let approved = GuardedCellUpdate {
+        expected: CellData {
+            value: String::new(),
+            formula: None,
+            style: Some("7".to_string()),
+        },
+        replacement: CellUpdate::Text("Completed".to_string()),
+    };
+    let invalid_sets = [
+        BTreeMap::new(),
+        BTreeMap::from([(
+            "Follow Up".to_string(),
+            BTreeMap::from([(
+                (2, 2),
+                GuardedCellUpdate {
+                    expected: CellData {
+                        style: Some("8".to_string()),
+                        ..approved.expected.clone()
+                    },
+                    replacement: approved.replacement.clone(),
+                },
+            )]),
+        )]),
+        BTreeMap::from([(
+            "Follow Up".to_string(),
+            BTreeMap::from([(
+                (2, 2),
+                GuardedCellUpdate {
+                    expected: approved.expected.clone(),
+                    replacement: CellUpdate::Text("Rejected".to_string()),
+                },
+            )]),
+        )]),
+        BTreeMap::from([(
+            "Follow Up".to_string(),
+            BTreeMap::from([((3, 2), approved.clone())]),
+        )]),
+    ];
+    for updates in invalid_sets {
+        let mut destination = Cursor::new(Vec::new());
+        source.seek(SeekFrom::Start(0)).unwrap();
+        assert!(patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).is_err());
+        assert!(destination.into_inner().is_empty());
+    }
+
+    let too_many = BTreeMap::from([(
+        "Follow Up".to_string(),
+        (1..=501)
+            .map(|row| ((row, 2), approved.clone()))
+            .collect::<BTreeMap<_, _>>(),
+    )]);
+    let mut destination = Cursor::new(Vec::new());
+    source.seek(SeekFrom::Start(0)).unwrap();
+    let error =
+        patch_workbook_sheets_guarded(&mut source, &mut destination, &too_many).unwrap_err();
+    assert_eq!(
+        error.kind(),
+        docflow_lib::ooxml::OoxmlErrorKind::LimitExceeded
+    );
+    assert!(destination.into_inner().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn guarded_writer_stays_on_pinned_handles_after_visible_parent_swap() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("Follow Up.xlsx");
+    let visible_parent = fixture.path().join(".docflow-backups");
+    let pinned_parent = fixture.path().join("pinned-backups");
+    let replacement_parent = fixture.path().join("replacement-backups");
+    fs::create_dir(&visible_parent).unwrap();
+    fs::create_dir(&replacement_parent).unwrap();
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0006</t></is></c><c r="B2" s="7"/></row></sheetData></worksheet>"#
+    );
+    let package = worksheet_facts_package(
+        MAIN,
+        &[("Follow Up", None, worksheet.as_str())],
+        false,
+        false,
+    );
+    fs::write(&source_path, package.into_inner()).unwrap();
+    let output_path = visible_parent.join("private-output.xlsx");
+    let mut source = File::open(&source_path).unwrap();
+    let mut destination = File::options()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(&output_path)
+        .unwrap();
+    fs::rename(&visible_parent, &pinned_parent).unwrap();
+    symlink(&replacement_parent, &visible_parent).unwrap();
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (2, 2),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("7".to_string()),
+                },
+                replacement: CellUpdate::Text("Completed".to_string()),
+            },
+        )]),
+    )]);
+
+    patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).unwrap();
+    source.seek(SeekFrom::Start(0)).unwrap();
+    destination.seek(SeekFrom::Start(0)).unwrap();
+    verify_guarded_workbook_delta(&mut source, &mut destination, &updates).unwrap();
+
+    assert!(pinned_parent.join("private-output.xlsx").is_file());
+    assert!(!replacement_parent.join("private-output.xlsx").exists());
 }
 
 #[test]

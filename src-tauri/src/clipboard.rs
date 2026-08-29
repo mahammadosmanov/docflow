@@ -13,6 +13,25 @@ pub fn write(payload: &ClipboardPayload) -> Result<(), BackendError> {
     write_platform(payload).map_err(|_| BackendError::request_failed("clipboard write failed"))
 }
 
+pub fn write_plain(text: &str) -> Result<(), BackendError> {
+    if text.len() > MAX_CLIPBOARD_BYTES {
+        return Err(BackendError::validation(
+            "clipboard text exceeded the size limit",
+        ));
+    }
+    let html = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;");
+    write(&ClipboardPayload {
+        html: format!("<pre>{html}</pre>"),
+        plain: text.to_string(),
+        count: 1,
+    })
+}
+
 pub fn cf_html(fragment: &str) -> Result<Vec<u8>, BackendError> {
     if fragment.len() > MAX_CLIPBOARD_BYTES {
         return Err(BackendError::validation(

@@ -47,7 +47,8 @@ export interface Step {
     | "restore_backup"
     | "print"
     | "pdf_first_page_replace"
-    | "cleanup_temp";
+    | "cleanup_temp"
+    | "outlook_reply_draft";
   src: string | null;
   dst: string | null;
   noteKey: string | null;
@@ -129,6 +130,13 @@ export interface Bootstrap {
   auth: AuthState;
   prefs: AppPrefs;
   operations: OperationDef[];
+}
+
+export interface SupportBundlePreview {
+  fileName: string;
+  mediaType: "application/json";
+  byteLength: number;
+  content: string;
 }
 
 export interface ProgressEvent {

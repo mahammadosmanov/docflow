@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use crate::print_queue::PrintAdapter;
+use crate::{outlook_reply_draft::OutlookAdapter, print_queue::PrintAdapter};
+
+#[cfg(not(target_os = "windows"))]
+use crate::outlook_reply_draft::{
+    DraftIdentity, MailItemIdentity, OutlookDraft, OutlookFailure, SelectedMailItem,
+};
 
 #[cfg(any(target_os = "windows", test))]
 pub(crate) mod controlled_submit;
@@ -166,6 +171,42 @@ pub fn production_print_adapter() -> Arc<dyn PrintAdapter> {
 #[cfg(target_os = "windows")]
 pub fn production_print_adapter() -> Arc<dyn PrintAdapter> {
     Arc::new(windows::printing::WindowsPrintAdapter)
+}
+
+#[cfg(target_os = "windows")]
+pub fn production_outlook_adapter() -> Arc<dyn OutlookAdapter> {
+    Arc::new(windows::outlook::WindowsOutlookAdapter)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn production_outlook_adapter() -> Arc<dyn OutlookAdapter> {
+    Arc::new(UnsupportedOutlookAdapter)
+}
+
+#[cfg(not(target_os = "windows"))]
+struct UnsupportedOutlookAdapter;
+
+#[cfg(not(target_os = "windows"))]
+impl OutlookAdapter for UnsupportedOutlookAdapter {
+    fn selected_mail_item(&self) -> Result<SelectedMailItem, OutlookFailure> {
+        Err(outlook_unsupported())
+    }
+
+    fn reply_all(
+        &self,
+        _expected: &MailItemIdentity,
+    ) -> Result<Box<dyn OutlookDraft>, OutlookFailure> {
+        Err(outlook_unsupported())
+    }
+
+    fn delete_unchanged_draft(&self, _draft: &DraftIdentity) -> Result<(), OutlookFailure> {
+        Err(outlook_unsupported())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn outlook_unsupported() -> OutlookFailure {
+    OutlookFailure::unsupported("error.rfi.outlookDraft.unsupportedPlatform")
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]

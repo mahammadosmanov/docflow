@@ -13,6 +13,7 @@ import type {
   RecoveryPayload,
   ReviewDecision,
   ReviewItem,
+  SupportBundlePreview,
 } from "../types";
 
 interface CommandSpec<Params, Result> {
@@ -66,6 +67,8 @@ export interface FrontendCommandMap {
     { opId: string; presetId: string },
     Ok
   >;
+  "support/diagnostics": CommandSpec<NoParams, SupportBundlePreview>;
+  "support/copyDiagnostics": CommandSpec<{ content: string }, Ok>;
   "engine/preview": CommandSpec<
     { opId: string; values: Record<string, unknown> },
     Plan
@@ -132,6 +135,8 @@ export const FRONTEND_METHODS = [
   "settings/presets",
   "settings/savePreset",
   "settings/deletePreset",
+  "support/diagnostics",
+  "support/copyDiagnostics",
   "engine/preview",
   "engine/apply",
   "engine/cancel",

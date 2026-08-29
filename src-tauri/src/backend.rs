@@ -7,9 +7,12 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::{
+    clipboard,
     contracts::{AuthState, ProgressEvent},
+    diagnostics::{DiagnosticsInput, RecentErrorCodes, build_bundle, validate_bundle_content},
     errors::BackendError,
     native::{NativeBackend, PathSelectionMode},
+    ocr::NativeOcr,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -30,6 +33,10 @@ pub(crate) enum BackendMethod {
     SettingsSavePreset,
     #[serde(rename = "settings/deletePreset")]
     SettingsDeletePreset,
+    #[serde(rename = "support/diagnostics")]
+    SupportDiagnostics,
+    #[serde(rename = "support/copyDiagnostics")]
+    SupportCopyDiagnostics,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -84,7 +91,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 31] = [
+    pub(crate) const ALL: [Self; 33] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -101,6 +108,8 @@ impl BackendMethod {
         Self::SettingsPresets,
         Self::SettingsSavePreset,
         Self::SettingsDeletePreset,
+        Self::SupportDiagnostics,
+        Self::SupportCopyDiagnostics,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -132,6 +141,8 @@ impl BackendMethod {
             Self::SettingsPresets => "settings/presets",
             Self::SettingsSavePreset => "settings/savePreset",
             Self::SettingsDeletePreset => "settings/deletePreset",
+            Self::SupportDiagnostics => "support/diagnostics",
+            Self::SupportCopyDiagnostics => "support/copyDiagnostics",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",
@@ -164,6 +175,8 @@ impl BackendMethod {
             Self::AppBootstrap
                 | Self::SettingsUpdate
                 | Self::SettingsReset
+                | Self::SupportDiagnostics
+                | Self::SupportCopyDiagnostics
                 | Self::AuthSignIn
                 | Self::AuthSignUp
                 | Self::AuthSignOut
@@ -188,6 +201,7 @@ impl BackendMethod {
 pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
+    recent_error_codes: RecentErrorCodes,
 }
 
 fn path_dialog_filter(
@@ -205,6 +219,7 @@ impl BackendRouter {
         Ok(Self {
             app,
             native: Arc::new(NativeBackend::production()?),
+            recent_error_codes: RecentErrorCodes::default(),
         })
     }
 
@@ -216,6 +231,8 @@ impl BackendRouter {
     ) -> Result<Value, BackendError> {
         method.authorize(&self.native.auth_state())?;
         match method {
+            BackendMethod::SupportDiagnostics => self.support_diagnostics(params).await,
+            BackendMethod::SupportCopyDiagnostics => self.copy_diagnostics(params).await,
             BackendMethod::EnginePreview => self.preview(params, progress).await,
             BackendMethod::EngineApply => self.apply(params, progress).await,
             BackendMethod::EngineCancel => self.cancel(params).await,
@@ -239,6 +256,36 @@ impl BackendRouter {
                     .map_err(|_| BackendError::request_failed("native backend task failed"))?
             }
         }
+    }
+
+    async fn support_diagnostics(&self, params: Value) -> Result<Value, BackendError> {
+        validate_empty_params(&params)?;
+        let recent_error_codes = self.recent_error_codes.snapshot();
+        tauri::async_runtime::spawn_blocking(move || {
+            let ocr = NativeOcr::discover();
+            let (ocr_available, ocr_language_data_available) = ocr.support_status();
+            serde_json::to_value(build_bundle(DiagnosticsInput {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                platform_os: std::env::consts::OS.to_string(),
+                platform_arch: std::env::consts::ARCH.to_string(),
+                ocr_available,
+                ocr_language_data_available,
+                recent_error_codes,
+            })?)
+            .map_err(|_| BackendError::protocol("diagnostics preview encoding failed"))
+        })
+        .await
+        .map_err(|_| BackendError::request_failed("diagnostics collection task failed"))?
+    }
+
+    async fn copy_diagnostics(&self, params: Value) -> Result<Value, BackendError> {
+        let request: CopyDiagnosticsParams =
+            serde_json::from_value(params).map_err(|_| BackendError::invalid_params())?;
+        validate_bundle_content(&request.content)?;
+        tauri::async_runtime::spawn_blocking(move || clipboard::write_plain(&request.content))
+            .await
+            .map_err(|_| BackendError::request_failed("diagnostics clipboard task failed"))??;
+        Ok(serde_json::json!({"ok": true}))
     }
 
     async fn apply(
@@ -378,6 +425,8 @@ impl BackendRouter {
             match operation_id.as_str() {
                 "rfi.process_scans" => native.preview_process_scans(params, send),
                 "rfi.log_add" => native.preview_rfi_log(params, send),
+                "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
+                "rfi.outlook_reply_draft" => native.preview_outlook_reply_draft(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
                 "files.batch_print" => native.preview_batch_print(params, send),
                 _ => Err(BackendError::validation("unknown operation ID")),
@@ -431,6 +480,20 @@ struct RevealPathParams {
     selection_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CopyDiagnosticsParams {
+    content: String,
+}
+
+fn validate_empty_params(params: &Value) -> Result<(), BackendError> {
+    if params.as_object().is_some_and(serde_json::Map::is_empty) {
+        Ok(())
+    } else {
+        Err(BackendError::invalid_params())
+    }
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub(crate) async fn frontend_call(
     router: tauri::State<'_, BackendRouter>,
@@ -440,9 +503,13 @@ pub(crate) async fn frontend_call(
     debug_assert_eq!(request.method.owner(), MethodOwner::Rust);
     debug_assert!(BackendMethod::ALL.contains(&request.method));
     let _method_name = request.method.as_str();
-    router
+    let result = router
         .call(request.method, request.params, on_progress)
-        .await
+        .await;
+    if let Err(error) = &result {
+        router.recent_error_codes.record(error.code);
+    }
+    result
 }
 
 #[cfg(test)]
@@ -472,6 +539,8 @@ mod tests {
             BackendMethod::AppBootstrap,
             BackendMethod::SettingsUpdate,
             BackendMethod::SettingsReset,
+            BackendMethod::SupportDiagnostics,
+            BackendMethod::SupportCopyDiagnostics,
             BackendMethod::AuthSignIn,
             BackendMethod::AuthSignUp,
             BackendMethod::AuthSignOut,
@@ -526,6 +595,40 @@ mod tests {
                 "{rejected} must not be React-reachable"
             );
         }
+    }
+
+    #[test]
+    fn support_diagnostics_preview_and_copy_are_closed_public_rust_methods() {
+        let signed_out = auth_state(false, false);
+        for name in ["support/diagnostics", "support/copyDiagnostics"] {
+            let method: BackendMethod = serde_json::from_value(serde_json::json!(name))
+                .unwrap_or_else(|error| panic!("{name} should be allowed: {error}"));
+            assert_eq!(method.owner(), MethodOwner::Rust);
+            assert!(method.authorize(&signed_out).is_ok());
+        }
+        for rejected in [
+            "support/diagnostics/upload",
+            "support/diagnostics/scan",
+            "support/sendDiagnostics",
+        ] {
+            assert!(
+                serde_json::from_value::<BackendMethod>(serde_json::json!(rejected)).is_err(),
+                "{rejected} must not be React-reachable"
+            );
+        }
+        assert!(
+            serde_json::from_value::<CopyDiagnosticsParams>(serde_json::json!({
+                "content": "{}\n"
+            }))
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<CopyDiagnosticsParams>(serde_json::json!({
+                "content": "{}\n",
+                "destination": "/tmp/forged"
+            }))
+            .is_err()
+        );
     }
 
     #[test]

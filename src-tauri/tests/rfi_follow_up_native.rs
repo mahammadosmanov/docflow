@@ -1,11 +1,21 @@
-use std::io::{Cursor, Seek, SeekFrom, Write};
+use std::{
+    fs::File,
+    io::{Cursor, Seek, SeekFrom, Write},
+    time::Duration,
+};
 
 use docflow_lib::{
+    fs_ops::FilesystemAuthority,
     ooxml::{
         OrderedWorkbookDiscovery, WorkbookData, ordered_workbook_discovery,
         read_workbook_from_reader,
     },
-    rfi_follow_up::{canonical_rfi, classify_workbooks, mapped_follow_up_status},
+    paths::{CallerIdentity, GrantAccess, GrantScope},
+    plan_store::{BackendOrigin, PlanBinding},
+    rfi_follow_up::{
+        canonical_rfi, classify_workbooks, guarded_updates, mapped_follow_up_status,
+        preview_from_open_files, revise_from_open_files,
+    },
 };
 use serde_json::{Value, json};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
@@ -131,6 +141,471 @@ fn target_with_rows(rows: impl IntoIterator<Item = String>, merges: &[&str]) -> 
         std::iter::once(row(1, [inline("A1", "RFI NO."), inline("B1", "STATUS")])).chain(rows),
         merges,
     ))
+}
+
+#[test]
+fn preview_from_open_files_builds_an_inert_exact_workbook_plan() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(
+                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+
+    assert!(plan.plan_id.is_empty());
+    assert_eq!(plan.op_id, "rfi.follow_up_sync");
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.steps[0].src.as_deref(), target_path.to_str());
+    assert!(
+        plan.steps[0]
+            .dst
+            .as_deref()
+            .unwrap()
+            .contains(".docflow-s5-backup-")
+    );
+    assert!(!fixture.path().join(".docflow-backups").exists());
+}
+
+#[test]
+fn follow_up_retained_apply_revalidates_open_workbooks_at_every_boundary() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let journal_path = root.join("journals");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    let source_bytes = source_package(
+        worksheet(
+            [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+            &[],
+        ),
+        worksheet(Vec::<String>::new(), &[]),
+    )
+    .into_inner();
+    let original_target =
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner();
+    std::fs::write(&source_path, &source_bytes).unwrap();
+    std::fs::write(&target_path, &original_target).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+
+    let authority = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+
+    let result = authority.apply(&plan.plan_id, &caller).unwrap();
+
+    assert_eq!(result.applied, 1);
+    assert_eq!(result.failed, 0);
+    assert_eq!(std::fs::read(&source_path).unwrap(), source_bytes);
+    let (_, applied) = parsed(Cursor::new(std::fs::read(&target_path).unwrap()));
+    assert_eq!(
+        applied.sheet("Follow Up").unwrap().cells[&(2, 2)].value,
+        "Completed"
+    );
+    let names = std::fs::read_dir(&root)
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect::<Vec<_>>();
+    assert!(
+        names
+            .iter()
+            .any(|name| name.starts_with(".docflow-s5-backup-"))
+    );
+    assert!(
+        names
+            .iter()
+            .any(|name| name.starts_with(".docflow-s5-retained-original-"))
+    );
+    assert!(root.join(".docflow-backups").is_dir());
+    let retained = result.meta["retainedEvidence"].as_array().unwrap();
+    assert_eq!(retained.len(), 3);
+    assert!(retained.iter().all(|item| item.get("path").is_none()));
+    let restarted = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    assert!(restarted.recover_pending(&caller).unwrap().is_empty());
+}
+
+#[test]
+fn follow_up_retained_undo_restores_exact_backup_and_preserves_all_evidence() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let journal_path = root.join("journals");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    let source_bytes = source_package(
+        worksheet(
+            [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+            &[],
+        ),
+        worksheet(Vec::<String>::new(), &[]),
+    )
+    .into_inner();
+    let original_target =
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner();
+    std::fs::write(&source_path, &source_bytes).unwrap();
+    std::fs::write(&target_path, &original_target).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+
+    let authority = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.applied, 1);
+    let applied_target = std::fs::read(&target_path).unwrap();
+    assert_ne!(applied_target, original_target);
+    let rejected = authority
+        .undo(&applied.journal_id, &caller, Some(&root.join("ignored")))
+        .unwrap_err();
+    assert_eq!(rejected.code, "validation");
+    assert_eq!(std::fs::read(&target_path).unwrap(), applied_target);
+    std::fs::write(&target_path, b"later user edit").unwrap();
+    let rejected = authority
+        .undo(&applied.journal_id, &caller, None)
+        .unwrap_err();
+    assert_eq!(rejected.code, "validation");
+    assert_eq!(std::fs::read(&target_path).unwrap(), b"later user edit");
+    std::fs::write(&target_path, &applied_target).unwrap();
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+
+    assert_eq!((undone.applied, undone.failed), (1, 0));
+    assert_eq!(std::fs::read(&source_path).unwrap(), source_bytes);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original_target);
+    assert_eq!(undone.meta["effectState"], "committed");
+    let retained = undone.meta["retainedEvidence"].as_array().unwrap();
+    assert_eq!(retained.len(), 4);
+    assert!(retained.iter().all(|item| item.get("path").is_none()));
+    assert!(
+        root.read_dir()
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".docflow-s5-retained-applied-")
+            })
+    );
+    let restarted = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    assert!(restarted.recover_pending(&caller).unwrap().is_empty());
+}
+
+#[test]
+fn follow_up_retained_recovery_completes_exact_applied_state_after_restart() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let journal_path = root.join("journals");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(
+                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    let authority = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.applied, 1);
+
+    let journal_file = std::fs::read_dir(&journal_path)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().and_then(|value| value.to_str()) == Some("json"))
+        .unwrap();
+    let mut journal: Value =
+        serde_json::from_slice(&std::fs::read(&journal_file).unwrap()).unwrap();
+    let completed = journal["steps"][0].clone();
+    let evidence = journal["retainedEvidence"].as_array().unwrap();
+    let backup = evidence
+        .iter()
+        .find(|item| item["role"] == "backup")
+        .unwrap()
+        .clone();
+    let private = evidence
+        .iter()
+        .find(|item| item["role"] == "private_output")
+        .unwrap()
+        .clone();
+    let retained = evidence
+        .iter()
+        .find(|item| item["role"] == "displaced_original")
+        .unwrap()
+        .clone();
+    journal["steps"] = json!([]);
+    journal["state"] = json!("applying");
+    journal["followUpPhase"] = json!("publication_active");
+    journal["pendingRetainedArtifact"] = json!({
+        "role": "displaced_original",
+        "path": retained["path"],
+        "locator": retained["locator"],
+        "creationState": "intent"
+    });
+    journal["pendingPublication"] = json!({
+        "purpose": "apply",
+        "canonical": target_path,
+        "retained": retained["path"],
+        "backup": backup["path"],
+        "publicationSource": private["path"],
+        "expectedCanonicalIdentity": retained["identity"],
+        "expectedCanonicalSha256": retained["sha256"],
+        "expectedBackupIdentity": backup["identity"],
+        "expectedBackupSha256": backup["sha256"],
+        "publicationSourceIdentity": private["identity"],
+        "publicationSha256": private["sha256"],
+        "expectedCanonicalSecuritySha256": retained["securitySha256"],
+        "expectedBackupSecuritySha256": backup["securitySha256"],
+        "publicationSecuritySha256": private["securitySha256"],
+        "expectedCanonicalDefaultStreamBytes": retained["defaultStreamBytes"],
+        "expectedCanonicalAuxiliaryChargeBytes": retained["auxiliaryChargeBytes"],
+        "expectedCanonicalLogicalChargeBytes": retained["logicalChargeBytes"],
+        "destinationAccessSha256": "0".repeat(64),
+        "destinationAuxiliarySha256": "0".repeat(64),
+        "destinationAuxiliaryChargeBytes": retained["auxiliaryChargeBytes"],
+        "retainedIdentity": retained["identity"],
+        "retainedSha256": retained["sha256"],
+        "retainedSecuritySha256": retained["securitySha256"],
+        "createdCanonicalIdentity": completed["meta"]["createdCanonicalIdentity"],
+        "phase": "verifying_canonical"
+    });
+    std::fs::write(&journal_file, serde_json::to_vec_pretty(&journal).unwrap()).unwrap();
+    drop(authority);
+
+    let pending_journal = std::fs::read(&journal_file).unwrap();
+    let pending_canonical = std::fs::read(&target_path).unwrap();
+    let notices = (0_u64..65)
+        .map(|index| {
+            let path = journal_path.join(format!(".invalid-s5-{index:064x}.json"));
+            std::fs::write(&path, b"{}").unwrap();
+            path
+        })
+        .collect::<Vec<_>>();
+    let restarted = FilesystemAuthority::new(&journal_path, Duration::from_secs(300));
+    let bounded = restarted.recover_pending(&caller).unwrap_err();
+    assert_eq!(bounded.code, "journal_invalid");
+    assert_eq!(std::fs::read(&journal_file).unwrap(), pending_journal);
+    assert_eq!(std::fs::read(&target_path).unwrap(), pending_canonical);
+    assert!(
+        notices
+            .iter()
+            .all(|notice| std::fs::read(notice).unwrap() == b"{}")
+    );
+    std::fs::remove_file(notices.last().unwrap()).unwrap();
+
+    assert!(restarted.recover_pending(&caller).unwrap().is_empty());
+    assert!(restarted.recover_pending(&caller).unwrap().is_empty());
+    let recovered: Value = serde_json::from_slice(&std::fs::read(&journal_file).unwrap()).unwrap();
+    assert_eq!(recovered["state"], "committed");
+    assert_eq!(recovered["steps"].as_array().unwrap().len(), 1);
+    assert!(recovered.get("pendingPublication").is_none());
+    assert_eq!(recovered["retainedEvidence"].as_array().unwrap().len(), 3);
+    assert!(
+        notices[..64]
+            .iter()
+            .all(|notice| std::fs::read(notice).unwrap() == b"{}")
+    );
+}
+
+#[test]
+fn revise_from_open_files_changes_only_enabled_and_preserves_plan_identity() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(
+                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let mut plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    plan.plan_id = "preserved-plan".to_string();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["enabled"] = Value::Bool(false);
+
+    let revised = revise_from_open_files(&plan, &rows, &mut source, &mut target).unwrap();
+
+    assert_eq!(revised.plan_id, "preserved-plan");
+    assert!(revised.steps.is_empty());
+    assert_eq!(revised.meta["editor"]["rows"][0]["enabled"], false);
+    assert_eq!(
+        revised.warnings.last().unwrap().key,
+        "warn.rfi.followUp.noRowsSelected"
+    );
+}
+
+#[test]
+fn duplicate_approved_coordinates_rejected_before_guarded_map() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(
+                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let mut plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    let step = &mut plan.steps[0];
+    let updates = step.meta["updates"].as_array_mut().unwrap();
+    updates.push(updates[0].clone());
+
+    let error = guarded_updates(step).unwrap_err();
+
+    assert_eq!(error.code, "validation");
+    assert_eq!(error.message, "error.rfi.followUp.workbookInvalid");
 }
 
 #[test]
@@ -284,7 +759,18 @@ fn projection_budget_rejects_500_by_500_before_owned_materialization() {
 #[test]
 fn merge_query_budget_bounds_duplicate_target_range_amplification() {
     let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
-    let rows = std::iter::once(row(1, [inline("A1", "RFI NO."), inline("B1", "STATUS")]))
+    let source_rows = (10..310)
+        .map(|number| {
+            row(
+                number,
+                [
+                    inline(&format!("A{number}"), rfi),
+                    inline(&format!("P{number}"), "Completed"),
+                ],
+            )
+        })
+        .collect::<String>();
+    let target_rows = std::iter::once(row(1, [inline("A1", "RFI NO."), inline("B1", "STATUS")]))
         .chain((2..502).map(|number| {
             row(
                 number,
@@ -295,19 +781,19 @@ fn merge_query_budget_bounds_duplicate_target_range_amplification() {
             )
         }))
         .collect::<String>();
-    let merges = (1_000..10_999)
+    let merges = (1_000..2_414)
         .map(|number| format!(r#"<mergeCell ref="Z{number}:Z{number}"/>"#))
         .collect::<String>();
+    let source = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData>{source_rows}</sheetData><mergeCells count="1414">{merges}</mergeCells></worksheet>"#
+    );
     let target = format!(
-        r#"<worksheet xmlns="{MAIN}"><sheetData>{rows}</sheetData><mergeCells count="9999">{merges}</mergeCells></worksheet>"#
+        r#"<worksheet xmlns="{MAIN}"><sheetData>{target_rows}</sheetData><mergeCells count="1414">{merges}</mergeCells></worksheet>"#
     );
 
     assert_eq!(
         classify(
-            source_package(
-                worksheet(Vec::<String>::new(), &[]),
-                worksheet(Vec::<String>::new(), &[]),
-            ),
+            source_package(source, worksheet(Vec::<String>::new(), &[]),),
             target_package(target),
         )
         .unwrap_err()
@@ -708,6 +1194,120 @@ fn oracle_projection(review: &Value) -> Value {
     })
 }
 
+fn compatibility_plan(
+    source: Cursor<Vec<u8>>,
+    target: Cursor<Vec<u8>>,
+) -> docflow_lib::contracts::Plan {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_file = fixture.path().join("RFI Log.xlsx");
+    let target_file = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(&source_file, source.into_inner()).unwrap();
+    std::fs::write(&target_file, target.into_inner()).unwrap();
+    let mut source = File::open(source_file).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(target_file)
+        .unwrap();
+    preview_from_open_files(
+        std::path::Path::new("RFI Log.xlsx"),
+        std::path::Path::new("Follow Up.xlsx"),
+        &mut source,
+        &mut target,
+    )
+    .unwrap()
+}
+
+fn public_oracle_projection(plan: &docflow_lib::contracts::Plan) -> Value {
+    let editor = &plan.meta["editor"];
+    let rows = editor["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            json!({
+                "_rowId": row["_rowId"],
+                "_sheet": row["_sheet"],
+                "_row": row["_row"],
+                "rfiNo": row["rfiNo"],
+                "sourceStatuses": row["sourceStatuses"],
+                "currentStatus": row["currentStatus"],
+                "proposedStatus": row["proposedStatus"],
+                "disposition": row["disposition"],
+                "reasonKey": row["reasonKey"],
+                "selectable": row["selectable"],
+                "enabled": row["enabled"],
+                "sourceProvenance": row["sourceEvidence"].as_array().unwrap().iter().map(|evidence| json!({
+                    "sheet": evidence["sheet"],
+                    "row": evidence["row"],
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let updates = plan
+        .steps
+        .first()
+        .and_then(|step| step.meta.get("updates"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|update| {
+            json!({
+                "rowId": update["rowId"],
+                "canonicalRfi": update["canonicalRfi"],
+                "proposedStatus": update["proposedStatus"],
+                "target": {
+                    "sheet": update["target"]["worksheet"]["name"],
+                    "row": update["target"]["row"],
+                    "rfiColumn": update["target"]["rfiColumn"],
+                    "statusColumn": update["target"]["statusColumn"],
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "opId": plan.op_id,
+        "columns": editor["columns"],
+        "rows": rows,
+        "updates": updates,
+        "warnings": plan.warnings,
+    })
+}
+
+#[test]
+fn preview_matches_the_frozen_follow_up_compatibility_oracle() {
+    let oracle: Value = serde_json::from_str(include_str!(
+        "fixtures/rfi_follow_up_compatibility_oracle.json"
+    ))
+    .unwrap();
+    let plan = compatibility_plan(compatibility_source(), compatibility_target());
+
+    assert_eq!(
+        public_oracle_projection(&plan),
+        oracle["defaultReview"],
+        "public Follow Up preview diverged from the frozen compatibility oracle"
+    );
+
+    let no_selection = compatibility_plan(
+        compatibility_source(),
+        target_with_rows(
+            [row(
+                2,
+                [
+                    inline("A2", "AZE-SUN-INT-QMS-RFI-CIV-0003"),
+                    inline("B2", "Completed"),
+                ],
+            )],
+            &[],
+        ),
+    );
+    assert!(no_selection.steps.is_empty());
+    assert_eq!(
+        serde_json::to_value(&no_selection.warnings).unwrap(),
+        oracle["noSelectionWarnings"]
+    );
+}
+
 #[test]
 fn compatibility_oracle_matches_exact_rows() {
     let actual =
@@ -716,7 +1316,8 @@ fn compatibility_oracle_matches_exact_rows() {
         "fixtures/rfi_follow_up_compatibility_oracle.json"
     ))
     .unwrap();
-    assert_eq!(actual, oracle["defaultReview"]);
+    assert_eq!(actual["rows"], oracle["defaultReview"]["rows"]);
+    assert_eq!(actual["warnings"], oracle["defaultReview"]["warnings"]);
 
     let no_selection = classify(
         compatibility_source(),

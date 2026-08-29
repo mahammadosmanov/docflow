@@ -68,6 +68,36 @@ test("Windows package smoke waits for GUI-subsystem processes", () => {
   assert.doesNotMatch(installedSmoke, /& \$application --package-smoke/u);
 });
 
+test("Windows release emits commit-bound install performance and artifact manifests", () => {
+  const smoke = readFileSync(
+    resolve(root, "tools/smoke_windows_installer.ps1"),
+    "utf8",
+  );
+  const workflow = readFileSync(
+    resolve(root, ".github/workflows/windows-release.yml"),
+    "utf8",
+  );
+
+  for (const required of [
+    "[string]$EvidencePath",
+    "WaitForInputIdle",
+    "coldStartMilliseconds",
+    "peakWorkingSetBytes",
+    "uninstallVerified",
+    "ConvertTo-Json",
+  ]) {
+    assert.match(smoke, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")), required);
+  }
+  assert.match(workflow, /-EvidencePath\s+\$evidencePath/u);
+  assert.match(workflow, /commitSha\s*=\s*\$env:GITHUB_SHA/u);
+  assert.match(workflow, /installerSha256/u);
+  assert.match(workflow, /installerSizeBytes/u);
+  assert.match(workflow, /smokeEvidenceSha256/u);
+  assert.match(workflow, /DocFlow-windows-x64-manifest\.json/u);
+  assert.match(workflow, /DocFlow-windows-x64-smoke\.json/u);
+  assert.match(workflow, /bundle\/nsis\/\*\.json/u);
+});
+
 test("manual Windows runs can deliver only to an exact unpublished draft", () => {
   const source = readFileSync(resolve(root, ".github/workflows/windows-release.yml"), "utf8");
 

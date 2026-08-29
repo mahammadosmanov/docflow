@@ -77,6 +77,7 @@ import type {
   ReviewDecision,
   ReviewItem,
   Step,
+  SupportBundlePreview,
   ThemePreference,
 } from "./types";
 
@@ -1665,6 +1666,7 @@ type EditorColumn = {
   detail?: boolean;
   bulk?: boolean;
   display?: string;
+  disabledWhen?: { field: string; equals: string | number | boolean };
 };
 
 const EDITOR_DATE_MONTHS = [
@@ -2269,7 +2271,9 @@ function EditablePlanTable({
                     }
                     const text = String(row[column.key] ?? "");
                     const displayText =
-                      column.key === "status"
+                      column.display === "localizedKey"
+                        ? s.t(text)
+                        : column.key === "status" && text
                         ? s.t(`print.status.${text}`)
                         : column.key === "worksheetVisibility" && text
                           ? s.t(`print.worksheet.visibility.${text}`)
@@ -2288,6 +2292,11 @@ function EditablePlanTable({
                             aria-label={s.t(column.labelKey)}
                             type="checkbox"
                             checked={Boolean(row[column.key])}
+                            disabled={
+                              column.disabledWhen !== undefined &&
+                              row[column.disabledWhen.field] ===
+                                column.disabledWhen.equals
+                            }
                             onChange={(event) =>
                               update(rowIndex, column.key, event.target.checked)
                             }
@@ -2453,6 +2462,7 @@ export function PlanView({
   );
   const canApply =
     editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);
+  const replyPreview = outlookReplyPreview(plan.meta?.replyPreview);
   return (
     <div className="flow-layout">
       {plan.warnings.length > 0 && (
@@ -2464,6 +2474,23 @@ export function PlanView({
             </div>
           ))}
         </Notice>
+      )}
+      {replyPreview && (
+        <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
+          <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
+          <div>
+            <strong>{s.t("outlookDraft.subject")}</strong>
+            <pre>{replyPreview.subject}</pre>
+          </div>
+          <div>
+            <strong>{s.t("outlookDraft.plainText")}</strong>
+            <pre>{replyPreview.plainText}</pre>
+          </div>
+          <div>
+            <strong>{s.t("outlookDraft.html")}</strong>
+            <pre>{replyPreview.html}</pre>
+          </div>
+        </section>
       )}
       {editor && editorRows && onEditorRowsChange ? (
         <EditablePlanTable
@@ -2511,6 +2538,27 @@ export function PlanView({
       />
     </div>
   );
+}
+
+function outlookReplyPreview(value: unknown): {
+  subject: string;
+  plainText: string;
+  html: string;
+} | null {
+  if (!value || typeof value !== "object") return null;
+  const preview = value as Record<string, unknown>;
+  if (
+    typeof preview.subject !== "string" ||
+    typeof preview.plainText !== "string" ||
+    typeof preview.html !== "string"
+  ) {
+    return null;
+  }
+  return {
+    subject: preview.subject,
+    plainText: preview.plainText,
+    html: preview.html,
+  };
 }
 
 function StepRow({ step, s }: { step: Step; s: Strings }) {
@@ -3342,6 +3390,10 @@ function SettingsScreen({
   const [username, setUsername] = useState(auth.user?.username ?? "");
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
+  const [diagnostics, setDiagnostics] =
+    useState<SupportBundlePreview | null>(null);
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const update = async (patch: Partial<AppPrefs>) => {
     try {
       onPrefs(
@@ -3363,6 +3415,34 @@ function SettingsScreen({
       setSaved(s.t("prefs.account.saved"));
     } catch (reason) {
       setError(humanError(reason, s));
+    }
+  };
+  const previewDiagnostics = async () => {
+    setError("");
+    setDiagnosticsStatus("");
+    setDiagnosticsBusy(true);
+    try {
+      setDiagnostics(await bridge.call("support/diagnostics"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+  const copyDiagnostics = async () => {
+    if (!diagnostics) return;
+    setError("");
+    setDiagnosticsStatus("");
+    setDiagnosticsBusy(true);
+    try {
+      await bridge.call("support/copyDiagnostics", {
+        content: diagnostics.content,
+      });
+      setDiagnosticsStatus(s.t("prefs.support.copied"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setDiagnosticsBusy(false);
     }
   };
   return (
@@ -3484,6 +3564,56 @@ function SettingsScreen({
               onChange={(compact) => void update({ compact })}
             />
           </label>
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.support.title")}
+          icon={<Shield />}
+          help={s.t("prefs.support.help")}
+        >
+          <div className="support-diagnostics">
+            <p>{s.t("prefs.support.privacy")}</p>
+            <div className="support-diagnostics-actions">
+              <Button
+                variant="secondary"
+                icon={
+                  diagnosticsBusy ? (
+                    <LoaderCircle className="spin" />
+                  ) : (
+                    <Eye />
+                  )
+                }
+                disabled={diagnosticsBusy}
+                onClick={() => void previewDiagnostics()}
+              >
+                {s.t("prefs.support.preview")}
+              </Button>
+              {diagnostics && (
+                <Button
+                  variant="secondary"
+                  icon={<Copy />}
+                  disabled={diagnosticsBusy}
+                  onClick={() => void copyDiagnostics()}
+                >
+                  {s.t("prefs.support.copy")}
+                </Button>
+              )}
+            </div>
+            {diagnostics && (
+              <div className="support-diagnostics-preview">
+                <small>
+                  {diagnostics.fileName} · {s.t("prefs.support.size", {
+                    count: diagnostics.byteLength,
+                  })}
+                </small>
+                <pre aria-label={s.t("prefs.support.previewLabel")}>
+                  {diagnostics.content}
+                </pre>
+              </div>
+            )}
+            {diagnosticsStatus && (
+              <Notice kind="info">{diagnosticsStatus}</Notice>
+            )}
+          </div>
         </SettingsGroup>
         {error && <Notice kind="error">{error}</Notice>}
         <Button

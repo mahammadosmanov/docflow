@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt, fs,
     fs::{File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
 };
 
@@ -16,7 +16,10 @@ use quick_xml::{
 use serde::{Deserialize, Serialize};
 use zip::{ZipArchive, ZipWriter};
 
-const MAX_PACKAGE_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_PACKAGE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_GUARDED_CELL_UPDATES: usize = 500;
+pub(crate) const MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK: u64 = 1_000_000;
+pub(crate) const MAX_APPLY_MERGE_COMPARISONS: u64 = 2_000_000;
 const MAX_UNCOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 4_096;
@@ -67,6 +70,12 @@ pub enum CellUpdate {
         formula: String,
         cached: Option<String>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GuardedCellUpdate {
+    pub expected: CellData,
+    pub replacement: CellUpdate,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -163,11 +172,58 @@ impl WorksheetData {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WorkbookData {
     pub sheets: BTreeMap<String, WorksheetData>,
+    merge_validation_comparisons: u64,
+    merge_validation_complete: bool,
 }
 
 impl WorkbookData {
     pub fn sheet(&self, name: &str) -> Option<&WorksheetData> {
         self.sheets.get(name)
+    }
+
+    pub(crate) fn merge_validation_comparisons(&self) -> u64 {
+        self.merge_validation_comparisons
+    }
+
+    pub(crate) fn merge_validation_complete(&self) -> bool {
+        self.merge_validation_complete
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct MergeComparisonBudget {
+    remaining: u64,
+    consumed: u64,
+}
+
+impl MergeComparisonBudget {
+    fn for_validation() -> Self {
+        Self {
+            remaining: MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK,
+            consumed: 0,
+        }
+    }
+
+    fn for_apply(parsed_comparisons: u64) -> Result<Self, OoxmlError> {
+        let remaining = MAX_APPLY_MERGE_COMPARISONS
+            .checked_sub(parsed_comparisons)
+            .ok_or_else(|| {
+                OoxmlError::limit_exceeded("guarded merge comparison count exceeded the limit")
+            })?;
+        Ok(Self {
+            remaining,
+            consumed: parsed_comparisons,
+        })
+    }
+
+    fn consume(&mut self) -> Result<(), OoxmlError> {
+        self.remaining = self.remaining.checked_sub(1).ok_or_else(|| {
+            OoxmlError::limit_exceeded("guarded merge comparison count exceeded the limit")
+        })?;
+        self.consumed = self.consumed.checked_add(1).ok_or_else(|| {
+            OoxmlError::limit_exceeded("guarded merge comparison count exceeded the limit")
+        })?;
+        Ok(())
     }
 }
 
@@ -256,6 +312,28 @@ struct XmlDocument {
     nodes: Vec<XmlNode>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum CanonicalXmlEvent {
+    Start {
+        namespace: Option<Vec<u8>>,
+        local_name: Vec<u8>,
+        attributes: Vec<(Option<Vec<u8>>, Vec<u8>, String)>,
+    },
+    End {
+        namespace: Option<Vec<u8>>,
+        local_name: Vec<u8>,
+    },
+    Empty {
+        namespace: Option<Vec<u8>>,
+        local_name: Vec<u8>,
+        attributes: Vec<(Option<Vec<u8>>, Vec<u8>, String)>,
+    },
+    Raw {
+        kind: &'static str,
+        value: Vec<u8>,
+    },
+}
+
 struct ZipPreflightFacts {
     entry_count: usize,
     central_directory_start: u64,
@@ -323,6 +401,232 @@ pub fn patch_workbook_sheets(
         let _ = fs::remove_file(destination);
     }
     write_result
+}
+
+pub fn patch_workbook_sheets_guarded<R, W>(
+    source: &mut R,
+    destination: &mut W,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Read + Write + Seek,
+{
+    validate_guarded_update_set(updates_by_sheet)?;
+    source.seek(SeekFrom::Start(0))?;
+    let discovery = ordered_workbook_discovery(source)?;
+    if discovery.safety.has_workbook_protection {
+        return Err(OoxmlError::invalid("guarded workbook is protected"));
+    }
+    let sheet_infos = project_sheet_infos(discovery);
+    source.seek(SeekFrom::Start(0))?;
+    if package_has_signature(source)? {
+        return Err(OoxmlError::invalid("guarded workbook is signed"));
+    }
+    source.seek(SeekFrom::Start(0))?;
+    let workbook = read_workbook_from_reader(source)?;
+    validate_guarded_source(&workbook, updates_by_sheet)?;
+
+    source.seek(SeekFrom::Start(0))?;
+    let mut archive = open_archive(source)?;
+    let mut patched = BTreeMap::<String, Vec<u8>>::new();
+    for (sheet_name, updates) in updates_by_sheet {
+        let info = sheet_infos
+            .get(sheet_name)
+            .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))?;
+        let raw = read_entry(&mut archive, &info.path)?;
+        patched.insert(info.path.clone(), patch_sheet_xml_guarded(&raw, updates)?);
+    }
+
+    if destination.seek(SeekFrom::End(0))? != 0 {
+        return Err(OoxmlError::invalid(
+            "guarded destination must be an empty create-new file",
+        ));
+    }
+    destination.seek(SeekFrom::Start(0))?;
+    write_package_guarded(&mut archive, destination, &patched)?;
+    destination.seek(SeekFrom::Start(0))?;
+    Ok(())
+}
+
+pub fn verify_guarded_workbook_delta<R1, R2>(
+    source: &mut R1,
+    destination: &mut R2,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    validate_guarded_update_set(updates_by_sheet)?;
+    source.seek(SeekFrom::Start(0))?;
+    let source_discovery = ordered_workbook_discovery(source)?;
+    let source_infos = project_sheet_infos(source_discovery);
+    let target_parts = updates_by_sheet
+        .keys()
+        .map(|name| {
+            source_infos
+                .get(name)
+                .map(|info| info.path.clone())
+                .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+
+    source.seek(SeekFrom::Start(0))?;
+    destination.seek(SeekFrom::Start(0))?;
+    let mut source_archive = open_archive(&mut *source)?;
+    let mut destination_archive = open_archive(&mut *destination)?;
+    if source_archive.len() != destination_archive.len() {
+        return Err(OoxmlError::invalid("guarded package member roster changed"));
+    }
+    for index in 0..source_archive.len() {
+        let source_name = source_archive.by_index(index)?.name().to_string();
+        let destination_name = destination_archive.by_index(index)?.name().to_string();
+        if source_name != destination_name {
+            return Err(OoxmlError::invalid("guarded package member roster changed"));
+        }
+        let source_bytes = read_entry(&mut source_archive, &source_name)?;
+        let destination_bytes = read_entry(&mut destination_archive, &destination_name)?;
+        if target_parts.contains(&source_name) {
+            let sheet_name = updates_by_sheet
+                .keys()
+                .find(|name| {
+                    source_infos
+                        .get(*name)
+                        .is_some_and(|info| info.path == source_name)
+                })
+                .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))?;
+            let updates = updates_by_sheet
+                .get(sheet_name)
+                .ok_or_else(|| OoxmlError::invalid("guarded updates are missing"))?;
+            let source_tokens = guarded_sheet_tokens(&source_bytes, updates, false)?;
+            let destination_tokens = guarded_sheet_tokens(&destination_bytes, updates, true)?;
+            if destination_tokens != source_tokens {
+                return Err(OoxmlError::invalid(
+                    "guarded worksheet delta verification failed",
+                ));
+            }
+        } else if destination_bytes != source_bytes {
+            return Err(OoxmlError::invalid(
+                "guarded non-target package member changed",
+            ));
+        }
+    }
+
+    drop(source_archive);
+    drop(destination_archive);
+
+    destination.seek(SeekFrom::Start(0))?;
+    let destination_workbook = read_workbook_from_reader(destination)?;
+    for (sheet_name, updates) in updates_by_sheet {
+        let sheet = destination_workbook
+            .sheet(sheet_name)
+            .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))?;
+        for (&coordinate, update) in updates {
+            let cell = sheet
+                .cells
+                .get(&coordinate)
+                .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
+            let CellUpdate::Text(replacement) = &update.replacement else {
+                return Err(OoxmlError::invalid("guarded replacement is invalid"));
+            };
+            if cell.value != *replacement
+                || cell.formula.is_some()
+                || cell.style != update.expected.style
+            {
+                return Err(OoxmlError::invalid(
+                    "guarded target cell verification failed",
+                ));
+            }
+        }
+    }
+    source.seek(SeekFrom::Start(0))?;
+    destination.seek(SeekFrom::Start(0))?;
+    Ok(())
+}
+
+fn validate_guarded_update_set(
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError> {
+    let update_count = updates_by_sheet
+        .values()
+        .try_fold(0_usize, |count, updates| {
+            if updates.is_empty() {
+                return Err(OoxmlError::invalid("guarded worksheet updates are empty"));
+            }
+            count.checked_add(updates.len()).ok_or_else(|| {
+                OoxmlError::limit_exceeded("guarded update count exceeded the limit")
+            })
+        })?;
+    if updates_by_sheet.is_empty() || update_count == 0 {
+        return Err(OoxmlError::invalid(
+            "at least one guarded cell update is required",
+        ));
+    }
+    if update_count > MAX_GUARDED_CELL_UPDATES {
+        return Err(OoxmlError::limit_exceeded(
+            "guarded update count exceeded the limit",
+        ));
+    }
+    for updates in updates_by_sheet.values() {
+        for (&(row, column), update) in updates {
+            if row == 0 || column == 0 || column > MAX_WORKSHEET_COLUMNS {
+                return Err(OoxmlError::invalid(
+                    "guarded worksheet cell reference is invalid",
+                ));
+            }
+            if !matches!(
+                &update.replacement,
+                CellUpdate::Text(value) if matches!(value.as_str(), "Completed" | "In Progress")
+            ) {
+                return Err(OoxmlError::invalid("guarded replacement is invalid"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_guarded_source(
+    workbook: &WorkbookData,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError> {
+    if !workbook.merge_validation_complete() {
+        return Err(OoxmlError::invalid(
+            "guarded merge validation facts are incomplete",
+        ));
+    }
+    let mut merge_budget =
+        MergeComparisonBudget::for_apply(workbook.merge_validation_comparisons())?;
+    for (sheet_name, updates) in updates_by_sheet {
+        let sheet = workbook
+            .sheet(sheet_name)
+            .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))?;
+        if sheet.has_sheet_protection {
+            return Err(OoxmlError::invalid("guarded worksheet is protected"));
+        }
+        for (&coordinate, update) in updates {
+            let cell = sheet
+                .cells
+                .get(&coordinate)
+                .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
+            if cell != &update.expected || cell.formula.is_some() {
+                return Err(OoxmlError::invalid(
+                    "guarded target cell no longer matches its approved value",
+                ));
+            }
+            for range in &sheet.merged_ranges {
+                merge_budget.consume()?;
+                if range.first_row <= coordinate.0
+                    && coordinate.0 <= range.last_row
+                    && range.first_column <= coordinate.1
+                    && coordinate.1 <= range.last_column
+                {
+                    return Err(OoxmlError::invalid("guarded target cell is merged"));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn read_member(source: &Path, name: &str) -> Result<Vec<u8>, OoxmlError> {
@@ -540,11 +844,19 @@ pub fn read_workbook_from_reader<R: Read + Seek>(
         None => Vec::new(),
     };
     let mut sheets = BTreeMap::new();
+    let mut merge_budget = MergeComparisonBudget::for_validation();
     for (name, info) in infos {
         let raw = read_entry(&mut archive, &info.path)?;
-        sheets.insert(name, worksheet_data(&raw, &shared_strings)?);
+        sheets.insert(
+            name,
+            worksheet_data(&raw, &shared_strings, &mut merge_budget)?,
+        );
     }
-    Ok(WorkbookData { sheets })
+    Ok(WorkbookData {
+        sheets,
+        merge_validation_comparisons: merge_budget.consumed,
+        merge_validation_complete: true,
+    })
 }
 
 pub fn package_has_signature<R: Read + Seek>(source: &mut R) -> Result<bool, OoxmlError> {
@@ -941,6 +1253,90 @@ fn write_package(
     let output = writer.finish()?;
     output.sync_all()?;
     Ok(())
+}
+
+fn write_package_guarded<R, W>(
+    archive: &mut ZipArchive<R>,
+    output: &mut W,
+    patched: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Write + Seek,
+{
+    let archive_comment = archive.comment().to_vec();
+    let limited = LimitedWriter::new(output, MAX_PACKAGE_BYTES)?;
+    let mut writer = ZipWriter::new(limited);
+    writer.set_raw_comment(archive_comment.into_boxed_slice())?;
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index)?;
+        if let Some(bytes) = patched.get(entry.name()) {
+            let name = entry.name().to_string();
+            let mut options = entry.options().into_full_options();
+            if !entry.comment().is_empty() {
+                options = options.with_file_comment(entry.comment());
+            }
+            writer.start_file(name, options)?;
+            writer.write_all(bytes)?;
+        } else {
+            writer.raw_copy_file(entry)?;
+        }
+    }
+    let mut output = writer.finish()?;
+    output.flush()?;
+    Ok(())
+}
+
+struct LimitedWriter<'a, W> {
+    inner: &'a mut W,
+    position: u64,
+    limit: u64,
+}
+
+impl<'a, W: Seek> LimitedWriter<'a, W> {
+    fn new(inner: &'a mut W, limit: u64) -> io::Result<Self> {
+        let position = inner.stream_position()?;
+        if position > limit {
+            return Err(io::Error::other("guarded output exceeded the size limit"));
+        }
+        Ok(Self {
+            inner,
+            position,
+            limit,
+        })
+    }
+}
+
+impl<W: Write> Write for LimitedWriter<'_, W> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        let requested = u64::try_from(buffer.len())
+            .ok()
+            .and_then(|length| self.position.checked_add(length))
+            .filter(|end| *end <= self.limit)
+            .ok_or_else(|| io::Error::other("guarded output exceeded the size limit"))?;
+        let written = self.inner.write(buffer)?;
+        self.position = self
+            .position
+            .checked_add(u64::try_from(written).unwrap_or(u64::MAX))
+            .filter(|end| *end <= requested)
+            .ok_or_else(|| io::Error::other("guarded output position is invalid"))?;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<W: Seek> Seek for LimitedWriter<'_, W> {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        let position = self.inner.seek(position)?;
+        if position > self.limit {
+            return Err(io::Error::other("guarded output exceeded the size limit"));
+        }
+        self.position = position;
+        Ok(position)
+    }
 }
 
 fn authenticated_workbook_parts<R: Read + Seek>(
@@ -1637,6 +2033,457 @@ fn patch_sheet_xml(
     Ok((serialize_document(&document)?, replaced_formulas))
 }
 
+fn patch_sheet_xml_guarded(
+    raw: &[u8],
+    updates: &BTreeMap<(u32, u32), GuardedCellUpdate>,
+) -> Result<Vec<u8>, OoxmlError> {
+    let mut document = parse_document(raw)?;
+    let root = document_root_mut_local(
+        &mut document,
+        b"worksheet",
+        "guarded worksheet root is invalid",
+    )?;
+    let namespace = root
+        .namespace
+        .clone()
+        .filter(|namespace| {
+            matches!(
+                namespace.as_slice(),
+                value
+                    if value == TRANSITIONAL_WORKBOOK_NAMESPACE.as_bytes()
+                        || value == STRICT_WORKBOOK_NAMESPACE.as_bytes()
+            )
+        })
+        .ok_or_else(|| OoxmlError::invalid("guarded worksheet namespace is invalid"))?;
+    let prefix = root
+        .start
+        .name()
+        .as_ref()
+        .split(|byte| *byte == b':')
+        .next()
+        .filter(|_| root.start.name().as_ref().contains(&b':'))
+        .map(|prefix| String::from_utf8_lossy(prefix).into_owned());
+    let sheet_data = single_child_element_in_namespace_mut(
+        root,
+        b"sheetData",
+        &namespace,
+        "guarded worksheet sheetData is invalid",
+    )?;
+
+    for (&(row_number, column_number), update) in updates {
+        let row = unique_direct_child_by_attribute_mut(
+            sheet_data,
+            b"row",
+            &namespace,
+            b"r",
+            &row_number.to_string(),
+            "guarded worksheet row is missing or ambiguous",
+        )?;
+        let coordinate = cell_reference(row_number, column_number);
+        let cell = unique_direct_child_by_attribute_mut(
+            row,
+            b"c",
+            &namespace,
+            b"r",
+            &coordinate,
+            "guarded worksheet cell is missing or ambiguous",
+        )?;
+        patch_guarded_cell_value(cell, &namespace, prefix.as_deref(), &update.replacement)?;
+    }
+    serialize_document(&document)
+}
+
+fn patch_guarded_cell_value(
+    cell: &mut XmlElement,
+    namespace: &[u8],
+    prefix: Option<&str>,
+    update: &CellUpdate,
+) -> Result<(), OoxmlError> {
+    let CellUpdate::Text(value) = update else {
+        return Err(OoxmlError::invalid("guarded replacement is invalid"));
+    };
+    if !matches!(value.as_str(), "Completed" | "In Progress") {
+        return Err(OoxmlError::invalid("guarded replacement is invalid"));
+    }
+    if child_elements_in_namespace(cell, b"f", namespace)
+        .next()
+        .is_some()
+    {
+        return Err(OoxmlError::invalid(
+            "guarded target cell contains a formula",
+        ));
+    }
+
+    let mut representation_indices = cell
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace)
+                    && (has_local_name(child, b"v") || has_local_name(child, b"is")) =>
+            {
+                Some(index)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if representation_indices.len() > 1 {
+        return Err(OoxmlError::invalid(
+            "guarded target cell value representation is ambiguous",
+        ));
+    }
+    let insert_at = representation_indices.first().copied().unwrap_or_else(|| {
+        cell.children
+            .iter()
+            .position(|node| {
+                matches!(
+                    node,
+                    XmlNode::Element(child)
+                        if child.namespace.as_deref() == Some(namespace)
+                            && has_local_name(child, b"extLst")
+                )
+            })
+            .unwrap_or(cell.children.len())
+    });
+    for index in representation_indices.drain(..).rev() {
+        cell.children.remove(index);
+    }
+
+    set_unqualified_attribute(cell, b"t", "inlineStr");
+    let qualify = |local: &str| match prefix {
+        Some(prefix) => format!("{prefix}:{local}"),
+        None => local.to_string(),
+    };
+    let mut inline = XmlElement::new(&qualify("is"));
+    inline.namespace = Some(namespace.to_vec());
+    let mut text = XmlElement::new(&qualify("t"));
+    text.namespace = Some(namespace.to_vec());
+    if value.trim() != value {
+        set_attribute(&mut text, b"xml:space", "preserve");
+    }
+    set_element_text(&mut text, value);
+    inline.children.push(XmlNode::Element(text));
+    cell.children.insert(insert_at, XmlNode::Element(inline));
+    cell.empty = false;
+    Ok(())
+}
+
+fn guarded_sheet_tokens(
+    raw: &[u8],
+    updates: &BTreeMap<(u32, u32), GuardedCellUpdate>,
+    output: bool,
+) -> Result<Vec<CanonicalXmlEvent>, OoxmlError> {
+    let mut document = parse_document(raw)?;
+    let root = document_root_mut_local(
+        &mut document,
+        b"worksheet",
+        "guarded worksheet root is invalid",
+    )?;
+    let namespace = root
+        .namespace
+        .clone()
+        .filter(|namespace| {
+            matches!(
+                namespace.as_slice(),
+                value
+                    if value == TRANSITIONAL_WORKBOOK_NAMESPACE.as_bytes()
+                        || value == STRICT_WORKBOOK_NAMESPACE.as_bytes()
+            )
+        })
+        .ok_or_else(|| OoxmlError::invalid("guarded worksheet namespace is invalid"))?;
+    let sheet_data = single_child_element_in_namespace_mut(
+        root,
+        b"sheetData",
+        &namespace,
+        "guarded worksheet sheetData is invalid",
+    )?;
+    for (&(row_number, column_number), update) in updates {
+        let row = unique_direct_child_by_attribute_mut(
+            sheet_data,
+            b"row",
+            &namespace,
+            b"r",
+            &row_number.to_string(),
+            "guarded worksheet row is missing or ambiguous",
+        )?;
+        let coordinate = cell_reference(row_number, column_number);
+        let cell = unique_direct_child_by_attribute_mut(
+            row,
+            b"c",
+            &namespace,
+            b"r",
+            &coordinate,
+            "guarded worksheet cell is missing or ambiguous",
+        )?;
+        normalize_guarded_cell_for_tokens(cell, &namespace, &coordinate, update, output)?;
+    }
+
+    let mut tokens = Vec::new();
+    canonical_xml_tokens(&document.nodes, &mut tokens)?;
+    Ok(tokens)
+}
+
+fn normalize_guarded_cell_for_tokens(
+    cell: &mut XmlElement,
+    namespace: &[u8],
+    coordinate: &str,
+    update: &GuardedCellUpdate,
+    output: bool,
+) -> Result<(), OoxmlError> {
+    let CellUpdate::Text(replacement) = &update.replacement else {
+        return Err(OoxmlError::invalid("guarded replacement is invalid"));
+    };
+    if output {
+        validate_exact_guarded_output_value(cell, namespace, replacement)?;
+    } else if child_elements_in_namespace(cell, b"f", namespace)
+        .next()
+        .is_some()
+    {
+        return Err(OoxmlError::invalid(
+            "guarded source cell contains a formula",
+        ));
+    }
+
+    cell.attributes.retain(|attribute| {
+        !(attribute.namespace.is_none() && attribute.local_name.as_slice() == b"t")
+    });
+    let representation_indices = cell
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace)
+                    && (has_local_name(child, b"v") || has_local_name(child, b"is")) =>
+            {
+                Some(index)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if representation_indices.len() > 1 {
+        return Err(OoxmlError::invalid(
+            "guarded cell value representation is ambiguous",
+        ));
+    }
+    let insert_at = representation_indices.first().copied().unwrap_or_else(|| {
+        cell.children
+            .iter()
+            .position(|node| {
+                matches!(
+                    node,
+                    XmlNode::Element(child)
+                        if child.namespace.as_deref() == Some(namespace)
+                            && has_local_name(child, b"extLst")
+                )
+            })
+            .unwrap_or(cell.children.len())
+    });
+    for index in representation_indices.into_iter().rev() {
+        cell.children.remove(index);
+    }
+    let marker = format!("docflow-guarded:{coordinate}:{replacement}");
+    cell.children.insert(
+        insert_at,
+        XmlNode::Raw(Event::Text(BytesText::new(&marker).into_owned())),
+    );
+    cell.empty = false;
+    Ok(())
+}
+
+fn validate_exact_guarded_output_value(
+    cell: &XmlElement,
+    namespace: &[u8],
+    expected: &str,
+) -> Result<(), OoxmlError> {
+    if bounded_unqualified_attribute(cell, b"t", 32, "guarded cell type")?.as_deref()
+        != Some("inlineStr")
+    {
+        return Err(OoxmlError::invalid("guarded output cell type is invalid"));
+    }
+    if child_elements_in_namespace(cell, b"f", namespace)
+        .next()
+        .is_some()
+        || child_elements_in_namespace(cell, b"v", namespace)
+            .next()
+            .is_some()
+    {
+        return Err(OoxmlError::invalid(
+            "guarded output value representation is invalid",
+        ));
+    }
+    let inline = single_child_element_in_namespace(
+        cell,
+        b"is",
+        namespace,
+        "guarded output inline string is invalid",
+    )?;
+    if !inline.attributes.is_empty() || inline.children.len() != 1 {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string is invalid",
+        ));
+    }
+    let XmlNode::Element(text) = &inline.children[0] else {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string is invalid",
+        ));
+    };
+    if text.namespace.as_deref() != Some(namespace)
+        || !has_local_name(text, b"t")
+        || text.children.len() != 1
+    {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string is invalid",
+        ));
+    }
+    let allows_space = expected.trim() != expected;
+    let attributes_are_exact = if allows_space {
+        text.attributes.len() == 1
+            && text.attributes[0].namespace.as_deref()
+                == Some(b"http://www.w3.org/XML/1998/namespace")
+            && text.attributes[0].local_name.as_slice() == b"space"
+            && text.attributes[0].value.as_slice() == b"preserve"
+    } else {
+        text.attributes.is_empty()
+    };
+    if !attributes_are_exact {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string attributes are invalid",
+        ));
+    }
+    let XmlNode::Raw(Event::Text(value)) = &text.children[0] else {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string text is invalid",
+        ));
+    };
+    let decoded = value
+        .decode()
+        .map_err(|_| OoxmlError::invalid("guarded output inline string text is invalid"))?;
+    if decode_entities(&decoded) != expected {
+        return Err(OoxmlError::invalid(
+            "guarded output inline string text is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn canonical_xml_tokens(
+    nodes: &[XmlNode],
+    output: &mut Vec<CanonicalXmlEvent>,
+) -> Result<(), OoxmlError> {
+    for node in nodes {
+        match node {
+            XmlNode::Element(element) => {
+                let local_name = element
+                    .start
+                    .name()
+                    .as_ref()
+                    .rsplit(|byte| *byte == b':')
+                    .next()
+                    .unwrap_or_default()
+                    .to_vec();
+                let attributes = element
+                    .attributes
+                    .iter()
+                    .filter(|attribute| {
+                        attribute.local_name.as_slice() != b"xmlns"
+                            && attribute.namespace.as_deref()
+                                != Some(b"http://www.w3.org/2000/xmlns/")
+                    })
+                    .map(|attribute| {
+                        let raw = std::str::from_utf8(&attribute.value)
+                            .map_err(|_| OoxmlError::invalid("XML attribute is invalid"))?;
+                        let value = unescape(raw)
+                            .map_err(|_| OoxmlError::invalid("XML attribute is invalid"))?
+                            .into_owned();
+                        Ok((
+                            attribute.namespace.clone(),
+                            attribute.local_name.clone(),
+                            value,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, OoxmlError>>()?;
+                if element.empty && element.children.is_empty() {
+                    output.push(CanonicalXmlEvent::Empty {
+                        namespace: element.namespace.clone(),
+                        local_name,
+                        attributes,
+                    });
+                } else {
+                    output.push(CanonicalXmlEvent::Start {
+                        namespace: element.namespace.clone(),
+                        local_name: local_name.clone(),
+                        attributes,
+                    });
+                    canonical_xml_tokens(&element.children, output)?;
+                    output.push(CanonicalXmlEvent::End {
+                        namespace: element.namespace.clone(),
+                        local_name,
+                    });
+                }
+            }
+            XmlNode::Raw(event) => {
+                let kind = match event {
+                    Event::Text(_) => "text",
+                    Event::CData(_) => "cdata",
+                    Event::Comment(_) => "comment",
+                    Event::Decl(_) => "decl",
+                    Event::PI(_) => "pi",
+                    Event::DocType(_) => "doctype",
+                    Event::GeneralRef(_) => "general_ref",
+                    Event::Eof => "eof",
+                    Event::Start(_) | Event::End(_) | Event::Empty(_) => {
+                        return Err(OoxmlError::invalid("XML event model is invalid"));
+                    }
+                };
+                let value = match event {
+                    Event::Text(text) => text
+                        .decode()
+                        .map(|value| decode_entities(&value).into_bytes())
+                        .map_err(|_| OoxmlError::invalid("XML text is invalid"))?,
+                    _ => event.as_ref().to_vec(),
+                };
+                output.push(CanonicalXmlEvent::Raw { kind, value });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn unique_direct_child_by_attribute_mut<'a>(
+    parent: &'a mut XmlElement,
+    local_name: &[u8],
+    namespace: &[u8],
+    attribute_name: &[u8],
+    attribute_value: &str,
+    error: &str,
+) -> Result<&'a mut XmlElement, OoxmlError> {
+    let matches = parent
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace)
+                    && has_local_name(child, local_name) =>
+            {
+                Some((index, attribute(child, attribute_name)))
+            }
+            _ => None,
+        })
+        .filter(|(_, value)| value.as_deref() == Some(attribute_value))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(OoxmlError::invalid(error));
+    }
+    match &mut parent.children[matches[0]] {
+        XmlNode::Element(element) => Ok(element),
+        XmlNode::Raw(_) => Err(OoxmlError::invalid(error)),
+    }
+}
+
 fn shared_strings(raw: &[u8]) -> Result<Vec<String>, OoxmlError> {
     let document = parse_document(raw)?;
     let root = document_root_local(&document, b"sst", "shared strings root is invalid")?;
@@ -1670,7 +2517,11 @@ fn shared_strings(raw: &[u8]) -> Result<Vec<String>, OoxmlError> {
     Ok(strings)
 }
 
-fn worksheet_data(raw: &[u8], shared_strings: &[String]) -> Result<WorksheetData, OoxmlError> {
+fn worksheet_data(
+    raw: &[u8],
+    shared_strings: &[String],
+    merge_budget: &mut MergeComparisonBudget,
+) -> Result<WorksheetData, OoxmlError> {
     let document = parse_document(raw)?;
     let root = document_root_local(&document, b"worksheet", "worksheet root is invalid")?;
     let namespace = root
@@ -1699,7 +2550,7 @@ fn worksheet_data(raw: &[u8], shared_strings: &[String]) -> Result<WorksheetData
             "worksheet protection is invalid",
         )?
         .is_some(),
-        merged_ranges: worksheet_merged_ranges(root, namespace)?,
+        merged_ranges: worksheet_merged_ranges(root, namespace, merge_budget)?,
         ..WorksheetData::default()
     };
 
@@ -1898,6 +2749,36 @@ fn single_child_element_in_namespace<'a>(
         .ok_or_else(|| OoxmlError::invalid(error))
 }
 
+fn single_child_element_in_namespace_mut<'a>(
+    parent: &'a mut XmlElement,
+    local_name: &[u8],
+    namespace: &[u8],
+    error: &str,
+) -> Result<&'a mut XmlElement, OoxmlError> {
+    let matches = parent
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(child) if has_local_name(child, local_name) => {
+                if child.namespace.as_deref() == Some(namespace) {
+                    Some(Ok(index))
+                } else {
+                    Some(Err(OoxmlError::invalid(error)))
+                }
+            }
+            _ => None,
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if matches.len() != 1 {
+        return Err(OoxmlError::invalid(error));
+    }
+    match &mut parent.children[matches[0]] {
+        XmlNode::Element(element) => Ok(element),
+        XmlNode::Raw(_) => Err(OoxmlError::invalid(error)),
+    }
+}
+
 fn canonical_inline_string(element: &XmlElement, namespace: &[u8]) -> Result<String, OoxmlError> {
     let mut text = String::new();
     for node in &element.children {
@@ -2018,6 +2899,7 @@ fn reject_nested_cell_value_shadow(element: &XmlElement) -> Result<(), OoxmlErro
 fn worksheet_merged_ranges(
     root: &XmlElement,
     namespace: &[u8],
+    merge_budget: &mut MergeComparisonBudget,
 ) -> Result<Vec<CellRange>, OoxmlError> {
     let Some(merge_cells) = optional_single_child_element_in_namespace(
         root,
@@ -2028,7 +2910,7 @@ fn worksheet_merged_ranges(
     else {
         return Ok(Vec::new());
     };
-    let mut ranges = Vec::new();
+    let mut ranges = Vec::<CellRange>::new();
     for node in &merge_cells.children {
         let XmlNode::Element(element) = node else {
             continue;
@@ -2063,14 +2945,18 @@ fn worksheet_merged_ranges(
             || range.first_column > range.last_column
             || range.last_row > MAX_WORKSHEET_ROWS
             || range.last_column > MAX_WORKSHEET_COLUMNS
-            || ranges.iter().any(|existing: &CellRange| {
-                existing.first_row <= range.last_row
-                    && range.first_row <= existing.last_row
-                    && existing.first_column <= range.last_column
-                    && range.first_column <= existing.last_column
-            })
         {
             return Err(OoxmlError::invalid("worksheet merge range is invalid"));
+        }
+        for existing in &ranges {
+            merge_budget.consume()?;
+            if existing.first_row <= range.last_row
+                && range.first_row <= existing.last_row
+                && existing.first_column <= range.last_column
+                && range.first_column <= existing.last_column
+            {
+                return Err(OoxmlError::invalid("worksheet merge range is invalid"));
+            }
         }
         ranges.push(range);
     }
@@ -2548,6 +3434,30 @@ fn document_root_local<'a>(
     Ok(root)
 }
 
+fn document_root_mut_local<'a>(
+    document: &'a mut XmlDocument,
+    local_name: &[u8],
+    error: &str,
+) -> Result<&'a mut XmlElement, OoxmlError> {
+    let roots = document
+        .nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(element) if has_local_name(element, local_name) => Some(index),
+            XmlNode::Element(_) => Some(usize::MAX),
+            XmlNode::Raw(_) => None,
+        })
+        .collect::<Vec<_>>();
+    if roots.len() != 1 || roots[0] == usize::MAX {
+        return Err(OoxmlError::invalid(error));
+    }
+    match &mut document.nodes[roots[0]] {
+        XmlNode::Element(root) => Ok(root),
+        XmlNode::Raw(_) => Err(OoxmlError::invalid(error)),
+    }
+}
+
 fn single_child_element_expanded<'a>(
     parent: &'a XmlElement,
     local_name: &'a [u8],
@@ -2809,6 +3719,35 @@ fn set_attribute(element: &mut XmlElement, local: &[u8], value: &str) {
     }
 }
 
+fn set_unqualified_attribute(element: &mut XmlElement, name: &[u8], value: &str) {
+    let mut attributes = element
+        .start
+        .attributes()
+        .with_checks(false)
+        .flatten()
+        .map(|attribute| {
+            (
+                attribute.key.as_ref().to_vec(),
+                attribute.value.as_ref().to_vec(),
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some(attribute) = attributes
+        .iter_mut()
+        .find(|attribute| attribute.0.as_slice() == name)
+    {
+        attribute.1 = value.as_bytes().to_vec();
+    } else {
+        attributes.push((name.to_vec(), value.as_bytes().to_vec()));
+    }
+    element.start.clear_attributes();
+    for (key, value) in attributes {
+        element
+            .start
+            .push_attribute((key.as_slice(), value.as_slice()));
+    }
+}
+
 fn remove_attribute(element: &mut XmlElement, local: &[u8]) {
     let attributes = element
         .start
@@ -2932,9 +3871,9 @@ mod tests {
     use zip::{ZipWriter, write::SimpleFileOptions};
 
     use super::{
-        CellUpdate, OoxmlErrorKind, WorksheetDescriptor, WorksheetVisibility,
-        ordered_workbook_discovery, parse_document_with_limits, patch_workbook_sheets,
-        read_workbook, sheet_infos_from_path,
+        CellUpdate, MAX_APPLY_MERGE_COMPARISONS, MergeComparisonBudget, OoxmlErrorKind,
+        WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
+        parse_document_with_limits, patch_workbook_sheets, read_workbook, sheet_infos_from_path,
     };
 
     const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2943,6 +3882,18 @@ mod tests {
     const OFFICE_DOCUMENT_REL: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     const PACKAGE_REL_NS: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    #[test]
+    fn guarded_follow_up_apply_merge_budget_exact_boundary_and_one_over() {
+        let mut exact = MergeComparisonBudget::for_apply(MAX_APPLY_MERGE_COMPARISONS - 1).unwrap();
+        exact.consume().unwrap();
+        let one_over = exact.consume().unwrap_err();
+        assert_eq!(one_over.kind(), OoxmlErrorKind::LimitExceeded);
+
+        let already_over =
+            MergeComparisonBudget::for_apply(MAX_APPLY_MERGE_COMPARISONS + 1).unwrap_err();
+        assert_eq!(already_over.kind(), OoxmlErrorKind::LimitExceeded);
+    }
 
     struct SparseReader {
         len: u64,

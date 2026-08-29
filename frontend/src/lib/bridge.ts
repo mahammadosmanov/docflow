@@ -20,6 +20,7 @@ import type {
   ProgressEvent,
   RecoveryPayload,
   ReviewItem,
+  SupportBundlePreview,
 } from "../types";
 
 type ProgressHandler = (event: ProgressEvent) => void;
@@ -195,6 +196,37 @@ const demoRfiOperation: OperationDef = {
       choiceLabels: {},
       visibleWhen: {},
       helpKey: "param.rfi.sheetCounts.help",
+    },
+  ],
+};
+
+const demoRfiFollowUpOperation: OperationDef = {
+  id: "rfi.follow_up_sync",
+  titleKey: "op.rfi.follow_up_sync.title",
+  descriptionKey: "op.rfi.follow_up_sync.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "rfi_log_workbook",
+      kind: "file",
+      labelKey: "param.rfi.followUp.rfiLogWorkbook",
+      default: "",
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.followUp.rfiLogWorkbook.help",
+    },
+    {
+      name: "follow_up_workbook",
+      kind: "file",
+      labelKey: "param.rfi.followUp.followUpWorkbook",
+      default: "",
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.followUp.followUpWorkbook.help",
     },
   ],
 };
@@ -459,6 +491,7 @@ export class MockBridge implements Bridge {
           operations: [
             demoOperation,
             demoRfiOperation,
+            demoRfiFollowUpOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
           ],
@@ -521,6 +554,37 @@ export class MockBridge implements Bridge {
         break;
       case "settings/saveParams":
         this.params = (params.values as Record<string, unknown>) ?? {};
+        result = { ok: true };
+        break;
+      case "support/diagnostics": {
+        const content = `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            docflow: { version: __DOCFLOW_VERSION__ },
+            platform: { arch: "demo", os: "browser-preview" },
+            components: {
+              ocr: {
+                engine: "tesseract",
+                languageDataAvailable: false,
+                status: "missing",
+              },
+              sidecar: { required: false, status: "retired" },
+            },
+            recentErrorCodes: [],
+            privacy: { delivery: "local-only", redaction: "recursive" },
+          },
+          null,
+          2,
+        )}\n`;
+        result = {
+          fileName: "docflow-support-diagnostics-v1.json",
+          mediaType: "application/json",
+          byteLength: new TextEncoder().encode(content).byteLength,
+          content,
+        } satisfies SupportBundlePreview;
+        break;
+      }
+      case "support/copyDiagnostics":
         result = { ok: true };
         break;
       case "engine/preview": {

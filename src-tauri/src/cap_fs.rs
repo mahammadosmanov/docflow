@@ -8,16 +8,37 @@ use std::{
 
 use crate::journal::FilesystemObjectIdentity;
 
+const MAX_SECURITY_AUXILIARY_RECORDS: usize = 128;
+const MAX_SECURITY_AUXILIARY_BYTES: u64 = 1024 * 1024;
+
 #[cfg(test)]
 thread_local! {
     static DIRECTORY_SYNC_FAILURE_COUNTDOWN: std::cell::Cell<Option<usize>> = const {
         std::cell::Cell::new(None)
+    };
+    static POST_CREATE_IDENTITY_FAILURE: std::cell::Cell<bool> = const {
+        std::cell::Cell::new(false)
     };
 }
 
 #[cfg(test)]
 pub(crate) fn inject_directory_sync_failure_after(successful_syncs: usize) {
     DIRECTORY_SYNC_FAILURE_COUNTDOWN.with(|countdown| countdown.set(Some(successful_syncs)));
+}
+
+#[cfg(test)]
+fn inject_post_create_identity_failure_once() {
+    POST_CREATE_IDENTITY_FAILURE.with(|injected| injected.set(true));
+}
+
+#[cfg(test)]
+fn take_post_create_identity_failure() -> bool {
+    POST_CREATE_IDENTITY_FAILURE.with(|injected| injected.replace(false))
+}
+
+#[cfg(not(test))]
+fn take_post_create_identity_failure() -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -46,10 +67,21 @@ fn injected_directory_sync_failure() -> io::Result<()> {
 pub(crate) struct CapabilityRoot {
     canonical: PathBuf,
     directory: Arc<PlatformDirectory>,
+    access: DirectoryAccess,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DirectoryAccess {
+    ReadOnly,
+    ReadWrite,
 }
 
 impl CapabilityRoot {
     pub(crate) fn open(canonical: &Path) -> io::Result<Self> {
+        Self::open_with_access(canonical, DirectoryAccess::ReadWrite)
+    }
+
+    pub(crate) fn open_with_access(canonical: &Path, access: DirectoryAccess) -> io::Result<Self> {
         if !canonical.is_absolute() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -58,7 +90,8 @@ impl CapabilityRoot {
         }
         Ok(Self {
             canonical: canonical.to_path_buf(),
-            directory: Arc::new(PlatformDirectory::open_ambient(canonical)?),
+            directory: Arc::new(PlatformDirectory::open_ambient(canonical, access)?),
+            access,
         })
     }
 
@@ -143,13 +176,14 @@ impl AuthorizedPath {
                     "invalid capability-relative ancestor",
                 ));
             };
-            directory = directory.open_dir_no_follow(name)?;
+            directory = directory.open_dir_no_follow(name, self.root.access)?;
         }
         Ok(AnchoredPath {
             absolute: self.absolute.clone(),
             parent: directory,
             name,
             expected_identity: self.expected_identity.clone(),
+            access: self.root.access,
         })
     }
 
@@ -165,7 +199,7 @@ impl AuthorizedPath {
                 ));
             };
             absolute.push(name);
-            match parent.open_dir_no_follow(name) {
+            match parent.open_dir_no_follow(name, self.root.access) {
                 Ok(directory) => parent = directory,
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {
                     let mut missing = vec![(absolute.clone(), name.to_os_string())];
@@ -183,6 +217,7 @@ impl AuthorizedPath {
                         parent,
                         missing,
                         index: 0,
+                        access: self.root.access,
                     });
                 }
                 Err(error) => return Err(error),
@@ -192,14 +227,113 @@ impl AuthorizedPath {
             parent,
             missing: Vec::new(),
             index: 0,
+            access: self.root.access,
         })
     }
+
+    pub(crate) fn create_artifact_parent_no_clobber(
+        &self,
+    ) -> Result<ArtifactParentCreateOutcome, CapabilityEffectError> {
+        let anchored = self.anchor().map_err(CapabilityEffectError::no_effect)?;
+        anchored
+            .require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        match anchored.parent.create_dir(&anchored.name) {
+            Ok(()) => match anchored
+                .parent
+                .open_dir_no_follow(&anchored.name, DirectoryAccess::ReadWrite)
+                .and_then(|directory| directory.identity())
+            {
+                Ok(identity) => Ok(ArtifactParentCreateOutcome::Created { identity }),
+                Err(_) => Ok(ArtifactParentCreateOutcome::CreatedIdentityUnknown),
+            },
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                Ok(ArtifactParentCreateOutcome::AlreadyExists)
+            }
+            Err(error) => Err(CapabilityEffectError::no_effect(error)),
+        }
+    }
+
+    pub(crate) fn s5_retained_storage_usage(
+        &self,
+        max_entries: usize,
+    ) -> io::Result<RetainedStorageUsage> {
+        let directory = self.open_directory_no_follow()?;
+        let mut usage = RetainedStorageUsage {
+            file_count: 0,
+            logical_charge_bytes: 0,
+        };
+        for name in directory.entry_names()? {
+            let Some(name_text) = name.to_str() else {
+                continue;
+            };
+            if !S5_RETAINED_PREFIXES
+                .iter()
+                .any(|prefix| name_text.starts_with(prefix))
+            {
+                continue;
+            }
+            usage.file_count = usage
+                .file_count
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("retained artifact count overflowed"))?;
+            if usage.file_count > max_entries {
+                return Err(io::Error::other(
+                    "retained artifact count exceeded the limit",
+                ));
+            }
+            let file = directory.open_file_no_follow(&name, false)?;
+            let metadata = file.metadata()?;
+            if !metadata.is_file() {
+                return Err(io::Error::other("retained artifact is not a regular file"));
+            }
+            let snapshot = FileSecuritySnapshot::capture(&file, None)?;
+            let charge = metadata
+                .len()
+                .checked_add(snapshot.auxiliary_charge_bytes())
+                .ok_or_else(|| io::Error::other("retained artifact charge overflowed"))?;
+            usage.logical_charge_bytes = usage
+                .logical_charge_bytes
+                .checked_add(charge)
+                .ok_or_else(|| io::Error::other("retained storage usage overflowed"))?;
+        }
+        Ok(usage)
+    }
+
+    fn open_directory_no_follow(&self) -> io::Result<PlatformDirectory> {
+        let mut directory = self.root.directory.try_clone()?;
+        for component in self.relative.components() {
+            let Component::Normal(name) = component else {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "invalid capability-relative directory",
+                ));
+            };
+            directory = directory.open_dir_no_follow(name, self.root.access)?;
+        }
+        Ok(directory)
+    }
+}
+
+const S5_RETAINED_PREFIXES: [&str; 4] = [
+    ".docflow-s5-backup-",
+    ".docflow-s5-private-output-",
+    ".docflow-s5-retained-original-",
+    ".docflow-s5-retained-applied-",
+];
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ArtifactParentCreateOutcome {
+    Created { identity: FilesystemObjectIdentity },
+    AlreadyExists,
+    CreatedIdentityUnknown,
 }
 
 pub(crate) struct MissingDirectoryCursor {
     parent: PlatformDirectory,
     missing: Vec<(PathBuf, OsString)>,
     index: usize,
+    access: DirectoryAccess,
 }
 
 impl MissingDirectoryCursor {
@@ -208,6 +342,12 @@ impl MissingDirectoryCursor {
     }
 
     pub(crate) fn create_next(&mut self) -> Result<(), CapabilityEffectError> {
+        if self.access != DirectoryAccess::ReadWrite {
+            return Err(CapabilityEffectError::no_effect(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "read-only capability cannot create a directory",
+            )));
+        }
         let (_, name) = self.missing.get(self.index).ok_or_else(|| {
             CapabilityEffectError::no_effect(io::Error::other("no directory pending"))
         })?;
@@ -216,7 +356,7 @@ impl MissingDirectoryCursor {
             .map_err(CapabilityEffectError::no_effect)?;
         let child = self
             .parent
-            .open_dir_no_follow(name)
+            .open_dir_no_follow(name, self.access)
             .map_err(CapabilityEffectError::outcome_unknown)?;
         self.parent
             .sync_all()
@@ -227,6 +367,7 @@ impl MissingDirectoryCursor {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct CapabilityEffectError {
     error: io::Error,
     outcome_unknown: bool,
@@ -256,11 +397,513 @@ impl CapabilityEffectError {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct FileSecuritySnapshot {
+    access: PlatformFileAccess,
+    auxiliary: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PlatformFileAccess {
+    #[cfg(unix)]
+    Unix {
+        mode: u32,
+        uid: u32,
+        gid: u32,
+        links: u64,
+    },
+    #[cfg(windows)]
+    Windows { attributes: u32 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ParentSecuritySnapshot {
+    identity: FilesystemObjectIdentity,
+    access: PlatformParentAccess,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PlatformParentAccess {
+    #[cfg(unix)]
+    Unix { mode: u32, uid: u32, gid: u32 },
+    #[cfg(windows)]
+    Windows { attributes: u32 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CreationSecurityDescriptor {
+    access: PlatformFileAccess,
+    auxiliary: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+pub(crate) struct SecuredCreatedFile(File);
+
+pub(crate) enum SecuredCreateOutcome {
+    Created {
+        file: SecuredCreatedFile,
+        identity: FilesystemObjectIdentity,
+    },
+    CreatedIdentityUnknown {
+        file: SecuredCreatedFile,
+    },
+}
+
+pub(crate) struct RetainedStorageUsage {
+    pub(crate) file_count: usize,
+    pub(crate) logical_charge_bytes: u64,
+}
+
+pub(crate) struct RetainedStorageReservation {
+    pub(crate) file_count: usize,
+    pub(crate) logical_charge_bytes: u64,
+}
+
+impl RetainedStorageReservation {
+    pub(crate) fn for_apply(
+        original_default_stream_bytes: u64,
+        original_auxiliary_charge_bytes: u64,
+    ) -> io::Result<Self> {
+        let logical_charge_bytes = original_default_stream_bytes
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(crate::ooxml::MAX_PACKAGE_BYTES))
+            .and_then(|value| {
+                original_auxiliary_charge_bytes
+                    .checked_mul(3)
+                    .and_then(|auxiliary| value.checked_add(auxiliary))
+            })
+            .ok_or_else(|| io::Error::other("retained storage reservation overflowed"))?;
+        Ok(Self {
+            file_count: 3,
+            logical_charge_bytes,
+        })
+    }
+
+    pub(crate) fn for_undo(
+        current_applied_default_stream_bytes: u64,
+        current_applied_auxiliary_charge_bytes: u64,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            file_count: 1,
+            logical_charge_bytes: current_applied_default_stream_bytes
+                .checked_add(current_applied_auxiliary_charge_bytes)
+                .ok_or_else(|| io::Error::other("retained storage reservation overflowed"))?,
+        })
+    }
+}
+
+impl FileSecuritySnapshot {
+    pub(crate) fn capture(data: &File, _security: Option<&File>) -> io::Result<Self> {
+        let metadata = data.metadata()?;
+        #[cfg(unix)]
+        let access = {
+            use std::os::unix::fs::MetadataExt;
+
+            if metadata.nlink() != 1 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "secured workbook must have exactly one hard link",
+                ));
+            }
+            PlatformFileAccess::Unix {
+                mode: metadata.mode(),
+                uid: metadata.uid(),
+                gid: metadata.gid(),
+                links: metadata.nlink(),
+            }
+        };
+        #[cfg(windows)]
+        let access = {
+            use std::os::windows::fs::MetadataExt;
+
+            PlatformFileAccess::Windows {
+                attributes: metadata.file_attributes(),
+            }
+        };
+        #[cfg(unix)]
+        let auxiliary = capture_unix_xattrs(data)?;
+        #[cfg(windows)]
+        let auxiliary = Vec::new();
+        Ok(Self { access, auxiliary })
+    }
+
+    pub(crate) fn creation_descriptor(
+        &self,
+        _parent: &ParentSecuritySnapshot,
+    ) -> io::Result<CreationSecurityDescriptor> {
+        Ok(CreationSecurityDescriptor {
+            access: self.access.clone(),
+            auxiliary: self.auxiliary.clone(),
+        })
+    }
+
+    pub(crate) fn verify_created_access(&self, file: &SecuredCreatedFile) -> io::Result<()> {
+        let actual = Self::capture(&file.0, None)?;
+        if actual.access == self.access {
+            Ok(())
+        } else {
+            Err(io::Error::other("secured file access metadata changed"))
+        }
+    }
+
+    pub(crate) fn replay_and_verify_auxiliary(
+        &self,
+        file: &mut SecuredCreatedFile,
+    ) -> io::Result<()> {
+        #[cfg(unix)]
+        replay_unix_xattrs(&file.0, &self.auxiliary)?;
+        let actual = Self::capture(&file.0, None)?;
+        if actual.auxiliary == self.auxiliary {
+            Ok(())
+        } else {
+            Err(io::Error::other("secured file auxiliary metadata changed"))
+        }
+    }
+
+    pub(crate) fn verify_complete(&self, file: &SecuredCreatedFile) -> io::Result<()> {
+        let actual = Self::capture(&file.0, None)?;
+        if &actual == self {
+            Ok(())
+        } else {
+            Err(io::Error::other("secured file metadata changed"))
+        }
+    }
+
+    pub(crate) fn access_sha256(&self) -> String {
+        security_digest(format!("{:?}", self.access).as_bytes())
+    }
+
+    pub(crate) fn auxiliary_sha256(&self) -> String {
+        security_digest(format!("{:?}", self.auxiliary).as_bytes())
+    }
+
+    pub(crate) fn auxiliary_charge_bytes(&self) -> u64 {
+        self.auxiliary.iter().fold(0_u64, |total, (name, value)| {
+            total
+                .saturating_add(name.len() as u64)
+                .saturating_add(value.len() as u64)
+                .saturating_add(16)
+        })
+    }
+
+    pub(crate) fn sha256(&self) -> String {
+        security_digest(format!("{:?}:{:?}", self.access, self.auxiliary).as_bytes())
+    }
+}
+
+impl CreationSecurityDescriptor {
+    pub(crate) fn current_owner_only() -> io::Result<Self> {
+        #[cfg(unix)]
+        let access = PlatformFileAccess::Unix {
+            mode: u32::from(libc::S_IFREG | 0o600),
+            uid: unsafe { libc::geteuid() },
+            gid: unsafe { libc::getegid() },
+            links: 1,
+        };
+        #[cfg(windows)]
+        let access = PlatformFileAccess::Windows {
+            attributes: windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_NORMAL,
+        };
+        Ok(Self {
+            access,
+            auxiliary: Vec::new(),
+        })
+    }
+}
+
+impl SecuredCreatedFile {
+    pub(crate) fn sync_all(&self) -> io::Result<()> {
+        self.0.sync_all()
+    }
+
+    pub(crate) fn identity(&self) -> io::Result<FilesystemObjectIdentity> {
+        file_identity(&self.0)
+    }
+
+    pub(crate) fn security_snapshot(&self) -> io::Result<FileSecuritySnapshot> {
+        FileSecuritySnapshot::capture(&self.0, None)
+    }
+
+    pub(crate) fn len(&self) -> io::Result<u64> {
+        Ok(self.0.metadata()?.len())
+    }
+
+    pub(crate) fn sha256(&mut self) -> io::Result<String> {
+        use sha2::{Digest, Sha256};
+
+        self.seek(SeekFrom::Start(0))?;
+        let mut digest = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = self.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            digest.update(&buffer[..read]);
+        }
+        self.seek(SeekFrom::Start(0))?;
+        Ok(format!("{:x}", digest.finalize()))
+    }
+}
+
+impl Read for SecuredCreatedFile {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+
+impl Write for SecuredCreatedFile {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.0.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Seek for SecuredCreatedFile {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.0.seek(position)
+    }
+}
+
+fn apply_creation_security(file: &File, security: &CreationSecurityDescriptor) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
+
+        let PlatformFileAccess::Unix { mode, uid, gid, .. } = security.access;
+        let descriptor = file.as_raw_fd();
+        let metadata = file.metadata()?;
+        if (metadata.uid() != uid || metadata.gid() != gid)
+            && unsafe { libc::fchown(descriptor, uid, gid) } != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let permission_mode = libc::mode_t::try_from(mode & 0o7777)
+            .map_err(|_| io::Error::other("secured file mode is invalid"))?;
+        if unsafe { libc::fchmod(descriptor, permission_mode) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    #[cfg(windows)]
+    {
+        let PlatformFileAccess::Windows { attributes } = security.access;
+        use std::os::windows::fs::MetadataExt;
+        if file.metadata()?.file_attributes() != attributes {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "complete Windows creation security requires the secured NtCreateFile path",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+    use std::os::fd::AsRawFd;
+
+    let descriptor = file.as_raw_fd();
+    #[cfg(target_os = "macos")]
+    let list_size = unsafe { libc::flistxattr(descriptor, std::ptr::null_mut(), 0, 0) };
+    #[cfg(not(target_os = "macos"))]
+    let list_size = unsafe { libc::flistxattr(descriptor, std::ptr::null_mut(), 0) };
+    if list_size < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if u64::try_from(list_size).unwrap_or(u64::MAX) > MAX_SECURITY_AUXILIARY_BYTES {
+        return Err(io::Error::other(
+            "file auxiliary metadata exceeded the size limit",
+        ));
+    }
+    let mut names = vec![0_u8; list_size as usize];
+    if list_size > 0 {
+        #[cfg(target_os = "macos")]
+        let read =
+            unsafe { libc::flistxattr(descriptor, names.as_mut_ptr().cast(), names.len(), 0) };
+        #[cfg(not(target_os = "macos"))]
+        let read = unsafe { libc::flistxattr(descriptor, names.as_mut_ptr().cast(), names.len()) };
+        if read != list_size {
+            return Err(io::Error::other(
+                "file auxiliary metadata changed during capture",
+            ));
+        }
+    }
+    let mut records = names
+        .split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| name.to_vec())
+        .collect::<Vec<_>>();
+    records.sort();
+    records.dedup();
+    if records.len() > MAX_SECURITY_AUXILIARY_RECORDS {
+        return Err(io::Error::other(
+            "file auxiliary metadata record count exceeded the limit",
+        ));
+    }
+
+    let mut total = 0_u64;
+    let mut output = Vec::with_capacity(records.len());
+    for name in records {
+        let c_name = std::ffi::CString::new(name.clone())
+            .map_err(|_| io::Error::other("file auxiliary metadata name is invalid"))?;
+        #[cfg(target_os = "macos")]
+        let value_size =
+            unsafe { libc::fgetxattr(descriptor, c_name.as_ptr(), std::ptr::null_mut(), 0, 0, 0) };
+        #[cfg(not(target_os = "macos"))]
+        let value_size =
+            unsafe { libc::fgetxattr(descriptor, c_name.as_ptr(), std::ptr::null_mut(), 0) };
+        if value_size < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        total = total
+            .checked_add(name.len() as u64)
+            .and_then(|value| value.checked_add(value_size as u64))
+            .and_then(|value| value.checked_add(16))
+            .filter(|value| *value <= MAX_SECURITY_AUXILIARY_BYTES)
+            .ok_or_else(|| io::Error::other("file auxiliary metadata exceeded the size limit"))?;
+        let mut value = vec![0_u8; value_size as usize];
+        if value_size > 0 {
+            #[cfg(target_os = "macos")]
+            let read = unsafe {
+                libc::fgetxattr(
+                    descriptor,
+                    c_name.as_ptr(),
+                    value.as_mut_ptr().cast(),
+                    value.len(),
+                    0,
+                    0,
+                )
+            };
+            #[cfg(not(target_os = "macos"))]
+            let read = unsafe {
+                libc::fgetxattr(
+                    descriptor,
+                    c_name.as_ptr(),
+                    value.as_mut_ptr().cast(),
+                    value.len(),
+                )
+            };
+            if read != value_size {
+                return Err(io::Error::other(
+                    "file auxiliary metadata changed during capture",
+                ));
+            }
+        }
+        output.push((name, value));
+    }
+    Ok(output)
+}
+
+#[cfg(unix)]
+fn replay_unix_xattrs(file: &File, records: &[(Vec<u8>, Vec<u8>)]) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    if records.len() > MAX_SECURITY_AUXILIARY_RECORDS {
+        return Err(io::Error::other(
+            "file auxiliary metadata record count exceeded the limit",
+        ));
+    }
+    for (name, value) in records {
+        let c_name = std::ffi::CString::new(name.clone())
+            .map_err(|_| io::Error::other("file auxiliary metadata name is invalid"))?;
+        #[cfg(target_os = "macos")]
+        let result = unsafe {
+            libc::fsetxattr(
+                file.as_raw_fd(),
+                c_name.as_ptr(),
+                value.as_ptr().cast(),
+                value.len(),
+                0,
+                0,
+            )
+        };
+        #[cfg(not(target_os = "macos"))]
+        let result = unsafe {
+            libc::fsetxattr(
+                file.as_raw_fd(),
+                c_name.as_ptr(),
+                value.as_ptr().cast(),
+                value.len(),
+                0,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+fn parent_security_snapshot(parent: &PlatformDirectory) -> io::Result<ParentSecuritySnapshot> {
+    let metadata = parent.metadata()?;
+    #[cfg(unix)]
+    let access = {
+        use std::os::unix::fs::MetadataExt;
+
+        PlatformParentAccess::Unix {
+            mode: metadata.mode(),
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        }
+    };
+    #[cfg(windows)]
+    let access = {
+        use std::os::windows::fs::MetadataExt;
+
+        PlatformParentAccess::Windows {
+            attributes: metadata.file_attributes(),
+        }
+    };
+    Ok(ParentSecuritySnapshot {
+        identity: parent.identity()?,
+        access,
+    })
+}
+
+fn security_digest(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+#[cfg(test)]
+fn windows_backup_stream_auxiliary_charge(records: &[(u32, &str, u64)]) -> io::Result<u64> {
+    const BACKUP_DATA: u32 = 1;
+    let mut unnamed_default_seen = false;
+    let mut charge = 0_u64;
+    for (stream_id, name, payload_bytes) in records {
+        if *stream_id == BACKUP_DATA && name.is_empty() {
+            if unnamed_default_seen {
+                return Err(io::Error::other(
+                    "duplicate unnamed backup data stream was reported",
+                ));
+            }
+            unnamed_default_seen = true;
+            continue;
+        }
+        charge = charge
+            .checked_add(name.len() as u64)
+            .and_then(|value| value.checked_add(*payload_bytes))
+            .and_then(|value| value.checked_add(16))
+            .filter(|value| *value <= MAX_SECURITY_AUXILIARY_BYTES)
+            .ok_or_else(|| io::Error::other("backup auxiliary stream budget was exceeded"))?;
+    }
+    if !unnamed_default_seen {
+        return Err(io::Error::other(
+            "unnamed backup data stream was not reported",
+        ));
+    }
+    Ok(charge)
+}
+
 pub(crate) struct AnchoredPath {
     absolute: PathBuf,
     parent: PlatformDirectory,
     name: OsString,
     expected_identity: Option<FilesystemObjectIdentity>,
+    access: DirectoryAccess,
 }
 
 impl AnchoredPath {
@@ -287,9 +930,45 @@ impl AnchoredPath {
     }
 
     pub(crate) fn open_mutable(&self) -> io::Result<File> {
+        self.require_write()?;
         let file = self.parent.open_file_no_follow(&self.name, true)?;
         self.validate_expected_identity(&file)?;
         Ok(file)
+    }
+
+    pub(crate) fn create_new(&self) -> io::Result<File> {
+        self.require_write()?;
+        self.parent.create_file_new(&self.name)
+    }
+
+    pub(crate) fn create_new_secured(
+        &self,
+        security: &CreationSecurityDescriptor,
+    ) -> io::Result<SecuredCreatedFile> {
+        let file = self.create_new()?;
+        apply_creation_security(&file, security)?;
+        Ok(SecuredCreatedFile(file))
+    }
+
+    pub(crate) fn create_new_secured_identified(
+        &self,
+        security: &CreationSecurityDescriptor,
+    ) -> Result<SecuredCreateOutcome, CapabilityEffectError> {
+        self.require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        let raw = self
+            .parent
+            .create_file_new(&self.name)
+            .map_err(CapabilityEffectError::no_effect)?;
+        apply_creation_security(&raw, security).map_err(CapabilityEffectError::outcome_unknown)?;
+        let file = SecuredCreatedFile(raw);
+        if take_post_create_identity_failure() {
+            return Ok(SecuredCreateOutcome::CreatedIdentityUnknown { file });
+        }
+        match file.identity() {
+            Ok(identity) => Ok(SecuredCreateOutcome::Created { file, identity }),
+            Err(_) => Ok(SecuredCreateOutcome::CreatedIdentityUnknown { file }),
+        }
     }
 
     pub(crate) fn identity(&self) -> io::Result<FilesystemObjectIdentity> {
@@ -306,10 +985,12 @@ impl AnchoredPath {
     }
 
     pub(crate) fn remove_file(&self) -> io::Result<()> {
+        self.require_write()?;
         self.parent.remove_file(&self.name)
     }
 
     pub(crate) fn remove_dir(&self) -> io::Result<()> {
+        self.require_write()?;
         self.parent.remove_dir(&self.name)
     }
 
@@ -329,6 +1010,7 @@ impl AnchoredPath {
     }
 
     pub(crate) fn copy_no_clobber_from_file(&self, input: &mut File) -> io::Result<()> {
+        self.require_write()?;
         input.seek(SeekFrom::Start(0))?;
         let (temporary_name, mut output) = self.create_temporary()?;
         let result = (|| {
@@ -347,6 +1029,7 @@ impl AnchoredPath {
     }
 
     pub(crate) fn write_no_clobber(&self, contents: &[u8]) -> io::Result<()> {
+        self.require_write()?;
         let (temporary_name, mut output) = self.create_temporary()?;
         let result = (|| {
             output.write_all(contents)?;
@@ -363,6 +1046,8 @@ impl AnchoredPath {
     }
 
     pub(crate) fn move_no_clobber_to(&self, destination: &AnchoredPath) -> io::Result<()> {
+        self.require_write()?;
+        destination.require_write()?;
         match self
             .parent
             .rename(&self.name, &destination.parent, &destination.name, false)
@@ -380,7 +1065,61 @@ impl AnchoredPath {
         }
     }
 
+    pub(crate) fn retain_current_name_no_clobber(
+        &self,
+        retained: &AnchoredPath,
+    ) -> Result<(), CapabilityEffectError> {
+        self.require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        retained
+            .require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        let source_parent = self
+            .parent
+            .identity()
+            .map_err(CapabilityEffectError::no_effect)?;
+        let retained_parent = retained
+            .parent
+            .identity()
+            .map_err(CapabilityEffectError::no_effect)?;
+        if source_parent != retained_parent {
+            return Err(CapabilityEffectError::no_effect(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "retained publication must remain in the canonical parent",
+            )));
+        }
+        self.parent
+            .rename(&self.name, &retained.parent, &retained.name, false)
+            .map_err(CapabilityEffectError::no_effect)?;
+        self.parent
+            .sync_all()
+            .map_err(CapabilityEffectError::outcome_unknown)
+    }
+
+    pub(crate) fn sync_parent(&self) -> io::Result<()> {
+        self.require_write()?;
+        self.parent.sync_all()
+    }
+
+    pub(crate) fn capture_parent_security(&self) -> io::Result<ParentSecuritySnapshot> {
+        parent_security_snapshot(&self.parent)
+    }
+
+    pub(crate) fn verify_parent_security(
+        &self,
+        expected: &ParentSecuritySnapshot,
+    ) -> io::Result<()> {
+        let actual = self.capture_parent_security()?;
+        if &actual == expected {
+            Ok(())
+        } else {
+            Err(io::Error::other("capability parent security changed"))
+        }
+    }
+
     pub(crate) fn replace_with(&self, source: &AnchoredPath) -> io::Result<()> {
+        self.require_write()?;
+        source.require_write()?;
         source
             .parent
             .rename(&source.name, &self.parent, &self.name, true)?;
@@ -418,6 +1157,7 @@ impl AnchoredPath {
             parent: self.parent.try_clone()?,
             name,
             expected_identity: None,
+            access: self.access,
         })
     }
 
@@ -434,7 +1174,19 @@ impl AnchoredPath {
         Ok(())
     }
 
+    fn require_write(&self) -> io::Result<()> {
+        if self.access == DirectoryAccess::ReadWrite {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "read-only capability cannot mutate the filesystem",
+            ))
+        }
+    }
+
     fn create_temporary(&self) -> io::Result<(OsString, File)> {
+        self.require_write()?;
         let display = self.name.to_string_lossy();
         for _ in 0..16 {
             let name = OsString::from(format!(".{display}.docflow-{}.tmp", uuid::Uuid::new_v4()));
@@ -451,7 +1203,7 @@ impl AnchoredPath {
     }
 }
 
-fn file_identity(file: &File) -> io::Result<FilesystemObjectIdentity> {
+pub(crate) fn file_identity(file: &File) -> io::Result<FilesystemObjectIdentity> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -489,9 +1241,29 @@ fn validate_relative(path: &Path) -> io::Result<()> {
 #[cfg(unix)]
 struct PlatformDirectory(File);
 
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+fn unix_errno_pointer() -> *mut libc::c_int {
+    unsafe { libc::__error() }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn unix_errno_pointer() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
+}
+
+#[cfg(unix)]
+fn set_unix_errno(value: libc::c_int) {
+    unsafe { *unix_errno_pointer() = value };
+}
+
+#[cfg(unix)]
+fn unix_errno() -> libc::c_int {
+    unsafe { *unix_errno_pointer() }
+}
+
 #[cfg(unix)]
 impl PlatformDirectory {
-    fn open_ambient(path: &Path) -> io::Result<Self> {
+    fn open_ambient(path: &Path, _access: DirectoryAccess) -> io::Result<Self> {
         use std::os::unix::fs::OpenOptionsExt;
 
         std::fs::OpenOptions::new()
@@ -505,6 +1277,57 @@ impl PlatformDirectory {
         self.0.try_clone().map(Self)
     }
 
+    fn metadata(&self) -> io::Result<std::fs::Metadata> {
+        self.0.metadata()
+    }
+
+    fn entry_names(&self) -> io::Result<Vec<OsString>> {
+        use std::os::fd::AsRawFd;
+
+        let dot = c".";
+        let duplicated = unsafe {
+            libc::openat(
+                self.0.as_raw_fd(),
+                dot.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if duplicated < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let stream = unsafe { libc::fdopendir(duplicated) };
+        if stream.is_null() {
+            unsafe { libc::close(duplicated) };
+            return Err(io::Error::last_os_error());
+        }
+        struct DirectoryStream(*mut libc::DIR);
+        impl Drop for DirectoryStream {
+            fn drop(&mut self) {
+                unsafe { libc::closedir(self.0) };
+            }
+        }
+        let stream = DirectoryStream(stream);
+        let mut names = Vec::new();
+        loop {
+            set_unix_errno(0);
+            let entry = unsafe { libc::readdir(stream.0) };
+            if entry.is_null() {
+                let errno = unix_errno();
+                if errno == 0 {
+                    break;
+                }
+                return Err(io::Error::from_raw_os_error(errno));
+            }
+            let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) };
+            if name.to_bytes() == b"." || name.to_bytes() == b".." {
+                continue;
+            }
+            use std::os::unix::ffi::OsStringExt;
+            names.push(OsString::from_vec(name.to_bytes().to_vec()));
+        }
+        Ok(names)
+    }
+
     fn identity(&self) -> io::Result<FilesystemObjectIdentity> {
         use std::os::unix::fs::MetadataExt;
 
@@ -515,7 +1338,7 @@ impl PlatformDirectory {
         })
     }
 
-    fn open_dir_no_follow(&self, name: &OsStr) -> io::Result<Self> {
+    fn open_dir_no_follow(&self, name: &OsStr, _access: DirectoryAccess) -> io::Result<Self> {
         let name = unix_name(name)?;
         let descriptor = unsafe {
             libc::openat(
@@ -725,15 +1548,17 @@ struct PlatformDirectory(File);
 
 #[cfg(windows)]
 impl PlatformDirectory {
-    fn open_ambient(path: &Path) -> io::Result<Self> {
+    fn open_ambient(path: &Path, access: DirectoryAccess) -> io::Result<Self> {
         use std::os::windows::fs::OpenOptionsExt;
         use windows_sys::Win32::Storage::FileSystem::{
             FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
             FILE_SHARE_WRITE,
         };
 
-        std::fs::OpenOptions::new()
+        let mut options = std::fs::OpenOptions::new();
+        options
             .read(true)
+            .write(access == DirectoryAccess::ReadWrite)
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
             .open(path)
@@ -756,6 +1581,78 @@ impl PlatformDirectory {
         self.0.try_clone().map(Self)
     }
 
+    fn metadata(&self) -> io::Result<std::fs::Metadata> {
+        self.0.metadata()
+    }
+
+    fn entry_names(&self) -> io::Result<Vec<OsString>> {
+        use std::{
+            mem::{offset_of, size_of},
+            os::windows::{ffi::OsStringExt, io::AsRawHandle},
+        };
+        use windows_sys::Win32::{
+            Foundation::{ERROR_NO_MORE_FILES, HANDLE},
+            Storage::FileSystem::{
+                FILE_ID_BOTH_DIR_INFO, FileIdBothDirectoryInfo, GetFileInformationByHandleEx,
+            },
+        };
+
+        let mut names = Vec::new();
+        let mut buffer = vec![0_u8; 64 * 1024];
+        loop {
+            let ok = unsafe {
+                GetFileInformationByHandleEx(
+                    self.0.as_raw_handle() as HANDLE,
+                    FileIdBothDirectoryInfo,
+                    buffer.as_mut_ptr().cast(),
+                    u32::try_from(buffer.len()).expect("directory buffer fits u32"),
+                )
+            };
+            if ok == 0 {
+                let error = io::Error::last_os_error();
+                if error.raw_os_error() == Some(ERROR_NO_MORE_FILES as i32) {
+                    break;
+                }
+                return Err(error);
+            }
+            let mut offset = 0_usize;
+            loop {
+                if offset + size_of::<FILE_ID_BOTH_DIR_INFO>() > buffer.len() {
+                    return Err(io::Error::other("directory enumeration record is invalid"));
+                }
+                let entry =
+                    unsafe { &*buffer.as_ptr().add(offset).cast::<FILE_ID_BOTH_DIR_INFO>() };
+                let name_len = usize::try_from(entry.FileNameLength)
+                    .map_err(|_| io::Error::other("directory name is invalid"))?
+                    / 2;
+                let name_offset = offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
+                if offset
+                    .checked_add(name_offset)
+                    .and_then(|start| start.checked_add(name_len.saturating_mul(2)))
+                    .is_none_or(|end| end > buffer.len())
+                {
+                    return Err(io::Error::other(
+                        "directory name exceeded the bounded record",
+                    ));
+                }
+                let name_units =
+                    unsafe { std::slice::from_raw_parts(entry.FileName.as_ptr(), name_len) };
+                let name = OsString::from_wide(name_units);
+                if name != OsStr::new(".") && name != OsStr::new("..") {
+                    names.push(name);
+                }
+                if entry.NextEntryOffset == 0 {
+                    break;
+                }
+                offset = offset
+                    .checked_add(entry.NextEntryOffset as usize)
+                    .filter(|next| *next < buffer.len())
+                    .ok_or_else(|| io::Error::other("directory enumeration offset is invalid"))?;
+            }
+        }
+        Ok(names)
+    }
+
     fn identity(&self) -> io::Result<FilesystemObjectIdentity> {
         let (volume_serial, file_index) = windows_file_identity(&self.0)?;
         Ok(FilesystemObjectIdentity::Windows {
@@ -764,8 +1661,18 @@ impl PlatformDirectory {
         })
     }
 
-    fn open_dir_no_follow(&self, name: &OsStr) -> io::Result<Self> {
-        nt_open_relative(&self.0, name, NtLeafKind::Directory, NtDisposition::Open).map(Self)
+    fn open_dir_no_follow(&self, name: &OsStr, access: DirectoryAccess) -> io::Result<Self> {
+        nt_open_relative(
+            &self.0,
+            name,
+            if access == DirectoryAccess::ReadWrite {
+                NtLeafKind::MutableDirectory
+            } else {
+                NtLeafKind::Directory
+            },
+            NtDisposition::Open,
+        )
+        .map(Self)
     }
 
     fn open_file_no_follow(&self, name: &OsStr, mutable: bool) -> io::Result<File> {
@@ -834,7 +1741,14 @@ impl PlatformDirectory {
 
     fn sync_all(&self) -> io::Result<()> {
         injected_directory_sync_failure()?;
-        Ok(())
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::{Foundation::HANDLE, Storage::FileSystem::FlushFileBuffers};
+
+        if unsafe { FlushFileBuffers(self.0.as_raw_handle() as HANDLE) } == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -1095,6 +2009,301 @@ fn windows_file_identity(file: &File) -> io::Result<(u32, u64)> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Write};
+
+    use tempfile::tempdir;
+
+    use super::{
+        ArtifactParentCreateOutcome, CapabilityRoot, DirectoryAccess, FileSecuritySnapshot,
+        RetainedStorageReservation, SecuredCreateOutcome,
+    };
+
+    #[test]
+    fn secured_create_anchored_create_new_no_clobber() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let path = fixture.path().join("created.xlsx");
+        let anchored = root.authorize(&path).unwrap().anchor().unwrap();
+
+        let mut created = anchored.create_new().unwrap();
+        created.write_all(b"owned bytes").unwrap();
+        created.sync_all().unwrap();
+        drop(created);
+
+        let error = anchored.create_new().unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        let mut contents = Vec::new();
+        anchored
+            .open_read()
+            .unwrap()
+            .read_to_end(&mut contents)
+            .unwrap();
+        assert_eq!(contents, b"owned bytes");
+    }
+
+    #[test]
+    fn retained_publication_retain_current_name_is_same_parent_and_no_clobber() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let canonical_path = fixture.path().join("Follow Up.xlsx");
+        let retained_path = fixture
+            .path()
+            .join(".docflow-s5-retained-original-test.xlsx");
+        std::fs::write(&canonical_path, b"original").unwrap();
+        let canonical = root.authorize(&canonical_path).unwrap().anchor().unwrap();
+        let retained = root.authorize(&retained_path).unwrap().anchor().unwrap();
+
+        canonical.retain_current_name_no_clobber(&retained).unwrap();
+
+        assert!(!canonical_path.exists());
+        assert_eq!(std::fs::read(&retained_path).unwrap(), b"original");
+
+        std::fs::write(&canonical_path, b"racer").unwrap();
+        let error = canonical
+            .retain_current_name_no_clobber(&retained)
+            .unwrap_err();
+        assert!(!error.is_outcome_unknown());
+        assert_eq!(std::fs::read(&canonical_path).unwrap(), b"racer");
+        assert_eq!(std::fs::read(&retained_path).unwrap(), b"original");
+    }
+
+    #[test]
+    fn directory_access_and_retained_quota_read_only_root_rejects_mutation() {
+        let fixture = tempdir().unwrap();
+        let read_only =
+            CapabilityRoot::open_with_access(fixture.path(), DirectoryAccess::ReadOnly).unwrap();
+        let denied_path = fixture.path().join("denied.xlsx");
+        let denied = read_only.authorize(&denied_path).unwrap().anchor().unwrap();
+        assert_eq!(
+            denied.create_new().unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        let protected_path = fixture.path().join("protected.xlsx");
+        std::fs::write(&protected_path, b"must remain").unwrap();
+        let protected = read_only
+            .authorize(&protected_path)
+            .unwrap()
+            .anchor()
+            .unwrap();
+        assert_eq!(
+            protected.remove_file().unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(std::fs::read(&protected_path).unwrap(), b"must remain");
+
+        let read_write =
+            CapabilityRoot::open_with_access(fixture.path(), DirectoryAccess::ReadWrite).unwrap();
+        let allowed_path = fixture.path().join("allowed.xlsx");
+        read_write
+            .authorize(&allowed_path)
+            .unwrap()
+            .anchor()
+            .unwrap()
+            .create_new()
+            .unwrap();
+
+        let legacy_path = fixture.path().join("legacy.xlsx");
+        CapabilityRoot::open(fixture.path())
+            .unwrap()
+            .authorize(&legacy_path)
+            .unwrap()
+            .anchor()
+            .unwrap()
+            .create_new()
+            .unwrap();
+    }
+
+    #[test]
+    fn directory_access_and_retained_quota_artifact_parent_is_typed_and_no_clobber() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let artifact_path = fixture.path().join(".docflow-backups");
+        let artifact = root.authorize(&artifact_path).unwrap();
+
+        let created = artifact.create_artifact_parent_no_clobber().unwrap();
+        assert!(matches!(
+            created,
+            ArtifactParentCreateOutcome::Created { .. }
+        ));
+        assert!(artifact_path.is_dir());
+
+        let existing = artifact.create_artifact_parent_no_clobber().unwrap();
+        assert_eq!(existing, ArtifactParentCreateOutcome::AlreadyExists);
+    }
+
+    #[test]
+    fn secured_create_identified_retains_live_handle_when_post_create_identity_is_unknown() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let path = fixture.path().join("unknown-identity.xlsx");
+        let anchored = root.authorize(&path).unwrap().anchor().unwrap();
+        let descriptor = super::CreationSecurityDescriptor::current_owner_only().unwrap();
+        super::inject_post_create_identity_failure_once();
+
+        let SecuredCreateOutcome::CreatedIdentityUnknown { mut file } =
+            anchored.create_new_secured_identified(&descriptor).unwrap()
+        else {
+            panic!("injected identity failure must preserve the live handle");
+        };
+        file.write_all(b"retained").unwrap();
+        file.sync_all().unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), b"retained");
+    }
+
+    #[test]
+    fn backup_stream_skip_unnamed_default_payload_is_excluded_from_auxiliary_budget() {
+        let default_bytes = 4_u64 * 1024 * 1024 * 1024;
+        let charge = super::windows_backup_stream_auxiliary_charge(&[
+            (1, "", default_bytes),
+            (1, ":audit:$DATA", 17),
+            (3, "", 23),
+        ])
+        .unwrap();
+
+        assert_eq!(charge, 17 + ":audit:$DATA".len() as u64 + 16 + 23 + 16);
+    }
+
+    #[test]
+    fn directory_access_and_retained_quota_apply_reservation_charges_three_auxiliary_copies() {
+        let reservation = RetainedStorageReservation::for_apply(100, 20).unwrap();
+        assert_eq!(reservation.file_count, 3);
+        assert_eq!(
+            reservation.logical_charge_bytes,
+            crate::ooxml::MAX_PACKAGE_BYTES + 260
+        );
+    }
+
+    #[test]
+    fn directory_access_and_retained_quota_scan_counts_only_bounded_s5_artifacts() {
+        let fixture = tempdir().unwrap();
+        let mut expected_charge = 0_u64;
+        for (name, bytes) in [
+            (".docflow-s5-backup-a.xlsx", b"a".as_slice()),
+            (".docflow-s5-private-output-a.xlsx", b"bb".as_slice()),
+            (".docflow-s5-retained-original-a.xlsx", b"ccc".as_slice()),
+            (".docflow-s5-retained-applied-a.xlsx", b"dddd".as_slice()),
+            ("ordinary.xlsx", b"not retained".as_slice()),
+        ] {
+            let path = fixture.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            if name.starts_with(".docflow-s5-") {
+                let file = std::fs::File::open(path).unwrap();
+                expected_charge += bytes.len() as u64
+                    + FileSecuritySnapshot::capture(&file, None)
+                        .unwrap()
+                        .auxiliary_charge_bytes();
+            }
+        }
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let authorized = root.authorize_directory(fixture.path()).unwrap();
+
+        let usage = authorized.s5_retained_storage_usage(4).unwrap();
+        assert_eq!(usage.file_count, 4);
+        assert_eq!(usage.logical_charge_bytes, expected_charge);
+        assert!(authorized.s5_retained_storage_usage(3).is_err());
+    }
+
+    #[test]
+    fn directory_access_and_retained_quota_undo_reservation_charges_retained_applied_auxiliary() {
+        let reservation = RetainedStorageReservation::for_undo(100, 20).unwrap();
+        assert_eq!(reservation.file_count, 1);
+        assert_eq!(reservation.logical_charge_bytes, 120);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_security_snapshot_round_trips_mode_and_complete_digest() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let source_path = fixture.path().join("source.xlsx");
+        std::fs::write(&source_path, b"source bytes").unwrap();
+        std::fs::set_permissions(&source_path, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let source = root.authorize(&source_path).unwrap().anchor().unwrap();
+        let source_file = source.open_read().unwrap();
+        #[cfg(target_os = "macos")]
+        set_test_xattr(&source_file, "user.docflow", b"retained metadata");
+        let snapshot = FileSecuritySnapshot::capture(&source_file, None).unwrap();
+        let destination_path = fixture.path().join("destination.xlsx");
+        let destination = root.authorize(&destination_path).unwrap().anchor().unwrap();
+        let parent = destination.capture_parent_security().unwrap();
+        let descriptor = snapshot.creation_descriptor(&parent).unwrap();
+
+        let mut created = destination.create_new_secured(&descriptor).unwrap();
+        snapshot.verify_created_access(&created).unwrap();
+        snapshot.replay_and_verify_auxiliary(&mut created).unwrap();
+        created.write_all(b"source bytes").unwrap();
+        created.sync_all().unwrap();
+        snapshot.verify_complete(&created).unwrap();
+
+        assert_eq!(
+            std::fs::metadata(&destination_path)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o640
+        );
+        assert_eq!(snapshot.sha256().len(), 64);
+        assert_eq!(snapshot.access_sha256().len(), 64);
+        assert_eq!(snapshot.auxiliary_sha256().len(), 64);
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            get_test_xattr(&created.0, "user.docflow"),
+            b"retained metadata"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_test_xattr(file: &std::fs::File, name: &str, value: &[u8]) {
+        use std::{ffi::CString, os::fd::AsRawFd};
+
+        let name = CString::new(name).unwrap();
+        let result = unsafe {
+            libc::fsetxattr(
+                file.as_raw_fd(),
+                name.as_ptr(),
+                value.as_ptr().cast(),
+                value.len(),
+                0,
+                0,
+            )
+        };
+        assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
+    }
+
+    #[cfg(target_os = "macos")]
+    fn get_test_xattr(file: &std::fs::File, name: &str) -> Vec<u8> {
+        use std::{ffi::CString, os::fd::AsRawFd};
+
+        let name = CString::new(name).unwrap();
+        let size = unsafe {
+            libc::fgetxattr(
+                file.as_raw_fd(),
+                name.as_ptr(),
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+            )
+        };
+        assert!(size >= 0, "{}", std::io::Error::last_os_error());
+        let mut value = vec![0_u8; size as usize];
+        let read = unsafe {
+            libc::fgetxattr(
+                file.as_raw_fd(),
+                name.as_ptr(),
+                value.as_mut_ptr().cast(),
+                value.len(),
+                0,
+                0,
+            )
+        };
+        assert_eq!(read, size, "{}", std::io::Error::last_os_error());
+        value
+    }
+
     #[test]
     fn windows_rename_uses_the_native_root_relative_information_contract() {
         let source = include_str!("cap_fs.rs");
@@ -1147,5 +2356,31 @@ mod tests {
         assert!(windows_directory.contains("Zone.Identifier:$DATA"));
         assert!(!windows_directory.contains("self.canonical"));
         assert!(!windows_directory.contains("std::fs::File::open"));
+    }
+
+    #[test]
+    fn windows_directory_sync_uses_flush_file_buffers() {
+        let source = include_str!("cap_fs.rs");
+        let windows = source
+            .split("#[cfg(windows)]\nimpl PlatformDirectory")
+            .nth(1)
+            .expect("Windows directory implementation")
+            .split("#[cfg(windows)]\n#[derive(Clone, Copy)]")
+            .next()
+            .expect("bounded Windows directory implementation");
+        let sync = windows
+            .split("fn sync_all(&self)")
+            .nth(1)
+            .expect("Windows directory sync")
+            .split("}\n}")
+            .next()
+            .expect("bounded Windows directory sync");
+        assert!(sync.contains("injected_directory_sync_failure()?"));
+        assert!(sync.contains("FlushFileBuffers"));
+        assert!(sync.contains("io::Error::last_os_error()"));
+        assert!(
+            sync.find("injected_directory_sync_failure()?").unwrap()
+                < sync.find("FlushFileBuffers").unwrap()
+        );
     }
 }

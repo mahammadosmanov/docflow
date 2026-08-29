@@ -1406,6 +1406,40 @@ textarea:focus {
 .plan-heading svg {
   width: 0.9rem;
 }
+.outlook-reply-preview {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.outlook-reply-preview h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.outlook-reply-preview > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.outlook-reply-preview strong {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.outlook-reply-preview pre {
+  max-height: 180px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+  font: 0.75rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .step-list,
 .review-list,
 .history-list,
@@ -1696,6 +1730,43 @@ textarea:focus {
 }
 .settings-account small {
   color: var(--muted);
+}
+.support-diagnostics {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.support-diagnostics > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.support-diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.support-diagnostics-preview {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+.support-diagnostics-preview small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.support-diagnostics-preview pre {
+  max-height: 320px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+  font: 0.75rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
 }
 .choice-grid {
   display: grid;
