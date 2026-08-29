@@ -240,25 +240,13 @@ impl AuthorizedPath {
         anchored
             .require_write()
             .map_err(CapabilityEffectError::no_effect)?;
-        match anchored.parent.create_dir(&anchored.name) {
-            Ok(()) => match anchored
-                .parent
-                .open_dir_no_follow(&anchored.name, DirectoryAccess::ReadWrite)
-                .and_then(|directory| directory.identity())
-            {
-                Ok(identity) => Ok(ArtifactParentCreateOutcome::Created { identity }),
-                Err(error) => {
-                    eprintln!("[docflow-cap-fs] artifact parent identity reopen failed: {error}");
-                    Ok(ArtifactParentCreateOutcome::CreatedIdentityUnknown)
-                }
-            },
+        match anchored.parent.create_dir_identified(&anchored.name) {
+            Ok(Some(identity)) => Ok(ArtifactParentCreateOutcome::Created { identity }),
+            Ok(None) => Ok(ArtifactParentCreateOutcome::CreatedIdentityUnknown),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 Ok(ArtifactParentCreateOutcome::AlreadyExists)
             }
-            Err(error) => {
-                eprintln!("[docflow-cap-fs] artifact parent create failed: {error}");
-                Err(CapabilityEffectError::no_effect(error))
-            }
+            Err(error) => Err(CapabilityEffectError::no_effect(error)),
         }
     }
 
@@ -1497,6 +1485,14 @@ impl PlatformDirectory {
         }
     }
 
+    fn create_dir_identified(&self, name: &OsStr) -> io::Result<Option<FilesystemObjectIdentity>> {
+        self.create_dir(name)?;
+        Ok(self
+            .open_dir_no_follow(name, DirectoryAccess::ReadWrite)
+            .and_then(|directory| directory.identity())
+            .ok())
+    }
+
     fn remove_file(&self, name: &OsStr) -> io::Result<()> {
         self.unlink(name, 0)
     }
@@ -1815,6 +1811,16 @@ impl PlatformDirectory {
 
     fn create_dir(&self, name: &OsStr) -> io::Result<()> {
         nt_open_relative(&self.0, name, NtLeafKind::Directory, NtDisposition::Create).map(drop)
+    }
+
+    fn create_dir_identified(&self, name: &OsStr) -> io::Result<Option<FilesystemObjectIdentity>> {
+        let directory = nt_open_relative(
+            &self.0,
+            name,
+            NtLeafKind::MutableDirectory,
+            NtDisposition::Create,
+        )?;
+        Ok(PlatformDirectory(directory).identity().ok())
     }
 
     fn remove_file(&self, name: &OsStr) -> io::Result<()> {
