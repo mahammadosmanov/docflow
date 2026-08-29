@@ -1814,12 +1814,7 @@ impl PlatformDirectory {
         destination: &OsStr,
         replace: bool,
     ) -> io::Result<()> {
-        let destination_parent = nt_open_relative(
-            &destination_dir.0,
-            OsStr::new("."),
-            NtLeafKind::RenameTargetDirectory,
-            NtDisposition::Open,
-        )?;
+        let destination_parent = duplicate_rename_target_directory(&destination_dir.0)?;
         retry_windows_sharing_violation(|| {
             let source =
                 nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
@@ -1845,7 +1840,6 @@ impl PlatformDirectory {
 enum NtLeafKind {
     Directory,
     MutableDirectory,
-    RenameTargetDirectory,
     ReadFile,
     MutableFile,
     MutableAny,
@@ -1881,7 +1875,7 @@ fn nt_open_relative(
             },
             Storage::FileSystem::{
                 DELETE, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-                FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE, SYNCHRONIZE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, SYNCHRONIZE,
             },
             System::IO::IO_STATUS_BLOCK,
         },
@@ -1914,10 +1908,6 @@ fn nt_open_relative(
         ),
         NtLeafKind::MutableDirectory => (
             GENERIC_READ | GENERIC_WRITE | DELETE | SYNCHRONIZE,
-            FILE_DIRECTORY_FILE,
-        ),
-        NtLeafKind::RenameTargetDirectory => (
-            FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             FILE_DIRECTORY_FILE,
         ),
         NtLeafKind::ReadFile => (
@@ -1969,6 +1959,39 @@ fn nt_open_relative(
         }
     }
     Ok(file)
+}
+
+#[cfg(windows)]
+fn duplicate_rename_target_directory(parent: &File) -> io::Result<File> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle};
+    use windows_sys::Win32::{
+        Foundation::{DuplicateHandle, HANDLE},
+        Storage::FileSystem::{FILE_READ_ATTRIBUTES, FILE_TRAVERSE, SYNCHRONIZE},
+        System::Threading::GetCurrentProcess,
+    };
+
+    let process = unsafe { GetCurrentProcess() };
+    let mut duplicated: HANDLE = std::ptr::null_mut();
+    let ok = unsafe {
+        DuplicateHandle(
+            process,
+            parent.as_raw_handle() as HANDLE,
+            process,
+            &mut duplicated,
+            FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            0,
+            0,
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if duplicated.is_null() {
+        return Err(io::Error::other(
+            "DuplicateHandle returned an invalid rename target",
+        ));
+    }
+    Ok(unsafe { File::from_raw_handle(duplicated) })
 }
 
 #[cfg(windows)]
@@ -2476,8 +2499,9 @@ mod tests {
         assert!(rename.contains("FILE_RENAME_INFORMATION"));
         assert!(rename.contains("FileRenameInformation"));
         assert!(rename.contains("RootDirectory"));
-        assert!(source.contains("NtLeafKind::RenameTargetDirectory"));
         assert!(rename.contains("destination_parent: &File"));
+        assert!(source.contains("fn duplicate_rename_target_directory"));
+        assert!(source.contains("DuplicateHandle"));
         assert!(!rename.contains("SetFileInformationByHandle"));
     }
 
