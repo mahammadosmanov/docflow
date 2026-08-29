@@ -1001,6 +1001,23 @@ impl AnchoredPath {
         self.parent.sync_all()
     }
 
+    #[cfg(any(windows, test))]
+    pub(crate) fn remove_verified(&self, expected_sha256: &str) -> io::Result<()> {
+        self.require_write()?;
+        let mut file = self.open_mutable()?;
+        if sha256_open_file(&mut file)? != expected_sha256 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "file changed before pinned deletion",
+            ));
+        }
+        #[cfg(windows)]
+        delete_open_handle(&file)?;
+        #[cfg(not(windows))]
+        self.parent.remove_file(&self.name)?;
+        self.parent.sync_all()
+    }
+
     pub(crate) fn remove_dir_durable(&self) -> io::Result<()> {
         self.parent.remove_dir(&self.name)?;
         self.parent.sync_all()
@@ -2248,6 +2265,25 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert_eq!(std::fs::read(&workbook_path).unwrap(), b"later edit");
+    }
+
+    #[test]
+    fn pinned_remove_verifies_the_same_handle_before_deletion() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let path = fixture.path().join("owned-backup.xlsx");
+        std::fs::write(&path, b"verified backup").unwrap();
+        let anchored = root.authorize(&path).unwrap().anchor().unwrap();
+        let expected = anchored.sha256().unwrap();
+
+        let error = anchored
+            .remove_verified("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(path.exists());
+
+        anchored.remove_verified(&expected).unwrap();
+        assert!(!path.exists());
     }
 
     #[test]

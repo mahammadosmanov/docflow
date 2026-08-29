@@ -439,6 +439,18 @@ fn undo_quarantined_file(
         anchor_path_io(Path::new(&recovery.original), roots).map_err(UndoStepFailure::NoEffect)?;
     let quarantine = anchor_path_io(Path::new(&recovery.quarantine), roots)
         .map_err(UndoStepFailure::NoEffect)?;
+    #[cfg(windows)]
+    if recovery.target.is_none() {
+        let expected = expected_undo_hash(step, roots).map_err(UndoStepFailure::NoEffect)?;
+        persist_recovery_phase(journals, record, UndoRecoveryPhase::Deleting)?;
+        return original.remove_verified(&expected).map_err(|error| {
+            if error.kind() == io::ErrorKind::InvalidData {
+                UndoStepFailure::NoEffect(error)
+            } else {
+                UndoStepFailure::OutcomeUnknown(error)
+            }
+        });
+    }
     if let Err(error) = original.move_no_clobber_to(&quarantine) {
         return Err(
             if matches!(
@@ -484,8 +496,20 @@ fn verify_expected_hash(
     step: &Step,
     roots: &[CapabilityRoot],
 ) -> io::Result<()> {
-    let expected = step
-        .meta
+    let expected = expected_undo_hash(step, roots)?;
+    let actual = path.sha256()?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{} changed since apply", path.absolute().display()),
+        ))
+    }
+}
+
+fn expected_undo_hash(step: &Step, roots: &[CapabilityRoot]) -> io::Result<String> {
+    step.meta
         .get("undoSha256")
         .and_then(Value::as_str)
         .map(str::to_string)
@@ -501,16 +525,7 @@ fn verify_expected_hash(
                 io::ErrorKind::InvalidData,
                 "legacy journal has no safe hash fallback",
             )
-        })?;
-    let actual = path.sha256()?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("{} changed since apply", path.absolute().display()),
-        ))
-    }
+        })
 }
 
 fn restore_after_failure(
