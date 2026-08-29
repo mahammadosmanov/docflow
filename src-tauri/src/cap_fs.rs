@@ -1814,19 +1814,9 @@ impl PlatformDirectory {
     }
 
     fn create_dir_identified(&self, name: &OsStr) -> io::Result<Option<FilesystemObjectIdentity>> {
-        let directory = nt_open_relative(
-            &self.0,
-            name,
-            NtLeafKind::MutableDirectory,
-            NtDisposition::Create,
-        )?;
-        match PlatformDirectory(directory).identity() {
-            Ok(identity) => Ok(Some(identity)),
-            Err(error) => {
-                eprintln!("[docflow-cap-fs] created directory handle identity failed: {error}");
-                Ok(None)
-            }
-        }
+        let directory =
+            nt_open_relative(&self.0, name, NtLeafKind::Directory, NtDisposition::Create)?;
+        Ok(PlatformDirectory(directory).identity().ok())
     }
 
     fn remove_file(&self, name: &OsStr) -> io::Result<()> {
