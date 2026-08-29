@@ -1814,20 +1814,16 @@ impl PlatformDirectory {
         destination: &OsStr,
         replace: bool,
     ) -> io::Result<()> {
-        let destination_parent = if self.identity()? == destination_dir.identity()? {
-            None
-        } else {
-            Some(nt_open_relative(
-                &destination_dir.0,
-                OsStr::new("."),
-                NtLeafKind::RenameTargetDirectory,
-                NtDisposition::Open,
-            )?)
-        };
+        let destination_parent = nt_open_relative(
+            &destination_dir.0,
+            OsStr::new("."),
+            NtLeafKind::RenameTargetDirectory,
+            NtDisposition::Open,
+        )?;
         retry_windows_sharing_violation(|| {
             let source =
                 nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
-            rename_open_handle(&source, destination_parent.as_ref(), destination, replace)
+            rename_open_handle(&source, &destination_parent, destination, replace)
         })
     }
 
@@ -1978,7 +1974,7 @@ fn nt_open_relative(
 #[cfg(windows)]
 fn rename_open_handle(
     source: &File,
-    destination_parent: Option<&File>,
+    destination_parent: &File,
     destination: &OsStr,
     replace: bool,
 ) -> io::Result<()> {
@@ -2003,9 +1999,7 @@ fn rename_open_handle(
     let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists = replace;
-        (*info).RootDirectory = destination_parent
-            .map(|parent| parent.as_raw_handle() as HANDLE)
-            .unwrap_or(std::ptr::null_mut());
+        (*info).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
         (*info).FileNameLength = bytes as u32;
         std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
     }
@@ -2483,8 +2477,7 @@ mod tests {
         assert!(rename.contains("FileRenameInformation"));
         assert!(rename.contains("RootDirectory"));
         assert!(source.contains("NtLeafKind::RenameTargetDirectory"));
-        assert!(rename.contains("destination_parent: Option<&File>"));
-        assert!(rename.contains("unwrap_or(std::ptr::null_mut())"));
+        assert!(rename.contains("destination_parent: &File"));
         assert!(!rename.contains("SetFileInformationByHandle"));
     }
 
