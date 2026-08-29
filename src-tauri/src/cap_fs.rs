@@ -1551,15 +1551,15 @@ impl PlatformDirectory {
     fn open_ambient(path: &Path, access: DirectoryAccess) -> io::Result<Self> {
         use std::os::windows::fs::OpenOptionsExt;
         use windows_sys::Win32::Storage::FileSystem::{
-            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
-            FILE_SHARE_WRITE,
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+            FILE_SHARE_READ, FILE_SHARE_WRITE,
         };
 
         let mut options = std::fs::OpenOptions::new();
         options
             .read(true)
             .write(access == DirectoryAccess::ReadWrite)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
             .open(path)
             .and_then(|file| {
@@ -1791,8 +1791,8 @@ fn nt_open_relative(
                 UNICODE_STRING,
             },
             Storage::FileSystem::{
-                DELETE, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-                FILE_SHARE_WRITE, SYNCHRONIZE,
+                DELETE, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, SYNCHRONIZE,
             },
             System::IO::IO_STATUS_BLOCK,
         },
@@ -1847,7 +1847,7 @@ fn nt_open_relative(
             &mut status_block,
             std::ptr::null(),
             FILE_ATTRIBUTE_NORMAL,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             match disposition {
                 NtDisposition::Open => FILE_OPEN,
                 NtDisposition::Create => FILE_CREATE,
@@ -2382,5 +2382,27 @@ mod tests {
             sync.find("injected_directory_sync_failure()?").unwrap()
                 < sync.find("FlushFileBuffers").unwrap()
         );
+    }
+
+    #[test]
+    fn windows_capability_handles_share_delete_for_handle_relative_renames() {
+        let source = include_str!("cap_fs.rs");
+        let windows = source
+            .split("#[cfg(windows)]\nimpl PlatformDirectory")
+            .nth(1)
+            .expect("Windows directory implementation");
+        let ambient_open = windows
+            .split("fn open_ambient")
+            .nth(1)
+            .and_then(|value| value.split("fn try_clone").next())
+            .expect("ambient directory open");
+        let relative_open = windows
+            .split("fn nt_open_relative")
+            .nth(1)
+            .and_then(|value| value.split("fn rename_open_handle").next())
+            .expect("relative NT open");
+
+        assert!(ambient_open.contains("FILE_SHARE_DELETE"));
+        assert!(relative_open.contains("FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE"));
     }
 }
