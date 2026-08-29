@@ -160,6 +160,7 @@ try {
         Invoke-Checked $npm @("run", "build") "Build the interface and verify final source"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--test", "rfi_log_native") "Test the Windows-critical RFI workbook path"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "cap_fs::tests::windows_cross_parent_rename_is_capability_relative_and_no_clobber", "--", "--exact", "--nocapture") "Test Windows cross-parent capability rename"
+        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "paths::provisional_tests::dual_same_root_grants_preserve_the_write_capability_for_artifact_creation", "--", "--exact", "--nocapture") "Test Windows dual-grant artifact creation"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--test", "rfi_follow_up_native", "follow_up_retained_", "--", "--nocapture") "Test Windows retained RFI follow-up lifecycle"
         Invoke-Checked $cargo @("fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check") "Check Rust formatting"
         Invoke-Checked $cargo @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings") "Lint the Rust backend"
