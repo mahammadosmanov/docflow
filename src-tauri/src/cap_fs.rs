@@ -2526,6 +2526,30 @@ mod tests {
         assert!(!rename.contains("SetFileInformationByHandle"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_cross_parent_rename_is_capability_relative_and_no_clobber() {
+        let fixture = tempdir().unwrap();
+        let source_dir = fixture.path().join("source");
+        let destination_dir = fixture.path().join("destination");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&destination_dir).unwrap();
+        let source_path = source_dir.join("source.txt");
+        let destination_path = destination_dir.join("destination.txt");
+        std::fs::write(&source_path, b"capability bytes").unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let source = root.authorize(&source_path).unwrap().anchor().unwrap();
+        let destination = root.authorize(&destination_path).unwrap().anchor().unwrap();
+
+        source.move_no_clobber_to(&destination).unwrap();
+
+        assert!(!source_path.exists());
+        assert_eq!(
+            std::fs::read(destination_path).unwrap(),
+            b"capability bytes"
+        );
+    }
+
     #[test]
     fn windows_zone_identifier_open_is_identity_checked_and_root_relative() {
         let source = normalized_source();

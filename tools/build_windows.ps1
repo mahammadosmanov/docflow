@@ -159,6 +159,7 @@ try {
         Invoke-Checked $npm @("test") "Run Node and interface tests"
         Invoke-Checked $npm @("run", "build") "Build the interface and verify final source"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--test", "rfi_log_native") "Test the Windows-critical RFI workbook path"
+        Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "cap_fs::tests::windows_cross_parent_rename_is_capability_relative_and_no_clobber", "--", "--exact", "--nocapture") "Test Windows cross-parent capability rename"
         Invoke-Checked $cargo @("fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check") "Check Rust formatting"
         Invoke-Checked $cargo @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings") "Lint the Rust backend"
         Invoke-Checked $cargo @("test", "--manifest-path", "src-tauri/Cargo.toml", "--no-fail-fast") "Test the Rust backend"
