@@ -497,7 +497,7 @@ fn approved_xlsm_apply_preserves_package_and_undo_restores_exact_hash() {
     assert_eq!(table["columnWidths"][0], 25.0);
 
     let undone = authority.undo(&result.journal_id, &caller(), None).unwrap();
-    assert_eq!(undone.failed, 0);
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
     assert_eq!(file_sha256(&workbook).unwrap(), original_hash);
 }
 
