@@ -158,6 +158,7 @@
   "param.dropFolder": "Drop folder here or browse",
   "param.dropFile": "Drop file here or browse",
   "action.recent": "Recent selections",
+  "action.toggleTheme": "Toggle theme (Light / Dark / System)",
   "filter.searchPlaceholder": "Search (RFI no, status, description)...",
   "filter.all": "All",
   "filter.changes": "Changes",

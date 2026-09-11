@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.4 - 2026-09-11
+
+### Added
+
+- High-contrast monochrome dark mode adhering to Rule 11 with obsidian backdrop (`#0a0a0a`), clean surface tiers (`#141414`, `#1e1e1e`, `#2a2a2a`), crisp white text, and distinct card borders.
+- 1-click header theme switcher toggling between Light, Dark, and System with `Alt + T` operator keyboard shortcut.
+- Full localization in Turkish, English, Russian, and Azerbaijani.
+
 ## 0.7.0-rc.3 - 2026-09-11
 
 ### Added

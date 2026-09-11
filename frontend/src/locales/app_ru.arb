@@ -130,6 +130,7 @@
   "param.dropFolder": "Перетащите папку сюда или выберите",
   "param.dropFile": "Перетащите файл сюда или выберите",
   "action.recent": "Недавние пути",
+  "action.toggleTheme": "Переключить тему (Светлая / Тёмная / Системная)",
   "filter.searchPlaceholder": "Поиск (номер RFI, статус, описание)...",
   "filter.all": "Все",
   "filter.changes": "Изменения",

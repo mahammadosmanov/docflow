@@ -130,6 +130,7 @@
   "param.dropFolder": "Klasörü buraya sürükleyin veya göz atın",
   "param.dropFile": "Dosyayı buraya sürükleyin veya göz atın",
   "action.recent": "Son seçimler",
+  "action.toggleTheme": "Temayı değiştir (Açık / Koyu / Sistem)",
   "filter.searchPlaceholder": "Ara (RFI no, durum, açıklama)...",
   "filter.all": "Tümü",
   "filter.changes": "Değişiklikler",

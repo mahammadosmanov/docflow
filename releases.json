@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.3",
+  "currentVersion": "0.7.0-rc.4",
   "releases": [
     {
       "version": "0.1.0",
@@ -182,9 +182,17 @@
       "version": "0.7.0-rc.3",
       "date": "2026-09-11",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.3",
       "summary": "Power-user UX accelerators: live preview table text search and filter tabs (All, Changes, Manual Review) plus keyboard shortcuts (Ctrl/Cmd+Enter, Space, Escape)."
+    },
+    {
+      "version": "0.7.0-rc.4",
+      "date": "2026-09-11",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.4",
+      "summary": "High-contrast monochrome dark mode adhering to Rule 11 with obsidian backdrop, crisp card borders, 1-click header theme switcher, and Alt+T hotkey."
     }
   ]
 }

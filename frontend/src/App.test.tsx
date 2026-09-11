@@ -728,7 +728,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.3-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.4-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
@@ -1412,5 +1412,48 @@ describe("DocFlow shell", () => {
     expect(
       await screen.findByRole("button", { name: "Önizle" }),
     ).toBeVisible();
+  });
+
+  it("supports quick theme toggling via header button and Alt+T shortcut", async () => {
+    let currentTheme = "system";
+    interceptMockBridge((method, params) => {
+      if (method === "settings/update") {
+        currentTheme = (params.theme as string) || currentTheme;
+        return {
+          handled: true,
+          value: {
+            locale: null,
+            theme: currentTheme,
+            font: "system",
+            fontScale: 1.0,
+            compact: false,
+          },
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+
+    const toggleBtn = screen.getByRole("button", {
+      name: /Temayı değiştir/i,
+    });
+    expect(toggleBtn).toBeVisible();
+
+    // Initial is system
+    expect(document.documentElement.dataset.theme).toBe("system");
+
+    // Click toggle: system -> light
+    fireEvent.click(toggleBtn);
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
+    });
+
+    // Press Alt+T: light -> dark
+    fireEvent.keyDown(window, { key: "t", altKey: true });
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("dark");
+    });
   });
 });

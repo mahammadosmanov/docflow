@@ -20,6 +20,8 @@ import {
   History,
   LoaderCircle,
   LogOut,
+  Monitor,
+  Moon,
   Play,
   Plus,
   Printer,
@@ -29,6 +31,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Sun,
   TableProperties,
   Trash2,
   Undo2,
@@ -320,6 +323,7 @@ export function App() {
           bootstrap={bootstrap}
           s={s}
           onAuth={updateAuth}
+          onPrefs={updatePrefs}
           navigate={setRoute}
         />
       );
@@ -599,12 +603,14 @@ function HomeScreen({
   bootstrap,
   s,
   onAuth,
+  onPrefs,
   navigate,
 }: {
   bridge: Bridge;
   bootstrap: Bootstrap;
   s: Strings;
   onAuth: (auth: AuthState) => void;
+  onPrefs?: (prefs: AppPrefs) => void;
   navigate: (route: Route) => void;
 }) {
   const who =
@@ -613,6 +619,34 @@ function HomeScreen({
   const [shortcutError, setShortcutError] = useState("");
   const signOut = async () =>
     onAuth(await bridge.call("auth/signOut"));
+
+  const latestTheme = useRef(bootstrap.prefs.theme);
+  latestTheme.current = bootstrap.prefs.theme;
+
+  const toggleTheme = useCallback(async () => {
+    if (!onPrefs) return;
+    const current = latestTheme.current;
+    const nextTheme: ThemePreference =
+      current === "system" ? "light" : current === "light" ? "dark" : "system";
+    try {
+      const updated = await bridge.call("settings/update", { theme: nextTheme });
+      onPrefs(updated);
+    } catch {
+      // Ignore background failure
+    }
+  }, [bridge, onPrefs]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && (event.key === "t" || event.key === "T")) {
+        event.preventDefault();
+        void toggleTheme();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleTheme]);
+
   const openReview = async () => {
     setReviewBusy(true);
     setShortcutError("");
@@ -648,6 +682,18 @@ function HomeScreen({
                 <Shield />
               </IconButton>
             )}
+            <IconButton
+              label={s.t("action.toggleTheme")}
+              onClick={() => void toggleTheme()}
+            >
+              {bootstrap.prefs.theme === "dark" ? (
+                <Moon />
+              ) : bootstrap.prefs.theme === "light" ? (
+                <Sun />
+              ) : (
+                <Monitor />
+              )}
+            </IconButton>
             <IconButton
               label={s.t("action.history")}
               onClick={() => navigate({ name: "history" })}

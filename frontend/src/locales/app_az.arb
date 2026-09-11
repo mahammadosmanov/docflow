@@ -130,6 +130,7 @@
   "param.dropFolder": "Qovluğu buraya sürükləyin və ya baxın",
   "param.dropFile": "Faylı buraya sürükləyin və ya baxın",
   "action.recent": "Son seçimlər",
+  "action.toggleTheme": "Mövzunu dəyiş (İşıqlı / Qaranlıq / Sistem)",
   "filter.searchPlaceholder": "Axtarış (RFI nömrəsi, status, təsvir)...",
   "filter.all": "Hamısı",
   "filter.changes": "Dəyişikliklər",
