@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
+  Download,
   Eye,
   EyeOff,
   FileCheck2,
@@ -54,6 +55,7 @@ import {
   chooseFile,
   chooseFiles,
   chooseFolder,
+  dropPaths,
   revealPath,
 } from "./lib/platform";
 import type {
@@ -109,6 +111,17 @@ export function humanError(error: unknown, s: Strings): string {
   if (localizedKey) {
     const localized = s.t(localizedKey);
     if (localized !== localizedKey) return localized;
+  }
+  const detailedMatch = raw.match(
+    /^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+):\s*(.+)$/,
+  );
+  if (detailedMatch) {
+    const key = detailedMatch[1];
+    const details = detailedMatch[2];
+    const localized = s.t(key);
+    if (localized !== key) {
+      return `${localized} (${details})`;
+    }
   }
   if (/error\.preset\.nameInvalid|preset[_ .-]?name[_ .-]?invalid/i.test(raw))
     return s.t("error.preset.nameInvalid");
@@ -806,6 +819,8 @@ function OperationScreen({
   const [values, setValues] =
     useState<Record<string, unknown>>(defaults);
   const valuesRevision = useRef(0);
+  const [hydrated, setHydrated] = useState(false);
+  const lastSaved = useRef("");
   const [stage, setStage] = useState<
     "form" | "previewing" | "preview" | "applying" | "result"
   >("form");
@@ -821,24 +836,64 @@ function OperationScreen({
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
+    setHydrated(false);
     const hydrationRevision = ++valuesRevision.current;
     void bridge
       .call("settings/params", {
         opId: operation.id,
       })
       .then((saved) => {
-        if (valuesRevision.current !== hydrationRevision) return;
+        if (valuesRevision.current !== hydrationRevision) {
+          setHydrated(true);
+          return;
+        }
         const known = new Set(
           operation.schema.map((item) => item.name),
         );
+        const filtered = Object.fromEntries(
+          Object.entries(saved).filter(([key]) => known.has(key)),
+        );
         setValues((current) => ({
           ...current,
-          ...Object.fromEntries(
-            Object.entries(saved).filter(([key]) => known.has(key)),
-          ),
+          ...filtered,
         }));
+        lastSaved.current = JSON.stringify(
+          Object.fromEntries(
+            Object.entries({ ...defaults, ...filtered }).filter(([name]) => {
+              const param = operation.schema.find((item) => item.name === name);
+              return param?.kind !== "longText" && param?.kind !== "secret";
+            }),
+          ),
+        );
+        setHydrated(true);
+      })
+      .catch(() => {
+        setHydrated(true);
       });
   }, [bridge, operation]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const sanitized = Object.fromEntries(
+      Object.entries(values).filter(([name]) => {
+        const param = operation.schema.find((item) => item.name === name);
+        return param?.kind !== "longText" && param?.kind !== "secret";
+      }),
+    );
+    const serialized = JSON.stringify(sanitized);
+    if (serialized === lastSaved.current) return;
+
+    const timer = setTimeout(() => {
+      lastSaved.current = serialized;
+      void bridge
+        .call("settings/saveParams", {
+          opId: operation.id,
+          values: sanitized,
+        })
+        .catch(() => {});
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [bridge, operation, values, hydrated]);
 
   useEffect(() => {
     if (operation.id !== "files.batch_print") return;
@@ -866,14 +921,16 @@ function OperationScreen({
     setError("");
     setStage("previewing");
     try {
+      const sanitized = Object.fromEntries(
+        Object.entries(values).filter(([name]) => {
+          const param = operation.schema.find((item) => item.name === name);
+          return param?.kind !== "longText" && param?.kind !== "secret";
+        }),
+      );
+      lastSaved.current = JSON.stringify(sanitized);
       await bridge.call("settings/saveParams", {
         opId: operation.id,
-        values: Object.fromEntries(
-          Object.entries(values).filter(([name]) => {
-            const param = operation.schema.find((item) => item.name === name);
-            return param?.kind !== "longText" && param?.kind !== "secret";
-          }),
-        ),
+        values: sanitized,
       });
       const next = await bridge.call(
         "engine/preview",
@@ -1486,8 +1543,42 @@ function SchemaField({
     const paths = Array.isArray(value)
       ? value.filter(isPathSelection)
       : [];
+    const [dragOver, setDragOver] = useState(false);
     return (
-      <div className="field">
+      <div
+        className={`field dropzone-field ${dragOver ? "drop-active" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setDragOver(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setDragOver(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setDragOver(false);
+          const dropped = Array.from(event.dataTransfer.files).map(
+            (file) => (file as unknown as { path?: string }).path || file.name,
+          );
+          if (dropped.length > 0) {
+            void dropPaths(bridge, operationId, param.name, dropped).then(
+              (selected) => {
+                const merged = new Map(
+                  [...paths, ...selected].map((item) => [
+                    item.selectionId,
+                    item,
+                  ]),
+                );
+                onChange([...merged.values()]);
+              },
+            );
+          }
+        }}
+      >
         <span>{s.t(param.labelKey)}</span>
         <div className="multi-file-actions">
           <Button
@@ -1588,6 +1679,7 @@ function SchemaField({
   }
   const browse = param.kind === "folder" || param.kind === "file";
   const pathValue = isPathSelection(value) ? value.displayPath : "";
+  const [browseDragOver, setBrowseDragOver] = useState(false);
   if (param.kind === "longText") {
     return (
       <label className="field">
@@ -1604,7 +1696,46 @@ function SchemaField({
   return (
     <label className="field">
       <span>{s.t(param.labelKey)}</span>
-      <div className="path-input">
+      <div
+        className={`path-input ${browse ? "dropzone-field" : ""} ${browse && browseDragOver ? "drop-active" : ""}`}
+        onDragOver={
+          browse
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setBrowseDragOver(true);
+              }
+            : undefined
+        }
+        onDragLeave={
+          browse
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setBrowseDragOver(false);
+              }
+            : undefined
+        }
+        onDrop={
+          browse
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setBrowseDragOver(false);
+                const dropped = Array.from(event.dataTransfer.files).map(
+                  (file) => (file as unknown as { path?: string }).path || file.name,
+                );
+                if (dropped.length > 0) {
+                  void dropPaths(bridge, operationId, param.name, dropped).then(
+                    (selected) => {
+                      if (selected[0]) onChange(selected[0]);
+                    },
+                  );
+                }
+              }
+            : undefined
+        }
+      >
         <input
           type={
             param.kind === "int"
@@ -2216,22 +2347,50 @@ function EditablePlanTable({
                   />
                 </th>
               )}
-              {visibleColumns.map((column) => (
-                <th
-                  key={column.key}
-                  style={
-                    editor.layout === "compact"
-                      ? {
-                          width: column.width ?? 120,
-                          minWidth: column.width ?? 120,
-                          maxWidth: column.width ?? 120,
-                        }
-                      : { minWidth: column.width ?? 120 }
-                  }
-                >
-                  {s.t(column.labelKey)}
-                </th>
-              ))}
+              {visibleColumns.map((column) => {
+                const defaultWidth =
+                  column.kind === "bool"
+                    ? 50
+                    : column.key === "sourceStatuses" || column.key === "disposition"
+                      ? 220
+                      : column.key === "reasonKey"
+                        ? 180
+                        : column.key === "currentStatus" || column.key === "proposedStatus"
+                          ? 130
+                          : column.key === "rfiNo"
+                            ? 120
+                            : column.key === "_sheet"
+                              ? 60
+                              : column.key === "_row"
+                                ? 50
+                                : 120;
+                const colWidth = column.width ?? defaultWidth;
+                const isFixedNarrow =
+                  column.kind === "bool" ||
+                  column.key === "_sheet" ||
+                  column.key === "_row" ||
+                  colWidth <= 65;
+                return (
+                  <th
+                    key={column.key}
+                    style={
+                      editor.layout === "compact"
+                        ? isFixedNarrow
+                          ? {
+                              width: colWidth,
+                              minWidth: colWidth,
+                              maxWidth: colWidth,
+                            }
+                          : {
+                              minWidth: colWidth,
+                            }
+                        : { minWidth: colWidth }
+                    }
+                  >
+                    {s.t(column.labelKey)}
+                  </th>
+                );
+              })}
               {(editor.reorderable === true || editor.duplicateEnabled === true) && (
                 <th aria-label={s.t("editor.rowActions")} />
               )}
@@ -2284,9 +2443,12 @@ function EditablePlanTable({
                       : [];
                     const listId = `editor-${rowIndex}-${column.key}`;
                     return (
-                      <td key={column.key}>
+                      <td
+                        key={column.key}
+                        className={column.kind === "bool" ? "center" : undefined}
+                      >
                         {column.kind === "readonly" ? (
-                          <span className="readonly-cell" title={text}>{displayText}</span>
+                          <span className="readonly-cell" title={displayText || text}>{displayText}</span>
                         ) : column.kind === "bool" ? (
                           <input
                             aria-label={s.t(column.labelKey)}
@@ -3445,6 +3607,23 @@ function SettingsScreen({
       setDiagnosticsBusy(false);
     }
   };
+  const downloadDiagnostics = () => {
+    if (!diagnostics) return;
+    try {
+      const blob = new Blob([diagnostics.content], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = diagnostics.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setDiagnosticsStatus(s.t("prefs.support.downloaded"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
   return (
     <div className="screen">
       <Header title={s.t("prefs.title")} onBack={onBack} />
@@ -3588,14 +3767,24 @@ function SettingsScreen({
                 {s.t("prefs.support.preview")}
               </Button>
               {diagnostics && (
-                <Button
-                  variant="secondary"
-                  icon={<Copy />}
-                  disabled={diagnosticsBusy}
-                  onClick={() => void copyDiagnostics()}
-                >
-                  {s.t("prefs.support.copy")}
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    icon={<Copy />}
+                    disabled={diagnosticsBusy}
+                    onClick={() => void copyDiagnostics()}
+                  >
+                    {s.t("prefs.support.copy")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<Download />}
+                    disabled={diagnosticsBusy}
+                    onClick={downloadDiagnostics}
+                  >
+                    {s.t("prefs.support.download")}
+                  </Button>
+                </>
               )}
             </div>
             {diagnostics && (

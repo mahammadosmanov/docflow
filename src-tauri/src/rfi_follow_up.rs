@@ -39,11 +39,11 @@ const SOURCE_FIRST_DATA_ROW: u32 = 10;
 const MAX_SOURCE_DATA_ROWS_PER_SHEET: u32 = 20_000;
 const MAX_HEADER_ROWS: u32 = 32;
 const MAX_HEADER_COLUMNS: u32 = 64;
-const MAX_FOLLOW_UP_DATA_ROWS: u32 = 10_000;
-const MAX_PREVIEW_ROWS: usize = 500;
+const MAX_FOLLOW_UP_DATA_ROWS: u32 = 20_000;
+const MAX_PREVIEW_ROWS: usize = 5_000;
 const MAX_SOURCE_EVIDENCE_PER_RFI: usize = 500;
-const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 8 * 1024 * 1024;
-const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 2_000_000;
+const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 20_000_000;
 const MAX_CELL_TEXT_CHARS: usize = 20_000;
 const FULL_RFI_PREFIX: &str = "AZE-SUN-INT-QMS-RFI-";
 const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
@@ -469,8 +469,16 @@ pub fn preview_from_open_files(
     rfi_log: &mut File,
     follow_up: &mut File,
 ) -> Result<Plan, BackendError> {
-    let rfi_log_display = rfi_log_path.to_str().ok_or_else(workbook_invalid)?;
-    let follow_up_display = follow_up_path.to_str().ok_or_else(workbook_invalid)?;
+    let rfi_log_display = rfi_log_path.to_str().ok_or_else(|| {
+        BackendError::validation(
+            "error.rfi.followUp.workbookInvalid: RFI Log path contains invalid UTF-8",
+        )
+    })?;
+    let follow_up_display = follow_up_path.to_str().ok_or_else(|| {
+        BackendError::validation(
+            "error.rfi.followUp.workbookInvalid: Follow Up path contains invalid UTF-8",
+        )
+    })?;
     let source_fingerprint = fingerprint_open_file(rfi_log)?;
     let target_fingerprint = fingerprint_open_file(follow_up)?;
     if source_fingerprint.identity == target_fingerprint.identity {
@@ -479,29 +487,39 @@ pub fn preview_from_open_files(
         ));
     }
 
-    rfi_log
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| workbook_invalid())?;
+    rfi_log.seek(SeekFrom::Start(0)).map_err(|e| {
+        BackendError::validation(format!(
+            "error.rfi.followUp.workbookInvalid: RFI Log seek failed: {e}"
+        ))
+    })?;
     let source_discovery =
         ordered_workbook_discovery(rfi_log).map_err(map_follow_up_ooxml_error)?;
-    rfi_log
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| workbook_invalid())?;
+    rfi_log.seek(SeekFrom::Start(0)).map_err(|e| {
+        BackendError::validation(format!(
+            "error.rfi.followUp.workbookInvalid: RFI Log seek failed: {e}"
+        ))
+    })?;
     let source_workbook = read_workbook_from_reader(rfi_log).map_err(map_follow_up_ooxml_error)?;
 
-    follow_up
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| workbook_invalid())?;
+    follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
+        BackendError::validation(format!(
+            "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
+        ))
+    })?;
     let target_has_signature =
         package_has_signature(follow_up).map_err(map_follow_up_ooxml_error)?;
-    follow_up
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| workbook_invalid())?;
+    follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
+        BackendError::validation(format!(
+            "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
+        ))
+    })?;
     let target_discovery =
         ordered_workbook_discovery(follow_up).map_err(map_follow_up_ooxml_error)?;
-    follow_up
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| workbook_invalid())?;
+    follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
+        BackendError::validation(format!(
+            "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
+        ))
+    })?;
     let target_workbook =
         read_workbook_from_reader(follow_up).map_err(map_follow_up_ooxml_error)?;
     let classification = classify_workbooks(
@@ -514,17 +532,29 @@ pub fn preview_from_open_files(
     let extension = follow_up_path
         .extension()
         .and_then(|value| value.to_str())
-        .filter(|value| matches!(*value, "xlsx" | "xlsm"))
-        .ok_or_else(workbook_invalid)?;
+        .filter(|value| value.eq_ignore_ascii_case("xlsx") || value.eq_ignore_ascii_case("xlsm"))
+        .ok_or_else(|| {
+            BackendError::validation(
+                "error.rfi.followUp.workbookInvalid: Follow Up workbook must have .xlsx or .xlsm extension",
+            )
+        })?;
     let backup = follow_up_path
         .parent()
-        .ok_or_else(workbook_invalid)?
+        .ok_or_else(|| {
+            BackendError::validation(
+                "error.rfi.followUp.workbookInvalid: Follow Up workbook parent directory missing",
+            )
+        })?
         .join(format!(
             ".docflow-s5-backup-{}.{}",
             Uuid::new_v4().simple(),
-            extension
+            extension.to_ascii_lowercase()
         ));
-    let backup_display = backup.to_str().ok_or_else(workbook_invalid)?;
+    let backup_display = backup.to_str().ok_or_else(|| {
+        BackendError::validation(
+            "error.rfi.followUp.workbookInvalid: backup path contains invalid UTF-8",
+        )
+    })?;
     plan_from_classification(
         rfi_log_display,
         follow_up_display,
@@ -686,12 +716,10 @@ fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, Backend
     let identity = file_identity(file).map_err(|_| workbook_invalid())?;
     let mtime_ns = metadata
         .modified()
-        .map_err(|_| workbook_invalid())?
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| workbook_invalid())?
-        .as_nanos()
-        .try_into()
-        .map_err(|_| workbook_invalid())?;
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .and_then(|duration| u64::try_from(duration.as_nanos()).ok())
+        .unwrap_or(0);
     file.seek(SeekFrom::Start(0))
         .map_err(|_| workbook_invalid())?;
     let mut digest = Sha256::new();
@@ -805,6 +833,129 @@ fn plan_from_classification(
     })
 }
 
+fn matches_discipline_sheet(sheet_name: &str, discipline: &str) -> bool {
+    let name = sheet_name.trim().to_uppercase();
+    if name == discipline {
+        return true;
+    }
+    let tokens: Vec<&str> = name
+        .split(|c: char| c.is_whitespace() || c == '-' || c == '_' || c == '.' || c == '/')
+        .filter(|t| !t.is_empty())
+        .collect();
+    let has_token = |patterns: &[&str]| {
+        tokens
+            .iter()
+            .any(|t| patterns.iter().any(|p| *t == *p || t.starts_with(p)))
+    };
+    match discipline {
+        "CIV" => {
+            name.starts_with("CIV")
+                || has_token(&[
+                    "CIV",
+                    "CIVIL",
+                    "INSAAT",
+                    "İNŞAAT",
+                    "STRUCT",
+                    "STRUCTURAL",
+                    "CONCRETE",
+                ])
+        }
+        "MEC" => {
+            name.starts_with("MEC")
+                || has_token(&[
+                    "MEC",
+                    "MECH",
+                    "MECHANICAL",
+                    "PIPE",
+                    "PIPING",
+                    "MEKANIK",
+                    "MEKANİK",
+                    "HVAC",
+                ])
+        }
+        "ELE" => {
+            name.starts_with("ELE")
+                || has_token(&[
+                    "ELE",
+                    "ELEC",
+                    "ELECTRICAL",
+                    "INST",
+                    "INSTRUMENTATION",
+                    "ELEKTRIK",
+                    "ELEKTRİK",
+                ])
+        }
+        "PRC" => {
+            name.starts_with("PRC")
+                || name.starts_with("PROC")
+                || has_token(&["PRC", "PROC", "PROCESS", "PROSES", "COMMISSIONING"])
+        }
+        _ => false,
+    }
+}
+
+fn detect_rfi_and_status_columns(
+    worksheet: &WorksheetData,
+    default_rfi_col: u32,
+    default_status_col: u32,
+) -> (u32, u32) {
+    let scan_rows = worksheet.max_row.min(100);
+    let has_rfi_in_default = (1..=scan_rows).any(|row| {
+        worksheet.cell(row, default_rfi_col).is_some_and(|cell| {
+            canonical_rfi(&cell.value).is_some() || canonical_follow_up_rfi(&cell.value).is_some()
+        })
+    });
+    let rfi_column = if has_rfi_in_default {
+        default_rfi_col
+    } else {
+        (1..=10.min(worksheet.max_row))
+            .find_map(|row| {
+                (1..=64.min(worksheet.max_column)).find(|&col| {
+                    worksheet
+                        .cell(row, col)
+                        .is_some_and(|cell| is_follow_up_rfi_header(&normalize_header(&cell.value)))
+                })
+            })
+            .or_else(|| {
+                (1..=64.min(worksheet.max_column)).find(|&col| {
+                    (1..=scan_rows).any(|row| {
+                        worksheet.cell(row, col).is_some_and(|cell| {
+                            canonical_rfi(&cell.value).is_some()
+                                || canonical_follow_up_rfi(&cell.value).is_some()
+                        })
+                    })
+                })
+            })
+            .unwrap_or(default_rfi_col)
+    };
+
+    let mut detected_status = None;
+    for row in 1..=worksheet.max_row.min(10) {
+        for col in 1..=worksheet.max_column.min(64) {
+            if col == rfi_column {
+                continue;
+            }
+            if let Some(cell) = worksheet.cell(row, col) {
+                let token = normalize_header(&cell.value);
+                if is_follow_up_worley_status_header(&token)
+                    || is_follow_up_generic_status_header(&token)
+                    || token == "NOTLAR"
+                    || token == "AÇIKLAMA"
+                    || token == "ACIKLAMA"
+                {
+                    detected_status = Some(col);
+                    break;
+                }
+            }
+        }
+        if detected_status.is_some() {
+            break;
+        }
+    }
+    let status_column = detected_status.unwrap_or(default_status_col);
+    (rfi_column, status_column)
+}
+
 fn scan_source(
     discovery: &OrderedWorkbookDiscovery,
     workbook: &WorkbookData,
@@ -813,15 +964,28 @@ fn scan_source(
         return Err(protected());
     }
     let mut grouped = BTreeMap::<String, Vec<SourceStatusEvidence>>::new();
+    let mut scanned_sheets = BTreeSet::new();
     for projection in status_columns() {
-        let descriptor = discovery
+        let descriptor = match discovery
             .worksheets
             .iter()
-            .find(|worksheet| worksheet.name == projection.sheet)
-            .ok_or_else(workbook_invalid)?;
-        let worksheet = workbook
-            .sheet(projection.sheet)
-            .ok_or_else(workbook_invalid)?;
+            .find(|worksheet| worksheet.name.trim().eq_ignore_ascii_case(projection.sheet))
+            .or_else(|| {
+                discovery
+                    .worksheets
+                    .iter()
+                    .find(|worksheet| matches_discipline_sheet(&worksheet.name, projection.sheet))
+            }) {
+            Some(d) => d,
+            None => continue,
+        };
+        let worksheet = match workbook.sheet(&descriptor.name) {
+            Some(w) => w,
+            None => continue,
+        };
+        if !scanned_sheets.insert(descriptor.name.clone()) {
+            continue;
+        }
         if worksheet.has_sheet_protection {
             return Err(protected());
         }
@@ -830,14 +994,21 @@ fn scan_source(
         if worksheet.max_row > last_allowed {
             return Err(limit_exceeded());
         }
-        for row in SOURCE_FIRST_DATA_ROW..=worksheet.max_row {
-            let Some(rfi_cell) = worksheet.cell(row, projection.rfi_column) else {
+        let (rfi_col, status_col) = detect_rfi_and_status_columns(
+            worksheet,
+            projection.rfi_column,
+            projection.status_column,
+        );
+        for row in 1..=worksheet.max_row {
+            let Some(rfi_cell) = worksheet.cell(row, rfi_col) else {
                 continue;
             };
-            let Some(rfi) = canonical_rfi(&rfi_cell.value) else {
+            let Some(rfi) = canonical_rfi(&rfi_cell.value).or_else(|| {
+                canonical_follow_up_rfi(&rfi_cell.value).map(|(canonical, _)| canonical)
+            }) else {
                 continue;
             };
-            let status_cell = worksheet.cell(row, projection.status_column);
+            let status_cell = worksheet.cell(row, status_col);
             let evidence = grouped.entry(rfi).or_default();
             if evidence.len() >= MAX_SOURCE_EVIDENCE_PER_RFI {
                 return Err(limit_exceeded());
@@ -845,12 +1016,67 @@ fn scan_source(
             evidence.push(SourceStatusEvidence {
                 sheet: descriptor.name.clone(),
                 row,
-                rfi_column: projection.rfi_column,
-                status_column: projection.status_column,
+                rfi_column: rfi_col,
+                status_column: status_col,
                 rfi_cell: rfi_cell.into(),
                 status_cell: status_cell.map(Into::into),
             });
         }
+    }
+
+    if scanned_sheets.is_empty() {
+        // Fallback for consolidated or custom RFI Log workbooks (e.g. single-sheet "RFI Log", "RFIs", "Sheet1")
+        for descriptor in &discovery.worksheets {
+            if descriptor.visibility != WorksheetVisibility::Visible {
+                continue;
+            }
+            let Some(worksheet) = workbook.sheet(&descriptor.name) else {
+                continue;
+            };
+            if worksheet.has_sheet_protection {
+                continue;
+            }
+            let (rfi_col, status_col) = detect_rfi_and_status_columns(worksheet, 1, 20);
+            let last_allowed = SOURCE_FIRST_DATA_ROW + MAX_SOURCE_DATA_ROWS_PER_SHEET - 1;
+            if worksheet.max_row > last_allowed {
+                return Err(limit_exceeded());
+            }
+            let mut sheet_had_rfis = false;
+            for row in 1..=worksheet.max_row {
+                let Some(rfi_cell) = worksheet.cell(row, rfi_col) else {
+                    continue;
+                };
+                let Some(rfi) = canonical_rfi(&rfi_cell.value).or_else(|| {
+                    canonical_follow_up_rfi(&rfi_cell.value).map(|(canonical, _)| canonical)
+                }) else {
+                    continue;
+                };
+                let status_cell = worksheet.cell(row, status_col);
+                let evidence = grouped.entry(rfi).or_default();
+                if evidence.len() >= MAX_SOURCE_EVIDENCE_PER_RFI {
+                    return Err(limit_exceeded());
+                }
+                evidence.push(SourceStatusEvidence {
+                    sheet: descriptor.name.clone(),
+                    row,
+                    rfi_column: rfi_col,
+                    status_column: status_col,
+                    rfi_cell: rfi_cell.into(),
+                    status_cell: status_cell.map(Into::into),
+                });
+                sheet_had_rfis = true;
+            }
+            if sheet_had_rfis {
+                validate_cell_text(worksheet)?;
+                scanned_sheets.insert(descriptor.name.clone());
+            }
+        }
+    }
+
+    if scanned_sheets.is_empty() {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.workbookInvalid: no sheets containing valid RFI entries found in RFI Log",
+        ));
     }
     Ok(grouped)
 }
@@ -1384,8 +1610,12 @@ where
 
 fn map_apply_ooxml_error(error: OoxmlError) -> BackendError {
     match error.kind() {
-        OoxmlErrorKind::LimitExceeded => limit_exceeded(),
-        OoxmlErrorKind::Invalid => workbook_invalid(),
+        OoxmlErrorKind::LimitExceeded => {
+            BackendError::validation(format!("error.rfi.followUp.limitExceeded: {error}"))
+        }
+        OoxmlErrorKind::Invalid => {
+            BackendError::validation(format!("error.rfi.followUp.workbookInvalid: {error}"))
+        }
     }
 }
 
@@ -1410,6 +1640,36 @@ fn normalize_header(value: &str) -> String {
     normalize_status(value).to_ascii_uppercase()
 }
 
+fn is_follow_up_rfi_header(token: &str) -> bool {
+    token == "RFI NO."
+        || token == "RFI NO"
+        || token == "RFI #"
+        || token == "RFI NUMBER"
+        || token == "RFI NO:"
+        || token == "RFI REF"
+        || token == "RFI REFERENCE"
+}
+
+fn is_follow_up_worley_status_header(token: &str) -> bool {
+    token == "WORLEY STATUS"
+        || token == "WORLEY SIGNATURE"
+        || token == "WORLEY REMARKS"
+        || token == "WORLEY REMARK"
+        || token == "STATUS (WORLEY)"
+        || token == "SIGNATURE (WORLEY)"
+}
+
+fn is_follow_up_generic_status_header(token: &str) -> bool {
+    token == "STATUS"
+        || token == "RFI STATUS"
+        || token == "CURRENT STATUS"
+        || token == "SIGNATURE"
+        || token == "SIGNATURE STATUS"
+        || token == "DURUM"
+        || token == "REMARKS"
+        || token == "REMARK"
+}
+
 fn manual(reason: &str) -> (FollowUpDisposition, String) {
     (
         FollowUpDisposition::ManualReview,
@@ -1432,8 +1692,12 @@ fn signed_package() -> BackendError {
 #[allow(dead_code)]
 pub(crate) fn map_follow_up_ooxml_error(error: OoxmlError) -> BackendError {
     match error.kind() {
-        OoxmlErrorKind::LimitExceeded => limit_exceeded(),
-        OoxmlErrorKind::Invalid => workbook_invalid(),
+        OoxmlErrorKind::LimitExceeded => {
+            BackendError::validation(format!("error.rfi.followUp.limitExceeded: {error}"))
+        }
+        OoxmlErrorKind::Invalid => {
+            BackendError::validation(format!("error.rfi.followUp.workbookInvalid: {error}"))
+        }
     }
 }
 

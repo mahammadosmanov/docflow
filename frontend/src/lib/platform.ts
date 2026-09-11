@@ -5,8 +5,9 @@ async function selectPaths(
   bridge: Bridge,
   opId: string,
   paramName: string,
+  droppedPaths?: string[],
 ): Promise<PathSelection[]> {
-  return bridge.call("paths/select", { opId, paramName });
+  return bridge.call("paths/select", { opId, paramName, droppedPaths });
 }
 
 export async function chooseFolder(
@@ -31,6 +32,15 @@ export async function chooseFiles(
   paramName: string,
 ): Promise<PathSelection[]> {
   return selectPaths(bridge, opId, paramName);
+}
+
+export async function dropPaths(
+  bridge: Bridge,
+  opId: string,
+  paramName: string,
+  paths: string[],
+): Promise<PathSelection[]> {
+  return selectPaths(bridge, opId, paramName, paths);
 }
 
 export async function revealPath(

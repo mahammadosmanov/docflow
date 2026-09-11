@@ -109,7 +109,7 @@ let rfi_follow_up = operation(
 );
 ```
 
-Both pickers use the existing `Excel (.xlsm, .xlsx)` filter. File selections remain opaque `PathSelection` DTOs in the webview. `filter_saved_operation_params` already excludes file parameters, so neither visible path nor selection ID is saved as an operation parameter or preset.
+Both pickers use the existing `Excel (.xlsm, .xlsx)` filter. File selections remain opaque `PathSelection` DTOs in the webview. File parameters are persisted as canonical paths in settings and dynamically re-issued as active `PathSelection` DTOs scoped to the authenticated caller when operation parameters are queried.
 
 The frozen `protocol1_operations.json` snapshot becomes an additive five-operation snapshot. Protocol version remains `1`; existing method names and the first four operation definitions do not change. `smoke.rs` must expect five operations rather than four.
 

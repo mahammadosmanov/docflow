@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -209,7 +209,10 @@ fn path_dialog_filter(
     parameter_name: &str,
 ) -> Option<(&'static str, &'static [&'static str])> {
     match (operation_id, parameter_name) {
-        ("rfi.log_add", "workbook") => Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"])),
+        ("rfi.log_add", "workbook")
+        | ("rfi.follow_up_sync", "rfi_log_workbook" | "follow_up_workbook") => {
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
+        }
         _ => None,
     }
 }
@@ -353,33 +356,75 @@ impl BackendRouter {
             .native
             .selection_mode(&request.op_id, &request.param_name)?;
         let filter = path_dialog_filter(&request.op_id, &request.param_name);
-        let app = self.app.clone();
-        let paths = tauri::async_runtime::spawn_blocking(move || {
-            let dialog = app.dialog().file();
-            let dialog = match filter {
-                Some((name, extensions)) => dialog.add_filter(name, extensions),
-                None => dialog,
-            };
-            let selected = match mode {
-                PathSelectionMode::Folder => dialog
-                    .blocking_pick_folder()
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                PathSelectionMode::File => {
-                    dialog.blocking_pick_file().into_iter().collect::<Vec<_>>()
+        let paths = if !request.dropped_paths.is_empty() {
+            if request.dropped_paths.len() > 1000 {
+                return Err(BackendError::invalid_params());
+            }
+            if mode != PathSelectionMode::Files && request.dropped_paths.len() > 1 {
+                return Err(BackendError::invalid_params());
+            }
+            let mut resolved = Vec::new();
+            for path_str in request.dropped_paths {
+                let path = PathBuf::from(path_str);
+                if !path.exists() {
+                    return Err(BackendError::path_invalid("dropped path does not exist"));
                 }
-                PathSelectionMode::Files => dialog.blocking_pick_files().unwrap_or_default(),
-            };
-            selected
-                .into_iter()
-                .map(|path| {
-                    path.into_path()
-                        .map_err(|_| BackendError::path_invalid("selected path is invalid"))
-                })
-                .collect::<Result<Vec<_>, BackendError>>()
-        })
-        .await
-        .map_err(|_| BackendError::request_failed("path selection task failed"))??;
+                match mode {
+                    PathSelectionMode::Folder if !path.is_dir() => {
+                        return Err(BackendError::path_invalid("dropped path must be a folder"));
+                    }
+                    PathSelectionMode::File | PathSelectionMode::Files if !path.is_file() => {
+                        return Err(BackendError::path_invalid("dropped path must be a file"));
+                    }
+                    _ => {}
+                }
+                if let Some((_, allowed_extensions)) = filter {
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.to_ascii_lowercase())
+                        .unwrap_or_default();
+                    if !allowed_extensions
+                        .iter()
+                        .any(|allowed| allowed.eq_ignore_ascii_case(&ext))
+                    {
+                        return Err(BackendError::path_invalid(
+                            "dropped file type is not accepted",
+                        ));
+                    }
+                }
+                resolved.push(path);
+            }
+            resolved
+        } else {
+            let app = self.app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let dialog = app.dialog().file();
+                let dialog = match filter {
+                    Some((name, extensions)) => dialog.add_filter(name, extensions),
+                    None => dialog,
+                };
+                let selected = match mode {
+                    PathSelectionMode::Folder => dialog
+                        .blocking_pick_folder()
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                    PathSelectionMode::File => {
+                        dialog.blocking_pick_file().into_iter().collect::<Vec<_>>()
+                    }
+                    PathSelectionMode::Files => dialog.blocking_pick_files().unwrap_or_default(),
+                };
+                selected
+                    .into_iter()
+                    .map(|path| {
+                        path.into_path()
+                            .map_err(|_| BackendError::path_invalid("selected path is invalid"))
+                    })
+                    .collect::<Result<Vec<_>, BackendError>>()
+            })
+            .await
+            .map_err(|_| BackendError::request_failed("path selection task failed"))??
+        };
         serde_json::to_value(self.native.register_selected_paths(
             &request.op_id,
             &request.param_name,
@@ -472,6 +517,8 @@ pub(crate) struct FrontendRequest {
 struct SelectPathsParams {
     op_id: String,
     param_name: String,
+    #[serde(default)]
+    dropped_paths: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -672,6 +719,14 @@ mod tests {
     fn rfi_log_workbook_picker_offers_macro_enabled_and_standard_excel_files() {
         assert_eq!(
             path_dialog_filter("rfi.log_add", "workbook"),
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
+        );
+        assert_eq!(
+            path_dialog_filter("rfi.follow_up_sync", "rfi_log_workbook"),
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
+        );
+        assert_eq!(
+            path_dialog_filter("rfi.follow_up_sync", "follow_up_workbook"),
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
         );
         assert_eq!(path_dialog_filter("rfi.process_scans", "source"), None);

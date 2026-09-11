@@ -1434,3 +1434,164 @@ fn compatibility_oracle_matches_exact_rows() {
     assert_eq!(no_selection["warnings"], oracle["noSelectionWarnings"]);
     assert_eq!(no_selection["editor"]["requiredFields"], json!(["enabled"]));
 }
+
+#[test]
+fn partial_discipline_source_package_without_all_four_sheets_is_accepted() {
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0001";
+    let civ_sheet = worksheet(
+        [row(
+            10,
+            [inline("A10", rfi), inline("T10", "Signed by Worley")],
+        )],
+        &[],
+    );
+    // Source package only has CIV sheet, no MEC, ELE, or PRC
+    let source = package(&[("CIV", None, civ_sheet)]);
+    let target = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]);
+    let classification = classify(source, target).unwrap();
+    assert_eq!(classification["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        classification["rows"][0]["disposition"],
+        "rfi.followUp.disposition.ready"
+    );
+    assert_eq!(classification["rows"][0]["proposedStatus"], "Signed");
+}
+
+#[test]
+fn source_package_with_sheet_name_whitespace_and_case_is_accepted() {
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0001";
+    let civ_sheet = worksheet(
+        [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
+        &[],
+    );
+    // Source package has "Civ " with trailing space and mixed case
+    let source = package(&[("Civ ", None, civ_sheet)]);
+    let target = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]);
+    let classification = classify(source, target).unwrap();
+    assert_eq!(classification["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        classification["rows"][0]["disposition"],
+        "rfi.followUp.disposition.ready"
+    );
+}
+
+#[test]
+fn source_package_with_short_rfi_code_is_matched() {
+    // Source sheet uses short code "CIV-0001" instead of full prefix
+    let civ_sheet = worksheet(
+        [row(
+            10,
+            [inline("A10", "CIV-0001"), inline("T10", "Signed by Worley")],
+        )],
+        &[],
+    );
+    let source = package(&[("CIV", None, civ_sheet)]);
+    let target = target_with_rows([row(2, [inline("A2", "CIV-0001"), blank("B2")])], &[]);
+    let classification = classify(source, target).unwrap();
+    assert_eq!(classification["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        classification["rows"][0]["disposition"],
+        "rfi.followUp.disposition.ready"
+    );
+    assert_eq!(classification["rows"][0]["proposedStatus"], "Signed");
+}
+
+#[test]
+fn preview_from_open_files_accepts_uppercase_extension() {
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0001";
+    let source_bytes = source_package(
+        worksheet(
+            [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
+            &[],
+        ),
+        worksheet(Vec::<String>::new(), &[]),
+    );
+    let target_bytes = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]);
+    let temp = tempfile::tempdir().unwrap();
+    let source_path = temp.path().join("RFI_LOG.XLSX");
+    let target_path = temp.path().join("FOLLOW_UP.XLSX");
+    std::fs::write(&source_path, source_bytes.into_inner()).unwrap();
+    std::fs::write(&target_path, target_bytes.into_inner()).unwrap();
+    let mut source = File::options().read(true).open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    assert_eq!(plan.op_id, "rfi.follow_up_sync");
+    assert!(!plan.steps.is_empty());
+}
+
+#[test]
+fn source_package_with_single_rfi_log_sheet_is_accepted() {
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0001";
+    let log_sheet = worksheet(
+        [
+            row(
+                1,
+                [
+                    inline("A1", "No"),
+                    inline("B1", "RFI No"),
+                    inline("C1", "Description"),
+                    inline("D1", "Remarks"),
+                ],
+            ),
+            row(
+                2,
+                [
+                    inline("A2", "1"),
+                    inline("B2", rfi),
+                    inline("C2", "Inspection"),
+                    inline("D2", "Signed by Worley"),
+                ],
+            ),
+        ],
+        &[],
+    );
+    let source = package(&[("RFI Log", None, log_sheet)]);
+    let target = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]);
+    let classification = classify(source, target).unwrap();
+    assert_eq!(classification["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        classification["rows"][0]["disposition"],
+        "rfi.followUp.disposition.ready"
+    );
+    assert_eq!(classification["rows"][0]["proposedStatus"], "Signed");
+}
+
+#[test]
+fn source_package_with_shifted_rfi_column_in_discipline_sheet_is_accepted() {
+    let rfi = "CIV-0002";
+    let civ_sheet = worksheet(
+        [
+            row(
+                1,
+                [
+                    inline("A1", "Item"),
+                    inline("B1", "RFI Code"),
+                    inline("T1", "Remarks"),
+                ],
+            ),
+            row(
+                2,
+                [
+                    inline("A2", "1"),
+                    inline("B2", rfi),
+                    inline("T2", "Signed by Worley"),
+                ],
+            ),
+        ],
+        &[],
+    );
+    let source = package(&[("CIVIL WORKS", None, civ_sheet)]);
+    let target = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]);
+    let classification = classify(source, target).unwrap();
+    assert_eq!(classification["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        classification["rows"][0]["disposition"],
+        "rfi.followUp.disposition.ready"
+    );
+    assert_eq!(classification["rows"][0]["proposedStatus"], "Signed");
+}

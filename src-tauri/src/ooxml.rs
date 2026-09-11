@@ -19,7 +19,7 @@ use zip::{ZipArchive, ZipWriter};
 pub(crate) const MAX_PACKAGE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_GUARDED_CELL_UPDATES: usize = 500;
 pub(crate) const MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK: u64 = 1_000_000;
-pub(crate) const MAX_APPLY_MERGE_COMPARISONS: u64 = 2_000_000;
+pub(crate) const MAX_APPLY_MERGE_COMPARISONS: u64 = 20_000_000;
 const MAX_UNCOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 4_096;
@@ -31,7 +31,7 @@ const MAX_RELATIONSHIP_TARGET_BYTES: usize = 4_096;
 const MAX_STATE_BYTES: usize = 16;
 const MAX_U32_ATTRIBUTE_BYTES: usize = 10;
 const MAX_XML_DEPTH: usize = 256;
-const MAX_XML_NODES: usize = 1_000_000;
+const MAX_XML_NODES: usize = 20_000_000;
 const MAX_MERGED_RANGES: usize = 10_000;
 const MAX_WORKSHEET_ROWS: u32 = 1_048_576;
 const MAX_WORKSHEET_COLUMNS: u32 = 16_384;
@@ -1528,6 +1528,25 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
         "richValueRel",
         "slicerCache",
         "timelineCache",
+        "chartsheet",
+        "dialogsheet",
+        "table",
+        "queryTable",
+        "pivotTable",
+        "printerSettings",
+        "drawing",
+        "vmlDrawing",
+        "image",
+        "rdRichValueTypes",
+        "rdRichValueStructure",
+        "rdArray",
+        "model",
+        "dataModel",
+        "webextension",
+        "feature",
+        "customProperty",
+        "package",
+        "hyperlink",
     ];
 
     let root = validate_relationship_document_namespace(document, "workbook")?;
@@ -1549,6 +1568,9 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
             return Err(OoxmlError::invalid("unknown workbook relationship class"));
         }
         if relationship_target_mode_is_external(relationship, "workbook")? {
+            if relationship_class == "externalLink" || relationship_class == "hyperlink" {
+                continue;
+            }
             return Err(OoxmlError::invalid(
                 "external workbook relationship target is not allowed",
             ));
@@ -2643,12 +2665,18 @@ fn worksheet_data(
                     .map(|inline| canonical_inline_string(inline, namespace))
                     .transpose()?
                     .unwrap_or_default(),
-                "s" => raw_value
-                    .parse::<usize>()
-                    .ok()
-                    .and_then(|index| shared_strings.get(index))
-                    .cloned()
-                    .ok_or_else(|| OoxmlError::invalid("shared string index is invalid"))?,
+                "s" => {
+                    if raw_value.is_empty() {
+                        String::new()
+                    } else {
+                        raw_value
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|index| shared_strings.get(index))
+                            .cloned()
+                            .ok_or_else(|| OoxmlError::invalid("shared string index is invalid"))?
+                    }
+                }
                 _ => raw_value,
             };
             let formula = optional_single_child_element_in_namespace(
@@ -2948,6 +2976,9 @@ fn worksheet_merged_ranges(
         {
             return Err(OoxmlError::invalid("worksheet merge range is invalid"));
         }
+        if ranges.contains(&range) {
+            continue;
+        }
         for existing in &ranges {
             merge_budget.consume()?;
             if existing.first_row <= range.last_row
@@ -2969,8 +3000,10 @@ fn worksheet_merged_ranges(
         let declared = declared
             .parse::<usize>()
             .map_err(|_| OoxmlError::invalid("worksheet merge count is invalid"))?;
-        if declared != ranges.len() {
-            return Err(OoxmlError::invalid("worksheet merge count is invalid"));
+        if declared > MAX_MERGED_RANGES {
+            return Err(OoxmlError::limit_exceeded(
+                "worksheet merge range count exceeded the limit",
+            ));
         }
     }
     Ok(ranges)

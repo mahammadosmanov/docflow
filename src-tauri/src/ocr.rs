@@ -228,7 +228,45 @@ fn tesseract_candidates() -> Vec<PathBuf> {
             directory
                 .join("../Resources/resources/tesseract")
                 .join(executable_name),
+            directory.join("tesseract").join(executable_name),
+            directory.join(executable_name),
         ]);
+    }
+    #[cfg(windows)]
+    {
+        for root in [
+            r"C:\Program Files\Tesseract-OCR",
+            r"C:\Program Files (x86)\Tesseract-OCR",
+        ] {
+            candidates.push(PathBuf::from(root).join(executable_name));
+        }
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            candidates.push(
+                PathBuf::from(program_files)
+                    .join("Tesseract-OCR")
+                    .join(executable_name),
+            );
+        }
+        if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+            candidates.push(
+                PathBuf::from(program_files_x86)
+                    .join("Tesseract-OCR")
+                    .join(executable_name),
+            );
+        }
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            candidates.push(
+                PathBuf::from(local_appdata)
+                    .join("Programs")
+                    .join("Tesseract-OCR")
+                    .join(executable_name),
+            );
+        }
+    }
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            candidates.push(dir.join(executable_name));
+        }
     }
     candidates
 }
@@ -255,9 +293,39 @@ fn metadata_is_reparse_point(_metadata: &fs::Metadata) -> bool {
 }
 
 fn find_tessdata(executable: &Path) -> Option<PathBuf> {
-    let directory = executable.parent()?;
-    let candidate = directory.join("tessdata");
-    bundled_regular_file(&candidate.join("eng.traineddata")).then_some(candidate)
+    if let Some(directory) = executable.parent() {
+        let candidate = directory.join("tessdata");
+        if bundled_regular_file(&candidate.join("eng.traineddata")) {
+            return Some(candidate);
+        }
+        let parent_candidate = directory.join("../tessdata");
+        if bundled_regular_file(&parent_candidate.join("eng.traineddata")) {
+            return Some(parent_candidate);
+        }
+    }
+    if let Ok(prefix) = std::env::var("TESSDATA_PREFIX") {
+        let candidate = PathBuf::from(&prefix);
+        if bundled_regular_file(&candidate.join("eng.traineddata")) {
+            return Some(candidate);
+        }
+        let candidate_tessdata = candidate.join("tessdata");
+        if bundled_regular_file(&candidate_tessdata.join("eng.traineddata")) {
+            return Some(candidate_tessdata);
+        }
+    }
+    #[cfg(windows)]
+    {
+        for root in [
+            r"C:\Program Files\Tesseract-OCR\tessdata",
+            r"C:\Program Files (x86)\Tesseract-OCR\tessdata",
+        ] {
+            let candidate = PathBuf::from(root);
+            if bundled_regular_file(&candidate.join("eng.traineddata")) {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

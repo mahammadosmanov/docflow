@@ -473,6 +473,14 @@ describe("DocFlow shell", () => {
       expect(
         humanError(new Error("error.rfi.followUp.workbookInvalid"), strings),
       ).toBe(followUpExpected[locale as keyof typeof followUpExpected]);
+      expect(
+        humanError(
+          new Error("error.rfi.followUp.workbookInvalid: file check failed"),
+          strings,
+        ),
+      ).toBe(
+        `${followUpExpected[locale as keyof typeof followUpExpected]} (file check failed)`,
+      );
     }
   });
 
@@ -720,7 +728,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.1-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.2-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
@@ -1321,5 +1329,31 @@ describe("DocFlow shell", () => {
     expect(
       call.mock.calls.some(([method]) => /upload|send|telemetry/i.test(method)),
     ).toBe(false);
+  });
+
+  it("auto-saves parameters on change and reuses saved parameters", async () => {
+    let savedParams: Record<string, unknown> | null = null;
+    interceptMockBridge((method, params) => {
+      if (method === "settings/saveParams") {
+        savedParams = (params as { values: Record<string, unknown> }).values;
+        return { handled: true, value: { ok: true } };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    );
+
+    const copiesInput = await screen.findByRole("spinbutton", {
+      name: /^Kopya sayısı/,
+    });
+    fireEvent.change(copiesInput, { target: { value: "9" } });
+
+    await waitFor(() => {
+      expect(savedParams).toMatchObject({ copies: 9 });
+    });
   });
 });

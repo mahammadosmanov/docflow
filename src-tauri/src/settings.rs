@@ -115,12 +115,7 @@ impl SettingsStore {
     pub fn save_params(&self, op_id: &str, values: JsonObject) -> io::Result<()> {
         let clean = values
             .into_iter()
-            .filter(|(_, value)| {
-                matches!(
-                    value,
-                    Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)
-                )
-            })
+            .filter(|(_, value)| is_safe_param_value(value))
             .collect();
 
         let mut data = lock_data(&self.data);
@@ -496,6 +491,26 @@ fn preset_value_matches(parameter: &ParamDef, value: &Value, validate_choices: b
         }),
         ParamKind::Int => value.as_i64().is_some() || value.as_u64().is_some(),
         _ => false,
+    }
+}
+
+fn is_safe_param_value(value: &Value) -> bool {
+    match value {
+        Value::Null | Value::Bool(_) | Value::Number(_) => true,
+        Value::String(text) => text.chars().count() <= 4096,
+        Value::Array(items) => {
+            items.len() <= 1000
+                && items.iter().all(|item| {
+                    item.as_str()
+                        .is_some_and(|text| text.chars().count() <= 4096)
+                })
+        }
+        Value::Object(map) => {
+            map.len() <= 64
+                && map
+                    .values()
+                    .all(|item| item.as_u64().is_some() || item.as_i64().is_some_and(|n| n >= 0))
+        }
     }
 }
 

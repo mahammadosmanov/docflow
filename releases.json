@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.1",
+  "currentVersion": "0.7.0-rc.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -166,9 +166,17 @@
       "version": "0.7.0-rc.1",
       "date": "2026-08-29",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.1",
       "summary": "Release candidate with exact RFI Follow Up synchronization, unsent Outlook Reply All drafts, redacted local diagnostics, and commit-bound Windows evidence."
+    },
+    {
+      "version": "0.7.0-rc.2",
+      "date": "2026-09-11",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.2",
+      "summary": "Automated Windows cross-build with bundled OCR, HTML5 drag-and-drop on form path inputs, persistent parameter auto-save and reuse, flexible RFI header layout discovery, and 1-click diagnostic export."
     }
   ]
 }

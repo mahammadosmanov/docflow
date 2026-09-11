@@ -1,6 +1,6 @@
 {
   "name": "docflow-desktop",
-  "version": "0.7.0-rc.1",
+  "version": "0.7.0-rc.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "npm run audit:source && npm run build:frontend",
     "build:frontend": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
     "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1",
+    "build:windows:cross": "bash tools/build_windows_cross.sh",
     "test": "node --test tools/*.test.mjs && vitest run --config frontend/vite.config.ts",
     "test:watch": "vitest --config frontend/vite.config.ts",
     "version:check": "node tools/version_manager.mjs check",

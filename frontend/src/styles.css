@@ -230,41 +230,52 @@ h2 {
 .dashboard-pane,
 .settings-pane,
 .work-pane {
-  width: min(100%, 760px);
+  width: min(calc(100% - 48px), 1160px);
   height: calc(100vh - 60px);
   margin: 0 auto;
-  padding: calc(32px * var(--space)) 24px;
+  padding: calc(20px * var(--space)) 24px calc(12px * var(--space));
   overflow: auto;
 }
 .dashboard-pane {
-  width: min(100%, 1040px);
+  width: min(calc(100% - 48px), 1480px);
   height: calc(100vh - 60px);
   margin: 0 auto;
-  padding: calc(32px * var(--space)) 24px;
+  padding: calc(20px * var(--space)) 24px calc(12px * var(--space));
   overflow: auto;
 }
 .work-pane {
-  width: min(100%, 860px);
+  width: min(calc(100% - 48px), 1160px);
   height: calc(100vh - 109px);
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px * var(--space)) 24px calc(8px * var(--space));
 }
 .work-pane.editor-pane {
-  width: min(100%, 1520px);
+  width: min(calc(100% - 32px), 1840px);
+  height: calc(100vh - 109px);
+  max-height: calc(100vh - 109px);
+  padding: calc(10px * var(--space)) 16px 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .review-pane {
+  width: min(calc(100% - 48px), 1280px);
   height: calc(100vh - 60px);
 }
 .settings-pane {
-  width: min(100%, 720px);
+  width: min(calc(100% - 48px), 980px);
+  padding: calc(20px * var(--space)) 24px;
 }
 .page-heading {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: calc(28px * var(--space));
+  margin-bottom: calc(16px * var(--space));
 }
 .page-heading p {
-  max-width: 590px;
+  max-width: 720px;
   margin-bottom: 0;
   color: var(--muted);
   font-size: 0.9rem;
@@ -283,12 +294,17 @@ h2 {
 
 .operation-list {
   display: grid;
-  gap: calc(12px * var(--space));
+  gap: calc(10px * var(--space));
+}
+@media (min-width: 1180px) {
+  .operation-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 24px;
   align-items: start;
 }
 .dashboard-section {
@@ -469,13 +485,13 @@ h2 {
 
 .form-stack {
   display: grid;
-  gap: calc(14px * var(--space));
+  gap: calc(10px * var(--space));
 }
 .preset-toolbar {
-  margin-bottom: calc(20px * var(--space));
-  padding: 14px;
+  margin-bottom: calc(12px * var(--space));
+  padding: 10px 12px;
   display: grid;
-  gap: 11px;
+  gap: 8px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   background: var(--surface-2);
@@ -512,7 +528,7 @@ h2 {
 .preset-name input {
   min-width: 0;
   width: 100%;
-  height: 42px;
+  height: 38px;
   padding: 0 12px;
   color: var(--text);
   background: var(--surface);
@@ -525,7 +541,7 @@ h2 {
 }
 .field {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   color: var(--text);
   font-size: 0.79rem;
   font-weight: 650;
@@ -546,7 +562,7 @@ h2 {
   gap: 8px;
 }
 .input-shell {
-  height: 43px;
+  height: 38px;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -568,7 +584,7 @@ h2 {
 select {
   min-width: 0;
   flex: 1;
-  height: 42px;
+  height: 38px;
   padding: 0 12px;
   color: var(--text);
   background: var(--surface);
@@ -594,8 +610,8 @@ textarea:focus {
 }
 .field textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 10px 12px;
+  min-height: 84px;
+  padding: 8px 12px;
   resize: vertical;
   color: var(--text);
   background: var(--surface);
@@ -612,6 +628,18 @@ textarea:focus {
 .selected-files {
   display: grid;
   gap: 6px;
+}
+.dropzone-field {
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.dropzone-field.drop-active {
+  border-color: var(--text) !important;
+  background-color: var(--surface-2) !important;
+  outline: 2px dashed var(--text);
+  outline-offset: -2px;
+}
+.path-input.dropzone-field.drop-active input {
+  background-color: transparent;
 }
 .resume-queue-card {
   margin-top: 14px;
@@ -932,11 +960,11 @@ textarea:focus {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
 }
 .content-card,
 .settings-group {
-  padding: calc(20px * var(--space));
+  padding: calc(16px * var(--space)) 20px;
   border: 0;
   border-radius: var(--radius);
   background: var(--surface);
@@ -944,7 +972,7 @@ textarea:focus {
 }
 .card-title,
 .settings-title {
-  margin-bottom: calc(22px * var(--space));
+  margin-bottom: calc(14px * var(--space));
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -1013,13 +1041,18 @@ textarea:focus {
 }
 
 .action-bar {
-  min-height: 58px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  min-height: 52px;
   margin-top: auto;
-  padding-top: 20px;
+  padding-top: 12px;
+  padding-bottom: 6px;
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 0;
+  border-top: 1px solid var(--line);
 }
 .action-bar > div {
   display: flex;
@@ -1035,11 +1068,33 @@ textarea:focus {
 .editor-card {
   min-height: 0;
   flex: 1;
-  padding: 14px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius);
   background: var(--surface-2);
+}
+.work-pane.editor-pane > .flow-layout {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+.work-pane.editor-pane .editor-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.work-pane.editor-pane .action-bar {
+  flex-shrink: 0;
+  position: static;
+  margin-top: 4px;
+  padding: 8px 0 4px;
 }
 .editor-heading {
   margin-bottom: 10px;
@@ -1118,11 +1173,17 @@ textarea:focus {
   overflow: auto;
 }
 .editor-table {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0 8px;
   table-layout: fixed;
+}
+.editor-table th:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--surface-2);
+  z-index: 3;
 }
 .editor-table th {
   position: sticky;
@@ -1313,6 +1374,8 @@ textarea:focus {
   padding: 4px 7px;
 }
 .editor-card--compact .editor-table {
+  width: 100%;
+  min-width: 100%;
   border-spacing: 0 3px;
 }
 .editor-card--compact .editor-table th {
@@ -1379,6 +1442,11 @@ textarea:focus {
   color: var(--muted);
   text-align: center;
   white-space: nowrap;
+  background: var(--surface);
+  z-index: 1;
+}
+.editor-table tr.selected-row td.editor-row-actions {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .editor-row-actions button svg {
   width: 14px;

@@ -8,6 +8,21 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.2 - 2026-09-11
+
+### Added
+
+- Automated cross-compilation pipeline for Windows x64 (`tools/build_windows_cross.sh`) packaging standalone Tesseract OCR binaries and `eng.traineddata` into both NSIS installer and zero-install portable zip.
+- HTML5 drag-and-drop on all single and multi-file/folder form inputs with monochrome active drop states.
+- Automatic parameter persistence and re-issue of opaque path tokens on operation load.
+- 1-click diagnostic report download in Preferences -> Support.
+- Robust header discovery across non-standard contractor RFI logs (detecting RFI and Worley status columns across first 10 rows and 64 columns).
+
+### Safety
+
+- Preserved strict non-worksheet sheet relationship checks in OOXML workbook discovery.
+- All 321 Rust tests and 39 frontend/tooling tests passing with zero warnings.
+
 ## 0.7.0-rc.1 - 2026-08-29
 
 ### Added

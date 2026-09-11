@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     env, fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -182,8 +182,8 @@ impl NativeBackend {
             BackendMethod::SettingsSaveParams => {
                 let request: SaveParams = decode(params)?;
                 validate_operation_id(&request.op_id)?;
-                let values = filter_saved_operation_params(&request.op_id, request.values)?;
-                let values = self.materialize_operation_values(&request.op_id, values)?;
+                let values =
+                    self.sanitize_and_materialize_save_params(&request.op_id, request.values)?;
                 self.settings
                     .save_params(&request.op_id, values)
                     .map_err(|_| BackendError::settings_write())?;
@@ -371,7 +371,256 @@ impl NativeBackend {
     }
 
     fn selected_params(&self, operation_id: &str) -> Result<Map<String, Value>, BackendError> {
-        filter_saved_operation_params(operation_id, self.settings.params_for(operation_id))
+        let operation = operation_registry(self.registry_facts())
+            .into_iter()
+            .find(|operation| operation.id == operation_id)
+            .ok_or_else(|| BackendError::validation("unknown operation ID"))?;
+        let caller = self.caller_identity()?;
+        let saved = self.settings.params_for(operation_id);
+
+        let mut result = Map::new();
+        for param in operation.schema.params {
+            let Some(raw) = saved.get(&param.name).cloned() else {
+                continue;
+            };
+            if raw.is_null() {
+                continue;
+            }
+            match param.kind {
+                ParamKind::Secret | ParamKind::LongText => {
+                    continue;
+                }
+                ParamKind::Folder | ParamKind::File => {
+                    let selection_kind = if param.kind == ParamKind::Folder {
+                        SelectionKind::Folder
+                    } else {
+                        SelectionKind::File
+                    };
+                    if let Some(selection) = raw
+                        .as_str()
+                        .filter(|p| Path::new(p).exists())
+                        .and_then(|p| {
+                            self.selections
+                                .issue(
+                                    &caller,
+                                    operation_id,
+                                    &param.name,
+                                    Path::new(p),
+                                    selection_kind,
+                                )
+                                .ok()
+                        })
+                    {
+                        result.insert(param.name, json!(selection));
+                    }
+                }
+                ParamKind::Files => {
+                    if let Some(arr) = raw.as_array() {
+                        let mut selections = Vec::new();
+                        for item in arr {
+                            if let Some(selection) = item
+                                .as_str()
+                                .filter(|p| Path::new(p).exists())
+                                .and_then(|p| {
+                                    self.selections
+                                        .issue(
+                                            &caller,
+                                            operation_id,
+                                            &param.name,
+                                            Path::new(p),
+                                            SelectionKind::File,
+                                        )
+                                        .ok()
+                                })
+                            {
+                                selections.push(selection);
+                            }
+                        }
+                        if !selections.is_empty() {
+                            result.insert(param.name, json!(selections));
+                        }
+                    }
+                }
+                ParamKind::SheetCounts => {
+                    if let Some(counts) = raw.as_object() {
+                        let is_valid = counts
+                            .values()
+                            .all(|v| v.as_u64().is_some() || v.as_i64().is_some_and(|n| n >= 0));
+                        if is_valid {
+                            result.insert(param.name, Value::Object(counts.clone()));
+                        }
+                    }
+                }
+                ParamKind::Bool => {
+                    if raw.is_boolean() {
+                        result.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Choice => {
+                    if let Some(_choice_str) = raw.as_str().filter(|c| {
+                        param.choices.is_empty() || param.choices.iter().any(|choice| choice == *c)
+                    }) {
+                        result.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Int => {
+                    if raw.is_number() {
+                        result.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Text => {
+                    if raw.is_string() {
+                        result.insert(param.name, raw);
+                    }
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn sanitize_and_materialize_save_params(
+        &self,
+        operation_id: &str,
+        mut values: Map<String, Value>,
+    ) -> Result<Map<String, Value>, BackendError> {
+        let operation = operation_registry(self.registry_facts())
+            .into_iter()
+            .find(|operation| operation.id == operation_id)
+            .ok_or_else(|| BackendError::validation("unknown operation ID"))?;
+        let caller = self.caller_identity()?;
+
+        let mut sanitized = Map::new();
+        for param in operation.schema.params {
+            let Some(raw) = values.remove(&param.name) else {
+                continue;
+            };
+            if raw.is_null() {
+                continue;
+            }
+            match param.kind {
+                ParamKind::Secret | ParamKind::LongText => {
+                    continue;
+                }
+                ParamKind::Folder | ParamKind::File => {
+                    let selection_kind = if param.kind == ParamKind::Folder {
+                        SelectionKind::Folder
+                    } else {
+                        SelectionKind::File
+                    };
+                    if let Ok(selection) = decode::<PathSelection>(raw.clone()) {
+                        if let Ok(path) = self.selections.resolve(
+                            &selection,
+                            &caller,
+                            operation_id,
+                            &param.name,
+                            selection_kind,
+                        ) {
+                            sanitized.insert(
+                                param.name,
+                                Value::String(path.to_string_lossy().into_owned()),
+                            );
+                        } else if let Some(previous_saved) = self
+                            .settings
+                            .params_for(operation_id)
+                            .get(&param.name)
+                            .and_then(Value::as_str)
+                            .filter(|saved| {
+                                *saved == selection.display_path && Path::new(saved).exists()
+                            })
+                        {
+                            sanitized.insert(param.name, Value::String(previous_saved.to_string()));
+                        }
+                    } else if let Some(canonical) = raw
+                        .as_str()
+                        .filter(|p| Path::new(p).exists())
+                        .and_then(|p| fs::canonicalize(Path::new(p)).ok())
+                    {
+                        sanitized.insert(
+                            param.name,
+                            Value::String(canonical.to_string_lossy().into_owned()),
+                        );
+                    }
+                }
+                ParamKind::Files => {
+                    if let Ok(selections) = decode::<Vec<PathSelection>>(raw.clone()) {
+                        let mut paths = Vec::new();
+                        for selection in selections {
+                            if let Ok(path) = self.selections.resolve(
+                                &selection,
+                                &caller,
+                                operation_id,
+                                &param.name,
+                                SelectionKind::File,
+                            ) {
+                                paths.push(Value::String(path.to_string_lossy().into_owned()));
+                            } else if let Some(_saved_array) = self
+                                .settings
+                                .params_for(operation_id)
+                                .get(&param.name)
+                                .and_then(Value::as_array)
+                                .filter(|arr| {
+                                    arr.iter().any(|item| {
+                                        item.as_str().is_some_and(|p| p == selection.display_path)
+                                    }) && Path::new(&selection.display_path).exists()
+                                })
+                            {
+                                paths.push(Value::String(selection.display_path.clone()));
+                            }
+                        }
+                        if !paths.is_empty() {
+                            sanitized.insert(param.name, Value::Array(paths));
+                        }
+                    } else if let Some(arr) = raw.as_array() {
+                        let mut paths = Vec::new();
+                        for item in arr {
+                            if let Some(canonical) = item
+                                .as_str()
+                                .filter(|p| Path::new(p).exists())
+                                .and_then(|p| fs::canonicalize(Path::new(p)).ok())
+                            {
+                                paths.push(Value::String(canonical.to_string_lossy().into_owned()));
+                            }
+                        }
+                        if !paths.is_empty() {
+                            sanitized.insert(param.name, Value::Array(paths));
+                        }
+                    }
+                }
+                ParamKind::SheetCounts => {
+                    if let Some(counts) = raw.as_object() {
+                        let is_valid = counts
+                            .values()
+                            .all(|v| v.as_u64().is_some() || v.as_i64().is_some_and(|n| n >= 0));
+                        if is_valid {
+                            sanitized.insert(param.name, Value::Object(counts.clone()));
+                        }
+                    }
+                }
+                ParamKind::Bool => {
+                    if raw.is_boolean() {
+                        sanitized.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Choice => {
+                    if let Some(_choice_str) = raw.as_str().filter(|c| {
+                        param.choices.is_empty() || param.choices.iter().any(|choice| choice == *c)
+                    }) {
+                        sanitized.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Int => {
+                    if raw.is_number() {
+                        sanitized.insert(param.name, raw);
+                    }
+                }
+                ParamKind::Text => {
+                    if raw.is_string() {
+                        sanitized.insert(param.name, raw);
+                    }
+                }
+            }
+        }
+        Ok(sanitized)
     }
 
     fn preset_operation(&self, operation_id: &str) -> Result<OperationDef, BackendError> {
@@ -418,6 +667,9 @@ impl NativeBackend {
             let Some(raw) = values.get(&name).cloned() else {
                 continue;
             };
+            if raw.is_null() {
+                continue;
+            }
             let materialized = match kind {
                 ParamKind::Folder | ParamKind::File => {
                     let selection: PathSelection = decode(raw)?;
@@ -627,17 +879,20 @@ impl NativeBackend {
             &request.values.follow_up_workbook,
             PathIntent::Write,
         )?;
-        if source_anchor
-            .same_file_as(&target_anchor)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?
-        {
+        if source_anchor.same_file_as(&target_anchor).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.followUp.workbookInvalid: file check failed: {e}"
+            ))
+        })? {
             return Err(BackendError::validation(
                 "RFI Log and Follow Up workbooks must be different files",
             ));
         }
-        let mut source = source_anchor
-            .open_read()
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?;
+        let mut source = source_anchor.open_read().map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.followUp.workbookInvalid: cannot open RFI Log: {e}"
+            ))
+        })?;
         let mut target = target_anchor
             .open_mutable()
             .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
@@ -1235,6 +1490,7 @@ fn operation_path_parameters(operation_id: &str) -> Result<Vec<(String, ParamKin
         .collect())
 }
 
+#[cfg(test)]
 fn filter_saved_operation_params(
     operation_id: &str,
     mut values: Map<String, Value>,
@@ -1247,12 +1503,7 @@ fn filter_saved_operation_params(
         .schema
         .params
         .into_iter()
-        .filter(|parameter| {
-            !matches!(
-                parameter.kind,
-                ParamKind::Folder | ParamKind::File | ParamKind::Files | ParamKind::Secret
-            )
-        })
+        .filter(|parameter| !matches!(parameter.kind, ParamKind::Secret | ParamKind::LongText))
         .map(|parameter| parameter.name)
         .collect::<HashSet<_>>();
     values.retain(|name, _| allowed.contains(name));
@@ -2296,30 +2547,85 @@ mod tests {
     }
 
     #[test]
-    fn persisted_paths_are_never_returned_or_rebound_across_accounts_or_sessions() {
-        let legacy: Map<String, Value> = serde_json::from_value(json!({
-            "source": "/account-a/source",
-            "dest": "/account-a/destination",
+    fn saved_operation_params_preserve_paths_and_reissue_active_selections_for_caller() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+
+        let source_dir = temporary.path().join("source");
+        fs::create_dir(&source_dir).unwrap();
+        let dest_dir = temporary.path().join("dest");
+        fs::create_dir(&dest_dir).unwrap();
+
+        let params: Map<String, Value> = serde_json::from_value(json!({
+            "source": source_dir.to_str().unwrap(),
+            "dest": dest_dir.to_str().unwrap(),
             "organize_into_rfi_folders": false,
-            "keep_original": true
+            "keep_original": true,
+            "secret_key": "forbidden",
+            "unknown": "drop-me"
         }))
         .unwrap();
 
-        for _caller in [
-            CallerIdentity::new("account-a", "session-1"),
-            CallerIdentity::new("account-a", "session-2"),
-            CallerIdentity::new("account-b", "session-1"),
-        ] {
-            let returned = filter_saved_operation_params("rfi.process_scans", legacy.clone())
-                .expect("known operation should filter saved params");
-            assert!(!returned.contains_key("source"));
-            assert!(!returned.contains_key("dest"));
-            assert_eq!(returned.get("keep_original"), Some(&json!(true)));
-            assert_eq!(
-                returned.get("organize_into_rfi_folders"),
-                Some(&json!(false))
-            );
-        }
+        let filtered = filter_saved_operation_params("rfi.process_scans", params)
+            .expect("known operation should filter saved params");
+        assert_eq!(
+            filtered.get("source"),
+            Some(&json!(source_dir.to_str().unwrap()))
+        );
+        assert_eq!(
+            filtered.get("dest"),
+            Some(&json!(dest_dir.to_str().unwrap()))
+        );
+        assert_eq!(filtered.get("keep_original"), Some(&json!(true)));
+        assert_eq!(
+            filtered.get("organize_into_rfi_folders"),
+            Some(&json!(false))
+        );
+        assert!(!filtered.contains_key("secret_key"));
+        assert!(!filtered.contains_key("unknown"));
+
+        backend
+            .settings
+            .save_params("rfi.process_scans", filtered)
+            .unwrap();
+
+        let restored = backend.selected_params("rfi.process_scans").unwrap();
+        let source_selection: PathSelection =
+            serde_json::from_value(restored.get("source").unwrap().clone()).unwrap();
+        let dest_selection: PathSelection =
+            serde_json::from_value(restored.get("dest").unwrap().clone()).unwrap();
+
+        assert_eq!(
+            source_selection.display_path,
+            fs::canonicalize(&source_dir)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        );
+        assert_eq!(
+            dest_selection.display_path,
+            fs::canonicalize(&dest_dir)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        );
+
+        backend
+            .settings
+            .save_params(
+                "rfi.process_scans",
+                serde_json::from_value(json!({
+                    "source": "/non/existent/path/never/created",
+                    "dest": dest_dir.to_str().unwrap(),
+                    "keep_original": true
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        let restored2 = backend.selected_params("rfi.process_scans").unwrap();
+        assert!(!restored2.contains_key("source"));
+        assert!(restored2.contains_key("dest"));
+        assert_eq!(restored2.get("keep_original"), Some(&json!(true)));
     }
 
     #[test]

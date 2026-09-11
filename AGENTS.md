@@ -44,6 +44,7 @@ change before moving authority.
 13. Never expose a Supabase service-role or secret key in a desktop client.
 14. Windows and macOS remain supported.
 15. Preserve existing non-secret settings, journal, trash, queue, DTO, and cloud formats unless an accepted decision explicitly changes one.
+16. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible.
 
 ## Development workflow
 
@@ -53,7 +54,8 @@ change before moving authority.
 - Keep the frontend thin and commands closed, typed, bounded, and authorized in Rust.
 - Never add an interpreter, application sidecar, shell/process authority, or a second mutation backend.
 - Do not modify `legacy/` or generated output under `app/build/`, `frontend/dist/`, `src-tauri/target/`, or local environment directories.
-- Do not commit, push, publish, deploy, or release unless the user explicitly requests it.
+- Advance the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and create a focused git commit at the end of each completed work item.
+- Do not push, publish, deploy, or release unless the user explicitly requests it.
 
 ## Verification
 
