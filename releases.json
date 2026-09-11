@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.2",
+  "currentVersion": "0.7.0-rc.3",
   "releases": [
     {
       "version": "0.1.0",
@@ -174,9 +174,17 @@
       "version": "0.7.0-rc.2",
       "date": "2026-09-11",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.2",
       "summary": "Automated Windows cross-build with bundled OCR, HTML5 drag-and-drop on form path inputs, persistent parameter auto-save and reuse, flexible RFI header layout discovery, and 1-click diagnostic export."
+    },
+    {
+      "version": "0.7.0-rc.3",
+      "date": "2026-09-11",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.3",
+      "summary": "Power-user UX accelerators: live preview table text search and filter tabs (All, Changes, Manual Review) plus keyboard shortcuts (Ctrl/Cmd+Enter, Space, Escape)."
     }
   ]
 }

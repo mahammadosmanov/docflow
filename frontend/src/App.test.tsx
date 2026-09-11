@@ -728,7 +728,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.2-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.3-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
@@ -1355,5 +1355,62 @@ describe("DocFlow shell", () => {
     await waitFor(() => {
       expect(savedParams).toMatchObject({ copies: 9 });
     });
+  });
+
+  it("filters and searches rows in the preview editor table", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+
+    expect(
+      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+    ).toBeVisible();
+
+    const searchInput = screen.getByLabelText("Ara (RFI no, durum, açıklama)...");
+    expect(searchInput).toBeVisible();
+
+    // Search for 0008
+    fireEvent.change(searchInput, { target: { value: "0008" } });
+    expect(screen.getByRole("button", { name: "0008" })).toBeVisible();
+
+    // Filter by changes tab
+    const changesTab = screen.getByRole("button", { name: "Değişiklikler" });
+    fireEvent.click(changesTab);
+    expect(changesTab).toHaveClass("filter-tab--active");
+
+    // Clear search
+    fireEvent.change(searchInput, { target: { value: "" } });
+    const allTab = screen.getByRole("button", { name: "Tümü" });
+    fireEvent.click(allTab);
+    expect(allTab).toHaveClass("filter-tab--active");
+  });
+
+  it("supports keyboard shortcuts Ctrl+Enter and Escape", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+
+    // Press Ctrl+Enter to trigger preview
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+
+    expect(
+      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+    ).toBeVisible();
+
+    // Press Escape to return to form
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(
+      await screen.findByRole("button", { name: "Önizle" }),
+    ).toBeVisible();
   });
 });

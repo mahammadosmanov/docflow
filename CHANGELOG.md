@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.3 - 2026-09-11
+
+### Added
+
+- Live preview table search box and instant filter tabs (`All`, `Changes`, `Manual Review`) with dynamic filtered row count.
+- Global operator keyboard shortcuts: `Ctrl/Cmd + Enter` to trigger Preview or Apply, `Escape` to return to form or close modals, and `Space` to toggle row selection or enable/disable state.
+- Localized filter labels in Turkish, English, Russian, and Azerbaijani.
+
 ## 0.7.0-rc.2 - 2026-09-11
 
 ### Added

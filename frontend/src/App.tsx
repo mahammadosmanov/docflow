@@ -1051,6 +1051,31 @@ function OperationScreen({
       setError(humanError(reason, s));
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        if (stage === "form") {
+          event.preventDefault();
+          void preview();
+        } else if (stage === "preview" && !cancelling) {
+          event.preventDefault();
+          void apply();
+        }
+      } else if (event.key === "Escape") {
+        if (stage === "preview" || stage === "result") {
+          event.preventDefault();
+          setStage("form");
+        } else if (stage === "form") {
+          event.preventDefault();
+          onBack();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [stage, cancelling, preview, apply, onBack]);
+
   const currentStep =
     stage === "form"
       ? 0
@@ -2019,6 +2044,39 @@ function EditablePlanTable({
     selectedIds.has(rowId(row, index)),
   );
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "changes" | "review">("all");
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredRowIndices = useMemo(() => {
+    return rows
+      .map((row, index) => {
+        if (filterMode === "changes") {
+          const isChange =
+            (row.proposedStatus && row.proposedStatus !== row.currentStatus) ||
+            row.enabled === true;
+          if (!isChange) return -1;
+        } else if (filterMode === "review") {
+          const isReview =
+            row.disposition === "manual_review" ||
+            Boolean(row.reasonKey) ||
+            row.selectable === false ||
+            row.enabled === false;
+          if (!isReview) return -1;
+        }
+        if (normalizedSearch) {
+          const matches = Object.values(row).some((val) =>
+            typeof val === "string" || typeof val === "number"
+              ? String(val).toLowerCase().includes(normalizedSearch)
+              : false,
+          );
+          if (!matches) return -1;
+        }
+        return index;
+      })
+      .filter((index) => index !== -1);
+  }, [rows, filterMode, normalizedSearch]);
+
   useEffect(() => {
     const validIds = new Set(rows.map((row, index) => rowId(row, index)));
     setSelectedIds((current) => {
@@ -2121,7 +2179,11 @@ function EditablePlanTable({
   };
 
   const selectAll = () =>
-    setSelectedIds(new Set(rows.map((row, index) => rowId(row, index))));
+    setSelectedIds(
+      new Set(
+        filteredRowIndices.map((index) => rowId(rows[index], index)),
+      ),
+    );
   const selectNone = () => setSelectedIds(new Set());
   const toggleRow = (id: string) =>
     setSelectedIds((current) => {
@@ -2227,6 +2289,48 @@ function EditablePlanTable({
             </Button>
           )}
         </div>
+      </div>
+      <div className="table-filter-bar">
+        <div className="table-search-box">
+          <input
+            type="search"
+            aria-label={s.t("filter.searchPlaceholder")}
+            placeholder={s.t("filter.searchPlaceholder")}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+        </div>
+        <div className="table-filter-tabs">
+          <button
+            type="button"
+            className={`filter-tab ${filterMode === "all" ? "filter-tab--active" : ""}`}
+            onClick={() => setFilterMode("all")}
+          >
+            {s.t("filter.all")}
+          </button>
+          <button
+            type="button"
+            className={`filter-tab ${filterMode === "changes" ? "filter-tab--active" : ""}`}
+            onClick={() => setFilterMode("changes")}
+          >
+            {s.t("filter.changes")}
+          </button>
+          <button
+            type="button"
+            className={`filter-tab ${filterMode === "review" ? "filter-tab--active" : ""}`}
+            onClick={() => setFilterMode("review")}
+          >
+            {s.t("filter.manualReview")}
+          </button>
+        </div>
+        {(searchTerm !== "" || filterMode !== "all") && (
+          <span className="table-filter-count">
+            {s.t("table.filterCount", {
+              filtered: filteredRowIndices.length,
+              total: rows.length,
+            })}
+          </span>
+        )}
       </div>
       {editor.bulkEnabled === true && (
         <div className="bulk-editor" aria-label={s.t("editor.bulk.title")}>
@@ -2340,7 +2444,12 @@ function EditablePlanTable({
                   <input
                     aria-label={s.t("editor.selectAll")}
                     type="checkbox"
-                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    checked={
+                      filteredRowIndices.length > 0 &&
+                      filteredRowIndices.every((index) =>
+                        selectedIds.has(rowId(rows[index], index)),
+                      )
+                    }
                     onChange={(event) =>
                       event.target.checked ? selectAll() : selectNone()
                     }
@@ -2397,14 +2506,29 @@ function EditablePlanTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIndex) => {
+            {filteredRowIndices.map((rowIndex) => {
+              const row = rows[rowIndex];
               const sheet = String(row._sheet ?? "");
               const groupCount = rows.filter(
                 (item) => item[groupField] === row[groupField],
               ).length;
               const id = rowId(row, rowIndex);
               return (
-                <tr key={id} className={selectedIds.has(id) ? "selected-row" : ""}>
+                <tr
+                  key={id}
+                  className={selectedIds.has(id) ? "selected-row" : ""}
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === " " && event.target === event.currentTarget) {
+                      event.preventDefault();
+                      if (editor.selectionEnabled === true) {
+                        toggleRow(id);
+                      } else if (typeof row.enabled === "boolean" && row.selectable !== false) {
+                        update(rowIndex, "enabled", !row.enabled);
+                      }
+                    }
+                  }}
+                >
                   {editor.selectionEnabled === true && (
                     <td className="selection-column">
                       <input
@@ -2565,6 +2689,13 @@ function EditablePlanTable({
                 </tr>
               );
             })}
+            {filteredRowIndices.length === 0 && (
+              <tr>
+                <td colSpan={visibleColumns.length + 2} className="empty-filter-cell">
+                  {s.t("plan.empty")}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
