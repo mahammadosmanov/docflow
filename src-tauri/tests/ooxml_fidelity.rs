@@ -171,7 +171,7 @@ fn guarded_follow_up_patch_changes_only_authorized_value_events() {
                         formula: None,
                         style: Some("7".to_string()),
                     },
-                    replacement: CellUpdate::Text("Completed".to_string()),
+                    replacement: CellUpdate::Text("Signed".to_string()),
                 },
             )]),
         )]);
@@ -193,7 +193,7 @@ fn guarded_follow_up_patch_changes_only_authorized_value_events() {
         let patched =
             String::from_utf8(cursor_member(&destination, "xl/worksheets/sheet1.xml")).unwrap();
         assert!(patched.contains(
-            r#"<c r="B2" s="7" x:keep="yes" x:t="sentinel" t="inlineStr"><is><t>Completed</t></is><extLst>"#
+            r#"<c r="B2" s="7" x:keep="yes" x:t="sentinel" t="inlineStr"><is><t>Signed</t></is><extLst>"#
         ));
         assert!(patched.contains("do not change"));
         assert!(patched.contains("sheet sentinel"));
@@ -221,7 +221,7 @@ fn guarded_follow_up_verifier_compares_expanded_events_not_attribute_quote_bytes
                     formula: None,
                     style: Some("7".to_string()),
                 },
-                replacement: CellUpdate::Text("Completed".to_string()),
+                replacement: CellUpdate::Text("Signed".to_string()),
             },
         )]),
     )]);
@@ -259,7 +259,7 @@ fn guarded_follow_up_verifier_rejects_unapproved_event_and_package_deltas() {
                     formula: None,
                     style: Some("7".to_string()),
                 },
-                replacement: CellUpdate::Text("Completed".to_string()),
+                replacement: CellUpdate::Text("Signed".to_string()),
             },
         )]),
     )]);
@@ -315,7 +315,7 @@ fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
             formula: None,
             style: Some("7".to_string()),
         },
-        replacement: CellUpdate::Text("Completed".to_string()),
+        replacement: CellUpdate::Text("Signed".to_string()),
     };
     let invalid_sets = [
         BTreeMap::new(),
@@ -413,7 +413,7 @@ fn guarded_writer_stays_on_pinned_handles_after_visible_parent_swap() {
                     formula: None,
                     style: Some("7".to_string()),
                 },
-                replacement: CellUpdate::Text("Completed".to_string()),
+                replacement: CellUpdate::Text("Signed".to_string()),
             },
         )]),
     )]);

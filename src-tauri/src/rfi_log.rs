@@ -82,6 +82,7 @@ struct Layout {
     location_col: u32,
     subcontractor_col: u32,
     status_col: u32,
+    remarks_col: u32,
     validity_col: u32,
     row_col: Option<u32>,
 }
@@ -99,7 +100,7 @@ pub(crate) fn status_columns() -> [RfiStatusColumns; 4] {
         RfiStatusColumns {
             sheet: projection.sheet,
             rfi_column: 1,
-            status_column: projection.status_col,
+            status_column: projection.remarks_col,
         }
     })
 }
@@ -117,6 +118,7 @@ fn layout(discipline: &str) -> Option<Layout> {
             location_col: 14,
             subcontractor_col: 15,
             status_col: 16,
+            remarks_col: 20,
             validity_col: 17,
             row_col: None,
         }),
@@ -131,6 +133,7 @@ fn layout(discipline: &str) -> Option<Layout> {
             location_col: 15,
             subcontractor_col: 16,
             status_col: 17,
+            remarks_col: 21,
             validity_col: 18,
             row_col: Some(8),
         }),
@@ -145,6 +148,7 @@ fn layout(discipline: &str) -> Option<Layout> {
             location_col: 14,
             subcontractor_col: 15,
             status_col: 16,
+            remarks_col: 20,
             validity_col: 17,
             row_col: None,
         }),
@@ -159,6 +163,7 @@ fn layout(discipline: &str) -> Option<Layout> {
             location_col: 14,
             subcontractor_col: 15,
             status_col: 16,
+            remarks_col: 20,
             validity_col: 17,
             row_col: None,
         }),

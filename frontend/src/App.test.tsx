@@ -458,14 +458,21 @@ describe("DocFlow shell", () => {
       az: "Etibarlı makro aktiv .xlsm və ya standart .xlsx RFI Log faylı seçin.",
       ru: "Выберите допустимый RFI Log с поддержкой макросов .xlsm или стандартный .xlsx.",
     } as const;
+    const followUpExpected = {
+      tr: "Geçerli RFI Log ve Follow Up .xlsm veya .xlsx çalışma kitapları seç.",
+      en: "Select valid RFI Log and Follow Up .xlsm or .xlsx workbooks.",
+      az: "Etibarlı RFI Log və Follow Up .xlsm və ya .xlsx iş kitabları seçin.",
+      ru: "Выберите допустимые книги RFI Log и Follow Up в формате .xlsm или .xlsx.",
+    } as const;
 
     for (const [locale, message] of Object.entries(expected)) {
+      const strings = makeStrings(locale as keyof typeof expected);
+      expect(humanError(new Error("error.rfi.workbookInvalid"), strings)).toBe(
+        message,
+      );
       expect(
-        humanError(
-          new Error("error.rfi.workbookInvalid"),
-          makeStrings(locale as keyof typeof expected),
-        ),
-      ).toBe(message);
+        humanError(new Error("error.rfi.followUp.workbookInvalid"), strings),
+      ).toBe(followUpExpected[locale as keyof typeof followUpExpected]);
     }
   });
 

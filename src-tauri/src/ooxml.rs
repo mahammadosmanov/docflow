@@ -577,7 +577,7 @@ fn validate_guarded_update_set(
             }
             if !matches!(
                 &update.replacement,
-                CellUpdate::Text(value) if matches!(value.as_str(), "Completed" | "In Progress")
+                CellUpdate::Text(value) if matches!(value.as_str(), "Signed" | "Not Signed")
             ) {
                 return Err(OoxmlError::invalid("guarded replacement is invalid"));
             }
@@ -1523,6 +1523,7 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
         "pivotCacheDefinition",
         "customXml",
         "metadata",
+        "sheetMetadata",
         "person",
         "richValueRel",
         "slicerCache",
@@ -1559,8 +1560,7 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
             "workbook relationship target",
         )?
         .ok_or_else(|| OoxmlError::invalid("workbook relationship target is missing"))?;
-        let normalized_target =
-            normalize_workbook_relationship_target(workbook_part_path, &target)?;
+        let normalized_target = normalize_relationship_target(workbook_part_path, &target)?;
         if !relationship_targets.insert(normalized_target.clone()) {
             return Err(OoxmlError::invalid(
                 "duplicate workbook relationship target",
@@ -2102,7 +2102,7 @@ fn patch_guarded_cell_value(
     let CellUpdate::Text(value) = update else {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     };
-    if !matches!(value.as_str(), "Completed" | "In Progress") {
+    if !matches!(value.as_str(), "Signed" | "Not Signed") {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     }
     if child_elements_in_namespace(cell, b"f", namespace)
@@ -5109,6 +5109,33 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "external workbook relationship target is not allowed"
+        );
+    }
+
+    #[test]
+    fn ordered_worksheet_discovery_accepts_package_internal_parent_relative_custom_xml() {
+        let workbook = format!(
+            r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="MEC" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+        );
+        let relationships = format!(
+            r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/></Relationships>"#
+        );
+
+        let discovery = ordered_workbook_discovery(&mut fixture_from_members(
+            &workbook,
+            &relationships,
+            [
+                ("xl/worksheets/sheet1.xml", b"worksheet".as_slice()),
+                ("customXml/item1.xml", b"custom xml".as_slice()),
+                ("xl/metadata.xml", b"sheet metadata".as_slice()),
+            ],
+        ))
+        .unwrap();
+
+        assert_eq!(discovery.worksheets.len(), 1);
+        assert_eq!(
+            discovery.worksheets[0].part_path,
+            "xl/worksheets/sheet1.xml"
         );
     }
 

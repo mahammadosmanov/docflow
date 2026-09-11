@@ -23,11 +23,11 @@
 - Use exactly two required file parameters: `rfi_log_workbook` and `follow_up_workbook`.
 - Accept `.xlsx` and `.xlsm` only.
 - Read selected workbooks from anchored handles; domain preview/revise must not reopen a user path.
-- Canonical RFI matching is whole-value NFC + trim + uppercase against `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}` only.
-- Map exact case-sensitive `Completed → Completed` and `Ongoing → In Progress` only.
-- Keep blank, unknown, unmatched, missing-cell, formula, merged, duplicate-target, conflicting-source, and unknown-target rows manual-only with `enabled=false` and `selectable=false`.
+- Source RFI matching is whole-value NFC + trim + uppercase against `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}`; Follow Up displays and stores only exact short `(CIV|MEC|ELE|PRC)-[0-9]{4}` values, with the fixed prefix added internally only for source lookup.
+- Derive `Signed` only from a case-sensitive trimmed REMARKS line exactly equal to `Signed by Worley`; otherwise derive `Not Signed`.
+- Keep blank/invalid/unmatched/missing-cell/formula/merged/duplicate-target/conflicting-source and unknown target-status rows manual-only with `enabled=false` and `selectable=false`. Only blank, `Signed`, and `Not Signed` target statuses are recognized.
 - Discover exactly one `RFI NO.`/`STATUS` header pair within 32 rows × 64 columns; never infer a sheet or neighboring column.
-- Enforce 10,000 source data rows per sheet, 10,000 Follow Up data rows, 500 source evidence rows per canonical RFI across all projected sheets, 500 preview rows/updates, 20,000 Unicode scalar values per cell, at most 1,000,000 merge-overlap validation comparisons per workbook and 2,000,000 total overlap-plus-membership comparisons across the source/target preview/revise pair, and an exact 8-MiB borrowed-serialization budget over the complete preview/editor plus immutable step-authority projection. Guarded apply is a fresh target-only validation pass with its own exact 2,000,000 overlap-plus-membership comparison account.
+- Enforce 20,000 source data rows per sheet, 10,000 Follow Up data rows, 500 source evidence rows per canonical RFI across all projected sheets, 500 preview rows/updates, 20,000 Unicode scalar values per cell, at most 1,000,000 merge-overlap validation comparisons per workbook and 2,000,000 total overlap-plus-membership comparisons across the source/target preview/revise pair, and an exact 8-MiB borrowed-serialization budget over the complete preview/editor plus immutable step-authority projection. Guarded apply is a fresh target-only validation pass with its own exact 2,000,000 overlap-plus-membership comparison account.
 - Parse worksheet evidence only from accepted Strict/Transitional SpreadsheetML `worksheet/sheetData/row/c` hierarchy; reject duplicate coordinates and foreign-namespace shadows before classification.
 - Preview and revise are inert.
 - A successful revise replaces the same cached plan atomically, preserves plan/binding/backend provenance and original TTL, and leaves no superseded apply authority.

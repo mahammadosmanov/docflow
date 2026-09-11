@@ -1,51 +1,572 @@
 {
   "defaultReview": {
-    "opId": "rfi.follow_up_sync",
     "columns": [
-      {"key":"enabled","labelKey":"rfi.followUp.column.enabled","kind":"bool","bulk":false,"disabledWhen":{"field":"selectable","equals":false}},
-      {"key":"rfiNo","labelKey":"rfi.followUp.column.rfiNo","kind":"readonly"},
-      {"key":"sourceStatuses","labelKey":"rfi.followUp.column.sourceStatuses","kind":"readonly"},
-      {"key":"currentStatus","labelKey":"rfi.followUp.column.currentStatus","kind":"readonly"},
-      {"key":"proposedStatus","labelKey":"rfi.followUp.column.proposedStatus","kind":"readonly"},
-      {"key":"disposition","labelKey":"rfi.followUp.column.disposition","kind":"readonly","display":"localizedKey"},
-      {"key":"reasonKey","labelKey":"rfi.followUp.column.reason","kind":"readonly","display":"localizedKey","detail":true},
-      {"key":"_sheet","labelKey":"rfi.followUp.column.sheet","kind":"readonly","detail":true},
-      {"key":"_row","labelKey":"rfi.followUp.column.row","kind":"readonly","detail":true}
+      {
+        "bulk": false,
+        "disabledWhen": {
+          "equals": false,
+          "field": "selectable"
+        },
+        "key": "enabled",
+        "kind": "bool",
+        "labelKey": "rfi.followUp.column.enabled"
+      },
+      {
+        "key": "rfiNo",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.rfiNo"
+      },
+      {
+        "key": "sourceStatuses",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.sourceStatuses"
+      },
+      {
+        "key": "currentStatus",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.currentStatus"
+      },
+      {
+        "key": "proposedStatus",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.proposedStatus"
+      },
+      {
+        "display": "localizedKey",
+        "key": "disposition",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.disposition"
+      },
+      {
+        "detail": true,
+        "display": "localizedKey",
+        "key": "reasonKey",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.reason"
+      },
+      {
+        "detail": true,
+        "key": "_sheet",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.sheet"
+      },
+      {
+        "detail": true,
+        "key": "_row",
+        "kind": "readonly",
+        "labelKey": "rfi.followUp.column.row"
+      }
     ],
+    "opId": "rfi.follow_up_sync",
     "rows": [
-      {"_rowId":"rfi-follow-up:1:2:2","_sheet":"Follow Up","_row":2,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0001","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.ready","reasonKey":"warn.rfi.followUp.reason.readyCompleted","selectable":true,"enabled":true,"sourceProvenance":[{"sheet":"CIV","row":10}]},
-      {"_rowId":"rfi-follow-up:1:3:2","_sheet":"Follow Up","_row":3,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0002","sourceStatuses":["Ongoing"],"currentStatus":"","proposedStatus":"In Progress","disposition":"rfi.followUp.disposition.ready","reasonKey":"warn.rfi.followUp.reason.readyOngoing","selectable":true,"enabled":true,"sourceProvenance":[{"sheet":"CIV","row":11}]},
-      {"_rowId":"rfi-follow-up:1:4:2","_sheet":"Follow Up","_row":4,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0003","sourceStatuses":["Completed"],"currentStatus":"Completed","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.alreadySynced","reasonKey":"warn.rfi.followUp.reason.alreadySynced","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":12}]},
-      {"_rowId":"rfi-follow-up:1:5:2","_sheet":"Follow Up","_row":5,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0004","sourceStatuses":[""],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceStatusBlank","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":13}]},
-      {"_rowId":"rfi-follow-up:1:6:2","_sheet":"Follow Up","_row":6,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0005","sourceStatuses":["Cancelled"],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceStatusUnknown","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":14}]},
-      {"_rowId":"rfi-follow-up:1:7:2","_sheet":"Follow Up","_row":7,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0006","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.ready","reasonKey":"warn.rfi.followUp.reason.readyCompleted","selectable":true,"enabled":true,"sourceProvenance":[{"sheet":"CIV","row":15},{"sheet":"MEC","row":10}]},
-      {"_rowId":"rfi-follow-up:1:8:2","_sheet":"Follow Up","_row":8,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0007","sourceStatuses":["Completed","Ongoing"],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceConflict","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":16},{"sheet":"MEC","row":11}]},
-      {"_rowId":"rfi-follow-up:1:9:2","_sheet":"Follow Up","_row":9,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0008","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceFormula","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":17}]},
-      {"_rowId":"rfi-follow-up:1:10:2","_sheet":"Follow Up","_row":10,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0009","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceMerged","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":18}]},
-      {"_rowId":"rfi-follow-up:1:11:2","_sheet":"Follow Up","_row":11,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-9999","sourceStatuses":[],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.sourceMissing","selectable":false,"enabled":false,"sourceProvenance":[]},
-      {"_rowId":"rfi-follow-up:1:12:2","_sheet":"Follow Up","_row":12,"rfiNo":"prefix AZE-SUN-INT-QMS-RFI-CIV-0001","sourceStatuses":[],"currentStatus":"","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.invalidRfi","selectable":false,"enabled":false,"sourceProvenance":[]},
-      {"_rowId":"rfi-follow-up:1:13:2","_sheet":"Follow Up","_row":13,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0017","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetRfiFormula","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":26}]},
-      {"_rowId":"rfi-follow-up:1:14:2","_sheet":"Follow Up","_row":14,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0011","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetRfiMerged","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":20}]},
-      {"_rowId":"rfi-follow-up:1:15:2","_sheet":"Follow Up","_row":15,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0014","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetDuplicate","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":23}]},
-      {"_rowId":"rfi-follow-up:1:16:2","_sheet":"Follow Up","_row":16,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0014","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetDuplicate","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":23}]},
-      {"_rowId":"rfi-follow-up:1:17:2","_sheet":"Follow Up","_row":17,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0012","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetCellMissing","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":21}]},
-      {"_rowId":"rfi-follow-up:1:18:2","_sheet":"Follow Up","_row":18,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0013","sourceStatuses":["Completed"],"currentStatus":"Completed","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetFormula","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":22}]},
-      {"_rowId":"rfi-follow-up:1:19:2","_sheet":"Follow Up","_row":19,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0016","sourceStatuses":["Completed"],"currentStatus":"","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetMerged","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":25}]},
-      {"_rowId":"rfi-follow-up:1:20:2","_sheet":"Follow Up","_row":20,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0010","sourceStatuses":["Completed"],"currentStatus":"Pending","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.targetStatusUnknown","selectable":false,"enabled":false,"sourceProvenance":[{"sheet":"CIV","row":19}]},
-      {"_rowId":"rfi-follow-up:1:21:2","_sheet":"Follow Up","_row":21,"rfiNo":"","sourceStatuses":[],"currentStatus":"Completed","proposedStatus":null,"disposition":"rfi.followUp.disposition.manualReview","reasonKey":"warn.rfi.followUp.reason.blankRfi","selectable":false,"enabled":false,"sourceProvenance":[]},
-      {"_rowId":"rfi-follow-up:1:22:2","_sheet":"Follow Up","_row":22,"rfiNo":"AZE-SUN-INT-QMS-RFI-CIV-0015","sourceStatuses":["Completed"],"currentStatus":"In Progress","proposedStatus":"Completed","disposition":"rfi.followUp.disposition.ready","reasonKey":"warn.rfi.followUp.reason.readyCompleted","selectable":true,"enabled":true,"sourceProvenance":[{"sheet":"CIV","row":24}]}
+      {
+        "_row": 2,
+        "_rowId": "rfi-follow-up:1:2:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0001",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 10,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 3,
+        "_rowId": "rfi-follow-up:1:3:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0002",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 11,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 4,
+        "_rowId": "rfi-follow-up:1:4:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "Completed",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetStatusUnknown",
+        "rfiNo": "CIV-0003",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 12,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 5,
+        "_rowId": "rfi-follow-up:1:5:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0004",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 13,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 6,
+        "_rowId": "rfi-follow-up:1:6:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0005",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 14,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 7,
+        "_rowId": "rfi-follow-up:1:7:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0006",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 15,
+            "sheet": "CIV"
+          },
+          {
+            "row": 10,
+            "sheet": "MEC"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 8,
+        "_rowId": "rfi-follow-up:1:8:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.ready",
+        "enabled": true,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.readyNotSigned",
+        "rfiNo": "CIV-0007",
+        "selectable": true,
+        "sourceProvenance": [
+          {
+            "row": 16,
+            "sheet": "CIV"
+          },
+          {
+            "row": 11,
+            "sheet": "MEC"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 9,
+        "_rowId": "rfi-follow-up:1:9:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": null,
+        "reasonKey": "warn.rfi.followUp.reason.sourceFormula",
+        "rfiNo": "CIV-0008",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 17,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 10,
+        "_rowId": "rfi-follow-up:1:10:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": null,
+        "reasonKey": "warn.rfi.followUp.reason.sourceMerged",
+        "rfiNo": "CIV-0009",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 18,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 11,
+        "_rowId": "rfi-follow-up:1:11:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": null,
+        "reasonKey": "warn.rfi.followUp.reason.sourceMissing",
+        "rfiNo": "CIV-9999",
+        "selectable": false,
+        "sourceProvenance": [],
+        "sourceStatuses": []
+      },
+      {
+        "_row": 12,
+        "_rowId": "rfi-follow-up:1:12:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": null,
+        "reasonKey": "warn.rfi.followUp.reason.invalidRfi",
+        "rfiNo": "prefix AZE-SUN-INT-QMS-RFI-CIV-0001",
+        "selectable": false,
+        "sourceProvenance": [],
+        "sourceStatuses": []
+      },
+      {
+        "_row": 13,
+        "_rowId": "rfi-follow-up:1:13:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetRfiFormula",
+        "rfiNo": "CIV-0017",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 26,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 14,
+        "_rowId": "rfi-follow-up:1:14:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetRfiMerged",
+        "rfiNo": "CIV-0011",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 20,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 15,
+        "_rowId": "rfi-follow-up:1:15:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetDuplicate",
+        "rfiNo": "CIV-0014",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 23,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 16,
+        "_rowId": "rfi-follow-up:1:16:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetDuplicate",
+        "rfiNo": "CIV-0014",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 23,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 17,
+        "_rowId": "rfi-follow-up:1:17:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetCellMissing",
+        "rfiNo": "CIV-0012",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 21,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 18,
+        "_rowId": "rfi-follow-up:1:18:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "Completed",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetFormula",
+        "rfiNo": "CIV-0013",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 22,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 19,
+        "_rowId": "rfi-follow-up:1:19:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetMerged",
+        "rfiNo": "CIV-0016",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 25,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 20,
+        "_rowId": "rfi-follow-up:1:20:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "Pending",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetStatusUnknown",
+        "rfiNo": "CIV-0010",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 19,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      },
+      {
+        "_row": 21,
+        "_rowId": "rfi-follow-up:1:21:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "Completed",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": null,
+        "reasonKey": "warn.rfi.followUp.reason.blankRfi",
+        "rfiNo": "",
+        "selectable": false,
+        "sourceProvenance": [],
+        "sourceStatuses": []
+      },
+      {
+        "_row": 22,
+        "_rowId": "rfi-follow-up:1:22:2",
+        "_sheet": "Follow Up",
+        "currentStatus": "In Progress",
+        "disposition": "rfi.followUp.disposition.manualReview",
+        "enabled": false,
+        "proposedStatus": "Not Signed",
+        "reasonKey": "warn.rfi.followUp.reason.targetStatusUnknown",
+        "rfiNo": "CIV-0015",
+        "selectable": false,
+        "sourceProvenance": [
+          {
+            "row": 24,
+            "sheet": "CIV"
+          }
+        ],
+        "sourceStatuses": [
+          "Not Signed"
+        ]
+      }
     ],
     "updates": [
-      {"rowId":"rfi-follow-up:1:2:2","canonicalRfi":"AZE-SUN-INT-QMS-RFI-CIV-0001","proposedStatus":"Completed","target":{"sheet":"Follow Up","row":2,"rfiColumn":1,"statusColumn":2}},
-      {"rowId":"rfi-follow-up:1:3:2","canonicalRfi":"AZE-SUN-INT-QMS-RFI-CIV-0002","proposedStatus":"In Progress","target":{"sheet":"Follow Up","row":3,"rfiColumn":1,"statusColumn":2}},
-      {"rowId":"rfi-follow-up:1:7:2","canonicalRfi":"AZE-SUN-INT-QMS-RFI-CIV-0006","proposedStatus":"Completed","target":{"sheet":"Follow Up","row":7,"rfiColumn":1,"statusColumn":2}},
-      {"rowId":"rfi-follow-up:1:22:2","canonicalRfi":"AZE-SUN-INT-QMS-RFI-CIV-0015","proposedStatus":"Completed","target":{"sheet":"Follow Up","row":22,"rfiColumn":1,"statusColumn":2}}
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0001",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:2:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 2,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      },
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0002",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:3:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 3,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      },
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0004",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:5:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 5,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      },
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0005",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:6:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 6,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      },
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0006",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:7:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 7,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      },
+      {
+        "canonicalRfi": "AZE-SUN-INT-QMS-RFI-CIV-0007",
+        "proposedStatus": "Not Signed",
+        "rowId": "rfi-follow-up:1:8:2",
+        "target": {
+          "rfiColumn": 1,
+          "row": 8,
+          "sheet": "Follow Up",
+          "statusColumn": 2
+        }
+      }
     ],
     "warnings": [
-      {"key":"warn.rfi.followUp.manualRows","subject":"16"}
+      {
+        "key": "warn.rfi.followUp.manualRows",
+        "subject": "15"
+      }
     ]
   },
   "noSelectionWarnings": [
-    {"key":"warn.rfi.followUp.noRowsSelected","subject":""}
+    {
+      "key": "warn.rfi.followUp.noRowsSelected",
+      "subject": ""
+    }
   ]
 }

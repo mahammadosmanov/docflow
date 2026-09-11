@@ -36,7 +36,7 @@ use crate::{
 #[allow(dead_code)]
 pub(crate) const OPERATION_ID: &str = "rfi.follow_up_sync";
 const SOURCE_FIRST_DATA_ROW: u32 = 10;
-const MAX_SOURCE_DATA_ROWS_PER_SHEET: u32 = 10_000;
+const MAX_SOURCE_DATA_ROWS_PER_SHEET: u32 = 20_000;
 const MAX_HEADER_ROWS: u32 = 32;
 const MAX_HEADER_COLUMNS: u32 = 64;
 const MAX_FOLLOW_UP_DATA_ROWS: u32 = 10_000;
@@ -45,6 +45,8 @@ const MAX_SOURCE_EVIDENCE_PER_RFI: usize = 500;
 const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 2_000_000;
 const MAX_CELL_TEXT_CHARS: usize = 20_000;
+const FULL_RFI_PREFIX: &str = "AZE-SUN-INT-QMS-RFI-";
+const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
 
 #[cfg(test)]
 static SOURCE_ANALYSIS_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -322,11 +324,34 @@ pub fn canonical_rfi(value: &str) -> Option<String> {
     .then_some(normalized)
 }
 
-pub fn mapped_follow_up_status(value: &str) -> Option<&'static str> {
-    match value {
-        "Completed" => Some("Completed"),
-        "Ongoing" => Some("In Progress"),
-        _ => None,
+pub fn canonical_follow_up_rfi(value: &str) -> Option<(String, String)> {
+    static SHORT_RFI: OnceLock<Regex> = OnceLock::new();
+    let normalized = normalize_status(value).to_uppercase();
+    let short = if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {
+        short.to_string()
+    } else {
+        normalized
+    };
+    if !SHORT_RFI
+        .get_or_init(|| {
+            Regex::new(r"\A(?:CIV|MEC|ELE|PRC)-[0-9]{4}\z")
+                .expect("short Follow Up RFI regex is valid")
+        })
+        .is_match(&short)
+    {
+        return None;
+    }
+    Some((format!("{FULL_RFI_PREFIX}{short}"), short))
+}
+
+pub fn mapped_follow_up_status(remark: &str) -> &'static str {
+    if remark
+        .lines()
+        .any(|line| normalize_status(line) == WORLEY_SIGNED_MARKER)
+    {
+        "Signed"
+    } else {
+        "Not Signed"
     }
 }
 
@@ -714,7 +739,9 @@ fn plan_from_classification(
             }
             Ok(FollowUpApprovedUpdate {
                 row_id: row.row_id.clone(),
-                canonical_rfi: row.rfi_no.clone(),
+                canonical_rfi: canonical_follow_up_rfi(&row.rfi_no)
+                    .map(|(canonical, _)| canonical)
+                    .ok_or_else(workbook_invalid)?,
                 proposed_status: row.proposed_status.clone().ok_or_else(workbook_invalid)?,
                 target: FollowUpCellTarget {
                     worksheet: row.target.worksheet.clone(),
@@ -841,7 +868,7 @@ fn discover_layout(
         return Err(protected());
     }
     let mut candidates = Vec::new();
-    let mut duplicate_header = false;
+    let mut duplicate_header_sheets = BTreeSet::new();
     for descriptor in &discovery.worksheets {
         let worksheet = workbook
             .sheet(&descriptor.name)
@@ -867,7 +894,7 @@ fn discover_layout(
                 }
             }
             if rfi_columns.len() > 1 || status_columns.len() > 1 {
-                duplicate_header = true;
+                duplicate_header_sheets.insert(descriptor.name.clone());
             }
             if rfi_columns.len() == 1
                 && status_columns.len() == 1
@@ -888,15 +915,25 @@ fn discover_layout(
             }
         }
     }
-    if duplicate_header || candidates.len() > 1 {
+    if candidates.len() > 1 {
         return Err(BackendError::validation(
             "error.rfi.followUp.layoutAmbiguous",
         ));
     }
-    candidates
-        .into_iter()
-        .next()
-        .ok_or_else(|| BackendError::validation("error.rfi.followUp.layoutMissing"))
+    if let Some(candidate) = candidates.into_iter().next() {
+        if duplicate_header_sheets.contains(&candidate.worksheet.name) {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.layoutAmbiguous",
+            ));
+        }
+        return Ok(candidate);
+    }
+    if !duplicate_header_sheets.is_empty() {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.layoutAmbiguous",
+        ));
+    }
+    Err(BackendError::validation("error.rfi.followUp.layoutMissing"))
 }
 
 fn scan_target_rows(
@@ -911,9 +948,13 @@ fn scan_target_rows(
     for row in (layout.header_row + 1)..=worksheet.max_row {
         let rfi_cell = worksheet.cell(row, layout.rfi_column);
         let status_cell = worksheet.cell(row, layout.status_column);
-        let visible_rfi = rfi_cell
+        let raw_rfi = rfi_cell
             .map(|cell| normalize_status(&cell.value))
             .unwrap_or_default();
+        let (canonical_rfi, visible_rfi) = match canonical_follow_up_rfi(&raw_rfi) {
+            Some((canonical, short)) => (Some(canonical), short),
+            None => (None, raw_rfi),
+        };
         let current_status = status_cell
             .map(|cell| normalize_status(&cell.value))
             .unwrap_or_default();
@@ -925,7 +966,7 @@ fn scan_target_rows(
         }
         rows.push(PendingTargetRow {
             row,
-            canonical_rfi: canonical_rfi(&visible_rfi),
+            canonical_rfi,
             visible_rfi,
             current_status,
             rfi_cell: rfi_cell.map(Into::into),
@@ -982,8 +1023,8 @@ fn classify_borrowed_row<'a>(
     } else if status_merged {
         manual("targetMerged")
     } else if !pending.current_status.is_empty()
-        && pending.current_status != "Completed"
-        && pending.current_status != "In Progress"
+        && pending.current_status != "Signed"
+        && pending.current_status != "Not Signed"
     {
         manual("targetStatusUnknown")
     } else if analysis.proposed_status.as_deref() == Some(pending.current_status.as_str()) {
@@ -992,18 +1033,15 @@ fn classify_borrowed_row<'a>(
             "warn.rfi.followUp.reason.alreadySynced".to_string(),
         )
     } else {
-        let reason = if analysis.proposed_status.as_deref() == Some("Completed") {
-            "warn.rfi.followUp.reason.readyCompleted"
+        let reason = if analysis.proposed_status.as_deref() == Some("Signed") {
+            "warn.rfi.followUp.reason.readySigned"
         } else {
-            "warn.rfi.followUp.reason.readyOngoing"
+            "warn.rfi.followUp.reason.readyNotSigned"
         };
         (FollowUpDisposition::Ready, reason.to_string())
     };
     let selectable = disposition == FollowUpDisposition::Ready;
-    let rfi_no = pending
-        .canonical_rfi
-        .as_deref()
-        .unwrap_or(&pending.visible_rfi);
+    let rfi_no = pending.visible_rfi.as_str();
     Ok(BorrowedFollowUpRow {
         row_id: format!(
             "rfi-follow-up:{}:{}:{}",
@@ -1069,11 +1107,14 @@ fn analyze_source(
     let statuses = evidence
         .iter()
         .map(|evidence| {
-            evidence
-                .status_cell
-                .as_ref()
-                .map(|cell| normalize_status(&cell.value))
-                .unwrap_or_default()
+            mapped_follow_up_status(
+                evidence
+                    .status_cell
+                    .as_ref()
+                    .map(|cell| cell.value.as_str())
+                    .unwrap_or_default(),
+            )
+            .to_string()
         })
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -1117,25 +1158,11 @@ fn analyze_source(
             reason: Some("sourceMerged"),
         });
     }
-    if statuses.iter().all(String::is_empty) {
-        return Ok(SourceAnalysis {
-            statuses,
-            proposed_status: None,
-            reason: Some("sourceStatusBlank"),
-        });
-    }
     if statuses.len() == 1 {
-        if let Some(mapped) = mapped_follow_up_status(&statuses[0]) {
-            return Ok(SourceAnalysis {
-                statuses,
-                proposed_status: Some(mapped.to_string()),
-                reason: None,
-            });
-        }
         return Ok(SourceAnalysis {
+            proposed_status: statuses.first().cloned(),
             statuses,
-            proposed_status: None,
-            reason: Some("sourceStatusUnknown"),
+            reason: None,
         });
     }
     Ok(SourceAnalysis {
@@ -1249,11 +1276,14 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
             ))
             || canonical_rfi(&update.canonical_rfi).as_deref()
                 != Some(update.canonical_rfi.as_str())
-            || !matches!(update.proposed_status.as_str(), "Completed" | "In Progress")
+            || !matches!(update.proposed_status.as_str(), "Signed" | "Not Signed")
             || update.target.worksheet != meta.layout.worksheet
             || update.target.rfi_column != meta.layout.rfi_column
             || update.target.status_column != meta.layout.status_column
-            || update.target.rfi_cell.value != update.canonical_rfi
+            || canonical_follow_up_rfi(&update.target.rfi_cell.value)
+                .map(|(canonical, _)| canonical)
+                .as_deref()
+                != Some(update.canonical_rfi.as_str())
             || update.target.rfi_cell.formula.is_some()
             || update.target.status_cell.formula.is_some()
         {
@@ -1444,14 +1474,14 @@ mod tests {
         FollowUpApprovedUpdate {
             row_id: "rfi-follow-up:7:2:2".to_string(),
             canonical_rfi: canonical_rfi.clone(),
-            proposed_status: "Completed".to_string(),
+            proposed_status: "Signed".to_string(),
             target: FollowUpCellTarget {
                 worksheet: descriptor(),
                 row: 2,
                 rfi_column: 1,
                 status_column: 2,
                 rfi_cell: CellSnapshot {
-                    value: canonical_rfi,
+                    value: "CIV-0001".to_string(),
                     ..CellSnapshot::default()
                 },
                 status_cell: CellSnapshot::default(),
@@ -1535,12 +1565,12 @@ mod tests {
             row_id: update.row_id.clone(),
             sheet: "Follow Up".to_string(),
             row: 2,
-            rfi_no: update.canonical_rfi.clone(),
-            source_statuses: vec!["Completed".to_string()],
+            rfi_no: "CIV-0001".to_string(),
+            source_statuses: vec!["Signed".to_string()],
             current_status: String::new(),
             proposed_status: Some(update.proposed_status.clone()),
             disposition: FollowUpDisposition::Ready,
-            reason_key: "warn.rfi.followUp.reason.readyCompleted".to_string(),
+            reason_key: "warn.rfi.followUp.reason.readySigned".to_string(),
             selectable: true,
             enabled: true,
             target: FollowUpReviewTarget {
@@ -1638,7 +1668,7 @@ mod tests {
         civ.cells.insert(
             (10, civ_status_column),
             CellData {
-                value: "Completed".to_string(),
+                value: "Signed by Worley".to_string(),
                 ..Default::default()
             },
         );

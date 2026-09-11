@@ -8,14 +8,14 @@
 
 ## 1. Goal
 
-Add a separate, explicit RFI Follow Up synchronization operation. It reads statuses from an authorized RFI Log workbook, discovers one unambiguous `RFI No.`/`Status` table in an authorized Follow Up workbook, previews every populated Follow Up row, and updates only explicitly enabled status cells.
+Add a separate, explicit RFI Follow Up synchronization operation. It reads the exact Worley-signature evidence from the authorized RFI Log `REMARKS` columns, discovers one unambiguous `RFI No.`/`Status` table in an authorized Follow Up workbook, previews every populated Follow Up row using its short RFI identity, and updates only explicitly enabled status cells.
 
 The only automatic mappings are:
 
-| Exact source status | Exact Follow Up value |
+| Exact RFI Log remark evidence | Exact Follow Up value |
 |---|---|
-| `Completed` | `Completed` |
-| `Ongoing` | `In Progress` |
+| A trimmed remark line exactly equal to `Signed by Worley` | `Signed` |
+| No exact `Signed by Worley` remark line | `Not Signed` |
 
 Everything else is non-actionable manual review. Preview and revise are inert. Apply revalidates both workbook identities, bytes, metadata, layout, source evidence, and selected target cells immediately before any backup or canonical-leaf effect. A verified no-clobber backup and a durable write-ahead retained-publication transaction preserve every competing byte sequence: the current canonical name is displaced destination-no-clobber to a unique retained leaf and verified, then the empty canonical name is created with create-new/O_EXCL and populated through that already-open destination handle from an already-open verified private output handle. Apply, recovery, and undo never overwrite or automatically delete a canonical, retained, backup, recovery, or mismatched leaf. Successful apply deliberately keeps the displaced original as non-authoritative recovery evidence.
 
@@ -196,13 +196,15 @@ The existing OOXML package limits remain authoritative: 256 MiB package, 512 MiB
 
 Normalization is deliberately narrow:
 
-- **RFI value:** Unicode NFC, trim leading/trailing Unicode whitespace, uppercase, then require the entire value to match `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}`. Equality is equality of those entire canonical strings.
-- **Status value:** Unicode NFC plus leading/trailing Unicode-whitespace trim only. Comparison remains case-sensitive.
+- **Source RFI value:** Unicode NFC, trim leading/trailing Unicode whitespace, uppercase, then require the entire value to match `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}`.
+- **Follow Up RFI value:** Unicode NFC, trim leading/trailing Unicode whitespace, uppercase, then require the entire displayed value to match `(CIV|MEC|ELE|PRC)-[0-9]{4}`. Matching adds the fixed internal `AZE-SUN-INT-QMS-RFI-` prefix only for source lookup; preview and the workbook keep the short value.
+- **Signature evidence:** Unicode NFC plus line splitting and leading/trailing Unicode-whitespace trim per line. A line must equal case-sensitive `Signed by Worley`; its presence maps to `Signed`, and absence maps to `Not Signed`.
+- **Target status value:** Unicode NFC plus leading/trailing Unicode-whitespace trim. Only blank, `Signed`, and `Not Signed` are writable/recognized target states.
 - **Header value:** Unicode NFC, leading/trailing Unicode-whitespace trim, then ASCII uppercase. The only accepted RFI header token is `RFI NO.` and the only accepted status header token is `STATUS`.
 
 There is no internal-whitespace collapse, punctuation deletion, substring extraction, wrapped-number recovery, OCR substitution, discipline repair, or fuzzy fallback. The existing permissive `rfi_code::find`/`canonical_and_find` functions are not used by this operation.
 
-Any source or Follow Up cell text longer than 20,000 Unicode scalar values fails preview. If a source sheet extends beyond row `10_009`, or a chosen Follow Up table extends more than 10,000 rows below its header, preview fails rather than silently truncating. More than 500 populated Follow Up review rows also fails rather than returning a partial plan. A canonical RFI may contribute at most 500 source evidence rows across the four projected sheets. The 501st evidence row for the same canonical RFI fails the whole preview with `error.rfi.followUp.limitExceeded` before any per-target clone, row DTO, editor JSON, or step authority is built; it is never truncated or summarized. The count limit is not the memory bound: the complete serialized preview/editor plus immutable `FollowUpStepMeta` authority projection must also fit `MAX_PREVIEW_AUTHORITY_BYTES` (8 MiB). Exceeding either independent limit fails with `error.rfi.followUp.limitExceeded`; being exactly at a count boundary does not override the byte budget.
+Any source or Follow Up cell text longer than 20,000 Unicode scalar values fails preview. If a source sheet extends beyond row `20_009`, or a chosen Follow Up table extends more than 10,000 rows below its header, preview fails rather than silently truncating. More than 500 populated Follow Up review rows also fails rather than returning a partial plan. A canonical RFI may contribute at most 500 source evidence rows across the four projected sheets. The 501st evidence row for the same canonical RFI fails the whole preview with `error.rfi.followUp.limitExceeded` before any per-target clone, row DTO, editor JSON, or step authority is built; it is never truncated or summarized. The count limit is not the memory bound: the complete serialized preview/editor plus immutable `FollowUpStepMeta` authority projection must also fit `MAX_PREVIEW_AUTHORITY_BYTES` (8 MiB). Exceeding either independent limit fails with `error.rfi.followUp.limitExceeded`; being exactly at a count boundary does not override the byte budget.
 
 ## 6. OOXML read and mutation APIs
 
@@ -310,7 +312,7 @@ Rules:
 - the update set is nonempty and contains at most 500 coordinates;
 - worksheet names and map coordinates are exact; duplicate approved coordinates are rejected while converting the representable ordered `FollowUpApprovedUpdate` vector into this map, before this API is called;
 - every selected target cell physically exists and its current `CellData { value, formula, style }` equals `expected` before any output is written;
-- each replacement is `CellUpdate::Text("Completed")` or `CellUpdate::Text("In Progress")`; every other update kind/value is rejected;
+- each replacement is `CellUpdate::Text("Signed")` or `CellUpdate::Text("Not Signed")`; every other update kind/value is rejected;
 - duplicate-validation rewriting is disabled (`None`), unlike the RFI Log append path;
 - an absent, formula-bearing, or merged target status cell is never authorized, so this operation never creates a cell, removes a formula, changes `calcChain.xml`, or changes a row/table placement;
 - the guarded writer preserves every target-cell attribute except the text-representation `t` attribute and preserves every non-value child subtree; it replaces only the canonical value representation with the exact inline-string representation required for the approved text;
@@ -321,14 +323,14 @@ Rules:
 1. requires every non-target event token to match exactly;
 2. requires target `<c>` coordinates, style and every attribute other than `t` to match;
 3. requires every target child subtree other than the one canonical `v`/`is` value representation to match exactly and requires no `f` child;
-4. requires output `t="inlineStr"` plus exactly one canonical `<is><t>{approved replacement}</t></is>` representation whose decoded text equals that coordinate's exact `Completed` or `In Progress` update, allowing `xml:space="preserve"` only when that approved text requires it;
+4. requires output `t="inlineStr"` plus exactly one canonical `<is><t>{approved replacement}</t></is>` representation whose decoded text equals that coordinate's exact `Signed` or `Not Signed` update, allowing `xml:space="preserve"` only when that approved text requires it;
 5. replaces only that approved representation with a coordinate/value marker in each stream and requires the resulting complete streams to be equal.
 
 Any changed row attribute, ordering token, validation, table part, hyperlink, drawing/comment relationship, extension subtree, unknown event, or non-target cell fails `error.rfi.followUp.patchVerification` before the canonical workbook name is touched. Semantic workbook reread then independently requires every selected value/style and all parsed non-target cells to match. ZIP order/compression and lexical XML quoting may change, so package byte equality is not claimed; exact undo instead restores the byte-identical backup and original SHA-256.
 
 ## 7. Source RFI Log evidence
 
-Expose, but do not duplicate, the existing RFI Log sheet/status layout:
+Expose, but do not duplicate, the existing RFI Log sheet/REMARKS layout:
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -344,15 +346,15 @@ pub(crate) fn status_columns() -> [RfiStatusColumns; 4];
 It returns, in this exact order:
 
 ```text
-CIV: RFI 1, Status 16
-MEC: RFI 1, Status 17
-ELE: RFI 1, Status 16
-PRC: RFI 1, Status 16
+CIV: RFI 1, REMARKS 20
+MEC: RFI 1, REMARKS 21
+ELE: RFI 1, REMARKS 20
+PRC: RFI 1, REMARKS 20
 ```
 
-The values are projections of the current `rfi_log::layout` constants. In literal terms the actual projections are `CIV: 1/16`, `MEC: 1/17`, `ELE: 1/16`, `PRC: 1/16` (RFI/status), in that order. Existing `rfi.log_add` behavior stays unchanged; no generic 3/4/8/9 constants are added.
+The values are projections of the current `rfi_log::layout` constants. In literal terms the actual projections are `CIV: 1/20`, `MEC: 1/21`, `ELE: 1/20`, `PRC: 1/20` (RFI/REMARKS), in that order. Existing `rfi.log_add` behavior stays unchanged.
 
-The Follow Up scanner requires all four exact source sheets. Either workbook-level protection or protection on any of those four source sheets fails preview; protected input is not treated as trustworthy synchronization evidence. For rows 10 through the physical maximum in each sheet, it records only a full exact canonical RFI. Formula-bearing RFI or status cells do not authorize a mapping. Evidence is represented by:
+The Follow Up scanner requires all four exact source sheets. Either workbook-level protection or protection on any of those four source sheets fails preview; protected input is not treated as trustworthy synchronization evidence. For rows 10 through the physical maximum in each sheet, it records only a full exact canonical source RFI and the exact projected REMARKS cell. Formula-bearing or merged RFI/REMARKS cells do not authorize a mapping. Evidence is represented by:
 
 ```rust
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -367,9 +369,9 @@ struct SourceStatusEvidence {
 }
 ```
 
-`status_cell=None` means the projected source status coordinate has no physical `<c>` element; its normalized status value is `""`. The projected `status_column` remains explicit so missing-cell evidence cannot be mistaken for a different column.
+`status_cell=None` means the projected REMARKS coordinate has no physical `<c>` element and therefore derives `Not Signed`. The projected `status_column` remains explicit so missing-cell evidence cannot be mistaken for a different column.
 
-A canonical RFI group produces an automatic proposed status only when every evidence row has a recognized source status and every recognized row maps to the same target value. Repeated identical `Completed` rows or repeated identical `Ongoing` rows are safe up to the explicit 500-evidence-per-RFI bound. Formula evidence is `sourceFormula`; an RFI/status evidence cell participating in a merged range is `sourceMerged`; an all-blank group is `sourceStatusBlank`; an all-identical nonblank unknown group is `sourceStatusUnknown`; and every mixed recognized/unknown/blank group, `Completed`/`Ongoing` mix, or multiple-unknown group is `sourceConflict`. None is selectable. Source merge/formula/status analysis is computed once per bounded canonical group and reused by target rows; classification must not repeat a linear merge-range scan for every duplicate target row.
+A canonical source RFI group derives `Signed` only when each authoritative evidence row contains a trimmed, case-sensitive line exactly equal to `Signed by Worley`; absence derives `Not Signed`. Repeated evidence is safe only when every row derives the same value. Formula evidence is `sourceFormula`; an RFI/REMARKS evidence cell participating in a merged range is `sourceMerged`; and a `Signed`/`Not Signed` mixture is `sourceConflict`. None is selectable. Source merge/formula/signature analysis is computed once per bounded canonical group and reused by target rows; classification must not repeat a linear merge-range scan for every duplicate target row.
 
 Merge overlap validation and later membership lookup use one auditable end-to-end comparison account even though parsing precedes classification. Each `WorkbookData` carries private parser-produced `merge_validation_comparisons: u64` and `merge_validation_complete: bool` facts exposed only by crate-visible read-only accessors; no setter/deserializer exists. `Default` is deliberately non-authoritative (`0/false`). The parser sets `complete=true` only after every worksheet's overlap validation succeeds. Production S5 classification rejects `false` as workbook-invalid before using the count; its tests obtain authoritative data through `read_workbook_for_follow_up`, not a forged default struct. During parse, every range-vs-range comparison used to reject overlapping canonical merge ranges consumes one checked unit before the comparison; a workbook fails with the typed worksheet-limit error before comparison `MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK + 1`, and exactly 1,000,000 validation comparisons are allowed across all of that workbook's worksheets. The facts are not accepted from JSON or a caller.
 
@@ -1600,8 +1602,8 @@ Automated tests synthesize inert OOXML packages and never start Office. They ass
 
 - Bootstrap and the demo bridge expose a separate fifth `rfi.follow_up_sync` operation with exactly two required Excel file selections; protocol method count remains 31.
 - Preview reads both workbooks through caller/session/operation-bound anchored capabilities and mutates nothing; its internal DTO decodes exact snake_case registry keys.
-- The only automatic source mappings are exact `Completed → Completed` and `Ongoing → In Progress`.
-- RFI equality uses the exact full canonical string; no fuzzy, substring, or placement inference exists.
+- The only automatic source mapping derives `Signed` from an exact trimmed `Signed by Worley` REMARKS line and derives `Not Signed` from its absence.
+- Follow Up displays and stores exact short RFI values; lookup equality is the internally prefixed exact full source identity. No fuzzy, substring, or placement inference exists.
 - Worksheet evidence comes only from the canonical Strict/Transitional hierarchy; duplicate physical row IDs, duplicate coordinates, empty high-row extent, and foreign shadows fail closed.
 - Header discovery is unique and bounded to 32 rows × 64 columns; data and preview limits fail closed.
 - Safe rows alone default enabled. Blank/unknown/missing-cell/formula/merged/unmatched/duplicate/conflicting/unknown-target rows are visible, manual-only, and disabled. Already-synchronized rows are visible and disabled.

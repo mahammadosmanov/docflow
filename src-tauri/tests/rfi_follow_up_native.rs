@@ -13,8 +13,8 @@ use docflow_lib::{
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
     rfi_follow_up::{
-        canonical_rfi, classify_workbooks, guarded_updates, mapped_follow_up_status,
-        preview_from_open_files, revise_from_open_files,
+        canonical_follow_up_rfi, canonical_rfi, classify_workbooks, guarded_updates,
+        mapped_follow_up_status, preview_from_open_files, revise_from_open_files,
     },
 };
 use serde_json::{Value, json};
@@ -153,7 +153,7 @@ fn preview_from_open_files_builds_an_inert_exact_workbook_plan() {
         &source_path,
         source_package(
             worksheet(
-                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
                 &[],
             ),
             worksheet(Vec::<String>::new(), &[]),
@@ -175,6 +175,7 @@ fn preview_from_open_files_builds_an_inert_exact_workbook_plan() {
 
     let plan =
         preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    guarded_updates(&plan.steps[0]).unwrap();
 
     assert!(plan.plan_id.is_empty());
     assert_eq!(plan.op_id, "rfi.follow_up_sync");
@@ -200,7 +201,7 @@ fn follow_up_retained_apply_revalidates_open_workbooks_at_every_boundary() {
     let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
     let source_bytes = source_package(
         worksheet(
-            [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+            [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
             &[],
         ),
         worksheet(Vec::<String>::new(), &[]),
@@ -249,7 +250,7 @@ fn follow_up_retained_apply_revalidates_open_workbooks_at_every_boundary() {
     let (_, applied) = parsed(Cursor::new(std::fs::read(&target_path).unwrap()));
     assert_eq!(
         applied.sheet("Follow Up").unwrap().cells[&(2, 2)].value,
-        "Completed"
+        "Not Signed"
     );
     let names = std::fs::read_dir(&root)
         .unwrap()
@@ -284,7 +285,7 @@ fn follow_up_retained_undo_restores_exact_backup_and_preserves_all_evidence() {
     let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
     let source_bytes = source_package(
         worksheet(
-            [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+            [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
             &[],
         ),
         worksheet(Vec::<String>::new(), &[]),
@@ -377,7 +378,7 @@ fn follow_up_retained_recovery_completes_exact_applied_state_after_restart() {
         &source_path,
         source_package(
             worksheet(
-                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
                 &[],
             ),
             worksheet(Vec::<String>::new(), &[]),
@@ -531,7 +532,7 @@ fn revise_from_open_files_changes_only_enabled_and_preserves_plan_identity() {
         &source_path,
         source_package(
             worksheet(
-                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
                 &[],
             ),
             worksheet(Vec::<String>::new(), &[]),
@@ -577,7 +578,7 @@ fn duplicate_approved_coordinates_rejected_before_guarded_map() {
         &source_path,
         source_package(
             worksheet(
-                [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+                [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
                 &[],
             ),
             worksheet(Vec::<String>::new(), &[]),
@@ -630,18 +631,67 @@ fn canonical_rfi_uses_the_entire_nfc_trimmed_uppercased_value_without_internal_r
 }
 
 #[test]
-fn source_matrix_allows_only_exact_completed_and_ongoing() {
-    assert_eq!(mapped_follow_up_status("Completed"), Some("Completed"));
-    assert_eq!(mapped_follow_up_status("Ongoing"), Some("In Progress"));
-    for rejected in [
-        "completed",
-        "ONGOING",
-        " Completed ",
-        "Cancelled",
-        "Rejected",
-        "",
-    ] {
-        assert_eq!(mapped_follow_up_status(rejected), None, "{rejected}");
+fn short_follow_up_rfi_uses_worley_remark_and_preserves_short_display() {
+    let full = "AZE-SUN-INT-QMS-RFI-CIV-0170";
+    let review = classify(
+        source_package(
+            worksheet(
+                [row(
+                    10,
+                    [inline("A10", full), inline("T10", "Signed by Worley")],
+                )],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        ),
+        target_with_rows(
+            [row(
+                2,
+                [inline("A2", "CIV-0170"), inline("B2", "Not Signed")],
+            )],
+            &[],
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(review["rows"][0]["rfiNo"], "CIV-0170");
+    assert_eq!(review["rows"][0]["sourceStatuses"], json!(["Signed"]));
+    assert_eq!(review["rows"][0]["currentStatus"], "Not Signed");
+    assert_eq!(review["rows"][0]["proposedStatus"], "Signed");
+    assert_eq!(review["rows"][0]["selectable"], true);
+    assert_eq!(
+        review["rows"][0]["reasonKey"],
+        "warn.rfi.followUp.reason.readySigned"
+    );
+}
+
+#[test]
+fn follow_up_uses_short_rfi_identity_and_worley_signature_remark_only() {
+    assert_eq!(
+        canonical_follow_up_rfi("CIV-0170"),
+        Some((
+            "AZE-SUN-INT-QMS-RFI-CIV-0170".to_string(),
+            "CIV-0170".to_string(),
+        ))
+    );
+    assert_eq!(
+        canonical_follow_up_rfi("AZE-SUN-INT-QMS-RFI-CIV-0170"),
+        Some((
+            "AZE-SUN-INT-QMS-RFI-CIV-0170".to_string(),
+            "CIV-0170".to_string(),
+        ))
+    );
+    for rejected in ["CIV-170", "prefix CIV-0170", "CIV-0170 suffix"] {
+        assert_eq!(canonical_follow_up_rfi(rejected), None, "{rejected}");
+    }
+
+    assert_eq!(mapped_follow_up_status("Signed by Worley"), "Signed");
+    assert_eq!(
+        mapped_follow_up_status("survey report completed\r\n\r\nSigned by Worley"),
+        "Signed"
+    );
+    for not_signed in ["", "Completed", "Not Signed by Worley", "signed by worley"] {
+        assert_eq!(mapped_follow_up_status(not_signed), "Not Signed");
     }
 }
 
@@ -649,11 +699,17 @@ fn source_matrix_allows_only_exact_completed_and_ongoing() {
 fn source_duplicates_require_same_safe_status() {
     let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
     let civ = worksheet(
-        [row(10, [inline("A10", rfi), inline("P10", "Completed")])],
+        [row(
+            10,
+            [inline("A10", rfi), inline("T10", "Signed by Worley")],
+        )],
         &[],
     );
     let same = worksheet(
-        [row(10, [inline("A10", rfi), inline("Q10", "Completed")])],
+        [row(
+            10,
+            [inline("A10", rfi), inline("U10", "Signed by Worley")],
+        )],
         &[],
     );
     let ready = classify(
@@ -665,7 +721,7 @@ fn source_duplicates_require_same_safe_status() {
         ready["rows"][0]["disposition"],
         "rfi.followUp.disposition.ready"
     );
-    assert_eq!(ready["rows"][0]["sourceStatuses"], json!(["Completed"]));
+    assert_eq!(ready["rows"][0]["sourceStatuses"], json!(["Signed"]));
     assert_eq!(
         ready["rows"][0]["sourceEvidence"]
             .as_array()
@@ -677,7 +733,7 @@ fn source_duplicates_require_same_safe_status() {
     );
 
     let conflict = worksheet(
-        [row(10, [inline("A10", rfi), inline("Q10", "Ongoing")])],
+        [row(10, [inline("A10", rfi), inline("U10", "Ongoing")])],
         &[],
     );
     let manual = classify(
@@ -700,12 +756,12 @@ fn source_evidence_per_rfi_limit_fails_before_projection_amplification() {
             number,
             [
                 inline(&format!("A{number}"), rfi),
-                inline(&format!("P{number}"), "Completed"),
+                inline(&format!("T{number}"), "Completed"),
             ],
         )
     });
     let mec = worksheet(
-        [row(10, [inline("A10", rfi), inline("Q10", "Completed")])],
+        [row(10, [inline("A10", rfi), inline("U10", "Completed")])],
         &[],
     );
 
@@ -728,7 +784,7 @@ fn projection_budget_rejects_500_by_500_before_owned_materialization() {
             number,
             [
                 inline(&format!("A{number}"), rfi),
-                inline(&format!("P{number}"), "Completed"),
+                inline(&format!("T{number}"), "Completed"),
             ],
         )
     });
@@ -765,7 +821,7 @@ fn merge_query_budget_bounds_duplicate_target_range_amplification() {
                 number,
                 [
                     inline(&format!("A{number}"), rfi),
-                    inline(&format!("P{number}"), "Completed"),
+                    inline(&format!("T{number}"), "Completed"),
                 ],
             )
         })
@@ -914,9 +970,60 @@ fn follow_up_authority_and_layout_require_exact_safe_bounded_inputs() {
 }
 
 #[test]
+fn unique_follow_up_table_is_not_poisoned_by_a_duplicate_summary_layout() {
+    let source = source_package(
+        worksheet(Vec::<String>::new(), &[]),
+        worksheet(Vec::<String>::new(), &[]),
+    );
+    let target = package(&[
+        (
+            "Summary",
+            None,
+            worksheet(
+                [row(
+                    1,
+                    [
+                        inline("A1", "RFI NO."),
+                        inline("B1", "STATUS"),
+                        inline("C1", "RFI NO."),
+                        inline("D1", "STATUS"),
+                    ],
+                )],
+                &[],
+            ),
+        ),
+        (
+            "Signed By Worley CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI NO."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+    ]);
+
+    let review = classify(source, target).unwrap();
+
+    assert_eq!(
+        review["layout"]["worksheet"]["name"],
+        "Signed By Worley CIV"
+    );
+}
+
+#[test]
+fn production_template_physical_extent_within_twenty_thousand_rows_is_accepted() {
+    let source = source_package(
+        worksheet([row(18_913, Vec::<String>::new())], &[]),
+        worksheet(Vec::<String>::new(), &[]),
+    );
+
+    classify(source, target_with_rows(Vec::<String>::new(), &[])).unwrap();
+}
+
+#[test]
 fn empty_physical_high_row_enforces_source_limit() {
     let source = source_package(
-        worksheet([row(10_010, Vec::<String>::new())], &[]),
+        worksheet([row(20_010, Vec::<String>::new())], &[]),
         worksheet(Vec::<String>::new(), &[]),
     );
 
@@ -936,9 +1043,9 @@ fn classification_keeps_unsafe_rows_visible_but_unselectable() {
     let source = source_package(
         worksheet(
             [
-                row(10, [inline("A10", completed), inline("P10", "Completed")]),
-                row(11, [inline("A11", unknown), inline("P11", "Cancelled")]),
-                row(12, [inline("A12", controlled), inline("P12", "Completed")]),
+                row(10, [inline("A10", completed), inline("T10", "Completed")]),
+                row(11, [inline("A11", unknown), inline("T11", "Cancelled")]),
+                row(12, [inline("A12", controlled), inline("T12", "Completed")]),
             ],
             &[],
         ),
@@ -976,19 +1083,16 @@ fn classification_keeps_unsafe_rows_visible_but_unselectable() {
         vec![
             "warn.rfi.followUp.reason.invalidRfi",
             "warn.rfi.followUp.reason.sourceMissing",
-            "warn.rfi.followUp.reason.sourceStatusUnknown",
+            "warn.rfi.followUp.reason.readyNotSigned",
             "warn.rfi.followUp.reason.targetStatusUnknown",
             "warn.rfi.followUp.reason.blankRfi",
         ]
     );
-    assert!(
-        review["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .skip(1)
-            .all(|row| row["enabled"] == false && row["selectable"] == false)
-    );
+    assert_eq!(review["rows"][3]["enabled"], true);
+    for index in [1usize, 2, 4, 5] {
+        assert_eq!(review["rows"][index]["enabled"], false);
+        assert_eq!(review["rows"][index]["selectable"], false);
+    }
 }
 
 #[test]
@@ -1004,23 +1108,23 @@ fn formula_and_merge_facts_drive_manual_review() {
                     10,
                     [
                         inline("A10", source_formula),
-                        formula("P10", "LOOKUP()", "Completed"),
+                        formula("T10", "LOOKUP()", "Completed"),
                     ],
                 ),
                 row(
                     11,
-                    [inline("A11", source_merged), inline("P11", "Completed")],
+                    [inline("A11", source_merged), inline("T11", "Completed")],
                 ),
                 row(
                     12,
-                    [inline("A12", target_formula), inline("P12", "Completed")],
+                    [inline("A12", target_formula), inline("T12", "Completed")],
                 ),
                 row(
                     13,
-                    [inline("A13", target_merged), inline("P13", "Completed")],
+                    [inline("A13", target_merged), inline("T13", "Completed")],
                 ),
             ],
-            &["P11:Q11"],
+            &["T11:U11"],
         ),
         worksheet(Vec::<String>::new(), &[]),
     );
@@ -1080,8 +1184,8 @@ fn compatibility_source() -> Cursor<Vec<u8>> {
                 &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
             )];
             cells.push(status.map_or_else(
-                || blank(&format!("P{physical_row}")),
-                |status| inline(&format!("P{physical_row}"), status),
+                || blank(&format!("T{physical_row}")),
+                |status| inline(&format!("T{physical_row}"), status),
             ));
             row(physical_row, cells)
         })
@@ -1090,26 +1194,26 @@ fn compatibility_source() -> Cursor<Vec<u8>> {
         17,
         [
             inline("A17", "AZE-SUN-INT-QMS-RFI-CIV-0008"),
-            formula("P17", "LOOKUP()", "Completed"),
+            formula("T17", "LOOKUP()", "Completed"),
         ],
     ));
     civ_rows.sort();
     source_package(
-        worksheet(civ_rows, &["P18:Q18"]),
+        worksheet(civ_rows, &["T18:U18"]),
         worksheet(
             [
                 row(
                     10,
                     [
                         inline("A10", "AZE-SUN-INT-QMS-RFI-CIV-0006"),
-                        inline("Q10", "Completed"),
+                        inline("U10", "Completed"),
                     ],
                 ),
                 row(
                     11,
                     [
                         inline("A11", "AZE-SUN-INT-QMS-RFI-CIV-0007"),
-                        inline("Q11", "Ongoing"),
+                        inline("U11", "Ongoing"),
                     ],
                 ),
             ],
@@ -1293,10 +1397,7 @@ fn preview_matches_the_frozen_follow_up_compatibility_oracle() {
         target_with_rows(
             [row(
                 2,
-                [
-                    inline("A2", "AZE-SUN-INT-QMS-RFI-CIV-0003"),
-                    inline("B2", "Completed"),
-                ],
+                [inline("A2", "CIV-0003"), inline("B2", "Not Signed")],
             )],
             &[],
         ),
@@ -1324,10 +1425,7 @@ fn compatibility_oracle_matches_exact_rows() {
         target_with_rows(
             [row(
                 2,
-                [
-                    inline("A2", "AZE-SUN-INT-QMS-RFI-CIV-0003"),
-                    inline("B2", "Completed"),
-                ],
+                [inline("A2", "CIV-0003"), inline("B2", "Not Signed")],
             )],
             &[],
         ),
