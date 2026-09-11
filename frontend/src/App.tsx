@@ -1148,89 +1148,91 @@ function OperationScreen({
       >
         {stage === "form" && (
           <div className="flow-layout">
-            <section className="content-card">
-              <div className="card-title">
-                <SlidersHorizontal />
-                <div>
-                  <h2>{s.t("step.form")}</h2>
-                  <p>{s.t(operation.descriptionKey)}</p>
+            <div className="flow-scroll">
+              <section className="content-card">
+                <div className="card-title">
+                  <SlidersHorizontal />
+                  <div>
+                    <h2>{s.t("step.form")}</h2>
+                    <p>{s.t(operation.descriptionKey)}</p>
+                  </div>
                 </div>
-              </div>
-              {operation.supportsPresets && (
-                <PresetToolbar
-                  bridge={bridge}
-                  operation={operation}
-                  values={values}
-                  s={s}
-                  onApply={(preset) => {
-                    valuesRevision.current += 1;
-                    setValues((current) => ({
-                      ...current,
-                      ...preset.values,
-                    }));
-                  }}
-                  onError={setError}
-                />
-              )}
-              <div className="form-stack">
-                {operation.schema
-                  .filter((param) =>
-                    Object.entries(param.visibleWhen ?? {}).every(
-                      ([name, expected]) => values[name] === expected,
-                    ),
-                  )
-                  .map((param) => (
-                  <SchemaField
-                    key={param.name}
+                {operation.supportsPresets && (
+                  <PresetToolbar
                     bridge={bridge}
-                    operationId={operation.id}
-                    param={param}
-                    value={values[param.name]}
+                    operation={operation}
                     values={values}
                     s={s}
-                    onChange={(value) => {
+                    onApply={(preset) => {
                       valuesRevision.current += 1;
                       setValues((current) => ({
                         ...current,
-                        [param.name]: value,
+                        ...preset.values,
                       }));
                     }}
+                    onError={setError}
                   />
-                ))}
-              </div>
-              {latestPrintQueue && (
-                <div className="resume-queue-card">
-                  <div>
-                    <strong>{s.t("print.resume.title")}</strong>
-                    <small>
-                      {s.t("print.resume.summary", {
-                        count: latestPrintQueue.resumable,
-                      })}
-                    </small>
-                  </div>
-                  <span className="resume-queue-actions">
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        void discardPrintQueue(latestPrintQueue.queueId)
-                      }
-                    >
-                      {s.t("print.resume.discard")}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      icon={<RotateCcw />}
-                      onClick={() =>
-                        void resumePrintQueue(latestPrintQueue.queueId)
-                      }
-                    >
-                      {s.t("print.resume.review")}
-                    </Button>
-                  </span>
+                )}
+                <div className="form-stack">
+                  {operation.schema
+                    .filter((param) =>
+                      Object.entries(param.visibleWhen ?? {}).every(
+                        ([name, expected]) => values[name] === expected,
+                      ),
+                    )
+                    .map((param) => (
+                    <SchemaField
+                      key={param.name}
+                      bridge={bridge}
+                      operationId={operation.id}
+                      param={param}
+                      value={values[param.name]}
+                      values={values}
+                      s={s}
+                      onChange={(value) => {
+                        valuesRevision.current += 1;
+                        setValues((current) => ({
+                          ...current,
+                          [param.name]: value,
+                        }));
+                      }}
+                    />
+                  ))}
                 </div>
-              )}
-            </section>
-            {error && <Notice kind="error">{error}</Notice>}
+                {latestPrintQueue && (
+                  <div className="resume-queue-card">
+                    <div>
+                      <strong>{s.t("print.resume.title")}</strong>
+                      <small>
+                        {s.t("print.resume.summary", {
+                          count: latestPrintQueue.resumable,
+                        })}
+                      </small>
+                    </div>
+                    <span className="resume-queue-actions">
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          void discardPrintQueue(latestPrintQueue.queueId)
+                        }
+                      >
+                        {s.t("print.resume.discard")}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        icon={<RotateCcw />}
+                        onClick={() =>
+                          void resumePrintQueue(latestPrintQueue.queueId)
+                        }
+                      >
+                        {s.t("print.resume.review")}
+                      </Button>
+                    </span>
+                  </div>
+                )}
+              </section>
+              {error && <Notice kind="error">{error}</Notice>}
+            </div>
             <ActionBar
               left={operation.schema.some((param) => param.name === "dest") ? (
                 <Button
@@ -1844,6 +1846,17 @@ function SchemaField({
             {s.t("action.browse")}
           </Button>
         )}
+        {browse && Boolean(pathValue) && (
+          <button
+            type="button"
+            className="field-action"
+            title={s.t("action.clear")}
+            aria-label={s.t("action.clear")}
+            onClick={() => onChange(null)}
+          >
+            <X />
+          </button>
+        )}
       </div>
       {param.helpKey && <small>{s.t(param.helpKey)}</small>}
     </label>
@@ -2016,12 +2029,15 @@ function CompactDateInput({
       </button>
       {yearVisible && (
         <select
+          autoFocus
           className="compact-date-year"
           aria-label={`${label} — ${s.t("rfi.date.year")}`}
           value={draft.year}
-          onChange={(event) =>
-            commit({ ...draft, year: Number(event.target.value) })
-          }
+          onBlur={() => setYearVisible(false)}
+          onChange={(event) => {
+            commit({ ...draft, year: Number(event.target.value) });
+            setYearVisible(false);
+          }}
         >
           {Array.from({ length: 69 }, (_, index) => 2000 + index).map(
             (year) => (
@@ -2547,7 +2563,10 @@ function EditablePlanTable({
                 );
               })}
               {(editor.reorderable === true || editor.duplicateEnabled === true) && (
-                <th aria-label={s.t("editor.rowActions")} />
+                <th
+                  className="editor-actions-header"
+                  aria-label={s.t("editor.rowActions")}
+                />
               )}
             </tr>
           </thead>
@@ -2804,60 +2823,93 @@ export function PlanView({
   const replyPreview = outlookReplyPreview(plan.meta?.replyPreview);
   return (
     <div className="flow-layout">
-      {plan.warnings.length > 0 && (
-        <Notice kind="warning" title={s.t("ui.warnings")}>
-          {plan.warnings.map((warning) => (
-            <div key={`${warning.key}-${warning.subject}`}>
-              {warning.subject && <strong>{warning.subject}: </strong>}
-              {s.t(warning.key)}
-            </div>
-          ))}
-        </Notice>
-      )}
-      {replyPreview && (
-        <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
-          <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
-          <div>
-            <strong>{s.t("outlookDraft.subject")}</strong>
-            <pre>{replyPreview.subject}</pre>
-          </div>
-          <div>
-            <strong>{s.t("outlookDraft.plainText")}</strong>
-            <pre>{replyPreview.plainText}</pre>
-          </div>
-          <div>
-            <strong>{s.t("outlookDraft.html")}</strong>
-            <pre>{replyPreview.html}</pre>
-          </div>
-        </section>
-      )}
       {editor && editorRows && onEditorRowsChange ? (
-        <EditablePlanTable
-          editor={editor}
-          rows={editorRows}
-          s={s}
-          onChange={onEditorRowsChange}
-        />
-      ) : <section className="plan-section">
-        <div className="plan-heading">
-          <strong>{s.t("plan.summary", { count: moves })}</strong>
-          <span>
-            <Eye /> {s.t("plan.readOnly")}
-          </span>
-        </div>
-        {plan.steps.length ? (
-          <div className="step-list">
-            {plan.steps.map((step, index) => (
-              <StepRow key={`${step.kind}-${index}`} step={step} s={s} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={<FileCheck2 />}
-            title={s.t("plan.empty")}
+        <>
+          {plan.warnings.length > 0 && (
+            <Notice kind="warning" title={s.t("ui.warnings")}>
+              {plan.warnings.map((warning) => (
+                <div key={`${warning.key}-${warning.subject}`}>
+                  {warning.subject && <strong>{warning.subject}: </strong>}
+                  {s.t(warning.key)}
+                </div>
+              ))}
+            </Notice>
+          )}
+          {replyPreview && (
+            <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
+              <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
+              <div>
+                <strong>{s.t("outlookDraft.subject")}</strong>
+                <pre>{replyPreview.subject}</pre>
+              </div>
+              <div>
+                <strong>{s.t("outlookDraft.plainText")}</strong>
+                <pre>{replyPreview.plainText}</pre>
+              </div>
+              <div>
+                <strong>{s.t("outlookDraft.html")}</strong>
+                <pre>{replyPreview.html}</pre>
+              </div>
+            </section>
+          )}
+          <EditablePlanTable
+            editor={editor}
+            rows={editorRows}
+            s={s}
+            onChange={onEditorRowsChange}
           />
-        )}
-      </section>}
+        </>
+      ) : (
+        <div className="flow-scroll">
+          {plan.warnings.length > 0 && (
+            <Notice kind="warning" title={s.t("ui.warnings")}>
+              {plan.warnings.map((warning) => (
+                <div key={`${warning.key}-${warning.subject}`}>
+                  {warning.subject && <strong>{warning.subject}: </strong>}
+                  {s.t(warning.key)}
+                </div>
+              ))}
+            </Notice>
+          )}
+          {replyPreview && (
+            <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
+              <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
+              <div>
+                <strong>{s.t("outlookDraft.subject")}</strong>
+                <pre>{replyPreview.subject}</pre>
+              </div>
+              <div>
+                <strong>{s.t("outlookDraft.plainText")}</strong>
+                <pre>{replyPreview.plainText}</pre>
+              </div>
+              <div>
+                <strong>{s.t("outlookDraft.html")}</strong>
+                <pre>{replyPreview.html}</pre>
+              </div>
+            </section>
+          )}
+          <section className="plan-section">
+            <div className="plan-heading">
+              <strong>{s.t("plan.summary", { count: moves })}</strong>
+              <span>
+                <Eye /> {s.t("plan.readOnly")}
+              </span>
+            </div>
+            {plan.steps.length ? (
+              <div className="step-list">
+                {plan.steps.map((step, index) => (
+                  <StepRow key={`${step.kind}-${index}`} step={step} s={s} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<FileCheck2 />}
+                title={s.t("plan.empty")}
+              />
+            )}
+          </section>
+        </div>
+      )}
       {error && <Notice kind="error">{error}</Notice>}
       <ActionBar
         left={
@@ -3186,80 +3238,82 @@ function ReviewScreen({
           <BusyState label={s.t("action.review")} />
         ) : (
           <div className="flow-layout">
-            <div className="page-heading compact-heading">
-              <div>
-                <h1>{s.t("review.title")}</h1>
-                <p>{s.t("review.help")}</p>
+            <div className="flow-scroll">
+              <div className="page-heading compact-heading">
+                <div>
+                  <h1>{s.t("review.title")}</h1>
+                  <p>{s.t("review.help")}</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  icon={<RefreshCw />}
+                  onClick={() => void scan()}
+                >
+                  {s.t("action.retry")}
+                </Button>
               </div>
-              <Button
-                variant="secondary"
-                icon={<RefreshCw />}
-                onClick={() => void scan()}
-              >
-                {s.t("action.retry")}
-              </Button>
-            </div>
-            {items.length ? (
-              <div className="review-list">
-                {items.map((item) => (
-                  <div className="review-row" key={item.selectionId}>
-                    <button
-                      className="file-button"
-                      title={item.path}
-                      onClick={() =>
-                        void revealPath(bridge, item.selectionId)
-                      }
-                    >
-                      <FileSearch />
-                      <span>
-                        <strong>{item.name}</strong>
-                        <small>{item.path}</small>
-                      </span>
-                    </button>
-                    <input
-                      aria-label={`${item.name} code`}
-                      value={codes[item.selectionId] ?? ""}
-                      placeholder={s.t("review.noCode")}
-                      disabled={actions[item.selectionId] !== "put"}
-                      onChange={(event) =>
-                        setCodes((current) => ({
-                          ...current,
-                          [item.selectionId]: event.target.value,
-                        }))
-                      }
-                    />
-                    <Segmented
-                      value={actions[item.selectionId] ?? "keep"}
-                      options={[
-                        ["keep", s.t("review.keep")],
-                        ["put", s.t("review.put")],
-                        ["delete", s.t("review.delete")],
-                      ]}
-                      onChange={(action) =>
-                        setActions((current) => ({
-                          ...current,
-                          [item.selectionId]: action as ReviewAction,
-                        }))
-                      }
-                      small
-                    />
-                    {item.targetExists &&
-                      actions[item.path] === "put" && (
-                        <span className="row-warning">
-                          <CircleAlert /> {s.t("review.willReplace")}
+              {items.length ? (
+                <div className="review-list">
+                  {items.map((item) => (
+                    <div className="review-row" key={item.selectionId}>
+                      <button
+                        className="file-button"
+                        title={item.path}
+                        onClick={() =>
+                          void revealPath(bridge, item.selectionId)
+                        }
+                      >
+                        <FileSearch />
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>{item.path}</small>
                         </span>
-                      )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={<FileCheck2 />}
-                title={s.t("review.empty")}
-                message={s.t("review.empty.help")}
-              />
-            )}
-            {error && <Notice kind="error">{error}</Notice>}
+                      </button>
+                      <input
+                        aria-label={`${item.name} code`}
+                        value={codes[item.selectionId] ?? ""}
+                        placeholder={s.t("review.noCode")}
+                        disabled={actions[item.selectionId] !== "put"}
+                        onChange={(event) =>
+                          setCodes((current) => ({
+                            ...current,
+                            [item.selectionId]: event.target.value,
+                          }))
+                        }
+                      />
+                      <Segmented
+                        value={actions[item.selectionId] ?? "keep"}
+                        options={[
+                          ["keep", s.t("review.keep")],
+                          ["put", s.t("review.put")],
+                          ["delete", s.t("review.delete")],
+                        ]}
+                        onChange={(action) =>
+                          setActions((current) => ({
+                            ...current,
+                            [item.selectionId]: action as ReviewAction,
+                          }))
+                        }
+                        small
+                      />
+                      {item.targetExists &&
+                        actions[item.path] === "put" && (
+                          <span className="row-warning">
+                            <CircleAlert /> {s.t("review.willReplace")}
+                          </span>
+                        )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<FileCheck2 />}
+                  title={s.t("review.empty")}
+                  message={s.t("review.empty.help")}
+                />
+              )}
+              {error && <Notice kind="error">{error}</Notice>}
+            </div>
             <ActionBar
               left={
                 <span className="muted">

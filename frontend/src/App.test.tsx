@@ -728,7 +728,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.4-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.5-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
@@ -1454,6 +1454,29 @@ describe("DocFlow shell", () => {
     fireEvent.keyDown(window, { key: "t", altKey: true });
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe("dark");
+    });
+  });
+
+  it("shows quick clear button for browse path fields and clears on click", async () => {
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    const browseBtn = await screen.findByRole("button", { name: "Gözat" });
+    fireEvent.click(browseBtn);
+
+    // Verify clear button appears
+    const clearBtn = await screen.findByRole("button", { name: "Temizle" });
+    expect(clearBtn).toBeVisible();
+
+    // Click clear
+    fireEvent.click(clearBtn);
+
+    // Verify clear button disappears and placeholder returns
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Temizle" })).not.toBeInTheDocument();
     });
   });
 });

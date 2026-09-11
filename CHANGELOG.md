@@ -8,6 +8,19 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.5 - 2026-09-11
+
+### Fixed
+
+- Eliminated UI button overlap and obscured form fields by decoupling action bar from scrollable form/review content (`flow-scroll`) and pinning action buttons cleanly at the bottom.
+- Resolved unclosed `@media (prefers-color-scheme: dark)` brace in `styles.css` that leaked media query scope across subsequent global styles.
+- Fixed detached table header bug where regular data columns stuck to `right: 0` during horizontal scrolling when row actions were disabled; now explicitly targeted with `editor-actions-header`.
+- Added clear separation border and shadow to sticky row action columns to prevent scrolled table cells from bleeding behind buttons.
+- Added `white-space: nowrap` and `flex-shrink: 0` to `.button` and icon buttons to prevent label wrapping and squishing across different window sizes and localized languages.
+- Added auto-close behavior and focus management to `CompactDateInput` year select to prevent overlaying rows beneath it.
+- Added 1-click clear button (`X`) to path inputs when a file or folder is selected.
+- Added `max-height` and scrolling to `.modal` to guarantee action buttons are always accessible on low-height viewports.
+
 ## 0.7.0-rc.4 - 2026-09-11
 
 ### Added
