@@ -8,6 +8,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.9 - 2026-09-12
+
+### Fixed
+
+- Resolved `path grant does not allow this access` (`BackendError::path_access_denied`) in Analyze RFI System & Sync Worley Signatures (`rfi.system_sync`):
+  - Fixed path grant selection in `preview_rfi_system_sync` which previously defaulted to matching the read-only `system_root` grant when RFI Log or Follow Up workbooks were stored inside the selected system folder.
+  - Dynamically promoted `system_root` provisional grant to `ReadWrite` when workbooks are nested inside or equal to the system directory, avoiding conflicting capability grants and safely granting write authority.
+  - Explicitly resolved grants with write intent (`g.access.allows(PathIntent::Write)`), and resolved candidate paths against canonical capabilities in `authorize_capability_for_grant`.
+  - Added missing `provisional.commit()` to preserve granted path capabilities across preview -> apply boundaries.
+  - Fixed `reserved plan ID requires an empty plan ID` by initializing `Plan` with an empty `plan_id` for reserved plan binding.
+
 ## 0.7.0-rc.8 - 2026-09-12
 
 ### Added

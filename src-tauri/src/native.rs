@@ -956,16 +956,26 @@ impl NativeBackend {
                 "operation is not owned by the Rust RFI System Sync backend",
             ));
         }
-        let system_root = request.values.rfi_system_root.clone();
-        let source_root = request
-            .values
-            .rfi_log_workbook
+        let system_root = fs::canonicalize(&request.values.rfi_system_root).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.systemSync.systemRootInvalid: cannot resolve root: {e}"
+            ))
+        })?;
+        let source_path = fs::canonicalize(&request.values.rfi_log_workbook).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.systemSync.workbookInvalid: cannot resolve RFI Log: {e}"
+            ))
+        })?;
+        let target_path = fs::canonicalize(&request.values.follow_up_workbook).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.systemSync.workbookInvalid: cannot resolve Follow Up: {e}"
+            ))
+        })?;
+        let source_root = source_path
             .parent()
             .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
             .to_path_buf();
-        let target_root = request
-            .values
-            .follow_up_workbook
+        let target_root = target_path
             .parent()
             .ok_or_else(|| BackendError::path_invalid("Follow Up workbook has no parent"))?
             .to_path_buf();
@@ -976,35 +986,50 @@ impl NativeBackend {
             uuid::Uuid::new_v4().to_string(),
             &request.op_id,
         );
-        let provisional = self.filesystem.issue_provisional_grants(
-            &scope,
-            &[
-                (system_root, GrantAccess::Read),
-                (source_root, GrantAccess::ReadWrite),
-                (target_root, GrantAccess::ReadWrite),
-            ],
-        )?;
+
+        let system_needs_write =
+            source_path.starts_with(&system_root) || target_path.starts_with(&system_root);
+        let system_access = if system_needs_write {
+            GrantAccess::ReadWrite
+        } else {
+            GrantAccess::Read
+        };
+
+        let mut grant_requests: Vec<(PathBuf, GrantAccess)> =
+            vec![(system_root.clone(), system_access)];
+
+        let source_covered = system_needs_write && source_path.starts_with(&system_root);
+        if !source_covered {
+            grant_requests.push((source_root.clone(), GrantAccess::ReadWrite));
+        }
+
+        let target_covered = (system_needs_write && target_path.starts_with(&system_root))
+            || (!source_covered && target_path.starts_with(&source_root));
+        if !target_covered {
+            grant_requests.push((target_root.clone(), GrantAccess::ReadWrite));
+        }
+
+        let provisional = self
+            .filesystem
+            .issue_provisional_grants(&scope, &grant_requests)?;
+
         let source_grant = provisional
             .grants()
             .iter()
-            .find(|g| request.values.rfi_log_workbook.starts_with(&g.root))
-            .ok_or_else(|| BackendError::path_invalid("No grant covering RFI Log"))?;
+            .find(|g| g.access.allows(PathIntent::Write) && source_path.starts_with(&g.root))
+            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
         let target_grant = provisional
             .grants()
             .iter()
-            .find(|g| request.values.follow_up_workbook.starts_with(&g.root))
-            .ok_or_else(|| BackendError::path_invalid("No grant covering Follow Up"))?;
+            .find(|g| g.access.allows(PathIntent::Write) && target_path.starts_with(&g.root))
+            .ok_or_else(|| BackendError::path_invalid("No write grant covering Follow Up"))?;
 
-        let source_anchor = self.filesystem.anchor_granted_path(
-            source_grant,
-            &request.values.rfi_log_workbook,
-            PathIntent::Write,
-        )?;
-        let target_anchor = self.filesystem.anchor_granted_path(
-            target_grant,
-            &request.values.follow_up_workbook,
-            PathIntent::Write,
-        )?;
+        let source_anchor =
+            self.filesystem
+                .anchor_granted_path(source_grant, &source_path, PathIntent::Write)?;
+        let target_anchor =
+            self.filesystem
+                .anchor_granted_path(target_grant, &target_path, PathIntent::Write)?;
         if source_anchor.same_file_as(&target_anchor).map_err(|e| {
             BackendError::validation(format!(
                 "error.rfi.systemSync.workbookInvalid: file check failed: {e}"
@@ -1026,16 +1051,12 @@ impl NativeBackend {
             phase: "preview".to_string(),
             done: 0,
             total: 1,
-            subject: request
-                .values
-                .rfi_system_root
-                .to_string_lossy()
-                .into_owned(),
+            subject: system_root.to_string_lossy().into_owned(),
         });
         let mut plan = rfi_system_sync::preview_system_sync(
-            &request.values.rfi_system_root,
-            &request.values.rfi_log_workbook,
-            &request.values.follow_up_workbook,
+            &system_root,
+            &source_path,
+            &target_path,
             &mut source,
             &mut target,
         )?;
@@ -1057,6 +1078,7 @@ impl NativeBackend {
             reservation,
             plan,
         )?;
+        provisional.commit();
         progress(ProgressEvent {
             phase: "preview".to_string(),
             done: 1,
@@ -2797,5 +2819,172 @@ mod tests {
             Some((2, 1, "print-audit-1".to_string(), "2/3".to_string()))
         );
         assert_eq!(result["cloudSynced"], true);
+    }
+
+    #[test]
+    fn preview_rfi_system_sync_with_nested_workbooks_succeeds_and_applies() {
+        use std::io::{Cursor, Write};
+        use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+
+        fn create_xlsx(sheets: &[(&str, &str)]) -> Vec<u8> {
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+            let mut workbook_sheets = String::new();
+            let mut relationships = String::new();
+            for (index, (name, content)) in sheets.iter().enumerate() {
+                let ordinal = index + 1;
+                workbook_sheets.push_str(&format!(
+                    r#"<sheet name="{name}" sheetId="{ordinal}" r:id="rId{ordinal}"/>"#
+                ));
+                relationships.push_str(&format!(
+                    r#"<Relationship Id="rId{ordinal}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{ordinal}.xml"/>"#
+                ));
+                writer
+                    .start_file(format!("xl/worksheets/sheet{ordinal}.xml"), options)
+                    .unwrap();
+                let ws = format!(
+                    r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{content}</sheetData></worksheet>"#
+                );
+                writer.write_all(ws.as_bytes()).unwrap();
+            }
+            let pkg_rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
+            let wb = format!(
+                r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{workbook_sheets}</sheets></workbook>"#
+            );
+            let rels = format!(
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{relationships}</Relationships>"#
+            );
+            for (name, bytes) in [
+                ("[Content_Types].xml", b"content-types".as_slice()),
+                ("_rels/.rels", pkg_rels.as_bytes()),
+                ("xl/workbook.xml", wb.as_bytes()),
+                ("xl/_rels/workbook.xml.rels", rels.as_bytes()),
+            ] {
+                writer.start_file(name, options).unwrap();
+                writer.write_all(bytes).unwrap();
+            }
+            writer.finish().unwrap().into_inner()
+        }
+
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let temp_path = fs::canonicalize(temporary.path()).unwrap();
+        let system_root = temp_path.join("RFI_SYSTEM");
+        let civ_dir = system_root.join("CIV");
+        fs::create_dir_all(&civ_dir).unwrap();
+
+        let civ_103_dir = civ_dir.join("AZE-SUN-INT-QMS-RFI-CIV-0103");
+        fs::create_dir_all(&civ_103_dir).unwrap();
+        let civ_103_pdf = civ_103_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0103.pdf");
+        {
+            let stream = "BT /F1 18 Tf 460 100 Td (E.Mammadov Signed Worley) Tj ET\n";
+            let objects = [
+                "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_string(),
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+                format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len()),
+            ];
+            let mut bytes = b"%PDF-1.4\n".to_vec();
+            let mut offsets = Vec::new();
+            for (index, object) in objects.iter().enumerate() {
+                offsets.push(bytes.len());
+                bytes.extend_from_slice(
+                    format!("{} 0 obj\n{}\nendobj\n", index + 1, object).as_bytes(),
+                );
+            }
+            let xref = bytes.len();
+            bytes.extend_from_slice(
+                format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+            );
+            for offset in offsets {
+                bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+            }
+            bytes.extend_from_slice(
+                format!(
+                    "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+                    objects.len() + 1
+                )
+                .as_bytes(),
+            );
+            fs::write(&civ_103_pdf, bytes).unwrap();
+        }
+
+        // Place workbooks INSIDE system_root to test nested grant handling
+        let rfi_log_path = system_root.join("RFI_Log.xlsx");
+        let follow_up_path = system_root.join("Follow_Up.xlsx");
+
+        let civ_log_row = r#"<row r="10"><c r="A10" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0103</t></is></c><c r="B10" t="inlineStr"><is><t>ITP-1</t></is></c><c r="C10" t="inlineStr"><is><t>2.3.1</t></is></c><c r="F10" t="inlineStr"><is><t>AREA-1</t></is></c><c r="G10" t="inlineStr"><is><t>CIV</t></is></c><c r="N10" t="inlineStr"><is><t>LOC</t></is></c><c r="T10" t="inlineStr"><is><t></t></is></c></row>"#;
+        let rfi_log_bytes =
+            create_xlsx(&[("CIV", civ_log_row), ("MEC", ""), ("ELE", ""), ("PRC", "")]);
+        fs::write(&rfi_log_path, &rfi_log_bytes).unwrap();
+
+        let fu_civ_row = r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Area</t></is></c><c r="B1" t="inlineStr"><is><t>3.1</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>AREA-1</t></is></c><c r="B2" t="inlineStr"><is><t></t></is></c></row>"#;
+        let fu_bytes = create_xlsx(&[("Signed by CIV", fu_civ_row), ("Signed by MEC", "")]);
+        fs::write(&follow_up_path, &fu_bytes).unwrap();
+
+        let caller = backend.caller_identity().unwrap();
+        let system_root_sel = backend
+            .selections
+            .issue(
+                &caller,
+                "rfi.system_sync",
+                "rfi_system_root",
+                &system_root,
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let rfi_log_sel = backend
+            .selections
+            .issue(
+                &caller,
+                "rfi.system_sync",
+                "rfi_log_workbook",
+                &rfi_log_path,
+                SelectionKind::File,
+            )
+            .unwrap();
+        let fu_sel = backend
+            .selections
+            .issue(
+                &caller,
+                "rfi.system_sync",
+                "follow_up_workbook",
+                &follow_up_path,
+                SelectionKind::File,
+            )
+            .unwrap();
+
+        let params = json!({
+            "opId": "rfi.system_sync",
+            "values": {
+                "rfi_system_root": system_root_sel,
+                "rfi_log_workbook": rfi_log_sel,
+                "follow_up_workbook": fu_sel,
+            }
+        });
+
+        let preview_result = backend
+            .preview_rfi_system_sync(params, |_| {})
+            .expect("preview must not fail with path grant error");
+        assert_eq!(preview_result["opId"], "rfi.system_sync");
+        let plan_id = preview_result["planId"].as_str().unwrap();
+
+        // Apply
+        let apply_result = backend
+            .filesystem
+            .apply_with_progress(plan_id, &caller, |_| {})
+            .expect("apply must succeed");
+        assert_eq!(apply_result.applied, 2);
+        assert_eq!(apply_result.failed, 0);
+
+        // Undo
+        let undo_result = backend
+            .filesystem
+            .undo(&apply_result.journal_id, &caller, None)
+            .expect("undo must succeed");
+        assert_eq!(undo_result.applied, 4);
+        assert_eq!(undo_result.failed, 0);
     }
 }

@@ -62,7 +62,7 @@ pub enum GrantAccess {
 }
 
 impl GrantAccess {
-    fn allows(self, intent: PathIntent) -> bool {
+    pub(crate) fn allows(self, intent: PathIntent) -> bool {
         matches!(
             (self, intent),
             (Self::ReadWrite, _)
@@ -770,9 +770,10 @@ impl PathGrantStore {
         if !grant.access.allows(intent) {
             return Err(BackendError::path_access_denied());
         }
+        let resolved = resolve_existing_ancestor(candidate)?;
         stored
             .capability
-            .authorize(candidate)
+            .authorize(&resolved)
             .map_err(|_| BackendError::path_escape())
     }
 

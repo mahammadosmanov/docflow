@@ -898,9 +898,8 @@ pub fn preview_system_sync(
     let mut plan_meta = JsonObject::new();
     plan_meta.insert("editor".to_string(), editor);
 
-    let plan_id = Uuid::new_v4().to_string();
     Ok(Plan {
-        plan_id,
+        plan_id: String::new(),
         op_id: OPERATION_ID.to_string(),
         steps,
         warnings,
