@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.6",
+  "currentVersion": "0.7.0-rc.7",
   "releases": [
     {
       "version": "0.1.0",
@@ -206,9 +206,17 @@
       "version": "0.7.0-rc.6",
       "date": "2026-09-12",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.6",
       "summary": "Fix unknown workbook relationship class error in Worley signature synchronization by expanding OOXML relationship resolution to support modern Microsoft Office schemas and standard Excel workbook relationships."
+    },
+    {
+      "version": "0.7.0-rc.7",
+      "date": "2026-09-12",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.7",
+      "summary": "Fix 'More than one safe Follow Up table was found' error by adding multi-sheet layout discovery and preferred discipline sheet disambiguation in Worley signature status synchronization."
     }
   ]
 }

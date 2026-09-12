@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.7 - 2026-09-12
+
+### Fixed
+
+- Resolved `More than one safe Follow Up table was found. Keep one exact RFI NO./STATUS table.` (`error.rfi.followUp.layoutAmbiguous`) in Worley signature status synchronization when handling real-world Follow Up workbooks containing multiple discipline sheets (e.g. `Signed by CIV` and `Signed by MEC`).
+- Added multi-sheet layout discovery and atomic preview/apply synchronization across all valid discipline Follow Up sheets in a single transaction.
+- Added smart sheet disambiguation prioritizing recognized discipline conventions (`SIGNED BY`, `FOLLOW UP`, `CIV`, `MEC`, `ELE`, `PRC`) while preserving strict ambiguity rejection for unknown dummy sheets.
+
 ## 0.7.0-rc.6 - 2026-09-12
 
 ### Fixed

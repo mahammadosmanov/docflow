@@ -1595,3 +1595,146 @@ fn source_package_with_shifted_rfi_column_in_discipline_sheet_is_accepted() {
     );
     assert_eq!(classification["rows"][0]["proposedStatus"], "Signed");
 }
+
+#[test]
+fn multi_sheet_follow_up_with_civ_and_mec_is_synchronized() {
+    let civ_rfi = "CIV-0001";
+    let mec_rfi = "MEC-0005";
+
+    let source = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("A1", "RFI NO"), inline("T1", "Remarks")]),
+                    row(2, [inline("A2", civ_rfi), inline("T2", "Signed by Worley")]),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("A1", "RFI NO"), inline("U1", "Remarks")]),
+                    row(2, [inline("A2", mec_rfi), inline("U2", "Under review")]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let target = package(&[
+        (
+            "Signed by CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("A1", "RFI NO."), inline("B1", "STATUS")]),
+                    row(2, [inline("A2", civ_rfi), blank("B2")]),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "Signed by MEC",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("C1", "RFI NO."), inline("D1", "STATUS")]),
+                    row(2, [inline("C2", mec_rfi), blank("D2")]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let classification = classify(source.clone(), target.clone()).unwrap();
+    let rows = classification["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+
+    assert_eq!(rows[0]["_sheet"], "Signed by CIV");
+    assert_eq!(rows[0]["rfiNo"], civ_rfi);
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+
+    assert_eq!(rows[1]["_sheet"], "Signed by MEC");
+    assert_eq!(rows[1]["rfiNo"], mec_rfi);
+    assert_eq!(rows[1]["proposedStatus"], "Not Signed");
+    assert_eq!(rows[1]["disposition"], "rfi.followUp.disposition.ready");
+
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(&source_path, source.into_inner()).unwrap();
+    std::fs::write(&target_path, target.into_inner()).unwrap();
+
+    let mut source_file = File::open(&source_path).unwrap();
+    let mut target_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut source_file,
+        &mut target_file,
+    )
+    .unwrap();
+    assert_eq!(plan.steps.len(), 1);
+
+    let updates = guarded_updates(&plan.steps[0]).unwrap();
+    assert!(updates.contains_key("Signed by CIV"));
+    assert!(updates.contains_key("Signed by MEC"));
+    assert_eq!(updates["Signed by CIV"].len(), 1);
+    assert_eq!(updates["Signed by MEC"].len(), 1);
+}
+
+#[test]
+fn multi_sheet_follow_up_prioritizes_signed_by_sheets_over_arbitrary_sheets() {
+    let civ_rfi = "CIV-0001";
+    let source = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("A1", "RFI NO"), inline("T1", "Remarks")]),
+                row(2, [inline("A2", civ_rfi), inline("T2", "Signed by Worley")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let target = package(&[
+        (
+            "Arbitrary Notes",
+            None,
+            worksheet(
+                [row(1, [inline("A1", "RFI NO."), inline("B1", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Signed by CIV",
+            None,
+            worksheet(
+                [
+                    row(4, [inline("C4", "RFI NO."), inline("D4", "STATUS")]),
+                    row(5, [inline("C5", civ_rfi), blank("D5")]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let classification = classify(source, target).unwrap();
+    let rows = classification["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["_sheet"], "Signed by CIV");
+    assert_eq!(rows[0]["rfiNo"], civ_rfi);
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+}

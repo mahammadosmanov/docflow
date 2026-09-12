@@ -82,7 +82,7 @@ struct SourceStatusEvidence {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct FollowUpLayout {
+pub(crate) struct FollowUpLayout {
     worksheet: WorksheetDescriptor,
     header_row: u32,
     rfi_column: u32,
@@ -151,7 +151,19 @@ pub(crate) struct FollowUpStepMeta {
     rfi_log_fingerprint: WorkbookFingerprint,
     follow_up_fingerprint: WorkbookFingerprint,
     layout: FollowUpLayout,
+    #[serde(default)]
+    layouts: Vec<FollowUpLayout>,
     updates: Vec<FollowUpApprovedUpdate>,
+}
+
+impl FollowUpStepMeta {
+    pub(crate) fn all_layouts(&self) -> impl Iterator<Item = &FollowUpLayout> {
+        if self.layouts.is_empty() {
+            std::slice::from_ref(&self.layout).iter()
+        } else {
+            self.layouts.iter()
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -163,6 +175,8 @@ struct FollowUpPlanMeta {
     rfi_log_fingerprint: WorkbookFingerprint,
     follow_up_fingerprint: WorkbookFingerprint,
     layout: FollowUpLayout,
+    #[serde(default)]
+    layouts: Vec<FollowUpLayout>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -260,10 +274,16 @@ struct BorrowedEditor<'a> {
 #[serde(rename_all = "camelCase")]
 struct BorrowedAuthorityProjection<'a> {
     layout: &'a FollowUpLayout,
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    layouts: &'a [FollowUpLayout],
     rows: &'a [BorrowedFollowUpRow<'a>],
     warnings: &'a [Warning],
     editor: BorrowedEditor<'a>,
     approved_rows: Vec<&'a BorrowedFollowUpRow<'a>>,
+}
+
+fn slice_is_empty<T>(slice: &[T]) -> bool {
+    slice.is_empty()
 }
 
 struct CountingLimitWriter {
@@ -378,26 +398,32 @@ pub fn classify_workbooks(
         proposed_status: None,
         reason: None,
     };
-    let layout = discover_layout(
+    let layouts = discover_layouts(
         target_discovery,
         target_workbook,
         target_has_signature,
         &mut merge_budget,
     )?;
-    let worksheet = target_workbook
-        .sheet(&layout.worksheet.name)
-        .ok_or_else(workbook_invalid)?;
-    let pending = scan_target_rows(worksheet, &layout)?;
-    let duplicate_counts = pending
+    let mut all_pending = Vec::new();
+    for layout in &layouts {
+        let worksheet = target_workbook
+            .sheet(&layout.worksheet.name)
+            .ok_or_else(workbook_invalid)?;
+        let pending = scan_target_rows(worksheet, layout)?;
+        for row in pending {
+            all_pending.push((layout, worksheet, row));
+        }
+    }
+    let duplicate_counts = all_pending
         .iter()
-        .filter_map(|row| row.canonical_rfi.as_ref())
+        .filter_map(|(_, _, row)| row.canonical_rfi.as_ref())
         .fold(BTreeMap::<String, usize>::new(), |mut counts, rfi| {
             *counts.entry(rfi.clone()).or_default() += 1;
             counts
         });
-    let borrowed_rows = pending
+    let borrowed_rows = all_pending
         .iter()
-        .map(|pending| {
+        .map(|(layout, worksheet, pending)| {
             let evidence = pending
                 .canonical_rfi
                 .as_ref()
@@ -411,7 +437,7 @@ pub fn classify_workbooks(
                 .unwrap_or(&empty_analysis);
             classify_borrowed_row(
                 pending,
-                &layout,
+                layout,
                 worksheet,
                 evidence,
                 analysis,
@@ -440,9 +466,11 @@ pub fn classify_workbooks(
         });
     }
     let columns = editor_columns();
+    let primary_layout = layouts.first().ok_or_else(workbook_invalid)?;
     {
         let projection = BorrowedAuthorityProjection {
-            layout: &layout,
+            layout: primary_layout,
+            layouts: &layouts,
             rows: &borrowed_rows,
             warnings: &warnings,
             editor: borrowed_editor(&columns, &borrowed_rows),
@@ -456,7 +484,8 @@ pub fn classify_workbooks(
         .collect::<Vec<_>>();
     let editor = editor_metadata(&rows, columns);
     Ok(json!({
-        "layout": layout,
+        "layout": primary_layout,
+        "layouts": layouts,
         "rows": rows,
         "warnings": warnings,
         "editor": editor,
@@ -629,6 +658,7 @@ pub fn revise_from_open_files(
         || authority.rfi_log_fingerprint != fresh_authority.rfi_log_fingerprint
         || authority.follow_up_fingerprint != fresh_authority.follow_up_fingerprint
         || authority.layout != fresh_authority.layout
+        || authority.layouts != fresh_authority.layouts
     {
         return Err(BackendError::validation(
             "error.rfi.followUp.workbookChanged",
@@ -753,6 +783,10 @@ fn plan_from_classification(
     let decode_field = |name: &str| object.get(name).cloned().ok_or_else(workbook_invalid);
     let layout: FollowUpLayout =
         serde_json::from_value(decode_field("layout")?).map_err(|_| workbook_invalid())?;
+    let layouts: Vec<FollowUpLayout> = object
+        .get("layouts")
+        .and_then(|val| serde_json::from_value(val.clone()).ok())
+        .unwrap_or_else(|| vec![layout.clone()]);
     let rows: Vec<FollowUpRow> =
         serde_json::from_value(decode_field("rows")?).map_err(|_| workbook_invalid())?;
     let warnings: Vec<Warning> =
@@ -794,6 +828,7 @@ fn plan_from_classification(
         rfi_log_fingerprint: rfi_log_fingerprint.clone(),
         follow_up_fingerprint: follow_up_fingerprint.clone(),
         layout: layout.clone(),
+        layouts: layouts.clone(),
     };
     let mut meta = serde_json::Map::new();
     meta.insert("editor".to_string(), editor);
@@ -809,6 +844,7 @@ fn plan_from_classification(
             rfi_log_fingerprint,
             follow_up_fingerprint,
             layout,
+            layouts,
             updates,
         };
         let step_meta = serde_json::to_value(step_meta)
@@ -1081,12 +1117,37 @@ fn scan_source(
     Ok(grouped)
 }
 
-fn discover_layout(
+fn is_preferred_follow_up_sheet_name(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    let trimmed = upper.trim();
+    trimmed.contains("SIGNED BY")
+        || trimmed.contains("FOLLOW UP")
+        || trimmed.contains("FOLLOW-UP")
+        || trimmed.contains("FOLLOWUP")
+        || trimmed == "CIV"
+        || trimmed == "MEC"
+        || trimmed == "ELE"
+        || trimmed == "PRC"
+        || trimmed.starts_with("CIV ")
+        || trimmed.starts_with("MEC ")
+        || trimmed.starts_with("ELE ")
+        || trimmed.starts_with("PRC ")
+        || trimmed.ends_with(" CIV")
+        || trimmed.ends_with(" MEC")
+        || trimmed.ends_with(" ELE")
+        || trimmed.ends_with(" PRC")
+        || trimmed.ends_with("-CIV")
+        || trimmed.ends_with("-MEC")
+        || trimmed.ends_with("-ELE")
+        || trimmed.ends_with("-PRC")
+}
+
+fn discover_layouts(
     discovery: &OrderedWorkbookDiscovery,
     workbook: &WorkbookData,
     has_signature: bool,
     merge_budget: &mut MergeQueryBudget,
-) -> Result<FollowUpLayout, BackendError> {
+) -> Result<Vec<FollowUpLayout>, BackendError> {
     if has_signature {
         return Err(signed_package());
     }
@@ -1141,25 +1202,50 @@ fn discover_layout(
             }
         }
     }
-    if candidates.len() > 1 {
-        return Err(BackendError::validation(
-            "error.rfi.followUp.layoutAmbiguous",
-        ));
+    let mut sheet_candidate_counts = BTreeMap::<String, usize>::new();
+    for candidate in &candidates {
+        *sheet_candidate_counts
+            .entry(candidate.worksheet.name.clone())
+            .or_default() += 1;
     }
-    if let Some(candidate) = candidates.into_iter().next() {
-        if duplicate_header_sheets.contains(&candidate.worksheet.name) {
+    for (sheet_name, count) in sheet_candidate_counts {
+        if count > 1 {
+            duplicate_header_sheets.insert(sheet_name);
+        }
+    }
+    candidates.retain(|candidate| !duplicate_header_sheets.contains(&candidate.worksheet.name));
+    if candidates.is_empty() {
+        if !duplicate_header_sheets.is_empty() {
             return Err(BackendError::validation(
                 "error.rfi.followUp.layoutAmbiguous",
             ));
         }
-        return Ok(candidate);
+        return Err(BackendError::validation("error.rfi.followUp.layoutMissing"));
     }
-    if !duplicate_header_sheets.is_empty() {
-        return Err(BackendError::validation(
-            "error.rfi.followUp.layoutAmbiguous",
-        ));
+    if candidates.len() == 1 {
+        return Ok(candidates);
     }
-    Err(BackendError::validation("error.rfi.followUp.layoutMissing"))
+    let preferred: Vec<_> = candidates
+        .into_iter()
+        .filter(|candidate| is_preferred_follow_up_sheet_name(&candidate.worksheet.name))
+        .collect();
+    if !preferred.is_empty() {
+        return Ok(preferred);
+    }
+    Err(BackendError::validation(
+        "error.rfi.followUp.layoutAmbiguous",
+    ))
+}
+
+#[allow(dead_code)]
+fn discover_layout(
+    discovery: &OrderedWorkbookDiscovery,
+    workbook: &WorkbookData,
+    has_signature: bool,
+    merge_budget: &mut MergeQueryBudget,
+) -> Result<FollowUpLayout, BackendError> {
+    let layouts = discover_layouts(discovery, workbook, has_signature, merge_budget)?;
+    layouts.into_iter().next().ok_or_else(workbook_invalid)
 }
 
 fn scan_target_rows(
@@ -1494,7 +1580,13 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
-        if !row_ids.insert(update.row_id.as_str())
+        let valid_layout = meta.all_layouts().any(|layout| {
+            layout.worksheet == update.target.worksheet
+                && layout.rfi_column == update.target.rfi_column
+                && layout.status_column == update.target.status_column
+        });
+        if !valid_layout
+            || !row_ids.insert(update.row_id.as_str())
             || !targets.insert((
                 update.target.worksheet.part_path.as_str(),
                 update.target.row,
@@ -1503,9 +1595,6 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
             || canonical_rfi(&update.canonical_rfi).as_deref()
                 != Some(update.canonical_rfi.as_str())
             || !matches!(update.proposed_status.as_str(), "Signed" | "Not Signed")
-            || update.target.worksheet != meta.layout.worksheet
-            || update.target.rfi_column != meta.layout.rfi_column
-            || update.target.status_column != meta.layout.status_column
             || canonical_follow_up_rfi(&update.target.rfi_cell.value)
                 .map(|(canonical, _)| canonical)
                 .as_deref()
@@ -1765,6 +1854,7 @@ mod tests {
                 rfi_column: 1,
                 status_column: 2,
             },
+            layouts: Vec::new(),
             updates,
         }
     }
