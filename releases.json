@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.5",
+  "currentVersion": "0.7.0-rc.6",
   "releases": [
     {
       "version": "0.1.0",
@@ -198,9 +198,17 @@
       "version": "0.7.0-rc.5",
       "date": "2026-09-11",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.5",
       "summary": "UI/UX layout overhaul: eliminate button overlap, fix unclosed dark media query, decouple table action headers from column count, dock action bars without covering form fields, auto-close date dropdowns, and add 1-click path reset."
+    },
+    {
+      "version": "0.7.0-rc.6",
+      "date": "2026-09-12",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.6",
+      "summary": "Fix unknown workbook relationship class error in Worley signature synchronization by expanding OOXML relationship resolution to support modern Microsoft Office schemas and standard Excel workbook relationships."
     }
   ]
 }

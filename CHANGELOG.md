@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.6 - 2026-09-12
+
+### Fixed
+
+- Resolved `unknown workbook relationship class` validation error in Worley signature synchronization (`rfi.sync_worley`) when loading real-world Excel workbooks (`.xlsm` / `.xlsx`).
+- Added full support for Microsoft Office relationship namespaces across versions (e.g. `2006`, `2007`, `2011`, `2014`, `2017`, `2019`, `2020`) and package-level relationship namespaces.
+- Expanded allowed workbook and worksheet relationship classes to recognize standard Excel elements including `volatileDependencies`, `calcFeatures`, `features`, `vbaProjectSignature`, `customXmlMappings`, `xmlMaps`, `customData`, `customDataProperties`, `customUI`, `attachedToolbars`, `activeXControlBinary`, `usernames`, `revisionLog`, and `revisionHeaders`.
+
 ## 0.7.0-rc.5 - 2026-09-11
 
 ### Fixed

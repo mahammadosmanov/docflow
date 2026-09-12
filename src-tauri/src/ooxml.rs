@@ -58,8 +58,6 @@ const PACKAGE_RELATIONSHIP_NAMESPACES: [&str; 2] = [
 const TRANSITIONAL_RELATIONSHIP_PREFIX: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
 const STRICT_RELATIONSHIP_PREFIX: &str = "http://purl.oclc.org/ooxml/officeDocument/relationships/";
-const MICROSOFT_OFFICE_RELATIONSHIP_PREFIX: &str =
-    "http://schemas.microsoft.com/office/2006/relationships/";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CellUpdate {
@@ -1475,15 +1473,27 @@ fn internal_relationship_target_for_class(
 }
 
 fn relationship_class(relationship_type: &str) -> Option<&str> {
-    let class = ooxml_relationship_class(relationship_type)
-        .or_else(|| relationship_type.strip_prefix(MICROSOFT_OFFICE_RELATIONSHIP_PREFIX))?;
-    (!class.is_empty() && !class.contains('/')).then_some(class)
+    ooxml_relationship_class(relationship_type).or_else(|| {
+        let rest = relationship_type.strip_prefix("http://schemas.microsoft.com/office/")?;
+        let rel_idx = rest.find("/relationships/")?;
+        let class = &rest[rel_idx + "/relationships/".len()..];
+        let class = class.strip_prefix("ui/").unwrap_or(class);
+        (!class.is_empty() && !class.contains('/')).then_some(class)
+    })
 }
 
 fn ooxml_relationship_class(relationship_type: &str) -> Option<&str> {
     let class = relationship_type
         .strip_prefix(TRANSITIONAL_RELATIONSHIP_PREFIX)
-        .or_else(|| relationship_type.strip_prefix(STRICT_RELATIONSHIP_PREFIX))?;
+        .or_else(|| relationship_type.strip_prefix(STRICT_RELATIONSHIP_PREFIX))
+        .or_else(|| {
+            relationship_type
+                .strip_prefix("http://schemas.openxmlformats.org/package/2006/relationships/")
+        })
+        .or_else(|| {
+            relationship_type.strip_prefix("http://purl.oclc.org/ooxml/package/relationships/")
+        })?;
+    let class = class.strip_prefix("ui/").unwrap_or(class);
     (!class.is_empty() && !class.contains('/')).then_some(class)
 }
 
@@ -1518,10 +1528,13 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
         "externalLink",
         "connections",
         "vbaProject",
+        "vbaProjectSignature",
         "xlMacrosheet",
         "xlIntlMacrosheet",
         "pivotCacheDefinition",
         "customXml",
+        "customXmlMappings",
+        "xmlMaps",
         "metadata",
         "sheetMetadata",
         "person",
@@ -1544,9 +1557,22 @@ fn validate_workbook_relationship_classes<R: Read + Seek>(
         "dataModel",
         "webextension",
         "feature",
+        "features",
+        "calcFeatures",
+        "volatileDependencies",
+        "customData",
+        "customDataProperties",
         "customProperty",
+        "customProperties",
+        "extendedProperties",
         "package",
         "hyperlink",
+        "customUI",
+        "attachedToolbars",
+        "activeXControlBinary",
+        "usernames",
+        "revisionLog",
+        "revisionHeaders",
     ];
 
     let root = validate_relationship_document_namespace(document, "workbook")?;
@@ -1633,6 +1659,9 @@ fn validate_worksheet_relationship_classes<R: Read + Seek>(
         "diagramStyle",
         "diagramColors",
         "package",
+        "webextension",
+        "customProperty",
+        "feature",
     ];
 
     let root = validate_relationship_document_namespace(document, "worksheet")?;
@@ -1659,7 +1688,7 @@ fn validate_worksheet_relationship_classes<R: Read + Seek>(
             "worksheet relationship type",
         )?
         .ok_or_else(|| OoxmlError::invalid("worksheet relationship type is missing"))?;
-        let Some(relationship_class) = ooxml_relationship_class(&relationship_type) else {
+        let Some(relationship_class) = relationship_class(&relationship_type) else {
             return Err(OoxmlError::invalid("unknown worksheet relationship class"));
         };
         if !KNOWN_CLASSES.contains(&relationship_class) {
@@ -6028,6 +6057,35 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.to_string(), "unknown workbook relationship class");
+    }
+
+    #[test]
+    fn ordered_worksheet_discovery_accepts_volatile_dependencies_and_modern_office_relationships() {
+        let workbook = format!(
+            r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="MEC" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+        );
+        let relationships = format!(
+            r#"<Relationships>
+                <Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/>
+                <Relationship Id="rIdVolatile" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/volatileDependencies" Target="volatileDependencies.xml"/>
+                <Relationship Id="rIdCalc" Type="http://schemas.microsoft.com/office/2020/07/relationships/calcFeatures" Target="calcFeatures.xml"/>
+                <Relationship Id="rIdCustomUI" Type="http://schemas.microsoft.com/office/2006/relationships/ui/customUI" Target="customUI/customUI.xml"/>
+            </Relationships>"#
+        );
+        let discovery = ordered_workbook_discovery(&mut fixture(
+            &workbook,
+            &relationships,
+            &[
+                ("xl/worksheets/sheet1.xml", b"worksheet"),
+                ("xl/volatileDependencies.xml", b"<volTypes/>"),
+                ("xl/calcFeatures.xml", b"<calcFeatures/>"),
+                ("xl/customUI/customUI.xml", b"<customUI/>"),
+            ],
+        ))
+        .unwrap();
+
+        assert_eq!(discovery.worksheets.len(), 1);
+        assert_eq!(discovery.worksheets[0].name, "MEC");
     }
 
     #[test]
