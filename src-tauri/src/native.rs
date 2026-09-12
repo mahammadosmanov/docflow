@@ -41,7 +41,7 @@ use crate::{
     review::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
     },
-    rfi_follow_up, rfi_log,
+    rfi_follow_up, rfi_log, rfi_system_sync,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
 };
 
@@ -941,6 +941,131 @@ impl NativeBackend {
         encode(cached)
     }
 
+    pub(crate) fn preview_rfi_system_sync<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<RfiSystemSyncPreviewValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != rfi_system_sync::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI System Sync backend",
+            ));
+        }
+        let system_root = request.values.rfi_system_root.clone();
+        let source_root = request
+            .values
+            .rfi_log_workbook
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
+            .to_path_buf();
+        let target_root = request
+            .values
+            .follow_up_workbook
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("Follow Up workbook has no parent"))?
+            .to_path_buf();
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let provisional = self.filesystem.issue_provisional_grants(
+            &scope,
+            &[
+                (system_root, GrantAccess::Read),
+                (source_root, GrantAccess::ReadWrite),
+                (target_root, GrantAccess::ReadWrite),
+            ],
+        )?;
+        let source_grant = provisional
+            .grants()
+            .iter()
+            .find(|g| request.values.rfi_log_workbook.starts_with(&g.root))
+            .ok_or_else(|| BackendError::path_invalid("No grant covering RFI Log"))?;
+        let target_grant = provisional
+            .grants()
+            .iter()
+            .find(|g| request.values.follow_up_workbook.starts_with(&g.root))
+            .ok_or_else(|| BackendError::path_invalid("No grant covering Follow Up"))?;
+
+        let source_anchor = self.filesystem.anchor_granted_path(
+            source_grant,
+            &request.values.rfi_log_workbook,
+            PathIntent::Write,
+        )?;
+        let target_anchor = self.filesystem.anchor_granted_path(
+            target_grant,
+            &request.values.follow_up_workbook,
+            PathIntent::Write,
+        )?;
+        if source_anchor.same_file_as(&target_anchor).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.systemSync.workbookInvalid: file check failed: {e}"
+            ))
+        })? {
+            return Err(BackendError::validation(
+                "RFI Log and Follow Up workbooks must be different files",
+            ));
+        }
+        let mut source = source_anchor.open_mutable().map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.systemSync.workbookLocked: cannot open RFI Log: {e}"
+            ))
+        })?;
+        let mut target = target_anchor
+            .open_mutable()
+            .map_err(|_| BackendError::validation("error.rfi.systemSync.workbookLocked"))?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 0,
+            total: 1,
+            subject: request
+                .values
+                .rfi_system_root
+                .to_string_lossy()
+                .into_owned(),
+        });
+        let mut plan = rfi_system_sync::preview_system_sync(
+            &request.values.rfi_system_root,
+            &request.values.rfi_log_workbook,
+            &request.values.follow_up_workbook,
+            &mut source,
+            &mut target,
+        )?;
+        let reservation = self.filesystem.reserve_plan_id();
+        reservation.assign_to_empty(&mut plan)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_reserved_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                caller.owner_id.clone(),
+                caller.session_id.clone(),
+                request.op_id,
+                grant_ids,
+            ),
+            reservation,
+            plan,
+        )?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(cached)
+    }
+
     pub(crate) fn preview_outlook_reply_draft<F>(
         &self,
         params: Value,
@@ -1620,6 +1745,17 @@ struct ProcessScansValues {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RfiFollowUpPreviewValues {
+    #[serde(rename = "rfi_log_workbook")]
+    rfi_log_workbook: PathBuf,
+    #[serde(rename = "follow_up_workbook")]
+    follow_up_workbook: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RfiSystemSyncPreviewValues {
+    #[serde(rename = "rfi_system_root")]
+    rfi_system_root: PathBuf,
     #[serde(rename = "rfi_log_workbook")]
     rfi_log_workbook: PathBuf,
     #[serde(rename = "follow_up_workbook")]

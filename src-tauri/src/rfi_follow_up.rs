@@ -741,7 +741,7 @@ pub(crate) fn validate_owned_plan_budget(plan: &Plan) -> Result<(), BackendError
     serde_json::to_writer(&mut writer, plan).map_err(|_| limit_exceeded())
 }
 
-fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, BackendError> {
+pub(crate) fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, BackendError> {
     let metadata = file.metadata().map_err(|_| workbook_invalid())?;
     let identity = file_identity(file).map_err(|_| workbook_invalid())?;
     let mtime_ns = metadata

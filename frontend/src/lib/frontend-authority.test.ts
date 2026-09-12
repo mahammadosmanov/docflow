@@ -171,8 +171,50 @@ describe("frontend authority boundary", () => {
       }
     }
     const releaseSafety = read("docs/RELEASE_SAFETY.md");
-    expect(releaseSafety).toContain("exact six-operation registry");
+    expect(releaseSafety).toContain("exact seven-operation registry");
     expect(releaseSafety).toContain("RFI Follow Up");
+  });
+
+  it("defines the RFI System Sync operation, required errors, and locale keys", () => {
+    const requiredKeys = [
+      "op.rfi.system_sync.title",
+      "op.rfi.system_sync.desc",
+      "param.rfi.systemSync.rfiSystemRoot",
+      "param.rfi.systemSync.rfiSystemRoot.help",
+      "param.rfi.systemSync.rfiLogWorkbook",
+      "param.rfi.systemSync.rfiLogWorkbook.help",
+      "param.rfi.systemSync.followUpWorkbook",
+      "param.rfi.systemSync.followUpWorkbook.help",
+      "error.param.required.rfi_system_root",
+      "error.rfi.systemSync.workbookInvalid",
+      "error.rfi.systemSync.workbookLocked",
+      "warn.rfi.systemSync.noChangesNeeded",
+      "note.rfi.systemSync.rfiLog",
+      "note.rfi.systemSync.followUp",
+      "note.rfi.systemSync.backup",
+      "note.rfi.systemSync.restore",
+      "rfi.systemSync.editor.title",
+      "rfi.systemSync.editor.rowCount",
+      "rfi.systemSync.column.enabled",
+      "rfi.systemSync.column.discipline",
+      "rfi.systemSync.column.rfiNo",
+      "rfi.systemSync.column.worleyStatus",
+      "rfi.systemSync.column.rfiLogAction",
+      "rfi.systemSync.column.followUpAction",
+      "rfi.systemSync.column.disposition",
+      "rfi.systemSync.column.reason",
+      "rfi.systemSync.disposition.ready",
+      "rfi.systemSync.disposition.alreadySynced",
+      "rfi.systemSync.disposition.unsigned",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
   });
 
   it("defines the separate Windows Outlook draft boundary in every locale", () => {

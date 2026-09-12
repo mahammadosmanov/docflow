@@ -329,13 +329,13 @@ fn find_tessdata(executable: &Path) -> Option<PathBuf> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct GrayImage {
-    width: usize,
-    height: usize,
-    pixels: Vec<u8>,
+pub(crate) struct GrayImage {
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) pixels: Vec<u8>,
 }
 
-fn read_png_gray(path: &Path) -> Result<GrayImage, String> {
+pub(crate) fn read_png_gray(path: &Path) -> Result<GrayImage, String> {
     const MAX_PIXELS: usize = 100_000_000;
     let file = fs::File::open(path).map_err(|error| format!("OCR image open: {error}"))?;
     let mut decoder = png::Decoder::new(BufReader::new(file));

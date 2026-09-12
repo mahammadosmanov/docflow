@@ -71,20 +71,20 @@ const COPY_HEADERS: [&str; 14] = [
 ];
 
 #[derive(Clone, Copy)]
-struct Layout {
-    sheet: &'static str,
-    issue_col: u32,
-    inspection_col: u32,
-    expiry_col: u32,
-    time_col: u32,
-    azfen_col: u32,
-    intec_col: u32,
-    location_col: u32,
-    subcontractor_col: u32,
-    status_col: u32,
-    remarks_col: u32,
-    validity_col: u32,
-    row_col: Option<u32>,
+pub(crate) struct Layout {
+    pub(crate) sheet: &'static str,
+    pub(crate) issue_col: u32,
+    pub(crate) inspection_col: u32,
+    pub(crate) expiry_col: u32,
+    pub(crate) time_col: u32,
+    pub(crate) azfen_col: u32,
+    pub(crate) intec_col: u32,
+    pub(crate) location_col: u32,
+    pub(crate) subcontractor_col: u32,
+    pub(crate) status_col: u32,
+    pub(crate) remarks_col: u32,
+    pub(crate) validity_col: u32,
+    pub(crate) row_col: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -105,7 +105,7 @@ pub(crate) fn status_columns() -> [RfiStatusColumns; 4] {
     })
 }
 
-fn layout(discipline: &str) -> Option<Layout> {
+pub(crate) fn layout(discipline: &str) -> Option<Layout> {
     match discipline {
         "CIV" => Some(Layout {
             sheet: "CIV",

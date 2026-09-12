@@ -33,6 +33,7 @@ pub mod review;
 pub mod rfi_code;
 pub mod rfi_follow_up;
 pub mod rfi_log;
+pub mod rfi_system_sync;
 pub mod settings;
 pub mod smoke;
 pub mod undo;

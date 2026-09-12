@@ -222,6 +222,45 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let rfi_system_sync = operation(
+        "rfi.system_sync",
+        vec![
+            parameter(
+                "rfi_system_root",
+                ParamKind::Folder,
+                "param.rfi.systemSync.rfiSystemRoot",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.systemSync.rfiSystemRoot.help"),
+            ),
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.systemSync.rfiLogWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.systemSync.rfiLogWorkbook.help"),
+            ),
+            parameter(
+                "follow_up_workbook",
+                ParamKind::File,
+                "param.rfi.systemSync.followUpWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.systemSync.followUpWorkbook.help"),
+            ),
+        ],
+    );
+
     let outlook_reply_draft = operation(
         "rfi.outlook_reply_draft",
         vec![parameter(
@@ -446,6 +485,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         outlook_reply_draft,
         batch_print,
         stage_signed_pages,
+        rfi_system_sync,
     ]
 }
 
@@ -468,12 +508,22 @@ mod tests {
                 "rfi.outlook_reply_draft",
                 "files.batch_print",
                 "rfi.stage_signed_first_pages",
+                "rfi.system_sync",
             ]
         );
         let follow_up = &operations[2];
         assert_eq!(
             follow_up.schema.validate(&Map::new()),
             vec![
+                "error.param.required.rfi_log_workbook".to_string(),
+                "error.param.required.follow_up_workbook".to_string(),
+            ]
+        );
+        let system_sync = &operations[6];
+        assert_eq!(
+            system_sync.schema.validate(&Map::new()),
+            vec![
+                "error.param.required.rfi_system_root".to_string(),
                 "error.param.required.rfi_log_workbook".to_string(),
                 "error.param.required.follow_up_workbook".to_string(),
             ]

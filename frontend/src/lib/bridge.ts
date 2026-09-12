@@ -231,6 +231,48 @@ const demoRfiFollowUpOperation: OperationDef = {
   ],
 };
 
+const demoRfiSystemSyncOperation: OperationDef = {
+  id: "rfi.system_sync",
+  titleKey: "op.rfi.system_sync.title",
+  descriptionKey: "op.rfi.system_sync.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "rfi_system_root",
+      kind: "folder",
+      labelKey: "param.rfi.systemSync.rfiSystemRoot",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.systemSync.rfiSystemRoot.help",
+    },
+    {
+      name: "rfi_log_workbook",
+      kind: "file",
+      labelKey: "param.rfi.systemSync.rfiLogWorkbook",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.systemSync.rfiLogWorkbook.help",
+    },
+    {
+      name: "follow_up_workbook",
+      kind: "file",
+      labelKey: "param.rfi.systemSync.followUpWorkbook",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.systemSync.followUpWorkbook.help",
+    },
+  ],
+};
+
 const demoPrintOperation: OperationDef = {
   id: "files.batch_print",
   titleKey: "op.files.batch_print.title",
@@ -494,6 +536,7 @@ export class MockBridge implements Bridge {
             demoRfiFollowUpOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
+            demoRfiSystemSyncOperation,
           ],
         } satisfies Bootstrap;
         break;

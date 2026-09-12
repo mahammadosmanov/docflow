@@ -8,7 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
-## 0.7.0-rc.7 - 2026-09-12
+## 0.7.0-rc.8 - 2026-09-12
+
+### Added
+
+- Added **Analyze RFI System & Sync Worley Signatures** (`rfi.system_sync`) operation:
+  - Scans single RFI system folder structure containing discipline directories (`CIV`, `MEC`, `ELE`, `PRC`) and canonical RFI folders (e.g. `AZE-SUN-INT-QMS-RFI-CIV-0103`).
+  - Inspects scanned PDF files matching `RFI No. ...` for Worley's signature in the page 1 bottom-right signature box labeled `Others` (identifying signatures such as E.Mammadov via dark ink density, handwriting, and stamp recognition).
+  - Synchronizes RFI Log discipline sheets (`CIV`, `MEC`, `ELE`, `PRC`): writes `Signed by Worley` in the `REMARKS` column (column 20 for CIV/ELE/PRC, column 21 for MEC) for signed RFIs, leaving unsigned RFIs untouched.
+  - Synchronizes Follow Up Final ITP sheets (`Signed by CIV` and `Signed by MEC`):
+    - Civil: maps ITP item `2.3.1` to Follow Up column `3.1`, matched by `Area` column == RFI Log `Tag No.`, writing short RFI code (e.g. `CIV-0103`).
+    - Mechanical: maps ITP items `1.3.5` -> column `3.5`, `3.3.1` -> column `3.1`, and `4.3.2` -> column `3.2`, matched by `PCS number` == `tagNo`, `Section` == `area`, and `Area` == `location`, writing short RFI code (e.g. `MEC-0700`).
+  - Generates comprehensive monochrome preview table with discipline filtering, status details, and individual toggle checkboxes.
+  - Multi-workbook apply with automatic no-clobber backups and lossless journaled undo.
+  - Complete localized UI strings in `en`, `tr`, `ru`, and `az`.
 
 ### Fixed
 

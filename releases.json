@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.7.0-rc.7",
+  "currentVersion": "0.7.0-rc.8",
   "releases": [
     {
       "version": "0.1.0",
@@ -214,9 +214,17 @@
       "version": "0.7.0-rc.7",
       "date": "2026-09-12",
       "channel": "preview",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.7.0-rc.7",
       "summary": "Fix 'More than one safe Follow Up table was found' error by adding multi-sheet layout discovery and preferred discipline sheet disambiguation in Worley signature status synchronization."
+    },
+    {
+      "version": "0.7.0-rc.8",
+      "date": "2026-09-12",
+      "channel": "preview",
+      "status": "current",
+      "tag": "v0.7.0-rc.8",
+      "summary": "Implement Analyze RFI System & Sync Worley Signatures feature (rfi.system_sync) scanning discipline folders (CIV, MEC, ELE, PRC), detecting Worley signature box on page 1, updating RFI Log REMARKS to 'Signed by Worley', and adding Final ITP short codes into Follow Up Signed by CIV and Signed by MEC sheets with full atomic backup and undo."
     }
   ]
 }
