@@ -26,7 +26,8 @@ the historical tracker.
   before/after workbook content previews where a safe bounded renderer exists.
 - Keep the implemented bounded Worley first-page thumbnails covered by packaged
   Windows and representative combined-scan acceptance evidence.
-- Add faster warning-focused review for combined Worley scans.
+- Keep the implemented warning search, type filtering, and exact-RFI page focus
+  covered by large combined-scan usability checks.
 - Prepare consistent Outlook drafts and archive reviewed publication mail as EML
   without automatically sending it.
 

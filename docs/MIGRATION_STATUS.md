@@ -4,6 +4,17 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.17.0: warning-focused review
+  - previews with five or more warnings provide local text search, type filtering,
+    result counts, and a compact scroll region without mutating Plan warnings
+  - signed-page warnings focus an existing comparison only after exact canonical
+    ASCII RFI matching against a current editor row
+  - filtering and focus do not revise candidate choices, steps, or Apply authority
+  - macOS source verification passed: 328 Rust unit tests and 199 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 50 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+
 - [x] Version 0.16.0: bounded Worley first-page comparison
   - signed-page staging shows the pinned signed page beside the selected archive
     candidate's first page before Apply

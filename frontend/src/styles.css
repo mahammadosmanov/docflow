@@ -1491,6 +1491,110 @@ textarea:focus {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.warning-review {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line));
+  border-radius: 9px;
+  color: var(--warning);
+  background: var(--surface-2);
+}
+.warning-review-heading,
+.warning-review-heading > div,
+.warning-review-filters,
+.warning-review-list > div,
+.warning-review-list button {
+  display: flex;
+  align-items: center;
+}
+.warning-review-heading {
+  justify-content: space-between;
+  gap: 10px;
+}
+.warning-review-heading > div,
+.warning-review-filters,
+.warning-review-list button {
+  gap: 6px;
+}
+.warning-review-heading svg,
+.warning-review-list button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+.warning-review-heading span {
+  min-width: 24px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  text-align: center;
+}
+.warning-review-filters input,
+.warning-review-filters select {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 0.68rem;
+}
+.warning-review-filters input {
+  width: min(230px, 24vw);
+}
+.warning-review-filters select {
+  width: min(260px, 26vw);
+}
+.warning-review-list {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 5px;
+  scrollbar-gutter: stable;
+}
+.warning-review-list > div {
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 22%, var(--line));
+  border-radius: 7px;
+  background: var(--surface);
+}
+.warning-review-list > div > div {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.warning-review-list strong,
+.warning-review-list span {
+  overflow-wrap: anywhere;
+}
+.warning-review-list strong {
+  color: var(--text);
+  font-size: 0.69rem;
+}
+.warning-review-list span,
+.warning-review > small,
+.warning-review-list p {
+  font-size: 0.66rem;
+}
+.warning-review-list button {
+  flex: 0 0 auto;
+  min-height: 29px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  color: var(--warning);
+  background: transparent;
+  font-size: 0.66rem;
+}
+.warning-review-list p {
+  margin: 0;
+  padding: 8px;
+}
 .signed-page-comparison {
   flex-shrink: 0;
   padding: 10px 12px;
@@ -1573,6 +1677,15 @@ textarea:focus {
   }
   .plan-exact-effects > summary small {
     display: none;
+  }
+  .warning-review-heading,
+  .warning-review-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .warning-review-filters input,
+  .warning-review-filters select {
+    width: 100%;
   }
   .signed-page-comparison-grid {
     grid-template-columns: 1fr;

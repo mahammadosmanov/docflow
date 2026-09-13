@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.16.0**. `VERSION` is authoritative.
+Current product version: **0.17.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -33,6 +33,8 @@ workbook behavior, print batches kept in order, and every change recoverable.
 9. Cloud history is audit metadata only; only a validated local journal can authorize undo.
 10. Every preview presents a shared, localized count of its approved effect types before Apply;
     editable previews can reveal the exact approved source and destination paths.
+11. Warning-heavy previews remain searchable and type-filterable without hiding
+    unmatched records from the immutable Plan.
 
 ## Current capabilities
 

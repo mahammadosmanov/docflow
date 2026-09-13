@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.17.0 - 2026-09-13
+
+### Added
+
+- Warning-heavy previews now provide compact text search, warning-type filtering,
+  visible result counts, and a bounded scrolling list.
+- Exact Worley RFI warnings can open their related old/new first-page comparison
+  without making the operator search the page selector manually.
+
+### Safety
+
+- Filtering is presentation-only: it never removes warnings from the approved
+  Plan or changes Apply eligibility.
+- Page focus requires an exact ASCII canonical RFI code already present in the
+  signed-page editor. Corrupted or decorated identifiers cannot create a link,
+  and focus never selects an archive or revises executable steps.
+
 ## 0.16.0 - 2026-09-13
 
 ### Added

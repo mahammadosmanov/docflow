@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.16.0 is a Tauri 2 desktop application for nine high-risk document
+DocFlow 0.17.0 is a Tauri 2 desktop application for nine high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
@@ -27,6 +27,8 @@ Apply becomes available. Editable previews provide an optional bounded list of
 the approved effects with their full source and destination paths. Worley
 signed-page previews also show bounded thumbnails of the selected archive page
 and exact signed source page without exposing local file access to React.
+Large warning sets stay compact and can be searched or filtered by type; exact
+Worley RFI warnings can focus their related page comparison directly.
 
 The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
 TypeScript presentation layer. Tesseract and operating-system document/print

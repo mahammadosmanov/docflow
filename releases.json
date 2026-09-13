@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.16.0",
+  "currentVersion": "0.17.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -334,9 +334,17 @@
       "version": "0.16.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.16.0",
       "summary": "Compare bounded thumbnails of the pinned Worley page and selected archive first page before Apply without exposing file authority to the webview."
+    },
+    {
+      "version": "0.17.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.17.0",
+      "summary": "Search and filter large preview warning sets, then focus exact Worley RFI warnings on their already-approved page comparison."
     }
   ]
 }

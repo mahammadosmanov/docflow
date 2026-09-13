@@ -59,6 +59,12 @@
   "plan.impact.drafts": "Drafts opened",
   "plan.impact.cleanup": "Cleanup",
   "plan.impact.warnings": "Warnings",
+  "plan.warnings.search": "Search warnings",
+  "plan.warnings.type": "Warning type",
+  "plan.warnings.all": "All warning types",
+  "plan.warnings.focus": "Show related page",
+  "plan.warnings.none": "No warnings match these filters.",
+  "plan.warnings.showing": "Showing {shown} of {count} warnings",
   "plan.exact.title": "{count} approved effects",
   "plan.exact.help": "Open to inspect exact source and destination paths",
   "@plan.summary": {

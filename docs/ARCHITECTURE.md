@@ -120,6 +120,13 @@ collapsed, height-bounded exact-effects panel. Expanding it renders complete
 source and destination paths already present in the Plan; it does not request,
 recompute, or mutate backend state.
 
+Warnings use one shared presentation for ordinary and record-editor plans. Five
+or more warnings gain local text and type filters while the complete immutable
+warning array remains untouched. In signed-page staging, a focus action is shown
+only when the warning subject contains an exact bounded ASCII RFI code that also
+exists in the current editor rows. It selects the already-rendered comparison;
+it cannot revise the Plan, choose an archive candidate, or authorize Apply.
+
 ## Safety invariants
 
 - Preview never mutates filesystem, cloud, Office, or printer state.

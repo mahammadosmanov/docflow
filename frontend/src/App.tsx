@@ -3219,6 +3219,7 @@ export function PlanView({
   editorRows?: Record<string, unknown>[];
   onEditorRowsChange?: (rows: Record<string, unknown>[]) => void;
 }) {
+  const [warningFocusCode, setWarningFocusCode] = useState("");
   const moves = plan.steps.filter((step) => step.kind !== "mkdir").length;
   const editor =
     plan.meta?.editor && typeof plan.meta.editor === "object"
@@ -3234,20 +3235,24 @@ export function PlanView({
   const canApply =
     editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);
   const replyPreview = outlookReplyPreview(plan.meta?.replyPreview);
+  const focusableWarningCodes =
+    plan.opId === "rfi.stage_signed_first_pages"
+      ? (editorRows ?? [])
+          .map((row) => (typeof row.code === "string" ? row.code : ""))
+          .filter(Boolean)
+      : [];
   return (
     <div className="flow-layout">
       <PlanImpactSummary plan={plan} s={s} />
       {editor && editorRows && onEditorRowsChange ? (
         <>
           {plan.warnings.length > 0 && (
-            <Notice kind="warning" title={s.t("ui.warnings")}>
-              {plan.warnings.map((warning) => (
-                <div key={`${warning.key}-${warning.subject}`}>
-                  {warning.subject && <strong>{warning.subject}: </strong>}
-                  {s.t(warning.key)}
-                </div>
-              ))}
-            </Notice>
+            <PlanWarnings
+              warnings={plan.warnings}
+              focusableCodes={focusableWarningCodes}
+              onFocusCode={setWarningFocusCode}
+              s={s}
+            />
           )}
           {replyPreview && (
             <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
@@ -3269,6 +3274,7 @@ export function PlanView({
           <SignedPageComparison
             plan={plan}
             editorRows={editorRows}
+            focusCode={warningFocusCode}
             s={s}
           />
           <EditablePlanTable
@@ -3282,14 +3288,7 @@ export function PlanView({
       ) : (
         <div className="flow-scroll">
           {plan.warnings.length > 0 && (
-            <Notice kind="warning" title={s.t("ui.warnings")}>
-              {plan.warnings.map((warning) => (
-                <div key={`${warning.key}-${warning.subject}`}>
-                  {warning.subject && <strong>{warning.subject}: </strong>}
-                  {s.t(warning.key)}
-                </div>
-              ))}
-            </Notice>
+            <PlanWarnings warnings={plan.warnings} focusableCodes={[]} s={s} />
           )}
           {replyPreview && (
             <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
@@ -3455,6 +3454,102 @@ function PlanExactEffects({ plan, s }: { plan: Plan; s: Strings }) {
   );
 }
 
+export function canonicalRfiInText(value: string): string | null {
+  return (
+    value.match(
+      /(?:^|[^A-Z0-9-])(AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4})(?=$|[^A-Z0-9-])/,
+    )?.[1] ?? null
+  );
+}
+
+export function PlanWarnings({
+  warnings,
+  focusableCodes,
+  onFocusCode,
+  s,
+}: {
+  warnings: Plan["warnings"];
+  focusableCodes: string[];
+  onFocusCode?: (code: string) => void;
+  s: Strings;
+}) {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState("all");
+  const types = [...new Set(warnings.map((warning) => warning.key))];
+  const normalizedQuery = query.trim().toLocaleLowerCase(s.locale);
+  const visible = warnings.filter((warning) => {
+    if (type !== "all" && warning.key !== type) return false;
+    if (!normalizedQuery) return true;
+    return `${warning.subject} ${s.t(warning.key)}`
+      .toLocaleLowerCase(s.locale)
+      .includes(normalizedQuery);
+  });
+  const focusable = new Set(focusableCodes);
+  return (
+    <section className="warning-review" aria-labelledby="warning-review-title">
+      <div className="warning-review-heading">
+        <div>
+          <CircleAlert aria-hidden="true" />
+          <strong id="warning-review-title">{s.t("ui.warnings")}</strong>
+          <span>{warnings.length}</span>
+        </div>
+        {warnings.length >= 5 && (
+          <div className="warning-review-filters">
+            <input
+              type="search"
+              aria-label={s.t("plan.warnings.search")}
+              placeholder={s.t("plan.warnings.search")}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <select
+              aria-label={s.t("plan.warnings.type")}
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+            >
+              <option value="all">{s.t("plan.warnings.all")}</option>
+              {types.map((key) => (
+                <option key={key} value={key}>
+                  {s.t(key)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      <div className="warning-review-list" role="list">
+        {visible.map((warning, index) => {
+          const code = canonicalRfiInText(warning.subject);
+          const canFocus = Boolean(code && focusable.has(code) && onFocusCode);
+          return (
+            <div key={`${warning.key}-${warning.subject}-${index}`} role="listitem">
+              <div>
+                {warning.subject && <strong>{warning.subject}</strong>}
+                <span>{s.t(warning.key)}</span>
+              </div>
+              {canFocus && code && (
+                <button type="button" onClick={() => onFocusCode?.(code)}>
+                  <Eye aria-hidden="true" />
+                  {s.t("plan.warnings.focus")}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {visible.length === 0 && <p>{s.t("plan.warnings.none")}</p>}
+      </div>
+      {warnings.length >= 5 && (
+        <small>
+          {s.t("plan.warnings.showing", {
+            shown: visible.length,
+            count: warnings.length,
+          })}
+        </small>
+      )}
+    </section>
+  );
+}
+
 export function safePngThumbnail(value: unknown): string | null {
   const prefix = "data:image/png;base64,";
   const pngSignature = "iVBORw0KGgo";
@@ -3475,12 +3570,15 @@ export function safePngThumbnail(value: unknown): string | null {
 function SignedPageComparison({
   plan,
   editorRows,
+  focusCode,
   s,
 }: {
   plan: Plan;
   editorRows: Record<string, unknown>[];
+  focusCode: string;
   s: Strings;
 }) {
+  const sectionRef = useRef<HTMLElement>(null);
   const raw =
     plan.meta?.pageComparisons && typeof plan.meta.pageComparisons === "object"
       ? (plan.meta.pageComparisons as Record<string, unknown>)
@@ -3506,6 +3604,13 @@ function SignedPageComparison({
       setSelectedId(availableIds[0] ?? "");
     }
   }, [availableSignature, selectedId]);
+  useEffect(() => {
+    if (!focusCode) return;
+    const row = available.find((candidate) => candidate.code === focusCode);
+    if (!row) return;
+    setSelectedId(String(row._rowId));
+    sectionRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [availableSignature, focusCode]);
   const omitted =
     typeof plan.meta?.pagePreviewOmitted === "number"
       ? plan.meta.pagePreviewOmitted
@@ -3528,7 +3633,12 @@ function SignedPageComparison({
   const signedPreview = safePngThumbnail(comparison.signed);
   const code = typeof selected.code === "string" ? selected.code : selectedId;
   return (
-    <section className="signed-page-comparison" aria-labelledby="signed-page-comparison-title">
+    <section
+      id="signed-page-comparison"
+      ref={sectionRef}
+      className="signed-page-comparison"
+      aria-labelledby="signed-page-comparison-title"
+    >
       <div className="signed-page-comparison-heading">
         <div>
           <strong id="signed-page-comparison-title">

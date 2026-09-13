@@ -11,8 +11,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   App,
+  canonicalRfiInText,
   humanError,
   isPlanEditorReady,
+  PlanWarnings,
   PlanView,
   safePngThumbnail,
   summarizePlanImpact,
@@ -811,6 +813,43 @@ describe("DocFlow shell", () => {
     ).toBe(true);
   });
 
+  it("filters large warning sets and focuses only an exact related RFI", () => {
+    const firstCode = "AZE-SUN-INT-QMS-RFI-MEC-0249";
+    const secondCode = "AZE-SUN-INT-QMS-RFI-MEC-0250";
+    const warnings: Plan["warnings"] = [
+      { key: "warn.rfi.archiveMissing", subject: firstCode },
+      { key: "warn.rfi.archiveAmbiguous", subject: secondCode },
+      { key: "warn.rfi.reviewExists", subject: "review-a.pdf" },
+      { key: "warn.rfi.reviewExists", subject: "review-b.pdf" },
+      { key: "warn.rfi.signedUnreadable", subject: "combined.pdf — #4" },
+      { key: "warn.rfi.signedUnreadable", subject: "combined.pdf — #8" },
+    ];
+    const onFocusCode = vi.fn();
+    render(
+      <PlanWarnings
+        warnings={warnings}
+        focusableCodes={[firstCode]}
+        onFocusCode={onFocusCode}
+        s={makeStrings("tr")}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(6);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Uyarılarda ara" }), {
+      target: { value: "0249" },
+    });
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "İlgili sayfayı göster" }),
+    );
+    expect(onFocusCode).toHaveBeenCalledWith(firstCode);
+    expect(screen.getByText("6 uyarının 1 tanesi gösteriliyor")).toBeVisible();
+
+    expect(canonicalRfiInText(`issue: ${secondCode} — page 2`)).toBe(secondCode);
+    expect(canonicalRfiInText(`${secondCode}A`)).toBeNull();
+    expect(canonicalRfiInText("AZE-SUN-INT-QMS-RFI-MEC-02Â49")).toBeNull();
+  });
+
   it("accepts only bounded PNG data thumbnails", () => {
     expect(safePngThumbnail("data:image/png;base64,iVBORw0KGgoAAA==")).toBe(
       "data:image/png;base64,iVBORw0KGgoAAA==",
@@ -1037,7 +1076,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.16.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.17.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
