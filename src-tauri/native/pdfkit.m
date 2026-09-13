@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int docflow_pdf_first_page_text(const char *path, char **output) {
+int docflow_pdf_page_text(const char *path, size_t pageIndex, char **output) {
     if (path == NULL || output == NULL) {
         return -1;
     }
@@ -16,10 +16,10 @@ int docflow_pdf_first_page_text(const char *path, char **output) {
         }
         PDFDocument *document = [[PDFDocument alloc]
             initWithURL:[NSURL fileURLWithPath:filePath]];
-        if (document == nil || document.isLocked || document.pageCount == 0) {
+        if (document == nil || document.isLocked || pageIndex >= document.pageCount) {
             return -2;
         }
-        PDFPage *page = [document pageAtIndex:0];
+        PDFPage *page = [document pageAtIndex:pageIndex];
         NSString *text = page.string;
         if (text == nil) {
             text = @"";
@@ -40,7 +40,8 @@ void docflow_pdfkit_free(char *value) {
     free(value);
 }
 
-int docflow_pdf_render_first_page(const char *input, const char *output, int dpi) {
+int docflow_pdf_render_page(const char *input, const char *output, int dpi,
+                            size_t pageIndex) {
     if (input == NULL || output == NULL || dpi < 72 || dpi > 600) {
         return -1;
     }
@@ -49,10 +50,10 @@ int docflow_pdf_render_first_page(const char *input, const char *output, int dpi
         NSString *outputPath = [NSString stringWithUTF8String:output];
         PDFDocument *document = [[PDFDocument alloc]
             initWithURL:[NSURL fileURLWithPath:inputPath]];
-        if (document == nil || document.isLocked || document.pageCount == 0) {
+        if (document == nil || document.isLocked || pageIndex >= document.pageCount) {
             return -2;
         }
-        PDFPage *page = [document pageAtIndex:0];
+        PDFPage *page = [document pageAtIndex:pageIndex];
         NSRect bounds = [page boundsForBox:kPDFDisplayBoxCropBox];
         CGFloat scale = ((CGFloat)dpi) / 72.0;
         NSSize size = NSMakeSize(MAX(1.0, bounds.size.width * scale),

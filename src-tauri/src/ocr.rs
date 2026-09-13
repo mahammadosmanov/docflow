@@ -129,7 +129,15 @@ impl NativeOcr {
 
 impl OcrAdapter for NativeOcr {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
-        let text = first_page_text(path)?;
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let text = page_text(path, page_index)?;
         if text.trim().chars().count() >= TEXT_LAYER_MIN_CHARS {
             let matched = find(&text);
             if matches!(matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
@@ -151,8 +159,8 @@ impl OcrAdapter for NativeOcr {
             {
                 let rendered = temporary
                     .path()
-                    .join(format!("first-page-{}.png", attempt.dpi));
-                render_first_page_png(path, &rendered, attempt.dpi)
+                    .join(format!("page-{page_index}-{}.png", attempt.dpi));
+                render_page_png(path, &rendered, attempt.dpi, page_index)
                     .map_err(OcrFailure::Document)?;
                 entry.insert(read_png_gray(&rendered).map_err(OcrFailure::Document)?);
             }
@@ -594,22 +602,27 @@ fn configure_tesseract_process(command: &mut Command) {
 fn configure_tesseract_process(_command: &mut Command) {}
 
 #[cfg(target_os = "macos")]
-fn first_page_text(path: &Path) -> Result<String, OcrFailure> {
+fn page_text(path: &Path, page_index: usize) -> Result<String, OcrFailure> {
     use std::ffi::{CStr, CString, c_char};
     use std::os::unix::ffi::OsStrExt;
 
     unsafe extern "C" {
-        fn docflow_pdf_first_page_text(path: *const c_char, output: *mut *mut c_char) -> i32;
+        fn docflow_pdf_page_text(
+            path: *const c_char,
+            page_index: usize,
+            output: *mut *mut c_char,
+        ) -> i32;
         fn docflow_pdfkit_free(value: *mut c_char);
     }
 
     let path = CString::new(path.as_os_str().as_bytes())
         .map_err(|_| OcrFailure::Document("PDF path contains NUL".to_string()))?;
     let mut output = std::ptr::null_mut();
-    let status = unsafe { docflow_pdf_first_page_text(path.as_ptr(), &mut output) };
+    let status = unsafe { docflow_pdf_page_text(path.as_ptr(), page_index, &mut output) };
     if status != 0 || output.is_null() {
         return Err(OcrFailure::Document(format!(
-            "PDFKit could not read the first page ({status})"
+            "PDFKit could not read page {} ({status})",
+            page_index + 1
         )));
     }
     let text = unsafe { CStr::from_ptr(output) }
@@ -621,21 +634,28 @@ fn first_page_text(path: &Path) -> Result<String, OcrFailure> {
 
 #[cfg(target_os = "macos")]
 pub fn render_first_page_png(input: &Path, output: &Path, dpi: i32) -> Result<(), String> {
+    render_page_png(input, output, dpi, 0)
+}
+
+#[cfg(target_os = "macos")]
+fn render_page_png(input: &Path, output: &Path, dpi: i32, page_index: usize) -> Result<(), String> {
     use std::ffi::{CString, c_char};
     use std::os::unix::ffi::OsStrExt;
 
     unsafe extern "C" {
-        fn docflow_pdf_render_first_page(
+        fn docflow_pdf_render_page(
             input: *const c_char,
             output: *const c_char,
             dpi: i32,
+            page_index: usize,
         ) -> i32;
     }
     let input = CString::new(input.as_os_str().as_bytes())
         .map_err(|_| "PDF path contains NUL".to_string())?;
     let output = CString::new(output.as_os_str().as_bytes())
         .map_err(|_| "image path contains NUL".to_string())?;
-    let status = unsafe { docflow_pdf_render_first_page(input.as_ptr(), output.as_ptr(), dpi) };
+    let status =
+        unsafe { docflow_pdf_render_page(input.as_ptr(), output.as_ptr(), dpi, page_index) };
     if status == 0 {
         Ok(())
     } else {
@@ -645,11 +665,28 @@ pub fn render_first_page_png(input: &Path, output: &Path, dpi: i32) -> Result<()
 
 #[cfg(target_os = "windows")]
 pub fn render_first_page_png(input: &Path, output: &Path, dpi: i32) -> Result<(), String> {
-    crate::windows_pdf::render_first_page_png(input, output, dpi)
+    render_page_png(input, output, dpi, 0)
+}
+
+#[cfg(target_os = "windows")]
+fn render_page_png(input: &Path, output: &Path, dpi: i32, page_index: usize) -> Result<(), String> {
+    let page_index = u32::try_from(page_index)
+        .map_err(|_| "Windows PDF page index is out of range".to_string())?;
+    crate::windows_pdf::render_page_png(input, output, dpi, page_index).map(|_| ())
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn render_first_page_png(_input: &Path, _output: &Path, _dpi: i32) -> Result<(), String> {
+    Err("native PDF image rendering is unsupported on this platform".to_string())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn render_page_png(
+    _input: &Path,
+    _output: &Path,
+    _dpi: i32,
+    _page_index: usize,
+) -> Result<(), String> {
     Err("native PDF image rendering is unsupported on this platform".to_string())
 }
 
@@ -712,7 +749,7 @@ pub fn image_pdf_from_png(input: &Path, output: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn first_page_text(_path: &Path) -> Result<String, OcrFailure> {
+fn page_text(_path: &Path, _page_index: usize) -> Result<String, OcrFailure> {
     Ok(String::new())
 }
 

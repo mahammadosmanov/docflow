@@ -31,7 +31,7 @@ use crate::{
         CallerIdentity, GrantAccess, GrantScope, PathGrant, PathGrantStore, PathIntent,
         ProvisionalPathGrants,
     },
-    pdf::replace_first_page_incremental,
+    pdf::replace_first_page_incremental_from_page,
     pdf_publish::temporary_pdf_name_matches,
     plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore, ReservedPlanId},
     progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
@@ -2270,6 +2270,19 @@ impl FilesystemAuthority {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| StepFailure::NoEffect("signed PDF hash is missing".to_string()))?;
+        let signed_page_index = step
+            .meta
+            .get("signedPageIndex")
+            .map(|value| {
+                value
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("signed PDF page index is invalid".to_string())
+                    })
+            })
+            .transpose()?
+            .unwrap_or(0);
         let archive_anchor = self
             .grants
             .authorize_capability_for_plan(
@@ -2343,8 +2356,13 @@ impl FilesystemAuthority {
         signed_copy_anchor
             .copy_no_clobber_from(&signed_anchor)
             .map_err(io_no_effect)?;
-        let generated = replace_first_page_incremental(&archive_copy, &signed_copy, &completed)
-            .map_err(|error| StepFailure::NoEffect(error.to_string()));
+        let generated = replace_first_page_incremental_from_page(
+            &archive_copy,
+            &signed_copy,
+            signed_page_index,
+            &completed,
+        )
+        .map_err(|error| StepFailure::NoEffect(error.to_string()));
         if let Err(error) = generated {
             record.pending_step = None;
             self.journals.write(record).map_err(step_unknown)?;

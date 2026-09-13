@@ -31,6 +31,18 @@ pub struct OcrRead {
 
 pub trait OcrAdapter {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure>;
+    fn supports_page_scan(&self) -> bool {
+        false
+    }
+    fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        if page_index == 0 {
+            self.read(path)
+        } else {
+            Err(OcrFailure::Document(
+                "page-level OCR is unavailable".to_string(),
+            ))
+        }
+    }
     fn diagnostics(&self) -> String;
 }
 

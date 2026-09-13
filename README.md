@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.12.0 is a Tauri 2 desktop application for nine high-risk document
+DocFlow 0.13.0 is a Tauri 2 desktop application for nine high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
@@ -11,8 +11,9 @@ workflows:
 - Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe
   workbook backup/verification, email extraction, and Excel-native mail copy
 - Batch Print: one strictly ordered Windows print queue for mixed file types
-- Stage signed RFI first pages: identify signed scans, keep the archive strictly
-  read-only, and create review copies with only page one replaced
+- Stage signed RFI first pages: identify every page in a combined Worley scan,
+  keep the archive strictly read-only, and create review copies with only the
+  exact matched page replacing page one
 - Synchronize RFI Follow Up: project exact Worley evidence into approved status cells
 - Prepare Outlook Reply All: open one verified, unsent reply draft for review
 - Analyze RFI System: detect Worley signatures and guard RFI Log/Follow Up updates

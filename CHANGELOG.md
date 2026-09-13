@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.13.0 - 2026-09-13
+
+### Added
+
+- Added page-by-page RFI recognition for a single combined Worley scan, so each
+  confidently identified page becomes its own review row and exact staging step.
+- Added page numbers to signed-scan review labels and four-language guidance for
+  combined scans.
+
+### Safety
+
+- Preview pins the whole signed PDF fingerprint and exact page index; apply does
+  not split, modify, or re-read the source to rediscover work.
+- Unreadable, low-confidence, duplicate, unsupported, missing, and ambiguous
+  pages produce no output. The archive remains read-only and existing review
+  files remain protected from overwrite.
+
 ## 0.12.0 - 2026-09-13
 
 ### Added

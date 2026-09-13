@@ -12,6 +12,7 @@ and versioned with the code they govern.
 | Repository-native SemVer and release catalog | Accepted | [`VERSIONING.md`](VERSIONING.md) |
 | Current RFI workbook header discovery and guarded Worley synchronization | Accepted | [`adr/0001-guarded-current-rfi-workbooks.md`](adr/0001-guarded-current-rfi-workbooks.md) |
 | Offline-first RFI work-item lifecycle and evidence boundaries | Accepted | [`adr/0002-rfi-work-item-lifecycle.md`](adr/0002-rfi-work-item-lifecycle.md) |
+| Exact-page staging for combined Worley scans | Accepted | [`adr/0003-combined-worley-scan-staging.md`](adr/0003-combined-worley-scan-staging.md) |
 
 ## Adding a decision
 

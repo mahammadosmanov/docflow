@@ -161,6 +161,15 @@ pub fn replace_first_page_incremental(
     signed_path: &Path,
     output_path: &Path,
 ) -> Result<(), PdfError> {
+    replace_first_page_incremental_from_page(archive_path, signed_path, 0, output_path)
+}
+
+pub fn replace_first_page_incremental_from_page(
+    archive_path: &Path,
+    signed_path: &Path,
+    signed_page_index: usize,
+    output_path: &Path,
+) -> Result<(), PdfError> {
     if output_path.exists() {
         return Err(PdfError::new(format!(
             "review destination already exists: {}",
@@ -173,7 +182,7 @@ pub fn replace_first_page_incremental(
     let signed_facts = signed.inspect()?;
     reject_unsupported(&archive_facts, "archive")?;
     reject_unsupported(&signed_facts, "signed scan")?;
-    if archive_facts.page_count == 0 || signed_facts.page_count == 0 {
+    if archive_facts.page_count == 0 || signed_page_index >= signed_facts.page_count {
         return Err(PdfError::new("PDF has no pages"));
     }
     if archive_facts.pages[0].widgets > 0 {
@@ -181,13 +190,13 @@ pub fn replace_first_page_incremental(
             "archive page one contains a form widget that cannot be safely detached",
         ));
     }
-    if signed_facts.pages[0].widgets > 0 {
+    if signed_facts.pages[signed_page_index].widgets > 0 {
         return Err(PdfError::new(
             "signed page one contains a form widget without a safely importable field tree",
         ));
     }
 
-    let appended = build_incremental_replacement(&archive, &signed)?;
+    let appended = build_incremental_replacement(&archive, &signed, signed_page_index)?;
     let parent = output_path
         .parent()
         .ok_or_else(|| PdfError::new("review destination has no parent directory"))?;
@@ -206,7 +215,13 @@ pub fn replace_first_page_incremental(
             .and_then(|()| output.sync_all())
             .map_err(|error| PdfError::new(format!("review output write failed: {error}")))?;
         drop(output);
-        validate_completed(output_path, &archive.bytes, &archive_facts, &signed_facts)
+        validate_completed(
+            output_path,
+            &archive.bytes,
+            &archive_facts,
+            &signed_facts,
+            signed_page_index,
+        )
     })();
     if write_result.is_err() {
         let _ = fs::remove_file(output_path);
@@ -243,6 +258,7 @@ fn validate_completed(
     archive_bytes: &[u8],
     archive: &PdfInspection,
     signed: &PdfInspection,
+    signed_page_index: usize,
 ) -> Result<(), PdfError> {
     let output_bytes = read_bounded(output_path)?;
     if !output_bytes.starts_with(archive_bytes) {
@@ -272,17 +288,17 @@ fn validate_completed(
         .pages
         .first()
         .ok_or_else(|| PdfError::new("completed PDF has no first page"))?;
-    let signed_first = signed
+    let signed_selected = signed
         .pages
-        .first()
-        .ok_or_else(|| PdfError::new("signed PDF has no first page"))?;
-    if completed_first.media_box != signed_first.media_box
-        || completed_first.crop_box != signed_first.crop_box
-        || completed_first.rotation != signed_first.rotation
-        || completed_first.content_hash != signed_first.content_hash
-        || completed_first.annotations != signed_first.annotations
-        || completed_first.links != signed_first.links
-        || completed_first.widgets != signed_first.widgets
+        .get(signed_page_index)
+        .ok_or_else(|| PdfError::new("signed PDF page index is out of range"))?;
+    if completed_first.media_box != signed_selected.media_box
+        || completed_first.crop_box != signed_selected.crop_box
+        || completed_first.rotation != signed_selected.rotation
+        || completed_first.content_hash != signed_selected.content_hash
+        || completed_first.annotations != signed_selected.annotations
+        || completed_first.links != signed_selected.links
+        || completed_first.widgets != signed_selected.widgets
     {
         return Err(PdfError::new(
             "completed PDF failed signed first-page validation",
@@ -294,6 +310,7 @@ fn validate_completed(
 fn build_incremental_replacement(
     archive: &ParsedPdf,
     signed: &ParsedPdf,
+    signed_page_index: usize,
 ) -> Result<Vec<u8>, PdfError> {
     let archive_pages = archive.pages()?;
     let signed_pages = signed.pages()?;
@@ -301,8 +318,8 @@ fn build_incremental_replacement(
         .first()
         .ok_or_else(|| PdfError::new("archive PDF has no pages"))?;
     let signed_page = *signed_pages
-        .first()
-        .ok_or_else(|| PdfError::new("signed PDF has no pages"))?;
+        .get(signed_page_index)
+        .ok_or_else(|| PdfError::new("signed PDF page index is out of range"))?;
     let archive_parent = archive
         .get_object(archive_page)?
         .as_dictionary()

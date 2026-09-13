@@ -4,12 +4,14 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.12 auditable RFI work foundation
+## Now — 0.13 combined Worley scan staging
 
 - Keep the read-only device-readiness surface accurate and actionable.
 - Design explicit, reversible archival retention for the append-only RFI work
   store; never delete history automatically. Portable owner-scoped audit export
   and live capacity visibility are implemented in 0.12.0.
+- Keep combined multi-RFI Worley scan page identification and exact-page staging
+  covered by representative Windows OCR and OneDrive acceptance evidence.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,
   OneDrive-backed folders, Microsoft Print to PDF, and representative printers.
 - Expand structural fixtures for every current production workbook family
@@ -21,8 +23,7 @@ the historical tracker.
 ## Next — deeper RFI automation
 
 - Add per-operation safety summaries and exact before/after workbook/PDF previews.
-- Split a multi-RFI Worley scan into reviewable page groups without touching the
-  source scan.
+- Add page thumbnails and faster warning-focused review for combined Worley scans.
 - Prepare consistent Outlook drafts and archive reviewed publication mail as EML
   without automatically sending it.
 

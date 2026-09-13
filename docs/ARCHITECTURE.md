@@ -79,6 +79,14 @@ preview, approval, no-clobber journal, and undo path. Export never prunes or
 modifies the append-only store. Queue DTOs expose event count, owned valid-event
 bytes, and the fixed limit so operators can act before the store is full.
 
+Signed-page staging performs bounded page-level OCR when a Worley scan contains
+multiple RFI first pages. Preview records the exact zero-based source page index,
+whole-file fingerprint, archive candidate, and destination in the immutable
+Plan. Apply revalidates the source, copies it into private operation storage, and
+imports only that approved page into the review copy. It never splits or mutates
+the source scan. Missing, low-confidence, duplicate, unsupported, or ambiguous
+pages remain warnings and cannot create an output.
+
 ## Operation contract
 
 ```text

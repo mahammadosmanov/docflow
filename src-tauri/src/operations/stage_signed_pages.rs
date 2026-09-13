@@ -20,6 +20,7 @@ use crate::{
 const OPERATION_ID: &str = "rfi.stage_signed_first_pages";
 const MIN_CONFIDENCE: f64 = 0.8;
 const MAX_SIGNED_PDFS: usize = 10_000;
+const MAX_SIGNED_PAGES: usize = 20_000;
 const MAX_ARCHIVE_ENTRIES: usize = 250_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -32,6 +33,7 @@ pub struct StageSignedPagesParams {
 
 struct Candidate {
     path: PathBuf,
+    page_index: usize,
     confidence: f64,
     method: String,
 }
@@ -72,6 +74,7 @@ where
     }
 
     let mut groups = BTreeMap::<String, Vec<Candidate>>::new();
+    let mut scanned_pages = 0_usize;
     for (index, pdf) in pdfs.iter().enumerate() {
         if cancelled() {
             return Err(BackendError::cancelled());
@@ -82,40 +85,95 @@ where
             total: pdfs.len() as u64,
             subject: display_name(pdf),
         });
-        let read = match ocr.read(pdf) {
-            Ok(read) => read,
-            Err(OcrFailure::EngineMissing) => {
-                return Ok(Plan {
-                    warnings: vec![warning("warn.no_ocr", &ocr.diagnostics())],
-                    ..empty_plan()
-                });
+        let page_count = if ocr.supports_page_scan() {
+            match inspect(pdf) {
+                Ok(facts) if fidelity_supported(&facts, PdfRole::SignedScan) => facts.page_count,
+                Ok(facts) => {
+                    plan.warnings.push(warning(
+                        "warn.rfi.pdfFidelityUnsupported",
+                        &truncate(
+                            &format!(
+                                "{} — {}",
+                                display_name(pdf),
+                                fidelity_reason(&facts, PdfRole::SignedScan)
+                            ),
+                            300,
+                        ),
+                    ));
+                    continue;
+                }
+                Err(error) => {
+                    plan.warnings.push(warning(
+                        "warn.rfi.pdfFidelityUnsupported",
+                        &truncate(&format!("{} — {error}", display_name(pdf)), 300),
+                    ));
+                    continue;
+                }
             }
-            Err(OcrFailure::Document(error)) => {
+        } else {
+            1
+        };
+        if page_count == 0 {
+            plan.warnings.push(warning(
+                "warn.rfi.pdfFidelityUnsupported",
+                &format!("{} — PDF has no pages", display_name(pdf)),
+            ));
+            continue;
+        }
+        scanned_pages = scanned_pages.saturating_add(page_count);
+        if scanned_pages > MAX_SIGNED_PAGES {
+            return Err(BackendError::validation(format!(
+                "signed scans exceed the {MAX_SIGNED_PAGES}-page limit"
+            )));
+        }
+        if page_count > 1 {
+            plan.warnings.push(warning(
+                "warn.rfi.signedMultiPage",
+                &format!("{} — {page_count}", display_name(pdf)),
+            ));
+        }
+        for page_index in 0..page_count {
+            let read = match ocr.read_page(pdf, page_index) {
+                Ok(read) => read,
+                Err(OcrFailure::EngineMissing) => {
+                    return Ok(Plan {
+                        warnings: vec![warning("warn.no_ocr", &ocr.diagnostics())],
+                        ..empty_plan()
+                    });
+                }
+                Err(OcrFailure::Document(error)) => {
+                    plan.warnings.push(warning(
+                        "warn.rfi.signedUnreadable",
+                        &truncate(
+                            &format!("{} — {error}", candidate_display(pdf, page_index)),
+                            300,
+                        ),
+                    ));
+                    continue;
+                }
+            };
+            if !matches!(read.matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
+                plan.warnings
+                    .push(warning("warn.no_code", &candidate_display(pdf, page_index)));
+                continue;
+            }
+            if read.matched.confidence < MIN_CONFIDENCE {
                 plan.warnings.push(warning(
-                    "warn.rfi.signedUnreadable",
-                    &truncate(&format!("{} — {error}", display_name(pdf)), 300),
+                    "warn.low_confidence",
+                    &candidate_display(pdf, page_index),
                 ));
                 continue;
             }
-        };
-        if !matches!(read.matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
-            plan.warnings
-                .push(warning("warn.no_code", &display_name(pdf)));
-            continue;
+            groups
+                .entry(read.matched.code)
+                .or_default()
+                .push(Candidate {
+                    path: pdf.clone(),
+                    page_index,
+                    confidence: read.matched.confidence,
+                    method: read.source,
+                });
         }
-        if read.matched.confidence < MIN_CONFIDENCE {
-            plan.warnings
-                .push(warning("warn.low_confidence", &display_name(pdf)));
-            continue;
-        }
-        groups
-            .entry(read.matched.code)
-            .or_default()
-            .push(Candidate {
-                path: pdf.clone(),
-                confidence: read.matched.confidence,
-                method: read.source,
-            });
     }
 
     let mut unique = BTreeMap::new();
@@ -123,7 +181,7 @@ where
         if candidates.len() != 1 {
             let names = candidates
                 .iter()
-                .map(|candidate| display_name(&candidate.path))
+                .map(|candidate| candidate_display(&candidate.path, candidate.page_index))
                 .collect::<Vec<_>>()
                 .join(", ");
             plan.warnings.push(warning(
@@ -184,10 +242,17 @@ where
             ));
             continue;
         }
-        if signed_facts.pages[0].widgets > 0 {
+        if signed_facts
+            .pages
+            .get(candidate.page_index)
+            .is_none_or(|page| page.widgets > 0)
+        {
             plan.warnings.push(warning(
                 "warn.rfi.pdfFidelityUnsupported",
-                &format!("{code} — page-one form widgets require manual review"),
+                &format!(
+                    "{code} — signed page {} form widgets require manual review",
+                    candidate.page_index + 1
+                ),
             ));
             continue;
         }
@@ -214,7 +279,7 @@ where
         if prepared.is_empty() {
             continue;
         }
-        if signed_facts.page_count > 1 {
+        if signed_facts.page_count > 1 && !ocr.supports_page_scan() {
             plan.warnings.push(warning(
                 "warn.rfi.signedExtraPages",
                 &display_name(&candidate.path),
@@ -260,7 +325,7 @@ where
             "_rowId": row_id,
             "enabled": true,
             "code": code,
-            "signedFile": display_name(&candidate.path),
+            "signedFile": candidate_display(&candidate.path, candidate.page_index),
             "archiveFile": selected,
         }));
     }
@@ -581,6 +646,10 @@ fn prepare_archive_candidate(
         "signedPageCount".to_string(),
         Value::from(signed_facts.page_count as u64),
     );
+    meta.insert(
+        "signedPageIndex".to_string(),
+        Value::from(candidate.page_index as u64),
+    );
     meta.insert("rowId".to_string(), Value::String(row_id.to_string()));
     steps.push(Step {
         kind: StepKind::PdfFirstPageReplace,
@@ -871,6 +940,10 @@ fn display_name(path: &Path) -> String {
         .and_then(|value| value.to_str())
         .unwrap_or_default()
         .to_string()
+}
+
+fn candidate_display(path: &Path, page_index: usize) -> String {
+    format!("{} — page {}", display_name(path), page_index + 1)
 }
 
 fn truncate(value: &str, max: usize) -> String {

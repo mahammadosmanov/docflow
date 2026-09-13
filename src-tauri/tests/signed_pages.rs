@@ -12,7 +12,7 @@ use docflow_lib::{
         stage_signed_pages::{StageSignedPagesParams, preview, revise},
     },
     paths::{CallerIdentity, GrantAccess, GrantScope},
-    pdf::{inspect, replace_first_page_incremental},
+    pdf::{inspect, replace_first_page_incremental, replace_first_page_incremental_from_page},
     plan_store::{BackendOrigin, PlanBinding},
     rfi_code::find,
 };
@@ -25,6 +25,41 @@ use support::pdf_fixture::{
 #[derive(Default)]
 struct FixtureOcr {
     codes: BTreeMap<String, String>,
+}
+
+#[derive(Default)]
+struct PageFixtureOcr {
+    codes: BTreeMap<(String, usize), String>,
+}
+
+impl OcrAdapter for PageFixtureOcr {
+    fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        let code = self
+            .codes
+            .get(&(name.to_string(), page_index))
+            .cloned()
+            .unwrap_or_default();
+        Ok(OcrRead {
+            matched: find(&code),
+            source: format!("fixture-page-{page_index}"),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "fixture page OCR".to_string()
+    }
 }
 
 impl FixtureOcr {
@@ -148,6 +183,133 @@ fn incremental_first_page_replacement_preserves_the_rich_archive_graph_and_prefi
     assert_eq!(output_facts.pages[1].annotations, 3);
     assert_eq!(output_facts.pages[1].links, 1);
     assert_eq!(output_facts.pages[1].widgets, 1);
+}
+
+#[test]
+fn arbitrary_signed_scan_page_can_replace_archive_page_one_with_fidelity() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let archive = fixture.path().join("archive.pdf");
+    let signed = fixture.path().join("signed.pdf");
+    let output = fixture.path().join("output.pdf");
+    write_rich_archive(&archive);
+    write_signed(&signed, true);
+    let signed_facts = inspect(&signed).unwrap();
+
+    replace_first_page_incremental_from_page(&archive, &signed, 1, &output).unwrap();
+
+    let completed = inspect(&output).unwrap();
+    assert_eq!(
+        completed.pages[0].content_hash,
+        signed_facts.pages[1].content_hash
+    );
+    assert_eq!(completed.pages[1..], inspect(&archive).unwrap().pages[1..]);
+}
+
+#[test]
+fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
+    const SECOND_CODE: &str = "AZE-SUN-INT-QMS-RFI-MEC-0249";
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    let signed = signed_root.join("combined.pdf");
+    write_signed(&signed, true);
+    write_rich_archive(&archive_root.join("CIV").join(filename_for(CODE)));
+    write_rich_archive(&archive_root.join("MEC").join(filename_for(SECOND_CODE)));
+    let ocr = PageFixtureOcr {
+        codes: BTreeMap::from([
+            (("combined.pdf".to_string(), 0), CODE.to_string()),
+            (("combined.pdf".to_string(), 1), SECOND_CODE.to_string()),
+        ]),
+    };
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    let replacement_steps = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+        .collect::<Vec<_>>();
+    assert_eq!(replacement_steps.len(), 2);
+    assert_eq!(replacement_steps[0].meta["signedPageIndex"], json!(0));
+    assert_eq!(replacement_steps[1].meta["signedPageIndex"], json!(1));
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 2);
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.signedMultiPage")
+    );
+
+    let authority =
+        FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+    let cached = cache_stage_plan(&authority, plan, &signed_root, &archive_root, &review_root);
+    let caller = CallerIdentity::new("owner-1", "session-1");
+    let result = authority.apply(&cached.plan_id, &caller).unwrap();
+    assert_eq!(result.applied, 4);
+    let second_output = review_root.join("MEC").join(filename_for(SECOND_CODE));
+    assert_eq!(
+        inspect(&second_output).unwrap().pages[0].content_hash,
+        inspect(&signed).unwrap().pages[1].content_hash
+    );
+}
+
+#[test]
+fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("combined.pdf"), true);
+    write_rich_archive(&archive_root.join("CIV").join(filename_for(CODE)));
+
+    let unreadable = PageFixtureOcr {
+        codes: BTreeMap::from([(("combined.pdf".to_string(), 0), CODE.to_string())]),
+    };
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &unreadable,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+            .count(),
+        1
+    );
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.no_code"
+            && warning.subject.contains("combined.pdf")
+            && warning.subject.contains("page 2")
+    }));
+
+    let duplicate = PageFixtureOcr {
+        codes: BTreeMap::from([
+            (("combined.pdf".to_string(), 0), CODE.to_string()),
+            (("combined.pdf".to_string(), 1), CODE.to_string()),
+        ]),
+    };
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &duplicate,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.signedDuplicate"
+            && warning.subject.contains("page 1")
+            && warning.subject.contains("page 2")
+    }));
 }
 
 #[test]

@@ -4,6 +4,20 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.13.0: combined Worley scan page staging
+  - every page in a combined signed PDF is recognized independently and shown as
+    a separate review candidate with its exact page number
+  - approved Plans pin the source fingerprint and page index; apply imports only
+    that page and never splits or mutates the source scan or archive
+  - unreadable, low-confidence, duplicate, unsupported, missing, and ambiguous
+    pages fail closed, and total scan work is bounded to 20,000 pages
+  - macOS source verification passed: 327 Rust unit tests and 196 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 47 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - Windows packaged OCR and OneDrive-backed acceptance remains pending and is
+    not implied by macOS source verification
+
 - [x] Version 0.12.0: portable RFI work audit and capacity visibility
   - owner-scoped valid events export together as lossless JSON and Excel-safe
     CSV through preview, approval, no-clobber writes, journal, and undo
