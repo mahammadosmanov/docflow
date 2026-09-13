@@ -719,5 +719,13 @@
   "error.workItems.stageInvalid": "The RFI work stage is invalid.",
   "error.workItems.ownerInvalid": "The RFI work owner is invalid.",
   "error.workItems.dateInvalid": "Due date must use YYYY-MM-DD.",
-  "error.workItems.conflict": "Conflicting stage events were found for this item; manual review is required."
+  "error.workItems.conflict": "Conflicting stage events were found for this item; manual review is required.",
+  "workItems.runVerifiedStep": "Run verified next step",
+  "workItems.reviewEvidenceTransition": "Review work tracking update",
+  "param.rfi.workItem.sourceJournalId": "Source journal",
+  "param.rfi.workItem.sourceJournalId.help": "Immutable journal evidence from the successful document operation.",
+  "error.workItems.sourceJournalInvalid": "The source journal is missing, unsuccessful, undone, or owned by another user.",
+  "error.workItems.sourceJournalUnsupported": "This operation cannot automatically advance an RFI work stage.",
+  "error.workItems.sourceJournalMismatch": "The journal evidence does not exactly match the selected stage or RFI numbers.",
+  "error.workItems.sourceJournalStale": "The source journal that advanced this item is no longer valid; manual review is required."
 }

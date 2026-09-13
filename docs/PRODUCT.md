@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.10.1**. `VERSION` is authoritative.
+Current product version: **0.11.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -36,7 +36,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| RFI work tracking | Resume multi-day RFI work from Today, Resume, and Needs Review queues with prefilled transitions | Owner-scoped append-only events; transient task fields; exact RFI codes; concurrent transitions fail into review; official documents remain authoritative |
+| RFI work tracking | Resume multi-day RFI work and launch verified next steps from Today, Resume, and Needs Review | Owner-scoped append-only events; exact committed journal evidence; separate preview/approval; stale or conflicting evidence fails into review; official documents remain authoritative |
 | Process Scans | Identify, rename, organize, and review RFI PDFs | Strict `-RFI-` anchor, no-overwrite, `_review/` fallback |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |

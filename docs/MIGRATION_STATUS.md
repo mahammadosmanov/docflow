@@ -4,6 +4,19 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.11.0: journal-linked RFI work transitions
+  - eligible work cards launch RFI Log, Process Scans, or two-workbook Worley
+    System Sync and offer a separate explicitly approved tracking transition
+    only after a fully committed same-owner journal proves exact RFI coverage
+  - partial, cancelled, failed, missing, foreign, undone, mismatched, review-only,
+    single-workbook, and Outlook-draft evidence fail closed
+  - macOS source verification passed: 326 Rust unit tests plus 192 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 47 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - Windows/Office/OneDrive runtime acceptance remains pending and is not implied
+    by the macOS source result
+
 - [x] Phase 0: GPT/Codex canon and cloud-undo containment
   - 145 Python tests, mypy, 9 frontend tests/build, Rust fmt/Clippy/tests/check
   - packaged OCR and forged-undo sentinel probe passed

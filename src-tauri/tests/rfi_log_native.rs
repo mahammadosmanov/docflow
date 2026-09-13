@@ -465,6 +465,11 @@ fn approved_xlsm_apply_preserves_package_and_undo_restores_exact_hash() {
             .iter()
             .any(|step| step.kind == docflow_lib::contracts::StepKind::RestoreBackup)
     );
+    assert!(journal.steps.iter().any(|step| {
+        step.meta.get("workItemEvidence").is_some_and(|evidence| {
+            evidence["canonicalRfiCodes"] == json!(["AZE-SUN-INT-QMS-RFI-CIV-0008"])
+        })
+    }));
     let after_members = members(&workbook);
     let changed = BTreeSet::from([
         "xl/worksheets/sheet1.xml".to_string(),

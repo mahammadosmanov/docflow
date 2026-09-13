@@ -123,6 +123,18 @@
         "remember": false,
         "required": false,
         "visibleWhen": { "action": "transition" }
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.workItem.sourceJournalId.help",
+        "kind": "text",
+        "labelKey": "param.rfi.workItem.sourceJournalId",
+        "name": "source_journal_id",
+        "remember": false,
+        "required": false,
+        "visibleWhen": { "action": "journal_evidence" }
       }
     ],
     "supportsPresets": false,

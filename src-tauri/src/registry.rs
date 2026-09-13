@@ -195,6 +195,17 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 transition_visibility,
                 Some("param.rfi.workItem.reason.help"),
             ),
+            parameter(
+                "source_journal_id",
+                ParamKind::Text,
+                "param.rfi.workItem.sourceJournalId",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::from_iter([("action".to_string(), json!("journal_evidence"))]),
+                Some("param.rfi.workItem.sourceJournalId.help"),
+            ),
         ],
     );
     for parameter in &mut work_item.schema.params {

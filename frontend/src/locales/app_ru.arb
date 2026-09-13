@@ -691,5 +691,13 @@
   "error.workItems.stageInvalid": "Этап работы RFI недопустим.",
   "error.workItems.ownerInvalid": "Владелец работы RFI недопустим.",
   "error.workItems.dateInvalid": "Срок должен иметь формат ГГГГ-ММ-ДД.",
-  "error.workItems.conflict": "Для работы найдены конфликтующие события этапов; требуется ручная проверка."
+  "error.workItems.conflict": "Для работы найдены конфликтующие события этапов; требуется ручная проверка.",
+  "workItems.runVerifiedStep": "Запустить следующий проверяемый шаг",
+  "workItems.reviewEvidenceTransition": "Проверить обновление учёта работы",
+  "param.rfi.workItem.sourceJournalId": "Исходный журнал",
+  "param.rfi.workItem.sourceJournalId.help": "Неизменяемое доказательство журнала успешной операции с документом.",
+  "error.workItems.sourceJournalInvalid": "Исходный журнал отсутствует, неуспешен, отменён или принадлежит другому пользователю.",
+  "error.workItems.sourceJournalUnsupported": "Эта операция не может автоматически продвинуть этап работы RFI.",
+  "error.workItems.sourceJournalMismatch": "Доказательство журнала не совпадает точно с выбранным этапом или номерами RFI.",
+  "error.workItems.sourceJournalStale": "Исходный журнал, продвинувший эту работу, больше недействителен; требуется ручная проверка."
 }

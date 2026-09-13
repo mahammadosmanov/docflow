@@ -757,10 +757,11 @@ impl NativeBackend {
     }
 
     fn work_items(&self) -> Result<WorkItemQueues, BackendError> {
-        work_items::project(
+        work_items::project_with_journals(
             &self.app_data_dir.join("work-items"),
             &self.caller_identity()?.owner_id,
             chrono::Local::now().date_naive(),
+            &self.journals,
         )
     }
 
@@ -794,11 +795,17 @@ impl NativeBackend {
             total: 1,
             subject: request.values.title.clone(),
         });
-        let plan = work_items::preview_event(
+        let source_journal = if request.values.source_journal_id.trim().is_empty() {
+            None
+        } else {
+            Some(self.journals.read(&request.values.source_journal_id)?)
+        };
+        let plan = work_items::preview_event_with_journal(
             &self.app_data_dir.join("work-items"),
             &caller.owner_id,
             request.values,
             &chrono::Utc::now().to_rfc3339(),
+            source_journal.as_ref(),
         )?;
         let cached = self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -3137,6 +3144,16 @@ mod tests {
             .preview_rfi_system_sync(params, |_| {})
             .expect("preview must not fail with path grant error");
         assert_eq!(preview_result["opId"], "rfi.system_sync");
+        assert!(
+            preview_result["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|step| {
+                    step["meta"]["syncStep"]["canonicalRfiCodes"]
+                        == json!(["AZE-SUN-INT-QMS-RFI-CIV-0103"])
+                })
+        );
         let plan_id = preview_result["planId"].as_str().unwrap();
 
         // Apply
@@ -3146,6 +3163,18 @@ mod tests {
             .expect("apply must succeed");
         assert_eq!(apply_result.applied, 2);
         assert_eq!(apply_result.failed, 0);
+        let journal = backend.journals.read(&apply_result.journal_id).unwrap();
+        let evidence = journal
+            .steps
+            .iter()
+            .filter_map(|step| step.meta.get("workItemEvidence"))
+            .collect::<Vec<_>>();
+        assert_eq!(evidence.len(), 2);
+        assert!(
+            evidence.iter().all(|item| {
+                item["canonicalRfiCodes"] == json!(["AZE-SUN-INT-QMS-RFI-CIV-0103"])
+            })
+        );
 
         // Undo
         let undo_result = backend

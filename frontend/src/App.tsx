@@ -96,6 +96,7 @@ type Route =
       name: "operation";
       operation: OperationDef;
       initialValues?: Record<string, unknown>;
+      workItem?: WorkItem;
     }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
@@ -277,14 +278,28 @@ export function App() {
     case "operation":
       return (
         <OperationScreen
+          key={`${route.operation.id}:${String(route.initialValues?.item_id ?? "")}:${String(route.initialValues?.source_journal_id ?? "")}`}
           bridge={bridge}
           operation={route.operation}
           initialValues={route.initialValues}
+          workItem={route.workItem}
           s={s}
           onBack={() => setRoute({ name: "home" })}
           onReview={(destination) =>
             setRoute({ name: "review", destination })
           }
+          onWorkItemEvidence={(values) => {
+            const tracker = bootstrap.operations.find(
+              (candidate) => candidate.id === "rfi.work_item_update",
+            );
+            if (tracker) {
+              setRoute({
+                name: "operation",
+                operation: tracker,
+                initialValues: values,
+              });
+            }
+          }}
         />
       );
     case "review":
@@ -693,6 +708,15 @@ function HomeScreen({
   const workItemOperation = bootstrap.operations.find(
     (operation) => operation.id === "rfi.work_item_update",
   );
+  const runVerifiedWorkStep = (item: WorkItem) => {
+    const mapping = verifiedOperationByStage[item.stage];
+    const operation = mapping
+      ? bootstrap.operations.find((candidate) => candidate.id === mapping.operationId)
+      : undefined;
+    if (operation) {
+      navigate({ name: "operation", operation, workItem: item });
+    }
+  };
 
   const openReview = async () => {
     setReviewBusy(true);
@@ -821,6 +845,7 @@ function HomeScreen({
                     initialValues: workItemTransitionValues(item),
                   })
                 }
+                onRun={runVerifiedWorkStep}
               />
               <WorkQueue
                 icon={<Play />}
@@ -836,6 +861,7 @@ function HomeScreen({
                     initialValues: workItemTransitionValues(item),
                   })
                 }
+                onRun={runVerifiedWorkStep}
               />
               <WorkQueue
                 icon={<CircleAlert />}
@@ -851,6 +877,7 @@ function HomeScreen({
                     initialValues: workItemTransitionValues(item),
                   })
                 }
+                onRun={runVerifiedWorkStep}
               />
             </div>
           )}
@@ -1037,8 +1064,24 @@ function workItemTransitionValues(item: WorkItem): Record<string, unknown> {
     due_date: item.dueDate ?? "",
     needs_review: item.needsReview,
     reason: "",
+    source_journal_id: "",
   };
 }
+
+const verifiedOperationByStage: Record<
+  string,
+  { operationId: string; targetStage: string }
+> = {
+  checked: { operationId: "rfi.log_add", targetStage: "numbers_assigned" },
+  publication_email_archived: {
+    operationId: "rfi.process_scans",
+    targetStage: "intec_scan_filed",
+  },
+  intec_scan_filed: {
+    operationId: "rfi.system_sync",
+    targetStage: "worley_signed_synced",
+  },
+};
 
 function WorkQueue({
   icon,
@@ -1047,6 +1090,7 @@ function WorkQueue({
   empty,
   s,
   onOpen,
+  onRun,
 }: {
   icon: ReactNode;
   title: string;
@@ -1054,6 +1098,7 @@ function WorkQueue({
   empty: string;
   s: Strings;
   onOpen: (item: WorkItem) => void;
+  onRun?: (item: WorkItem) => void;
 }) {
   return (
     <section className="work-queue-column">
@@ -1067,22 +1112,32 @@ function WorkQueue({
       ) : (
         <div className="work-item-list">
           {items.slice(0, 6).map((item) => (
-            <button
-              type="button"
-              className="work-item-card"
-              key={item.itemId}
-              aria-label={s.t("workItems.open", { title: item.title })}
-              onClick={() => onOpen(item)}
-            >
-              <div>
-                <strong>{item.title}</strong>
-                <small>{s.t(`choice.rfi.workItem.stage.${item.stage}`)}</small>
-              </div>
-              {item.rfiCodes.length > 0 && (
-                <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
+            <div className="work-item-card-shell" key={item.itemId}>
+              <button
+                type="button"
+                className="work-item-card"
+                aria-label={s.t("workItems.open", { title: item.title })}
+                onClick={() => onOpen(item)}
+              >
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{s.t(`choice.rfi.workItem.stage.${item.stage}`)}</small>
+                </div>
+                {item.rfiCodes.length > 0 && (
+                  <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
+                )}
+                <span className="work-item-id">{item.itemId}</span>
+              </button>
+              {onRun && verifiedOperationByStage[item.stage] && (
+                <button
+                  type="button"
+                  className="work-item-run"
+                  onClick={() => onRun(item)}
+                >
+                  <Play /> {s.t("workItems.runVerifiedStep")}
+                </button>
               )}
-              <span className="work-item-id">{item.itemId}</span>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -1125,16 +1180,20 @@ function OperationScreen({
   bridge,
   operation,
   initialValues,
+  workItem,
   s,
   onBack,
   onReview,
+  onWorkItemEvidence,
 }: {
   bridge: Bridge;
   operation: OperationDef;
   initialValues?: Record<string, unknown>;
+  workItem?: WorkItem;
   s: Strings;
   onBack: () => void;
   onReview: (destination: PathSelection) => void;
+  onWorkItemEvidence: (values: Record<string, unknown>) => void;
 }) {
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
@@ -1624,6 +1683,24 @@ function OperationScreen({
             )}
             copyingSheet={copyingSheet}
             onCopy={(sheet) => void copyTable(sheet)}
+            onWorkItemEvidence={
+              workItem &&
+              verifiedOperationByStage[workItem.stage]?.operationId === operation.id &&
+              result.applied > 0 &&
+              result.failed === 0 &&
+              result.journalId &&
+              (typeof result.meta?.effectState !== "string" ||
+                result.meta.effectState === "committed")
+                ? () => {
+                    const mapping = verifiedOperationByStage[workItem.stage];
+                    onWorkItemEvidence({
+                      ...workItemTransitionValues(workItem),
+                      stage: mapping.targetStage,
+                      source_journal_id: result.journalId,
+                    });
+                  }
+                : undefined
+            }
           />
         )}
       </main>
@@ -3301,6 +3378,7 @@ function ResultView({
   copyingSheet = null,
   onCopy,
   onResumePrint,
+  onWorkItemEvidence,
 }: {
   result: OperationResult;
   s: Strings;
@@ -3312,6 +3390,7 @@ function ResultView({
   copyingSheet?: string | null;
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
+  onWorkItemEvidence?: () => void;
 }) {
   const effectState =
     typeof result.meta?.effectState === "string"
@@ -3400,6 +3479,11 @@ function ResultView({
         </div>
       )}
       <div className="result-actions">
+        {onWorkItemEvidence && (
+          <Button variant="secondary" icon={<BadgeCheck />} onClick={onWorkItemEvidence}>
+            {s.t("workItems.reviewEvidenceTransition")}
+          </Button>
+        )}
         {onResumePrint && (
           <Button
             variant="secondary"

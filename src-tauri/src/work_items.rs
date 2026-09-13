@@ -1,4 +1,10 @@
-use std::{collections::BTreeMap, fs, io::Read, path::Path, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    io::Read,
+    path::Path,
+    sync::OnceLock,
+};
 
 use chrono::{DateTime, NaiveDate};
 use regex::Regex;
@@ -9,6 +15,7 @@ use uuid::Uuid;
 use crate::{
     contracts::{Plan, Step, StepKind},
     errors::BackendError,
+    journal::{JournalRecord, JournalState, JournalStore},
 };
 
 pub const OPERATION_ID: &str = "rfi.work_item_update";
@@ -49,6 +56,8 @@ pub struct WorkItemInput {
     pub needs_review: bool,
     #[serde(default)]
     pub reason: String,
+    #[serde(default)]
+    pub source_journal_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -68,6 +77,7 @@ struct WorkItemEvent {
     due_date: Option<String>,
     needs_review: bool,
     reason: Option<String>,
+    #[serde(default)]
     source_journal_id: Option<String>,
 }
 
@@ -83,6 +93,7 @@ pub struct WorkItem {
     pub needs_review: bool,
     pub reason: Option<String>,
     pub last_event_id: String,
+    pub source_journal_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -101,6 +112,16 @@ pub fn preview_event(
     input: WorkItemInput,
     occurred_at: &str,
 ) -> Result<Plan, BackendError> {
+    preview_event_with_journal(root, owner_id, input, occurred_at, None)
+}
+
+pub fn preview_event_with_journal(
+    root: &Path,
+    owner_id: &str,
+    input: WorkItemInput,
+    occurred_at: &str,
+    source_journal: Option<&JournalRecord>,
+) -> Result<Plan, BackendError> {
     validate_owner(owner_id)?;
     DateTime::parse_from_rfc3339(occurred_at)
         .map_err(|_| validation("error.workItems.timestampInvalid"))?;
@@ -111,6 +132,17 @@ pub fn preview_event(
         MAX_REASON_CHARS,
         "error.workItems.reasonInvalid",
     )?;
+    let source_journal_id = bounded_optional(
+        &input.source_journal_id,
+        64,
+        "error.workItems.sourceJournalInvalid",
+    )?;
+    if source_journal_id
+        .as_deref()
+        .is_some_and(|value| Uuid::parse_str(value).is_err())
+    {
+        return Err(validation("error.workItems.sourceJournalInvalid"));
+    }
     let current = project(root, owner_id, chrono::Local::now().date_naive())?;
     let existing = current
         .today
@@ -121,7 +153,7 @@ pub fn preview_event(
         .cloned();
 
     let event_id = Uuid::new_v4().to_string();
-    let (item_id, action, previous_event_id, from_stage, title, rfi_codes) =
+    let (item_id, action, previous_event_id, from_stage, title, mut rfi_codes) =
         match input.action.as_str() {
             "create" => {
                 if !input.item_id.trim().is_empty() {
@@ -146,11 +178,12 @@ pub fn preview_event(
                 let existing = existing
                     .as_ref()
                     .ok_or_else(|| validation("error.workItems.notFound"))?;
-                let reason = reason
-                    .as_ref()
-                    .filter(|value| !value.is_empty())
-                    .ok_or_else(|| validation("error.workItems.reasonRequired"))?;
-                let _ = reason;
+                if source_journal_id.is_none() {
+                    reason
+                        .as_ref()
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| validation("error.workItems.reasonRequired"))?;
+                }
                 (
                     existing.item_id.clone(),
                     "transition".to_string(),
@@ -162,6 +195,28 @@ pub fn preview_event(
             }
             _ => return Err(validation("error.workItems.actionInvalid")),
         };
+    if source_journal_id.is_some() != source_journal.is_some() {
+        return Err(validation("error.workItems.sourceJournalInvalid"));
+    }
+    if let (Some(journal_id), Some(journal)) = (&source_journal_id, source_journal) {
+        if journal_id != &journal.journal_id {
+            return Err(validation("error.workItems.sourceJournalInvalid"));
+        }
+        if from_stage
+            .as_deref()
+            .and_then(stage_index)
+            .zip(stage_index(&input.stage))
+            .is_none_or(|(from, to)| to <= from)
+        {
+            return Err(validation("error.workItems.sourceJournalMismatch"));
+        }
+        rfi_codes = validate_journal_transition(journal, owner_id, &input.stage, &rfi_codes)?;
+    }
+    let reason = if reason.is_none() {
+        source_journal.map(|journal| format!("journal evidence: {}", journal.op_id))
+    } else {
+        reason
+    };
     let event = WorkItemEvent {
         schema_version: SCHEMA_VERSION,
         event_id: event_id.clone(),
@@ -177,7 +232,7 @@ pub fn preview_event(
         due_date: due_date.or_else(|| existing.and_then(|item| item.due_date)),
         needs_review: input.needs_review,
         reason,
-        source_journal_id: None,
+        source_journal_id,
     };
     let content = serde_json::to_string_pretty(&event)
         .map(|value| format!("{value}\n"))
@@ -298,6 +353,7 @@ pub fn project(
                     needs_review: event.needs_review,
                     reason: event.reason,
                     last_event_id: event.event_id,
+                    source_journal_id: event.source_journal_id,
                 },
             );
             continue;
@@ -314,11 +370,13 @@ pub fn project(
             continue;
         }
         current.stage = event.to_stage;
+        current.rfi_codes = event.rfi_codes;
         current.updated_at = event.occurred_at;
         current.due_date = event.due_date;
         current.needs_review = event.needs_review;
         current.reason = event.reason;
         current.last_event_id = event.event_id;
+        current.source_journal_id = event.source_journal_id;
     }
     let mut queues = WorkItemQueues {
         invalid_event_count,
@@ -354,6 +412,237 @@ pub fn project(
         });
     }
     Ok(queues)
+}
+
+pub fn project_with_journals(
+    root: &Path,
+    owner_id: &str,
+    today: NaiveDate,
+    journals: &JournalStore,
+) -> Result<WorkItemQueues, BackendError> {
+    let mut projected = project(root, owner_id, today)?;
+    let invalid_evidence = invalid_evidence_items(root, owner_id, journals)?;
+    for item in projected
+        .today
+        .iter_mut()
+        .chain(projected.resume.iter_mut())
+        .chain(projected.needs_review.iter_mut())
+    {
+        if invalid_evidence.contains(&item.item_id) {
+            item.needs_review = true;
+            item.reason = Some("error.workItems.sourceJournalStale".to_string());
+        }
+    }
+    let mut all = projected
+        .today
+        .drain(..)
+        .chain(projected.resume.drain(..))
+        .chain(projected.needs_review.drain(..))
+        .collect::<Vec<_>>();
+    projected.needs_review = all
+        .extract_if(.., |item| item.needs_review)
+        .collect::<Vec<_>>();
+    for item in all {
+        if item
+            .due_date
+            .as_deref()
+            .and_then(|value| NaiveDate::parse_from_str(value, "%Y-%m-%d").ok())
+            .is_some_and(|date| date <= today)
+        {
+            projected.today.push(item);
+        } else {
+            projected.resume.push(item);
+        }
+    }
+    for queue in [
+        &mut projected.today,
+        &mut projected.resume,
+        &mut projected.needs_review,
+    ] {
+        queue.sort_by(|left, right| {
+            (&left.due_date, &left.updated_at, &left.item_id).cmp(&(
+                &right.due_date,
+                &right.updated_at,
+                &right.item_id,
+            ))
+        });
+    }
+    Ok(projected)
+}
+
+fn invalid_evidence_items(
+    root: &Path,
+    owner_id: &str,
+    journals: &JournalStore,
+) -> Result<BTreeSet<String>, BackendError> {
+    let entries = match fs::read_dir(root.join("events")) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(_) => return Err(validation("error.workItems.storeUnavailable")),
+    };
+    let mut invalid = BTreeSet::new();
+    for (index, entry) in entries.enumerate() {
+        if index >= MAX_EVENTS {
+            return Err(validation("error.workItems.eventLimit"));
+        }
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if path.extension().and_then(|value| value.to_str()) != Some("json")
+            || !metadata.is_file()
+            || metadata.len() > MAX_EVENT_BYTES
+        {
+            continue;
+        }
+        let Ok(file) = fs::File::open(&path) else {
+            continue;
+        };
+        let mut bytes = Vec::new();
+        if file
+            .take(MAX_EVENT_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .is_err()
+            || bytes.len() as u64 > MAX_EVENT_BYTES
+        {
+            continue;
+        }
+        let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
+            continue;
+        };
+        if event.owner_id != owner_id || validate_event(&event).is_err() {
+            continue;
+        }
+        let Some(journal_id) = event.source_journal_id.as_deref() else {
+            continue;
+        };
+        let valid = journals.read(journal_id).ok().is_some_and(|journal| {
+            validate_journal_transition(&journal, owner_id, &event.to_stage, &event.rfi_codes)
+                .is_ok()
+        });
+        if !valid {
+            invalid.insert(event.item_id);
+        }
+    }
+    Ok(invalid)
+}
+
+fn validate_journal_transition(
+    journal: &JournalRecord,
+    owner_id: &str,
+    target_stage: &str,
+    current_codes: &[String],
+) -> Result<Vec<String>, BackendError> {
+    if journal.owner_id.as_deref() != Some(owner_id)
+        || journal.state != Some(JournalState::Committed)
+        || journal.pending_step.is_some()
+        || journal.pending_undo.is_some()
+        || !journal.undone_steps.is_empty()
+    {
+        return Err(validation("error.workItems.sourceJournalInvalid"));
+    }
+    let expected_stage = match journal.op_id.as_str() {
+        "rfi.log_add" => "numbers_assigned",
+        "rfi.process_scans" => "intec_scan_filed",
+        "rfi.system_sync" => "worley_signed_synced",
+        _ => return Err(validation("error.workItems.sourceJournalUnsupported")),
+    };
+    if target_stage != expected_stage {
+        return Err(validation("error.workItems.sourceJournalMismatch"));
+    }
+    let evidence = journal_rfi_codes(journal)?;
+    if journal.op_id == "rfi.log_add" && current_codes.is_empty() {
+        return Ok(evidence);
+    }
+    if current_codes.is_empty()
+        || !current_codes
+            .iter()
+            .all(|code| evidence.binary_search(code).is_ok())
+    {
+        return Err(validation("error.workItems.sourceJournalMismatch"));
+    }
+    Ok(current_codes.to_vec())
+}
+
+fn journal_rfi_codes(journal: &JournalRecord) -> Result<Vec<String>, BackendError> {
+    let mut codes = Vec::new();
+    match journal.op_id.as_str() {
+        "rfi.log_add" => {
+            let evidence = journal
+                .steps
+                .iter()
+                .filter_map(|step| step.meta.get("workItemEvidence"))
+                .collect::<Vec<_>>();
+            if evidence.len() != 1 {
+                return Err(validation("error.workItems.sourceJournalMismatch"));
+            }
+            codes.extend(
+                evidence[0]
+                    .get("canonicalRfiCodes")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string),
+            );
+        }
+        "rfi.process_scans" => {
+            for step in &journal.steps {
+                if matches!(
+                    step.kind,
+                    StepKind::Copy | StepKind::Move | StepKind::Rename
+                ) && step.note_key.as_deref() == Some("note.renamed")
+                    && let Some(code) = step.meta.get("code").and_then(Value::as_str)
+                {
+                    codes.push(code.to_string());
+                }
+            }
+        }
+        "rfi.system_sync" => {
+            let mut kinds = Vec::new();
+            let mut per_workbook = Vec::<std::collections::BTreeSet<String>>::new();
+            for sync in journal
+                .steps
+                .iter()
+                .filter_map(|step| step.meta.get("workItemEvidence"))
+                .filter_map(Value::as_object)
+            {
+                kinds.push(
+                    sync.get("workbookKind")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                );
+                let step_codes = sync
+                    .get("canonicalRfiCodes")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect::<std::collections::BTreeSet<_>>();
+                per_workbook.push(step_codes);
+            }
+            kinds.sort();
+            if kinds != ["followUp", "rfiLog"] || per_workbook.len() != 2 {
+                return Err(validation("error.workItems.sourceJournalMismatch"));
+            }
+            let first = per_workbook.pop().unwrap_or_default();
+            let second = per_workbook.pop().unwrap_or_default();
+            codes = first.intersection(&second).cloned().collect();
+        }
+        _ => return Err(validation("error.workItems.sourceJournalUnsupported")),
+    }
+    for code in &codes {
+        validate_rfi_code(code)?;
+    }
+    codes.sort();
+    codes.dedup();
+    if codes.is_empty() {
+        return Err(validation("error.workItems.sourceJournalMismatch"));
+    }
+    Ok(codes)
 }
 
 fn validate_event(event: &WorkItemEvent) -> Result<(), BackendError> {
@@ -413,6 +702,13 @@ fn validate_event(event: &WorkItemEvent) -> Result<(), BackendError> {
     if let Some(value) = &event.reason {
         bounded_optional(value, MAX_REASON_CHARS, "error.workItems.reasonInvalid")?;
     }
+    if event
+        .source_journal_id
+        .as_deref()
+        .is_some_and(|value| Uuid::parse_str(value).is_err())
+    {
+        return Err(validation("error.workItems.sourceJournalInvalid"));
+    }
     Ok(())
 }
 
@@ -451,6 +747,10 @@ fn validate_stage(value: &str) -> Result<(), BackendError> {
     } else {
         Err(validation("error.workItems.stageInvalid"))
     }
+}
+
+fn stage_index(value: &str) -> Option<usize> {
+    STAGES.iter().position(|stage| *stage == value)
 }
 
 fn validate_owner(value: &str) -> Result<(), BackendError> {

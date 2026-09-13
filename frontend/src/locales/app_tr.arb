@@ -691,5 +691,13 @@
   "error.workItems.stageInvalid": "RFI iş aşaması geçersiz.",
   "error.workItems.ownerInvalid": "RFI iş sahibi geçersiz.",
   "error.workItems.dateInvalid": "Hedef tarih YYYY-AA-GG biçiminde olmalıdır.",
-  "error.workItems.conflict": "Aynı iş için çakışan aşama olayları bulundu; manuel inceleme gerekir."
+  "error.workItems.conflict": "Aynı iş için çakışan aşama olayları bulundu; manuel inceleme gerekir.",
+  "workItems.runVerifiedStep": "Kanıtlı sonraki adımı çalıştır",
+  "workItems.reviewEvidenceTransition": "İş takibi güncellemesini incele",
+  "param.rfi.workItem.sourceJournalId": "Kaynak journal",
+  "param.rfi.workItem.sourceJournalId.help": "Başarılı belge işleminin değiştirilemez journal kanıtı.",
+  "error.workItems.sourceJournalInvalid": "Kaynak journal eksik, başarısız, geri alınmış veya bu kullanıcıya ait değil.",
+  "error.workItems.sourceJournalUnsupported": "Bu işlem RFI iş aşamasını otomatik ilerletemez.",
+  "error.workItems.sourceJournalMismatch": "Journal kanıtı seçilen aşama veya RFI numaralarıyla tam eşleşmiyor.",
+  "error.workItems.sourceJournalStale": "İşi ilerleten kaynak journal artık geçerli değil; manuel inceleme gerekir."
 }

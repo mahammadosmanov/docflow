@@ -64,7 +64,7 @@ and silent uninstall on a real Windows runner.
 | Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
 | Device readiness | pure fact classification + typed command/UI tests | Hidden OCR/printer failure or overlooked interrupted work |
-| RFI work tracking | strict event validation + conflict projection + native preview/apply/list/undo + typed queue UI | Lost resume state, cross-user exposure, silent transition conflict, or coordination metadata authorizing document mutation |
+| RFI work tracking | strict event validation + conflict projection + native preview/apply/list/undo + journal-evidence validation + typed queue UI | Lost resume state, cross-user exposure, silent transition conflict, stale/foreign/partial evidence, or coordination metadata authorizing document mutation |
 
 ## External certification gates
 

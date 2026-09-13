@@ -64,6 +64,14 @@ projection. A stale transition creates a visible review conflict and never
 silently replaces the last proven stage. These coordination records cannot
 authorize an Excel, PDF, email, print, or replica mutation.
 
+Eligible document journals can authorize only a separate work-item transition
+preview. The validator admits committed same-owner RFI Log, successfully filed
+Process Scans, or two-workbook System Sync evidence with exact canonical RFI
+coverage. The transition remains an independently approved, journaled,
+undoable no-clobber write. Journal disappearance, undo, partial state, wrong
+operation, wrong stage, or identity mismatch fails closed into rejection or
+Needs Review; Outlook draft journals are never lifecycle evidence.
+
 ## Operation contract
 
 ```text

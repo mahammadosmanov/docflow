@@ -397,20 +397,25 @@ h2 {
   display: grid;
   gap: 7px;
 }
+.work-item-card-shell {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
 .work-item-card {
   width: 100%;
   min-width: 0;
   padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .work-item-card:hover {
-  border-color: var(--line-strong);
   background: var(--surface-3);
 }
 .work-item-card:focus-visible {
@@ -444,6 +449,29 @@ h2 {
 .work-item-card code {
   margin: 6px 0;
   font-size: 0.63rem;
+}
+.work-item-run {
+  width: 100%;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.work-item-run:hover {
+  background: var(--surface-3);
+}
+.work-item-run svg {
+  width: 13px;
+  height: 13px;
 }
 .work-queue-empty {
   min-height: 42px;

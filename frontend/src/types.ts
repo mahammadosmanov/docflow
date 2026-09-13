@@ -161,6 +161,7 @@ export interface WorkItem {
   needsReview: boolean;
   reason: string | null;
   lastEventId: string;
+  sourceJournalId: string | null;
 }
 
 export interface WorkItemQueues {

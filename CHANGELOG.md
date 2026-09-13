@@ -8,6 +8,29 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.11.0 - 2026-09-13
+
+### Added
+
+- Added one-click launch of the next journal-producing operation from eligible
+  RFI work cards: RFI Log after operator checking, Process Scans after the
+  publication email is archived, and System Sync after the INTEC scan is filed.
+- Added a separate preview-first work-item update after a fully successful
+  operation, linked to the exact local journal that proved the effect.
+- RFI Log evidence can populate newly assigned exact RFI numbers; scan and
+  Worley-sync evidence must cover every RFI already attached to the work item.
+
+### Safety
+
+- Partial, cancelled, failed, missing, foreign-owner, undone, mismatched, and
+  unsupported journals cannot advance an RFI work stage.
+- Process Scans counts only successfully filed document steps, not `_review`
+  routing, and Worley synchronization requires the same RFI to be proven in
+  both committed workbook-update steps.
+- Outlook drafts never advance publication or archive stages. If previously
+  accepted source evidence later becomes invalid, the work item moves to Needs
+  Review instead of retaining an unsupported success state.
+
 ## 0.10.1 - 2026-09-13
 
 ### Fixed

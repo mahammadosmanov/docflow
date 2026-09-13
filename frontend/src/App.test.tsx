@@ -62,6 +62,95 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("opens the journal-producing operation from an eligible RFI work card", async () => {
+    interceptMockBridge((method) => {
+      if (method === "workItems/list") {
+        return {
+            handled: true,
+            value: {
+              today: [
+                {
+                  itemId: "work-checked",
+                  title: "Checked MEC request",
+                  rfiCodes: [],
+                  stage: "checked",
+                  updatedAt: "2026-09-13T08:00:00Z",
+                  dueDate: "2026-09-13",
+                  needsReview: false,
+                  reason: null,
+                  lastEventId: "event-checked",
+                  sourceJournalId: null,
+                },
+              ],
+              resume: [],
+              needsReview: [],
+              completedCount: 0,
+              invalidEventCount: 0,
+            },
+          };
+      }
+      if (method === "engine/preview") {
+        return {
+          handled: true,
+          value: {
+            planId: "verified-rfi-log-plan",
+            opId: "rfi.log_add",
+            steps: [
+              {
+                kind: "workbook_update",
+                src: "RFI Log.xlsm",
+                dst: ".docflow-backups/RFI Log.xlsm",
+                noteKey: "note.rfi.workbookUpdate",
+                meta: {},
+              },
+            ],
+            warnings: [],
+            meta: {},
+          },
+        };
+      }
+      if (method === "engine/apply") {
+        return {
+          handled: true,
+          value: {
+            applied: 1,
+            failed: 0,
+            journalId: "11111111-1111-4111-8111-111111111111",
+            errors: [],
+            meta: { effectState: "committed" },
+          },
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Kanıtlı sonraki adımı çalıştır",
+      }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "Çoklu sheet RFI Log kaydı ekle",
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Uygula" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "İş takibi güncellemesini incele",
+      }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "RFI işini kaydet" }),
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Aşama/ })).toHaveValue(
+      "numbers_assigned",
+    );
+  });
+
   it("shows persistent RFI work queues and opens the schema-driven work item operation", async () => {
     const call = interceptMockBridge((method) =>
       method === "workItems/list"
@@ -79,6 +168,7 @@ describe("DocFlow shell", () => {
                   needsReview: false,
                   reason: null,
                   lastEventId: "event-1",
+                  sourceJournalId: null,
                 },
               ],
               resume: [],
@@ -823,7 +913,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.10.1-demo")).toBeVisible();
+    expect(screen.getByText("v0.11.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

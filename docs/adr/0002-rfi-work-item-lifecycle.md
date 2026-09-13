@@ -69,6 +69,15 @@ schema editor. Work-item fields are explicitly transient schema values, so a
 previous task identity or stage is never restored as a preference for a new
 item.
 
+Version 0.11.0 implements journal-linked assisted transitions. Eligible work
+cards open the operation that can produce the required evidence. Only a fully
+committed, same-owner local journal with exact RFI coverage can prepare a second
+work-item transition Plan, which still requires explicit preview and approval.
+RFI Log advances to `numbers_assigned`, successfully filed Process Scans advance
+to `intec_scan_filed`, and a two-workbook System Sync advances to
+`worley_signed_synced`. Outlook drafts are deliberately excluded. Missing or
+later-undone evidence projects the work item into Needs Review.
+
 ## Rollback
 
 The work-item store is coordination metadata. Disabling or rebuilding it does

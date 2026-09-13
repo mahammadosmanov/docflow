@@ -691,5 +691,13 @@
   "error.workItems.stageInvalid": "RFI iş mərhələsi etibarsızdır.",
   "error.workItems.ownerInvalid": "RFI iş sahibi etibarsızdır.",
   "error.workItems.dateInvalid": "Hədəf tarix YYYY-AA-GG formatında olmalıdır.",
-  "error.workItems.conflict": "Bu iş üçün ziddiyyətli mərhələ hadisələri tapıldı; əl ilə yoxlama tələb olunur."
+  "error.workItems.conflict": "Bu iş üçün ziddiyyətli mərhələ hadisələri tapıldı; əl ilə yoxlama tələb olunur.",
+  "workItems.runVerifiedStep": "Sübutlu növbəti addımı işə sal",
+  "workItems.reviewEvidenceTransition": "İş izləmə yeniləməsini yoxla",
+  "param.rfi.workItem.sourceJournalId": "Mənbə jurnalı",
+  "param.rfi.workItem.sourceJournalId.help": "Uğurlu sənəd əməliyyatının dəyişməz jurnal sübutu.",
+  "error.workItems.sourceJournalInvalid": "Mənbə jurnalı yoxdur, uğursuzdur, geri alınıb və ya başqa istifadəçiyə məxsusdur.",
+  "error.workItems.sourceJournalUnsupported": "Bu əməliyyat RFI iş mərhələsini avtomatik irəli apara bilməz.",
+  "error.workItems.sourceJournalMismatch": "Jurnal sübutu seçilmiş mərhələ və ya RFI nömrələri ilə tam uyğun gəlmir.",
+  "error.workItems.sourceJournalStale": "Bu işi irəli aparan mənbə jurnalı artıq etibarlı deyil; əl ilə yoxlama tələb olunur."
 }

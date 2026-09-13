@@ -1,7 +1,14 @@
 use std::{fs, path::Path};
 
 use chrono::NaiveDate;
-use docflow_lib::work_items::{WorkItemInput, preview_event, project};
+use docflow_lib::{
+    contracts::{Step, StepKind},
+    journal::{JournalRecord, JournalState, JournalStore},
+    work_items::{
+        WorkItemInput, preview_event, preview_event_with_journal, project, project_with_journals,
+    },
+};
+use serde_json::{Map, json};
 use tempfile::tempdir;
 
 fn persist_preview(plan: &docflow_lib::contracts::Plan) {
@@ -32,7 +39,22 @@ fn input(action: &str, item_id: &str, stage: &str) -> WorkItemInput {
         } else {
             String::new()
         },
+        source_journal_id: String::new(),
     }
+}
+
+fn committed_journal(op_id: &str, steps: Vec<Step>) -> JournalRecord {
+    let mut journal = JournalRecord::new(
+        "11111111-1111-4111-8111-111111111111",
+        op_id,
+        "2026-09-13T09:00:00Z",
+        "owner-1",
+        "session-1",
+        "digest-1",
+    );
+    journal.state = Some(JournalState::Committed);
+    journal.steps = steps;
+    journal
 }
 
 #[test]
@@ -176,4 +198,297 @@ fn event_symlinks_are_never_followed() {
     )
     .expect("symlink-safe projection");
     assert_eq!(projection.invalid_event_count, 1);
+}
+
+#[test]
+fn committed_rfi_log_journal_assigns_exact_numbers_to_an_empty_item() {
+    let directory = tempdir().expect("temporary store");
+    let mut create_input = input("create", "", "checked");
+    create_input.rfi_codes.clear();
+    let create = preview_event(
+        directory.path(),
+        "owner-1",
+        create_input,
+        "2026-09-13T08:00:00Z",
+    )
+    .unwrap();
+    persist_preview(&create);
+    let item_id = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0]
+        .item_id
+        .clone();
+    let journal = committed_journal(
+        "rfi.log_add",
+        vec![Step {
+            kind: StepKind::WorkbookUpdate,
+            src: None,
+            dst: None,
+            note_key: None,
+            meta: Map::from_iter([(
+                "workItemEvidence".to_string(),
+                json!({"canonicalRfiCodes": ["AZE-SUN-INT-QMS-RFI-MEC-0249"]}),
+            )]),
+        }],
+    );
+    let mut transition = input("transition", &item_id, "numbers_assigned");
+    transition.source_journal_id = journal.journal_id.clone();
+    transition.reason.clear();
+    let plan = preview_event_with_journal(
+        directory.path(),
+        "owner-1",
+        transition,
+        "2026-09-13T09:01:00Z",
+        Some(&journal),
+    )
+    .unwrap();
+    persist_preview(&plan);
+    let item = &project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0];
+    assert_eq!(item.stage, "numbers_assigned");
+    assert_eq!(item.rfi_codes, ["AZE-SUN-INT-QMS-RFI-MEC-0249"]);
+    assert_eq!(
+        item.source_journal_id.as_deref(),
+        Some("11111111-1111-4111-8111-111111111111")
+    );
+}
+
+#[test]
+fn partial_wrong_owner_or_outlook_journals_never_advance_work() {
+    let directory = tempdir().expect("temporary store");
+    let create = preview_event(
+        directory.path(),
+        "owner-1",
+        input("create", "", "checked"),
+        "2026-09-13T08:00:00Z",
+    )
+    .unwrap();
+    persist_preview(&create);
+    let item_id = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0]
+        .item_id
+        .clone();
+    for (op_id, owner, state) in [
+        ("rfi.log_add", "owner-1", JournalState::PartialCommitted),
+        ("rfi.log_add", "owner-2", JournalState::Committed),
+        (
+            "rfi.outlook_reply_draft",
+            "owner-1",
+            JournalState::Committed,
+        ),
+    ] {
+        let mut journal = committed_journal(op_id, Vec::new());
+        journal.owner_id = Some(owner.to_string());
+        journal.state = Some(state);
+        let mut transition = input("transition", &item_id, "numbers_assigned");
+        transition.source_journal_id = journal.journal_id.clone();
+        assert!(
+            preview_event_with_journal(
+                directory.path(),
+                "owner-1",
+                transition,
+                "2026-09-13T09:01:00Z",
+                Some(&journal),
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn process_scan_evidence_counts_only_successfully_filed_rfi_documents() {
+    let directory = tempdir().unwrap();
+    let create = preview_event(
+        directory.path(),
+        "owner-1",
+        input("create", "", "publication_email_archived"),
+        "2026-09-13T08:00:00Z",
+    )
+    .unwrap();
+    persist_preview(&create);
+    let item_id = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0]
+        .item_id
+        .clone();
+    let journal = committed_journal(
+        "rfi.process_scans",
+        vec![
+            Step {
+                kind: StepKind::Copy,
+                src: None,
+                dst: None,
+                note_key: Some("note.renamed".to_string()),
+                meta: Map::from_iter([("code".to_string(), json!("AZE-SUN-INT-QMS-RFI-MEC-0249"))]),
+            },
+            Step {
+                kind: StepKind::Copy,
+                src: None,
+                dst: None,
+                note_key: Some("note.needs_review".to_string()),
+                meta: Map::from_iter([("code".to_string(), json!("AZE-SUN-INT-QMS-RFI-MEC-0250"))]),
+            },
+        ],
+    );
+    let mut transition = input("transition", &item_id, "intec_scan_filed");
+    transition.source_journal_id = journal.journal_id.clone();
+    assert!(
+        preview_event_with_journal(
+            directory.path(),
+            "owner-1",
+            transition,
+            "2026-09-13T09:01:00Z",
+            Some(&journal),
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn system_sync_requires_the_same_rfi_in_both_committed_workbook_steps() {
+    let directory = tempdir().unwrap();
+    let create = preview_event(
+        directory.path(),
+        "owner-1",
+        input("create", "", "intec_scan_filed"),
+        "2026-09-13T08:00:00Z",
+    )
+    .unwrap();
+    persist_preview(&create);
+    let item_id = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0]
+        .item_id
+        .clone();
+    let sync_step = |kind: &str, codes: serde_json::Value| Step {
+        kind: StepKind::WorkbookUpdate,
+        src: None,
+        dst: None,
+        note_key: None,
+        meta: Map::from_iter([(
+            "workItemEvidence".to_string(),
+            json!({"workbookKind": kind, "canonicalRfiCodes": codes}),
+        )]),
+    };
+    let journal = committed_journal(
+        "rfi.system_sync",
+        vec![
+            sync_step("rfiLog", json!(["AZE-SUN-INT-QMS-RFI-MEC-0249"])),
+            sync_step("followUp", json!([])),
+        ],
+    );
+    let mut transition = input("transition", &item_id, "worley_signed_synced");
+    transition.source_journal_id = journal.journal_id.clone();
+    assert!(
+        preview_event_with_journal(
+            directory.path(),
+            "owner-1",
+            transition,
+            "2026-09-13T09:01:00Z",
+            Some(&journal),
+        )
+        .is_err()
+    );
+    let journal = committed_journal(
+        "rfi.system_sync",
+        vec![
+            sync_step("rfiLog", json!(["AZE-SUN-INT-QMS-RFI-MEC-0249"])),
+            sync_step("followUp", json!(["AZE-SUN-INT-QMS-RFI-MEC-0249"])),
+        ],
+    );
+    let mut transition = input("transition", &item_id, "worley_signed_synced");
+    transition.source_journal_id = journal.journal_id.clone();
+    assert!(
+        preview_event_with_journal(
+            directory.path(),
+            "owner-1",
+            transition,
+            "2026-09-13T09:02:00Z",
+            Some(&journal),
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn missing_source_journal_moves_a_previously_advanced_item_to_review() {
+    let directory = tempdir().unwrap();
+    let mut create_input = input("create", "", "checked");
+    create_input.rfi_codes.clear();
+    let create = preview_event(
+        directory.path(),
+        "owner-1",
+        create_input,
+        "2026-09-13T08:00:00Z",
+    )
+    .unwrap();
+    persist_preview(&create);
+    let item_id = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap()
+    .today[0]
+        .item_id
+        .clone();
+    let journal = committed_journal(
+        "rfi.log_add",
+        vec![Step {
+            kind: StepKind::WorkbookUpdate,
+            src: None,
+            dst: None,
+            note_key: None,
+            meta: Map::from_iter([(
+                "workItemEvidence".to_string(),
+                json!({"canonicalRfiCodes": ["AZE-SUN-INT-QMS-RFI-MEC-0249"]}),
+            )]),
+        }],
+    );
+    let mut transition = input("transition", &item_id, "numbers_assigned");
+    transition.source_journal_id = journal.journal_id.clone();
+    let advanced = preview_event_with_journal(
+        directory.path(),
+        "owner-1",
+        transition,
+        "2026-09-13T09:01:00Z",
+        Some(&journal),
+    )
+    .unwrap();
+    persist_preview(&advanced);
+
+    let projection = project_with_journals(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+        &JournalStore::new(directory.path().join("missing-journals")),
+    )
+    .unwrap();
+    assert_eq!(projection.needs_review.len(), 1);
+    assert_eq!(
+        projection.needs_review[0].reason.as_deref(),
+        Some("error.workItems.sourceJournalStale")
+    );
 }

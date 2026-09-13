@@ -244,6 +244,17 @@ const demoWorkItemOperation: OperationDef = {
       visibleWhen: { action: "transition" },
       helpKey: "param.rfi.workItem.reason.help",
     },
+    {
+      name: "source_journal_id",
+      kind: "text",
+      labelKey: "param.rfi.workItem.sourceJournalId",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: { action: "journal_evidence" },
+      helpKey: "param.rfi.workItem.sourceJournalId.help",
+    },
   ] as ParamDef[]).map((parameter) => ({
     ...parameter,
     remember: false,

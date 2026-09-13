@@ -76,6 +76,8 @@ pub(crate) struct SystemSyncStepMeta {
     pub source_fingerprint: WorkbookFingerprint,
     pub workbook_kind: SyncWorkbookKind,
     pub updates: BTreeMap<String, BTreeMap<String, GuardedCellUpdateDto>>,
+    #[serde(default)]
+    pub canonical_rfi_codes: Vec<String>,
     pub summary: String,
 }
 
@@ -688,12 +690,25 @@ pub fn preview_system_sync(
             Uuid::new_v4().simple(),
             extension
         ));
+        let update_row_ids = updates
+            .values()
+            .flat_map(BTreeMap::values)
+            .map(|update| update.row_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let canonical_rfi_codes = review_rows
+            .iter()
+            .filter(|row| update_row_ids.contains(row.row_id.as_str()))
+            .map(|row| row.canonical_rfi.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
         let step_meta = SystemSyncStepMeta {
             target_path: path.to_string_lossy().into_owned(),
             backup_path: backup_path.to_string_lossy().into_owned(),
             source_fingerprint: fingerprint,
             workbook_kind: kind,
             updates,
+            canonical_rfi_codes,
             summary: format!("Update {count} {label} cell(s)"),
         };
         let mut meta = JsonObject::new();
@@ -840,6 +855,24 @@ pub fn revise(plan: &Plan, rows: &[Value]) -> Result<Plan, BackendError> {
         if meta.updates.is_empty() {
             continue;
         }
+        let update_row_ids = meta
+            .updates
+            .values()
+            .flat_map(BTreeMap::values)
+            .map(|update| update.row_id.as_str())
+            .collect::<BTreeSet<_>>();
+        meta.canonical_rfi_codes = originals
+            .values()
+            .filter(|row| {
+                row.get("_rowId")
+                    .and_then(Value::as_str)
+                    .is_some_and(|row_id| update_row_ids.contains(row_id))
+            })
+            .filter_map(|row| row.get("canonicalRfi").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
         step.meta.insert(
             "syncStep".to_string(),
             serde_json::to_value(meta).map_err(|_| {
