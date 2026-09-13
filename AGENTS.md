@@ -45,6 +45,7 @@ change before moving authority.
 14. Windows and macOS remain supported.
 15. Preserve existing non-secret settings, journal, trash, queue, DTO, and cloud formats unless an accepted decision explicitly changes one.
 16. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible.
+17. Classify every completed slice with `node tools/version_manager.mjs next`: `fix` increments PATCH, `feature` increments MINOR, and `breaking` increments MAJOR. Do not extend a prerelease train unless an explicit release-candidate plan is active.
 
 ## Development workflow
 

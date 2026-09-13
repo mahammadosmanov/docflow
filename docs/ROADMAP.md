@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.7 reliability foundation
+## Now — 0.8 reliability foundation
 
 - Keep the read-only device-readiness surface accurate and actionable.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,

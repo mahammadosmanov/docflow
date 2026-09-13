@@ -42,6 +42,22 @@ export function parseVersion(value) {
   };
 }
 
+export function nextVersion(current, changeType) {
+  const version = parseVersion(current);
+  if (changeType === "fix") {
+    return `${version.major}.${version.minor}.${version.patch + 1}`;
+  }
+  if (changeType === "feature") {
+    return `${version.major}.${version.minor + 1}.0`;
+  }
+  if (changeType === "breaking") {
+    return `${version.major + 1}.0.0`;
+  }
+  throw new VersionError(
+    `invalid change type: ${JSON.stringify(changeType)}; expected fix, feature, or breaking`,
+  );
+}
+
 function readJson(path) {
   const value = JSON.parse(readFileSync(path, "utf8"));
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -314,7 +330,7 @@ export function listReleases(root = REPOSITORY_ROOT, { json = false } = {}) {
 }
 
 function usage() {
-  return "usage: node tools/version_manager.mjs check [--require-tag] | set <version> | list [--json] | notes <version>";
+  return "usage: node tools/version_manager.mjs check [--require-tag] | next <fix|feature|breaking> | set <version> | list [--json] | notes <version>";
 }
 
 function main(argv) {
@@ -336,6 +352,10 @@ function main(argv) {
       console.log(
         `Updated runtime manifests to ${rest[0]}. Now update releases.json and CHANGELOG.md, then run check.`,
       );
+      return 0;
+    }
+    if (command === "next" && rest.length === 1) {
+      console.log(nextVersion(canonicalVersion(REPOSITORY_ROOT), rest[0]));
       return 0;
     }
     if (command === "list") {

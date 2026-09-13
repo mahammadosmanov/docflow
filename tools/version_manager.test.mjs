@@ -14,6 +14,7 @@ import test from "node:test";
 import {
   canonicalVersion,
   manifestVersions,
+  nextVersion,
   parseVersion,
   releaseNotes,
   setVersion,
@@ -61,6 +62,15 @@ test("set updates every remaining runtime manifest", () => {
 test("SemVer rejects numeric prerelease identifiers with leading zeroes", () => {
   assert.throws(() => parseVersion("1.2.3-rc.01"), /leading zeroes/);
   assert.deepEqual(parseVersion("1.2.3-rc.1").prerelease, ["rc", "1"]);
+});
+
+test("next version follows the project change classification", () => {
+  assert.equal(nextVersion("0.7.0-rc.11", "fix"), "0.7.1");
+  assert.equal(nextVersion("0.7.0-rc.11", "feature"), "0.8.0");
+  assert.equal(nextVersion("0.7.0-rc.11", "breaking"), "1.0.0");
+  assert.equal(nextVersion("0.8.0", "fix"), "0.8.1");
+  assert.equal(nextVersion("0.8.0", "feature"), "0.9.0");
+  assert.throws(() => nextVersion("0.8.0", "cosmetic"), /change type/);
 });
 
 test("validation rejects mismatched catalog tags and impossible dates", () => {

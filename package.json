@@ -1,6 +1,6 @@
 {
   "name": "docflow-desktop",
-  "version": "0.7.0-rc.11",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "test": "node --test tools/*.test.mjs && vitest run --config frontend/vite.config.ts",
     "test:watch": "vitest --config frontend/vite.config.ts",
     "version:check": "node tools/version_manager.mjs check",
+    "version:next": "node tools/version_manager.mjs next",
     "versions": "node tools/version_manager.mjs list",
     "audit:source": "node tools/package_audit.mjs source",
     "audit:licenses": "node tools/license_audit.mjs",

@@ -24,6 +24,9 @@ and the current changelog section. The frontend version is injected from
 ```bash
 node tools/version_manager.mjs check
 npm run version:check
+node tools/version_manager.mjs next fix
+node tools/version_manager.mjs next feature
+node tools/version_manager.mjs next breaking
 node tools/version_manager.mjs list
 npm run versions
 node tools/version_manager.mjs list --json
@@ -45,6 +48,10 @@ node tools/version_manager.mjs check --require-tag
 3. Use a focused branch and pull request; do not release from an unreviewed dirty tree.
 4. Choose the SemVer bump: patch for a compatible fix, minor for a compatible
    capability, major for an incompatible contract change.
+   Use `next fix`, `next feature`, or `next breaking` to calculate it. A normal
+   completed work item must not keep incrementing prerelease labels under the
+   same base version. Prerelease suffixes are reserved for an explicitly opened
+   release-candidate cycle and require their own release plan.
 5. Run `node tools/version_manager.mjs set X.Y.Z`.
 6. Move Unreleased notes into `## X.Y.Z - YYYY-MM-DD`.
 7. Update current/superseded entries and intended tag in `releases.json`.

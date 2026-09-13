@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.8.0 - 2026-09-13
+
+### Added
+
+- Promoted the device-readiness foundation to a SemVer minor release because it
+  adds a backward-compatible user capability.
+- Added a tested `next fix|feature|breaking` version command so completed work
+  is classified consistently instead of extending one prerelease number.
+
+### Changed
+
+- Established PATCH for compatible fixes, MINOR for compatible features, and
+  MAJOR for incompatible contract changes as the mandatory commit workflow.
+
+### Safety
+
+- Version correction was committed separately without rewriting earlier Git
+  history, preserving exact rollback points for the preceding implementation.
+
 ## 0.7.0-rc.11 - 2026-09-13
 
 ### Added

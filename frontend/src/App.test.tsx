@@ -759,7 +759,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.11-demo")).toBeVisible();
+    expect(screen.getByText("v0.8.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
