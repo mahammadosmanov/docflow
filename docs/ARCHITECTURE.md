@@ -54,7 +54,11 @@ Device readiness is a separate authenticated, read-only Rust query. It reports
 only bounded OCR availability, enumerated-printer count, and pending local
 recovery count. It neither scans user folders nor treats a healthy device result
 as workbook, OneDrive, Office, or printer-output certification; those checks stay
-inside operation preview and platform release gates.
+inside operation preview and platform release gates. The pending count uses the
+same bounded journal parser as recovery but never acquires mutation permits,
+reopens recorded roots, reconciles effects, or rewrites a journal. Finalized
+recovery notices are projected directly because their retained locator is already
+the fail-closed operator handoff; listing them needs no document-root authority.
 
 RFI work tracking stores bounded, owner-scoped, append-only JSON events beneath
 the application-data directory. Event creation and manual stage transitions use

@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.18.1 - 2026-09-13
+
+### Fixed
+
+- Device readiness now counts interrupted work through a bounded, read-only
+  journal inspection instead of running recovery during dashboard startup.
+- A finalized RFI Follow Up recovery notice can now be listed without reopening
+  its former workbook root, so a stale path identity no longer hides the
+  Recovery Center behind a raw path-grant error.
+
+### Safety
+
+- Startup inspection does not acquire mutation authority, rewrite a journal,
+  reopen document roots, or retry an uncertain workbook operation.
+- Pending and finalized recovery records remain visible and are never silently
+  discarded or treated as safe to apply again.
+
 ## 0.18.0 - 2026-09-13
 
 ### Added

@@ -744,9 +744,8 @@ impl NativeBackend {
             Ok(inventory) => (true, inventory.printers.len() as u64),
             Err(_) => (false, 0),
         };
-        let recovery = self.recovery()?;
-        let recovery_count =
-            recovery.journals.len() as u64 + u64::from(recovery.print_queue.is_some());
+        let recovery_count = self.filesystem.pending_recovery_count()?
+            + u64::from(self.print.latest(&self.caller_identity()?)?.is_some());
         Ok(build_readiness(ReadinessFacts {
             ocr_available,
             ocr_language_data_available,

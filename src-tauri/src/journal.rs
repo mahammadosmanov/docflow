@@ -1420,12 +1420,23 @@ impl JournalStore {
         &self,
         permits: S5PermitBundle,
     ) -> Result<S5RecoverySession, BackendError> {
+        let entries = self.scan_pending_recovery_entries()?;
+        Ok(S5RecoverySession {
+            store: self.clone(),
+            _permits: permits,
+            entries,
+        })
+    }
+
+    pub(crate) fn pending_recovery_count(&self) -> Result<u64, BackendError> {
+        u64::try_from(self.scan_pending_recovery_entries()?.len()).map_err(|_| {
+            BackendError::journal_invalid("pending recovery count could not be represented")
+        })
+    }
+
+    fn scan_pending_recovery_entries(&self) -> Result<VecDeque<PendingS5Entry>, BackendError> {
         let Ok(directory) = fs::read_dir(&self.root) else {
-            return Ok(S5RecoverySession {
-                store: self.clone(),
-                _permits: permits,
-                entries: VecDeque::new(),
-            });
+            return Ok(VecDeque::new());
         };
         let mut paths = directory
             .collect::<Result<Vec<_>, _>>()
@@ -1488,11 +1499,7 @@ impl JournalStore {
                 ));
             }
         }
-        Ok(S5RecoverySession {
-            store: self.clone(),
-            _permits: permits,
-            entries,
-        })
+        Ok(entries)
     }
 
     #[cfg(test)]
@@ -1608,8 +1615,11 @@ impl S5RecoverySession {
 
     pub(crate) fn next_root_accesses(&self) -> Option<&[GrantRootAccessRecord]> {
         match self.entries.front() {
-            Some(PendingS5Entry::Valid(record)) => Some(&record.grant_root_accesses),
+            Some(PendingS5Entry::Valid(record)) if record.recovery_notice.is_none() => {
+                Some(&record.grant_root_accesses)
+            }
             Some(PendingS5Entry::Legacy(_)) | None => None,
+            Some(PendingS5Entry::Valid(_)) => None,
         }
     }
 
@@ -1635,6 +1645,9 @@ impl S5RecoverySession {
         if record.owner_id.as_deref() != Some(caller.owner_id.as_str()) {
             return Err(BackendError::journal_owner_mismatch());
         }
+        if let Some(notice) = record.recovery_notice.clone() {
+            return Ok(Some(recovery_entry(&record, notice)));
+        }
         let roots = roots.ok_or_else(|| {
             BackendError::journal_invalid("S5 recovery root authority is missing")
         })?;
@@ -1652,9 +1665,6 @@ impl S5RecoverySession {
                 &self.store,
                 &mut token,
             );
-        }
-        if let Some(notice) = token.record.recovery_notice.clone() {
-            return Ok(Some(recovery_entry(&token.record, notice)));
         }
         let known_effect = !token.record.retained_evidence.is_empty()
             || token.record.created_artifact_parent.is_some()
@@ -2443,6 +2453,48 @@ mod tests {
                 "locator": "journal:journal-s5;root:0;leaf:evidence.xlsx"
             })
         );
+    }
+
+    #[test]
+    fn readiness_count_is_read_only_and_final_notice_needs_no_root_reopen() {
+        let fixture = tempfile::tempdir().unwrap();
+        let store = JournalStore::new(fixture.path().join("journals"));
+        let process_lock = crate::progress::GlobalMutationLock::default();
+        let permits = store.bind_s5_permits(
+            process_lock.try_acquire().unwrap(),
+            store.try_acquire_mutation_lock().unwrap(),
+        );
+        let mut token =
+            ValidatedS5Record::for_test(retained_publication_record(fixture.path()), permits)
+                .unwrap();
+        token
+            .prepare_failed_partial(RecoveryNotice {
+                warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
+                locator: "journal:journal-s5;root:0;leaf:target.xlsx".to_string(),
+            })
+            .unwrap();
+
+        store.write_s5_cas(&mut token, 0).unwrap();
+        let path = store.path_for(&token.record);
+        drop(token);
+        let before = fs::read(&path).unwrap();
+
+        assert_eq!(store.pending_recovery_count().unwrap(), 1);
+        assert_eq!(fs::read(&path).unwrap(), before);
+
+        let process_lock = crate::progress::GlobalMutationLock::default();
+        let permits = store.bind_s5_permits(
+            process_lock.try_acquire().unwrap(),
+            store.try_acquire_mutation_lock().unwrap(),
+        );
+        let mut session = store.begin_s5_recovery(permits).unwrap();
+        assert!(session.next_root_accesses().is_none());
+        let recovered = session
+            .recover_next(None, &crate::paths::CallerIdentity::new("owner", "session"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(recovered.journal_id, "journal-s5");
+        assert_eq!(fs::read(path).unwrap(), before);
     }
 
     #[test]

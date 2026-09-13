@@ -4,6 +4,23 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.18.1: mutation-free readiness and stale-root recovery listing
+  - dashboard readiness uses the same bounded journal parser without acquiring
+    mutation permits, reopening workbook roots, reconciling effects, or writing
+    journal state
+  - finalized Follow Up recovery notices are returned directly from their
+    validated local record even when the former document root identity is stale
+  - pending and uncertain records remain visible and are never retried or removed
+    by startup inspection
+  - macOS source verification passed: 329 Rust unit tests and 199 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 51 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - the unsigned 0.18.1 package passed tree audit and packaged OCR/apply/journal/
+    undo smoke (22 ms bootstrap/settings, 307 ms first OCR, 410 ms operation),
+    but normal GUI launch exposed a separate macOS Keychain read stall; this is
+    not counted as a successful normal-launch gate and is addressed separately
+
 - [x] Version 0.18.0: exact existing-cell workbook comparison
   - guarded RFI System and Follow Up steps expose workbook, sheet/cell, canonical
     RFI, expected current value, and exact replacement value before Apply

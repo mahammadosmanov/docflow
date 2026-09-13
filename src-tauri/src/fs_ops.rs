@@ -1456,6 +1456,10 @@ impl FilesystemAuthority {
         Ok(recovered)
     }
 
+    pub fn pending_recovery_count(&self) -> Result<u64, BackendError> {
+        self.journals.pending_recovery_count()
+    }
+
     fn undo_follow_up(
         &self,
         journal_id: &str,
