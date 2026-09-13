@@ -37,6 +37,8 @@ pub(crate) enum BackendMethod {
     SupportDiagnostics,
     #[serde(rename = "support/copyDiagnostics")]
     SupportCopyDiagnostics,
+    #[serde(rename = "support/readiness")]
+    SupportReadiness,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -91,7 +93,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 33] = [
+    pub(crate) const ALL: [Self; 34] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -110,6 +112,7 @@ impl BackendMethod {
         Self::SettingsDeletePreset,
         Self::SupportDiagnostics,
         Self::SupportCopyDiagnostics,
+        Self::SupportReadiness,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -143,6 +146,7 @@ impl BackendMethod {
             Self::SettingsDeletePreset => "settings/deletePreset",
             Self::SupportDiagnostics => "support/diagnostics",
             Self::SupportCopyDiagnostics => "support/copyDiagnostics",
+            Self::SupportReadiness => "support/readiness",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",

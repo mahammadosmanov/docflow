@@ -50,6 +50,12 @@ denylist, content, path, depth, item, and byte bounds apply before the determini
 JSON crosses into the webview. Collection does not scan user files or send data;
 copying the validated preview to the local clipboard is a separate explicit action.
 
+Device readiness is a separate authenticated, read-only Rust query. It reports
+only bounded OCR availability, enumerated-printer count, and pending local
+recovery count. It neither scans user folders nor treats a healthy device result
+as workbook, OneDrive, Office, or printer-output certification; those checks stay
+inside operation preview and platform release gates.
+
 ## Operation contract
 
 ```text

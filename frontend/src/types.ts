@@ -139,6 +139,17 @@ export interface SupportBundlePreview {
   content: string;
 }
 
+export interface ReadinessCheck {
+  id: "ocr" | "printers" | "recovery";
+  status: "ready" | "attention";
+  count: number;
+}
+
+export interface ReadinessReport {
+  overall: "ready" | "attention";
+  checks: ReadinessCheck[];
+}
+
 export interface ProgressEvent {
   phase: string;
   done: number;

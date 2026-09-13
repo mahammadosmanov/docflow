@@ -338,6 +338,117 @@ h2 {
   font-weight: 750;
   letter-spacing: 0.16em;
 }
+.readiness-card {
+  margin-bottom: calc(20px * var(--space));
+  padding: calc(16px * var(--space)) 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.readiness-heading,
+.readiness-heading-actions,
+.readiness-item,
+.readiness-action {
+  display: flex;
+  align-items: center;
+}
+.readiness-heading {
+  justify-content: space-between;
+  gap: 18px;
+}
+.readiness-heading h2 {
+  margin: 0 0 3px;
+  font-size: 1rem;
+}
+.readiness-heading p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.readiness-heading-actions {
+  gap: 8px;
+  flex: none;
+}
+.readiness-overall {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.readiness-overall svg,
+.readiness-item > svg,
+.readiness-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.readiness-overall.attention,
+.readiness-item.attention {
+  border-color: var(--warning);
+}
+.readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.readiness-item {
+  min-width: 0;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.readiness-item > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.readiness-item strong,
+.readiness-item small {
+  display: block;
+}
+.readiness-item strong {
+  margin-bottom: 2px;
+  font-size: 0.78rem;
+}
+.readiness-item small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.readiness-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--surface-3);
+}
+.readiness-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 62px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.readiness-loading svg {
+  width: 16px;
+  height: 16px;
+}
+.readiness-action {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
 
 .operation-list {
   display: grid;
@@ -2073,6 +2184,15 @@ textarea:focus-visible {
   }
   .page-heading {
     align-items: flex-start;
+  }
+  .readiness-heading {
+    align-items: flex-start;
+  }
+  .readiness-grid {
+    grid-template-columns: 1fr;
+  }
+  .readiness-overall {
+    display: none;
   }
   .step-indicator small {
     display: none;

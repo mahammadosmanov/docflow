@@ -77,6 +77,8 @@ import type {
   Plan,
   PrintQueueSummary,
   ProgressEvent,
+  ReadinessCheck,
+  ReadinessReport,
   RecoveryPayload,
   ReviewAction,
   ReviewDecision,
@@ -617,6 +619,8 @@ function HomeScreen({
     bootstrap.auth.user?.display || bootstrap.auth.session?.email || "";
   const [reviewBusy, setReviewBusy] = useState(false);
   const [shortcutError, setShortcutError] = useState("");
+  const [readiness, setReadiness] = useState<ReadinessReport | null>(null);
+  const [readinessBusy, setReadinessBusy] = useState(true);
   const signOut = async () =>
     onAuth(await bridge.call("auth/signOut"));
 
@@ -646,6 +650,21 @@ function HomeScreen({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleTheme]);
+
+  const loadReadiness = useCallback(async () => {
+    setReadinessBusy(true);
+    try {
+      setReadiness(await bridge.call("support/readiness"));
+    } catch (reason) {
+      setShortcutError(humanError(reason, s));
+    } finally {
+      setReadinessBusy(false);
+    }
+  }, [bridge, s]);
+
+  useEffect(() => {
+    void loadReadiness();
+  }, [loadReadiness]);
 
   const openReview = async () => {
     setReviewBusy(true);
@@ -726,6 +745,54 @@ function HomeScreen({
             <Shield /> Preview-first <span aria-hidden="true">·</span>
             <span>v{bootstrap.version}</span>
           </div>
+        </section>
+        <section className="readiness-card" aria-labelledby="readiness-title">
+          <div className="readiness-heading">
+            <div>
+              <p className="eyebrow">{s.t("readiness.eyebrow")}</p>
+              <h2 id="readiness-title">{s.t("readiness.title")}</h2>
+              <p>{s.t("readiness.help")}</p>
+            </div>
+            <div className="readiness-heading-actions">
+              {readiness && (
+                <span className={`readiness-overall ${readiness.overall}`}>
+                  {readiness.overall === "ready" ? <CheckCircle2 /> : <CircleAlert />}
+                  {s.t(`readiness.overall.${readiness.overall}`)}
+                </span>
+              )}
+              <IconButton
+                label={s.t("readiness.refresh")}
+                onClick={() => void loadReadiness()}
+                disabled={readinessBusy}
+              >
+                <RefreshCw className={readinessBusy ? "spin" : ""} />
+              </IconButton>
+            </div>
+          </div>
+          {readinessBusy && !readiness ? (
+            <div className="readiness-loading">
+              <LoaderCircle className="spin" /> {s.t("readiness.loading")}
+            </div>
+          ) : (
+            <div className="readiness-grid">
+              {readiness?.checks.map((check) => (
+                <ReadinessItem key={check.id} check={check} s={s} />
+              ))}
+            </div>
+          )}
+          {readiness?.checks.some(
+            (check) => check.id === "recovery" && check.status === "attention",
+          ) && (
+            <div className="readiness-action">
+              <Button
+                variant="secondary"
+                icon={<RotateCcw />}
+                onClick={() => navigate({ name: "recovery" })}
+              >
+                {s.t("readiness.openRecovery")}
+              </Button>
+            </div>
+          )}
         </section>
         <div className="dashboard-grid">
           <section className="dashboard-section">
@@ -842,6 +909,37 @@ function HomeScreen({
         </div>
         {shortcutError && <Notice kind="error">{shortcutError}</Notice>}
       </main>
+    </div>
+  );
+}
+
+function ReadinessItem({
+  check,
+  s,
+}: {
+  check: ReadinessCheck;
+  s: Strings;
+}) {
+  const detailKey =
+    check.id === "printers" && check.status === "ready"
+      ? "readiness.printers.ready"
+      : `readiness.${check.id}.${check.status}`;
+  const icon =
+    check.id === "printers" ? (
+      <Printer />
+    ) : check.id === "recovery" ? (
+      <RotateCcw />
+    ) : (
+      <FileSearch />
+    );
+  return (
+    <div className={`readiness-item ${check.status}`}>
+      <span className="readiness-icon">{icon}</span>
+      <span>
+        <strong>{s.t(`readiness.${check.id}.title`)}</strong>
+        <small>{s.t(detailKey, { count: check.count })}</small>
+      </span>
+      {check.status === "ready" ? <Check /> : <CircleAlert />}
     </div>
   );
 }

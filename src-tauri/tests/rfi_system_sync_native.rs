@@ -276,10 +276,8 @@ fn test_system_sync_full_preview_apply_and_undo() {
 
     // Any post-preview change must fail before either workbook or any backup is
     // touched.
-    let stale_authority = FilesystemAuthority::new(
-        &fixture_path.join("stale-journal"),
-        Duration::from_secs(300),
-    );
+    let stale_authority =
+        FilesystemAuthority::new(fixture_path.join("stale-journal"), Duration::from_secs(300));
     let stale_caller = CallerIdentity::new("stale-owner", "stale-session");
     let stale_scope = GrantScope::new(
         &stale_caller.owner_id,

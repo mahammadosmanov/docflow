@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.6.0 is a Tauri 2 desktop application for four high-risk document
+DocFlow 0.7.0 is a Tauri 2 desktop application for seven high-risk document
 workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
@@ -9,6 +9,13 @@ workflows:
 - Batch Print: one strictly ordered Windows print queue for mixed file types
 - Stage signed RFI first pages: identify signed scans, keep the archive strictly
   read-only, and create review copies with only page one replaced
+- Synchronize RFI Follow Up: project exact Worley evidence into approved status cells
+- Prepare Outlook Reply All: open one verified, unsent reply draft for review
+- Analyze RFI System: detect Worley signatures and guard RFI Log/Follow Up updates
+
+The home screen also performs a read-only device-readiness check for OCR,
+available printers, and interrupted/recovery work. File-specific workbook,
+OneDrive, lock, and fingerprint checks remain part of each operation preview.
 
 The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
 TypeScript presentation layer. Tesseract and operating-system document/print

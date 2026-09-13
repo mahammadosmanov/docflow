@@ -63,6 +63,7 @@ and silent uninstall on a real Windows runner.
 | Localization | four-catalog key equality | Raw keys or missing language strings |
 | Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
+| Device readiness | pure fact classification + typed command/UI tests | Hidden OCR/printer failure or overlooked interrupted work |
 
 ## External certification gates
 

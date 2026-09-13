@@ -19,6 +19,7 @@ import type {
   Plan,
   ProgressEvent,
   RecoveryPayload,
+  ReadinessReport,
   ReviewItem,
   SupportBundlePreview,
 } from "../types";
@@ -629,6 +630,16 @@ export class MockBridge implements Bridge {
       }
       case "support/copyDiagnostics":
         result = { ok: true };
+        break;
+      case "support/readiness":
+        result = {
+          overall: "ready",
+          checks: [
+            { id: "ocr", status: "ready", count: 1 },
+            { id: "printers", status: "ready", count: 1 },
+            { id: "recovery", status: "ready", count: 0 },
+          ],
+        } satisfies ReadinessReport;
         break;
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });

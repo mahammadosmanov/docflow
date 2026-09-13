@@ -1,0 +1,64 @@
+# ADR 0002: Local RFI work-item lifecycle
+
+- Date: 2026-09-13
+- Status: Accepted
+
+## Context
+
+DocFlow exposes safe individual operations, but the operator's real work spans
+days and crosses Outlook, RFI Log, Inspection Status Follow Up, scanned PDFs,
+Worley signatures, and three filesystem replicas. Remembering which operation
+comes next creates duplicate effort and makes an interrupted task hard to resume.
+
+The Excel workbooks and controlled folders remain the official records. DocFlow
+must not silently replace them with an application database or infer that an
+email, file, print job, or signature has completed merely because an earlier
+step succeeded.
+
+## Decision
+
+Introduce an offline-first **RFI work item** as a local coordination record. A
+work item groups one request and one or more canonical RFI identities through
+these explicit stages:
+
+1. request captured;
+2. checked by operator;
+3. RFI numbers assigned;
+4. prepared files received;
+5. published as Ongoing;
+6. publication email archived;
+7. INTEC scan filed;
+8. Worley signature staged and synchronized;
+9. replicas reviewed and synchronized;
+10. complete.
+
+Transitions are append-only events. The current stage is a rebuildable
+projection, not mutation authority. Each transition stores only bounded
+metadata and references to local DocFlow journal IDs; document contents,
+credentials, Outlook bodies, and executable filesystem steps are forbidden.
+
+Automatic transitions are allowed only when a successful local journal proves
+the exact effect. Email sending, workbook writes, scan placement, printing, and
+replica transfer retain their own preview and explicit approval. Manual stage
+changes require a reason and are visibly labelled as operator assertions.
+
+The initial implementation will use a versioned local store beneath the existing
+DocFlow application-data directory. Cloud history may mirror inert metadata,
+but the feature must work fully offline and cloud data can never authorize a
+local effect.
+
+## Consequences
+
+- The home screen can show Today, Resume, and Needs Review without treating
+  memory or email patterns as evidence.
+- One RFI request can safely span multiple days and machines while official
+  workbooks remain authoritative.
+- Existing operations remain independently usable and backward compatible.
+- Store migrations, event validation, retention, export, and rebuild tests are
+  required before the first persistent work-item release.
+
+## Rollback
+
+The work-item store is coordination metadata. Disabling or rebuilding it does
+not alter official documents. Document rollback continues to use the existing
+validated local journals only.

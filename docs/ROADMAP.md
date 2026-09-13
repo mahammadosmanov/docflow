@@ -4,29 +4,46 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.6.x reliability
+## Now — 0.7 reliability foundation
 
-- Ship the Tauri 2 production baseline as `v0.6.0`.
-- Calibrate OCR against representative real scans and retain at least 95% accuracy.
-- Exercise the signed-page workflow on OneDrive-backed Windows folders.
-- Maintain the read-only redacted local diagnostics support bundle.
-- Keep version, changelog, installer, and release metadata synchronized.
+- Keep the read-only device-readiness surface accurate and actionable.
+- Certify the exact Windows candidate against Excel open/recalculate, Outlook,
+  OneDrive-backed folders, Microsoft Print to PDF, and representative printers.
+- Expand structural fixtures for every current production workbook family
+  without committing private documents.
+- Calibrate OCR against consented representative scans and retain at least 95%
+  exact canonical-RFI recognition.
+- Keep version, changelog, installer, checksums, and release metadata synchronized.
 
-## Next — safe operational maturity
+## Next — unified RFI work
 
-- Add checksums to every published installer and surface them in release notes.
-- Expand fixture coverage for every production workbook family without committing
-  private documents.
-- Define a free/manual Windows code-signing plan; do not claim signing until a
-  trustworthy certificate path exists.
+- Implement the append-only local RFI work-item store defined by ADR 0002.
+- Replace the flat home experience with Today, Resume, and Needs Review queues.
+- Add per-operation safety summaries and exact before/after workbook/PDF previews.
+- Split a multi-RFI Worley scan into reviewable page groups without touching the
+  source scan.
+- Prepare consistent Outlook drafts and archive reviewed publication mail as EML
+  without automatically sending it.
+
+## Then — controlled system synchronization
+
+- Compare the original, local, and INTEC/OneDrive RFI systems using hashes and
+  explicit scope boundaries.
+- Present same, missing, newer, and conflicting files before any transfer.
+- Require an explicit authority choice for every conflict; never use silent
+  last-writer-wins behavior.
+- Stage no-clobber transfers with retained backups, resumable low-bandwidth
+  queues, and no automatic retry for uncertain outcomes.
 
 ## Later — document automation breadth
 
-- Multi-RFI PDF splitting
+- Printer capability discovery, preflight thumbnails, test-page gates, and
+  spooler receipts
 - RFI status extraction and filing
-- PDF merge/split
+- PDF merge/split and quality repair
 - DOCX find/replace
 - Additional register/export operations driven by generic `ParamSchema`
+- Internal module decomposition, parser fuzzing, and fault-injection expansion
 
 ## Intake rule
 
@@ -37,9 +54,9 @@ intended release. Large architecture decisions receive a document linked from
 
 ## Prioritization
 
-1. Data-loss or false-label risk
-2. Broken release/package paths
-3. Repetitive user effort in an existing workflow
+1. Data-loss, workbook-repair, duplicate-print, or false-label risk
+2. Broken release/package and recovery paths
+3. Repetitive user effort in an existing RFI lifecycle
 4. New document operations
 5. Cosmetic work
 

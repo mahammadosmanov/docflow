@@ -8,6 +8,29 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.11 - 2026-09-13
+
+### Added
+
+- Added an authenticated, read-only **Device readiness** panel to the home
+  screen. It checks bundled OCR/language availability, enumerated printers, and
+  interrupted journal or print-queue recovery work without scanning user files.
+- Added one-click navigation from an attention result to Recovery Center and a
+  manual refresh action.
+- Added the accepted offline-first RFI work-item lifecycle and evidence boundary
+  as ADR 0002, ready for incremental implementation.
+
+### Changed
+
+- Reconciled the README and roadmap with the current seven-operation Rust
+  application and the 0.7 reliability/unified-work priorities.
+
+### Safety
+
+- A healthy device-readiness result is intentionally not treated as Excel,
+  OneDrive, Office, or printer-output certification. File-specific safety checks
+  remain in operation preview and platform certification remains separate.
+
 ## 0.7.0-rc.10 - 2026-09-13
 
 ### Fixed

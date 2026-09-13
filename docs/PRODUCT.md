@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.7.0-rc.10**. `VERSION` is authoritative.
+Current product version: **0.7.0-rc.11**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -46,6 +46,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |
 | Support diagnostics | Preview and copy a redacted local support bundle | Bounded Rust DTO, recursive redaction, no upload or user-file scan |
+| Device readiness | See OCR, printer, and interrupted-work health before starting | Read-only bounded checks; document-specific checks remain in preview |
 
 ## Non-goals
 

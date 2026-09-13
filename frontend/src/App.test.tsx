@@ -62,6 +62,37 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("shows device readiness and routes attention to recovery", async () => {
+    const call = interceptMockBridge((method) =>
+      method === "support/readiness"
+        ? {
+            handled: true,
+            value: {
+              overall: "attention",
+              checks: [
+                { id: "ocr", status: "ready", count: 1 },
+                { id: "printers", status: "ready", count: 2 },
+                { id: "recovery", status: "attention", count: 1 },
+              ],
+            },
+          }
+        : { handled: false },
+    );
+
+    render(<App />);
+    await signIn();
+
+    expect(await screen.findByText("Cihaz hazırlığı")).toBeVisible();
+    expect(screen.getByText("Dikkat gerekiyor")).toBeVisible();
+    expect(screen.getByText("2 yazıcı kullanılabilir")).toBeVisible();
+    expect(call).toHaveBeenCalledWith("support/readiness");
+
+    fireEvent.click(screen.getByRole("button", { name: "Kurtarmayı aç" }));
+    expect(
+      (await screen.findAllByRole("heading", { name: "Kurtarma merkezi" }))[0],
+    ).toBeVisible();
+  });
+
   it("operation presets load only for capability-enabled operations", async () => {
     const call = vi.spyOn(MockBridge.prototype, "call");
 
@@ -728,7 +759,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.7.0-rc.10-demo")).toBeVisible();
+    expect(screen.getByText("v0.7.0-rc.11-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

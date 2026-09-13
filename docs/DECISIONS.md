@@ -11,6 +11,7 @@ and versioned with the code they govern.
 | Preview/apply/journal operation contract | Accepted | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Repository-native SemVer and release catalog | Accepted | [`VERSIONING.md`](VERSIONING.md) |
 | Current RFI workbook header discovery and guarded Worley synchronization | Accepted | [`adr/0001-guarded-current-rfi-workbooks.md`](adr/0001-guarded-current-rfi-workbooks.md) |
+| Offline-first RFI work-item lifecycle and evidence boundaries | Accepted | [`adr/0002-rfi-work-item-lifecycle.md`](adr/0002-rfi-work-item-lifecycle.md) |
 
 ## Adding a decision
 

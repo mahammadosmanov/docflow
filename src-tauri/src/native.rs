@@ -37,6 +37,7 @@ use crate::{
     platform,
     print_queue::{BatchPrintParams, PrintService, default_queue_root},
     progress::GlobalMutationLock,
+    readiness::{ReadinessFacts, ReadinessReport, build_readiness},
     registry::{RegistryFacts, operation_registry},
     review::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
@@ -155,6 +156,10 @@ impl NativeBackend {
             BackendMethod::SupportDiagnostics | BackendMethod::SupportCopyDiagnostics => Err(
                 BackendError::protocol("support command reached the operation backend"),
             ),
+            BackendMethod::SupportReadiness => {
+                decode_empty(params)?;
+                encode(self.readiness()?)
+            }
             BackendMethod::AppBootstrap => {
                 decode_empty(params)?;
                 let auth = self.auth.restore(now())?;
@@ -718,6 +723,26 @@ impl NativeBackend {
             journals: self.filesystem.recover_pending(&caller)?,
             print_queue: self.print.latest(&caller)?,
         })
+    }
+
+    fn readiness(&self) -> Result<ReadinessReport, BackendError> {
+        let ocr = NativeOcr::discover();
+        let (ocr_available, ocr_language_data_available) = ocr.support_status();
+        let printer_inventory = self.print.inventory();
+        let (printer_inventory_available, printer_count) = match printer_inventory {
+            Ok(inventory) => (true, inventory.printers.len() as u64),
+            Err(_) => (false, 0),
+        };
+        let recovery = self.recovery()?;
+        let recovery_count =
+            recovery.journals.len() as u64 + u64::from(recovery.print_queue.is_some());
+        Ok(build_readiness(ReadinessFacts {
+            ocr_available,
+            ocr_language_data_available,
+            printer_inventory_available,
+            printer_count,
+            recovery_count,
+        }))
     }
 
     pub(crate) fn preview_process_scans<F>(
