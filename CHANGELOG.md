@@ -8,6 +8,31 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.19.0 - 2026-09-13
+
+### Added
+
+- Added a complete ordered onboarding map, stable product requirement IDs,
+  feature catalog, RFI domain rules, safety/state contract, generic editor
+  contract, code/test traceability, known-issue ledger, Windows runbook, and a
+  concise compatibility guide for other coding agents.
+- Added a documentation audit that verifies every required guide exists, local
+  map links resolve, all 14 requirements have traceability owners, and the nine
+  documented operations match the Rust registry exactly.
+
+### Changed
+
+- The command protocol now documents the active closed typed Tauri boundary
+  before its retained historical sidecar description.
+- The repository agent guide now routes every model through the canonical
+  documentation map and distinguishes OCR normalization from strict persisted
+  ASCII RFI identity.
+
+### Safety
+
+- Missing or stale onboarding/operation documentation now fails a canonical
+  source gate instead of silently misleading a future maintainer or AI model.
+
 ## 0.18.3 - 2026-09-13
 
 ### Fixed

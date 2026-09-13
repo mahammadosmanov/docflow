@@ -15,6 +15,7 @@ and versioned with the code they govern.
 | Exact-page staging for combined Worley scans | Accepted | [`adr/0003-combined-worley-scan-staging.md`](adr/0003-combined-worley-scan-staging.md) |
 | Bounded signed-page thumbnails carried by the approved Plan | Accepted | [`adr/0004-bounded-plan-page-previews.md`](adr/0004-bounded-plan-page-previews.md) |
 | Non-interactive passive macOS credential restore | Accepted | [`adr/0005-noninteractive-keychain-restore.md`](adr/0005-noninteractive-keychain-restore.md) |
+| Machine-checked maintainer and AI onboarding canon | Accepted | [`adr/0006-machine-checked-onboarding-canon.md`](adr/0006-machine-checked-onboarding-canon.md) |
 
 ## Adding a decision
 

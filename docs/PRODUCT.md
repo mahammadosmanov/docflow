@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.18.3**. `VERSION` is authoritative.
+Current product version: **0.19.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -37,6 +37,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
     unmatched records from the immutable Plan.
 12. Existing-cell workbook mutations expose the exact approved sheet, cell,
     current value, and replacement value before Apply.
+13. A machine-checked documentation map, stable requirement IDs, traceability
+    owners, known limitations, and Windows runbook keep human and AI handoffs
+    aligned with the registered Rust operation roster.
 
 ## Current capabilities
 
@@ -79,6 +82,8 @@ workbook behavior, print batches kept in order, and every change recoverable.
   is reported separately and never inferred from a macOS or cross-compile result.
 - Every release is discoverable through `releases.json`, `CHANGELOG.md`, a Git tag,
   and (for distributed builds) a GitHub Release.
+- Required onboarding documents, requirement ownership, and the documented
+  operation roster pass `node tools/docs_audit.mjs`.
 
 ## Source-of-truth order
 

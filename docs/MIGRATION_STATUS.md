@@ -4,6 +4,18 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.19.0: machine-checked maintainer and AI onboarding canon
+  - ordered documentation now covers requirements, all nine operations, exact
+    RFI rules, mutation/recovery state, generic editors, traceability, known
+    limitations, and Windows build/operator acceptance
+  - active Tauri command authority is documented before the retained historical
+    sidecar protocol, and both `AGENTS.md` and `CLAUDE.md` route new models to the
+    same source-of-truth order
+  - a Node audit fails on missing guides, broken map links, undocumented or
+    unregistered operations, and requirements without traceability owners
+  - this documentation/source gate does not claim the still-external Windows,
+    Office, OneDrive, printer, live-service, signing, or notarization evidence
+
 - [x] Version 0.18.3: current-version documentation enforcement
   - the version tool atomically updates runtime manifests plus the README,
     product definition, and roadmap current-version markers

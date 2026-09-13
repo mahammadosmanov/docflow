@@ -1,0 +1,35 @@
+# Feature catalog
+
+## Registered operations
+
+| Operation | Operator outcome |
+|---|---|
+| `rfi.work_item_update` | Create or transition a resumable append-only RFI work item |
+| `rfi.work_item_export` | Export owner-scoped work history to no-clobber JSON and Excel-safe CSV |
+| `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
+| `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
+| `rfi.follow_up_sync` | Project approved RFI status evidence into exact Follow Up cells |
+| `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
+| `files.batch_print` | Run and recover a strictly ordered mixed-file print queue |
+| `rfi.stage_signed_first_pages` | Identify single/combined Worley pages and create review copies with exact page-one replacement |
+| `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
+
+## Application features
+
+- Today, Resume, and Needs Review work queues with exact journal evidence.
+- Generic schema-driven forms, remembered safe values, typed presets, compact
+  multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
+- Preview impact counts, exact effect paths, approved workbook cell comparisons,
+  signed-page old/new thumbnails, and warning focus/filtering.
+- Persistent local history, explicit recovery center, guarded undo, and
+  recoverable review trash.
+- Optional Supabase sign-in/approval/admin and metadata-only shared history.
+- Read-only device readiness and copy-only redacted diagnostics.
+- Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
+
+## Intentional limits
+
+- Process Scans reads top-level PDFs only; signed-page recursion is explicit.
+- Outlook drafts are never auto-sent.
+- Three-system replica transfer is roadmap work, not a registered operation.
+- Native Office and printer behavior is accepted only on a real Windows host.

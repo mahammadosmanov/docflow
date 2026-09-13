@@ -1,4 +1,18 @@
-# Retired private sidecar protocol (historical)
+# Application command protocol
+
+The current UI uses one closed typed Tauri command, `frontend_call`, whose method
+roster is mirrored in Rust and TypeScript and rejected on drift. React sends a
+typed method plus bounded DTO; Rust authenticates and authorizes it, resolves
+opaque path-selection capabilities, and returns typed data or a stable localized
+error. Long operations use a Tauri channel for bounded progress and a typed
+cancellation command. Apply accepts only an opaque cached Plan identity, never
+client-authored steps. Tokens, raw credential values, native handles, and
+arbitrary file/network/process authority never cross into the webview.
+
+Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,
+`frontend/src/lib/bridge.ts`, and their roster/golden tests.
+
+## Retired private sidecar protocol (historical)
 
 This protocol is retained only to document compatibility history. No shipping or
 test path starts a sidecar or uses child-process IPC.

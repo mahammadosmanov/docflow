@@ -19,6 +19,7 @@
 
 ```bash
 node tools/version_manager.mjs check
+node tools/docs_audit.mjs
 node tools/package_audit.mjs source
 npm test
 npm run build
@@ -52,6 +53,7 @@ and silent uninstall on a real Windows runner.
 | Area | Mandatory evidence | Risk controlled |
 |---|---|---|
 | Version contract | Node version check | Mixed UI/installer versions |
+| Documentation contract | Required-map, requirement-ID, and operation-roster audit | New operator or coding agent follows missing/stale product guidance |
 | Process Scans | parser/OCR tests + image-only packaged smoke | OCR drift, false labels, missing engine/data |
 | Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |

@@ -4,6 +4,7 @@
 
 ```bash
 node tools/version_manager.mjs check
+node tools/docs_audit.mjs
 node tools/package_audit.mjs source
 npm test
 npm run build

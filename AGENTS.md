@@ -18,11 +18,12 @@ authority for filesystem, document, network, token, and native-platform work.
 Read sources in this order:
 
 1. This `AGENTS.md` and the closest nested `AGENTS.md`
-2. `docs/PRODUCT.md` and accepted architecture decisions
-3. `docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`
-4. Protocol/contracts and safety tests
-5. `docs/VERSIONING.md`, `docs/RELEASE_SAFETY.md`, and CI evidence
-6. Roadmap and GitHub Issues
+2. `docs/README.md` and its ordered documentation map
+3. `docs/PRODUCT.md`, `docs/PRD.md`, and accepted architecture decisions
+4. `docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`
+5. Protocol/contracts and safety tests
+6. `docs/VERSIONING.md`, `docs/RELEASE_SAFETY.md`, and CI evidence
+7. Roadmap and GitHub Issues
 
 When active sources disagree, stop and reconcile documents and tests in the same
 change before moving authority.
@@ -37,7 +38,8 @@ change before moving authority.
 6. The webview never receives Supabase tokens or arbitrary filesystem, network, shell, or process authority.
 7. All user-visible text exists in `tr`, `en`, `ru`, and `az`.
 8. Forms are generated from `ParamSchema`; never add an operation-specific form.
-9. Canonical RFI codes are normalized to NFC and uppercase once; never lowercase them.
+9. OCR candidates may be normalized to NFC and uppercase once. Persisted RFI
+   codes must already match exact uppercase ASCII; never silently repair them.
 10. Keep the strict `-RFI-` anchor. A miss is recoverable; a false label is silent corruption.
 11. The UI is monochrome. Meaning comes from controls, text, icons, and border weight.
 12. OCR, filesystem, network, Office, and printer work stays outside the webview.
@@ -62,6 +64,7 @@ change before moving authority.
 
 ```bash
 node tools/version_manager.mjs check
+node tools/docs_audit.mjs
 node tools/package_audit.mjs source
 npm test
 npm run build
