@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.17.0",
+  "currentVersion": "0.18.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -342,9 +342,17 @@
       "version": "0.17.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.17.0",
       "summary": "Search and filter large preview warning sets, then focus exact Worley RFI warnings on their already-approved page comparison."
+    },
+    {
+      "version": "0.18.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.18.0",
+      "summary": "Expand guarded RFI System and Follow Up plans into exact sheet/cell before-and-after value comparisons without reopening the workbook."
     }
   ]
 }

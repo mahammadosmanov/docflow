@@ -22,8 +22,8 @@ the historical tracker.
 
 ## Next — deeper RFI automation
 
-- Extend the implemented shared effect summary and exact-path disclosure with
-  before/after workbook content previews where a safe bounded renderer exists.
+- Keep the implemented exact existing-cell workbook comparison aligned with
+  guarded RFI System and Follow Up step metadata as workbook families expand.
 - Keep the implemented bounded Worley first-page thumbnails covered by packaged
   Windows and representative combined-scan acceptance evidence.
 - Keep the implemented warning search, type filtering, and exact-RFI page focus

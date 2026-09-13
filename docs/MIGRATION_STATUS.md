@@ -4,6 +4,18 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.18.0: exact existing-cell workbook comparison
+  - guarded RFI System and Follow Up steps expose workbook, sheet/cell, canonical
+    RFI, expected current value, and exact replacement value before Apply
+  - the bounded view derives only from approved step metadata and performs no
+    workbook read, recalculation, or mutation
+  - invalid or oversized display fields fail closed and at most 1,000 approved
+    cell changes cross the presentation boundary
+  - macOS source verification passed: 328 Rust unit tests and 199 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 51 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+
 - [x] Version 0.17.0: warning-focused review
   - previews with five or more warnings provide local text search, type filtering,
     result counts, and a compact scroll region without mutating Plan warnings

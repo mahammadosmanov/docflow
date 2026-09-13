@@ -1595,6 +1595,85 @@ textarea:focus {
   margin: 0;
   padding: 8px;
 }
+.workbook-change-preview {
+  flex-shrink: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.workbook-change-preview > summary {
+  min-height: 38px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+.workbook-change-preview > summary span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.workbook-change-preview > summary svg {
+  width: 15px;
+  height: 15px;
+}
+.workbook-change-preview > summary small,
+.workbook-change-preview > p,
+.workbook-change-limit {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+.workbook-change-preview > p {
+  margin: 0;
+  padding: 0 11px 8px;
+}
+.workbook-change-limit {
+  display: block;
+  padding: 7px 11px;
+  border-top: 1px solid var(--line);
+}
+.workbook-change-table-wrap {
+  max-height: 260px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  scrollbar-gutter: stable;
+}
+.workbook-change-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.67rem;
+}
+.workbook-change-preview th,
+.workbook-change-preview td {
+  padding: 6px 8px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.workbook-change-preview th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.workbook-change-preview td:nth-child(1),
+.workbook-change-preview td:nth-child(2) {
+  white-space: nowrap;
+}
+.workbook-change-preview td:nth-child(3) {
+  max-width: 230px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
 .signed-page-comparison {
   flex-shrink: 0;
   padding: 10px 12px;

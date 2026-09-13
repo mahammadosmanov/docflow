@@ -127,6 +127,14 @@ only when the warning subject contains an exact bounded ASCII RFI code that also
 exists in the current editor rows. It selects the already-rendered comparison;
 it cannot revise the Plan, choose an archive candidate, or authorize Apply.
 
+Guarded RFI System and Follow Up workbook steps already carry the expected and
+replacement values that Apply validates. The shared workbook comparison projects
+only those exact approved step fields into a collapsed sheet/cell table; it does
+not reopen Excel, parse the workbook, or calculate a new update. Coordinates and
+text are bounded and structurally validated in the presentation layer, and at
+most 1,000 approved cells are displayed. Filtering editor rows changes the step
+metadata first, so a revised Plan cannot display a disabled cell as executable.
+
 ## Safety invariants
 
 - Preview never mutates filesystem, cloud, Office, or printer state.

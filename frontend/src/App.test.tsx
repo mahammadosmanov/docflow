@@ -18,6 +18,7 @@ import {
   PlanView,
   safePngThumbnail,
   summarizePlanImpact,
+  summarizeWorkbookCellChanges,
 } from "./App";
 import { makeStrings } from "./i18n";
 import { MockBridge, resetBridgeForTests } from "./lib/bridge";
@@ -850,6 +851,116 @@ describe("DocFlow shell", () => {
     expect(canonicalRfiInText("AZE-SUN-INT-QMS-RFI-MEC-02Â49")).toBeNull();
   });
 
+  it("derives exact existing-cell workbook comparisons only from approved step metadata", () => {
+    const code = "AZE-SUN-INT-QMS-RFI-MEC-0249";
+    const plan: Plan = {
+      planId: "workbook-preview",
+      opId: "rfi.system_sync",
+      warnings: [],
+      meta: {
+        editor: {
+          rows: [{ _rowId: "sync-row-1", canonicalRfi: code }],
+        },
+      },
+      steps: [
+        {
+          kind: "workbook_update",
+          src: "RFI Log.xlsm",
+          dst: ".backup.xlsm",
+          noteKey: "note.rfi.systemSync.rfiLog",
+          meta: {
+            syncStep: {
+              workbookKind: "rfiLog",
+              updates: {
+                MEC: {
+                  "249:20": {
+                    rowId: "sync-row-1",
+                    expectedValue: "Completed",
+                    replacementValue: "Completed; Signed by Worley",
+                    row: 249,
+                    col: 20,
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          kind: "workbook_update",
+          src: "Inspection Status Follow Up.xlsm",
+          dst: ".backup-follow-up.xlsm",
+          noteKey: "note.rfi.followUp.workbookUpdate",
+          meta: {
+            updates: [
+              {
+                canonicalRfi: code,
+                proposedStatus: "Signed",
+                target: {
+                  row: 42,
+                  statusColumn: 19,
+                  worksheet: { name: "Signed By Worley MEC" },
+                  statusCell: { value: "Not Signed" },
+                },
+              },
+            ],
+          },
+        },
+        {
+          kind: "workbook_update",
+          src: "forged.xlsm",
+          dst: "forged-backup.xlsm",
+          noteKey: "forged",
+          meta: {
+            updates: [
+              {
+                canonicalRfi: `${code}A`,
+                proposedStatus: "Signed",
+                target: {
+                  row: 0,
+                  statusColumn: 99_999,
+                  worksheet: { name: "Bad" },
+                  statusCell: { value: "Unknown" },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(summarizeWorkbookCellChanges(plan)).toEqual([
+      {
+        workbook: "rfiLog",
+        sheet: "MEC",
+        cell: "T249",
+        before: "Completed",
+        after: "Completed; Signed by Worley",
+        rfiCode: code,
+      },
+      {
+        workbook: "followUp",
+        sheet: "Signed By Worley MEC",
+        cell: "S42",
+        before: "Not Signed",
+        after: "Signed",
+        rfiCode: code,
+      },
+    ]);
+    render(
+      <PlanView
+        plan={plan}
+        s={makeStrings("en")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText("Exact workbook cell changes"));
+    expect(screen.getByText("MEC!T249")).toBeVisible();
+    expect(screen.getByText("Completed; Signed by Worley")).toBeVisible();
+    expect(screen.getByText("Signed By Worley MEC!S42")).toBeVisible();
+  });
+
   it("accepts only bounded PNG data thumbnails", () => {
     expect(safePngThumbnail("data:image/png;base64,iVBORw0KGgoAAA==")).toBe(
       "data:image/png;base64,iVBORw0KGgoAAA==",
@@ -1076,7 +1187,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.17.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.18.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

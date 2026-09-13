@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.18.0 - 2026-09-13
+
+### Added
+
+- Guarded RFI System and Follow Up updates now expose an expandable exact cell
+  comparison before Apply: workbook, sheet/cell, RFI, current value, and new value.
+
+### Safety
+
+- The comparison reads only expected and replacement values already embedded in
+  approved workbook steps. It does not reopen Excel or recalculate mutations.
+- Invalid coordinates, oversized text, unknown workbook kinds, and non-canonical
+  RFI links fail closed; display is capped at 1,000 approved cell changes.
+
+### Fixed
+
+- Corrected the release-safety document's stale operation count from eight to nine.
+
 ## 0.17.0 - 2026-09-13
 
 ### Added
