@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.18.1",
+  "currentVersion": "0.18.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -358,9 +358,17 @@
       "version": "0.18.1",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.18.1",
       "summary": "Keep dashboard readiness mutation-free and surface finalized recovery notices even when their former document root can no longer be reopened."
+    },
+    {
+      "version": "0.18.2",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.18.2",
+      "summary": "Prevent passive macOS Keychain restoration from blocking normal startup while keeping inaccessible credentials untouched and native-only."
     }
   ]
 }

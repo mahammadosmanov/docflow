@@ -116,13 +116,30 @@ const ACCOUNT: &str = "session-v1";
 #[cfg(target_os = "macos")]
 impl CredentialStore for OsCredentialStore {
     fn read(&self) -> Result<Option<StoredSession>, CredentialError> {
+        use security_framework::item::{ItemClass, ItemSearchOptions, SearchResult};
+        use security_framework::os::macos::keychain::SecKeychain;
+
         const ERR_SEC_ITEM_NOT_FOUND: i32 = -25_300;
-        let mut encoded =
-            match security_framework::passwords::get_generic_password(SERVICE, ACCOUNT) {
-                Ok(encoded) => encoded,
-                Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => return Ok(None),
-                Err(_) => return Err(CredentialError::Unavailable),
-            };
+        let _interaction_lock =
+            SecKeychain::disable_user_interaction().map_err(|_| CredentialError::Unavailable)?;
+        let mut query = ItemSearchOptions::new();
+        query
+            .class(ItemClass::generic_password())
+            .service(SERVICE)
+            .account(ACCOUNT)
+            .load_data(true)
+            .limit(1)
+            .skip_authenticated_items(true);
+        let mut results = match query.search() {
+            Ok(results) => results,
+            Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => return Ok(None),
+            Err(_) => return Err(CredentialError::Unavailable),
+        };
+        let mut encoded = match results.pop() {
+            Some(SearchResult::Data(encoded)) if results.is_empty() => encoded,
+            None => return Ok(None),
+            Some(_) => return Err(CredentialError::InvalidData),
+        };
         let result = serde_json::from_slice(&encoded).map_err(|_| CredentialError::InvalidData);
         encoded.zeroize();
         result.map(Some)

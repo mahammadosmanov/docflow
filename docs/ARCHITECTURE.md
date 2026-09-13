@@ -178,7 +178,13 @@ the capability boundary.
 
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified
-readback. A downgrade requires sign-in again.
+readback. A downgrade requires sign-in again. Passive macOS startup reads set
+the Security framework's skip-authentication-UI query policy and hold its scoped
+legacy-keychain interaction-disable guard: an inaccessible item fails closed to
+signed out without deletion instead of blocking the splash screen on an
+off-focus Keychain prompt. Dropping the guard restores the process interaction
+policy. Explicit sign-in and sign-out remain the only user-driven credential
+write/delete paths.
 
 The completed migration rationale and historical phase gates are in
 `docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`.

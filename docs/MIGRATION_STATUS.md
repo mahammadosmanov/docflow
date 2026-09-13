@@ -4,6 +4,23 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.18.2: non-interactive macOS credential restore
+  - passive startup requests the exact Keychain item with authentication UI
+    disabled, so the splash screen cannot wait on a hidden authorization prompt
+  - unavailable or interaction-protected credentials remain untouched and fail
+    closed to signed out; native-only token storage is unchanged
+  - Windows behavior, explicit credential writes, and explicit deletes are
+    unchanged
+  - macOS source verification passed: 329 Rust unit tests and 200 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 51 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - the unsigned 0.18.2 package passed tree audit and packaged OCR/apply/journal/
+    undo smoke (17 ms bootstrap/settings, 300 ms first OCR, 382 ms operation)
+  - process sampling after normal launch confirmed bootstrap was no longer
+    blocked in Keychain restore; final visual GUI inspection remained pending
+    only because the macOS session locked during verification
+
 - [x] Version 0.18.1: mutation-free readiness and stale-root recovery listing
   - dashboard readiness uses the same bounded journal parser without acquiring
     mutation permits, reopening workbook roots, reconciling effects, or writing

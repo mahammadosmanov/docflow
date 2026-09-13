@@ -8,6 +8,22 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.18.2 - 2026-09-13
+
+### Fixed
+
+- macOS startup now reads an existing secure session without allowing Keychain
+  authentication UI to block the application on its splash screen.
+- If a session cannot be read without interaction, DocFlow fails closed to the
+  sign-in screen while leaving the Keychain item untouched.
+
+### Safety
+
+- Tokens remain inside the native OS credential store and never cross into the
+  webview. Startup does not copy them into settings or weaken credential access.
+- Credential creation, update, and deletion behavior is unchanged; only the
+  passive startup read is non-interactive.
+
 ## 0.18.1 - 2026-09-13
 
 ### Fixed

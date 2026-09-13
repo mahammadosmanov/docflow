@@ -62,6 +62,7 @@ and silent uninstall on a real Windows runner.
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |
 | Localization | four-catalog key equality | Raw keys or missing language strings |
 | Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
+| Credential startup | native-store contract test + normal packaged GUI launch | Hidden Keychain prompt, indefinite splash, token deletion, or webview exposure |
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
 | Device readiness | pure fact classification + typed command/UI tests + mutation-free pending-journal inspection test | Hidden OCR/printer failure, startup-time recovery mutation, stale-root failure, or overlooked interrupted work |
 | RFI work tracking | strict event validation + conflict projection + native preview/apply/list/undo + journal-evidence validation + typed queue UI | Lost resume state, cross-user exposure, silent transition conflict, stale/foreign/partial evidence, or coordination metadata authorizing document mutation |

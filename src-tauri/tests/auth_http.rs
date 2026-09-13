@@ -637,6 +637,22 @@ fn platform_credential_backend_is_native_for_supported_targets() {
     assert_eq!(OsCredentialStore::BACKEND, "windows-credential-manager");
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_startup_credential_read_never_requests_authentication_ui() {
+    let source = include_str!("../src/credentials.rs");
+    let macos_read = source
+        .split("#[cfg(target_os = \"macos\")]\nimpl CredentialStore for OsCredentialStore")
+        .nth(1)
+        .and_then(|block| block.split("#[cfg(target_os = \"windows\")]").next())
+        .expect("macOS credential implementation");
+
+    assert!(macos_read.contains("ItemSearchOptions"));
+    assert!(macos_read.contains("SecKeychain::disable_user_interaction()"));
+    assert!(macos_read.contains("skip_authenticated_items(true)"));
+    assert!(!macos_read.contains("get_generic_password"));
+}
+
 #[test]
 fn admin_user_methods_preserve_profile_dtos_and_owner_authorization_headers() {
     let now = 1_800_000_000_i64;
