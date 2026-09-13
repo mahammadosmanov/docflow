@@ -72,6 +72,13 @@ undoable no-clobber write. Journal disappearance, undo, partial state, wrong
 operation, wrong stage, or identity mismatch fails closed into rejection or
 Needs Review; Outlook draft journals are never lifecycle evidence.
 
+RFI work audit export reads the same bounded owner-scoped event snapshot and
+prepares both lossless JSON and Excel-safe CSV outputs. The selected destination
+is capability-bound, filenames are unique, and both writes use the ordinary
+preview, approval, no-clobber journal, and undo path. Export never prunes or
+modifies the append-only store. Queue DTOs expose event count, owned valid-event
+bytes, and the fixed limit so operators can act before the store is full.
+
 ## Operation contract
 
 ```text

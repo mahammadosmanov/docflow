@@ -141,6 +141,25 @@
     "titleKey": "op.rfi.work_item_update.title"
   },
   {
+    "descriptionKey": "op.rfi.work_item_export.desc",
+    "id": "rfi.work_item_export",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.workItem.exportDestination.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.workItem.exportDestination",
+        "name": "destination",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.work_item_export.title"
+  },
+  {
     "descriptionKey": "op.rfi.process_scans.desc",
     "id": "rfi.process_scans",
     "schema": [

@@ -397,6 +397,11 @@ h2 {
   display: grid;
   gap: 7px;
 }
+.work-store-usage {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
 .work-item-card-shell {
   overflow: hidden;
   border: 1px solid var(--line);

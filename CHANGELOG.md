@@ -8,6 +8,22 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.12.0 - 2026-09-13
+
+### Added
+
+- Added owner-scoped RFI work audit export as a lossless JSON file and an
+  Excel-safe CSV file from one previewed operation.
+- Added live event-count, storage-size, and 10,000-event capacity visibility to
+  the RFI work dashboard.
+
+### Safety
+
+- Audit files use unique names, never overwrite an existing destination, and
+  remain journaled and undoable. Invalid or foreign-owner events are excluded.
+- Formula-like CSV text is neutralized before Excel opens it, each output is
+  bounded to 16 MiB, and export never deletes or changes work-item history.
+
 ## 0.11.0 - 2026-09-13
 
 ### Added

@@ -4,11 +4,12 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.11 journal-linked RFI work foundation
+## Now — 0.12 auditable RFI work foundation
 
 - Keep the read-only device-readiness surface accurate and actionable.
-- Extend the implemented append-only RFI work items and journal-linked assisted
-  transitions with export and bounded retention controls.
+- Design explicit, reversible archival retention for the append-only RFI work
+  store; never delete history automatically. Portable owner-scoped audit export
+  and live capacity visibility are implemented in 0.12.0.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,
   OneDrive-backed folders, Microsoft Print to PDF, and representative printers.
 - Expand structural fixtures for every current production workbook family

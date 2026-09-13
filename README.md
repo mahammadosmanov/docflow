@@ -1,10 +1,12 @@
 # DocFlow
 
-DocFlow 0.10.1 is a Tauri 2 desktop application for eight high-risk document
+DocFlow 0.12.0 is a Tauri 2 desktop application for nine high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
   Review queues, plus one-click prefilled transitions
+- Export RFI work audit: owner-scoped lossless JSON and Excel-safe CSV with
+  visible bounded-store capacity, no overwrite, journal, and undo
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
 - Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe
   workbook backup/verification, email extraction, and Excel-native mail copy

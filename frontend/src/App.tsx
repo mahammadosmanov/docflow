@@ -708,6 +708,9 @@ function HomeScreen({
   const workItemOperation = bootstrap.operations.find(
     (operation) => operation.id === "rfi.work_item_update",
   );
+  const workItemExportOperation = bootstrap.operations.find(
+    (operation) => operation.id === "rfi.work_item_export",
+  );
   const runVerifiedWorkStep = (item: WorkItem) => {
     const mapping = verifiedOperationByStage[item.stage];
     const operation = mapping
@@ -806,6 +809,15 @@ function HomeScreen({
               <p>{s.t("workItems.help")}</p>
             </div>
             <div className="work-queue-actions">
+              {workItems && (
+                <span className="work-store-usage">
+                  {s.t("workItems.storeUsage", {
+                    count: workItems.eventCount,
+                    limit: workItems.eventLimit,
+                    size: Math.ceil(workItems.eventBytes / 1024),
+                  })}
+                </span>
+              )}
               <IconButton
                 label={s.t("workItems.refresh")}
                 onClick={() => void loadWorkItems()}
@@ -813,6 +825,17 @@ function HomeScreen({
               >
                 <RefreshCw className={workItemsBusy ? "spin" : ""} />
               </IconButton>
+              <Button
+                variant="secondary"
+                icon={<Download />}
+                disabled={!workItemExportOperation}
+                onClick={() =>
+                  workItemExportOperation &&
+                  navigate({ name: "operation", operation: workItemExportOperation })
+                }
+              >
+                {s.t("workItems.export")}
+              </Button>
               <Button
                 icon={<Plus />}
                 disabled={!workItemOperation}
@@ -888,6 +911,16 @@ function HomeScreen({
               })}
             </Notice>
           )}
+          {workItems &&
+            workItems.eventLimit > 0 &&
+            workItems.eventCount * 10 >= workItems.eventLimit * 9 && (
+              <Notice kind="warning">
+                {s.t("workItems.capacityWarning", {
+                  count: workItems.eventCount,
+                  limit: workItems.eventLimit,
+                })}
+              </Notice>
+            )}
         </section>
         <section className="readiness-card" aria-labelledby="readiness-title">
           <div className="readiness-heading">

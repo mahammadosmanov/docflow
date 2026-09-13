@@ -86,6 +86,9 @@ describe("DocFlow shell", () => {
               needsReview: [],
               completedCount: 0,
               invalidEventCount: 0,
+              eventCount: 0,
+              eventBytes: 0,
+              eventLimit: 10000,
             },
           };
       }
@@ -175,6 +178,9 @@ describe("DocFlow shell", () => {
               needsReview: [],
               completedCount: 2,
               invalidEventCount: 0,
+              eventCount: 3,
+              eventBytes: 2048,
+              eventLimit: 10000,
             },
           }
         : { handled: false },
@@ -186,10 +192,19 @@ describe("DocFlow shell", () => {
     expect(await screen.findByText("Bugünün RFI işleri")).toBeVisible();
     expect(screen.getByText("MEC inspection request")).toBeVisible();
     expect(screen.getByText("Talep kaydedildi")).toBeVisible();
+    expect(screen.getByText("3/10000 olay · 2 KB")).toBeVisible();
     expect(call).toHaveBeenCalledWith("workItems/list");
 
+    fireEvent.click(screen.getByRole("button", { name: "Denetimi dışa aktar" }));
+    expect(
+      await screen.findByRole("heading", {
+        name: "RFI iş denetimini dışa aktar",
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Geri" }));
+
     fireEvent.click(
-      screen.getByRole("button", { name: "MEC inspection request işini aç" }),
+      await screen.findByRole("button", { name: "MEC inspection request işini aç" }),
     );
     expect(
       await screen.findByRole("heading", { name: "RFI işini kaydet" }),
@@ -913,7 +928,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.11.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.12.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

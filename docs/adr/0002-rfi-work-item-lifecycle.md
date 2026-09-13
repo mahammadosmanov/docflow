@@ -54,8 +54,9 @@ local effect.
 - One RFI request can safely span multiple days and machines while official
   workbooks remain authoritative.
 - Existing operations remain independently usable and backward compatible.
-- Store migrations, event validation, retention, export, and rebuild tests are
-  required before the first persistent work-item release.
+- Store migrations, event validation, export, capacity visibility, and rebuild
+  tests are required as the feature matures. Any archival retention policy must
+  be explicit, reversible, and separately accepted before it can remove events.
 
 ## Initial implementation
 
@@ -77,6 +78,12 @@ RFI Log advances to `numbers_assigned`, successfully filed Process Scans advance
 to `intec_scan_filed`, and a two-workbook System Sync advances to
 `worley_signed_synced`. Outlook drafts are deliberately excluded. Missing or
 later-undone evidence projects the work item into Needs Review.
+
+Version 0.12.0 adds owner-scoped audit export as lossless JSON plus Excel-safe
+CSV through the standard preview/apply/journal/undo boundary. The home queue
+shows valid event count, bytes, and the fixed 10,000-event ceiling. No automatic
+retention or deletion is introduced; archival policy remains a later explicit
+decision.
 
 ## Rollback
 

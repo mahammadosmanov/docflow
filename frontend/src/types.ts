@@ -170,6 +170,9 @@ export interface WorkItemQueues {
   needsReview: WorkItem[];
   completedCount: number;
   invalidEventCount: number;
+  eventCount: number;
+  eventBytes: number;
+  eventLimit: number;
 }
 
 export interface ProgressEvent {

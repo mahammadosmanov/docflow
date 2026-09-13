@@ -4,6 +4,20 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.12.0: portable RFI work audit and capacity visibility
+  - owner-scoped valid events export together as lossless JSON and Excel-safe
+    CSV through preview, approval, no-clobber writes, journal, and undo
+  - invalid and foreign-owner events are never copied into the audit; formula-like
+    CSV text is neutralized and each output is bounded to 16 MiB
+  - the home queue reports valid event count, owned bytes, and the 10,000-event
+    ceiling without automatically deleting or changing history
+  - macOS source verification passed: 327 Rust unit tests and every integration
+    suite, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 47 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - Windows/OneDrive destination acceptance remains pending and is not implied
+    by macOS source verification
+
 - [x] Version 0.11.0: journal-linked RFI work transitions
   - eligible work cards launch RFI Log, Process Scans, or two-workbook Worley
     System Sync and offer a separate explicitly approved tracking transition

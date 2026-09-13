@@ -211,6 +211,20 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     for parameter in &mut work_item.schema.params {
         parameter.remember = false;
     }
+    let work_item_export = operation(
+        "rfi.work_item_export",
+        vec![parameter(
+            "destination",
+            ParamKind::Folder,
+            "param.rfi.workItem.exportDestination",
+            Value::Null,
+            true,
+            Vec::new(),
+            BTreeMap::new(),
+            Map::new(),
+            Some("param.rfi.workItem.exportDestination.help"),
+        )],
+    );
     let process_scans = operation(
         "rfi.process_scans",
         vec![
@@ -621,6 +635,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
 
     vec![
         work_item,
+        work_item_export,
         process_scans,
         rfi_log,
         rfi_follow_up,
@@ -645,6 +660,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 "rfi.work_item_update",
+                "rfi.work_item_export",
                 "rfi.process_scans",
                 "rfi.log_add",
                 "rfi.follow_up_sync",
@@ -654,7 +670,7 @@ mod tests {
                 "rfi.system_sync",
             ]
         );
-        let follow_up = &operations[3];
+        let follow_up = &operations[4];
         assert_eq!(
             follow_up.schema.validate(&Map::new()),
             vec![
@@ -662,7 +678,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[7];
+        let system_sync = &operations[8];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -672,7 +688,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            operations[4].schema.validate(&Map::new()),
+            operations[5].schema.validate(&Map::new()),
             vec!["error.param.required.reply_text".to_string()]
         );
 
@@ -687,7 +703,7 @@ mod tests {
     #[test]
     fn param_schema_validation_matches_frozen_required_value_rules() {
         let operations = operation_registry(RegistryFacts::default());
-        let process_scans = &operations[1];
+        let process_scans = &operations[2];
         assert_eq!(
             process_scans.schema.validate(&Map::new()),
             vec![
@@ -696,7 +712,7 @@ mod tests {
             ]
         );
 
-        let rfi_log = &operations[2];
+        let rfi_log = &operations[3];
         let values = serde_json::from_value(json!({
             "workbook": "/tmp/RFI Log.xlsx",
             "email_provider": "offline",

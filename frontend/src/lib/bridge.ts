@@ -261,6 +261,26 @@ const demoWorkItemOperation: OperationDef = {
   })),
 };
 
+const demoWorkItemExportOperation: OperationDef = {
+  id: "rfi.work_item_export",
+  titleKey: "op.rfi.work_item_export.title",
+  descriptionKey: "op.rfi.work_item_export.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "destination",
+      kind: "folder",
+      labelKey: "param.rfi.workItem.exportDestination",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.workItem.exportDestination.help",
+    },
+  ],
+};
+
 const demoRfiOperation: OperationDef = {
   id: "rfi.log_add",
   titleKey: "op.rfi.log_add.title",
@@ -660,6 +680,7 @@ export class MockBridge implements Bridge {
           prefs: this.prefs,
           operations: [
             demoWorkItemOperation,
+            demoWorkItemExportOperation,
             demoOperation,
             demoRfiOperation,
             demoRfiFollowUpOperation,
@@ -776,6 +797,9 @@ export class MockBridge implements Bridge {
           needsReview: [],
           completedCount: 0,
           invalidEventCount: 0,
+          eventCount: 0,
+          eventBytes: 0,
+          eventLimit: 10000,
         } satisfies WorkItemQueues;
         break;
       case "engine/preview": {
@@ -801,6 +825,31 @@ export class MockBridge implements Bridge {
                   stage: values.stage,
                   title: values.title,
                 },
+              },
+            ],
+          } satisfies Plan;
+          break;
+        }
+        if (params.opId === "rfi.work_item_export") {
+          result = {
+            planId: "demo-work-item-export-plan",
+            opId: "rfi.work_item_export",
+            warnings: [],
+            meta: { eventCount: 0, invalidEventCount: 0, sourceEventBytes: 0 },
+            steps: [
+              {
+                kind: "write",
+                src: null,
+                dst: "DocFlow export/docflow-rfi-work-audit-demo.json",
+                noteKey: "step.rfi.workItemExportJson",
+                meta: {},
+              },
+              {
+                kind: "write",
+                src: null,
+                dst: "DocFlow export/docflow-rfi-work-audit-demo.csv",
+                noteKey: "step.rfi.workItemExportCsv",
+                meta: {},
               },
             ],
           } satisfies Plan;

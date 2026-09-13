@@ -2,14 +2,14 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
     sync::OnceLock,
 };
 
 use chrono::{DateTime, NaiveDate};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
 use crate::{
@@ -19,9 +19,11 @@ use crate::{
 };
 
 pub const OPERATION_ID: &str = "rfi.work_item_update";
+pub const EXPORT_OPERATION_ID: &str = "rfi.work_item_export";
 const SCHEMA_VERSION: u64 = 1;
 const MAX_EVENTS: usize = 10_000;
 const MAX_EVENT_BYTES: u64 = 64 * 1024;
+const MAX_EXPORT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_REASON_CHARS: usize = 1_000;
 const MAX_RFI_CODES: usize = 500;
@@ -58,6 +60,12 @@ pub struct WorkItemInput {
     pub reason: String,
     #[serde(default)]
     pub source_journal_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkItemExportInput {
+    pub destination: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -104,6 +112,16 @@ pub struct WorkItemQueues {
     pub needs_review: Vec<WorkItem>,
     pub completed_count: u64,
     pub invalid_event_count: u64,
+    pub event_count: u64,
+    pub event_bytes: u64,
+    pub event_limit: u64,
+}
+
+#[derive(Debug, Default)]
+struct EventSnapshot {
+    events: Vec<WorkItemEvent>,
+    invalid_event_count: u64,
+    event_bytes: u64,
 }
 
 pub fn preview_event(
@@ -274,67 +292,14 @@ pub fn project(
     today: NaiveDate,
 ) -> Result<WorkItemQueues, BackendError> {
     validate_owner(owner_id)?;
-    let events_root = root.join("events");
-    let entries = match fs::read_dir(&events_root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(WorkItemQueues::default());
-        }
-        Err(_) => return Err(validation("error.workItems.storeUnavailable")),
-    };
-    let mut events = Vec::new();
-    let mut invalid_event_count = 0_u64;
-    for (index, entry) in entries.enumerate() {
-        if index >= MAX_EVENTS {
-            return Err(validation("error.workItems.eventLimit"));
-        }
-        let Ok(entry) = entry else {
-            invalid_event_count += 1;
-            continue;
-        };
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("json") {
-            continue;
-        }
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            invalid_event_count += 1;
-            continue;
-        };
-        if !metadata.is_file() || metadata.len() > MAX_EVENT_BYTES {
-            invalid_event_count += 1;
-            continue;
-        }
-        let Ok(file) = fs::File::open(&path) else {
-            invalid_event_count += 1;
-            continue;
-        };
-        let mut bytes = Vec::new();
-        if file
-            .take(MAX_EVENT_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .is_err()
-            || bytes.len() as u64 > MAX_EVENT_BYTES
-        {
-            invalid_event_count += 1;
-            continue;
-        }
-        let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
-            invalid_event_count += 1;
-            continue;
-        };
-        if validate_event(&event).is_err() {
-            invalid_event_count += 1;
-            continue;
-        }
-        if event.owner_id == owner_id {
-            events.push(event);
-        }
-    }
-    events.sort_by(|left, right| {
+    let mut snapshot = load_events(root, owner_id)?;
+    snapshot.events.sort_by(|left, right| {
         (&left.occurred_at, &left.event_id).cmp(&(&right.occurred_at, &right.event_id))
     });
+    let event_count = snapshot.events.len() as u64;
+    let mut invalid_event_count = snapshot.invalid_event_count;
     let mut projected = BTreeMap::<String, WorkItem>::new();
-    for event in events {
+    for event in snapshot.events {
         if event.action == "create" {
             if let Some(existing) = projected.get_mut(&event.item_id) {
                 existing.needs_review = true;
@@ -380,6 +345,9 @@ pub fn project(
     }
     let mut queues = WorkItemQueues {
         invalid_event_count,
+        event_count,
+        event_bytes: snapshot.event_bytes,
+        event_limit: MAX_EVENTS as u64,
         ..WorkItemQueues::default()
     };
     for item in projected.into_values() {
@@ -412,6 +380,207 @@ pub fn project(
         });
     }
     Ok(queues)
+}
+
+fn load_events(root: &Path, owner_id: &str) -> Result<EventSnapshot, BackendError> {
+    let events_root = root.join("events");
+    match fs::symlink_metadata(&events_root) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => return Err(validation("error.workItems.storeUnavailable")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(EventSnapshot::default());
+        }
+        Err(_) => return Err(validation("error.workItems.storeUnavailable")),
+    }
+    let entries = match fs::read_dir(&events_root) {
+        Ok(entries) => entries,
+        Err(_) => return Err(validation("error.workItems.storeUnavailable")),
+    };
+    let mut snapshot = EventSnapshot::default();
+    for (index, entry) in entries.enumerate() {
+        if index >= MAX_EVENTS {
+            return Err(validation("error.workItems.eventLimit"));
+        }
+        let Ok(entry) = entry else {
+            snapshot.invalid_event_count += 1;
+            continue;
+        };
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            snapshot.invalid_event_count += 1;
+            continue;
+        };
+        if !metadata.is_file() || metadata.len() > MAX_EVENT_BYTES {
+            snapshot.invalid_event_count += 1;
+            continue;
+        }
+        let Ok(file) = fs::File::open(&path) else {
+            snapshot.invalid_event_count += 1;
+            continue;
+        };
+        let mut bytes = Vec::new();
+        if file
+            .take(MAX_EVENT_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .is_err()
+            || bytes.len() as u64 > MAX_EVENT_BYTES
+        {
+            snapshot.invalid_event_count += 1;
+            continue;
+        }
+        let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
+            snapshot.invalid_event_count += 1;
+            continue;
+        };
+        if validate_event(&event).is_err() {
+            snapshot.invalid_event_count += 1;
+            continue;
+        }
+        if event.owner_id == owner_id {
+            snapshot.event_bytes += bytes.len() as u64;
+            snapshot.events.push(event);
+        }
+    }
+    Ok(snapshot)
+}
+
+pub fn preview_export(
+    root: &Path,
+    owner_id: &str,
+    input: WorkItemExportInput,
+    occurred_at: &str,
+) -> Result<Plan, BackendError> {
+    validate_owner(owner_id)?;
+    DateTime::parse_from_rfc3339(occurred_at)
+        .map_err(|_| validation("error.workItems.timestampInvalid"))?;
+    let destination = PathBuf::from(input.destination);
+    if !destination.is_dir() {
+        return Err(validation("error.workItems.exportDestinationInvalid"));
+    }
+    let mut snapshot = load_events(root, owner_id)?;
+    snapshot.events.sort_by(|left, right| {
+        (&left.occurred_at, &left.event_id).cmp(&(&right.occurred_at, &right.event_id))
+    });
+    let export_events = snapshot
+        .events
+        .iter()
+        .map(|event| {
+            json!({
+                "schemaVersion": event.schema_version,
+                "eventId": event.event_id,
+                "itemId": event.item_id,
+                "occurredAt": event.occurred_at,
+                "action": event.action,
+                "previousEventId": event.previous_event_id,
+                "fromStage": event.from_stage,
+                "toStage": event.to_stage,
+                "title": event.title,
+                "rfiCodes": event.rfi_codes,
+                "dueDate": event.due_date,
+                "needsReview": event.needs_review,
+                "reason": event.reason,
+                "sourceJournalId": event.source_journal_id,
+            })
+        })
+        .collect::<Vec<_>>();
+    let json_content = serde_json::to_string_pretty(&json!({
+        "schemaVersion": 1,
+        "exportedAt": occurred_at,
+        "ownerId": owner_id,
+        "eventCount": export_events.len(),
+        "invalidEventCount": snapshot.invalid_event_count,
+        "sourceEventBytes": snapshot.event_bytes,
+        "events": export_events,
+    }))
+    .map(|value| format!("{value}\n"))
+    .map_err(|_| BackendError::protocol("work item export could not be encoded"))?;
+    let mut csv_content = String::from(
+        "schema_version,event_id,item_id,occurred_at,action,previous_event_id,from_stage,to_stage,title,rfi_codes,due_date,needs_review,reason,source_journal_id\r\n",
+    );
+    for event in &snapshot.events {
+        let fields = [
+            event.schema_version.to_string(),
+            event.event_id.clone(),
+            event.item_id.clone(),
+            event.occurred_at.clone(),
+            event.action.clone(),
+            event.previous_event_id.clone().unwrap_or_default(),
+            event.from_stage.clone().unwrap_or_default(),
+            event.to_stage.clone(),
+            event.title.clone(),
+            event.rfi_codes.join(";"),
+            event.due_date.clone().unwrap_or_default(),
+            event.needs_review.to_string(),
+            event.reason.clone().unwrap_or_default(),
+            event.source_journal_id.clone().unwrap_or_default(),
+        ];
+        csv_content.push_str(
+            &fields
+                .iter()
+                .map(|value| csv_field(value))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        csv_content.push_str("\r\n");
+    }
+    if json_content.len() > MAX_EXPORT_BYTES || csv_content.len() > MAX_EXPORT_BYTES {
+        return Err(validation("error.workItems.exportTooLarge"));
+    }
+    let suffix = Uuid::new_v4().simple().to_string();
+    let basename = format!(
+        "docflow-rfi-work-audit-{}-{}",
+        compact_timestamp(occurred_at),
+        &suffix[..8]
+    );
+    let outputs = [
+        ("json", json_content, "step.rfi.workItemExportJson"),
+        ("csv", csv_content, "step.rfi.workItemExportCsv"),
+    ];
+    let mut steps = Vec::with_capacity(outputs.len());
+    for (extension, content, note_key) in outputs {
+        let path = destination.join(format!("{basename}.{extension}"));
+        if path.exists() {
+            return Err(validation("error.workItems.exportExists"));
+        }
+        steps.push(Step {
+            kind: StepKind::Write,
+            src: None,
+            dst: Some(path.to_string_lossy().into_owned()),
+            note_key: Some(note_key.to_string()),
+            meta: Map::from_iter([("content".to_string(), Value::String(content))]),
+        });
+    }
+    Ok(Plan {
+        plan_id: String::new(),
+        op_id: EXPORT_OPERATION_ID.to_string(),
+        steps,
+        warnings: Vec::new(),
+        meta: Map::from_iter([
+            ("eventCount".to_string(), json!(snapshot.events.len())),
+            (
+                "invalidEventCount".to_string(),
+                json!(snapshot.invalid_event_count),
+            ),
+            ("sourceEventBytes".to_string(), json!(snapshot.event_bytes)),
+        ]),
+    })
+}
+
+fn csv_field(value: &str) -> String {
+    let dangerous = value
+        .trim_start()
+        .chars()
+        .next()
+        .is_some_and(|first| matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r'));
+    let safe = if dangerous {
+        format!("'{value}")
+    } else {
+        value.to_string()
+    };
+    format!("\"{}\"", safe.replace('"', "\"\""))
 }
 
 pub fn project_with_journals(
@@ -475,45 +644,8 @@ fn invalid_evidence_items(
     owner_id: &str,
     journals: &JournalStore,
 ) -> Result<BTreeSet<String>, BackendError> {
-    let entries = match fs::read_dir(root.join("events")) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
-        Err(_) => return Err(validation("error.workItems.storeUnavailable")),
-    };
     let mut invalid = BTreeSet::new();
-    for (index, entry) in entries.enumerate() {
-        if index >= MAX_EVENTS {
-            return Err(validation("error.workItems.eventLimit"));
-        }
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if path.extension().and_then(|value| value.to_str()) != Some("json")
-            || !metadata.is_file()
-            || metadata.len() > MAX_EVENT_BYTES
-        {
-            continue;
-        }
-        let Ok(file) = fs::File::open(&path) else {
-            continue;
-        };
-        let mut bytes = Vec::new();
-        if file
-            .take(MAX_EVENT_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .is_err()
-            || bytes.len() as u64 > MAX_EVENT_BYTES
-        {
-            continue;
-        }
-        let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
-            continue;
-        };
-        if event.owner_id != owner_id || validate_event(&event).is_err() {
-            continue;
-        }
+    for event in load_events(root, owner_id)?.events {
         let Some(journal_id) = event.source_journal_id.as_deref() else {
             continue;
         };

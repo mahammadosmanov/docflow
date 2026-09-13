@@ -5,7 +5,8 @@ use docflow_lib::{
     contracts::{Step, StepKind},
     journal::{JournalRecord, JournalState, JournalStore},
     work_items::{
-        WorkItemInput, preview_event, preview_event_with_journal, project, project_with_journals,
+        WorkItemExportInput, WorkItemInput, preview_event, preview_event_with_journal,
+        preview_export, project, project_with_journals,
     },
 };
 use serde_json::{Map, json};
@@ -23,6 +24,82 @@ fn persist_preview(plan: &docflow_lib::contracts::Plan) {
             .expect("event content"),
     )
     .expect("persist event fixture");
+}
+
+#[test]
+fn audit_export_is_owner_scoped_bounded_and_excel_safe() {
+    let directory = tempdir().expect("temporary store");
+    let destination = tempdir().expect("export destination");
+    let mut dangerous = input("create", "", "request_captured");
+    dangerous.title = "=WEBSERVICE(\"https://example.invalid\")".to_string();
+    let owned = preview_event(
+        directory.path(),
+        "owner-1",
+        dangerous,
+        "2026-09-13T08:00:00Z",
+    )
+    .expect("owned event");
+    persist_preview(&owned);
+    let foreign = preview_event(
+        directory.path(),
+        "owner-2",
+        input("create", "", "request_captured"),
+        "2026-09-13T08:01:00Z",
+    )
+    .expect("foreign event");
+    persist_preview(&foreign);
+    fs::write(directory.path().join("events/invalid.json"), b"{bad").unwrap();
+
+    let plan = preview_export(
+        directory.path(),
+        "owner-1",
+        WorkItemExportInput {
+            destination: destination.path().to_string_lossy().into_owned(),
+        },
+        "2026-09-13T09:00:00Z",
+    )
+    .expect("audit export preview");
+
+    assert_eq!(plan.op_id, "rfi.work_item_export");
+    assert_eq!(plan.steps.len(), 2);
+    assert!(plan.steps.iter().all(|step| step.kind == StepKind::Write));
+    assert!(plan.steps.iter().all(|step| {
+        Path::new(step.dst.as_deref().unwrap())
+            .parent()
+            .is_some_and(|parent| parent == destination.path())
+    }));
+    let json = plan.steps[0].meta["content"].as_str().unwrap();
+    assert!(json.contains("=WEBSERVICE"));
+    assert!(json.contains("\"ownerId\": \"owner-1\""));
+    assert!(!json.contains("owner-2"));
+    assert!(json.contains("\"invalidEventCount\": 1"));
+    let csv = plan.steps[1].meta["content"].as_str().unwrap();
+    assert!(csv.contains("'=WEBSERVICE"));
+    assert!(!csv.contains("owner-2"));
+    assert_eq!(plan.meta["eventCount"], json!(1));
+}
+
+#[test]
+fn work_item_projection_reports_non_destructive_store_capacity() {
+    let directory = tempdir().expect("temporary store");
+    let created = preview_event(
+        directory.path(),
+        "owner-1",
+        input("create", "", "request_captured"),
+        "2026-09-13T08:00:00Z",
+    )
+    .expect("create preview");
+    persist_preview(&created);
+
+    let projection = project(
+        directory.path(),
+        "owner-1",
+        NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(projection.event_count, 1);
+    assert!(projection.event_bytes > 0);
+    assert_eq!(projection.event_limit, 10_000);
 }
 
 fn input(action: &str, item_id: &str, stage: &str) -> WorkItemInput {
@@ -198,6 +275,25 @@ fn event_symlinks_are_never_followed() {
     )
     .expect("symlink-safe projection");
     assert_eq!(projection.invalid_event_count, 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn event_store_directory_symlinks_are_never_followed() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempdir().expect("temporary store");
+    let outside = tempdir().expect("outside event store");
+    symlink(outside.path(), directory.path().join("events")).unwrap();
+
+    assert!(
+        project(
+            directory.path(),
+            "owner-1",
+            NaiveDate::from_ymd_opt(2026, 9, 13).unwrap(),
+        )
+        .is_err()
+    );
 }
 
 #[test]

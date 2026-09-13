@@ -44,7 +44,7 @@ use crate::{
     },
     rfi_follow_up, rfi_log, rfi_system_sync,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
-    work_items::{self, WorkItemInput, WorkItemQueues},
+    work_items::{self, WorkItemExportInput, WorkItemInput, WorkItemQueues},
 };
 
 const SUPABASE_URL: &str = "https://ndpkgbfmshceffwhpqoz.supabase.co";
@@ -806,6 +806,63 @@ impl NativeBackend {
             request.values,
             &chrono::Utc::now().to_rfc3339(),
             source_journal.as_ref(),
+        )?;
+        let cached = self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![grant.grant_id],
+            ),
+            plan,
+        )?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(cached)
+    }
+
+    pub(crate) fn preview_work_item_export<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<WorkItemExportInput> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != work_items::EXPORT_OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust work-item export backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let destination = PathBuf::from(&request.values.destination);
+        let grant = self
+            .filesystem
+            .issue_grant(&scope, &destination, GrantAccess::ReadWrite)?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 0,
+            total: 1,
+            subject: destination.to_string_lossy().into_owned(),
+        });
+        let plan = work_items::preview_export(
+            &self.app_data_dir.join("work-items"),
+            &caller.owner_id,
+            request.values,
+            &chrono::Utc::now().to_rfc3339(),
         )?;
         let cached = self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -2296,6 +2353,43 @@ mod tests {
             .unwrap();
         assert!(undone.is_some());
         assert!(backend.work_items().unwrap().resume.is_empty());
+    }
+
+    #[test]
+    fn work_item_audit_export_uses_selected_folder_journal_and_undo() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let export_root = temporary.path().join("audit-export");
+        fs::create_dir(&export_root).unwrap();
+        let selection = backend
+            .register_selected_paths(
+                work_items::EXPORT_OPERATION_ID,
+                "destination",
+                vec![export_root.clone()],
+            )
+            .unwrap()
+            .remove(0);
+        let plan = backend
+            .preview_work_item_export(
+                json!({
+                    "opId": work_items::EXPORT_OPERATION_ID,
+                    "values": {"destination": selection}
+                }),
+                |_| {},
+            )
+            .unwrap();
+        let plan_id = plan["planId"].as_str().unwrap();
+        let (result, operation_id) = backend
+            .apply_native_plan(plan_id, Some(work_items::EXPORT_OPERATION_ID), |_| {})
+            .unwrap();
+        assert_eq!(operation_id, work_items::EXPORT_OPERATION_ID);
+        assert_eq!(fs::read_dir(&export_root).unwrap().count(), 2);
+
+        backend
+            .try_native_undo(&json!({"journalId": result["journalId"]}))
+            .unwrap()
+            .expect("export should be undoable");
+        assert_eq!(fs::read_dir(&export_root).unwrap().count(), 0);
     }
 
     #[test]
