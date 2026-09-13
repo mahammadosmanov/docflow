@@ -8,6 +8,21 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.15.0 - 2026-09-13
+
+### Added
+
+- Added a collapsed exact-effects panel to schema-driven editable previews.
+- Operators can expand it before Apply to inspect every approved non-directory
+  effect with its complete source and destination paths.
+
+### Safety
+
+- The panel reads only immutable Plan steps already approved by Rust; opening it
+  performs no filesystem read, recalculation, or mutation.
+- The list is height-bounded and scrollable so large plans do not hide the
+  editor or Apply controls.
+
 ## 0.14.0 - 2026-09-13
 
 ### Added

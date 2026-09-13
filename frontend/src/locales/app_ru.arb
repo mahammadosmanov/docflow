@@ -38,6 +38,8 @@
   "plan.impact.drafts": "Открытие черновиков",
   "plan.impact.cleanup": "Очистка",
   "plan.impact.warnings": "Предупреждения",
+  "plan.exact.title": "Подтвержденных действий: {count}",
+  "plan.exact.help": "Откройте для проверки точных исходных и целевых путей",
   "op.rfi.process_scans.title": "Обработать сканы",
   "op.rfi.process_scans.desc": "Считывает номер RFI с первой страницы, переименовывает PDF и сохраняет их в выбранной структуре.",
   "param.source": "Исходная папка",

@@ -59,6 +59,8 @@
   "plan.impact.drafts": "Drafts opened",
   "plan.impact.cleanup": "Cleanup",
   "plan.impact.warnings": "Warnings",
+  "plan.exact.title": "{count} approved effects",
+  "plan.exact.help": "Open to inspect exact source and destination paths",
   "@plan.summary": {
     "placeholders": {
       "count": {

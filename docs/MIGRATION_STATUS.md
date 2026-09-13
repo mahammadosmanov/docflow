@@ -4,6 +4,14 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.15.0: exact approved effects in editable previews
+  - record editors expose a collapsed bounded list of immutable non-directory
+    Plan steps with complete source and destination paths
+  - the disclosure performs no backend read, recomputation, or mutation and does
+    not change Apply authority
+  - 20 Node tests, 48 React tests, production frontend build, source/version
+    audits, warnings-denied Clippy, fmt, check, and the full Rust suite passed
+
 - [x] Version 0.14.0: shared Apply-impact summary
   - ordinary and schema-driven editor previews display compact localized counts
     for outputs, updates, moves, printing, drafts, cleanup, and warnings

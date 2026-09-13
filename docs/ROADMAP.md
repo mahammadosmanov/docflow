@@ -22,8 +22,8 @@ the historical tracker.
 
 ## Next — deeper RFI automation
 
-- Extend the implemented shared effect summary with exact before/after workbook
-  and PDF content previews where a safe bounded renderer exists.
+- Extend the implemented shared effect summary and exact-path disclosure with
+  before/after workbook and PDF content previews where a safe bounded renderer exists.
 - Add page thumbnails and faster warning-focused review for combined Worley scans.
 - Prepare consistent Outlook drafts and archive reviewed publication mail as EML
   without automatically sending it.

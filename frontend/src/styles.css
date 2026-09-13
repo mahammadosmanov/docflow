@@ -1443,6 +1443,54 @@ textarea:focus {
   font-size: 0.78rem;
   font-weight: 700;
 }
+.plan-exact-effects {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.plan-exact-effects > summary {
+  min-height: 38px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.plan-exact-effects > summary::-webkit-details-marker {
+  display: none;
+}
+.plan-exact-effects > summary svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+.plan-exact-effects > summary span {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.plan-exact-effects > summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.plan-exact-list {
+  max-height: 190px;
+  padding: 0 8px 8px;
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+}
+.plan-exact-list .step-row {
+  padding: 8px 10px;
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+.plan-exact-list .step-copy span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 760px) {
   .plan-impact {
     align-items: stretch;
@@ -1450,6 +1498,9 @@ textarea:focus {
   }
   .plan-impact-counts {
     justify-content: flex-start;
+  }
+  .plan-exact-effects > summary small {
+    display: none;
   }
 }
 .editor-card {

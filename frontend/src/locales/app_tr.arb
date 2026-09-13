@@ -38,6 +38,8 @@
   "plan.impact.drafts": "Açılacak taslaklar",
   "plan.impact.cleanup": "Temizlik",
   "plan.impact.warnings": "Uyarılar",
+  "plan.exact.title": "{count} onaylı kesin etki",
+  "plan.exact.help": "Tam kaynak ve hedef yollarını incelemek için aç",
   "op.rfi.process_scans.title": "Taramaları İşle",
   "op.rfi.process_scans.desc": "İlk sayfadaki RFI numarasını okur, taranmış PDF'leri adlandırır ve seçtiğiniz düzende kaydeder.",
   "param.source": "Kaynak klasör",

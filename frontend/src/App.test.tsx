@@ -840,7 +840,15 @@ describe("DocFlow shell", () => {
     const plan: Plan = {
       planId: "plan-1",
       opId: "rfi.stage_signed_first_pages",
-      steps: [],
+      steps: [
+        {
+          kind: "pdf_first_page_replace",
+          src: "C:\\Signed\\combined.pdf",
+          dst: "C:\\Review\\RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf",
+          noteKey: "note.rfi.signedFirstPageStaged",
+          meta: {},
+        },
+      ],
       warnings: [],
       meta: { editor },
     };
@@ -859,6 +867,13 @@ describe("DocFlow shell", () => {
     expect(
       screen.getByText(
         "Henüz hiçbir şey değişmedi. Uygula yalnız bu onaylı önizlemeyi yürütür.",
+      ),
+    ).toBeVisible();
+    fireEvent.click(screen.getByText("1 onaylı kesin etki"));
+    expect(screen.getByText("C:\\Signed\\combined.pdf")).toBeVisible();
+    expect(
+      screen.getByText(
+        "→ C:\\Review\\RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf",
       ),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
@@ -987,7 +1002,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.14.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.15.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

@@ -106,6 +106,11 @@ moves/renames, print submissions, Outlook drafts, cleanup effects, and warnings.
 This is presentation only: it cannot add, remove, or authorize a step, and it is
 shown for both record-editor and ordinary previews.
 
+Record-editor previews also expose the same immutable non-directory steps in a
+collapsed, height-bounded exact-effects panel. Expanding it renders complete
+source and destination paths already present in the Plan; it does not request,
+recompute, or mutate backend state.
+
 ## Safety invariants
 
 - Preview never mutates filesystem, cloud, Office, or printer state.

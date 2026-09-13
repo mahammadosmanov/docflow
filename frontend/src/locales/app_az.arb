@@ -38,6 +38,8 @@
   "plan.impact.drafts": "Açılacaq qaralamalar",
   "plan.impact.cleanup": "Təmizləmə",
   "plan.impact.warnings": "Xəbərdarlıqlar",
+  "plan.exact.title": "{count} təsdiqlənmiş dəqiq təsir",
+  "plan.exact.help": "Tam mənbə və hədəf yollarını yoxlamaq üçün açın",
   "op.rfi.process_scans.title": "Skanları emal et",
   "op.rfi.process_scans.desc": "İlk səhifədəki RFI nömrəsini oxuyur, skan edilmiş PDF-ləri adlandırır və seçdiyiniz qaydada saxlayır.",
   "param.source": "Mənbə qovluğu",

@@ -3272,6 +3272,7 @@ export function PlanView({
             s={s}
             onChange={onEditorRowsChange}
           />
+          {plan.steps.length > 0 && <PlanExactEffects plan={plan} s={s} />}
         </>
       ) : (
         <div className="flow-scroll">
@@ -3430,6 +3431,25 @@ function PlanImpactSummary({ plan, s }: { plan: Plan; s: Strings }) {
   );
 }
 
+function PlanExactEffects({ plan, s }: { plan: Plan; s: Strings }) {
+  const effects = plan.steps.filter((step) => step.kind !== "mkdir");
+  if (effects.length === 0) return null;
+  return (
+    <details className="plan-exact-effects">
+      <summary>
+        <Eye aria-hidden="true" />
+        <span>{s.t("plan.exact.title", { count: effects.length })}</span>
+        <small>{s.t("plan.exact.help")}</small>
+      </summary>
+      <div className="plan-exact-list">
+        {effects.map((step, index) => (
+          <StepRow key={`${step.kind}-${index}`} step={step} s={s} fullPath />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function outlookReplyPreview(value: unknown): {
   subject: string;
   plainText: string;
@@ -3451,9 +3471,17 @@ function outlookReplyPreview(value: unknown): {
   };
 }
 
-function StepRow({ step, s }: { step: Step; s: Strings }) {
-  const source = step.src?.split(/[\\/]/).pop();
-  const destination = step.dst?.split(/[\\/]/).pop();
+function StepRow({
+  step,
+  s,
+  fullPath = false,
+}: {
+  step: Step;
+  s: Strings;
+  fullPath?: boolean;
+}) {
+  const source = fullPath ? step.src : step.src?.split(/[\\/]/).pop();
+  const destination = fullPath ? step.dst : step.dst?.split(/[\\/]/).pop();
   return (
     <div className="step-row">
       <span className="step-kind">

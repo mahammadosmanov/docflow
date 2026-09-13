@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.14.0",
+  "currentVersion": "0.15.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -318,9 +318,17 @@
       "version": "0.14.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.14.0",
       "summary": "Show every operation's approved output, update, move, print, draft, cleanup, and warning impact in one compact localized pre-Apply summary."
+    },
+    {
+      "version": "0.15.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.15.0",
+      "summary": "Let operators expand editable previews to inspect every exact approved effect and full source/destination path without recomputation."
     }
   ]
 }
