@@ -1491,6 +1491,78 @@ textarea:focus {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.signed-page-comparison {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.signed-page-comparison-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.signed-page-comparison-heading > div {
+  display: grid;
+  gap: 2px;
+}
+.signed-page-comparison-heading strong {
+  font-size: 0.78rem;
+}
+.signed-page-comparison-heading span,
+.signed-page-comparison > small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+.signed-page-comparison-heading select,
+.signed-page-comparison-code {
+  max-width: 360px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+}
+.signed-page-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.signed-page-comparison figure {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+.signed-page-comparison figcaption {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.signed-page-comparison img,
+.signed-page-preview-empty {
+  width: 100%;
+  height: 180px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+}
+.signed-page-preview-empty {
+  padding: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  text-align: center;
+}
 @media (max-width: 760px) {
   .plan-impact {
     align-items: stretch;
@@ -1501,6 +1573,13 @@ textarea:focus {
   }
   .plan-exact-effects > summary small {
     display: none;
+  }
+  .signed-page-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+  .signed-page-comparison img,
+  .signed-page-preview-empty {
+    height: 150px;
   }
 }
 .editor-card {

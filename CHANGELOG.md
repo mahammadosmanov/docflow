@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.16.0 - 2026-09-13
+
+### Added
+
+- Worley signed-page staging now shows the current archive first page beside the
+  exact new signed page selected by the approved Plan.
+- Ambiguous archive choices update the old-page image together with the selected
+  archive candidate.
+
+### Safety
+
+- Rust generates read-only grayscale PNG thumbnails only for the pinned Plan
+  pages; source scans and archives are never changed during preview.
+- Preview is capped at 20 RFI rows, 256 KiB per PNG, 4 MiB total encoded data,
+  and 240 by 320 pixels. Missing or unsupported previews require manual review
+  and never affect Apply authority.
+- React accepts only bounded PNG-signature data values and receives no local file
+  URL or added filesystem authority.
+
 ## 0.15.0 - 2026-09-13
 
 ### Added

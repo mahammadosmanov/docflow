@@ -30,6 +30,7 @@ struct FixtureOcr {
 #[derive(Default)]
 struct PageFixtureOcr {
     codes: BTreeMap<(String, usize), String>,
+    previews: bool,
 }
 
 impl OcrAdapter for PageFixtureOcr {
@@ -39,6 +40,10 @@ impl OcrAdapter for PageFixtureOcr {
 
     fn supports_page_scan(&self) -> bool {
         true
+    }
+
+    fn supports_page_previews(&self) -> bool {
+        self.previews
     }
 
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
@@ -219,6 +224,7 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
             (("combined.pdf".to_string(), 0), CODE.to_string()),
             (("combined.pdf".to_string(), 1), SECOND_CODE.to_string()),
         ]),
+        previews: true,
     };
 
     let plan = preview(
@@ -238,6 +244,18 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
     assert_eq!(replacement_steps[0].meta["signedPageIndex"], json!(0));
     assert_eq!(replacement_steps[1].meta["signedPageIndex"], json!(1));
     assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 2);
+    let comparisons = plan.meta["pageComparisons"].as_object().unwrap();
+    assert_eq!(comparisons.len(), 2);
+    for code in [CODE, SECOND_CODE] {
+        let comparison = comparisons[&format!("signed-{code}")].as_object().unwrap();
+        assert!(
+            comparison["signed"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("data:image/png;base64,"))
+        );
+        assert_eq!(comparison["archives"].as_object().unwrap().len(), 1);
+    }
+    assert_eq!(plan.meta["pagePreviewOmitted"], json!(0));
     assert!(
         plan.warnings
             .iter()
@@ -266,6 +284,7 @@ fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
 
     let unreadable = PageFixtureOcr {
         codes: BTreeMap::from([(("combined.pdf".to_string(), 0), CODE.to_string())]),
+        previews: false,
     };
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
@@ -292,6 +311,7 @@ fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
             (("combined.pdf".to_string(), 0), CODE.to_string()),
             (("combined.pdf".to_string(), 1), CODE.to_string()),
         ]),
+        previews: false,
     };
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
@@ -325,6 +345,7 @@ fn combined_scan_preview_reports_pages_and_cancels_between_them() {
                 "AZE-SUN-INT-QMS-RFI-MEC-0249".to_string(),
             ),
         ]),
+        previews: false,
     };
     let mut cancellation_checks = 0;
     let mut subjects = Vec::new();

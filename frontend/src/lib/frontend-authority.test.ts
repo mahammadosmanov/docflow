@@ -43,6 +43,9 @@ describe("frontend authority boundary", () => {
     expect(tauriConfig.app.security.csp).not.toMatch(
       /connect-src[^;]*https?:\/\/(?!ipc\.localhost)/,
     );
+    expect(tauriConfig.app.security.csp).toContain(
+      "img-src 'self' asset: http://asset.localhost data:",
+    );
     expect(sources).not.toMatch(
       /@tauri-apps\/plugin-(?:dialog|fs|http|opener|shell)|child_process|localStorage|sessionStorage|\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|accessToken|refreshToken|SUPABASE/i,
     );

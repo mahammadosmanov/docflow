@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.15.0",
+  "currentVersion": "0.16.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -326,9 +326,17 @@
       "version": "0.15.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.15.0",
       "summary": "Let operators expand editable previews to inspect every exact approved effect and full source/destination path without recomputation."
+    },
+    {
+      "version": "0.16.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.16.0",
+      "summary": "Compare bounded thumbnails of the pinned Worley page and selected archive first page before Apply without exposing file authority to the webview."
     }
   ]
 }

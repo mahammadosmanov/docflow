@@ -4,6 +4,20 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.16.0: bounded Worley first-page comparison
+  - signed-page staging shows the pinned signed page beside the selected archive
+    candidate's first page before Apply
+  - grayscale PNG previews are read-only, row/token-bound, and capped by row,
+    dimensions, per-image bytes, and total Plan bytes
+  - unsupported or exhausted rendering omits the image without changing steps,
+    editor validity, or Apply authority
+  - macOS source verification passed: 328 Rust unit tests and 199 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 49 React tests, production frontend build,
+    source/version audits, and the 282-Cargo/173-npm/60-OCR license audit
+  - packaged Windows PDF rendering and representative OneDrive acceptance remain
+    pending and are not implied by macOS source verification
+
 - [x] Version 0.15.0: exact approved effects in editable previews
   - record editors expose a collapsed bounded list of immutable non-directory
     Plan steps with complete source and destination paths

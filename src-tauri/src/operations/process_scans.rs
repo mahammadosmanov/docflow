@@ -34,6 +34,9 @@ pub trait OcrAdapter {
     fn supports_page_scan(&self) -> bool {
         false
     }
+    fn supports_page_previews(&self) -> bool {
+        false
+    }
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         if page_index == 0 {
             self.read(path)

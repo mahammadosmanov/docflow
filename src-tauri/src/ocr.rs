@@ -136,6 +136,10 @@ impl OcrAdapter for NativeOcr {
         true
     }
 
+    fn supports_page_previews(&self) -> bool {
+        cfg!(any(target_os = "macos", target_os = "windows"))
+    }
+
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         let text = page_text(path, page_index)?;
         if text.trim().chars().count() >= TEXT_LAYER_MIN_CHARS {
@@ -690,6 +694,95 @@ fn render_page_png(
     Err("native PDF image rendering is unsupported on this platform".to_string())
 }
 
+pub fn render_page_thumbnail_data_url(input: &Path, page_index: usize) -> Result<String, String> {
+    const MAX_WIDTH: usize = 240;
+    const MAX_HEIGHT: usize = 320;
+    const MAX_PNG_BYTES: usize = 256 * 1024;
+    let temporary = tempfile::tempdir().map_err(|error| format!("thumbnail temp: {error}"))?;
+    let rendered = temporary.path().join("page.png");
+    render_page_png(input, &rendered, 72, page_index)?;
+    let thumbnail = resize_gray_to_fit(&read_png_gray(&rendered)?, MAX_WIDTH, MAX_HEIGHT)?;
+    let mut png_bytes = Vec::new();
+    {
+        let width =
+            u32::try_from(thumbnail.width).map_err(|_| "thumbnail width is invalid".to_string())?;
+        let height = u32::try_from(thumbnail.height)
+            .map_err(|_| "thumbnail height is invalid".to_string())?;
+        let mut encoder = png::Encoder::new(&mut png_bytes, width, height);
+        encoder.set_color(png::ColorType::Grayscale);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|error| format!("thumbnail PNG header: {error}"))?;
+        writer
+            .write_image_data(&thumbnail.pixels)
+            .map_err(|error| format!("thumbnail PNG pixels: {error}"))?;
+    }
+    if png_bytes.len() > MAX_PNG_BYTES {
+        return Err("thumbnail exceeds the encoded size limit".to_string());
+    }
+    Ok(format!(
+        "data:image/png;base64,{}",
+        base64_encode(&png_bytes)
+    ))
+}
+
+fn resize_gray_to_fit(
+    image: &GrayImage,
+    max_width: usize,
+    max_height: usize,
+) -> Result<GrayImage, String> {
+    if image.width == 0
+        || image.height == 0
+        || image.pixels.len() != image.width.saturating_mul(image.height)
+        || max_width == 0
+        || max_height == 0
+    {
+        return Err("thumbnail dimensions are invalid".to_string());
+    }
+    let width_scale = max_width as f64 / image.width as f64;
+    let height_scale = max_height as f64 / image.height as f64;
+    let scale = width_scale.min(height_scale).min(1.0);
+    let width = ((image.width as f64 * scale).floor() as usize).max(1);
+    let height = ((image.height as f64 * scale).floor() as usize).max(1);
+    let mut pixels = Vec::with_capacity(width.saturating_mul(height));
+    for y in 0..height {
+        let source_y = y.saturating_mul(image.height) / height;
+        for x in 0..width {
+            let source_x = x.saturating_mul(image.width) / width;
+            pixels.push(image.pixels[source_y * image.width + source_x]);
+        }
+    }
+    Ok(GrayImage {
+        width,
+        height,
+        pixels,
+    })
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let first = chunk[0];
+        let second = chunk.get(1).copied().unwrap_or(0);
+        let third = chunk.get(2).copied().unwrap_or(0);
+        output.push(TABLE[usize::from(first >> 2)] as char);
+        output.push(TABLE[usize::from((first & 0x03) << 4 | second >> 4)] as char);
+        output.push(if chunk.len() > 1 {
+            TABLE[usize::from((second & 0x0f) << 2 | third >> 6)] as char
+        } else {
+            '='
+        });
+        output.push(if chunk.len() > 2 {
+            TABLE[usize::from(third & 0x3f)] as char
+        } else {
+            '='
+        });
+    }
+    output
+}
+
 pub fn image_pdf_from_png(input: &Path, output: &Path) -> Result<(), String> {
     use flate2::{Compression, write::ZlibEncoder};
 
@@ -808,6 +901,22 @@ mod tests {
                 .iter()
                 .all(|value| matches!(value, 0 | 255))
         );
+    }
+
+    #[test]
+    fn thumbnail_resize_and_base64_are_bounded_and_canonical() {
+        let image = GrayImage {
+            width: 4,
+            height: 2,
+            pixels: vec![0, 1, 2, 3, 4, 5, 6, 7],
+        };
+        let resized = resize_gray_to_fit(&image, 2, 2).unwrap();
+        assert_eq!((resized.width, resized.height), (2, 1));
+        assert_eq!(resized.pixels, vec![0, 2]);
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
     }
 
     #[cfg(windows)]

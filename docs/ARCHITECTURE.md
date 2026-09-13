@@ -87,6 +87,15 @@ imports only that approved page into the review copy. It never splits or mutates
 the source scan. Missing, low-confidence, duplicate, unsupported, or ambiguous
 pages remain warnings and cannot create an output.
 
+For up to 20 accepted RFI rows, Rust may also render the exact signed page and
+archive-candidate page one as grayscale PNG thumbnails. Each image is reduced to
+at most 240 by 320 pixels and 256 KiB; total encoded Plan thumbnail data is capped
+at 4 MiB. The images are inert metadata keyed by row and opaque candidate token,
+not executable steps or filesystem capabilities. React accepts only bounded PNG
+data URLs, and selecting an archive candidate displays the image bound to the
+same token used by Plan revision. Missing support or exhausted bounds require
+manual PDF review and never expand or alter Apply authority.
+
 ## Operation contract
 
 ```text

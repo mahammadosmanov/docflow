@@ -11,6 +11,7 @@ use crate::{
     errors::BackendError,
     fs_ops::file_sha256,
     naming::filename_for,
+    ocr::render_page_thumbnail_data_url,
     operations::process_scans::{OcrAdapter, OcrFailure},
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
@@ -22,6 +23,8 @@ const MIN_CONFIDENCE: f64 = 0.8;
 const MAX_SIGNED_PDFS: usize = 10_000;
 const MAX_SIGNED_PAGES: usize = 20_000;
 const MAX_ARCHIVE_ENTRIES: usize = 250_000;
+const MAX_PAGE_COMPARISONS: usize = 20;
+const MAX_PAGE_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StageSignedPagesParams {
@@ -39,6 +42,7 @@ struct Candidate {
 }
 
 struct PreparedArchive {
+    archive: PathBuf,
     relative: PathBuf,
     steps: Vec<Step>,
 }
@@ -210,6 +214,10 @@ where
         Value::String("rfi.signed.archive.choose".to_string()),
     )]);
     let mut candidate_steps = JsonObject::new();
+    let mut page_comparisons = JsonObject::new();
+    let mut page_preview_bytes = 0_usize;
+    let mut page_preview_omitted = 0_u64;
+    let mut page_preview_rows_attempted = 0_usize;
     for (code, candidate) in unique {
         if cancelled() {
             return Err(BackendError::cancelled());
@@ -312,6 +320,16 @@ where
             choices.push(Value::String(String::new()));
         }
         let mut row_candidates = JsonObject::new();
+        let preview_allowed =
+            ocr.supports_page_previews() && page_preview_rows_attempted < MAX_PAGE_COMPARISONS;
+        if preview_allowed {
+            page_preview_rows_attempted += 1;
+        }
+        let signed_preview = preview_allowed
+            .then(|| render_page_thumbnail_data_url(&candidate.path, candidate.page_index))
+            .and_then(Result::ok)
+            .and_then(|value| accept_page_preview(value, &mut page_preview_bytes));
+        let mut archive_previews = JsonObject::new();
         for (index, item) in prepared.iter().enumerate() {
             let token = format!("{row_id}-candidate-{}", index + 1);
             let relative = item.relative.to_string_lossy().into_owned();
@@ -320,6 +338,13 @@ where
             }
             choices.push(Value::String(token.clone()));
             archive_choice_labels.insert(token.clone(), Value::String(relative));
+            if preview_allowed
+                && let Some(value) = render_page_thumbnail_data_url(&item.archive, 0)
+                    .ok()
+                    .and_then(|value| accept_page_preview(value, &mut page_preview_bytes))
+            {
+                archive_previews.insert(token.clone(), Value::String(value));
+            }
             row_candidates.insert(
                 token,
                 serde_json::to_value(&item.steps).expect("candidate steps serialize"),
@@ -330,6 +355,17 @@ where
         }
         archive_choices.insert(code.clone(), Value::Array(choices));
         candidate_steps.insert(row_id.clone(), Value::Object(row_candidates));
+        if signed_preview.is_some() || !archive_previews.is_empty() {
+            page_comparisons.insert(
+                row_id.clone(),
+                json!({
+                    "signed": signed_preview,
+                    "archives": archive_previews,
+                }),
+            );
+        } else {
+            page_preview_omitted += 1;
+        }
         editor_rows.push(json!({
             "_rowId": row_id,
             "enabled": true,
@@ -341,6 +377,14 @@ where
     plan.meta.insert(
         "archiveCandidateSteps".to_string(),
         Value::Object(candidate_steps),
+    );
+    plan.meta.insert(
+        "pageComparisons".to_string(),
+        Value::Object(page_comparisons),
+    );
+    plan.meta.insert(
+        "pagePreviewOmitted".to_string(),
+        Value::from(page_preview_omitted),
     );
     plan.meta.insert(
         "editor".to_string(),
@@ -667,7 +711,20 @@ fn prepare_archive_candidate(
         note_key: Some("note.rfi.signedFirstPageStaged".to_string()),
         meta,
     });
-    Ok(Some(PreparedArchive { relative, steps }))
+    Ok(Some(PreparedArchive {
+        archive: archive_pdf.to_path_buf(),
+        relative,
+        steps,
+    }))
+}
+
+fn accept_page_preview(value: String, used: &mut usize) -> Option<String> {
+    let next = used.checked_add(value.len())?;
+    if next > MAX_PAGE_PREVIEW_BYTES {
+        return None;
+    }
+    *used = next;
+    Some(value)
 }
 
 fn extend_candidate_steps(target: &mut Vec<Step>, candidate: &[Step]) {

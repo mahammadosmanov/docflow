@@ -38,8 +38,8 @@ the prior first-page-only behavior and warn about extra pages.
   PDF splitting.
 - Each review row identifies its source filename and one-based page number.
 - One combined source fingerprint protects every planned page from later edits.
-- OCR effort grows with page count and remains bounded; progress stays file-based
-  until a future UI adds page-level progress and thumbnails.
+- OCR effort grows with page count and remains bounded. Page-level progress was
+  added in 0.13.1 and bounded thumbnails are governed by ADR 0004.
 - Native Windows OCR and OneDrive-backed review behavior still require acceptance
   on the exact packaged Windows candidate.
 

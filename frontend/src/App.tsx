@@ -3266,6 +3266,11 @@ export function PlanView({
               </div>
             </section>
           )}
+          <SignedPageComparison
+            plan={plan}
+            editorRows={editorRows}
+            s={s}
+          />
           <EditablePlanTable
             editor={editor}
             rows={editorRows}
@@ -3447,6 +3452,134 @@ function PlanExactEffects({ plan, s }: { plan: Plan; s: Strings }) {
         ))}
       </div>
     </details>
+  );
+}
+
+export function safePngThumbnail(value: unknown): string | null {
+  const prefix = "data:image/png;base64,";
+  const pngSignature = "iVBORw0KGgo";
+  const payload = typeof value === "string" ? value.slice(prefix.length) : "";
+  if (
+    typeof value !== "string" ||
+    !value.startsWith(prefix) ||
+    value.length > 350_000 ||
+    !payload.startsWith(pngSignature) ||
+    payload.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function SignedPageComparison({
+  plan,
+  editorRows,
+  s,
+}: {
+  plan: Plan;
+  editorRows: Record<string, unknown>[];
+  s: Strings;
+}) {
+  const raw =
+    plan.meta?.pageComparisons && typeof plan.meta.pageComparisons === "object"
+      ? (plan.meta.pageComparisons as Record<string, unknown>)
+      : {};
+  const available = editorRows.filter((row) => {
+    const rowId = typeof row._rowId === "string" ? row._rowId : "";
+    const comparison = raw[rowId];
+    if (!comparison || typeof comparison !== "object") return false;
+    const record = comparison as Record<string, unknown>;
+    const archives =
+      record.archives && typeof record.archives === "object"
+        ? Object.values(record.archives as Record<string, unknown>)
+        : [];
+    return Boolean(
+      safePngThumbnail(record.signed) || archives.some(safePngThumbnail),
+    );
+  });
+  const availableIds = available.map((row) => String(row._rowId));
+  const [selectedId, setSelectedId] = useState(availableIds[0] ?? "");
+  const availableSignature = availableIds.join("\u0000");
+  useEffect(() => {
+    if (!availableIds.includes(selectedId)) {
+      setSelectedId(availableIds[0] ?? "");
+    }
+  }, [availableSignature, selectedId]);
+  const omitted =
+    typeof plan.meta?.pagePreviewOmitted === "number"
+      ? plan.meta.pagePreviewOmitted
+      : 0;
+  if (available.length === 0) {
+    return omitted > 0 ? (
+      <Notice kind="warning">{s.t("rfi.signed.previewUnavailable")}</Notice>
+    ) : null;
+  }
+  const selected =
+    available.find((row) => row._rowId === selectedId) ?? available[0];
+  const comparison = raw[String(selected._rowId)] as Record<string, unknown>;
+  const archives =
+    comparison.archives && typeof comparison.archives === "object"
+      ? (comparison.archives as Record<string, unknown>)
+      : {};
+  const archiveToken =
+    typeof selected.archiveFile === "string" ? selected.archiveFile : "";
+  const archivePreview = safePngThumbnail(archives[archiveToken]);
+  const signedPreview = safePngThumbnail(comparison.signed);
+  const code = typeof selected.code === "string" ? selected.code : selectedId;
+  return (
+    <section className="signed-page-comparison" aria-labelledby="signed-page-comparison-title">
+      <div className="signed-page-comparison-heading">
+        <div>
+          <strong id="signed-page-comparison-title">
+            {s.t("rfi.signed.previewTitle")}
+          </strong>
+          <span>{s.t("rfi.signed.previewHelp")}</span>
+        </div>
+        {available.length > 1 ? (
+          <select
+            aria-label={s.t("rfi.signed.previewRfi")}
+            value={String(selected._rowId)}
+            onChange={(event) => setSelectedId(event.target.value)}
+          >
+            {available.map((row) => (
+              <option key={String(row._rowId)} value={String(row._rowId)}>
+                {typeof row.code === "string" ? row.code : String(row._rowId)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="signed-page-comparison-code">{code}</span>
+        )}
+      </div>
+      <div className="signed-page-comparison-grid">
+        <figure>
+          <figcaption>{s.t("rfi.signed.previewArchive")}</figcaption>
+          {archivePreview ? (
+            <img src={archivePreview} alt={s.t("rfi.signed.previewArchiveAlt", { code })} />
+          ) : (
+            <div className="signed-page-preview-empty">
+              {archiveToken
+                ? s.t("rfi.signed.previewUnavailable")
+                : s.t("rfi.signed.previewChooseArchive")}
+            </div>
+          )}
+        </figure>
+        <figure>
+          <figcaption>{s.t("rfi.signed.previewSigned")}</figcaption>
+          {signedPreview ? (
+            <img src={signedPreview} alt={s.t("rfi.signed.previewSignedAlt", { code })} />
+          ) : (
+            <div className="signed-page-preview-empty">
+              {s.t("rfi.signed.previewUnavailable")}
+            </div>
+          )}
+        </figure>
+      </div>
+      {omitted > 0 && (
+        <small>{s.t("rfi.signed.previewOmitted", { count: omitted })}</small>
+      )}
+    </section>
   );
 }
 

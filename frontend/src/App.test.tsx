@@ -14,6 +14,7 @@ import {
   humanError,
   isPlanEditorReady,
   PlanView,
+  safePngThumbnail,
   summarizePlanImpact,
 } from "./App";
 import { makeStrings } from "./i18n";
@@ -810,6 +811,19 @@ describe("DocFlow shell", () => {
     ).toBe(true);
   });
 
+  it("accepts only bounded PNG data thumbnails", () => {
+    expect(safePngThumbnail("data:image/png;base64,iVBORw0KGgoAAA==")).toBe(
+      "data:image/png;base64,iVBORw0KGgoAAA==",
+    );
+    expect(safePngThumbnail("https://example.test/page.png")).toBeNull();
+    expect(safePngThumbnail("data:image/svg+xml;base64,AA==")).toBeNull();
+    expect(safePngThumbnail("data:image/png;base64,<script>")).toBeNull();
+    expect(safePngThumbnail("data:image/png;base64,c2lnbmVk")).toBeNull();
+    expect(
+      safePngThumbnail(`data:image/png;base64,${"A".repeat(350_000)}`),
+    ).toBeNull();
+  });
+
   it("shows archive-root-relative candidates and enables apply only after selection", () => {
     const first = "Other/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf";
     const second = "Package/Civil/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0210.pdf";
@@ -850,7 +864,19 @@ describe("DocFlow shell", () => {
         },
       ],
       warnings: [],
-      meta: { editor },
+      meta: {
+        editor,
+        pageComparisons: {
+          "signed-CODE": {
+            signed: "data:image/png;base64,iVBORw0KGgoAAA==",
+            archives: {
+              "signed-CODE-candidate-1": "data:image/png;base64,iVBORw0KGgoBBB==",
+              "signed-CODE-candidate-2": "data:image/png;base64,iVBORw0KGgoCCC==",
+            },
+          },
+        },
+        pagePreviewOmitted: 0,
+      },
     };
     const onRowsChange = vi.fn();
     const props = {
@@ -877,6 +903,12 @@ describe("DocFlow shell", () => {
       ),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
+    expect(screen.getByText("İlk sayfa karşılaştırması")).toBeVisible();
+    expect(screen.getByText("İlk sayfasını göstermek için bir arşiv PDF'i seçin.")).toBeVisible();
+    expect(screen.getByAltText("CODE için yeni imzalı sayfa")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,iVBORw0KGgoAAA==",
+    );
     const archive = screen.getByRole("combobox");
     expect(within(archive).getByRole("option", { name: first })).toBeVisible();
     expect(within(archive).getByRole("option", { name: second })).toBeVisible();
@@ -886,6 +918,9 @@ describe("DocFlow shell", () => {
     expect(selectedRows[0].archiveFile).toBe("signed-CODE-candidate-2");
     view.rerender(<PlanView {...props} editorRows={selectedRows} />);
     expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
+    expect(
+      screen.getByAltText("CODE için arşivdeki mevcut ilk sayfa"),
+    ).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgoCCC==");
   });
 
   it("disables bool cells from row authority and localizes readonly key values", () => {
@@ -1002,7 +1037,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.15.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.16.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {
