@@ -9,7 +9,13 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { App, humanError, isPlanEditorReady, PlanView } from "./App";
+import {
+  App,
+  humanError,
+  isPlanEditorReady,
+  PlanView,
+  summarizePlanImpact,
+} from "./App";
 import { makeStrings } from "./i18n";
 import { MockBridge, resetBridgeForTests } from "./lib/bridge";
 import type { Plan } from "./types";
@@ -62,6 +68,49 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("summarizes every approved effect category without counting directories", () => {
+    const steps: Plan["steps"] = [
+      "mkdir",
+      "copy",
+      "write",
+      "pdf_first_page_replace",
+      "workbook_update",
+      "restore_backup",
+      "move",
+      "rename",
+      "print",
+      "outlook_reply_draft",
+      "cleanup_temp",
+    ].map((kind) => ({
+      kind: kind as Plan["steps"][number]["kind"],
+      src: null,
+      dst: null,
+      noteKey: null,
+      meta: {},
+    }));
+
+    expect(
+      summarizePlanImpact({
+        planId: "impact",
+        opId: "test",
+        steps,
+        warnings: [
+          { key: "warn.one", subject: "a" },
+          { key: "warn.two", subject: "b" },
+        ],
+        meta: {},
+      }),
+    ).toEqual({
+      outputs: 3,
+      updates: 2,
+      moves: 2,
+      printJobs: 1,
+      drafts: 1,
+      cleanup: 1,
+      warnings: 2,
+    });
+  });
+
   it("opens the journal-producing operation from an eligible RFI work card", async () => {
     interceptMockBridge((method) => {
       if (method === "workItems/list") {
@@ -806,6 +855,12 @@ describe("DocFlow shell", () => {
     };
     const view = render(<PlanView {...props} editorRows={initialRows} />);
 
+    expect(screen.getByText("Uygulamadan önce")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Henüz hiçbir şey değişmedi. Uygula yalnız bu onaylı önizlemeyi yürütür.",
+      ),
+    ).toBeVisible();
     expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
     const archive = screen.getByRole("combobox");
     expect(within(archive).getByRole("option", { name: first })).toBeVisible();
@@ -901,6 +956,10 @@ describe("DocFlow shell", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Unsent Outlook reply preview" })).toBeVisible();
+    const impact = view.container.querySelector<HTMLElement>(".plan-impact");
+    expect(impact).not.toBeNull();
+    expect(within(impact!).getByText("Drafts opened")).toBeVisible();
+    expect(within(impact!).getByText("1")).toBeVisible();
     expect(screen.getByText("Hello <script>alert(1)</script>")).toBeVisible();
     expect(
       screen.getByText(
@@ -928,7 +987,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.13.1-demo")).toBeVisible();
+    expect(screen.getByText("v0.14.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

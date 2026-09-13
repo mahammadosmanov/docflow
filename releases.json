@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.13.1",
+  "currentVersion": "0.14.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -310,9 +310,17 @@
       "version": "0.13.1",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.13.1",
       "summary": "Keep long combined-scan previews responsive with visible per-page recognition progress and cancellation between pages."
+    },
+    {
+      "version": "0.14.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.14.0",
+      "summary": "Show every operation's approved output, update, move, print, draft, cleanup, and warning impact in one compact localized pre-Apply summary."
     }
   ]
 }

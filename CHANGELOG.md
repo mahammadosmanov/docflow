@@ -8,6 +8,21 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.14.0 - 2026-09-13
+
+### Added
+
+- Added a compact Apply-impact summary to every ordinary and editable preview.
+- The summary separately counts new outputs, updated files, moves or renames,
+  print jobs, Outlook drafts, cleanup actions, and warnings.
+
+### Safety
+
+- Impact counts are derived only from the immutable Rust-approved Plan and do
+  not create, remove, or authorize effects.
+- The summary explicitly reminds the operator that preview has not changed any
+  document and Apply can execute only the approved preview.
+
 ## 0.13.1 - 2026-09-13
 
 ### Fixed

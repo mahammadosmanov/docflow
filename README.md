@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.13.1 is a Tauri 2 desktop application for nine high-risk document
+DocFlow 0.14.0 is a Tauri 2 desktop application for nine high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
@@ -21,6 +21,9 @@ workflows:
 The home screen also performs a read-only device-readiness check for OCR,
 available printers, and interrupted/recovery work. File-specific workbook,
 OneDrive, lock, and fingerprint checks remain part of each operation preview.
+Every operation preview also shows one compact impact summary for new outputs,
+updated files, moves, print jobs, drafts, cleanup actions, and warnings before
+Apply becomes available.
 
 The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
 TypeScript presentation layer. Tesseract and operating-system document/print

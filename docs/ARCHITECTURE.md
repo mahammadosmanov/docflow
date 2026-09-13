@@ -100,6 +100,12 @@ React renders `ParamSchema`; there is no operation-specific form. Apply accepts 
 opaque plan identity, not client-authored steps. The DTO shapes remain compatible
 through Serde/TypeScript golden fixtures.
 
+The shared Plan view derives a compact effect summary only from the immutable
+steps already returned by Rust. It counts created outputs, existing-file updates,
+moves/renames, print submissions, Outlook drafts, cleanup effects, and warnings.
+This is presentation only: it cannot add, remove, or authorize a step, and it is
+shown for both record-editor and ordinary previews.
+
 ## Safety invariants
 
 - Preview never mutates filesystem, cloud, Office, or printer state.

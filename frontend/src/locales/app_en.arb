@@ -50,6 +50,15 @@
   "history.undoToFolder": "Undo to a folder…",
   "plan.empty": "Nothing to do",
   "plan.summary": "{count} files will be processed",
+  "plan.impact.title": "Before you apply",
+  "plan.impact.previewOnly": "Nothing has changed yet. Apply executes only this approved preview.",
+  "plan.impact.outputs": "New outputs",
+  "plan.impact.updates": "Files updated",
+  "plan.impact.moves": "Moved / renamed",
+  "plan.impact.printJobs": "Print jobs",
+  "plan.impact.drafts": "Drafts opened",
+  "plan.impact.cleanup": "Cleanup",
+  "plan.impact.warnings": "Warnings",
   "@plan.summary": {
     "placeholders": {
       "count": {

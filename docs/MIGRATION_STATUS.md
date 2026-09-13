@@ -4,6 +4,17 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.14.0: shared Apply-impact summary
+  - ordinary and schema-driven editor previews display compact localized counts
+    for outputs, updates, moves, printing, drafts, cleanup, and warnings
+  - counts are presentation-only projections of immutable approved steps and
+    cannot expand Plan authority
+  - macOS source verification passed: 327 Rust unit tests and 199 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 20 Node tests, 48 React tests, production frontend build,
+    source/version audits, the 282-Cargo/173-npm/60-OCR license audit, and a
+    real-browser accessibility snapshot
+
 - [x] Version 0.13.1: responsive combined-scan preview
   - current page identity is emitted during recognition and cancellation is
     checked before every page, with zero document effects during preview
@@ -18,7 +29,7 @@ certification remain separate unchecked gates and are never implied by a source 
     that page and never splits or mutates the source scan or archive
   - unreadable, low-confidence, duplicate, unsupported, missing, and ambiguous
     pages fail closed, and total scan work is bounded to 20,000 pages
-  - macOS source verification passed: 327 Rust unit tests and 196 integration
+  - macOS source verification passed: 327 Rust unit tests and 198 integration
     tests, with one operator-workbook test intentionally ignored; warnings-denied
     Clippy, fmt, check, 20 Node tests, 47 React tests, production frontend build,
     source/version audits, and the 282-Cargo/173-npm/60-OCR license audit

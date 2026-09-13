@@ -3236,6 +3236,7 @@ export function PlanView({
   const replyPreview = outlookReplyPreview(plan.meta?.replyPreview);
   return (
     <div className="flow-layout">
+      <PlanImpactSummary plan={plan} s={s} />
       {editor && editorRows && onEditorRowsChange ? (
         <>
           {plan.warnings.length > 0 && (
@@ -3341,6 +3342,91 @@ export function PlanView({
         }
       />
     </div>
+  );
+}
+
+export interface PlanImpact {
+  outputs: number;
+  updates: number;
+  moves: number;
+  printJobs: number;
+  drafts: number;
+  cleanup: number;
+  warnings: number;
+}
+
+export function summarizePlanImpact(plan: Plan): PlanImpact {
+  const impact: PlanImpact = {
+    outputs: 0,
+    updates: 0,
+    moves: 0,
+    printJobs: 0,
+    drafts: 0,
+    cleanup: 0,
+    warnings: plan.warnings.length,
+  };
+  for (const step of plan.steps) {
+    switch (step.kind) {
+      case "copy":
+      case "write":
+      case "pdf_first_page_replace":
+        impact.outputs += 1;
+        break;
+      case "workbook_update":
+      case "restore_backup":
+        impact.updates += 1;
+        break;
+      case "move":
+      case "rename":
+        impact.moves += 1;
+        break;
+      case "print":
+        impact.printJobs += 1;
+        break;
+      case "outlook_reply_draft":
+        impact.drafts += 1;
+        break;
+      case "cleanup_temp":
+        impact.cleanup += 1;
+        break;
+      case "mkdir":
+        break;
+    }
+  }
+  return impact;
+}
+
+function PlanImpactSummary({ plan, s }: { plan: Plan; s: Strings }) {
+  const impact = summarizePlanImpact(plan);
+  const entries = ([
+    ["plan.impact.outputs", impact.outputs],
+    ["plan.impact.updates", impact.updates],
+    ["plan.impact.moves", impact.moves],
+    ["plan.impact.printJobs", impact.printJobs],
+    ["plan.impact.drafts", impact.drafts],
+    ["plan.impact.cleanup", impact.cleanup],
+    ["plan.impact.warnings", impact.warnings],
+  ] satisfies [string, number][]).filter(([, count]) => count > 0);
+  return (
+    <section className="plan-impact" aria-labelledby="plan-impact-title">
+      <div className="plan-impact-heading">
+        <Shield aria-hidden="true" />
+        <div>
+          <strong id="plan-impact-title">{s.t("plan.impact.title")}</strong>
+          <span>{s.t("plan.impact.previewOnly")}</span>
+        </div>
+      </div>
+      {entries.length > 0 && (
+        <dl className="plan-impact-counts">
+          {entries.map(([key, count]) => (
+            <div key={key}>
+              <dt>{s.t(key)}</dt>
+              <dd>{count}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
   );
 }
 
