@@ -585,11 +585,16 @@
   "param.rfi.systemSync.rfiLogWorkbook": "RFI Log İş Kitabı",
   "param.rfi.systemSync.rfiLogWorkbook.help": "Qeydlər (REMARKS) sütununa 'Signed by Worley' yazılacaq RFI Log (.xlsm və ya .xlsx) faylını seçin.",
   "param.rfi.systemSync.followUpWorkbook": "Follow Up İş Kitabı",
-  "param.rfi.systemSync.followUpWorkbook.help": "Signed by CIV və Signed by MEC vərəqlərinə Final ITP imzalanmış RFI-ların daxil ediləcəyi Follow Up (.xlsm və ya .xlsx) faylını seçin.",
+  "param.rfi.systemSync.followUpWorkbook.help": "Signed By Worley CIV və Signed By Worley MEC nəzarət cədvəllərini ehtiva edən cari Follow Up faylını seçin.",
   "error.param.required.rfi_system_root": "RFI Sistem əsas qovluğu mütləqdir",
   "error.rfi.systemSync.workbookInvalid": "Düzgün RFI Log və Follow Up .xlsm və ya .xlsx iş kitablarını seçin.",
   "error.rfi.systemSync.workbookLocked": "Seçilmiş iş kitabını Excel və ya digər tətbiqdə bağlayıb yenidən cəhd edin.",
+  "error.rfi.systemSync.workbookLayoutInvalid": "RFI Log-dakı CIV, MEC, ELE və PRC səhifələrinin hər birində bir dəqiq RFI No. və REMARKS başlığı olmalıdır.",
+  "error.rfi.systemSync.followUpLayoutInvalid": "Follow Up faylında bir Signed By Worley CIV cədvəli və bir Signed By Worley MEC nəzarət cədvəli olmalıdır.",
+  "error.rfi.systemSync.approvedUpdateInvalid": "Təsdiqlənmiş iş kitabı yeniləməsi etibarsızdır; yenidən önizləyin.",
+  "error.rfi.systemSync.workbookChanged": "Seçilmiş iş kitabı önizləmədən sonra dəyişib; heç bir yeniləmə tətbiq edilmədi. Yenidən önizləyin.",
   "warn.rfi.systemSync.noChangesNeeded": "Bütün aşkar edilmiş RFI-lar artıq sinxronlaşdırılıb və ya imzasızdır.",
+  "warn.rfi.systemSync.noRowsSelected": "Sinxronlaşdırmaq üçün ən azı bir təhlükəsiz imzalı RFI seçin.",
   "note.rfi.systemSync.rfiLog": "Worley imzalarını RFI Log qeydlərinə sinxronlaşdır",
   "note.rfi.systemSync.followUp": "Final ITP imzalı RFI-ları Follow Up iş kitabına sinxronlaşdır",
   "note.rfi.systemSync.backup": "Sinxronizasiyadan əvvəl nüsxə yarat",
@@ -606,5 +611,6 @@
   "rfi.systemSync.column.reason": "Sübut / Təfərrüatlar",
   "rfi.systemSync.disposition.ready": "Sinxronizasiyaya hazırdır",
   "rfi.systemSync.disposition.alreadySynced": "Artıq sinxronlaşdırılıb",
-  "rfi.systemSync.disposition.unsigned": "İmzasızdır"
+  "rfi.systemSync.disposition.unsigned": "İmzasızdır",
+  "rfi.systemSync.disposition.manualReview": "Əl ilə yoxlama"
 }

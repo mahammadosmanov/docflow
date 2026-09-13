@@ -697,6 +697,49 @@ impl FilesystemAuthority {
             cloud_synced: None,
         };
 
+        // Validate every approved workbook before creating a backup or changing
+        // either canonical file. This prevents a stale two-workbook plan from
+        // partially applying its first step.
+        for step in &claim.claimed.plan.steps {
+            let step_meta = rfi_system_sync::decode_step_meta(step)?;
+            let workbook_path = PathBuf::from(
+                step.src
+                    .as_deref()
+                    .ok_or_else(|| BackendError::validation("Step is missing source path"))?,
+            );
+            let backup_path = PathBuf::from(
+                step.dst
+                    .as_deref()
+                    .ok_or_else(|| BackendError::validation("Step is missing backup path"))?,
+            );
+            if workbook_path.as_path() != Path::new(&step_meta.target_path)
+                || backup_path.as_path() != Path::new(&step_meta.backup_path)
+            {
+                return Err(BackendError::validation(
+                    "error.rfi.systemSync.approvedUpdateInvalid",
+                ));
+            }
+            let capability = self.grants.authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &workbook_path,
+                PathIntent::Write,
+            )?;
+            let anchor = capability
+                .anchor()
+                .map_err(|error| BackendError::validation(error.to_string()))?;
+            let mut workbook = anchor
+                .open_mutable()
+                .map_err(|_| BackendError::validation("error.rfi.systemSync.workbookLocked"))?;
+            if rfi_follow_up::fingerprint_open_file(&mut workbook)? != step_meta.source_fingerprint
+            {
+                return Err(BackendError::validation(
+                    "error.rfi.systemSync.workbookChanged",
+                ));
+            }
+        }
+
         let total_steps = claim.claimed.plan.steps.len();
         for (step_idx, step) in claim.claimed.plan.steps.iter().enumerate() {
             if token.checkpoint().is_err() {
@@ -726,6 +769,18 @@ impl FilesystemAuthority {
             let workbook_anchor = workbook_cap
                 .anchor()
                 .map_err(|e| BackendError::validation(e.to_string()))?;
+
+            let step_meta = rfi_system_sync::decode_step_meta(step)?;
+            let mut current_workbook = workbook_anchor
+                .open_mutable()
+                .map_err(|_| BackendError::validation("error.rfi.systemSync.workbookLocked"))?;
+            if rfi_follow_up::fingerprint_open_file(&mut current_workbook)?
+                != step_meta.source_fingerprint
+            {
+                return Err(BackendError::validation(
+                    "error.rfi.systemSync.workbookChanged",
+                ));
+            }
 
             let backup_cap = self.grants.authorize_capability_for_plan(
                 &binding.grant_ids,

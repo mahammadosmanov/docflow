@@ -8,6 +8,32 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.7.0-rc.10 - 2026-09-13
+
+### Fixed
+
+- Corrected **Analyze RFI System & Sync Worley Signatures** against the current
+  production workbook layouts:
+  - discovers each RFI Log `RFI No.` and `REMARKS` column from exact headers
+    instead of writing to former fixed columns 20/21, which are current
+    shared-formula Folder Link columns;
+  - updates only literal `REMARKS` cells and the `Signed By Worley CIV`
+    `STATUS` / `Signed By Worley MEC` `Worley Status` control cells;
+  - preserves existing remarks by appending the exact `Signed by Worley` line;
+  - rejects missing, merged, formula-bearing, unexpected, stale, or altered
+    targets before unsafe mutation;
+  - applies a closed package-delta verifier so shared formulas, `calcChain.xml`,
+    VBA, styles, links, and every non-target OOXML member remain unchanged;
+  - revalidates both workbook fingerprints before the first mutation and again
+    before each workbook step;
+  - supports actual per-RFI selection during plan revision.
+
+### Verification
+
+- Added an operator-supplied production-template acceptance test. Copies of the
+  current RFI Log and Inspection Status Follow Up passed guarded preview/output
+  verification without changing their source files.
+
 ## 0.7.0-rc.9 - 2026-09-12
 
 ### Fixed

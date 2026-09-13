@@ -56,6 +56,7 @@ and silent uninstall on a real Windows runner.
 | Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |
 | RFI Follow Up | exact-match preview/revise/apply/undo and package-fidelity tests | Wrong-row updates, unsafe status projection, package damage, or recovery ambiguity |
+| RFI System/Worley sync | shared-formula fixture + operator-supplied current-template guarded-delta test | Folder Link formula overwrite, wrong control-table mapping, stale apply, shared-formula or calc-chain repair |
 | Outlook reply draft | fake-adapter identity/call-order/conditional-undo tests + Windows compile | Wrong message, recipient synthesis, accidental send, or deletion of a changed draft |
 | Batch Print | fake-adapter queue/spooler tests | Order loss, duplicated jobs, uncertain recovery |
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |

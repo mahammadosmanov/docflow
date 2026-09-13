@@ -1250,6 +1250,12 @@ impl NativeBackend {
         let payload = json!({"rows": request.rows});
         let revised = match claimed.plan.op_id.as_str() {
             "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
+            rfi_system_sync::OPERATION_ID => rfi_system_sync::revise(
+                &claimed.plan,
+                payload["rows"]
+                    .as_array()
+                    .ok_or_else(BackendError::invalid_params)?,
+            )?,
             "rfi.stage_signed_first_pages" => revise_stage_signed_pages(&claimed.plan, &payload)?,
             _ => {
                 return Err(BackendError::validation(
@@ -2915,13 +2921,24 @@ mod tests {
         let rfi_log_path = system_root.join("RFI_Log.xlsx");
         let follow_up_path = system_root.join("Follow_Up.xlsx");
 
-        let civ_log_row = r#"<row r="10"><c r="A10" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0103</t></is></c><c r="B10" t="inlineStr"><is><t>ITP-1</t></is></c><c r="C10" t="inlineStr"><is><t>2.3.1</t></is></c><c r="F10" t="inlineStr"><is><t>AREA-1</t></is></c><c r="G10" t="inlineStr"><is><t>CIV</t></is></c><c r="N10" t="inlineStr"><is><t>LOC</t></is></c><c r="T10" t="inlineStr"><is><t></t></is></c></row>"#;
-        let rfi_log_bytes =
-            create_xlsx(&[("CIV", civ_log_row), ("MEC", ""), ("ELE", ""), ("PRC", "")]);
+        let civ_log_row = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="V9" t="inlineStr"><is><t>REMARKS</t></is></c></row><row r="10"><c r="A10" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0103</t></is></c><c r="V10" t="inlineStr"><is><t></t></is></c></row>"#;
+        let mec_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="W9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
+        let ele_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="V9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
+        let prc_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="W9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
+        let rfi_log_bytes = create_xlsx(&[
+            ("CIV", civ_log_row),
+            ("MEC", mec_log_header),
+            ("ELE", ele_log_header),
+            ("PRC", prc_log_header),
+        ]);
         fs::write(&rfi_log_path, &rfi_log_bytes).unwrap();
 
-        let fu_civ_row = r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Area</t></is></c><c r="B1" t="inlineStr"><is><t>3.1</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>AREA-1</t></is></c><c r="B2" t="inlineStr"><is><t></t></is></c></row>"#;
-        let fu_bytes = create_xlsx(&[("Signed by CIV", fu_civ_row), ("Signed by MEC", "")]);
+        let fu_civ_row = r#"<row r="4"><c r="C4" t="inlineStr"><is><t>RFI No.</t></is></c><c r="D4" t="inlineStr"><is><t>STATUS</t></is></c></row><row r="5"><c r="C5" t="inlineStr"><is><t>CIV-0103</t></is></c><c r="D5" t="inlineStr"><is><t>Not Signed</t></is></c></row>"#;
+        let fu_mec_header = r#"<row r="3"><c r="S3" t="inlineStr"><is><t>RFI No.</t></is></c><c r="T3" t="inlineStr"><is><t>Worley Status</t></is></c></row>"#;
+        let fu_bytes = create_xlsx(&[
+            ("Signed By Worley CIV", fu_civ_row),
+            ("Signed By Worley MEC", fu_mec_header),
+        ]);
         fs::write(&follow_up_path, &fu_bytes).unwrap();
 
         let caller = backend.caller_identity().unwrap();

@@ -613,11 +613,16 @@
   "param.rfi.systemSync.rfiLogWorkbook": "RFI Log Workbook",
   "param.rfi.systemSync.rfiLogWorkbook.help": "Select the RFI Log (.xlsm or .xlsx) workbook to update Remarks to 'Signed by Worley'.",
   "param.rfi.systemSync.followUpWorkbook": "Follow Up Workbook",
-  "param.rfi.systemSync.followUpWorkbook.help": "Select the Follow Up (.xlsm or .xlsx) workbook to record Final ITP signed RFIs in Signed by CIV and Signed by MEC.",
+  "param.rfi.systemSync.followUpWorkbook.help": "Select the current Follow Up workbook containing the Signed By Worley CIV and Signed By Worley MEC control tables.",
   "error.param.required.rfi_system_root": "RFI System root folder is required",
   "error.rfi.systemSync.workbookInvalid": "Select valid RFI Log and Follow Up .xlsm or .xlsx workbooks.",
   "error.rfi.systemSync.workbookLocked": "Close the selected workbook in Excel or another application, then try again.",
+  "error.rfi.systemSync.workbookLayoutInvalid": "The RFI Log must contain one exact RFI No. and REMARKS header in each CIV, MEC, ELE, and PRC sheet.",
+  "error.rfi.systemSync.followUpLayoutInvalid": "The Follow Up workbook must contain one Signed By Worley CIV table and one Signed By Worley MEC control table.",
+  "error.rfi.systemSync.approvedUpdateInvalid": "The approved workbook update is invalid; preview again.",
+  "error.rfi.systemSync.workbookChanged": "A selected workbook changed after preview; no update was applied. Preview again.",
   "warn.rfi.systemSync.noChangesNeeded": "All detected RFIs are already synchronized or unsigned.",
+  "warn.rfi.systemSync.noRowsSelected": "Select at least one safe signed RFI to synchronize.",
   "note.rfi.systemSync.rfiLog": "Synchronize Worley signatures into RFI Log remarks",
   "note.rfi.systemSync.followUp": "Synchronize Final ITP signed RFIs into Follow Up",
   "note.rfi.systemSync.backup": "Create backup before synchronization",
@@ -634,5 +639,6 @@
   "rfi.systemSync.column.reason": "Evidence / Details",
   "rfi.systemSync.disposition.ready": "Ready to sync",
   "rfi.systemSync.disposition.alreadySynced": "Already synchronized",
-  "rfi.systemSync.disposition.unsigned": "Unsigned"
+  "rfi.systemSync.disposition.unsigned": "Unsigned",
+  "rfi.systemSync.disposition.manualReview": "Manual review"
 }

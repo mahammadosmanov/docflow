@@ -343,7 +343,7 @@ pub(crate) struct RfiStatusColumns {
 pub(crate) fn status_columns() -> [RfiStatusColumns; 4];
 ```
 
-It returns, in this exact order:
+The legacy projection defaults return, in this exact order:
 
 ```text
 CIV: RFI 1, REMARKS 20
@@ -352,7 +352,13 @@ ELE: RFI 1, REMARKS 20
 PRC: RFI 1, REMARKS 20
 ```
 
-The values are projections of the current `rfi_log::layout` constants. In literal terms the actual projections are `CIV: 1/20`, `MEC: 1/21`, `ELE: 1/20`, `PRC: 1/20` (RFI/REMARKS), in that order. Existing `rfi.log_add` behavior stays unchanged.
+These values are compatibility defaults for headerless synthetic and legacy
+workbooks, not authority for current production coordinates. Before reading
+evidence, the operation discovers an unambiguous RFI and REMARKS/status header
+within the bounded header scan. The current production RFI Log resolves REMARKS
+to CIV 22, MEC 23, ELE 22, and PRC 23; columns 20/21 can contain Folder Link
+shared formulas and must never be treated as REMARKS merely because of a legacy
+default. Existing `rfi.log_add` behavior stays unchanged.
 
 The Follow Up scanner requires all four exact source sheets. Either workbook-level protection or protection on any of those four source sheets fails preview; protected input is not treated as trustworthy synchronization evidence. For rows 10 through the physical maximum in each sheet, it records only a full exact canonical source RFI and the exact projected REMARKS cell. Formula-bearing or merged RFI/REMARKS cells do not authorize a mapping. Evidence is represented by:
 

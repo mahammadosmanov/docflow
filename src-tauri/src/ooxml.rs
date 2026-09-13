@@ -410,7 +410,35 @@ where
     R: Read + Seek,
     W: Read + Write + Seek,
 {
-    validate_guarded_update_set(updates_by_sheet)?;
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true)
+}
+
+/// Applies arbitrary text replacements while retaining the same exact-cell and
+/// closed-package-delta guarantees as the Follow Up status writer. Callers must
+/// validate their operation-specific replacement vocabulary before invoking it.
+pub fn patch_workbook_sheets_guarded_text<R, W>(
+    source: &mut R,
+    destination: &mut W,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Read + Write + Seek,
+{
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false)
+}
+
+fn patch_workbook_sheets_guarded_inner<R, W>(
+    source: &mut R,
+    destination: &mut W,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+    status_values_only: bool,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Read + Write + Seek,
+{
+    validate_guarded_update_set(updates_by_sheet, status_values_only)?;
     source.seek(SeekFrom::Start(0))?;
     let discovery = ordered_workbook_discovery(source)?;
     if discovery.safety.has_workbook_protection {
@@ -433,7 +461,10 @@ where
             .get(sheet_name)
             .ok_or_else(|| OoxmlError::invalid("guarded worksheet is missing"))?;
         let raw = read_entry(&mut archive, &info.path)?;
-        patched.insert(info.path.clone(), patch_sheet_xml_guarded(&raw, updates)?);
+        patched.insert(
+            info.path.clone(),
+            patch_sheet_xml_guarded(&raw, updates, status_values_only)?,
+        );
     }
 
     if destination.seek(SeekFrom::End(0))? != 0 {
@@ -456,7 +487,32 @@ where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    validate_guarded_update_set(updates_by_sheet)?;
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, true)
+}
+
+pub fn verify_guarded_workbook_delta_text<R1, R2>(
+    source: &mut R1,
+    destination: &mut R2,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false)
+}
+
+fn verify_guarded_workbook_delta_inner<R1, R2>(
+    source: &mut R1,
+    destination: &mut R2,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+    status_values_only: bool,
+) -> Result<(), OoxmlError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    validate_guarded_update_set(updates_by_sheet, status_values_only)?;
     source.seek(SeekFrom::Start(0))?;
     let source_discovery = ordered_workbook_discovery(source)?;
     let source_infos = project_sheet_infos(source_discovery);
@@ -545,6 +601,7 @@ where
 
 fn validate_guarded_update_set(
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+    status_values_only: bool,
 ) -> Result<(), OoxmlError> {
     let update_count = updates_by_sheet
         .values()
@@ -573,10 +630,13 @@ fn validate_guarded_update_set(
                     "guarded worksheet cell reference is invalid",
                 ));
             }
-            if !matches!(
-                &update.replacement,
-                CellUpdate::Text(value) if matches!(value.as_str(), "Signed" | "Not Signed")
-            ) {
+            if !matches!(&update.replacement, CellUpdate::Text(_))
+                || status_values_only
+                    && !matches!(
+                        &update.replacement,
+                        CellUpdate::Text(value) if matches!(value.as_str(), "Signed" | "Not Signed")
+                    )
+            {
                 return Err(OoxmlError::invalid("guarded replacement is invalid"));
             }
         }
@@ -2087,6 +2147,7 @@ fn patch_sheet_xml(
 fn patch_sheet_xml_guarded(
     raw: &[u8],
     updates: &BTreeMap<(u32, u32), GuardedCellUpdate>,
+    status_values_only: bool,
 ) -> Result<Vec<u8>, OoxmlError> {
     let mut document = parse_document(raw)?;
     let root = document_root_mut_local(
@@ -2139,7 +2200,13 @@ fn patch_sheet_xml_guarded(
             &coordinate,
             "guarded worksheet cell is missing or ambiguous",
         )?;
-        patch_guarded_cell_value(cell, &namespace, prefix.as_deref(), &update.replacement)?;
+        patch_guarded_cell_value(
+            cell,
+            &namespace,
+            prefix.as_deref(),
+            &update.replacement,
+            status_values_only,
+        )?;
     }
     serialize_document(&document)
 }
@@ -2149,11 +2216,12 @@ fn patch_guarded_cell_value(
     namespace: &[u8],
     prefix: Option<&str>,
     update: &CellUpdate,
+    status_values_only: bool,
 ) -> Result<(), OoxmlError> {
     let CellUpdate::Text(value) = update else {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     };
-    if !matches!(value.as_str(), "Signed" | "Not Signed") {
+    if status_values_only && !matches!(value.as_str(), "Signed" | "Not Signed") {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     }
     if child_elements_in_namespace(cell, b"f", namespace)
