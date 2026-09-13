@@ -4,9 +4,12 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.8 reliability foundation
+## Now — 0.9 unified RFI work foundation
 
 - Keep the read-only device-readiness surface accurate and actionable.
+- Extend the implemented append-only RFI work items and Today, Resume, and Needs
+  Review queues with one-click prefilled transitions and journal-linked
+  automatic evidence from successful operations.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,
   OneDrive-backed folders, Microsoft Print to PDF, and representative printers.
 - Expand structural fixtures for every current production workbook family
@@ -15,10 +18,8 @@ the historical tracker.
   exact canonical-RFI recognition.
 - Keep version, changelog, installer, checksums, and release metadata synchronized.
 
-## Next — unified RFI work
+## Next — deeper RFI automation
 
-- Implement the append-only local RFI work-item store defined by ADR 0002.
-- Replace the flat home experience with Today, Resume, and Needs Review queues.
 - Add per-operation safety summaries and exact before/after workbook/PDF previews.
 - Split a multi-RFI Worley scan into reviewable page groups without touching the
   source scan.

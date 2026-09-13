@@ -144,8 +144,8 @@ fn bootstrap_settings(root: &Path) -> Result<(Bootstrap, u128), String> {
         prefs: settings.preferences(),
         operations: operation_registry(RegistryFacts::default()),
     };
-    if bootstrap.operations.len() != 7 {
-        return Err("bootstrap did not expose all seven operations".to_string());
+    if bootstrap.operations.len() != 8 {
+        return Err("bootstrap did not expose all eight operations".to_string());
     }
     serde_json::to_value(&bootstrap).map_err(|error| format!("bootstrap encode: {error}"))?;
     Ok((bootstrap, started.elapsed().as_millis()))
@@ -304,7 +304,7 @@ mod tests {
 
         assert_eq!(bootstrap.protocol, 1);
         assert_eq!(bootstrap.version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(bootstrap.operations.len(), 7);
+        assert_eq!(bootstrap.operations.len(), 8);
         assert_eq!(bootstrap.prefs.locale.as_deref(), Some("az"));
     }
 }

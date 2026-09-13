@@ -404,6 +404,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             .map(|operation| operation.id.as_str())
             .collect::<Vec<_>>(),
         [
+            "rfi.work_item_update",
             "rfi.process_scans",
             "rfi.log_add",
             "rfi.follow_up_sync",
@@ -413,7 +414,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.system_sync",
         ]
     );
-    let outlook = &operations[3];
+    let outlook = &operations[4];
     assert_eq!(outlook.schema.params.len(), 1);
     assert_eq!(outlook.schema.params[0].name, "reply_text");
     assert_eq!(

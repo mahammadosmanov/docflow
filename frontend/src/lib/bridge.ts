@@ -22,6 +22,7 @@ import type {
   ReadinessReport,
   ReviewItem,
   SupportBundlePreview,
+  WorkItemQueues,
 } from "../types";
 
 type ProgressHandler = (event: ProgressEvent) => void;
@@ -130,6 +131,117 @@ const demoOperation: OperationDef = {
       choiceLabels: {},
       visibleWhen: {},
       helpKey: null,
+    },
+  ],
+};
+
+const demoWorkItemOperation: OperationDef = {
+  id: "rfi.work_item_update",
+  titleKey: "op.rfi.work_item_update.title",
+  descriptionKey: "op.rfi.work_item_update.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "action",
+      kind: "choice",
+      labelKey: "param.rfi.workItem.action",
+      default: "create",
+      required: true,
+      choices: ["create", "transition"],
+      choiceLabels: {
+        create: "choice.rfi.workItem.action.create",
+        transition: "choice.rfi.workItem.action.transition",
+      },
+      visibleWhen: {},
+      helpKey: "param.rfi.workItem.action.help",
+    },
+    {
+      name: "item_id",
+      kind: "text",
+      labelKey: "param.rfi.workItem.itemId",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: { action: "transition" },
+      helpKey: "param.rfi.workItem.itemId.help",
+    },
+    {
+      name: "title",
+      kind: "text",
+      labelKey: "param.rfi.workItem.title",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: { action: "create" },
+      helpKey: null,
+    },
+    {
+      name: "rfi_codes",
+      kind: "longText",
+      labelKey: "param.rfi.workItem.rfiCodes",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: { action: "create" },
+      helpKey: "param.rfi.workItem.rfiCodes.help",
+    },
+    {
+      name: "stage",
+      kind: "choice",
+      labelKey: "param.rfi.workItem.stage",
+      default: "request_captured",
+      required: true,
+      choices: [
+        "request_captured",
+        "checked",
+        "numbers_assigned",
+        "prepared_files_received",
+        "published_ongoing",
+        "publication_email_archived",
+        "intec_scan_filed",
+        "worley_signed_synced",
+        "replicas_synced",
+        "complete",
+      ],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.workItem.stage.help",
+    },
+    {
+      name: "due_date",
+      kind: "text",
+      labelKey: "param.rfi.workItem.dueDate",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.workItem.dueDate.help",
+    },
+    {
+      name: "needs_review",
+      kind: "bool",
+      labelKey: "param.rfi.workItem.needsReview",
+      default: false,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.workItem.needsReview.help",
+    },
+    {
+      name: "reason",
+      kind: "longText",
+      labelKey: "param.rfi.workItem.reason",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: { action: "transition" },
+      helpKey: "param.rfi.workItem.reason.help",
     },
   ],
 };
@@ -532,6 +644,7 @@ export class MockBridge implements Bridge {
           auth: this.auth,
           prefs: this.prefs,
           operations: [
+            demoWorkItemOperation,
             demoOperation,
             demoRfiOperation,
             demoRfiFollowUpOperation,
@@ -641,9 +754,43 @@ export class MockBridge implements Bridge {
           ],
         } satisfies ReadinessReport;
         break;
+      case "workItems/list":
+        result = {
+          today: [],
+          resume: [],
+          needsReview: [],
+          completedCount: 0,
+          invalidEventCount: 0,
+        } satisfies WorkItemQueues;
+        break;
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
         const values = params.values as Record<string, unknown>;
+        if (params.opId === "rfi.work_item_update") {
+          result = {
+            planId: "demo-work-item-plan",
+            opId: "rfi.work_item_update",
+            warnings: [],
+            meta: {
+              workItemId: "work-demo",
+              workItemStage: values.stage,
+            },
+            steps: [
+              {
+                kind: "write",
+                src: null,
+                dst: "DocFlow/work-items/events/demo.json",
+                noteKey: "step.rfi.workItemEvent",
+                meta: {
+                  itemId: "work-demo",
+                  stage: values.stage,
+                  title: values.title,
+                },
+              },
+            ],
+          } satisfies Plan;
+          break;
+        }
         if (params.opId === "files.batch_print") {
           const files = Array.isArray(values.files)
             ? values.files.map((value) => mockPath(value, ""))

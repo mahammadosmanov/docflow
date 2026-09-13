@@ -150,6 +150,26 @@ export interface ReadinessReport {
   checks: ReadinessCheck[];
 }
 
+export interface WorkItem {
+  itemId: string;
+  title: string;
+  rfiCodes: string[];
+  stage: string;
+  updatedAt: string;
+  dueDate: string | null;
+  needsReview: boolean;
+  reason: string | null;
+  lastEventId: string;
+}
+
+export interface WorkItemQueues {
+  today: WorkItem[];
+  resume: WorkItem[];
+  needsReview: WorkItem[];
+  completedCount: number;
+  invalidEventCount: number;
+}
+
 export interface ProgressEvent {
   phase: string;
   done: number;

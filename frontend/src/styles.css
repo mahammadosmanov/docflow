@@ -338,6 +338,109 @@ h2 {
   font-weight: 750;
   letter-spacing: 0.16em;
 }
+.work-queues {
+  margin-bottom: calc(20px * var(--space));
+  padding: calc(16px * var(--space)) 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.work-queues-heading {
+  align-items: center;
+}
+.work-queues-heading h2 {
+  margin: 0 0 3px;
+  font-size: 1rem;
+}
+.work-queue-actions,
+.work-queue-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.work-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.work-queue-column {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.work-queue-title {
+  min-height: 30px;
+  margin-bottom: 8px;
+}
+.work-queue-title > span,
+.work-queue-title svg {
+  width: 17px;
+  height: 17px;
+}
+.work-queue-title strong {
+  flex: 1;
+  font-size: 0.78rem;
+}
+.work-queue-title small {
+  min-width: 22px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.work-item-list {
+  display: grid;
+  gap: 7px;
+}
+.work-item-card {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.work-item-card > div,
+.work-item-card strong,
+.work-item-card small,
+.work-item-card code,
+.work-item-id {
+  display: block;
+  min-width: 0;
+}
+.work-item-card strong,
+.work-item-card small,
+.work-item-card code,
+.work-item-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-item-card strong {
+  font-size: 0.76rem;
+}
+.work-item-card small,
+.work-item-id {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+.work-item-card code {
+  margin: 6px 0;
+  font-size: 0.63rem;
+}
+.work-queue-empty {
+  min-height: 42px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
 .readiness-card {
   margin-bottom: calc(20px * var(--space));
   padding: calc(16px * var(--space)) 18px;
@@ -2189,6 +2292,17 @@ textarea:focus-visible {
     align-items: flex-start;
   }
   .readiness-grid {
+    grid-template-columns: 1fr;
+  }
+  .work-queues-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .work-queue-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .work-queue-grid {
     grid-template-columns: 1fr;
   }
   .readiness-overall {

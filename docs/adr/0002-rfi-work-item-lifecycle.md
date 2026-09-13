@@ -57,6 +57,13 @@ local effect.
 - Store migrations, event validation, retention, export, and rebuild tests are
   required before the first persistent work-item release.
 
+## Initial implementation
+
+Version 0.9.0 implements the owner-scoped append-only event store, strict event
+validation, Today/Resume/Needs Review projection, explicit manual transition
+reasons, no-clobber journaled writes, and undo. Automatic journal-linked
+transitions, export, and longer-term retention controls remain later increments.
+
 ## Rollback
 
 The work-item store is coordination metadata. Disabling or rebuilding it does

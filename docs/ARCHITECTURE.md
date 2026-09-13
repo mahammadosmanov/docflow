@@ -56,6 +56,14 @@ recovery count. It neither scans user folders nor treats a healthy device result
 as workbook, OneDrive, Office, or printer-output certification; those checks stay
 inside operation preview and platform release gates.
 
+RFI work tracking stores bounded, owner-scoped, append-only JSON events beneath
+the application-data directory. Event creation and manual stage transitions use
+the same cached Plan, explicit approval, no-clobber write, journal, and undo
+boundary as document operations. The home queues are a rebuildable read-only
+projection. A stale transition creates a visible review conflict and never
+silently replaces the last proven stage. These coordination records cannot
+authorize an Excel, PDF, email, print, or replica mutation.
+
 ## Operation contract
 
 ```text
@@ -97,6 +105,7 @@ the pinned directory or fails closed.
 - journals: `~/.docflow/journal/`
 - recoverable trash: `~/.docflow/trash/`
 - print queue: `~/.docflow/print_queue.json`
+- RFI work events: `~/.docflow/work-items/events/`
 - protocol-1 DTO casing/nullability and operation IDs: unchanged
 - Supabase `app_users` and `history` schema: compatible, with history steps inert
 

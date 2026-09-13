@@ -44,6 +44,7 @@ use crate::{
     },
     rfi_follow_up, rfi_log, rfi_system_sync,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
+    work_items::{self, WorkItemInput, WorkItemQueues},
 };
 
 const SUPABASE_URL: &str = "https://ndpkgbfmshceffwhpqoz.supabase.co";
@@ -159,6 +160,10 @@ impl NativeBackend {
             BackendMethod::SupportReadiness => {
                 decode_empty(params)?;
                 encode(self.readiness()?)
+            }
+            BackendMethod::WorkItemsList => {
+                decode_empty(params)?;
+                encode(self.work_items()?)
             }
             BackendMethod::AppBootstrap => {
                 decode_empty(params)?;
@@ -743,6 +748,69 @@ impl NativeBackend {
             printer_count,
             recovery_count,
         }))
+    }
+
+    fn work_items(&self) -> Result<WorkItemQueues, BackendError> {
+        work_items::project(
+            &self.app_data_dir.join("work-items"),
+            &self.caller_identity()?.owner_id,
+            chrono::Local::now().date_naive(),
+        )
+    }
+
+    pub(crate) fn preview_work_item<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<WorkItemInput> = decode(params)?;
+        if request.op_id != work_items::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust work-item backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let grant =
+            self.filesystem
+                .issue_grant(&scope, &self.app_data_dir, GrantAccess::ReadWrite)?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 0,
+            total: 1,
+            subject: request.values.title.clone(),
+        });
+        let plan = work_items::preview_event(
+            &self.app_data_dir.join("work-items"),
+            &caller.owner_id,
+            request.values,
+            &chrono::Utc::now().to_rfc3339(),
+        )?;
+        let cached = self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![grant.grant_id],
+            ),
+            plan,
+        )?;
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(cached)
     }
 
     pub(crate) fn preview_process_scans<F>(
@@ -2177,6 +2245,42 @@ mod tests {
             }),
             user: None,
         }
+    }
+
+    #[test]
+    fn work_item_preview_apply_list_and_undo_use_the_native_journal_boundary() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let plan = backend
+            .preview_work_item(
+                json!({
+                    "opId": work_items::OPERATION_ID,
+                    "values": {
+                        "action": "create",
+                        "itemId": "",
+                        "title": "MEC inspection request",
+                        "rfiCodes": "AZE-SUN-INT-QMS-RFI-MEC-0249",
+                        "stage": "request_captured",
+                        "dueDate": "",
+                        "needsReview": false,
+                        "reason": ""
+                    }
+                }),
+                |_| {},
+            )
+            .unwrap();
+        let plan_id = plan["planId"].as_str().unwrap();
+        let (result, operation_id) = backend
+            .apply_native_plan(plan_id, Some(work_items::OPERATION_ID), |_| {})
+            .unwrap();
+        assert_eq!(operation_id, work_items::OPERATION_ID);
+        assert_eq!(backend.work_items().unwrap().resume.len(), 1);
+
+        let undone = backend
+            .try_native_undo(&json!({"journalId": result["journalId"]}))
+            .unwrap();
+        assert!(undone.is_some());
+        assert!(backend.work_items().unwrap().resume.is_empty());
     }
 
     #[test]

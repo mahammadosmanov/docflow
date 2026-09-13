@@ -86,6 +86,8 @@ import type {
   Step,
   SupportBundlePreview,
   ThemePreference,
+  WorkItem,
+  WorkItemQueues,
 } from "./types";
 
 type Route =
@@ -621,6 +623,8 @@ function HomeScreen({
   const [shortcutError, setShortcutError] = useState("");
   const [readiness, setReadiness] = useState<ReadinessReport | null>(null);
   const [readinessBusy, setReadinessBusy] = useState(true);
+  const [workItems, setWorkItems] = useState<WorkItemQueues | null>(null);
+  const [workItemsBusy, setWorkItemsBusy] = useState(true);
   const signOut = async () =>
     onAuth(await bridge.call("auth/signOut"));
 
@@ -665,6 +669,25 @@ function HomeScreen({
   useEffect(() => {
     void loadReadiness();
   }, [loadReadiness]);
+
+  const loadWorkItems = useCallback(async () => {
+    setWorkItemsBusy(true);
+    try {
+      setWorkItems(await bridge.call("workItems/list"));
+    } catch (reason) {
+      setShortcutError(humanError(reason, s));
+    } finally {
+      setWorkItemsBusy(false);
+    }
+  }, [bridge, s]);
+
+  useEffect(() => {
+    void loadWorkItems();
+  }, [loadWorkItems]);
+
+  const workItemOperation = bootstrap.operations.find(
+    (operation) => operation.id === "rfi.work_item_update",
+  );
 
   const openReview = async () => {
     setReviewBusy(true);
@@ -745,6 +768,70 @@ function HomeScreen({
             <Shield /> Preview-first <span aria-hidden="true">·</span>
             <span>v{bootstrap.version}</span>
           </div>
+        </section>
+        <section className="work-queues" aria-labelledby="work-queues-title">
+          <div className="section-heading work-queues-heading">
+            <div>
+              <p className="eyebrow">{s.t("workItems.eyebrow")}</p>
+              <h2 id="work-queues-title">{s.t("workItems.title")}</h2>
+              <p>{s.t("workItems.help")}</p>
+            </div>
+            <div className="work-queue-actions">
+              <IconButton
+                label={s.t("workItems.refresh")}
+                onClick={() => void loadWorkItems()}
+                disabled={workItemsBusy}
+              >
+                <RefreshCw className={workItemsBusy ? "spin" : ""} />
+              </IconButton>
+              <Button
+                icon={<Plus />}
+                disabled={!workItemOperation}
+                onClick={() =>
+                  workItemOperation &&
+                  navigate({ name: "operation", operation: workItemOperation })
+                }
+              >
+                {s.t("workItems.new")}
+              </Button>
+            </div>
+          </div>
+          {workItemsBusy && !workItems ? (
+            <div className="readiness-loading">
+              <LoaderCircle className="spin" /> {s.t("workItems.loading")}
+            </div>
+          ) : (
+            <div className="work-queue-grid">
+              <WorkQueue
+                icon={<CalendarDays />}
+                title={s.t("workItems.today")}
+                items={workItems?.today ?? []}
+                empty={s.t("workItems.today.empty")}
+                s={s}
+              />
+              <WorkQueue
+                icon={<Play />}
+                title={s.t("workItems.resume")}
+                items={workItems?.resume ?? []}
+                empty={s.t("workItems.resume.empty")}
+                s={s}
+              />
+              <WorkQueue
+                icon={<CircleAlert />}
+                title={s.t("workItems.needsReview")}
+                items={workItems?.needsReview ?? []}
+                empty={s.t("workItems.needsReview.empty")}
+                s={s}
+              />
+            </div>
+          )}
+          {Boolean(workItems?.invalidEventCount) && (
+            <Notice kind="error">
+              {s.t("workItems.invalidEvents", {
+                count: workItems?.invalidEventCount ?? 0,
+              })}
+            </Notice>
+          )}
         </section>
         <section className="readiness-card" aria-labelledby="readiness-title">
           <div className="readiness-heading">
@@ -910,6 +997,48 @@ function HomeScreen({
         {shortcutError && <Notice kind="error">{shortcutError}</Notice>}
       </main>
     </div>
+  );
+}
+
+function WorkQueue({
+  icon,
+  title,
+  items,
+  empty,
+  s,
+}: {
+  icon: ReactNode;
+  title: string;
+  items: WorkItem[];
+  empty: string;
+  s: Strings;
+}) {
+  return (
+    <section className="work-queue-column">
+      <div className="work-queue-title">
+        <span>{icon}</span>
+        <strong>{title}</strong>
+        <small>{items.length}</small>
+      </div>
+      {items.length === 0 ? (
+        <p className="work-queue-empty">{empty}</p>
+      ) : (
+        <div className="work-item-list">
+          {items.slice(0, 6).map((item) => (
+            <article className="work-item-card" key={item.itemId}>
+              <div>
+                <strong>{item.title}</strong>
+                <small>{s.t(`choice.rfi.workItem.stage.${item.stage}`)}</small>
+              </div>
+              {item.rfiCodes.length > 0 && (
+                <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
+              )}
+              <span className="work-item-id">{item.itemId}</span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -40,6 +40,7 @@ pub mod smoke;
 pub mod undo;
 #[cfg(target_os = "windows")]
 mod windows_pdf;
+pub mod work_items;
 
 use tauri::Manager;
 

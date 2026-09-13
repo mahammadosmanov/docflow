@@ -62,6 +62,48 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("shows persistent RFI work queues and opens the schema-driven work item operation", async () => {
+    const call = interceptMockBridge((method) =>
+      method === "workItems/list"
+        ? {
+            handled: true,
+            value: {
+              today: [
+                {
+                  itemId: "work-1",
+                  title: "MEC inspection request",
+                  rfiCodes: ["AZE-SUN-INT-QMS-RFI-MEC-0249"],
+                  stage: "request_captured",
+                  updatedAt: "2026-09-13T08:00:00Z",
+                  dueDate: "2026-09-13",
+                  needsReview: false,
+                  reason: null,
+                  lastEventId: "event-1",
+                },
+              ],
+              resume: [],
+              needsReview: [],
+              completedCount: 2,
+              invalidEventCount: 0,
+            },
+          }
+        : { handled: false },
+    );
+
+    render(<App />);
+    await signIn();
+
+    expect(await screen.findByText("Bugünün RFI işleri")).toBeVisible();
+    expect(screen.getByText("MEC inspection request")).toBeVisible();
+    expect(screen.getByText("Talep kaydedildi")).toBeVisible();
+    expect(call).toHaveBeenCalledWith("workItems/list");
+
+    fireEvent.click(screen.getByRole("button", { name: "Yeni RFI işi" }));
+    expect(
+      await screen.findByRole("heading", { name: "RFI işini kaydet" }),
+    ).toBeVisible();
+  });
+
   it("shows device readiness and routes attention to recovery", async () => {
     const call = interceptMockBridge((method) =>
       method === "support/readiness"
@@ -759,7 +801,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.8.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.9.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

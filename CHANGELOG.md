@@ -8,6 +8,27 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.9.0 - 2026-09-13
+
+### Added
+
+- Added offline-first RFI work items with explicit lifecycle stages, optional
+  due dates, strict canonical RFI numbers, review flags, and mandatory reasons
+  for manual stage changes.
+- Added compact Today, Resume, and Needs Review queues to the home screen.
+- Added an authenticated, bounded work-item query and a schema-driven operation
+  for creating or advancing work without an operation-specific React form.
+
+### Safety
+
+- Every work-item event is previewed, explicitly approved, written as a new
+  no-clobber file, journaled, and undoable; official Excel files and RFI folders
+  remain unchanged and authoritative.
+- Event storage is append-only, owner-scoped, size/count bounded, and rejects
+  symlinks, malformed records, non-ASCII RFI codes, and unknown stages.
+- Concurrent transitions never use last-writer-wins; a stale branch sends the
+  item to Needs Review while retaining the last proven stage.
+
 ## 0.8.0 - 2026-09-13
 
 ### Added

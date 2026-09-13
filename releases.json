@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.8.0",
+  "currentVersion": "0.9.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -254,9 +254,17 @@
       "version": "0.8.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.8.0",
       "summary": "Promote device readiness to its correct backward-compatible feature release and enforce tested PATCH, MINOR, and MAJOR version selection for future work."
+    },
+    {
+      "version": "0.9.0",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.9.0",
+      "summary": "Add owner-scoped append-only RFI work items, Today/Resume/Needs Review queues, strict canonical identifiers, conflict detection, and fully journaled create/transition/undo behavior."
     }
   ]
 }

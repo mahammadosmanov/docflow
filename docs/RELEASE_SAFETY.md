@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact seven-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact eight-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -64,6 +64,7 @@ and silent uninstall on a real Windows runner.
 | Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
 | Device readiness | pure fact classification + typed command/UI tests | Hidden OCR/printer failure or overlooked interrupted work |
+| RFI work tracking | strict event validation + conflict projection + native preview/apply/list/undo + typed queue UI | Lost resume state, cross-user exposure, silent transition conflict, or coordination metadata authorizing document mutation |
 
 ## External certification gates
 

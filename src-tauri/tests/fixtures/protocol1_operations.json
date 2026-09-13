@@ -1,1 +1,603 @@
-[{"descriptionKey":"op.rfi.process_scans.desc","id":"rfi.process_scans","schema":[{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.source.help","kind":"folder","labelKey":"param.source","name":"source","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.dest.help","kind":"folder","labelKey":"param.dest","name":"dest","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":true,"helpKey":"param.organize_into_rfi_folders.help","kind":"bool","labelKey":"param.organize_into_rfi_folders","name":"organize_into_rfi_folders","required":false,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":false,"helpKey":null,"kind":"bool","labelKey":"param.keep_original","name":"keep_original","required":false,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.process_scans.title"},{"descriptionKey":"op.rfi.log_add.desc","id":"rfi.log_add","schema":[{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.workbook.help","kind":"file","labelKey":"param.rfi.workbook","name":"workbook","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":"","helpKey":"param.rfi.emailText.help","kind":"longText","labelKey":"param.rfi.emailText","name":"email_text","required":false,"visibleWhen":{}},{"choiceLabels":{"gemini":"choice.rfi.emailProvider.gemini","offline":"choice.rfi.emailProvider.offline"},"choices":["offline","gemini"],"default":"offline","helpKey":"param.rfi.emailProvider.help","kind":"choice","labelKey":"param.rfi.emailProvider","name":"email_provider","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":"","helpKey":"param.rfi.geminiApiKey.help","kind":"secret","labelKey":"param.rfi.geminiApiKey","name":"gemini_api_key","required":false,"visibleWhen":{"email_provider":"gemini"}},{"choiceLabels":{},"choices":["CIV","MEC","ELE","PRC"],"default":{"CIV":3,"ELE":0,"MEC":0,"PRC":0},"helpKey":"param.rfi.sheetCounts.help","kind":"sheetCounts","labelKey":"param.rfi.sheetCounts","name":"sheet_counts","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":true,"helpKey":"param.rfi.overflowNextDay.help","kind":"bool","labelKey":"param.rfi.overflowNextDay","name":"overflow_next_day","required":false,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.log_add.title"},{"descriptionKey":"op.rfi.follow_up_sync.desc","id":"rfi.follow_up_sync","schema":[{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.followUp.rfiLogWorkbook.help","kind":"file","labelKey":"param.rfi.followUp.rfiLogWorkbook","name":"rfi_log_workbook","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.followUp.followUpWorkbook.help","kind":"file","labelKey":"param.rfi.followUp.followUpWorkbook","name":"follow_up_workbook","required":true,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.follow_up_sync.title"},{"descriptionKey":"op.rfi.outlook_reply_draft.desc","id":"rfi.outlook_reply_draft","schema":[{"choiceLabels":{},"choices":[],"default":"","helpKey":"param.rfi.outlookReplyDraft.replyText.help","kind":"longText","labelKey":"param.rfi.outlookReplyDraft.replyText","name":"reply_text","required":true,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.outlook_reply_draft.title"},{"descriptionKey":"op.files.batch_print.desc","id":"files.batch_print","schema":[{"choiceLabels":{},"choices":[],"default":[],"helpKey":"param.print.files.help","kind":"files","labelKey":"param.print.files","name":"files","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.print.printer.help","kind":"choice","labelKey":"param.print.printer","name":"printer","required":true,"visibleWhen":{}},{"choiceLabels":{"A3":"choice.print.paper.A3","A4":"choice.print.paper.A4","A5":"choice.print.paper.A5","Legal":"choice.print.paper.Legal","Letter":"choice.print.paper.Letter","auto":"choice.print.paper.auto"},"choices":["auto","A4","A3","A5","Letter","Legal"],"default":"A4","helpKey":"param.print.paper.help","kind":"choice","labelKey":"param.print.paper","name":"paper","required":true,"visibleWhen":{}},{"choiceLabels":{"auto":"choice.print.orientation.auto","landscape":"choice.print.orientation.landscape","portrait":"choice.print.orientation.portrait"},"choices":["auto","portrait","landscape"],"default":"auto","helpKey":null,"kind":"choice","labelKey":"param.print.orientation","name":"orientation","required":true,"visibleWhen":{}},{"choiceLabels":{"actual":"choice.print.scaling.actual","fit":"choice.print.scaling.fit","shrink":"choice.print.scaling.shrink"},"choices":["fit","actual","shrink"],"default":"fit","helpKey":null,"kind":"choice","labelKey":"param.print.scaling","name":"scaling","required":true,"visibleWhen":{}},{"choiceLabels":{"color":"choice.print.color.color","grayscale":"choice.print.color.grayscale","printer":"choice.print.color.printer"},"choices":["printer","color","grayscale"],"default":"printer","helpKey":null,"kind":"choice","labelKey":"param.print.color","name":"color","required":true,"visibleWhen":{}},{"choiceLabels":{"long":"choice.print.duplex.long","printer":"choice.print.duplex.printer","short":"choice.print.duplex.short","simplex":"choice.print.duplex.simplex"},"choices":["printer","simplex","long","short"],"default":"printer","helpKey":null,"kind":"choice","labelKey":"param.print.duplex","name":"duplex","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":1,"helpKey":"param.print.copies.help","kind":"int","labelKey":"param.print.copies","name":"copies","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":true,"helpKey":"param.print.collate.help","kind":"bool","labelKey":"param.print.collate","name":"collate","required":false,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":0,"helpKey":"param.print.retries.help","kind":"int","labelKey":"param.print.retries","name":"retries","required":true,"visibleWhen":{}},{"choiceLabels":{"pause":"choice.print.onError.pause","skip":"choice.print.onError.skip"},"choices":["pause","skip"],"default":"pause","helpKey":"param.print.onError.help","kind":"choice","labelKey":"param.print.onError","name":"on_error","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":30,"helpKey":"param.print.timeout.help","kind":"int","labelKey":"param.print.timeout","name":"timeout_minutes","required":true,"visibleWhen":{}}],"supportsPresets":true,"titleKey":"op.files.batch_print.title"},{"descriptionKey":"op.rfi.stage_signed_first_pages.desc","id":"rfi.stage_signed_first_pages","schema":[{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.signedScans.help","kind":"folder","labelKey":"param.rfi.signedScans","name":"signed_scans","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.archiveRoot.help","kind":"folder","labelKey":"param.rfi.archiveRoot","name":"archive_root","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.reviewRoot.help","kind":"folder","labelKey":"param.rfi.reviewRoot","name":"review_root","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":false,"helpKey":"param.rfi.scanSubfolders.help","kind":"bool","labelKey":"param.rfi.scanSubfolders","name":"scan_subfolders","required":false,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.stage_signed_first_pages.title"},{"descriptionKey":"op.rfi.system_sync.desc","id":"rfi.system_sync","schema":[{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.systemSync.rfiSystemRoot.help","kind":"folder","labelKey":"param.rfi.systemSync.rfiSystemRoot","name":"rfi_system_root","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.systemSync.rfiLogWorkbook.help","kind":"file","labelKey":"param.rfi.systemSync.rfiLogWorkbook","name":"rfi_log_workbook","required":true,"visibleWhen":{}},{"choiceLabels":{},"choices":[],"default":null,"helpKey":"param.rfi.systemSync.followUpWorkbook.help","kind":"file","labelKey":"param.rfi.systemSync.followUpWorkbook","name":"follow_up_workbook","required":true,"visibleWhen":{}}],"supportsPresets":false,"titleKey":"op.rfi.system_sync.title"}]
+[
+  {
+    "descriptionKey": "op.rfi.work_item_update.desc",
+    "id": "rfi.work_item_update",
+    "schema": [
+      {
+        "choiceLabels": {
+          "create": "choice.rfi.workItem.action.create",
+          "transition": "choice.rfi.workItem.action.transition"
+        },
+        "choices": ["create", "transition"],
+        "default": "create",
+        "helpKey": "param.rfi.workItem.action.help",
+        "kind": "choice",
+        "labelKey": "param.rfi.workItem.action",
+        "name": "action",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.workItem.itemId.help",
+        "kind": "text",
+        "labelKey": "param.rfi.workItem.itemId",
+        "name": "item_id",
+        "required": false,
+        "visibleWhen": { "action": "transition" }
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": null,
+        "kind": "text",
+        "labelKey": "param.rfi.workItem.title",
+        "name": "title",
+        "required": false,
+        "visibleWhen": { "action": "create" }
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.workItem.rfiCodes.help",
+        "kind": "longText",
+        "labelKey": "param.rfi.workItem.rfiCodes",
+        "name": "rfi_codes",
+        "required": false,
+        "visibleWhen": { "action": "create" }
+      },
+      {
+        "choiceLabels": {
+          "checked": "choice.rfi.workItem.stage.checked",
+          "complete": "choice.rfi.workItem.stage.complete",
+          "intec_scan_filed": "choice.rfi.workItem.stage.intec_scan_filed",
+          "numbers_assigned": "choice.rfi.workItem.stage.numbers_assigned",
+          "prepared_files_received": "choice.rfi.workItem.stage.prepared_files_received",
+          "publication_email_archived": "choice.rfi.workItem.stage.publication_email_archived",
+          "published_ongoing": "choice.rfi.workItem.stage.published_ongoing",
+          "replicas_synced": "choice.rfi.workItem.stage.replicas_synced",
+          "request_captured": "choice.rfi.workItem.stage.request_captured",
+          "worley_signed_synced": "choice.rfi.workItem.stage.worley_signed_synced"
+        },
+        "choices": [
+          "request_captured",
+          "checked",
+          "numbers_assigned",
+          "prepared_files_received",
+          "published_ongoing",
+          "publication_email_archived",
+          "intec_scan_filed",
+          "worley_signed_synced",
+          "replicas_synced",
+          "complete"
+        ],
+        "default": "request_captured",
+        "helpKey": "param.rfi.workItem.stage.help",
+        "kind": "choice",
+        "labelKey": "param.rfi.workItem.stage",
+        "name": "stage",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.workItem.dueDate.help",
+        "kind": "text",
+        "labelKey": "param.rfi.workItem.dueDate",
+        "name": "due_date",
+        "required": false,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": false,
+        "helpKey": "param.rfi.workItem.needsReview.help",
+        "kind": "bool",
+        "labelKey": "param.rfi.workItem.needsReview",
+        "name": "needs_review",
+        "required": false,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.workItem.reason.help",
+        "kind": "longText",
+        "labelKey": "param.rfi.workItem.reason",
+        "name": "reason",
+        "required": false,
+        "visibleWhen": { "action": "transition" }
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.work_item_update.title"
+  },
+  {
+    "descriptionKey": "op.rfi.process_scans.desc",
+    "id": "rfi.process_scans",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.source.help",
+        "kind": "folder",
+        "labelKey": "param.source",
+        "name": "source",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.dest.help",
+        "kind": "folder",
+        "labelKey": "param.dest",
+        "name": "dest",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": true,
+        "helpKey": "param.organize_into_rfi_folders.help",
+        "kind": "bool",
+        "labelKey": "param.organize_into_rfi_folders",
+        "name": "organize_into_rfi_folders",
+        "required": false,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": false,
+        "helpKey": null,
+        "kind": "bool",
+        "labelKey": "param.keep_original",
+        "name": "keep_original",
+        "required": false,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.process_scans.title"
+  },
+  {
+    "descriptionKey": "op.rfi.log_add.desc",
+    "id": "rfi.log_add",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.workbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.workbook",
+        "name": "workbook",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.emailText.help",
+        "kind": "longText",
+        "labelKey": "param.rfi.emailText",
+        "name": "email_text",
+        "required": false,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "gemini": "choice.rfi.emailProvider.gemini",
+          "offline": "choice.rfi.emailProvider.offline"
+        },
+        "choices": [
+          "offline",
+          "gemini"
+        ],
+        "default": "offline",
+        "helpKey": "param.rfi.emailProvider.help",
+        "kind": "choice",
+        "labelKey": "param.rfi.emailProvider",
+        "name": "email_provider",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.geminiApiKey.help",
+        "kind": "secret",
+        "labelKey": "param.rfi.geminiApiKey",
+        "name": "gemini_api_key",
+        "required": false,
+        "visibleWhen": {
+          "email_provider": "gemini"
+        }
+      },
+      {
+        "choiceLabels": {},
+        "choices": [
+          "CIV",
+          "MEC",
+          "ELE",
+          "PRC"
+        ],
+        "default": {
+          "CIV": 3,
+          "ELE": 0,
+          "MEC": 0,
+          "PRC": 0
+        },
+        "helpKey": "param.rfi.sheetCounts.help",
+        "kind": "sheetCounts",
+        "labelKey": "param.rfi.sheetCounts",
+        "name": "sheet_counts",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": true,
+        "helpKey": "param.rfi.overflowNextDay.help",
+        "kind": "bool",
+        "labelKey": "param.rfi.overflowNextDay",
+        "name": "overflow_next_day",
+        "required": false,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.log_add.title"
+  },
+  {
+    "descriptionKey": "op.rfi.follow_up_sync.desc",
+    "id": "rfi.follow_up_sync",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.followUp.rfiLogWorkbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.followUp.rfiLogWorkbook",
+        "name": "rfi_log_workbook",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.followUp.followUpWorkbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.followUp.followUpWorkbook",
+        "name": "follow_up_workbook",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.follow_up_sync.title"
+  },
+  {
+    "descriptionKey": "op.rfi.outlook_reply_draft.desc",
+    "id": "rfi.outlook_reply_draft",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": "",
+        "helpKey": "param.rfi.outlookReplyDraft.replyText.help",
+        "kind": "longText",
+        "labelKey": "param.rfi.outlookReplyDraft.replyText",
+        "name": "reply_text",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.outlook_reply_draft.title"
+  },
+  {
+    "descriptionKey": "op.files.batch_print.desc",
+    "id": "files.batch_print",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": [],
+        "helpKey": "param.print.files.help",
+        "kind": "files",
+        "labelKey": "param.print.files",
+        "name": "files",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.print.printer.help",
+        "kind": "choice",
+        "labelKey": "param.print.printer",
+        "name": "printer",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "A3": "choice.print.paper.A3",
+          "A4": "choice.print.paper.A4",
+          "A5": "choice.print.paper.A5",
+          "Legal": "choice.print.paper.Legal",
+          "Letter": "choice.print.paper.Letter",
+          "auto": "choice.print.paper.auto"
+        },
+        "choices": [
+          "auto",
+          "A4",
+          "A3",
+          "A5",
+          "Letter",
+          "Legal"
+        ],
+        "default": "A4",
+        "helpKey": "param.print.paper.help",
+        "kind": "choice",
+        "labelKey": "param.print.paper",
+        "name": "paper",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "auto": "choice.print.orientation.auto",
+          "landscape": "choice.print.orientation.landscape",
+          "portrait": "choice.print.orientation.portrait"
+        },
+        "choices": [
+          "auto",
+          "portrait",
+          "landscape"
+        ],
+        "default": "auto",
+        "helpKey": null,
+        "kind": "choice",
+        "labelKey": "param.print.orientation",
+        "name": "orientation",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "actual": "choice.print.scaling.actual",
+          "fit": "choice.print.scaling.fit",
+          "shrink": "choice.print.scaling.shrink"
+        },
+        "choices": [
+          "fit",
+          "actual",
+          "shrink"
+        ],
+        "default": "fit",
+        "helpKey": null,
+        "kind": "choice",
+        "labelKey": "param.print.scaling",
+        "name": "scaling",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "color": "choice.print.color.color",
+          "grayscale": "choice.print.color.grayscale",
+          "printer": "choice.print.color.printer"
+        },
+        "choices": [
+          "printer",
+          "color",
+          "grayscale"
+        ],
+        "default": "printer",
+        "helpKey": null,
+        "kind": "choice",
+        "labelKey": "param.print.color",
+        "name": "color",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "long": "choice.print.duplex.long",
+          "printer": "choice.print.duplex.printer",
+          "short": "choice.print.duplex.short",
+          "simplex": "choice.print.duplex.simplex"
+        },
+        "choices": [
+          "printer",
+          "simplex",
+          "long",
+          "short"
+        ],
+        "default": "printer",
+        "helpKey": null,
+        "kind": "choice",
+        "labelKey": "param.print.duplex",
+        "name": "duplex",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": 1,
+        "helpKey": "param.print.copies.help",
+        "kind": "int",
+        "labelKey": "param.print.copies",
+        "name": "copies",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": true,
+        "helpKey": "param.print.collate.help",
+        "kind": "bool",
+        "labelKey": "param.print.collate",
+        "name": "collate",
+        "required": false,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": 0,
+        "helpKey": "param.print.retries.help",
+        "kind": "int",
+        "labelKey": "param.print.retries",
+        "name": "retries",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "pause": "choice.print.onError.pause",
+          "skip": "choice.print.onError.skip"
+        },
+        "choices": [
+          "pause",
+          "skip"
+        ],
+        "default": "pause",
+        "helpKey": "param.print.onError.help",
+        "kind": "choice",
+        "labelKey": "param.print.onError",
+        "name": "on_error",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": 30,
+        "helpKey": "param.print.timeout.help",
+        "kind": "int",
+        "labelKey": "param.print.timeout",
+        "name": "timeout_minutes",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": true,
+    "titleKey": "op.files.batch_print.title"
+  },
+  {
+    "descriptionKey": "op.rfi.stage_signed_first_pages.desc",
+    "id": "rfi.stage_signed_first_pages",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.signedScans.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.signedScans",
+        "name": "signed_scans",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.archiveRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.archiveRoot",
+        "name": "archive_root",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.reviewRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.reviewRoot",
+        "name": "review_root",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": false,
+        "helpKey": "param.rfi.scanSubfolders.help",
+        "kind": "bool",
+        "labelKey": "param.rfi.scanSubfolders",
+        "name": "scan_subfolders",
+        "required": false,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.stage_signed_first_pages.title"
+  },
+  {
+    "descriptionKey": "op.rfi.system_sync.desc",
+    "id": "rfi.system_sync",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.systemSync.rfiSystemRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.systemSync.rfiSystemRoot",
+        "name": "rfi_system_root",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.systemSync.rfiLogWorkbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.systemSync.rfiLogWorkbook",
+        "name": "rfi_log_workbook",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.systemSync.followUpWorkbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.systemSync.followUpWorkbook",
+        "name": "follow_up_workbook",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.system_sync.title"
+  }
+]
