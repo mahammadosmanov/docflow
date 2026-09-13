@@ -4,12 +4,12 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.13 combined Worley scan staging
+## Now — 0.18.3 reliability and Windows certification
 
-- Keep the read-only device-readiness surface accurate and actionable.
-- Design explicit, reversible archival retention for the append-only RFI work
-  store; never delete history automatically. Portable owner-scoped audit export
-  and live capacity visibility are implemented in 0.12.0.
+- Keep the read-only device-readiness surface accurate and actionable; startup
+  must never acquire mutation authority or block on hidden credential UI.
+- Keep human-facing current-version markers synchronized with `VERSION` through
+  the tested release tool, alongside changelog and release metadata.
 - Keep combined multi-RFI Worley scan page identification and exact-page staging
   covered by representative Windows OCR and OneDrive acceptance evidence.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,
@@ -18,7 +18,8 @@ the historical tracker.
   without committing private documents.
 - Calibrate OCR against consented representative scans and retain at least 95%
   exact canonical-RFI recognition.
-- Keep version, changelog, installer, checksums, and release metadata synchronized.
+- Retain append-only RFI work history until the operator explicitly exports and
+  archives it; never delete audit history automatically.
 
 ## Next — deeper RFI automation
 

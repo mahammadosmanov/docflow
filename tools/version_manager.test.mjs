@@ -31,6 +31,9 @@ function repositoryFixture() {
     "package-lock.json",
     "releases.json",
     "CHANGELOG.md",
+    "README.md",
+    "docs/PRODUCT.md",
+    "docs/ROADMAP.md",
     "src-tauri/Cargo.toml",
     "src-tauri/Cargo.lock",
     "src-tauri/tauri.conf.json",
@@ -54,6 +57,29 @@ test("set updates every remaining runtime manifest", () => {
     setVersion(fixture, "1.2.3-rc.1");
     assert.equal(canonicalVersion(fixture), "1.2.3-rc.1");
     assert.deepEqual(new Set(Object.values(manifestVersions(fixture))), new Set(["1.2.3-rc.1"]));
+    assert.match(readFileSync(join(fixture, "README.md"), "utf8"), /^DocFlow 1\.2\.3-rc\.1\b/mu);
+    assert.match(
+      readFileSync(join(fixture, "docs/PRODUCT.md"), "utf8"),
+      /^Current product version: \*\*1\.2\.3-rc\.1\*\*\./mu,
+    );
+    assert.match(
+      readFileSync(join(fixture, "docs/ROADMAP.md"), "utf8"),
+      /^## Now — 1\.2\.3-rc\.1 reliability and Windows certification$/mu,
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("validation rejects stale human-facing current-version markers", () => {
+  const fixture = repositoryFixture();
+  try {
+    const roadmapPath = join(fixture, "docs/ROADMAP.md");
+    writeFileSync(
+      roadmapPath,
+      readFileSync(roadmapPath, "utf8").replace(/^## Now — .*$/mu, "## Now — 0.1 stale"),
+    );
+    assert.match(validateRepository(fixture).join("\n"), /docs\/ROADMAP\.md: current-version marker/);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

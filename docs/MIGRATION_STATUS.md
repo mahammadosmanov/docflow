@@ -4,6 +4,14 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.18.3: current-version documentation enforcement
+  - the version tool atomically updates runtime manifests plus the README,
+    product definition, and roadmap current-version markers
+  - repository validation rejects stale human-facing markers, including the
+    previously stale 0.13 roadmap heading
+  - Node contract tests cover automatic updates and fail-closed drift detection;
+    external Windows, Office, OneDrive, and printer gates are unchanged
+
 - [x] Version 0.18.2: non-interactive macOS credential restore
   - passive startup requests the exact Keychain item with authentication UI
     disabled, so the splash screen cannot wait on a hidden authorization prompt

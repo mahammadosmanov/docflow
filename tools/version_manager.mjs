@@ -229,6 +229,28 @@ export function validateRepository(root = REPOSITORY_ROOT, { requireTag = false 
   } catch (error) {
     errors.push(error.message);
   }
+  for (const [path, pattern] of [
+    ["README.md", new RegExp(`^DocFlow ${current.replaceAll(".", "\\.")}\\b`, "mu")],
+    [
+      "docs/PRODUCT.md",
+      new RegExp(
+        `^Current product version: \\*\\*${current.replaceAll(".", "\\.")}\\*\\*\\.`,
+        "mu",
+      ),
+    ],
+    [
+      "docs/ROADMAP.md",
+      new RegExp(`^## Now — ${current.replaceAll(".", "\\.")}\\b`, "mu"),
+    ],
+  ]) {
+    try {
+      if (!pattern.test(readFileSync(join(root, path), "utf8"))) {
+        errors.push(`${path}: current-version marker does not match VERSION ${current}`);
+      }
+    } catch (error) {
+      errors.push(`${path}: could not verify current-version marker: ${error.message}`);
+    }
+  }
   if (requireTag) {
     try {
       const tags = execFileSync("git", ["tag", "--points-at", "HEAD"], {
@@ -279,6 +301,13 @@ function writeAtomic(path, content) {
   renameSync(temporary, path);
 }
 
+function replaceRequired(source, pattern, replacement, path) {
+  if (!pattern.test(source)) {
+    throw new VersionError(`could not update current-version marker in ${path}`);
+  }
+  return source.replace(pattern, replacement);
+}
+
 export function setVersion(root, version) {
   parseVersion(version);
   const updates = new Map([[join(root, "VERSION"), `${version}\n`]]);
@@ -313,6 +342,36 @@ export function setVersion(root, version) {
   const tauri = readJson(tauriPath);
   tauri.version = version;
   updates.set(tauriPath, jsonText(tauri));
+  const readmePath = join(root, "README.md");
+  updates.set(
+    readmePath,
+    replaceRequired(
+      readFileSync(readmePath, "utf8"),
+      /^DocFlow \S+\b/mu,
+      `DocFlow ${version}`,
+      "README.md",
+    ),
+  );
+  const productPath = join(root, "docs/PRODUCT.md");
+  updates.set(
+    productPath,
+    replaceRequired(
+      readFileSync(productPath, "utf8"),
+      /^Current product version: \*\*\S+\*\*\./mu,
+      `Current product version: **${version}**.`,
+      "docs/PRODUCT.md",
+    ),
+  );
+  const roadmapPath = join(root, "docs/ROADMAP.md");
+  updates.set(
+    roadmapPath,
+    replaceRequired(
+      readFileSync(roadmapPath, "utf8"),
+      /^## Now — \S+.*$/mu,
+      `## Now — ${version} reliability and Windows certification`,
+      "docs/ROADMAP.md",
+    ),
+  );
   for (const [path, content] of updates) writeAtomic(path, content);
 }
 

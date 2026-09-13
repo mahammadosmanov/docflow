@@ -8,6 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.18.3 - 2026-09-13
+
+### Fixed
+
+- The release tool now updates and verifies the current version shown in the
+  README, product definition, and roadmap as well as every runtime manifest.
+- Corrected the stale roadmap heading that still described 0.13 as current.
+
+### Safety
+
+- A release check now fails when any human-facing current-version marker drifts
+  from `VERSION`, preventing a package and its operator or AI documentation from
+  silently describing different baselines.
+
 ## 0.18.2 - 2026-09-13
 
 ### Fixed

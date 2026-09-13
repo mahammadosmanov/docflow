@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.18.2",
+  "currentVersion": "0.18.3",
   "releases": [
     {
       "version": "0.1.0",
@@ -366,9 +366,17 @@
       "version": "0.18.2",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.18.2",
       "summary": "Prevent passive macOS Keychain restoration from blocking normal startup while keeping inaccessible credentials untouched and native-only."
+    },
+    {
+      "version": "0.18.3",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.18.3",
+      "summary": "Keep the README, product definition, and roadmap current-version markers synchronized with every runtime manifest through the tested release tool."
     }
   ]
 }
