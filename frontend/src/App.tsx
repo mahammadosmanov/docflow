@@ -770,7 +770,7 @@ function HomeScreen({
             <p>{s.t("home.subtitle")}</p>
           </div>
           <div className="safe-badge">
-            <Shield /> Preview-first <span aria-hidden="true">·</span>
+            <Shield /> {s.t("home.previewFirst")} <span aria-hidden="true">·</span>
             <span>v{bootstrap.version}</span>
           </div>
         </section>
@@ -1430,7 +1430,11 @@ function OperationScreen({
 
   return (
     <div className="screen">
-      <Header title={s.t(operation.titleKey)} onBack={onBack}>
+      <Header
+        title={s.t(operation.titleKey)}
+        onBack={onBack}
+        backLabel={s.t("action.back")}
+      >
         <StepIndicator
           current={currentStep}
           labels={[
@@ -3515,7 +3519,11 @@ function ReviewScreen({
 
   return (
     <div className="screen">
-      <Header title={s.t("review.title")} onBack={onBack} />
+      <Header
+        title={s.t("review.title")}
+        onBack={onBack}
+        backLabel={s.t("action.back")}
+      />
       <main className="work-pane review-pane">
         {result ? (
           <ResultView
@@ -3690,6 +3698,7 @@ function HistoryScreen({
       <Header
         title={s.t("history.title")}
         onBack={onBack}
+        backLabel={s.t("action.back")}
         trailing={
           <IconButton
             label={s.t("action.retry")}
@@ -3861,6 +3870,7 @@ function RecoveryScreen({
       <Header
         title={s.t("recovery.title")}
         onBack={onBack}
+        backLabel={s.t("action.back")}
         trailing={
           <IconButton label={s.t("action.retry")} onClick={() => void load()}>
             <RefreshCw />
@@ -3988,6 +3998,7 @@ function AdminScreen({
       <Header
         title={s.t("admin.title")}
         onBack={onBack}
+        backLabel={s.t("action.back")}
         trailing={
           <IconButton
             label={s.t("action.retry")}
@@ -4156,7 +4167,11 @@ function SettingsScreen({
   };
   return (
     <div className="screen">
-      <Header title={s.t("prefs.title")} onBack={onBack} />
+      <Header
+        title={s.t("prefs.title")}
+        onBack={onBack}
+        backLabel={s.t("action.back")}
+      />
       <main className="settings-pane">
         {auth.signedIn && (
           <SettingsGroup title={s.t("prefs.account")} icon={<User />}>
@@ -4408,11 +4423,13 @@ function ChoiceGrid({
 function Header({
   title,
   onBack,
+  backLabel,
   trailing,
   children,
 }: {
   title?: string;
   onBack?: () => void;
+  backLabel?: string;
   trailing?: ReactNode;
   children?: ReactNode;
 }) {
@@ -4421,7 +4438,7 @@ function Header({
       <div className="header-main">
         <div className="header-left">
           {onBack && (
-            <IconButton label="Back" onClick={onBack}>
+            <IconButton label={backLabel ?? "←"} onClick={onBack}>
               <ArrowLeft />
             </IconButton>
           )}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.10.0",
+  "currentVersion": "0.10.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -270,9 +270,17 @@
       "version": "0.10.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.10.0",
       "summary": "Open RFI work items directly from Today, Resume, and Needs Review with safe prefilled transitions and schema-enforced transient task fields."
+    },
+    {
+      "version": "0.10.1",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.10.1",
+      "summary": "Localize the shared back action and preview-first safety badge across all four supported languages."
     }
   ]
 }

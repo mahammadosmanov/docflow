@@ -114,7 +114,7 @@ describe("DocFlow shell", () => {
       "request_captured",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Geri" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Yeni RFI işi" }));
     expect(
@@ -822,7 +822,8 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.10.0-demo")).toBeVisible();
+    expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
+    expect(screen.getByText("v0.10.1-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

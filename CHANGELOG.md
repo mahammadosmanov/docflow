@@ -8,6 +8,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.10.1 - 2026-09-13
+
+### Fixed
+
+- Localized the shared back-button accessible label and the home-screen
+  preview-first safety badge in Turkish, English, Russian, and Azerbaijani.
+
 ## 0.10.0 - 2026-09-13
 
 ### Added
