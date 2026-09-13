@@ -635,6 +635,7 @@
   "workItems.help": "Отслеживайте сегодняшние задачи, продолжение и проверку без изменения официальных документов.",
   "workItems.refresh": "Обновить работы RFI",
   "workItems.new": "Новая работа RFI",
+  "workItems.open": "Открыть {title}",
   "workItems.loading": "Загрузка работ RFI…",
   "workItems.today": "Работы RFI на сегодня",
   "workItems.resume": "Продолжить",

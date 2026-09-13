@@ -8,6 +8,22 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.10.0 - 2026-09-13
+
+### Added
+
+- Made every Today, Resume, and Needs Review card directly open its existing
+  RFI work item in the shared schema-driven editor with the item identity,
+  current stage, due date, and review state already filled.
+
+### Safety
+
+- Added a reusable schema-level `remember` policy and marked RFI work-item
+  fields transient, so task identities and prior transition values cannot leak
+  into the next new item through saved form preferences.
+- The shortcut still produces the same preview-first, explicitly approved,
+  no-clobber, journaled work-item event; it adds no document mutation path.
+
 ## 0.9.0 - 2026-09-13
 
 ### Added

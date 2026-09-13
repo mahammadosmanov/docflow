@@ -663,6 +663,7 @@
   "workItems.help": "Track today's work, resume points, and review items without changing official documents.",
   "workItems.refresh": "Refresh RFI work",
   "workItems.new": "New RFI work item",
+  "workItems.open": "Open {title}",
   "workItems.loading": "Loading RFI work…",
   "workItems.today": "Today's RFI work",
   "workItems.resume": "Resume",

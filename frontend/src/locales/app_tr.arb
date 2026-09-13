@@ -635,6 +635,7 @@
   "workItems.help": "Günlük işleri, kaldığın yeri ve inceleme gerektiren kayıtları resmî belgeleri değiştirmeden takip et.",
   "workItems.refresh": "RFI işlerini yenile",
   "workItems.new": "Yeni RFI işi",
+  "workItems.open": "{title} işini aç",
   "workItems.loading": "RFI işleri yükleniyor…",
   "workItems.today": "Bugünün RFI işleri",
   "workItems.resume": "Devam et",

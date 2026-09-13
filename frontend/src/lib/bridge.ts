@@ -14,6 +14,7 @@ import type {
   Bootstrap,
   HistoryPayload,
   OperationDef,
+  ParamDef,
   OperationResult,
   PathSelection,
   Plan,
@@ -140,7 +141,7 @@ const demoWorkItemOperation: OperationDef = {
   titleKey: "op.rfi.work_item_update.title",
   descriptionKey: "op.rfi.work_item_update.desc",
   supportsPresets: false,
-  schema: [
+  schema: ([
     {
       name: "action",
       kind: "choice",
@@ -243,7 +244,10 @@ const demoWorkItemOperation: OperationDef = {
       visibleWhen: { action: "transition" },
       helpKey: "param.rfi.workItem.reason.help",
     },
-  ],
+  ] as ParamDef[]).map((parameter) => ({
+    ...parameter,
+    remember: false,
+  })),
 };
 
 const demoRfiOperation: OperationDef = {

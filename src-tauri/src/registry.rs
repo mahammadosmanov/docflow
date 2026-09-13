@@ -57,6 +57,7 @@ fn parameter(
         choice_labels,
         visible_when,
         help_key: help_key.map(str::to_string),
+        remember: true,
     }
 }
 
@@ -75,7 +76,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     create_visibility.insert("action".to_string(), json!("create"));
     let mut transition_visibility = Map::new();
     transition_visibility.insert("action".to_string(), json!("transition"));
-    let work_item = operation(
+    let mut work_item = operation(
         "rfi.work_item_update",
         vec![
             parameter(
@@ -196,6 +197,9 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             ),
         ],
     );
+    for parameter in &mut work_item.schema.params {
+        parameter.remember = false;
+    }
     let process_scans = operation(
         "rfi.process_scans",
         vec![

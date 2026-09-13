@@ -98,10 +98,31 @@ describe("DocFlow shell", () => {
     expect(screen.getByText("Talep kaydedildi")).toBeVisible();
     expect(call).toHaveBeenCalledWith("workItems/list");
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "MEC inspection request işini aç" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "RFI işini kaydet" }),
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^İşlem/ })).toHaveValue(
+      "transition",
+    );
+    expect(screen.getByRole("textbox", { name: /^İş kimliği/ })).toHaveValue(
+      "work-1",
+    );
+    expect(screen.getByRole("combobox", { name: /^Aşama/ })).toHaveValue(
+      "request_captured",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
     fireEvent.click(screen.getByRole("button", { name: "Yeni RFI işi" }));
     expect(
       await screen.findByRole("heading", { name: "RFI işini kaydet" }),
     ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^İşlem/ })).toHaveValue(
+      "create",
+    );
   });
 
   it("shows device readiness and routes attention to recovery", async () => {
@@ -801,7 +822,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("v0.9.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.10.0-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

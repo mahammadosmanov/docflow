@@ -390,6 +390,9 @@ impl NativeBackend {
 
         let mut result = Map::new();
         for param in operation.schema.params {
+            if !param.remember {
+                continue;
+            }
             let Some(raw) = saved.get(&param.name).cloned() else {
                 continue;
             };
@@ -501,6 +504,9 @@ impl NativeBackend {
 
         let mut sanitized = Map::new();
         for param in operation.schema.params {
+            if !param.remember {
+                continue;
+            }
             let Some(raw) = values.remove(&param.name) else {
                 continue;
             };
@@ -1749,7 +1755,9 @@ fn filter_saved_operation_params(
         .schema
         .params
         .into_iter()
-        .filter(|parameter| !matches!(parameter.kind, ParamKind::Secret | ParamKind::LongText))
+        .filter(|parameter| {
+            parameter.remember && !matches!(parameter.kind, ParamKind::Secret | ParamKind::LongText)
+        })
         .map(|parameter| parameter.name)
         .collect::<HashSet<_>>();
     values.retain(|name, _| allowed.contains(name));
@@ -2661,6 +2669,20 @@ mod tests {
         assert_eq!(filtered.get("email_provider"), Some(&json!("gemini")));
         assert!(!filtered.contains_key("gemini_api_key"));
         assert!(!filtered.contains_key("unknown"));
+
+        let work_item = filter_saved_operation_params(
+            "rfi.work_item_update",
+            serde_json::from_value(json!({
+                "action": "transition",
+                "item_id": "work-1",
+                "stage": "checked",
+                "due_date": "2026-09-14",
+                "needs_review": false
+            }))
+            .unwrap(),
+        )
+        .expect("work-item form values should be recognized but transient");
+        assert!(work_item.is_empty());
     }
 
     #[test]

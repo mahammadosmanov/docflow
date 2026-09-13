@@ -635,6 +635,7 @@
   "workItems.help": "Rəsmi sənədləri dəyişmədən bugünkü işləri, davam nöqtələrini və yoxlama qeydlərini izlə.",
   "workItems.refresh": "RFI işlərini yenilə",
   "workItems.new": "Yeni RFI işi",
+  "workItems.open": "{title} işini aç",
   "workItems.loading": "RFI işləri yüklənir…",
   "workItems.today": "Bugünkü RFI işləri",
   "workItems.resume": "Davam et",

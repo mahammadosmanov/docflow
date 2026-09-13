@@ -4,12 +4,12 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.9 unified RFI work foundation
+## Now — 0.10 unified RFI work foundation
 
 - Keep the read-only device-readiness surface accurate and actionable.
-- Extend the implemented append-only RFI work items and Today, Resume, and Needs
-  Review queues with one-click prefilled transitions and journal-linked
-  automatic evidence from successful operations.
+- Extend the implemented append-only RFI work items and one-click prefilled
+  Today, Resume, and Needs Review transitions with journal-linked automatic
+  evidence from successful operations.
 - Certify the exact Windows candidate against Excel open/recalculate, Outlook,
   OneDrive-backed folders, Microsoft Print to PDF, and representative printers.
 - Expand structural fixtures for every current production workbook family

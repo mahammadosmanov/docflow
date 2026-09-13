@@ -398,11 +398,24 @@ h2 {
   gap: 7px;
 }
 .work-item-card {
+  width: 100%;
   min-width: 0;
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.work-item-card:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+.work-item-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .work-item-card > div,
 .work-item-card strong,

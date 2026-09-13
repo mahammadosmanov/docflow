@@ -64,6 +64,11 @@ validation, Today/Resume/Needs Review projection, explicit manual transition
 reasons, no-clobber journaled writes, and undo. Automatic journal-linked
 transitions, export, and longer-term retention controls remain later increments.
 
+Version 0.10.0 adds direct queue-card transitions through the same generic
+schema editor. Work-item fields are explicitly transient schema values, so a
+previous task identity or stage is never restored as a preference for a new
+item.
+
 ## Rollback
 
 The work-item store is coordination metadata. Disabling or rebuilding it does

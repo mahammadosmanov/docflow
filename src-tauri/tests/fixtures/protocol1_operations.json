@@ -14,6 +14,7 @@
         "kind": "choice",
         "labelKey": "param.rfi.workItem.action",
         "name": "action",
+        "remember": false,
         "required": true,
         "visibleWhen": {}
       },
@@ -25,6 +26,7 @@
         "kind": "text",
         "labelKey": "param.rfi.workItem.itemId",
         "name": "item_id",
+        "remember": false,
         "required": false,
         "visibleWhen": { "action": "transition" }
       },
@@ -36,6 +38,7 @@
         "kind": "text",
         "labelKey": "param.rfi.workItem.title",
         "name": "title",
+        "remember": false,
         "required": false,
         "visibleWhen": { "action": "create" }
       },
@@ -47,6 +50,7 @@
         "kind": "longText",
         "labelKey": "param.rfi.workItem.rfiCodes",
         "name": "rfi_codes",
+        "remember": false,
         "required": false,
         "visibleWhen": { "action": "create" }
       },
@@ -80,6 +84,7 @@
         "kind": "choice",
         "labelKey": "param.rfi.workItem.stage",
         "name": "stage",
+        "remember": false,
         "required": true,
         "visibleWhen": {}
       },
@@ -91,6 +96,7 @@
         "kind": "text",
         "labelKey": "param.rfi.workItem.dueDate",
         "name": "due_date",
+        "remember": false,
         "required": false,
         "visibleWhen": {}
       },
@@ -102,6 +108,7 @@
         "kind": "bool",
         "labelKey": "param.rfi.workItem.needsReview",
         "name": "needs_review",
+        "remember": false,
         "required": false,
         "visibleWhen": {}
       },
@@ -113,6 +120,7 @@
         "kind": "longText",
         "labelKey": "param.rfi.workItem.reason",
         "name": "reason",
+        "remember": false,
         "required": false,
         "visibleWhen": { "action": "transition" }
       }

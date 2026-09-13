@@ -48,6 +48,16 @@ pub struct ParamDef {
     pub choice_labels: BTreeMap<String, String>,
     pub visible_when: JsonObject,
     pub help_key: Option<String>,
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub remember: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -377,6 +387,7 @@ mod tests {
             choice_labels: std::collections::BTreeMap::new(),
             visible_when: JsonObject::new(),
             help_key: Some("param.source.help".to_string()),
+            remember: true,
         };
         assert_eq!(
             serde_json::to_value(parameter).expect("parameter should serialize"),

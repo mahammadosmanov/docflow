@@ -20,6 +20,7 @@ export interface ParamDef {
   choiceLabels: Record<string, string>;
   visibleWhen: Record<string, unknown>;
   helpKey: string | null;
+  remember?: boolean;
 }
 
 export interface OperationDef {

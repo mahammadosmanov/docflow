@@ -92,7 +92,11 @@ import type {
 
 type Route =
   | { name: "home" }
-  | { name: "operation"; operation: OperationDef }
+  | {
+      name: "operation";
+      operation: OperationDef;
+      initialValues?: Record<string, unknown>;
+    }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
   | { name: "history" }
@@ -275,6 +279,7 @@ export function App() {
         <OperationScreen
           bridge={bridge}
           operation={route.operation}
+          initialValues={route.initialValues}
           s={s}
           onBack={() => setRoute({ name: "home" })}
           onReview={(destination) =>
@@ -808,6 +813,14 @@ function HomeScreen({
                 items={workItems?.today ?? []}
                 empty={s.t("workItems.today.empty")}
                 s={s}
+                onOpen={(item) =>
+                  workItemOperation &&
+                  navigate({
+                    name: "operation",
+                    operation: workItemOperation,
+                    initialValues: workItemTransitionValues(item),
+                  })
+                }
               />
               <WorkQueue
                 icon={<Play />}
@@ -815,6 +828,14 @@ function HomeScreen({
                 items={workItems?.resume ?? []}
                 empty={s.t("workItems.resume.empty")}
                 s={s}
+                onOpen={(item) =>
+                  workItemOperation &&
+                  navigate({
+                    name: "operation",
+                    operation: workItemOperation,
+                    initialValues: workItemTransitionValues(item),
+                  })
+                }
               />
               <WorkQueue
                 icon={<CircleAlert />}
@@ -822,6 +843,14 @@ function HomeScreen({
                 items={workItems?.needsReview ?? []}
                 empty={s.t("workItems.needsReview.empty")}
                 s={s}
+                onOpen={(item) =>
+                  workItemOperation &&
+                  navigate({
+                    name: "operation",
+                    operation: workItemOperation,
+                    initialValues: workItemTransitionValues(item),
+                  })
+                }
               />
             </div>
           )}
@@ -1000,18 +1029,31 @@ function HomeScreen({
   );
 }
 
+function workItemTransitionValues(item: WorkItem): Record<string, unknown> {
+  return {
+    action: "transition",
+    item_id: item.itemId,
+    stage: item.stage,
+    due_date: item.dueDate ?? "",
+    needs_review: item.needsReview,
+    reason: "",
+  };
+}
+
 function WorkQueue({
   icon,
   title,
   items,
   empty,
   s,
+  onOpen,
 }: {
   icon: ReactNode;
   title: string;
   items: WorkItem[];
   empty: string;
   s: Strings;
+  onOpen: (item: WorkItem) => void;
 }) {
   return (
     <section className="work-queue-column">
@@ -1025,7 +1067,13 @@ function WorkQueue({
       ) : (
         <div className="work-item-list">
           {items.slice(0, 6).map((item) => (
-            <article className="work-item-card" key={item.itemId}>
+            <button
+              type="button"
+              className="work-item-card"
+              key={item.itemId}
+              aria-label={s.t("workItems.open", { title: item.title })}
+              onClick={() => onOpen(item)}
+            >
               <div>
                 <strong>{item.title}</strong>
                 <small>{s.t(`choice.rfi.workItem.stage.${item.stage}`)}</small>
@@ -1034,7 +1082,7 @@ function WorkQueue({
                 <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
               )}
               <span className="work-item-id">{item.itemId}</span>
-            </article>
+            </button>
           ))}
         </div>
       )}
@@ -1076,12 +1124,14 @@ function ReadinessItem({
 function OperationScreen({
   bridge,
   operation,
+  initialValues,
   s,
   onBack,
   onReview,
 }: {
   bridge: Bridge;
   operation: OperationDef;
+  initialValues?: Record<string, unknown>;
   s: Strings;
   onBack: () => void;
   onReview: (destination: PathSelection) => void;
@@ -1089,8 +1139,10 @@ function OperationScreen({
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
   );
-  const [values, setValues] =
-    useState<Record<string, unknown>>(defaults);
+  const [values, setValues] = useState<Record<string, unknown>>({
+    ...defaults,
+    ...(initialValues ?? {}),
+  });
   const valuesRevision = useRef(0);
   const [hydrated, setHydrated] = useState(false);
   const lastSaved = useRef("");
@@ -1124,17 +1176,29 @@ function OperationScreen({
           operation.schema.map((item) => item.name),
         );
         const filtered = Object.fromEntries(
-          Object.entries(saved).filter(([key]) => known.has(key)),
+          Object.entries(saved).filter(([key]) => {
+            const parameter = operation.schema.find((item) => item.name === key);
+            return known.has(key) && parameter?.remember !== false;
+          }),
         );
         setValues((current) => ({
           ...current,
           ...filtered,
+          ...(initialValues ?? {}),
         }));
         lastSaved.current = JSON.stringify(
           Object.fromEntries(
-            Object.entries({ ...defaults, ...filtered }).filter(([name]) => {
+            Object.entries({
+              ...defaults,
+              ...filtered,
+              ...(initialValues ?? {}),
+            }).filter(([name]) => {
               const param = operation.schema.find((item) => item.name === name);
-              return param?.kind !== "longText" && param?.kind !== "secret";
+              return (
+                param?.remember !== false &&
+                param?.kind !== "longText" &&
+                param?.kind !== "secret"
+              );
             }),
           ),
         );
@@ -1143,14 +1207,18 @@ function OperationScreen({
       .catch(() => {
         setHydrated(true);
       });
-  }, [bridge, operation]);
+  }, [bridge, operation, initialValues]);
 
   useEffect(() => {
     if (!hydrated) return;
     const sanitized = Object.fromEntries(
       Object.entries(values).filter(([name]) => {
         const param = operation.schema.find((item) => item.name === name);
-        return param?.kind !== "longText" && param?.kind !== "secret";
+        return (
+          param?.remember !== false &&
+          param?.kind !== "longText" &&
+          param?.kind !== "secret"
+        );
       }),
     );
     const serialized = JSON.stringify(sanitized);
@@ -1197,7 +1265,11 @@ function OperationScreen({
       const sanitized = Object.fromEntries(
         Object.entries(values).filter(([name]) => {
           const param = operation.schema.find((item) => item.name === name);
-          return param?.kind !== "longText" && param?.kind !== "secret";
+          return (
+            param?.remember !== false &&
+            param?.kind !== "longText" &&
+            param?.kind !== "secret"
+          );
         }),
       );
       lastSaved.current = JSON.stringify(sanitized);
