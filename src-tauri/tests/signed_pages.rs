@@ -284,7 +284,7 @@ fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
     assert!(plan.warnings.iter().any(|warning| {
         warning.key == "warn.no_code"
             && warning.subject.contains("combined.pdf")
-            && warning.subject.contains("page 2")
+            && warning.subject.contains("#2")
     }));
 
     let duplicate = PageFixtureOcr {
@@ -307,9 +307,43 @@ fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
     );
     assert!(plan.warnings.iter().any(|warning| {
         warning.key == "warn.rfi.signedDuplicate"
-            && warning.subject.contains("page 1")
-            && warning.subject.contains("page 2")
+            && warning.subject.contains("#1")
+            && warning.subject.contains("#2")
     }));
+}
+
+#[test]
+fn combined_scan_preview_reports_pages_and_cancels_between_them() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("combined.pdf"), true);
+    let ocr = PageFixtureOcr {
+        codes: BTreeMap::from([
+            (("combined.pdf".to_string(), 0), CODE.to_string()),
+            (
+                ("combined.pdf".to_string(), 1),
+                "AZE-SUN-INT-QMS-RFI-MEC-0249".to_string(),
+            ),
+        ]),
+    };
+    let mut cancellation_checks = 0;
+    let mut subjects = Vec::new();
+
+    let error = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &ocr,
+        |event| subjects.push(event.subject),
+        || {
+            cancellation_checks += 1;
+            cancellation_checks >= 3
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, "operation_cancelled");
+    assert!(subjects.iter().any(|subject| subject.contains("#1")));
+    assert!(!subjects.iter().any(|subject| subject.contains("#2")));
+    assert!(fs::read_dir(&review_root).unwrap().next().is_none());
 }
 
 #[test]

@@ -4,6 +4,13 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.13.1: responsive combined-scan preview
+  - current page identity is emitted during recognition and cancellation is
+    checked before every page, with zero document effects during preview
+  - focused cancellation regression, warnings-denied Clippy, fmt/check, Node and
+    React tests, frontend build, and version/source audits passed on macOS
+  - packaged Windows responsiveness remains part of the pending 0.13 acceptance
+
 - [x] Version 0.13.0: combined Worley scan page staging
   - every page in a combined signed PDF is recognized independently and shown as
     a separate review candidate with its exact page number

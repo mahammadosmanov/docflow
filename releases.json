@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.13.0",
+  "currentVersion": "0.13.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -302,9 +302,17 @@
       "version": "0.13.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.13.0",
       "summary": "Identify every exact RFI page in a combined Worley scan and stage the approved page into an archive-preserving review copy without modifying the source or archive."
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-09-13",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.13.1",
+      "summary": "Keep long combined-scan previews responsive with visible per-page recognition progress and cancellation between pages."
     }
   ]
 }

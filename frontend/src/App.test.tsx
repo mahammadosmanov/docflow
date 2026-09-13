@@ -928,7 +928,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(screen.getByText("Önizleme öncelikli")).toBeVisible();
-    expect(screen.getByText("v0.13.0-demo")).toBeVisible();
+    expect(screen.getByText("v0.13.1-demo")).toBeVisible();
   });
 
   it("signs in and opens the schema-driven operation", async () => {

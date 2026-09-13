@@ -133,6 +133,15 @@ where
             ));
         }
         for page_index in 0..page_count {
+            if cancelled() {
+                return Err(BackendError::cancelled());
+            }
+            progress(ProgressEvent {
+                phase: "preview".to_string(),
+                done: index as u64,
+                total: pdfs.len() as u64,
+                subject: candidate_display(pdf, page_index),
+            });
             let read = match ocr.read_page(pdf, page_index) {
                 Ok(read) => read,
                 Err(OcrFailure::EngineMissing) => {
@@ -943,7 +952,7 @@ fn display_name(path: &Path) -> String {
 }
 
 fn candidate_display(path: &Path, page_index: usize) -> String {
-    format!("{} — page {}", display_name(path), page_index + 1)
+    format!("{} — #{}", display_name(path), page_index + 1)
 }
 
 fn truncate(value: &str, max: usize) -> String {

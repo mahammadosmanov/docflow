@@ -8,6 +8,19 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.13.1 - 2026-09-13
+
+### Fixed
+
+- Combined Worley scan preview now reports the page currently being analyzed
+  and responds to cancellation between pages instead of waiting for the entire
+  PDF to finish.
+
+### Safety
+
+- Cancellation during page recognition remains preview-only and creates no
+  review output, journal, source split, or archive change.
+
 ## 0.13.0 - 2026-09-13
 
 ### Added
