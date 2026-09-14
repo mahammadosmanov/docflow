@@ -22,6 +22,16 @@ Windows output on the EPSON L15160 Series remains the decisive acceptance gate:
 run at least three mixed files in one Apply and confirm the queue advances
 without Review remaining while each page is produced exactly once.
 
+The Windows x64 cross-build from implementation commit
+`089c6344e65639e242c07443cbf043ae9e097b23` completed. The OCR-inclusive ZIP
+passed the package audit, every generated checksum verified, and both executable
+artifacts identify as Windows GUI-subsystem PE files. Cross-linker PDB warnings
+were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `af967f4b3becf483ae404729643f137588b45be7afba3a914f1ab4f5573dea33`;
+- portable EXE: `70e41122724da5df7e8821dc28e98d16c3a9a3b5459d5e5d63b2f4aeeca32ceb`;
+- per-user installer: `1c36021a4108a2a418ee4c9038b29ad8c37fd31d2e7abd4529495ebf644e0da4`.
+
 ## 0.24.0 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
