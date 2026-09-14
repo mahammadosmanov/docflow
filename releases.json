@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.25.0",
+  "currentVersion": "0.26.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -446,9 +446,17 @@
       "version": "0.25.0",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.25.0",
       "summary": "Search every nested RFI System folder with bounded multi-core signed-page archive discovery while keeping exact matching, read-only sources, deterministic planning, and serial safe effects."
+    },
+    {
+      "version": "0.26.0",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.26.0",
+      "summary": "Make signed-page preview progress, approved rows, comparisons, and warning files directly understandable while routing each warning source to a hash-pinned no-clobber Review copy."
     }
   ]
 }

@@ -37,9 +37,14 @@ authority and does not change confidence thresholds.
 - Exact effects show complete approved source/destination paths without reopening files.
 - Warning filtering is presentation-only and never removes Plan warnings.
 - Workbook comparison shows approved sheet/cell/current/replacement values only.
-- Signed-page thumbnails are bounded inert PNG metadata tied to row/candidate tokens.
+- Signed-page thumbnails are bounded inert PNG metadata tied to row/candidate
+  tokens. Signed-page warning-review metadata names only sources/destinations and
+  reasons already authorized by Plan steps; it cannot create a copy by itself.
 - The Plan content region owns vertical scrolling; its final action bar remains
   outside that region. Wide record tables own horizontal scrolling, and dialogs
   remain vertically scrollable within the viewport.
+- Signed-page plans put the approved editor before comparisons and warnings and
+  provide a sticky in-page navigator. Comparison controls change only the visible
+  row/image; warning filters and navigation never revise Plan authority.
 
 Any editor interaction change requires a frontend test and all four locale keys.

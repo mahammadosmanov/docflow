@@ -20,6 +20,13 @@ in the Plan. The 250,000-entry bound, exact filename requirement, symlink refusa
 complete-scan requirement, source hashes, no-clobber review output, serial Apply,
 journal order, and Undo rules are unchanged.
 
+Warnings that belong to signed input PDFs are actionable Plan effects, not hidden
+side effects. Preview records one hash-pinned copy per affected source beneath
+the review root's `_review` subtree and preserves the relative input path. Apply
+does not rediscover these files, refuses drift and collisions, journals successful
+copies, and leaves all signed/archive sources unchanged. Informational completed
+temporary-file cleanup does not create a warning copy.
+
 Undo runs successful journaled steps in reverse. It refuses to overwrite later
 user edits, verifies identities/hashes, and removes only empty directories that
 the operation created. Review delete is a recoverable move to app trash.

@@ -825,12 +825,12 @@ fn render_page_png(
 }
 
 pub fn render_page_thumbnail_data_url(input: &Path, page_index: usize) -> Result<String, String> {
-    const MAX_WIDTH: usize = 240;
-    const MAX_HEIGHT: usize = 320;
-    const MAX_PNG_BYTES: usize = 256 * 1024;
+    const MAX_WIDTH: usize = 540;
+    const MAX_HEIGHT: usize = 760;
+    const MAX_PNG_BYTES: usize = 768 * 1024;
     let temporary = tempfile::tempdir().map_err(|error| format!("thumbnail temp: {error}"))?;
     let rendered = temporary.path().join("page.png");
-    render_page_png(input, &rendered, 72, page_index)?;
+    render_page_png(input, &rendered, 144, page_index)?;
     let thumbnail = resize_gray_to_fit(&read_png_gray(&rendered)?, MAX_WIDTH, MAX_HEIGHT)?;
     let mut png_bytes = Vec::new();
     {

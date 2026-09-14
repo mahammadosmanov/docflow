@@ -13,7 +13,7 @@ use crate::{
     naming::filename_for,
     ocr::render_page_thumbnail_data_url,
     operations::process_scans::{OcrAdapter, OcrFailure},
-    parallel::bounded_map,
+    parallel::{bounded_map, bounded_map_stream},
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
     rfi_code::RfiMethod,
@@ -25,7 +25,7 @@ const MAX_SIGNED_PDFS: usize = 10_000;
 const MAX_SIGNED_PAGES: usize = 20_000;
 const MAX_ARCHIVE_ENTRIES: usize = 250_000;
 const MAX_PAGE_COMPARISONS: usize = 20;
-const MAX_PAGE_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
+const MAX_PAGE_PREVIEW_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StageSignedPagesParams {
@@ -46,6 +46,14 @@ struct PreparedArchive {
     archive: PathBuf,
     relative: PathBuf,
     steps: Vec<Step>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct WarningReviewReason {
+    key: String,
+    page_number: Option<usize>,
+    code: Option<String>,
+    detail: String,
 }
 
 struct CachedPageOcr {
@@ -107,8 +115,21 @@ where
             ..empty_plan()
         });
     }
+    progress(ProgressEvent {
+        phase: "signed_discovery".to_string(),
+        done: 0,
+        total: 0,
+        subject: signed_root.to_string_lossy().into_owned(),
+    });
     let pdfs = signed_pdfs(&signed_root, params.scan_subfolders)?;
+    progress(ProgressEvent {
+        phase: "signed_discovery".to_string(),
+        done: pdfs.len() as u64,
+        total: pdfs.len() as u64,
+        subject: signed_root.to_string_lossy().into_owned(),
+    });
     let mut plan = empty_plan();
+    let mut warning_reviews = BTreeMap::<PathBuf, Vec<WarningReviewReason>>::new();
     if pdfs.is_empty() {
         plan.warnings.push(warning(
             "warn.rfi.noSignedPdfs",
@@ -122,7 +143,13 @@ where
             return Err(BackendError::cancelled());
         }
         let mut tasks = Vec::new();
-        for pdf in &pdfs {
+        for (index, pdf) in pdfs.iter().enumerate() {
+            progress(ProgressEvent {
+                phase: "signed_inspection".to_string(),
+                done: index as u64,
+                total: pdfs.len() as u64,
+                subject: display_name(pdf),
+            });
             if let Ok(facts) = inspect(pdf)
                 && fidelity_supported(&facts, PdfRole::SignedScan)
             {
@@ -134,9 +161,23 @@ where
                 tasks.extend((0..facts.page_count).map(|page_index| (pdf.clone(), page_index)));
             }
         }
-        let (worker_count, results) =
-            bounded_map(&tasks, |(pdf, page_index)| ocr.read_page(pdf, *page_index))
-                .map_err(BackendError::request_failed)?;
+        let mut completed = 0_u64;
+        let (worker_count, results) = bounded_map_stream(
+            &tasks,
+            |(pdf, page_index)| ocr.read_page(pdf, *page_index),
+            |index, _| {
+                completed += 1;
+                let (pdf, page_index) = &tasks[index];
+                progress(ProgressEvent {
+                    phase: "signed_ocr".to_string(),
+                    done: completed,
+                    total: tasks.len() as u64,
+                    subject: candidate_display(pdf, *page_index),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?;
         if cancelled() {
             return Err(BackendError::cancelled());
         }
@@ -160,7 +201,7 @@ where
             return Err(BackendError::cancelled());
         }
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "signed_classification".to_string(),
             done: index as u64,
             total: pdfs.len() as u64,
             subject: display_name(pdf),
@@ -169,24 +210,29 @@ where
             match inspect(pdf) {
                 Ok(facts) if fidelity_supported(&facts, PdfRole::SignedScan) => facts.page_count,
                 Ok(facts) => {
-                    plan.warnings.push(warning(
+                    push_warning_review(
+                        &mut plan,
+                        &mut warning_reviews,
+                        &signed_root,
                         "warn.rfi.pdfFidelityUnsupported",
-                        &truncate(
-                            &format!(
-                                "{} — {}",
-                                display_name(pdf),
-                                fidelity_reason(&facts, PdfRole::SignedScan)
-                            ),
-                            300,
-                        ),
-                    ));
+                        pdf,
+                        None,
+                        None,
+                        fidelity_reason(&facts, PdfRole::SignedScan),
+                    );
                     continue;
                 }
                 Err(error) => {
-                    plan.warnings.push(warning(
+                    push_warning_review(
+                        &mut plan,
+                        &mut warning_reviews,
+                        &signed_root,
                         "warn.rfi.pdfFidelityUnsupported",
-                        &truncate(&format!("{} — {error}", display_name(pdf)), 300),
-                    ));
+                        pdf,
+                        None,
+                        None,
+                        &error.to_string(),
+                    );
                     continue;
                 }
             }
@@ -194,10 +240,16 @@ where
             1
         };
         if page_count == 0 {
-            plan.warnings.push(warning(
+            push_warning_review(
+                &mut plan,
+                &mut warning_reviews,
+                &signed_root,
                 "warn.rfi.pdfFidelityUnsupported",
-                &format!("{} — PDF has no pages", display_name(pdf)),
-            ));
+                pdf,
+                None,
+                None,
+                "PDF has no pages",
+            );
             continue;
         }
         scanned_pages = scanned_pages.saturating_add(page_count);
@@ -217,7 +269,7 @@ where
                 return Err(BackendError::cancelled());
             }
             progress(ProgressEvent {
-                phase: "preview".to_string(),
+                phase: "signed_classification".to_string(),
                 done: index as u64,
                 total: pdfs.len() as u64,
                 subject: candidate_display(pdf, page_index),
@@ -231,26 +283,47 @@ where
                     });
                 }
                 Err(OcrFailure::Document(error)) => {
-                    plan.warnings.push(warning(
+                    push_warning_review(
+                        &mut plan,
+                        &mut warning_reviews,
+                        &signed_root,
                         "warn.rfi.signedUnreadable",
-                        &truncate(
-                            &format!("{} — {error}", candidate_display(pdf, page_index)),
-                            300,
-                        ),
-                    ));
+                        pdf,
+                        Some(page_index),
+                        None,
+                        &error,
+                    );
                     continue;
                 }
             };
             if !matches!(read.matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
-                plan.warnings
-                    .push(warning("warn.no_code", &candidate_display(pdf, page_index)));
+                push_warning_review(
+                    &mut plan,
+                    &mut warning_reviews,
+                    &signed_root,
+                    "warn.no_code",
+                    pdf,
+                    Some(page_index),
+                    None,
+                    "No exact canonical RFI code was recognized",
+                );
                 continue;
             }
             if read.matched.confidence < MIN_CONFIDENCE {
-                plan.warnings.push(warning(
+                let detail = format!(
+                    "OCR score {:.0}% is below the 80% threshold",
+                    read.matched.confidence * 100.0
+                );
+                push_warning_review(
+                    &mut plan,
+                    &mut warning_reviews,
+                    &signed_root,
                     "warn.low_confidence",
-                    &candidate_display(pdf, page_index),
-                ));
+                    pdf,
+                    Some(page_index),
+                    Some(&read.matched.code),
+                    &detail,
+                );
                 continue;
             }
             groups
@@ -273,9 +346,19 @@ where
                 .map(|candidate| candidate_display(&candidate.path, candidate.page_index))
                 .collect::<Vec<_>>()
                 .join(", ");
+            for candidate in &candidates {
+                record_warning_review(
+                    &mut warning_reviews,
+                    &candidate.path,
+                    Some(candidate.page_index),
+                    Some(&code),
+                    "warn.rfi.signedDuplicate",
+                    "The same RFI code was recognized on more than one signed page",
+                );
+            }
             plan.warnings.push(warning(
                 "warn.rfi.signedDuplicate",
-                &truncate(&format!("{code} — {names}"), 300),
+                &truncate(&format!("{code} — {names} — duplicate signed pages"), 300),
             ));
         } else {
             unique.insert(code, candidates.into_iter().next().expect("one candidate"));
@@ -314,45 +397,74 @@ where
     let mut page_preview_bytes = 0_usize;
     let mut page_preview_omitted = 0_u64;
     let mut page_preview_rows_attempted = 0_usize;
-    for (code, candidate) in unique {
+    let comparison_total = unique.len() as u64;
+    for (comparison_index, (code, candidate)) in unique.into_iter().enumerate() {
         if cancelled() {
             return Err(BackendError::cancelled());
         }
+        progress(ProgressEvent {
+            phase: "comparison_preparation".to_string(),
+            done: comparison_index as u64,
+            total: comparison_total,
+            subject: format!(
+                "{} · {code}",
+                candidate_display(&candidate.path, candidate.page_index)
+            ),
+        });
         let matches = archive_matches.get(&code).cloned().unwrap_or_default();
         if matches.is_empty() {
-            plan.warnings
-                .push(warning("warn.rfi.archiveMissing", &code));
+            push_warning_review(
+                &mut plan,
+                &mut warning_reviews,
+                &signed_root,
+                "warn.rfi.archiveMissing",
+                &candidate.path,
+                Some(candidate.page_index),
+                Some(&code),
+                "No exact archive PDF filename was found anywhere below the selected RFI System",
+            );
             continue;
         }
         let signed_facts = match inspect(&candidate.path) {
             Ok(facts) if fidelity_supported(&facts, PdfRole::SignedScan) => facts,
             Ok(facts) => {
-                plan.warnings.push(warning(
+                push_warning_review(
+                    &mut plan,
+                    &mut warning_reviews,
+                    &signed_root,
                     "warn.rfi.pdfFidelityUnsupported",
-                    &truncate(
-                        &format!(
-                            "{} — {}",
-                            display_name(&candidate.path),
-                            fidelity_reason(&facts, PdfRole::SignedScan)
-                        ),
-                        300,
-                    ),
-                ));
+                    &candidate.path,
+                    Some(candidate.page_index),
+                    Some(&code),
+                    fidelity_reason(&facts, PdfRole::SignedScan),
+                );
                 continue;
             }
             Err(error) => {
-                plan.warnings.push(warning(
+                push_warning_review(
+                    &mut plan,
+                    &mut warning_reviews,
+                    &signed_root,
                     "warn.rfi.pdfFidelityUnsupported",
-                    &truncate(&format!("{} — {error}", display_name(&candidate.path)), 300),
-                ));
+                    &candidate.path,
+                    Some(candidate.page_index),
+                    Some(&code),
+                    &error.to_string(),
+                );
                 continue;
             }
         };
         if signed_facts.page_count == 0 {
-            plan.warnings.push(warning(
+            push_warning_review(
+                &mut plan,
+                &mut warning_reviews,
+                &signed_root,
                 "warn.rfi.pdfFidelityUnsupported",
-                &format!("{code} — PDF has no pages"),
-            ));
+                &candidate.path,
+                Some(candidate.page_index),
+                Some(&code),
+                "PDF has no pages",
+            );
             continue;
         }
         if signed_facts
@@ -360,18 +472,22 @@ where
             .get(candidate.page_index)
             .is_none_or(|page| page.widgets > 0)
         {
-            plan.warnings.push(warning(
+            push_warning_review(
+                &mut plan,
+                &mut warning_reviews,
+                &signed_root,
                 "warn.rfi.pdfFidelityUnsupported",
-                &format!(
-                    "{code} — signed page {} form widgets require manual review",
-                    candidate.page_index + 1
-                ),
-            ));
+                &candidate.path,
+                Some(candidate.page_index),
+                Some(&code),
+                "The signed page contains form widgets and requires manual review",
+            );
             continue;
         }
         let signed_hash = file_sha256(&candidate.path)
             .map_err(|_| BackendError::path_invalid("signed PDF could not be hashed"))?;
         let row_id = format!("signed-{code}");
+        let candidate_warning_start = plan.warnings.len();
         let mut prepared = Vec::new();
         for archive_pdf in &matches {
             if let Some(candidate_plan) = prepare_archive_candidate(
@@ -390,13 +506,32 @@ where
             }
         }
         if prepared.is_empty() {
+            if let Some(source_warning) = plan.warnings[candidate_warning_start..]
+                .iter()
+                .find(|warning| warning.key != "warn.rfi.staleTempFound")
+            {
+                record_warning_review(
+                    &mut warning_reviews,
+                    &candidate.path,
+                    Some(candidate.page_index),
+                    Some(&code),
+                    &source_warning.key,
+                    "No archive candidate passed all fidelity, destination, and safety checks",
+                );
+            }
             continue;
         }
         if signed_facts.page_count > 1 && !ocr.supports_page_scan() {
-            plan.warnings.push(warning(
+            push_warning_review(
+                &mut plan,
+                &mut warning_reviews,
+                &signed_root,
                 "warn.rfi.signedExtraPages",
-                &display_name(&candidate.path),
-            ));
+                &candidate.path,
+                Some(candidate.page_index),
+                Some(&code),
+                "Additional signed-scan pages could not be independently identified",
+            );
         }
         let ambiguous = prepared.len() > 1;
         if ambiguous {
@@ -407,8 +542,22 @@ where
                 .join(", ");
             plan.warnings.push(warning(
                 "warn.rfi.archiveAmbiguous",
-                &truncate(&format!("{code} — {names}"), 300),
+                &truncate(
+                    &format!(
+                        "{} — {code} — {names} — choose the correct archive candidate",
+                        candidate_display(&candidate.path, candidate.page_index)
+                    ),
+                    300,
+                ),
             ));
+            record_warning_review(
+                &mut warning_reviews,
+                &candidate.path,
+                Some(candidate.page_index),
+                Some(&code),
+                "warn.rfi.archiveAmbiguous",
+                "More than one exact archive PDF exists; choose the correct candidate",
+            );
         }
         let mut selected = String::new();
         let mut choices = Vec::with_capacity(prepared.len() + usize::from(ambiguous));
@@ -471,6 +620,7 @@ where
             "archiveFile": selected,
         }));
     }
+    add_warning_review_steps(&mut plan, &warning_reviews, &signed_root, &review_root)?;
     plan.meta.insert(
         "archiveCandidateSteps".to_string(),
         Value::Object(candidate_steps),
@@ -513,7 +663,7 @@ where
         }),
     );
     progress(ProgressEvent {
-        phase: "preview".to_string(),
+        phase: "preview_ready".to_string(),
         done: pdfs.len() as u64,
         total: pdfs.len() as u64,
         subject: String::new(),
@@ -565,7 +715,10 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
     let mut steps = plan
         .steps
         .iter()
-        .filter(|step| step.kind == StepKind::CleanupTemp)
+        .filter(|step| {
+            step.kind == StepKind::CleanupTemp
+                || step.meta.get("warningReview").and_then(Value::as_bool) == Some(true)
+        })
         .cloned()
         .collect::<Vec<_>>();
     let mut meta = plan.meta.clone();
@@ -838,6 +991,147 @@ fn extend_candidate_steps(target: &mut Vec<Step>, candidate: &[Step]) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn push_warning_review(
+    plan: &mut Plan,
+    reviews: &mut BTreeMap<PathBuf, Vec<WarningReviewReason>>,
+    signed_root: &Path,
+    key: &str,
+    source: &Path,
+    page_index: Option<usize>,
+    code: Option<&str>,
+    detail: &str,
+) {
+    record_warning_review(reviews, source, page_index, code, key, detail);
+    let relative = source.strip_prefix(signed_root).unwrap_or(source);
+    let mut context = vec![relative.to_string_lossy().into_owned()];
+    if let Some(page_index) = page_index {
+        context.push(format!("page {} (#{})", page_index + 1, page_index + 1));
+    }
+    if let Some(code) = code {
+        context.push(code.to_string());
+    }
+    if !detail.is_empty() {
+        context.push(detail.to_string());
+    }
+    plan.warnings
+        .push(warning(key, &truncate(&context.join(" · "), 500)));
+}
+
+fn record_warning_review(
+    reviews: &mut BTreeMap<PathBuf, Vec<WarningReviewReason>>,
+    source: &Path,
+    page_index: Option<usize>,
+    code: Option<&str>,
+    key: &str,
+    detail: &str,
+) {
+    let reason = WarningReviewReason {
+        key: key.to_string(),
+        page_number: page_index.map(|index| index + 1),
+        code: code.map(str::to_string),
+        detail: truncate(detail, 300),
+    };
+    let reasons = reviews.entry(source.to_path_buf()).or_default();
+    if !reasons.contains(&reason) {
+        reasons.push(reason);
+    }
+}
+
+fn add_warning_review_steps(
+    plan: &mut Plan,
+    reviews: &BTreeMap<PathBuf, Vec<WarningReviewReason>>,
+    signed_root: &Path,
+    review_root: &Path,
+) -> Result<(), BackendError> {
+    let warning_root = review_root.join("_review");
+    let mut items = Vec::new();
+    let mut planned_directories = BTreeSet::new();
+    for (source, reasons) in reviews {
+        let relative = source.strip_prefix(signed_root).map_err(|_| {
+            BackendError::path_invalid("warning review source escaped signed scans")
+        })?;
+        let destination = warning_root.join(relative);
+        let reason_values = reasons
+            .iter()
+            .map(|reason| {
+                json!({
+                    "key": reason.key,
+                    "pageNumber": reason.page_number,
+                    "code": reason.code,
+                    "detail": reason.detail,
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut status = "planned";
+        if destination.exists() {
+            status = "exists";
+            plan.warnings.push(warning(
+                "warn.rfi.warningReviewExists",
+                &relative.to_string_lossy(),
+            ));
+        } else if review_destination_blocked(&destination, review_root) {
+            status = "blocked";
+            plan.warnings.push(warning(
+                "warn.rfi.warningReviewBlocked",
+                &relative.to_string_lossy(),
+            ));
+        } else {
+            let mut review_steps = Vec::new();
+            add_directory_steps(
+                destination.parent().ok_or_else(|| {
+                    BackendError::path_invalid("warning review destination has no parent")
+                })?,
+                review_root,
+                &mut planned_directories,
+                &mut review_steps,
+            )?;
+            for step in &mut review_steps {
+                step.meta
+                    .insert("warningReview".to_string(), Value::Bool(true));
+            }
+            extend_candidate_steps(&mut plan.steps, &review_steps);
+            let source_hash = file_sha256(source).map_err(|_| {
+                BackendError::path_invalid("warning review PDF could not be hashed")
+            })?;
+            plan.steps.push(Step {
+                kind: StepKind::Copy,
+                src: Some(source.to_string_lossy().into_owned()),
+                dst: Some(destination.to_string_lossy().into_owned()),
+                note_key: Some("note.rfi.signedWarningReviewCopy".to_string()),
+                meta: JsonObject::from_iter([
+                    ("warningReview".to_string(), Value::Bool(true)),
+                    (
+                        "expectedSourceSha256".to_string(),
+                        Value::String(source_hash),
+                    ),
+                    ("reasons".to_string(), Value::Array(reason_values.clone())),
+                ]),
+            });
+        }
+        items.push(json!({
+            "sourceFile": relative.to_string_lossy(),
+            "destination": destination.strip_prefix(review_root).unwrap_or(&destination).to_string_lossy(),
+            "status": status,
+            "reasons": reason_values,
+        }));
+    }
+    plan.meta
+        .insert("warningReviewItems".to_string(), Value::Array(items));
+    Ok(())
+}
+
+fn review_destination_blocked(destination: &Path, review_root: &Path) -> bool {
+    destination
+        .ancestors()
+        .skip(1)
+        .take_while(|path| *path != review_root)
+        .any(|path| match fs::symlink_metadata(path) {
+            Ok(metadata) => !metadata.is_dir() || metadata.file_type().is_symlink(),
+            Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+        })
+}
+
 fn empty_plan() -> Plan {
     let mut meta = JsonObject::new();
     meta.insert("archiveReadOnly".to_string(), Value::Bool(true));
@@ -1029,7 +1323,7 @@ where
         }
         next.sort();
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "archive_scan".to_string(),
             done: directories_scanned as u64,
             total: directories_scanned.saturating_add(next.len()) as u64,
             subject: root.to_string_lossy().into_owned(),

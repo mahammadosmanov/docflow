@@ -1014,6 +1014,15 @@ describe("DocFlow shell", () => {
     expect(
       safePngThumbnail(`data:image/png;base64,${"A".repeat(350_000)}`),
     ).toBeNull();
+    const largerValidPayload = `iVBORw0KGgo${"A".repeat(400_001)}`;
+    expect(
+      safePngThumbnail(`data:image/png;base64,${largerValidPayload}`),
+    ).not.toBeNull();
+    expect(
+      safePngThumbnail(
+        `data:image/png;base64,iVBORw0KGgo${"A".repeat(1_100_000)}`,
+      ),
+    ).toBeNull();
   });
 
   it("shows archive-root-relative candidates and enables apply only after selection", () => {
@@ -1059,6 +1068,7 @@ describe("DocFlow shell", () => {
         code: "CODE",
         confidence: 0.9,
         archiveFile: "",
+        signedFile: "Incoming/combined-signed.pdf · page 1",
       },
     ];
     const plan: Plan = {
@@ -1073,7 +1083,13 @@ describe("DocFlow shell", () => {
           meta: {},
         },
       ],
-      warnings: [],
+      warnings: [
+        {
+          key: "warn.rfi.archiveMissing",
+          subject:
+            "Incoming/unmatched.pdf · page 2 (#2) · AZE-SUN-INT-QMS-RFI-MEC-0999",
+        },
+      ],
       meta: {
         editor,
         pageComparisons: {
@@ -1088,6 +1104,21 @@ describe("DocFlow shell", () => {
           },
         },
         pagePreviewOmitted: 0,
+        warningReviewItems: [
+          {
+            sourceFile: "Incoming/unmatched.pdf",
+            destination: "C:\\Review\\_review\\Incoming\\unmatched.pdf",
+            status: "planned",
+            reasons: [
+              {
+                key: "warn.rfi.archiveMissing",
+                pageNumber: 2,
+                code: "AZE-SUN-INT-QMS-RFI-MEC-0999",
+                detail: "No archive PDF matched this exact RFI number",
+              },
+            ],
+          },
+        ],
       },
     };
     const onRowsChange = vi.fn();
@@ -1124,12 +1155,43 @@ describe("DocFlow shell", () => {
     expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
     expect(screen.getByText("İlk sayfa karşılaştırması")).toBeVisible();
     expect(
+      screen.getByRole("navigation", {
+        name: "İmzalı sayfa önizleme bölümleri",
+      }),
+    ).toBeVisible();
+    expect(screen.getByText("Onaylanan RFI'lar")).toBeVisible();
+    expect(screen.getByText("Sayfaları karşılaştır")).toBeVisible();
+    expect(screen.getByText("Review kopyaları")).toBeVisible();
+    expect(screen.getByText("ÖNCE")).toBeVisible();
+    expect(screen.getByText("SONRA")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Yalnızca 1. sayfa değiştirilecek; arşivdeki diğer sayfalar aynı kalacak.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Warning veren PDF'ler Review'a gönderilecek"),
+    ).toBeVisible();
+    expect(screen.getByText("Incoming/unmatched.pdf")).toBeVisible();
+    expect(screen.getByText("Sayfa 2 · AZE-SUN-INT-QMS-RFI-MEC-0999")).toBeVisible();
+    expect(
+      screen.getByText("No archive PDF matched this exact RFI number"),
+    ).toBeVisible();
+    expect(screen.getByText("Kopyalanacak")).toBeVisible();
+    expect(
       screen.getByText("İlk sayfasını göstermek için bir arşiv PDF'i seçin."),
     ).toBeVisible();
     expect(screen.getByAltText("CODE için yeni imzalı sayfa")).toHaveAttribute(
       "src",
       "data:image/png;base64,iVBORw0KGgoAAA==",
     );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /CODE için yeni imzalı sayfa · Büyüt/,
+      }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     const archive = screen.getByRole("combobox");
     expect(within(archive).getByRole("option", { name: first })).toBeVisible();
     expect(within(archive).getByRole("option", { name: second })).toBeVisible();

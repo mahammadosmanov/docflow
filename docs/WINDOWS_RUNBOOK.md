@@ -62,7 +62,16 @@ pass from a macOS build or Windows cross-compile.
     place exact test archives at several nesting depths, and use nested single-
     and multi-page signed scans. Confirm every exact archive is found, duplicates
     remain selectable/ambiguous, unreadable or reparse-linked folders fail closed,
-    source hashes never change, and review copies preserve the archive layout.
+    source hashes never change, and replacement review copies preserve the
+    archive layout. During Preview, confirm discovery/OCR/archive/comparison
+    stages update before completion; approved rows, comparisons, warning files,
+    and warnings are reachable through the sticky navigator at the target display
+    scale; before/after images are legible and enlarge correctly. Cause a no-code,
+    low-confidence, missing-archive, and duplicate-page warning; verify each entry
+    names the exact source PDF and page/RFI where known. Apply must copy each
+    affected source PDF once beneath `_review` with its input subfolder layout,
+    never overwrite an existing Review file, and reject a source changed after
+    Preview.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

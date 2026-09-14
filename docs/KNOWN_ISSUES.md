@@ -31,6 +31,9 @@ These are not silently waived by passing local tests.
   Windows acceptance on the operator's actual OneDrive/network-backed RFI System,
   including deep nesting, an unreadable folder, cancellation, duplicate exact
   filenames, and a representative large entry count.
+- Signed-page 0.26.0 progress stages, sticky preview navigation, enlarged
+  comparisons, and hash-pinned warning copies still require native Windows/
+  WebView2 acceptance with representative OneDrive input and Review roots.
 - RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.
@@ -38,8 +41,8 @@ These are not silently waived by passing local tests.
 ## Current local limitations
 
 - Process Scans is intentionally top-level only.
-- Signed-page preview thumbnails are capped at 20 accepted rows; open the PDFs
-  manually beyond that bound.
+- Signed-page preview thumbnails are capped at 20 accepted rows and 12 MiB of
+  encoded preview data; open the PDFs manually beyond either bound.
 - The frontend production bundle currently emits a non-failing size advisory;
   startup/package measurements are the acceptance evidence until safe route-level
   splitting is implemented.

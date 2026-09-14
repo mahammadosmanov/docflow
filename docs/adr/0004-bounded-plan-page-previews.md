@@ -17,8 +17,8 @@ During preview, the Rust authority may render inert grayscale PNG thumbnails for
 the exact signed page and the first page of each archive candidate. Rendering is
 read-only and supported only by the native macOS and Windows PDF adapters.
 
-Each thumbnail is rendered at 72 DPI, reduced to at most 240 by 320 pixels, and
-rejected above 256 KiB before base64 encoding. At most 20 RFI rows and 4 MiB of
+Each thumbnail is rendered at 144 DPI, reduced to at most 540 by 760 pixels, and
+rejected above 768 KiB before base64 encoding. At most 20 RFI rows and 12 MiB of
 encoded thumbnail data are admitted into `Plan.meta.pageComparisons`. The row ID
 and opaque archive-candidate token bind every image to the same editor choice and
 candidate steps already held by the approved Plan. The webview accepts only
@@ -46,3 +46,10 @@ warnings, steps, Apply eligibility, or the exact mutation authority.
 Removing the optional metadata and comparison component restores path-and-page
 review. No stored document, journal, setting, or migration is involved because
 the thumbnails exist only in the in-memory preview Plan.
+
+## 2026-09-14 amendment
+
+Operator testing found the original 240 by 320 thumbnails too small to compare
+signatures and document identity. The revised per-image and total bounds above
+remain finite while allowing an explicit enlarged comparison in the same inert
+Plan metadata. Row count and authority boundaries are unchanged.

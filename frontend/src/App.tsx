@@ -1244,6 +1244,7 @@ function OperationScreen({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [result, setResult] = useState<OperationResult | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
+  const [progressTrail, setProgressTrail] = useState<ProgressEvent[]>([]);
   const [error, setError] = useState("");
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
@@ -1255,6 +1256,16 @@ function OperationScreen({
     unknown
   > | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const receiveProgress = useCallback((event: ProgressEvent) => {
+    setProgress(event);
+    setProgressTrail((current) => {
+      const next = [...current];
+      const last = next.at(-1);
+      if (last?.phase === event.phase) next[next.length - 1] = event;
+      else next.push(event);
+      return next.slice(-8);
+    });
+  }, []);
 
   useEffect(() => {
     setHydrated(false);
@@ -1368,6 +1379,9 @@ function OperationScreen({
 
   const preview = async () => {
     setError("");
+    const preparing = { phase: "preparing", done: 0, total: 0 };
+    setProgress(preparing);
+    setProgressTrail([preparing]);
     setStage("previewing");
     try {
       const sanitized = Object.fromEntries(
@@ -1391,7 +1405,7 @@ function OperationScreen({
       const next = await bridge.call(
         "engine/preview",
         { opId: operation.id, values },
-        setProgress,
+        receiveProgress,
       );
       installPlan(next);
     } catch (reason) {
@@ -1430,7 +1444,9 @@ function OperationScreen({
   const apply = async () => {
     if (!plan) return;
     setError("");
-    setProgress(null);
+    const applying = { phase: "apply", done: 0, total: 0 };
+    setProgress(applying);
+    setProgressTrail([applying]);
     try {
       let approvedPlan = plan;
       if (editorDirty) {
@@ -1468,7 +1484,7 @@ function OperationScreen({
         await bridge.call(
           "engine/apply",
           { opId: operation.id, planId: approvedPlan.planId },
-          setProgress,
+          receiveProgress,
         ),
       );
       setCancelling(false);
@@ -1692,7 +1708,12 @@ function OperationScreen({
           </div>
         )}
         {stage === "previewing" && (
-          <BusyState label={s.t("action.preview")} progress={progress} />
+          <BusyState
+            label={s.t("action.preview")}
+            progress={progress}
+            progressTrail={progressTrail}
+            s={s}
+          />
         )}
         {stage === "preview" && plan && (
           <PlanView
@@ -1710,7 +1731,12 @@ function OperationScreen({
         )}
         {stage === "applying" && (
           <div className="flow-layout">
-            <BusyState label={s.t("plan.applying")} progress={progress} />
+            <BusyState
+              label={s.t("plan.applying")}
+              progress={progress}
+              progressTrail={progressTrail}
+              s={s}
+            />
             <ActionBar
               left={
                 <Button
@@ -3330,6 +3356,7 @@ export function PlanView({
           .map((row) => (typeof row.code === "string" ? row.code : ""))
           .filter(Boolean)
       : [];
+  const signedStage = plan.opId === "rfi.stage_signed_first_pages";
   return (
     <div className="flow-layout">
       <div className="flow-scroll plan-flow-scroll">
@@ -3337,13 +3364,11 @@ export function PlanView({
         <ScanIndexSummary plan={plan} s={s} />
         {editor && editorRows && onEditorRowsChange ? (
           <>
-            {plan.warnings.length > 0 && (
-              <PlanWarnings
-                warnings={plan.warnings}
-                focusableCodes={focusableWarningCodes}
-                onFocusCode={setWarningFocusCode}
-                s={s}
-              />
+            {signedStage && (
+              <SignedStageNavigator plan={plan} rows={editorRows} s={s} />
+            )}
+            {!signedStage && plan.warnings.length > 0 && (
+              <PlanWarnings warnings={plan.warnings} focusableCodes={[]} s={s} />
             )}
             <WorkbookChangePreview plan={plan} s={s} />
             {replyPreview && (
@@ -3368,18 +3393,40 @@ export function PlanView({
                 </div>
               </section>
             )}
-            <SignedPageComparison
-              plan={plan}
-              editorRows={editorRows}
-              focusCode={warningFocusCode}
-              s={s}
-            />
-            <EditablePlanTable
-              editor={editor}
-              rows={editorRows}
-              s={s}
-              onChange={onEditorRowsChange}
-            />
+            {signedStage ? (
+              <>
+                <div id="signed-approved-records">
+                  <EditablePlanTable
+                    editor={editor}
+                    rows={editorRows}
+                    s={s}
+                    onChange={onEditorRowsChange}
+                  />
+                </div>
+                <SignedPageComparison
+                  plan={plan}
+                  editorRows={editorRows}
+                  focusCode={warningFocusCode}
+                  s={s}
+                />
+                <SignedWarningReviewSummary plan={plan} s={s} />
+                {plan.warnings.length > 0 && (
+                  <PlanWarnings
+                    warnings={plan.warnings}
+                    focusableCodes={focusableWarningCodes}
+                    onFocusCode={setWarningFocusCode}
+                    s={s}
+                  />
+                )}
+              </>
+            ) : (
+              <EditablePlanTable
+                editor={editor}
+                rows={editorRows}
+                s={s}
+                onChange={onEditorRowsChange}
+              />
+            )}
             {plan.steps.length > 0 && <PlanExactEffects plan={plan} s={s} />}
           </>
         ) : (
@@ -3829,7 +3876,11 @@ export function PlanWarnings({
   });
   const focusable = new Set(focusableCodes);
   return (
-    <section className="warning-review" aria-labelledby="warning-review-title">
+    <section
+      id="signed-warning-list"
+      className="warning-review"
+      aria-labelledby="warning-review-title"
+    >
       <div className="warning-review-heading">
         <div>
           <CircleAlert aria-hidden="true" />
@@ -3896,6 +3947,177 @@ export function PlanWarnings({
   );
 }
 
+interface SignedWarningReason {
+  key: string;
+  pageNumber: number | null;
+  code: string;
+  detail: string;
+}
+
+interface SignedWarningReviewItem {
+  sourceFile: string;
+  destination: string;
+  status: "planned" | "exists" | "blocked";
+  reasons: SignedWarningReason[];
+}
+
+function signedWarningReviewItems(plan: Plan): SignedWarningReviewItem[] {
+  const raw = Array.isArray(plan.meta?.warningReviewItems)
+    ? plan.meta.warningReviewItems
+    : [];
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as Record<string, unknown>;
+    if (
+      typeof item.sourceFile !== "string" ||
+      typeof item.destination !== "string" ||
+      !["planned", "exists", "blocked"].includes(String(item.status)) ||
+      !Array.isArray(item.reasons)
+    ) {
+      return [];
+    }
+    const reasons = item.reasons.flatMap((rawReason) => {
+      if (!rawReason || typeof rawReason !== "object") return [];
+      const reason = rawReason as Record<string, unknown>;
+      if (typeof reason.key !== "string" || typeof reason.detail !== "string") {
+        return [];
+      }
+      return [
+        {
+          key: reason.key,
+          pageNumber:
+            typeof reason.pageNumber === "number" &&
+            Number.isSafeInteger(reason.pageNumber) &&
+            reason.pageNumber > 0
+              ? reason.pageNumber
+              : null,
+          code: typeof reason.code === "string" ? reason.code : "",
+          detail: reason.detail,
+        },
+      ];
+    });
+    return [
+      {
+        sourceFile: item.sourceFile,
+        destination: item.destination,
+        status: item.status as SignedWarningReviewItem["status"],
+        reasons,
+      },
+    ];
+  });
+}
+
+function scrollToSignedSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ block: "start" });
+}
+
+function SignedStageNavigator({
+  plan,
+  rows,
+  s,
+}: {
+  plan: Plan;
+  rows: Record<string, unknown>[];
+  s: Strings;
+}) {
+  const reviewItems = signedWarningReviewItems(plan);
+  const approved = rows.filter((row) => row.enabled !== false).length;
+  return (
+    <nav className="signed-stage-nav" aria-label={s.t("rfi.signed.nav.label")}>
+      <button
+        type="button"
+        onClick={() => scrollToSignedSection("signed-approved-records")}
+      >
+        <BadgeCheck aria-hidden="true" />
+        <span>{s.t("rfi.signed.nav.approved")}</span>
+        <strong>{approved}</strong>
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollToSignedSection("signed-page-comparison")}
+      >
+        <Files aria-hidden="true" />
+        <span>{s.t("rfi.signed.nav.compare")}</span>
+        <strong>{rows.length}</strong>
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollToSignedSection("signed-warning-review")}
+        disabled={reviewItems.length === 0}
+      >
+        <CircleAlert aria-hidden="true" />
+        <span>{s.t("rfi.signed.nav.review")}</span>
+        <strong>{reviewItems.length}</strong>
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollToSignedSection("signed-warning-list")}
+        disabled={plan.warnings.length === 0}
+      >
+        <FileSearch aria-hidden="true" />
+        <span>{s.t("ui.warnings")}</span>
+        <strong>{plan.warnings.length}</strong>
+      </button>
+    </nav>
+  );
+}
+
+function SignedWarningReviewSummary({ plan, s }: { plan: Plan; s: Strings }) {
+  const items = signedWarningReviewItems(plan);
+  if (items.length === 0) return null;
+  return (
+    <section
+      id="signed-warning-review"
+      className="signed-warning-review"
+      aria-labelledby="signed-warning-review-title"
+    >
+      <header>
+        <div>
+          <CircleAlert aria-hidden="true" />
+          <span>
+            <strong id="signed-warning-review-title">
+              {s.t("rfi.signed.warningReview.title")}
+            </strong>
+            <small>{s.t("rfi.signed.warningReview.help")}</small>
+          </span>
+        </div>
+        <b>{items.length}</b>
+      </header>
+      <div className="signed-warning-review-list">
+        {items.map((item) => (
+          <article key={`${item.sourceFile}-${item.destination}`}>
+            <div className="signed-warning-review-file">
+              <strong>{item.sourceFile}</strong>
+              <span className={`review-copy-status ${item.status}`}>
+                {s.t(`rfi.signed.warningReview.${item.status}`)}
+              </span>
+            </div>
+            <small>
+              {s.t("rfi.signed.warningReview.destination")}: {item.destination}
+            </small>
+            <ul>
+              {item.reasons.map((reason, index) => (
+                <li key={`${reason.key}-${reason.pageNumber}-${index}`}>
+                  <span>
+                    {reason.pageNumber
+                      ? s.t("rfi.signed.warningReview.page", {
+                          page: reason.pageNumber,
+                        })
+                      : s.t("rfi.signed.warningReview.file")}
+                    {reason.code ? ` · ${reason.code}` : ""}
+                  </span>
+                  <strong>{s.t(reason.key)}</strong>
+                  {reason.detail && <small>{reason.detail}</small>}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function safePngThumbnail(value: unknown): string | null {
   const prefix = "data:image/png;base64,";
   const pngSignature = "iVBORw0KGgo";
@@ -3903,7 +4125,7 @@ export function safePngThumbnail(value: unknown): string | null {
   if (
     typeof value !== "string" ||
     !value.startsWith(prefix) ||
-    value.length > 350_000 ||
+    value.length > 1_100_000 ||
     !payload.startsWith(pngSignature) ||
     payload.length % 4 !== 0 ||
     !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)
@@ -3944,6 +4166,7 @@ function SignedPageComparison({
   });
   const availableIds = available.map((row) => String(row._rowId));
   const [selectedId, setSelectedId] = useState(availableIds[0] ?? "");
+  const [expanded, setExpanded] = useState<"archive" | "signed" | null>(null);
   const availableSignature = availableIds.join("\u0000");
   useEffect(() => {
     if (!availableIds.includes(selectedId)) {
@@ -3978,70 +4201,167 @@ function SignedPageComparison({
   const archivePreview = safePngThumbnail(archives[archiveToken]);
   const signedPreview = safePngThumbnail(comparison.signed);
   const code = typeof selected.code === "string" ? selected.code : selectedId;
+  const signedFile =
+    typeof selected.signedFile === "string" ? selected.signedFile : "";
+  const choiceLabels =
+    plan.meta?.editor && typeof plan.meta.editor === "object"
+      ? ((plan.meta.editor as Record<string, unknown>).choiceLabels as
+          | Record<string, unknown>
+          | undefined)
+      : undefined;
+  const archiveLabels =
+    choiceLabels?.archiveFile && typeof choiceLabels.archiveFile === "object"
+      ? (choiceLabels.archiveFile as Record<string, unknown>)
+      : {};
+  const archiveFile =
+    typeof archiveLabels[archiveToken] === "string"
+      ? String(archiveLabels[archiveToken])
+      : "";
+  const selectedIndex = available.findIndex(
+    (row) => String(row._rowId) === String(selected._rowId),
+  );
+  const selectOffset = (offset: number) => {
+    const target = available[selectedIndex + offset];
+    if (target) setSelectedId(String(target._rowId));
+  };
   return (
-    <section
-      id="signed-page-comparison"
-      ref={sectionRef}
-      className="signed-page-comparison"
-      aria-labelledby="signed-page-comparison-title"
-    >
-      <div className="signed-page-comparison-heading">
-        <div>
-          <strong id="signed-page-comparison-title">
-            {s.t("rfi.signed.previewTitle")}
-          </strong>
-          <span>{s.t("rfi.signed.previewHelp")}</span>
+    <>
+      <section
+        id="signed-page-comparison"
+        ref={sectionRef}
+        className="signed-page-comparison"
+        aria-labelledby="signed-page-comparison-title"
+      >
+        <div className="signed-page-comparison-heading">
+          <div>
+            <strong id="signed-page-comparison-title">
+              {s.t("rfi.signed.previewTitle")}
+            </strong>
+            <span>{s.t("rfi.signed.previewHelp")}</span>
+          </div>
+          <div className="signed-page-comparison-selector">
+            <button
+              type="button"
+              aria-label={s.t("rfi.signed.previewPrevious")}
+              disabled={selectedIndex <= 0}
+              onClick={() => selectOffset(-1)}
+            >
+              <ArrowLeft aria-hidden="true" />
+            </button>
+            {available.length > 1 ? (
+              <select
+                aria-label={s.t("rfi.signed.previewRfi")}
+                value={String(selected._rowId)}
+                onChange={(event) => setSelectedId(event.target.value)}
+              >
+                {available.map((row) => (
+                  <option key={String(row._rowId)} value={String(row._rowId)}>
+                    {typeof row.code === "string"
+                      ? row.code
+                      : String(row._rowId)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="signed-page-comparison-code">{code}</span>
+            )}
+            <button
+              type="button"
+              aria-label={s.t("rfi.signed.previewNext")}
+              disabled={selectedIndex >= available.length - 1}
+              onClick={() => selectOffset(1)}
+            >
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        {available.length > 1 ? (
-          <select
-            aria-label={s.t("rfi.signed.previewRfi")}
-            value={String(selected._rowId)}
-            onChange={(event) => setSelectedId(event.target.value)}
-          >
-            {available.map((row) => (
-              <option key={String(row._rowId)} value={String(row._rowId)}>
-                {typeof row.code === "string" ? row.code : String(row._rowId)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="signed-page-comparison-code">{code}</span>
+        <div className="signed-page-change-summary">
+          <span>{s.t("rfi.signed.previewArchive")}</span>
+          <ArrowRight aria-hidden="true" />
+          <strong>{s.t("rfi.signed.previewSigned")}</strong>
+          <small>{s.t("rfi.signed.previewOnlyPageOne")}</small>
+        </div>
+        <div className="signed-page-comparison-grid">
+          <figure>
+            <figcaption>
+              <span>{s.t("rfi.signed.previewBefore")}</span>
+              <strong>{s.t("rfi.signed.previewArchive")}</strong>
+              {archiveFile && <small title={archiveFile}>{archiveFile}</small>}
+            </figcaption>
+            {archivePreview ? (
+              <button
+                type="button"
+                className="signed-page-preview-button"
+                aria-label={`${s.t("rfi.signed.previewArchiveAlt", { code })} · ${s.t("rfi.signed.previewEnlarge")}`}
+                onClick={() => setExpanded("archive")}
+              >
+                <img
+                  src={archivePreview}
+                  alt={s.t("rfi.signed.previewArchiveAlt", { code })}
+                />
+                <span>{s.t("rfi.signed.previewEnlarge")}</span>
+              </button>
+            ) : (
+              <div className="signed-page-preview-empty">
+                {archiveToken
+                  ? s.t("rfi.signed.previewUnavailable")
+                  : s.t("rfi.signed.previewChooseArchive")}
+              </div>
+            )}
+          </figure>
+          <figure>
+            <figcaption>
+              <span>{s.t("rfi.signed.previewAfter")}</span>
+              <strong>{s.t("rfi.signed.previewSigned")}</strong>
+              {signedFile && <small title={signedFile}>{signedFile}</small>}
+            </figcaption>
+            {signedPreview ? (
+              <button
+                type="button"
+                className="signed-page-preview-button"
+                aria-label={`${s.t("rfi.signed.previewSignedAlt", { code })} · ${s.t("rfi.signed.previewEnlarge")}`}
+                onClick={() => setExpanded("signed")}
+              >
+                <img
+                  src={signedPreview}
+                  alt={s.t("rfi.signed.previewSignedAlt", { code })}
+                />
+                <span>{s.t("rfi.signed.previewEnlarge")}</span>
+              </button>
+            ) : (
+              <div className="signed-page-preview-empty">
+                {s.t("rfi.signed.previewUnavailable")}
+              </div>
+            )}
+          </figure>
+        </div>
+        {omitted > 0 && (
+          <small>{s.t("rfi.signed.previewOmitted", { count: omitted })}</small>
         )}
-      </div>
-      <div className="signed-page-comparison-grid">
-        <figure>
-          <figcaption>{s.t("rfi.signed.previewArchive")}</figcaption>
-          {archivePreview ? (
+      </section>
+      {expanded && (expanded === "archive" ? archivePreview : signedPreview) && (
+        <Modal
+          title={`${code} · ${s.t(
+            expanded === "archive"
+              ? "rfi.signed.previewArchive"
+              : "rfi.signed.previewSigned",
+          )}`}
+          onClose={() => setExpanded(null)}
+        >
+          <div className="signed-page-preview-modal">
             <img
-              src={archivePreview}
-              alt={s.t("rfi.signed.previewArchiveAlt", { code })}
+              src={expanded === "archive" ? archivePreview! : signedPreview!}
+              alt={s.t(
+                expanded === "archive"
+                  ? "rfi.signed.previewArchiveAlt"
+                  : "rfi.signed.previewSignedAlt",
+                { code },
+              )}
             />
-          ) : (
-            <div className="signed-page-preview-empty">
-              {archiveToken
-                ? s.t("rfi.signed.previewUnavailable")
-                : s.t("rfi.signed.previewChooseArchive")}
-            </div>
-          )}
-        </figure>
-        <figure>
-          <figcaption>{s.t("rfi.signed.previewSigned")}</figcaption>
-          {signedPreview ? (
-            <img
-              src={signedPreview}
-              alt={s.t("rfi.signed.previewSignedAlt", { code })}
-            />
-          ) : (
-            <div className="signed-page-preview-empty">
-              {s.t("rfi.signed.previewUnavailable")}
-            </div>
-          )}
-        </figure>
-      </div>
-      {omitted > 0 && (
-        <small>{s.t("rfi.signed.previewOmitted", { count: omitted })}</small>
+          </div>
+        </Modal>
       )}
-    </section>
+    </>
   );
 }
 
@@ -4406,7 +4726,7 @@ function ReviewScreen({
             onApply={() => void apply()}
           />
         ) : busy ? (
-          <BusyState label={s.t("action.review")} />
+          <BusyState label={s.t("action.review")} s={s} />
         ) : (
           <div className="flow-layout">
             <div className="flow-scroll">
@@ -4586,7 +4906,7 @@ function HistoryScreen({
           </span>
         </div>
         {busy && !payload ? (
-          <BusyState label={s.t("history.title")} />
+          <BusyState label={s.t("history.title")} s={s} />
         ) : payload?.rows.length ? (
           <div className="history-list">
             {payload.rows.map((row) => (
@@ -4745,7 +5065,7 @@ function RecoveryScreen({
           </div>
         </div>
         {busy && !payload ? (
-          <BusyState label={s.t("recovery.title")} />
+          <BusyState label={s.t("recovery.title")} s={s} />
         ) : (
           <div className="flow-layout">
             {payload?.journals.map((entry) => (
@@ -5475,9 +5795,13 @@ function EmptyState({
 function BusyState({
   label,
   progress,
+  progressTrail = [],
+  s,
 }: {
   label: string;
   progress?: ProgressEvent | null;
+  progressTrail?: ProgressEvent[];
+  s: Strings;
 }) {
   const fraction =
     progress && progress.total > 0 ? progress.done / progress.total : 0;
@@ -5485,14 +5809,41 @@ function BusyState({
     <div className="busy-state">
       <LoaderCircle className="spin" />
       <h2>{label}</h2>
+      {progress && (
+        <strong className="progress-phase">
+          {s.t(`progress.phase.${progress.phase}`)}
+        </strong>
+      )}
       <div className="progress">
         <span style={{ width: fraction ? `${fraction * 100}%` : "35%" }} />
       </div>
       {progress && (
         <small>
-          {progress.done} / {progress.total}
+          {progress.total > 0 ? `${progress.done} / ${progress.total}` : ""}
           {progress.subject ? ` · ${progress.subject}` : ""}
         </small>
+      )}
+      {progressTrail.length > 1 && (
+        <ol className="progress-trail" aria-label={s.t("progress.stages")}>
+          {progressTrail.map((event, index) => (
+            <li
+              key={`${event.phase}-${index}`}
+              className={index === progressTrail.length - 1 ? "current" : "done"}
+            >
+              {index === progressTrail.length - 1 ? (
+                <LoaderCircle className="spin" aria-hidden="true" />
+              ) : (
+                <Check aria-hidden="true" />
+              )}
+              <span>{s.t(`progress.phase.${event.phase}`)}</span>
+              {event.total > 0 && (
+                <small>
+                  {event.done}/{event.total}
+                </small>
+              )}
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );

@@ -8,6 +8,28 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.26.0 - 2026-09-14
+
+### Added
+
+- Stage signed RFI first pages now shows live discovery, page inspection, OCR,
+  classification, archive search, and comparison-preparation stages instead of
+  appearing idle until the end.
+- Warning PDFs have an explicit Review-copy preview with their exact source file,
+  affected page and RFI when known, diagnostic reason, destination, and copy
+  status. Apply copies each affected source PDF once beneath `_review`, preserves
+  its signed-input subfolder path, revalidates its previewed hash, and never
+  overwrites or modifies the source.
+
+### Changed
+
+- The signed-page preview puts approved RFIs first and adds a sticky navigator
+  for approved rows, page comparisons, Review copies, and warnings.
+- First-page comparison now uses larger higher-resolution thumbnails, explicit
+  Before/After labels, source filenames, previous/next RFI controls, and an
+  enlarged view. Only the approved first-page replacement is described; remaining
+  archive pages are explicitly shown as unchanged.
+
 ## 0.25.0 - 2026-09-14
 
 ### Added

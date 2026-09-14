@@ -1908,12 +1908,26 @@ impl FilesystemAuthority {
             .map_err(step_no_effect)?
             .anchor()
             .map_err(io_no_effect)?;
-        if let Some(source) = source_anchor.as_ref()
-            && let Ok(hash) = source.sha256()
-        {
-            actual
+        if let Some(source) = source_anchor.as_ref() {
+            if let Some(expected) = step
                 .meta
-                .insert("sourceSha256".to_string(), Value::String(hash));
+                .get("expectedSourceSha256")
+                .and_then(Value::as_str)
+            {
+                let hash = source.sha256().map_err(io_no_effect)?;
+                if hash != expected {
+                    return Err(StepFailure::NoEffect(
+                        "copy source changed after preview; preview again".to_string(),
+                    ));
+                }
+                actual
+                    .meta
+                    .insert("sourceSha256".to_string(), Value::String(hash));
+            } else if let Ok(hash) = source.sha256() {
+                actual
+                    .meta
+                    .insert("sourceSha256".to_string(), Value::String(hash));
+            }
         }
         record.pending_step = Some(actual.clone());
         record.state = Some(JournalState::Applying);

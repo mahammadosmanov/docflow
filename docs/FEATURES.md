@@ -27,7 +27,10 @@
   sent-unconfirmed and the queue continues. It is never retried automatically;
   explicit fault, deletion, or uncertain cancellation still pauses for review.
 - Preview impact counts, exact effect paths, approved workbook cell comparisons,
-  signed-page old/new thumbnails, and warning focus/filtering.
+  and warning focus/filtering. Signed-page Preview adds an ordered live stage
+  trail, sticky section navigator, approved rows first, higher-resolution
+  before/after page comparison with source filenames and zoom, and a structured
+  per-PDF warning/Review-copy summary.
 - OCR-backed preview effects, signed-page rows, orientation decisions, and
   manual-review items display their recognition score out of 100. The score is
   review evidence, not a probability or automatic approval.
@@ -45,6 +48,10 @@
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
   explicit task-local option.
+- Signed-page warnings identify the source PDF and affected page/RFI where known.
+  Apply copies each affected input PDF once to `_review` with the relative input
+  folder layout preserved; it never overwrites, mutates the signed input, or
+  repeats a combined source PDF for each warned page.
 
 ## Intentional limits
 

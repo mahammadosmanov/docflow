@@ -40,6 +40,12 @@ identity or secrets.
   may match; a code appearing only in a folder or unrelated filename is not authority.
 - New signed-scan input recursion defaults on. Both recursive walks reject
   symlinks and stop the whole preview if the archive cannot be scanned completely.
+- Every warning tied to a signed input records its relative PDF path, page number
+  when known, exact RFI when known, and diagnostic reason. The approved Plan adds
+  at most one no-clobber copy of each affected source PDF beneath
+  `<review root>/_review`, preserving its signed-input relative path. Apply pins
+  and revalidates the source hash; a changed source or occupied destination fails
+  closed. The source is never split, moved, renamed, or modified.
 
 Accepted OCR candidates retain the recognizer's bounded confidence value in the
 approved Plan. The UI displays it as a score out of 100 for Process Scans,

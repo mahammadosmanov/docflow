@@ -297,10 +297,11 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
         previews: true,
     };
 
+    let mut progress = Vec::new();
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
         &ocr,
-        |_| {},
+        |event| progress.push(event),
         || false,
     )
     .unwrap();
@@ -369,10 +370,11 @@ fn combined_scan_uses_bounded_parallel_page_ocr_when_supported() {
         ]),
     };
 
+    let mut progress = Vec::new();
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
         &ocr,
-        |_| {},
+        |event| progress.push(event),
         || false,
     )
     .unwrap();
@@ -389,6 +391,12 @@ fn combined_scan_uses_bounded_parallel_page_ocr_when_supported() {
             .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
             .count(),
         2
+    );
+    assert!(progress.iter().any(|event| event.phase == "signed_ocr"));
+    assert!(progress.iter().any(|event| event.phase == "archive_scan"));
+    assert_eq!(
+        progress.last().map(|event| event.phase.as_str()),
+        Some("preview_ready")
     );
 }
 
@@ -740,7 +748,11 @@ fn archive_lookup_ignores_nonstandard_names_even_when_the_path_contains_the_rfi_
     )
     .unwrap();
 
-    assert!(plan.steps.is_empty());
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert_eq!(plan.warnings.len(), 1);
     assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
 }
@@ -763,7 +775,11 @@ fn archive_ambiguity_requires_an_allowlisted_rfi_no_pdf_selection() {
     )
     .unwrap();
 
-    assert!(plan.steps.is_empty());
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert_eq!(plan.warnings.len(), 1);
     assert_eq!(plan.warnings[0].key, "warn.rfi.archiveAmbiguous");
     let rows = plan.meta["editor"]["rows"].as_array().unwrap();
@@ -954,7 +970,12 @@ fn preview_preserves_scan_subfolders_and_surfaces_pdf_fidelity_warnings() {
         || false,
     )
     .unwrap();
-    assert!(unsupported.steps.is_empty());
+    assert!(
+        unsupported
+            .steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert!(
         unsupported
             .warnings
@@ -970,7 +991,12 @@ fn preview_preserves_scan_subfolders_and_surfaces_pdf_fidelity_warnings() {
         || false,
     )
     .unwrap();
-    assert!(tagged.steps.is_empty());
+    assert!(
+        tagged
+            .steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert!(
         tagged
             .warnings
@@ -1000,11 +1026,60 @@ fn fuzzy_prefixes_never_authorize_signed_page_staging() {
     )
     .unwrap();
 
-    assert!(plan.steps.is_empty());
+    let review_copy = plan
+        .steps
+        .iter()
+        .find(|step| step.kind == StepKind::Copy)
+        .expect("warning source is routed to review");
+    let canonical_review_root = fs::canonicalize(&review_root).unwrap();
+    assert_eq!(
+        review_copy.dst.as_deref().map(Path::new),
+        Some(canonical_review_root.join("_review/fuzzy.pdf").as_path())
+    );
+    assert_eq!(review_copy.meta["warningReview"], true);
+    assert!(review_copy.meta["expectedSourceSha256"].is_string());
     assert_eq!(plan.warnings[0].key, "warn.no_code");
+    assert!(plan.warnings[0].subject.contains("fuzzy.pdf"));
+    assert!(plan.warnings[0].subject.contains("page 1"));
+    assert_eq!(plan.meta["warningReviewItems"][0]["status"], "planned");
+    assert_eq!(
+        plan.meta["warningReviewItems"][0]["reasons"][0]["key"],
+        "warn.no_code"
+    );
     assert_eq!(plan.meta["archiveWorkerCount"], 0);
     assert_eq!(plan.meta["archiveDirectoriesScanned"], 0);
     assert_eq!(plan.meta["archiveEntriesScanned"], 0);
+}
+
+#[test]
+fn warning_review_copy_revalidates_the_previewed_source_hash() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    let source = signed_root.join("unmatched.pdf");
+    write_signed(&source, false);
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &FixtureOcr {
+            codes: BTreeMap::new(),
+        },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let authority =
+        FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+    let cached = cache_stage_plan(&authority, plan, &signed_root, &archive_root, &review_root);
+    fs::write(&source, b"changed after preview").unwrap();
+
+    let result = authority
+        .apply(
+            &cached.plan_id,
+            &CallerIdentity::new("owner-1", "session-1"),
+        )
+        .unwrap();
+
+    assert_eq!(result.failed, 1);
+    assert!(!review_root.join("_review/unmatched.pdf").exists());
 }
 
 #[cfg(unix)]
@@ -1043,7 +1118,12 @@ fn recursive_discovery_never_follows_signed_or_archive_directory_symlinks() {
         || false,
     )
     .unwrap();
-    assert!(archive_plan.steps.is_empty());
+    assert!(
+        archive_plan
+            .steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert_eq!(archive_plan.warnings[0].key, "warn.rfi.archiveMissing");
 }
 
@@ -1067,7 +1147,11 @@ fn archive_lookup_never_follows_direct_pdf_symlinks() {
     )
     .unwrap();
 
-    assert!(plan.steps.is_empty());
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert_eq!(plan.warnings.len(), 1);
     assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
 }
@@ -1222,7 +1306,11 @@ fn same_bytes_in_an_unrelated_temp_copy_never_authorize_deletion() {
     )
     .unwrap();
 
-    assert!(plan.steps.is_empty());
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
     assert_eq!(plan.warnings[0].key, "warn.rfi.reviewExists");
     assert!(unrelated.is_file());
 }

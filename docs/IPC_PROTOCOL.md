@@ -9,6 +9,11 @@ cancellation command. Apply accepts only an opaque cached Plan identity, never
 client-authored steps. Tokens, raw credential values, native handles, and
 arbitrary file/network/process authority never cross into the webview.
 
+Signed-page Preview reports stable progress phases: `signed_discovery`,
+`signed_inspection`, `signed_ocr`, `signed_classification`, `archive_scan`,
+`comparison_preparation`, and `preview_ready`. These events are presentation-only;
+the final returned Plan remains the sole Apply authority.
+
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,
 `frontend/src/lib/bridge.ts`, and their roster/golden tests.
 

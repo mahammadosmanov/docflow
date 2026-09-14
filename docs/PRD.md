@@ -67,6 +67,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   filenames, preserves deterministic results, and records scan evidence in the
   immutable Plan. New signed-scan input recursion defaults on. Symlinks,
   ambiguity, unsupported PDFs, collisions, and unreadable directories fail closed.
+- **DF-021 — Actionable signed-page review:** signed-page Preview exposes live,
+  ordered discovery/OCR/archive/comparison stages; keeps approved rows, page
+  comparisons, warning files, and warnings directly reachable; and identifies
+  every warning by source PDF, page when known, exact RFI when known, and reason.
+  Apply copies each affected source PDF once beneath `_review`, preserving its
+  signed-input subfolder path, without changing the source or overwriting a
+  destination, and rejects source drift after Preview.
 
 ## Scope
 

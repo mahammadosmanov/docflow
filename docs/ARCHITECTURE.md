@@ -89,7 +89,11 @@ whole-file fingerprint, archive candidate, and destination in the immutable
 Plan. Apply revalidates the source, copies it into private operation storage, and
 imports only that approved page into the review copy. It never splits or mutates
 the source scan. Missing, low-confidence, duplicate, unsupported, or ambiguous
-pages remain warnings and cannot create an output.
+pages cannot create a replacement output. Each affected signed source is instead
+represented once by a hash-pinned no-clobber Copy step under
+`<review root>/_review`, with structured source/page/RFI/reason metadata for
+operator review. A multi-page source with several warnings is copied once, not
+split or duplicated.
 
 Archive discovery for signed-page staging performs a breadth-by-depth walk of
 the complete selected RFI System root. Independent directories at each depth are
@@ -100,9 +104,10 @@ maximum worker count and exact directory/entry totals. A single unreadable
 directory rejects the whole archive result rather than producing false misses.
 
 For up to 20 accepted RFI rows, Rust may also render the exact signed page and
-archive-candidate page one as grayscale PNG thumbnails. Each image is reduced to
-at most 240 by 320 pixels and 256 KiB; total encoded Plan thumbnail data is capped
-at 4 MiB. The images are inert metadata keyed by row and opaque candidate token,
+archive-candidate page one as grayscale PNG thumbnails. Each image is rendered at
+144 DPI, reduced to at most 540 by 760 pixels, and rejected above 768 KiB; total
+encoded Plan thumbnail data is capped at 12 MiB. The images are inert metadata
+keyed by row and opaque candidate token,
 not executable steps or filesystem capabilities. React accepts only bounded PNG
 data URLs, and selecting an archive candidate displays the image bound to the
 same token used by Plan revision. Missing support or exhausted bounds require
@@ -182,6 +187,13 @@ warning array remains untouched. In signed-page staging, a focus action is shown
 only when the warning subject contains an exact bounded ASCII RFI code that also
 exists in the current editor rows. It selects the already-rendered comparison;
 it cannot revise the Plan, choose an archive candidate, or authorize Apply.
+
+Signed-page Preview streams separate discovery, inspection, OCR, classification,
+archive-scan, comparison-preparation, and ready phases. React retains a bounded
+ordered phase trail rather than replacing the whole progress display with only
+the latest event. The signed-page Plan view puts approved rows first, keeps a
+sticky navigator to comparisons/review copies/warnings, and renders structured
+warning-copy metadata already present in the immutable Plan.
 
 Guarded RFI System and Follow Up workbook steps already carry the expected and
 replacement values that Apply validates. The shared workbook comparison projects
