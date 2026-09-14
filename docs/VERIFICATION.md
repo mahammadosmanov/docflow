@@ -4,6 +4,37 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.26.0 - 2026-09-14
+
+Passed source evidence for the signed-page review increment:
+
+- Clippy with all targets/features and warnings denied, Cargo formatting and
+  check, documentation/version/source/license audits;
+- 338 Rust unit tests and 213 integration tests passed; the two operator-workbook
+  environment tests remained intentionally ignored;
+- signed-page integration tests prove live OCR/archive/final progress phases,
+  one structured no-clobber `_review` copy per warning source, preserved nested
+  input layout, and Apply refusal when that source changes after Preview;
+- 23 Node tests and 53 React tests passed; the React evidence covers the signed
+  section navigator, before/after comparison and enlarged view, exact warning
+  PDF/page/RFI/reason presentation, and bounded larger PNG acceptance;
+- the production TypeScript/Vite build passed with the known non-failing
+  chunk-size advisory.
+
+The Windows x64 cross-build from final candidate commit
+`be5250dc148fed0e6aba1207af7ea491ae952ac9` completed. The OCR-inclusive ZIP
+passed the package audit, every generated checksum verified, and both executable
+artifacts identify as Windows GUI-subsystem PE files. Cross-linker PDB warnings
+were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `1ae4902992701694aa611061c5b6382cafecda328d96cf7e5763dd50778509f2`;
+- portable EXE: `ddfbbd652204a608f0d02090a9350bc1e389662bd5089512957d47a51b673c02`;
+- per-user installer: `90b6575d652119d5c3041ef8def18f335ffa1cb1008af1dbedb146747ac448c0`.
+
+Cross-build and browser tests do not establish native Windows/WebView2 or
+OneDrive acceptance. The exact 0.26.0 package still needs the signed-page checks
+in `WINDOWS_RUNBOOK.md` with non-sensitive copies on the operator machine.
+
 ## 0.25.0 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
