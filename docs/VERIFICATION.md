@@ -12,7 +12,19 @@ after removal. The complete source gates subsequently passed: version,
 documentation, source and license audits; 23 Node and 53 React tests; production
 frontend build; Rust formatting, Clippy with warnings denied, 338 unit tests,
 213 integration tests with two operator-workbook tests intentionally ignored,
-and Cargo check. Windows/native acceptance was not run.
+and Cargo check.
+
+The Windows x64 cross-build from commit
+`e15c3e1` completed. The OCR-inclusive ZIP passed the package audit, all three
+checksums verified, and the portable and installer executables identify as
+Windows GUI-subsystem PE files. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `10b58c287d783ae98d34888c818dd9d7d3f3fdcaf46cc1353c866b3187d3ce0f`;
+- portable EXE: `f596fda280c9f13251b332006c140bd550431d82243673a2021925b8c4ade2de`;
+- per-user installer: `1c1cc98b775032940995f8dda5200da33623535b4bafd91c5eb88164304649de`.
+
+Cross-build evidence does not establish native Windows, WebView2, Office,
+OneDrive, Outlook, or physical-printer acceptance; those gates were not run.
 
 ## 0.26.1 - 2026-09-14
 
