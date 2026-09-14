@@ -282,7 +282,27 @@ where
         }
     }
 
-    let archive_matches = archive_index(&archive_root, unique.keys().cloned().collect())?;
+    let archive_scan = archive_index(
+        &archive_root,
+        unique.keys().cloned().collect(),
+        &mut progress,
+        &mut cancelled,
+    )?;
+    plan.meta
+        .insert("archiveRecursive".to_string(), Value::Bool(true));
+    plan.meta.insert(
+        "archiveWorkerCount".to_string(),
+        Value::from(archive_scan.worker_count as u64),
+    );
+    plan.meta.insert(
+        "archiveDirectoriesScanned".to_string(),
+        Value::from(archive_scan.directories_scanned as u64),
+    );
+    plan.meta.insert(
+        "archiveEntriesScanned".to_string(),
+        Value::from(archive_scan.entries_scanned as u64),
+    );
+    let archive_matches = archive_scan.matches;
     let mut editor_rows = Vec::new();
     let mut archive_choices = JsonObject::new();
     let mut archive_choice_labels = JsonObject::from_iter([(
@@ -935,10 +955,29 @@ fn collect_pdfs(
     Ok(())
 }
 
-fn archive_index(
+struct ArchiveIndexResult {
+    matches: BTreeMap<String, Vec<PathBuf>>,
+    worker_count: usize,
+    directories_scanned: usize,
+    entries_scanned: usize,
+}
+
+struct ArchiveDirectoryBatch {
+    directories: Vec<PathBuf>,
+    matches: Vec<(String, PathBuf)>,
+    entries_scanned: usize,
+}
+
+fn archive_index<P, C>(
     root: &Path,
     codes: BTreeSet<String>,
-) -> Result<BTreeMap<String, Vec<PathBuf>>, BackendError> {
+    progress: &mut P,
+    cancelled: &mut C,
+) -> Result<ArchiveIndexResult, BackendError>
+where
+    P: FnMut(ProgressEvent),
+    C: FnMut() -> bool,
+{
     let wanted = codes
         .iter()
         .map(|code| (filename_for(code).to_ascii_lowercase(), code.clone()))
@@ -947,28 +986,84 @@ fn archive_index(
         .into_iter()
         .map(|code| (code, Vec::new()))
         .collect::<BTreeMap<_, _>>();
-    let mut visited = 0usize;
-    collect_archive(root, root, &wanted, &mut matches, &mut visited)?;
+    if wanted.is_empty() {
+        return Ok(ArchiveIndexResult {
+            matches,
+            worker_count: 0,
+            directories_scanned: 0,
+            entries_scanned: 0,
+        });
+    }
+    let mut directories = vec![root.to_path_buf()];
+    let mut entries_scanned = 0usize;
+    let mut directories_scanned = 0usize;
+    let mut worker_count = 1usize;
+    while !directories.is_empty() {
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        directories.sort();
+        let (workers, batches) = bounded_map(&directories, |directory| {
+            scan_archive_directory(root, directory, &wanted)
+        })
+        .map_err(BackendError::request_failed)?;
+        worker_count = worker_count.max(workers);
+        directories_scanned = directories_scanned
+            .checked_add(directories.len())
+            .ok_or_else(|| BackendError::validation("archive directory count overflow"))?;
+        let mut next = Vec::new();
+        for batch in batches {
+            let batch = batch?;
+            entries_scanned = entries_scanned
+                .checked_add(batch.entries_scanned)
+                .ok_or_else(|| BackendError::validation("archive entry count overflow"))?;
+            if entries_scanned > MAX_ARCHIVE_ENTRIES {
+                return Err(BackendError::validation(format!(
+                    "archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry limit"
+                )));
+            }
+            next.extend(batch.directories);
+            for (code, path) in batch.matches {
+                matches.entry(code).or_default().push(path);
+            }
+        }
+        next.sort();
+        progress(ProgressEvent {
+            phase: "preview".to_string(),
+            done: directories_scanned as u64,
+            total: directories_scanned.saturating_add(next.len()) as u64,
+            subject: root.to_string_lossy().into_owned(),
+        });
+        directories = next;
+    }
     for values in matches.values_mut() {
         values.sort();
     }
-    Ok(matches)
+    Ok(ArchiveIndexResult {
+        matches,
+        worker_count,
+        directories_scanned,
+        entries_scanned,
+    })
 }
 
-fn collect_archive(
+fn scan_archive_directory(
     root: &Path,
     directory: &Path,
     wanted: &BTreeMap<String, String>,
-    output: &mut BTreeMap<String, Vec<PathBuf>>,
-    visited: &mut usize,
-) -> Result<(), BackendError> {
+) -> Result<ArchiveDirectoryBatch, BackendError> {
+    let mut batch = ArchiveDirectoryBatch {
+        directories: Vec::new(),
+        matches: Vec::new(),
+        entries_scanned: 0,
+    };
     for entry in fs::read_dir(directory)
         .map_err(|_| BackendError::path_invalid("archive directory could not be read"))?
     {
         let entry =
             entry.map_err(|_| BackendError::path_invalid("archive entry could not be read"))?;
-        *visited += 1;
-        if *visited > MAX_ARCHIVE_ENTRIES {
+        batch.entries_scanned += 1;
+        if batch.entries_scanned > MAX_ARCHIVE_ENTRIES {
             return Err(BackendError::validation(format!(
                 "archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry limit"
             )));
@@ -977,7 +1072,7 @@ fn collect_archive(
             .metadata()
             .map_err(|_| BackendError::path_invalid("archive metadata could not be read"))?;
         if metadata.is_dir() && !metadata.file_type().is_symlink() {
-            collect_archive(root, &entry.path(), wanted, output, visited)?;
+            batch.directories.push(entry.path());
             continue;
         }
         if !metadata.is_file() || metadata.file_type().is_symlink() {
@@ -995,9 +1090,11 @@ fn collect_archive(
         if !resolved.starts_with(root) || !resolved.is_file() {
             return Err(BackendError::path_escape());
         }
-        output.entry(code.clone()).or_default().push(resolved);
+        batch.matches.push((code.clone(), resolved));
     }
-    Ok(())
+    batch.directories.sort();
+    batch.matches.sort();
+    Ok(batch)
 }
 
 fn add_directory_steps(

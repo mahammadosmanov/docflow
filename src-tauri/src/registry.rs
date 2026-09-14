@@ -656,7 +656,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 "scan_subfolders",
                 ParamKind::Bool,
                 "param.rfi.scanSubfolders",
-                json!(false),
+                json!(true),
                 false,
                 Vec::new(),
                 BTreeMap::new(),

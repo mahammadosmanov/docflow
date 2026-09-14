@@ -35,6 +35,11 @@ identity or secrets.
   a warning/review outcome, never an output.
 - The archive and signed source scan remain read-only. Page replacement happens
   only in no-clobber copies under the operator-selected review root.
+- The selected RFI System archive root is searched at every subfolder depth with
+  a bounded multi-core directory walk. Only the exact canonical RFI PDF filename
+  may match; a code appearing only in a folder or unrelated filename is not authority.
+- New signed-scan input recursion defaults on. Both recursive walks reject
+  symlinks and stop the whole preview if the archive cannot be scanned completely.
 
 Accepted OCR candidates retain the recognizer's bounded confidence value in the
 approved Plan. The UI displays it as a score out of 100 for Process Scans,

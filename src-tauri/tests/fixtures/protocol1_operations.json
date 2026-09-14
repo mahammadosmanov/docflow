@@ -587,7 +587,7 @@
       {
         "choiceLabels": {},
         "choices": [],
-        "default": false,
+        "default": true,
         "helpKey": "param.rfi.scanSubfolders.help",
         "kind": "bool",
         "labelKey": "param.rfi.scanSubfolders",

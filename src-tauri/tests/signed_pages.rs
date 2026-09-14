@@ -393,6 +393,40 @@ fn combined_scan_uses_bounded_parallel_page_ocr_when_supported() {
 }
 
 #[test]
+fn archive_discovery_scans_every_depth_with_bounded_parallel_evidence() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("incoming/day-1/signed.pdf"), false);
+    for branch in ["CIV", "MEC", "ELE", "PRC"] {
+        fs::create_dir_all(archive_root.join(branch).join("Area/Package")).unwrap();
+    }
+    write_rich_archive(
+        &archive_root
+            .join("CIV/Area/Package/RFI folder")
+            .join(filename_for(CODE)),
+    );
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, true),
+        &FixtureOcr::one(&["signed.pdf"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(
+        plan.steps
+            .iter()
+            .any(|step| step.kind == StepKind::PdfFirstPageReplace)
+    );
+    assert_eq!(plan.meta["archiveRecursive"], true);
+    assert!(plan.meta["archiveDirectoriesScanned"].as_u64().unwrap() >= 10);
+    assert!(plan.meta["archiveEntriesScanned"].as_u64().unwrap() >= 10);
+    let workers = plan.meta["archiveWorkerCount"].as_u64().unwrap();
+    assert!((1..=4).contains(&workers));
+}
+
+#[test]
 fn unreadable_and_duplicate_combined_scan_pages_fail_closed_with_page_labels() {
     let fixture = tempfile::TempDir::new().unwrap();
     let (signed_root, archive_root, review_root) = roots(&fixture);
@@ -968,6 +1002,9 @@ fn fuzzy_prefixes_never_authorize_signed_page_staging() {
 
     assert!(plan.steps.is_empty());
     assert_eq!(plan.warnings[0].key, "warn.no_code");
+    assert_eq!(plan.meta["archiveWorkerCount"], 0);
+    assert_eq!(plan.meta["archiveDirectoriesScanned"], 0);
+    assert_eq!(plan.meta["archiveEntriesScanned"], 0);
 }
 
 #[cfg(unix)]

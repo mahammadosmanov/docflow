@@ -22,6 +22,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-017 | `print_queue.rs`, `platform/mod.rs`, `platform/windows/printing.rs`, `registry.rs`, generic `App.tsx` form | `batch_print.rs` accepted-unconfirmed continuation test, Windows status/query-race policy tests, `native.rs` settings tests, `App.test.tsx` explicit-restore test |
 | DF-018 | `scan_index.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, generic `App.tsx` summary | scan-index unit tests, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, `App.test.tsx` |
 | DF-019 | OCR operation metadata, `native.rs` review DTO, generic `App.tsx` percent renderer and responsive CSS | `process_scans.rs`, `signed_pages.rs`, `App.test.tsx`, small-viewport Playwright evidence |
+| DF-020 | `operations/stage_signed_pages.rs`, `parallel.rs`, `registry.rs` | `signed_pages.rs` deep-recursion/parallel-evidence and symlink tests, registry protocol snapshot |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

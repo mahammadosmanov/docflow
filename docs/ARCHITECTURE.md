@@ -91,6 +91,14 @@ imports only that approved page into the review copy. It never splits or mutates
 the source scan. Missing, low-confidence, duplicate, unsupported, or ambiguous
 pages remain warnings and cannot create an output.
 
+Archive discovery for signed-page staging performs a breadth-by-depth walk of
+the complete selected RFI System root. Independent directories at each depth are
+enumerated in the bounded Rayon pool, then merged and sorted on the coordinator
+thread. This parallelizes network/OneDrive metadata reads without allowing
+parallel mutation or nondeterministic candidate order. The Plan records the
+maximum worker count and exact directory/entry totals. A single unreadable
+directory rejects the whole archive result rather than producing false misses.
+
 For up to 20 accepted RFI rows, Rust may also render the exact signed page and
 archive-candidate page one as grayscale PNG thumbnails. Each image is reduced to
 at most 240 by 320 pixels and 256 KiB; total encoded Plan thumbnail data is capped
@@ -123,8 +131,9 @@ overwrite a destination, update a workbook, or replace Plan hash/identity
 checks. Supabase remains metadata history only; large-system paths and cached
 document analysis are local-only.
 
-The same bounded analysis pool is used by native Process Scans OCR and combined
-Worley page recognition. It preserves deterministic input/result order and is
+The same bounded analysis pool is used by native Process Scans OCR, combined
+Worley page recognition, complete signed-page archive discovery, and page
+orientation analysis. It preserves deterministic input/result order and is
 never used for Office automation, print submission, publication, journals, or
 Undo, where parallel effects could create collisions or unknowable outcomes.
 

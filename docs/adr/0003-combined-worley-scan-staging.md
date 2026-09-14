@@ -27,6 +27,13 @@ private operation storage, and imports only the approved source page as page one
 of the review copy. The original scan and archive are never split, moved, or
 modified. Existing review outputs are never overwritten.
 
+The selected archive is a read-only RFI System root, not one expected leaf
+folder. Preview walks every descendant directory in bounded multi-core breadth
+batches, exact-matches only the canonical RFI PDF filename, sorts results before
+planning, and records worker/directory/entry evidence. New signed-scan input
+recursion defaults on, while the existing control remains available for an
+intentional top-level-only input run. Archive recursion cannot be disabled.
+
 Pages that are unreadable, low-confidence, duplicated for one RFI, contain an
 unsupported form widget, or map to a missing or ambiguous archive file remain
 visible warnings and produce no output. Adapters without page-level support keep
@@ -40,6 +47,8 @@ the prior first-page-only behavior and warn about extra pages.
 - One combined source fingerprint protects every planned page from later edits.
 - OCR effort grows with page count and remains bounded. Page-level progress was
   added in 0.13.1 and bounded thumbnails are governed by ADR 0004.
+- Large RFI System trees can use multiple cores for independent directory reads,
+  but Apply, publication, journal writes, and Undo remain serial and deterministic.
 - Native Windows OCR and OneDrive-backed review behavior still require acceptance
   on the exact packaged Windows candidate.
 

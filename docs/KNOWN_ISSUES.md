@@ -27,6 +27,10 @@ These are not silently waived by passing local tests.
 - OCR score labels and responsive plan scrolling still require native Windows
   acceptance at the operator's actual display scaling and representative small
   window sizes. Browser viewport evidence cannot certify WebView2 behavior.
+- Signed-page recursive multi-core archive discovery still requires native
+  Windows acceptance on the operator's actual OneDrive/network-backed RFI System,
+  including deep nesting, an unreadable folder, cancellation, duplicate exact
+  filenames, and a representative large entry count.
 - RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.

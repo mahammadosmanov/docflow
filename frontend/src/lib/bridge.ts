@@ -618,7 +618,7 @@ const demoSignedPagesOperation: OperationDef = {
       name: "scan_subfolders",
       kind: "bool",
       labelKey: "param.rfi.scanSubfolders",
-      default: false,
+      default: true,
       required: false,
       choices: [],
       choiceLabels: {},

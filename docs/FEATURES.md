@@ -11,7 +11,7 @@
 | `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; continue without duplicate submission when Windows accepts a job but exposes no final spool receipt, and optionally restore previous safe settings |
-| `rfi.stage_signed_first_pages` | Identify single/combined Worley pages and create review copies with exact page-one replacement |
+| `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
 
@@ -39,7 +39,8 @@
 - Read-only device readiness and copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
-  and PDF orientation; state-changing effects remain ordered and journaled.
+  complete recursive signed-page archive discovery, and PDF orientation;
+  state-changing effects remain ordered and journaled.
 - Durable local incremental scanning for RFI System Sync and PDF orientation.
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
@@ -47,7 +48,8 @@
 
 ## Intentional limits
 
-- Process Scans reads top-level PDFs only; signed-page recursion is explicit.
+- Process Scans reads top-level PDFs only. Signed-page input recursion defaults
+  on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent.
 - Three-system replica transfer is roadmap work, not a registered operation.
 - Native Office and printer behavior is accepted only on a real Windows host.

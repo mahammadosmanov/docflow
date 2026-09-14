@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.24.2 is a Tauri 2 desktop application for ten high-risk document
+DocFlow 0.25.0 is a Tauri 2 desktop application for ten high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
@@ -14,8 +14,9 @@ workflows:
   physical-printer observation, explicit recovery, named presets, and optional
   one-click recall of previous safe settings without retaining old files
 - Stage signed RFI first pages: identify every page in a combined Worley scan,
-  keep the archive strictly read-only, and create review copies with only the
-  exact matched page replacing page one, with a bounded old/new page comparison
+  search every nested folder below the selected read-only RFI System root with
+  bounded multi-core discovery, and create review copies with only the exact
+  matched page replacing page one, with a bounded old/new page comparison
 - Correct RFI PDF page orientation: scan every page below CIV, MEC, ELE, and PRC
   with bounded multi-core content analysis and create fidelity-checked copies in
   a separate review tree without modifying the RFI system

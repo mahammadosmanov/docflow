@@ -61,6 +61,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   out of 100 without presenting it as a probability or automatic approval. Plan
   content, long warnings, compact editors, dialogs, and final actions remain
   reachable by scrolling at supported small viewport and display-scale bounds.
+- **DF-020 — Complete parallel signed-page discovery:** signed-page staging
+  searches every depth under the selected read-only RFI System root with a
+  bounded multi-core directory walk, matches only exact canonical RFI PDF
+  filenames, preserves deterministic results, and records scan evidence in the
+  immutable Plan. New signed-scan input recursion defaults on. Symlinks,
+  ambiguity, unsupported PDFs, collisions, and unreadable directories fail closed.
 
 ## Scope
 

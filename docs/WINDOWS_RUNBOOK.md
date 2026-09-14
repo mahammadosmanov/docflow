@@ -58,6 +58,11 @@ pass from a macOS build or Windows cross-compile.
    and modify files, then confirm only completed unchanged entries resume while
    new/changed/failed items scan again. Finally use Force full rescan and confirm
    it bypasses the cache once and is off on the next visit.
+10. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
+    place exact test archives at several nesting depths, and use nested single-
+    and multi-page signed scans. Confirm every exact archive is found, duplicates
+    remain selectable/ambiguous, unreadable or reparse-linked folders fail closed,
+    source hashes never change, and review copies preserve the archive layout.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

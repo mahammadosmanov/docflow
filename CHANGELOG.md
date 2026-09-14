@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.25.0 - 2026-09-14
+
+### Added
+
+- Stage signed RFI first pages now searches the selected read-only RFI System
+  root through every nested folder using a bounded multi-core breadth scan. The
+  approved Plan records worker, directory, and entry counts while exact filename
+  matching, symlink refusal, archive immutability, and deterministic output order
+  remain unchanged.
+
+### Changed
+
+- New signed-scan folders are recursive by default, so nested scanner batches
+  are included without an extra click. The operator can still deliberately
+  disable this for a top-level-only input run; archive lookup always remains
+  fully recursive.
+
 ## 0.24.2 - 2026-09-14
 
 ### Fixed

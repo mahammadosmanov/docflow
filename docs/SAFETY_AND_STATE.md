@@ -13,6 +13,13 @@ locks, symlinks/reparse points, malformed input, exhausted bounds, or ambiguous
 evidence fail closed. Cancellation is checked before effects; partial and unknown
 outcomes stay recoverable rather than being presented as success.
 
+Signed-page archive discovery is always recursive and read-only. It processes
+independent directory batches through the bounded Rust analysis pool, merges
+results in deterministic path order, and records worker/directory/entry counts
+in the Plan. The 250,000-entry bound, exact filename requirement, symlink refusal,
+complete-scan requirement, source hashes, no-clobber review output, serial Apply,
+journal order, and Undo rules are unchanged.
+
 Undo runs successful journaled steps in reverse. It refuses to overwrite later
 user edits, verifies identities/hashes, and removes only empty directories that
 the operation created. Review delete is a recoverable move to app trash.

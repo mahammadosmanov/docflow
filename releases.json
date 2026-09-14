@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.24.2",
+  "currentVersion": "0.25.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -438,9 +438,17 @@
       "version": "0.24.2",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.24.2",
       "summary": "Continue strictly ordered Windows print queues after an accepted native-handler job has no identifiable final spool receipt, without retrying it or weakening explicit fault and cancellation handling."
+    },
+    {
+      "version": "0.25.0",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.25.0",
+      "summary": "Search every nested RFI System folder with bounded multi-core signed-page archive discovery while keeping exact matching, read-only sources, deterministic planning, and serial safe effects."
     }
   ]
 }

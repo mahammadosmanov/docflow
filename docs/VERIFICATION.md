@@ -4,6 +4,26 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.25.0 - 2026-09-14
+
+Passed source evidence after the final implementation edit:
+
+- Clippy with all targets/features and warnings denied;
+- 338 Rust unit tests and 212 integration tests; the two operator-workbook
+  environment tests remained intentionally ignored;
+- signed-page integration coverage proves exact archive discovery below several
+  CIV/MEC/ELE/PRC nesting depths, bounded worker evidence, deterministic exact
+  matching, no-work discovery avoidance, and refusal to follow file or directory
+  symlinks;
+- 23 Node tests and 53 React tests, production TypeScript/Vite build, Cargo
+  check, formatting, version, documentation, source, and license audits.
+
+The frontend build retained the known non-failing chunk-size advisory. Native
+Windows acceptance is still required on the operator's actual OneDrive/network
+RFI System: exercise a representative deep tree, duplicate exact filenames,
+an unreadable folder, cancellation, and nested combined scans; verify the archive
+hashes remain unchanged and only no-clobber review copies are produced.
+
 ## 0.24.2 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
