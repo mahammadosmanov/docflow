@@ -23,6 +23,9 @@ These are not silently waived by passing local tests.
 - Incremental scan performance and fingerprint behavior still require native
   Windows acceptance on the operator's actual OneDrive/network-backed 20 GB RFI
   tree, including interruption, resume, changed files, and forced full rescan.
+- OCR score labels and responsive plan scrolling still require native Windows
+  acceptance at the operator's actual display scaling and representative small
+  window sizes. Browser viewport evidence cannot certify WebView2 behavior.
 - RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.

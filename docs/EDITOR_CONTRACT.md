@@ -26,6 +26,11 @@ Compact display transforms (RFI suffix, short ITP/item, day/month) never alter
 the stored full value. Detail fields remain reachable and editable. Apply uses
 the latest successfully revised Plan, not React table state.
 
+Readonly columns may declare `display: "percent"` for a backend fraction in the
+closed interval 0–1. React clamps and rounds the presentation to 0–100%, while
+the immutable Plan retains the original value. This display transform grants no
+authority and does not change confidence thresholds.
+
 ## Shared preview surfaces
 
 - Impact counts derive from approved steps only.
@@ -33,5 +38,8 @@ the latest successfully revised Plan, not React table state.
 - Warning filtering is presentation-only and never removes Plan warnings.
 - Workbook comparison shows approved sheet/cell/current/replacement values only.
 - Signed-page thumbnails are bounded inert PNG metadata tied to row/candidate tokens.
+- The Plan content region owns vertical scrolling; its final action bar remains
+  outside that region. Wide record tables own horizontal scrolling, and dialogs
+  remain vertically scrollable within the viewport.
 
 Any editor interaction change requires a frontend test and all four locale keys.

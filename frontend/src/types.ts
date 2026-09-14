@@ -196,6 +196,7 @@ export interface ReviewItem {
   path: string;
   name: string;
   code: string;
+  confidence: number;
   targetExists?: boolean;
 }
 

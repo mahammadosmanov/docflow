@@ -1194,6 +1194,7 @@ export class MockBridge implements Bridge {
             path: "/RFI/_review/scan-01.pdf",
             name: "scan-01.pdf",
             code: "RFI-CIV-0064",
+            confidence: 0.9,
             targetExists: false,
           },
           {
@@ -1201,6 +1202,7 @@ export class MockBridge implements Bridge {
             path: "/RFI/_review/scan-02.pdf",
             name: "scan-02.pdf",
             code: "",
+            confidence: 0,
             targetExists: false,
           },
         ] satisfies ReviewItem[];

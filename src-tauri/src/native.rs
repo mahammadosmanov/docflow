@@ -1586,6 +1586,7 @@ impl NativeBackend {
                     name: item.name,
                     path: item.path,
                     code: item.code,
+                    confidence: item.confidence,
                     target_exists: item.target_exists,
                 })
             })
@@ -1834,6 +1835,7 @@ struct FrontendReviewItem {
     name: String,
     path: String,
     code: String,
+    confidence: f64,
     target_exists: bool,
 }
 

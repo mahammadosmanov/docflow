@@ -54,6 +54,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   new, failed, or explicitly forced files are analysed again. Cached evidence
   may reduce preview work but can never authorize Apply or replace apply-time
   identity/hash validation.
+- **DF-019 — Visible OCR evidence and reachable UI:** OCR-backed preview rows,
+  review items, and actionable page-orientation evidence expose a bounded score
+  out of 100 without presenting it as a probability or automatic approval. Plan
+  content, long warnings, compact editors, dialogs, and final actions remain
+  reachable by scrolling at supported small viewport and display-scale bounds.
 
 ## Scope
 

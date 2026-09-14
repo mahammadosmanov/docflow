@@ -446,6 +446,7 @@ where
             "_rowId": row_id,
             "enabled": true,
             "code": code,
+            "confidence": candidate.confidence,
             "signedFile": candidate_display(&candidate.path, candidate.page_index),
             "archiveFile": selected,
         }));
@@ -484,6 +485,7 @@ where
             "columns": [
                 {"key": "enabled", "labelKey": "rfi.signed.column.enabled", "kind": "bool"},
                 {"key": "code", "labelKey": "rfi.signed.column.code", "kind": "readonly"},
+                {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 112},
                 {"key": "signedFile", "labelKey": "rfi.signed.column.scan", "kind": "readonly"},
                 {"key": "archiveFile", "labelKey": "rfi.signed.column.archive", "kind": "choice", "bulk": false}
             ],

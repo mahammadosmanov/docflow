@@ -276,6 +276,8 @@ where
             });
             let mut meta = JsonObject::new();
             meta.insert("code".to_string(), Value::String(code.clone()));
+            meta.insert("confidence".to_string(), Value::from(winner.confidence));
+            meta.insert("source".to_string(), Value::String(winner.source.clone()));
             meta.insert(
                 "reason".to_string(),
                 Value::String("target_exists".to_string()),
@@ -333,6 +335,8 @@ where
             });
             let mut meta = JsonObject::new();
             meta.insert("code".to_string(), Value::String(code.clone()));
+            meta.insert("confidence".to_string(), Value::from(older.confidence));
+            meta.insert("source".to_string(), Value::String(older.source.clone()));
             meta.insert(
                 "reason".to_string(),
                 Value::String("older_revision".to_string()),

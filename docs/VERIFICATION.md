@@ -4,6 +4,26 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.24.0 - 2026-09-14
+
+Passed source evidence after the final implementation edit:
+
+- Clippy with all targets/features and warnings denied;
+- 338 Rust unit tests and 210 integration tests; the two operator-workbook
+  environment tests remained intentionally ignored;
+- 23 Node tests and 53 React tests, including bounded confidence formatting,
+  signed-page editor projection, and the plan scroll/action DOM contract;
+- production TypeScript/Vite build, Cargo check, formatting, version,
+  documentation, source, and dependency-license audits;
+- Playwright at a 680 x 520 viewport showed the OCR 100% badge, zero horizontal
+  body overflow, a 1,738 px synthetic long plan inside a 318 px scroll region,
+  and the complete action bar fixed within the viewport below that region.
+
+The frontend build retained the known non-failing chunk-size advisory. OCR
+scores are intentionally review evidence rather than calibrated probability or
+automatic approval. Native Windows/WebView2 display scaling, screen-reader, and
+representative low-confidence OCR acceptance have not yet run.
+
 ## 0.23.0 - 2026-09-14
 
 Passed source evidence after the final implementation edit:

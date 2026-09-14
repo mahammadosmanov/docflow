@@ -155,6 +155,13 @@ moves/renames, print submissions, Outlook drafts, cleanup effects, and warnings.
 This is presentation only: it cannot add, remove, or authorize a step, and it is
 shown for both record-editor and ordinary previews.
 
+OCR-derived steps carry their backend score in immutable step metadata, signed
+page editor rows expose the same evidence through the generic percent display,
+and manual Review DTOs include the stored score. React only rounds and bounds
+the visible 0–100 label. Plan content is the scrolling region while the action
+bar remains reachable outside it; record tables retain independent horizontal
+scrolling.
+
 Record-editor previews also expose the same immutable non-directory steps in a
 collapsed, height-bounded exact-effects panel. Expanding it renders complete
 source and destination paths already present in the Plan; it does not request,

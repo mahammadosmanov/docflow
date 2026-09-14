@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
   canonicalRfiInText,
+  formatConfidencePercent,
   humanError,
   isPlanEditorReady,
   PlanWarnings,
@@ -31,26 +32,25 @@ function interceptMockBridge(
   ) => { handled: boolean; value?: unknown },
 ) {
   const originalCall = MockBridge.prototype.call;
-  return vi
-    .spyOn(MockBridge.prototype, "call")
-    .mockImplementation(function (this: MockBridge, method, ...args) {
-      const result = intercept(
-        method,
-        (args[0] ?? {}) as Record<string, unknown>,
-      );
-      if (result.handled) return Promise.resolve(result.value) as never;
-      return Reflect.apply(originalCall, this, [method, ...args]);
-    });
+  return vi.spyOn(MockBridge.prototype, "call").mockImplementation(function (
+    this: MockBridge,
+    method,
+    ...args
+  ) {
+    const result = intercept(
+      method,
+      (args[0] ?? {}) as Record<string, unknown>,
+    );
+    if (result.handled) return Promise.resolve(result.value) as never;
+    return Reflect.apply(originalCall, this, [method, ...args]);
+  });
 }
 
 async function signIn() {
-  expect(
-    await screen.findByRole("heading", { name: "DocFlow" }),
-  ).toBeVisible();
-  fireEvent.change(
-    screen.getByLabelText("E-posta"),
-    { target: { value: "demo@example.com" } },
-  );
+  expect(await screen.findByRole("heading", { name: "DocFlow" })).toBeVisible();
+  fireEvent.change(screen.getByLabelText("E-posta"), {
+    target: { value: "demo@example.com" },
+  });
   fireEvent.change(screen.getByLabelText("Parola"), {
     target: { value: "secret1" },
   });
@@ -72,6 +72,16 @@ afterEach(() => {
 });
 
 describe("DocFlow shell", () => {
+  it("formats bounded OCR evidence as a score out of 100", () => {
+    expect(formatConfidencePercent(1)).toBe("100%");
+    expect(formatConfidencePercent(0.804)).toBe("80%");
+    expect(formatConfidencePercent(18.42, "percent")).toBe("18%");
+    expect(formatConfidencePercent(2)).toBe("100%");
+    expect(formatConfidencePercent(-1)).toBe("0%");
+    expect(formatConfidencePercent(" ")).toBeNull();
+    expect(formatConfidencePercent(Number.NaN)).toBeNull();
+  });
+
   it("summarizes every approved effect category without counting directories", () => {
     const steps: Plan["steps"] = [
       "mkdir",
@@ -154,31 +164,31 @@ describe("DocFlow shell", () => {
     interceptMockBridge((method) => {
       if (method === "workItems/list") {
         return {
-            handled: true,
-            value: {
-              today: [
-                {
-                  itemId: "work-checked",
-                  title: "Checked MEC request",
-                  rfiCodes: [],
-                  stage: "checked",
-                  updatedAt: "2026-09-13T08:00:00Z",
-                  dueDate: "2026-09-13",
-                  needsReview: false,
-                  reason: null,
-                  lastEventId: "event-checked",
-                  sourceJournalId: null,
-                },
-              ],
-              resume: [],
-              needsReview: [],
-              completedCount: 0,
-              invalidEventCount: 0,
-              eventCount: 0,
-              eventBytes: 0,
-              eventLimit: 10000,
-            },
-          };
+          handled: true,
+          value: {
+            today: [
+              {
+                itemId: "work-checked",
+                title: "Checked MEC request",
+                rfiCodes: [],
+                stage: "checked",
+                updatedAt: "2026-09-13T08:00:00Z",
+                dueDate: "2026-09-13",
+                needsReview: false,
+                reason: null,
+                lastEventId: "event-checked",
+                sourceJournalId: null,
+              },
+            ],
+            resume: [],
+            needsReview: [],
+            completedCount: 0,
+            invalidEventCount: 0,
+            eventCount: 0,
+            eventBytes: 0,
+            eventLimit: 10000,
+          },
+        };
       }
       if (method === "engine/preview") {
         return {
@@ -283,7 +293,9 @@ describe("DocFlow shell", () => {
     expect(screen.getByText("3/10000 olay · 2 KB")).toBeVisible();
     expect(call).toHaveBeenCalledWith("workItems/list");
 
-    fireEvent.click(screen.getByRole("button", { name: "Denetimi dışa aktar" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Denetimi dışa aktar" }),
+    );
     expect(
       await screen.findByRole("heading", {
         name: "RFI iş denetimini dışa aktar",
@@ -292,7 +304,9 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Geri" }));
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "MEC inspection request işini aç" }),
+      await screen.findByRole("button", {
+        name: "MEC inspection request işini aç",
+      }),
     );
     expect(
       await screen.findByRole("heading", { name: "RFI işini kaydet" }),
@@ -354,9 +368,7 @@ describe("DocFlow shell", () => {
 
     render(<App />);
     await signIn();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Taramaları İşle/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Taramaları İşle/ }));
     await screen.findByRole("heading", { name: "Ayarlar" });
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
@@ -416,12 +428,10 @@ describe("DocFlow shell", () => {
     fireEvent.change(screen.getByLabelText("Kayıtlı ön ayar"), {
       target: { value: "preset-1" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ön ayarı uygula" }),
+    fireEvent.click(screen.getByRole("button", { name: "Ön ayarı uygula" }));
+    expect(screen.getByRole("combobox", { name: /^Yazıcı/ })).toHaveValue(
+      "Disconnected Printer",
     );
-    expect(
-      screen.getByRole("combobox", { name: /^Yazıcı/ }),
-    ).toHaveValue("Disconnected Printer");
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     await waitFor(() =>
@@ -486,12 +496,8 @@ describe("DocFlow shell", () => {
     fireEvent.change(await screen.findByLabelText("Kayıtlı ön ayar"), {
       target: { value: "preset-1" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ön ayarı uygula" }),
-    );
-    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
-      "A3",
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Ön ayarı uygula" }));
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue("A3");
     fireEvent.change(
       screen.getByRole("spinbutton", { name: /^Kopya sayısı/ }),
       { target: { value: "7" } },
@@ -502,9 +508,7 @@ describe("DocFlow shell", () => {
       await paramsResult;
     });
 
-    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
-      "A3",
-    );
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue("A3");
     expect(
       screen.getByRole("spinbutton", { name: /^Kopya sayısı/ }),
     ).toHaveValue(7);
@@ -609,13 +613,10 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
     );
-    fireEvent.change(
-      await screen.findByLabelText("Yeni ön ayar adı"),
-      { target: { value: "A4 standard" } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ön ayarı kaydet" }),
-    );
+    fireEvent.change(await screen.findByLabelText("Yeni ön ayar adı"), {
+      target: { value: "A4 standard" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ön ayarı kaydet" }));
 
     await waitFor(() => expect(saveRequests).toHaveLength(2));
     expect(confirm).toHaveBeenCalledWith(
@@ -674,34 +675,25 @@ describe("DocFlow shell", () => {
     );
     const select = await screen.findByLabelText("Kayıtlı ön ayar");
     fireEvent.change(select, { target: { value: "preset-first" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ön ayarı sil" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Ön ayarı sil" }));
 
-    expect(confirm).toHaveBeenCalledWith(
-      "A3 duplex adlı ön ayar silinsin mi?",
-    );
+    expect(confirm).toHaveBeenCalledWith("A3 duplex adlı ön ayar silinsin mi?");
     expect(screen.getByRole("option", { name: "A3 duplex" })).toBeVisible();
 
     resolveDelete();
     await waitFor(() =>
-      expect(
-        screen.queryByRole("option", { name: "A3 duplex" }),
-      ).toBeNull(),
+      expect(screen.queryByRole("option", { name: "A3 duplex" })).toBeNull(),
     );
-    expect(
-      screen.getByRole("option", { name: "A4 simplex" }),
-    ).toBeVisible();
+    expect(screen.getByRole("option", { name: "A4 simplex" })).toBeVisible();
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
     ).toHaveLength(2);
   });
 
   it("operation presets show localized command errors", async () => {
-    const writeError = Object.assign(
-      new Error("settings could not be saved"),
-      { code: "settings_write_failed" },
-    );
+    const writeError = Object.assign(new Error("settings could not be saved"), {
+      code: "settings_write_failed",
+    });
     const call = interceptMockBridge((method) => {
       if (method === "settings/presets") {
         return { handled: true, value: [] };
@@ -720,13 +712,10 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
     );
-    fireEvent.change(
-      await screen.findByLabelText("Yeni ön ayar adı"),
-      { target: { value: "Unavailable" } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ön ayarı kaydet" }),
-    );
+    fireEvent.change(await screen.findByLabelText("Yeni ön ayar adı"), {
+      target: { value: "Unavailable" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ön ayarı kaydet" }));
 
     expect(
       await screen.findByText(
@@ -871,9 +860,12 @@ describe("DocFlow shell", () => {
     );
 
     expect(screen.getAllByRole("listitem")).toHaveLength(6);
-    fireEvent.change(screen.getByRole("searchbox", { name: "Uyarılarda ara" }), {
-      target: { value: "0249" },
-    });
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Uyarılarda ara" }),
+      {
+        target: { value: "0249" },
+      },
+    );
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     fireEvent.click(
       screen.getByRole("button", { name: "İlgili sayfayı göster" }),
@@ -881,7 +873,9 @@ describe("DocFlow shell", () => {
     expect(onFocusCode).toHaveBeenCalledWith(firstCode);
     expect(screen.getByText("6 uyarının 1 tanesi gösteriliyor")).toBeVisible();
 
-    expect(canonicalRfiInText(`issue: ${secondCode} — page 2`)).toBe(secondCode);
+    expect(canonicalRfiInText(`issue: ${secondCode} — page 2`)).toBe(
+      secondCode,
+    );
     expect(canonicalRfiInText(`${secondCode}A`)).toBeNull();
     expect(canonicalRfiInText("AZE-SUN-INT-QMS-RFI-MEC-02Â49")).toBeNull();
   });
@@ -1030,12 +1024,24 @@ describe("DocFlow shell", () => {
       columns: [
         { key: "enabled", labelKey: "rfi.signed.column.enabled", kind: "bool" },
         { key: "code", labelKey: "rfi.signed.column.code", kind: "readonly" },
-        { key: "archiveFile", labelKey: "rfi.signed.column.archive", kind: "choice" },
+        {
+          key: "confidence",
+          labelKey: "ocr.confidence",
+          kind: "readonly",
+          display: "percent",
+        },
+        {
+          key: "archiveFile",
+          labelKey: "rfi.signed.column.archive",
+          kind: "choice",
+        },
       ],
       choicesByValue: {
         archiveFile: {
           dependsOn: "code",
-          values: { CODE: ["", "signed-CODE-candidate-1", "signed-CODE-candidate-2"] },
+          values: {
+            CODE: ["", "signed-CODE-candidate-1", "signed-CODE-candidate-2"],
+          },
         },
       },
       choiceLabels: {
@@ -1047,7 +1053,13 @@ describe("DocFlow shell", () => {
       },
     };
     const initialRows = [
-      { _rowId: "signed-CODE", enabled: true, code: "CODE", archiveFile: "" },
+      {
+        _rowId: "signed-CODE",
+        enabled: true,
+        code: "CODE",
+        confidence: 0.9,
+        archiveFile: "",
+      },
     ];
     const plan: Plan = {
       planId: "plan-1",
@@ -1068,8 +1080,10 @@ describe("DocFlow shell", () => {
           "signed-CODE": {
             signed: "data:image/png;base64,iVBORw0KGgoAAA==",
             archives: {
-              "signed-CODE-candidate-1": "data:image/png;base64,iVBORw0KGgoBBB==",
-              "signed-CODE-candidate-2": "data:image/png;base64,iVBORw0KGgoCCC==",
+              "signed-CODE-candidate-1":
+                "data:image/png;base64,iVBORw0KGgoBBB==",
+              "signed-CODE-candidate-2":
+                "data:image/png;base64,iVBORw0KGgoCCC==",
             },
           },
         },
@@ -1087,6 +1101,13 @@ describe("DocFlow shell", () => {
     };
     const view = render(<PlanView {...props} editorRows={initialRows} />);
 
+    expect(screen.getByText("90%")).toBeVisible();
+    const scrollRegion = view.container.querySelector(".plan-flow-scroll");
+    expect(scrollRegion?.querySelector(".editor-card")).not.toBeNull();
+    expect(scrollRegion?.querySelector(".action-bar")).toBeNull();
+    expect(
+      view.container.querySelector(".flow-layout > .action-bar"),
+    ).not.toBeNull();
     expect(screen.getByText("Uygulamadan önce")).toBeVisible();
     expect(
       screen.getByText(
@@ -1102,7 +1123,9 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Uygula" })).toBeDisabled();
     expect(screen.getByText("İlk sayfa karşılaştırması")).toBeVisible();
-    expect(screen.getByText("İlk sayfasını göstermek için bir arşiv PDF'i seçin.")).toBeVisible();
+    expect(
+      screen.getByText("İlk sayfasını göstermek için bir arşiv PDF'i seçin."),
+    ).toBeVisible();
     expect(screen.getByAltText("CODE için yeni imzalı sayfa")).toHaveAttribute(
       "src",
       "data:image/png;base64,iVBORw0KGgoAAA==",
@@ -1112,7 +1135,10 @@ describe("DocFlow shell", () => {
     expect(within(archive).getByRole("option", { name: second })).toBeVisible();
 
     fireEvent.change(archive, { target: { value: "signed-CODE-candidate-2" } });
-    const selectedRows = onRowsChange.mock.calls[0][0] as Record<string, unknown>[];
+    const selectedRows = onRowsChange.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >[];
     expect(selectedRows[0].archiveFile).toBe("signed-CODE-candidate-2");
     view.rerender(<PlanView {...props} editorRows={selectedRows} />);
     expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
@@ -1123,8 +1149,18 @@ describe("DocFlow shell", () => {
 
   it("disables bool cells from row authority and localizes readonly key values", () => {
     const rows = [
-      { _rowId: "one", selectable: false, enabled: false, reasonKey: "action.close" },
-      { _rowId: "two", selectable: true, enabled: true, reasonKey: "action.close" },
+      {
+        _rowId: "one",
+        selectable: false,
+        enabled: false,
+        reasonKey: "action.close",
+      },
+      {
+        _rowId: "two",
+        selectable: true,
+        enabled: true,
+        reasonKey: "action.close",
+      },
     ];
     const plan: Plan = {
       planId: "plan-follow-up",
@@ -1203,7 +1239,9 @@ describe("DocFlow shell", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Unsent Outlook reply preview" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Unsent Outlook reply preview" }),
+    ).toBeVisible();
     const impact = view.container.querySelector<HTMLElement>(".plan-impact");
     expect(impact).not.toBeNull();
     expect(within(impact!).getByText("Drafts opened")).toBeVisible();
@@ -1245,9 +1283,7 @@ describe("DocFlow shell", () => {
     expect(
       await screen.findByRole("heading", { name: "İşlemler" }),
     ).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Taramaları İşle/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Taramaları İşle/ }));
 
     expect(
       await screen.findByRole("heading", { name: "Ayarlar" }),
@@ -1268,14 +1304,10 @@ describe("DocFlow shell", () => {
       screen.getByText("Yapılan işlemleri gör ve güvenle geri al."),
     ).toBeVisible();
     expect(
-      screen.getByText(
-        "Dil, görünüm, yazı ve hesap tercihlerini yönet.",
-      ),
+      screen.getByText("Dil, görünüm, yazı ve hesap tercihlerini yönet."),
     ).toBeVisible();
     expect(
-      screen.getByText(
-        "Kullanıcı erişimlerini ve yönetici yetkilerini yönet.",
-      ),
+      screen.getByText("Kullanıcı erişimlerini ve yönetici yetkilerini yönet."),
     ).toBeVisible();
     expect(
       screen.getByText(
@@ -1378,7 +1410,9 @@ describe("DocFlow shell", () => {
         name: /İmzalı RFI ilk sayfalarını hazırla/,
       }),
     );
-    expect(await screen.findByText("Yeni imzalı taramalar klasörü")).toBeVisible();
+    expect(
+      await screen.findByText("Yeni imzalı taramalar klasörü"),
+    ).toBeVisible();
     expect(screen.getByText("Mevcut RFI arşivinin kökü")).toBeVisible();
     expect(screen.getByText("Review çıktı klasörü")).toBeVisible();
     expect(
@@ -1455,9 +1489,7 @@ describe("DocFlow shell", () => {
     fireEvent.change(screen.getByLabelText("Yeni değer"), {
       target: { value: "PDL" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Seçilenlere uygula" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Seçilenlere uygula" }));
 
     await waitFor(() => {
       const subcontractors = Array.from(
@@ -1489,9 +1521,7 @@ describe("DocFlow shell", () => {
     fireEvent.change(screen.getByLabelText("Yeni değer"), {
       target: { value: "false" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Seçilenlere uygula" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Seçilenlere uygula" }));
 
     for (const checkbox of screen.getAllByLabelText("Yazdır")) {
       expect(checkbox).not.toBeChecked();
@@ -1675,7 +1705,11 @@ describe("DocFlow shell", () => {
       reorderable: true,
       columns: [
         { key: "enabled", labelKey: "print.col.include", kind: "bool" },
-        { key: "worksheetName", labelKey: "print.col.worksheet", kind: "readonly" },
+        {
+          key: "worksheetName",
+          labelKey: "print.col.worksheet",
+          kind: "readonly",
+        },
         {
           key: "worksheetVisibility",
           labelKey: "print.col.worksheetVisibility",
@@ -1737,7 +1771,9 @@ describe("DocFlow shell", () => {
       within(hiddenRow!).getByRole("checkbox", { name: "Yazdır" }),
     );
     expect(apply).toBeEnabled();
-    fireEvent.click(within(hiddenRow!).getByRole("button", { name: "Yukarı taşı" }));
+    fireEvent.click(
+      within(hiddenRow!).getByRole("button", { name: "Yukarı taşı" }),
+    );
     fireEvent.click(apply);
 
     await waitFor(() =>
@@ -1813,9 +1849,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ayarlar" }));
     await screen.findByRole("heading", { name: "Ayarlar" });
 
-    expect(
-      screen.getByText(/hiçbir yere gönderilmez/i),
-    ).toBeVisible();
+    expect(screen.getByText(/hiçbir yere gönderilmez/i)).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", { name: "Destek paketini önizle" }),
     );
@@ -1871,18 +1905,14 @@ describe("DocFlow shell", () => {
       name: /^Kopya sayısı/,
     });
     expect(copiesInput).toHaveValue(1);
-    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
-      "A4",
-    );
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue("A4");
     expect(screen.queryByText("old-job.pdf")).toBeNull();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Önceki ayarları getir" }),
     );
     expect(copiesInput).toHaveValue(9);
-    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
-      "A3",
-    );
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue("A3");
     expect(screen.getByRole("combobox", { name: /^Çift taraflı/ })).toHaveValue(
       "long",
     );
@@ -1918,7 +1948,9 @@ describe("DocFlow shell", () => {
       await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
     ).toBeVisible();
 
-    const searchInput = screen.getByLabelText("Ara (RFI no, durum, açıklama)...");
+    const searchInput = screen.getByLabelText(
+      "Ara (RFI no, durum, açıklama)...",
+    );
     expect(searchInput).toBeVisible();
 
     // Search for 0008
@@ -1956,9 +1988,7 @@ describe("DocFlow shell", () => {
     // Press Escape to return to form
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(
-      await screen.findByRole("button", { name: "Önizle" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Önizle" })).toBeVisible();
   });
 
   it("supports quick theme toggling via header button and Alt+T shortcut", async () => {
@@ -2023,7 +2053,9 @@ describe("DocFlow shell", () => {
 
     // Verify clear button disappears and placeholder returns
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Temizle" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Temizle" }),
+      ).not.toBeInTheDocument();
     });
   });
 });

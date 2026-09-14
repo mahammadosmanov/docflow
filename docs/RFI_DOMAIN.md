@@ -36,6 +36,12 @@ identity or secrets.
 - The archive and signed source scan remain read-only. Page replacement happens
   only in no-clobber copies under the operator-selected review root.
 
+Accepted OCR candidates retain the recognizer's bounded confidence value in the
+approved Plan. The UI displays it as a score out of 100 for Process Scans,
+signed-page rows, and Review. Orientation uses Tesseract's OSD score, normalized
+to the same visible 0–100 range. These are detector scores for operator review,
+not calibrated probabilities and never a substitute for preview approval.
+
 ## Workbooks
 
 RFI Log and Inspection Status Follow Up are macro-enabled production documents.

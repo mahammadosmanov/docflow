@@ -313,7 +313,16 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
     assert_eq!(replacement_steps.len(), 2);
     assert_eq!(replacement_steps[0].meta["signedPageIndex"], json!(0));
     assert_eq!(replacement_steps[1].meta["signedPageIndex"], json!(1));
-    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 2);
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["confidence"], json!(1.0));
+    assert!(
+        plan.meta["editor"]["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|column| column["key"] == "confidence" && column["display"] == "percent")
+    );
     let comparisons = plan.meta["pageComparisons"].as_object().unwrap();
     assert_eq!(comparisons.len(), 2);
     for code in [CODE, SECOND_CODE] {

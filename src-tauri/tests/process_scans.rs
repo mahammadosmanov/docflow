@@ -12,6 +12,7 @@ use docflow_lib::{
     plan_store::{BackendOrigin, PlanBinding},
     review::{ReviewAction, ReviewDecision, preview as review_preview, scan as review_scan},
 };
+use serde_json::json;
 
 #[test]
 fn rfi_matching_preserves_nfc_uppercase_and_the_strict_anchor() {
@@ -434,6 +435,8 @@ fn keep_original_copies_low_confidence_files_into_review() {
     assert_eq!(plan.warnings[0].key, "warn.low_confidence");
     assert_eq!(plan.steps.len(), 1);
     assert_eq!(plan.steps[0].kind, docflow_lib::contracts::StepKind::Copy);
+    assert_eq!(plan.steps[0].meta["confidence"], json!(0.79));
+    assert_eq!(plan.steps[0].meta["source"], "fixture-low-confidence");
 }
 
 #[test]

@@ -8,6 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.24.0 - 2026-09-14
+
+### Added
+
+- OCR-backed scan previews, Worley signed-page rows, page-orientation decisions,
+  and Review items now show their recognition score out of 100. The tooltip
+  makes clear that the score is review evidence, not automatic approval.
+
+### Fixed
+
+- Plan/editor content, long warning blocks, dialogs, and compact bulk controls
+  now remain scrollable and reachable on small or short displays; Apply and
+  Cancel remain outside the scrolling plan content.
+
 ## 0.23.0 - 2026-09-14
 
 ### Added

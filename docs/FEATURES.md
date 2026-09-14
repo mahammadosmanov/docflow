@@ -25,6 +25,11 @@
   settings, while named presets remain available for reusable procedures.
 - Preview impact counts, exact effect paths, approved workbook cell comparisons,
   signed-page old/new thumbnails, and warning focus/filtering.
+- OCR-backed preview effects, signed-page rows, orientation decisions, and
+  manual-review items display their recognition score out of 100. The score is
+  review evidence, not a probability or automatic approval.
+- Responsive plan panes keep long warnings, compact tables, modal content, and
+  Apply/Cancel actions reachable through bounded vertical or table scrolling.
 - Persistent local history, explicit recovery center, guarded undo, and
   recoverable review trash.
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.

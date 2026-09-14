@@ -110,17 +110,19 @@ const usernamePattern = /^[a-zA-Z0-9._-]{3,24}$/;
 function isPathSelection(value: unknown): value is PathSelection {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      "selectionId" in value &&
-      typeof value.selectionId === "string" &&
-      "displayPath" in value &&
-      typeof value.displayPath === "string",
+    typeof value === "object" &&
+    "selectionId" in value &&
+    typeof value.selectionId === "string" &&
+    "displayPath" in value &&
+    typeof value.displayPath === "string",
   );
 }
 
 export function humanError(error: unknown, s: Strings): string {
   const raw = error instanceof Error ? error.message : String(error);
-  const localizedKey = raw.match(/^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+)$/)?.[1];
+  const localizedKey = raw.match(
+    /^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+)$/,
+  )?.[1];
   if (localizedKey) {
     const localized = s.t(localizedKey);
     if (localized !== localizedKey) return localized;
@@ -147,9 +149,7 @@ export function humanError(error: unknown, s: Strings): string {
   if (/error\.preset\.limit|preset[_ .-]?(?:capacity|limit)/i.test(raw))
     return s.t("error.preset.limit");
   if (
-    /error\.preset\.stale|preset[_ .-]?(?:missing|stale|not found)/i.test(
-      raw,
-    )
+    /error\.preset\.stale|preset[_ .-]?(?:missing|stale|not found)/i.test(raw)
   )
     return s.t("error.preset.stale");
   if (/error\.preset\.write|preset.*(?:write|persist|save).*fail/i.test(raw))
@@ -286,9 +286,7 @@ export function App() {
           workItem={route.workItem}
           s={s}
           onBack={() => setRoute({ name: "home" })}
-          onReview={(destination) =>
-            setRoute({ name: "review", destination })
-          }
+          onReview={(destination) => setRoute({ name: "review", destination })}
           onWorkItemEvidence={(values) => {
             const tracker = bootstrap.operations.find(
               (candidate) => candidate.id === "rfi.work_item_update",
@@ -398,9 +396,7 @@ function LoginScreen({
     const timer = window.setTimeout(async () => {
       setChecking(true);
       try {
-        setAvailable(
-          await bridge.call("auth/usernameAvailable", { username }),
-        );
+        setAvailable(await bridge.call("auth/usernameAvailable", { username }));
       } catch {
         setAvailable(null);
       } finally {
@@ -521,9 +517,7 @@ function LoginScreen({
             )}
             <Field
               type={showPassword ? "text" : "password"}
-              autoComplete={
-                mode === "in" ? "current-password" : "new-password"
-              }
+              autoComplete={mode === "in" ? "current-password" : "new-password"}
               label={s.t("auth.password")}
               help={s.t("auth.passwordHint")}
               value={password}
@@ -546,9 +540,7 @@ function LoginScreen({
             type="submit"
             disabled={!valid || busy}
             wide
-            icon={
-              busy ? <LoaderCircle className="spin" /> : <ArrowRight />
-            }
+            icon={busy ? <LoaderCircle className="spin" /> : <ArrowRight />}
           >
             {s.t(mode === "in" ? "auth.signIn" : "auth.signUp")}
           </Button>
@@ -646,8 +638,7 @@ function HomeScreen({
   const [readinessBusy, setReadinessBusy] = useState(true);
   const [workItems, setWorkItems] = useState<WorkItemQueues | null>(null);
   const [workItemsBusy, setWorkItemsBusy] = useState(true);
-  const signOut = async () =>
-    onAuth(await bridge.call("auth/signOut"));
+  const signOut = async () => onAuth(await bridge.call("auth/signOut"));
 
   const latestTheme = useRef(bootstrap.prefs.theme);
   latestTheme.current = bootstrap.prefs.theme;
@@ -658,7 +649,9 @@ function HomeScreen({
     const nextTheme: ThemePreference =
       current === "system" ? "light" : current === "light" ? "dark" : "system";
     try {
-      const updated = await bridge.call("settings/update", { theme: nextTheme });
+      const updated = await bridge.call("settings/update", {
+        theme: nextTheme,
+      });
       onPrefs(updated);
     } catch {
       // Ignore background failure
@@ -715,7 +708,9 @@ function HomeScreen({
   const runVerifiedWorkStep = (item: WorkItem) => {
     const mapping = verifiedOperationByStage[item.stage];
     const operation = mapping
-      ? bootstrap.operations.find((candidate) => candidate.id === mapping.operationId)
+      ? bootstrap.operations.find(
+          (candidate) => candidate.id === mapping.operationId,
+        )
       : undefined;
     if (operation) {
       navigate({ name: "operation", operation, workItem: item });
@@ -798,7 +793,8 @@ function HomeScreen({
             <p>{s.t("home.subtitle")}</p>
           </div>
           <div className="safe-badge">
-            <Shield /> {s.t("home.previewFirst")} <span aria-hidden="true">·</span>
+            <Shield /> {s.t("home.previewFirst")}{" "}
+            <span aria-hidden="true">·</span>
             <span>v{bootstrap.version}</span>
           </div>
         </section>
@@ -832,7 +828,10 @@ function HomeScreen({
                 disabled={!workItemExportOperation}
                 onClick={() =>
                   workItemExportOperation &&
-                  navigate({ name: "operation", operation: workItemExportOperation })
+                  navigate({
+                    name: "operation",
+                    operation: workItemExportOperation,
+                  })
                 }
               >
                 {s.t("workItems.export")}
@@ -933,7 +932,11 @@ function HomeScreen({
             <div className="readiness-heading-actions">
               {readiness && (
                 <span className={`readiness-overall ${readiness.overall}`}>
-                  {readiness.overall === "ready" ? <CheckCircle2 /> : <CircleAlert />}
+                  {readiness.overall === "ready" ? (
+                    <CheckCircle2 />
+                  ) : (
+                    <CircleAlert />
+                  )}
                   {s.t(`readiness.overall.${readiness.overall}`)}
                 </span>
               )}
@@ -1155,7 +1158,9 @@ function WorkQueue({
               >
                 <div>
                   <strong>{item.title}</strong>
-                  <small>{s.t(`choice.rfi.workItem.stage.${item.stage}`)}</small>
+                  <small>
+                    {s.t(`choice.rfi.workItem.stage.${item.stage}`)}
+                  </small>
                 </div>
                 {item.rfiCodes.length > 0 && (
                   <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
@@ -1179,13 +1184,7 @@ function WorkQueue({
   );
 }
 
-function ReadinessItem({
-  check,
-  s,
-}: {
-  check: ReadinessCheck;
-  s: Strings;
-}) {
+function ReadinessItem({ check, s }: { check: ReadinessCheck; s: Strings }) {
   const detailKey =
     check.id === "printers" && check.status === "ready"
       ? "readiness.printers.ready"
@@ -1251,8 +1250,10 @@ function OperationScreen({
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
   const [latestPrintQueue, setLatestPrintQueue] =
     useState<PrintQueueSummary | null>(null);
-  const [previousValues, setPreviousValues] =
-    useState<Record<string, unknown> | null>(null);
+  const [previousValues, setPreviousValues] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
@@ -1268,12 +1269,12 @@ function OperationScreen({
           setHydrated(true);
           return;
         }
-        const known = new Set(
-          operation.schema.map((item) => item.name),
-        );
+        const known = new Set(operation.schema.map((item) => item.name));
         const filtered = Object.fromEntries(
           Object.entries(saved).filter(([key]) => {
-            const parameter = operation.schema.find((item) => item.name === key);
+            const parameter = operation.schema.find(
+              (item) => item.name === key,
+            );
             return known.has(key) && parameter?.remember !== false;
           }),
         );
@@ -1355,7 +1356,10 @@ function OperationScreen({
       editor &&
       typeof editor === "object" &&
       Array.isArray((editor as Record<string, unknown>).rows)
-        ? ((editor as Record<string, unknown>).rows as Record<string, unknown>[])
+        ? ((editor as Record<string, unknown>).rows as Record<
+            string,
+            unknown
+          >[])
         : [];
     setEditorRows(rows.map((row) => ({ ...row })));
     setEditorDirty(false);
@@ -1399,9 +1403,7 @@ function OperationScreen({
     setError("");
     setStage("previewing");
     try {
-      installPlan(
-        await bridge.call("engine/printQueueResume", { queueId }),
-      );
+      installPlan(await bridge.call("engine/printQueueResume", { queueId }));
     } catch (reason) {
       setError(humanError(reason, s));
       setStage("form");
@@ -1433,7 +1435,9 @@ function OperationScreen({
       let approvedPlan = plan;
       if (editorDirty) {
         const previousWarnings = new Set(
-          plan.warnings.map((warning) => `${warning.key}\u0000${warning.subject}`),
+          plan.warnings.map(
+            (warning) => `${warning.key}\u0000${warning.subject}`,
+          ),
         );
         const revised = await bridge.call("engine/revise", {
           planId: plan.planId,
@@ -1441,8 +1445,7 @@ function OperationScreen({
         });
         setPlan(revised);
         const revisedEditor = revised.meta?.editor as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
         const revisedRows = Array.isArray(revisedEditor?.rows)
           ? (revisedEditor.rows as Record<string, unknown>[])
           : editorRows;
@@ -1544,11 +1547,7 @@ function OperationScreen({
       >
         <StepIndicator
           current={currentStep}
-          labels={[
-            s.t("step.form"),
-            s.t("step.preview"),
-            s.t("step.apply"),
-          ]}
+          labels={[s.t("step.form"), s.t("step.preview"), s.t("step.apply")]}
         />
       </Header>
       <main
@@ -1612,23 +1611,23 @@ function OperationScreen({
                       ),
                     )
                     .map((param) => (
-                    <SchemaField
-                      key={param.name}
-                      bridge={bridge}
-                      operationId={operation.id}
-                      param={param}
-                      value={values[param.name]}
-                      values={values}
-                      s={s}
-                      onChange={(value) => {
-                        valuesRevision.current += 1;
-                        setValues((current) => ({
-                          ...current,
-                          [param.name]: value,
-                        }));
-                      }}
-                    />
-                  ))}
+                      <SchemaField
+                        key={param.name}
+                        bridge={bridge}
+                        operationId={operation.id}
+                        param={param}
+                        value={values[param.name]}
+                        values={values}
+                        s={s}
+                        onChange={(value) => {
+                          valuesRevision.current += 1;
+                          setValues((current) => ({
+                            ...current,
+                            [param.name]: value,
+                          }));
+                        }}
+                      />
+                    ))}
                 </div>
                 {latestPrintQueue && (
                   <div className="resume-queue-card">
@@ -1665,23 +1664,25 @@ function OperationScreen({
               {error && <Notice kind="error">{error}</Notice>}
             </div>
             <ActionBar
-              left={operation.schema.some((param) => param.name === "dest") ? (
-                <Button
-                  variant="ghost"
-                  icon={<FolderOpen />}
-                  onClick={() =>
-                    void chooseFolder(
-                      bridge,
-                      "rfi.review",
-                      "destination",
-                    ).then((destination) => {
-                      if (destination) onReview(destination);
-                    })
-                  }
-                >
-                  {s.t("action.review")}
-                </Button>
-              ) : undefined}
+              left={
+                operation.schema.some((param) => param.name === "dest") ? (
+                  <Button
+                    variant="ghost"
+                    icon={<FolderOpen />}
+                    onClick={() =>
+                      void chooseFolder(
+                        bridge,
+                        "rfi.review",
+                        "destination",
+                      ).then((destination) => {
+                        if (destination) onReview(destination);
+                      })
+                    }
+                  >
+                    {s.t("action.review")}
+                  </Button>
+                ) : undefined
+              }
               right={
                 <Button icon={<Eye />} onClick={() => void preview()}>
                   {s.t("action.preview")}
@@ -1754,7 +1755,8 @@ function OperationScreen({
             onCopy={(sheet) => void copyTable(sheet)}
             onWorkItemEvidence={
               workItem &&
-              verifiedOperationByStage[workItem.stage]?.operationId === operation.id &&
+              verifiedOperationByStage[workItem.stage]?.operationId ===
+                operation.id &&
               result.applied > 0 &&
               result.failed === 0 &&
               result.journalId &&
@@ -1792,10 +1794,11 @@ function presetCapableValues(
 ): Record<string, unknown> {
   const allowed = new Set(
     operation.schema
-      .filter((param) =>
-        param.kind === "bool" ||
-        param.kind === "choice" ||
-        param.kind === "int",
+      .filter(
+        (param) =>
+          param.kind === "bool" ||
+          param.kind === "choice" ||
+          param.kind === "int",
       )
       .map((param) => param.name),
   );
@@ -1878,9 +1881,7 @@ function PresetToolbar({
       } catch (reason) {
         if (
           !isDuplicatePresetError(reason) ||
-          !window.confirm(
-            s.t("preset.confirm.replace", { name: trimmedName }),
-          )
+          !window.confirm(s.t("preset.confirm.replace", { name: trimmedName }))
         ) {
           throw reason;
         }
@@ -1907,9 +1908,7 @@ function PresetToolbar({
     if (
       !selected ||
       busy ||
-      !window.confirm(
-        s.t("preset.confirm.delete", { name: selected.name }),
-      )
+      !window.confirm(s.t("preset.confirm.delete", { name: selected.name }))
     ) {
       return;
     }
@@ -2062,9 +2061,7 @@ function SchemaField({
     );
   }
   if (param.kind === "files") {
-    const paths = Array.isArray(value)
-      ? value.filter(isPathSelection)
-      : [];
+    const paths = Array.isArray(value) ? value.filter(isPathSelection) : [];
     const [dragOver, setDragOver] = useState(false);
     return (
       <div
@@ -2138,7 +2135,9 @@ function SchemaField({
                   type="button"
                   title={s.t("action.remove")}
                   onClick={() =>
-                    onChange(paths.filter((_, itemIndex) => itemIndex !== index))
+                    onChange(
+                      paths.filter((_, itemIndex) => itemIndex !== index),
+                    )
                   }
                 >
                   <X />
@@ -2169,7 +2168,10 @@ function SchemaField({
           {param.choices.map((choice) => {
             const count = Number(counts[choice] ?? 0);
             return (
-              <div className={`sheet-count ${count > 0 ? "active" : ""}`} key={choice}>
+              <div
+                className={`sheet-count ${count > 0 ? "active" : ""}`}
+                key={choice}
+              >
                 <strong>{choice}</strong>
                 <div>
                   <button
@@ -2245,7 +2247,8 @@ function SchemaField({
                 event.stopPropagation();
                 setBrowseDragOver(false);
                 const dropped = Array.from(event.dataTransfer.files).map(
-                  (file) => (file as unknown as { path?: string }).path || file.name,
+                  (file) =>
+                    (file as unknown as { path?: string }).path || file.name,
                 );
                 if (dropped.length > 0) {
                   void dropPaths(bridge, operationId, param.name, dropped).then(
@@ -2284,9 +2287,10 @@ function SchemaField({
             variant="secondary"
             icon={<FolderOpen />}
             onClick={() =>
-              void (param.kind === "folder"
-                ? chooseFolder(bridge, operationId, param.name)
-                : chooseFile(bridge, operationId, param.name)
+              void (
+                param.kind === "folder"
+                  ? chooseFolder(bridge, operationId, param.name)
+                  : chooseFile(bridge, operationId, param.name)
               ).then((path) => {
                 if (path) onChange(path);
               })
@@ -2358,9 +2362,10 @@ function parseEditorDate(value: string): EditorDateParts | null {
   const match = value.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
   if (!match) return null;
   const day = Number(match[1]);
-  const month = EDITOR_DATE_MONTHS.findIndex(
-    (name) => name.toLowerCase() === match[2].toLowerCase(),
-  ) + 1;
+  const month =
+    EDITOR_DATE_MONTHS.findIndex(
+      (name) => name.toLowerCase() === match[2].toLowerCase(),
+    ) + 1;
   const rawYear = Number(match[3]);
   const year = rawYear < 100 ? 2000 + rawYear : rawYear;
   if (!month || year < 2000 || year > 2068) return null;
@@ -2383,7 +2388,25 @@ function displayEditorValue(column: EditorColumn, value: string): string {
   if (column.display === "itemSuffix") {
     return value.replace(/^[A-Z]{2,5}[-\u02d7\u2010-\u2015]+/i, "");
   }
+  if (column.display === "percent") {
+    return formatConfidencePercent(value, "fraction") ?? "—";
+  }
   return value;
+}
+
+export function formatConfidencePercent(
+  value: unknown,
+  scale: "fraction" | "percent" = "fraction",
+): string | null {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (
+    (typeof value === "string" && value.trim() === "") ||
+    !Number.isFinite(numeric)
+  ) {
+    return null;
+  }
+  const percent = scale === "fraction" ? numeric * 100 : numeric;
+  return `${Math.round(Math.min(100, Math.max(0, percent)))}%`;
 }
 
 function CompactDateInput({
@@ -2414,9 +2437,7 @@ function CompactDateInput({
   const commit = (next: typeof draft) => {
     let normalized = next;
     if (next.day && next.month) {
-      const maxDay = new Date(
-        Date.UTC(next.year, next.month, 0),
-      ).getUTCDate();
+      const maxDay = new Date(Date.UTC(next.year, next.month, 0)).getUTCDate();
       normalized = { ...next, day: Math.min(next.day, maxDay) };
       onChange(formatEditorDate(normalized as EditorDateParts));
     }
@@ -2544,9 +2565,7 @@ function EditablePlanTable({
       column.kind !== "readonly" &&
       (!column.detail || detailsVisible),
   );
-  const [bulkField, setBulkField] = useState(
-    bulkColumns[0]?.key ?? "",
-  );
+  const [bulkField, setBulkField] = useState(bulkColumns[0]?.key ?? "");
   const [bulkValue, setBulkValue] = useState("");
   const visibleColumns = columns.filter(
     (column) => !column.detail || detailsVisible,
@@ -2556,7 +2575,9 @@ function EditablePlanTable({
   );
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "changes" | "review">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "changes" | "review">(
+    "all",
+  );
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const filteredRowIndices = useMemo(() => {
@@ -2602,11 +2623,7 @@ function EditablePlanTable({
     setBulkValue("");
   }, [bulkField, detailsVisible, editor.columns]);
 
-  const choiceLabel = (
-    field: string,
-    value: string,
-    column?: EditorColumn,
-  ) => {
+  const choiceLabel = (field: string, value: string, column?: EditorColumn) => {
     const fieldLabels = choiceLabels[field];
     if (fieldLabels && typeof fieldLabels === "object") {
       const key = (fieldLabels as Record<string, unknown>)[value];
@@ -2627,7 +2644,9 @@ function EditablePlanTable({
     const values = typed.values;
     const dependency = String(typed.dependsOn ?? "");
     if (!values || typeof values !== "object") return [];
-    const options = (values as Record<string, unknown>)[String(row[dependency] ?? "")];
+    const options = (values as Record<string, unknown>)[
+      String(row[dependency] ?? "")
+    ];
     return Array.isArray(options) ? options.map(String) : [];
   };
 
@@ -2641,8 +2660,14 @@ function EditablePlanTable({
     const autoFill = editor.autoFill;
     if (autoFill && typeof autoFill === "object") {
       const config = autoFill as Record<string, unknown>;
-      if (config.field === key && config.values && typeof config.values === "object") {
-        const preset = (config.values as Record<string, unknown>)[String(value)];
+      if (
+        config.field === key &&
+        config.values &&
+        typeof config.values === "object"
+      ) {
+        const preset = (config.values as Record<string, unknown>)[
+          String(value)
+        ];
         if (preset && typeof preset === "object") Object.assign(row, preset);
       }
     }
@@ -2663,11 +2688,7 @@ function EditablePlanTable({
     }
   };
 
-  const update = (
-    index: number,
-    key: string,
-    value: string | boolean,
-  ) => {
+  const update = (index: number, key: string, value: string | boolean) => {
     const next = rows.map((row) => ({ ...row }));
     applyValue(next[index], key, value);
     onChange(next);
@@ -2691,9 +2712,7 @@ function EditablePlanTable({
 
   const selectAll = () =>
     setSelectedIds(
-      new Set(
-        filteredRowIndices.map((index) => rowId(rows[index], index)),
-      ),
+      new Set(filteredRowIndices.map((index) => rowId(rows[index], index))),
     );
   const selectNone = () => setSelectedIds(new Set());
   const toggleRow = (id: string) =>
@@ -2747,11 +2766,10 @@ function EditablePlanTable({
     ? (editor.selectionGroupFields as unknown[]).map(String)
     : [];
   const groupChoices = selectionGroupFields.flatMap((field) => {
-    const values = [...new Set(rows.map((row) => String(row[field] ?? "")))]
-      .filter(Boolean);
-    return values.length <= 12
-      ? values.map((value) => ({ field, value }))
-      : [];
+    const values = [
+      ...new Set(rows.map((row) => String(row[field] ?? ""))),
+    ].filter(Boolean);
+    return values.length <= 12 ? values.map((value) => ({ field, value })) : [];
   });
   const bulkColumn = bulkColumns.find((column) => column.key === bulkField);
   const choiceRows = selectedRows.length
@@ -2762,9 +2780,13 @@ function EditablePlanTable({
   const bulkChoiceValues = bulkColumn
     ? choiceRows
         .map((row) => choicesFor(bulkColumn, row))
-        .reduce<string[]>((common, values, index) =>
-          index === 0 ? values : common.filter((value) => values.includes(value)),
-        [],)
+        .reduce<string[]>(
+          (common, values, index) =>
+            index === 0
+              ? values
+              : common.filter((value) => values.includes(value)),
+          [],
+        )
     : [];
   const bulkSuggestions = Array.isArray(autocomplete[bulkField])
     ? (autocomplete[bulkField] as unknown[]).map(String)
@@ -2776,7 +2798,9 @@ function EditablePlanTable({
       className={`editor-card${editor.layout === "compact" ? " editor-card--compact" : ""}`}
     >
       <div className="editor-heading">
-        <span><TableProperties /></span>
+        <span>
+          <TableProperties />
+        </span>
         <div>
           <strong>{s.t(String(editor.titleKey ?? "rfi.editor.title"))}</strong>
           <small>
@@ -2867,7 +2891,7 @@ function EditablePlanTable({
                 onClick={() => selectGroup(field, value)}
               >
                 {editor.layout === "compact" && field === groupField
-                  ? value.match(/(\d+)\s*$/)?.[1] ?? value
+                  ? (value.match(/(\d+)\s*$/)?.[1] ?? value)
                   : value}
               </button>
             ))}
@@ -2971,11 +2995,13 @@ function EditablePlanTable({
                 const defaultWidth =
                   column.kind === "bool"
                     ? 50
-                    : column.key === "sourceStatuses" || column.key === "disposition"
+                    : column.key === "sourceStatuses" ||
+                        column.key === "disposition"
                       ? 220
                       : column.key === "reasonKey"
                         ? 180
-                        : column.key === "currentStatus" || column.key === "proposedStatus"
+                        : column.key === "currentStatus" ||
+                            column.key === "proposedStatus"
                           ? 130
                           : column.key === "rfiNo"
                             ? 120
@@ -3011,7 +3037,8 @@ function EditablePlanTable({
                   </th>
                 );
               })}
-              {(editor.reorderable === true || editor.duplicateEnabled === true) && (
+              {(editor.reorderable === true ||
+                editor.duplicateEnabled === true) && (
                 <th
                   className="editor-actions-header"
                   aria-label={s.t("editor.rowActions")}
@@ -3033,11 +3060,17 @@ function EditablePlanTable({
                   className={selectedIds.has(id) ? "selected-row" : ""}
                   tabIndex={0}
                   onKeyDown={(event) => {
-                    if (event.key === " " && event.target === event.currentTarget) {
+                    if (
+                      event.key === " " &&
+                      event.target === event.currentTarget
+                    ) {
                       event.preventDefault();
                       if (editor.selectionEnabled === true) {
                         toggleRow(id);
-                      } else if (typeof row.enabled === "boolean" && row.selectable !== false) {
+                      } else if (
+                        typeof row.enabled === "boolean" &&
+                        row.selectable !== false
+                      ) {
                         update(rowIndex, "enabled", !row.enabled);
                       }
                     }
@@ -3046,7 +3079,9 @@ function EditablePlanTable({
                   {editor.selectionEnabled === true && (
                     <td className="selection-column">
                       <input
-                        aria-label={s.t("editor.selectRow", { row: rowIndex + 1 })}
+                        aria-label={s.t("editor.selectRow", {
+                          row: rowIndex + 1,
+                        })}
                         type="checkbox"
                         checked={selectedIds.has(id)}
                         onChange={() => toggleRow(id)}
@@ -3055,7 +3090,9 @@ function EditablePlanTable({
                         <button
                           type="button"
                           title={s.t("editor.selectGroup")}
-                          onClick={() => selectGroup(groupField, row[groupField])}
+                          onClick={() =>
+                            selectGroup(groupField, row[groupField])
+                          }
                         >
                           {groupCount}
                         </button>
@@ -3064,17 +3101,21 @@ function EditablePlanTable({
                   )}
                   {visibleColumns.map((column) => {
                     if (column.sheets && !column.sheets.includes(sheet)) {
-                      return <td key={column.key} className="not-applicable">—</td>;
+                      return (
+                        <td key={column.key} className="not-applicable">
+                          —
+                        </td>
+                      );
                     }
                     const text = String(row[column.key] ?? "");
                     const displayText =
                       column.display === "localizedKey"
                         ? s.t(text)
                         : column.key === "status" && text
-                        ? s.t(`print.status.${text}`)
-                        : column.key === "worksheetVisibility" && text
-                          ? s.t(`print.worksheet.visibility.${text}`)
-                        : displayEditorValue(column, text);
+                          ? s.t(`print.status.${text}`)
+                          : column.key === "worksheetVisibility" && text
+                            ? s.t(`print.worksheet.visibility.${text}`)
+                            : displayEditorValue(column, text);
                     const choices = choicesFor(column, row);
                     const suggestions = Array.isArray(autocomplete[column.key])
                       ? (autocomplete[column.key] as unknown[]).map(String)
@@ -3083,10 +3124,17 @@ function EditablePlanTable({
                     return (
                       <td
                         key={column.key}
-                        className={column.kind === "bool" ? "center" : undefined}
+                        className={
+                          column.kind === "bool" ? "center" : undefined
+                        }
                       >
                         {column.kind === "readonly" ? (
-                          <span className="readonly-cell" title={displayText || text}>{displayText}</span>
+                          <span
+                            className="readonly-cell"
+                            title={displayText || text}
+                          >
+                            {displayText}
+                          </span>
                         ) : column.kind === "bool" ? (
                           <input
                             aria-label={s.t(column.labelKey)}
@@ -3155,7 +3203,8 @@ function EditablePlanTable({
                       </td>
                     );
                   })}
-                  {(editor.reorderable === true || editor.duplicateEnabled === true) && (
+                  {(editor.reorderable === true ||
+                    editor.duplicateEnabled === true) && (
                     <td className="editor-row-actions">
                       {editor.reorderable === true && (
                         <>
@@ -3205,7 +3254,10 @@ function EditablePlanTable({
             })}
             {filteredRowIndices.length === 0 && (
               <tr>
-                <td colSpan={visibleColumns.length + 2} className="empty-filter-cell">
+                <td
+                  colSpan={visibleColumns.length + 2}
+                  className="empty-filter-cell"
+                >
                   {s.t("plan.empty")}
                 </td>
               </tr>
@@ -3265,8 +3317,9 @@ export function PlanView({
     !editor || !editorRows || isPlanEditorReady(editor, editorRows);
   const editorCanMaterializeStep = Boolean(
     editorRows?.some((row) => row.enabled !== false) &&
-      ((Array.isArray(editor?.requiredFields) && editor.requiredFields.length > 0) ||
-        (plan.opId === "files.batch_print" && editor?.kind === "recordTable")),
+    ((Array.isArray(editor?.requiredFields) &&
+      editor.requiredFields.length > 0) ||
+      (plan.opId === "files.batch_print" && editor?.kind === "recordTable")),
   );
   const canApply =
     editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);
@@ -3279,96 +3332,109 @@ export function PlanView({
       : [];
   return (
     <div className="flow-layout">
-      <PlanImpactSummary plan={plan} s={s} />
-      <ScanIndexSummary plan={plan} s={s} />
-      {editor && editorRows && onEditorRowsChange ? (
-        <>
-          {plan.warnings.length > 0 && (
-            <PlanWarnings
-              warnings={plan.warnings}
-              focusableCodes={focusableWarningCodes}
-              onFocusCode={setWarningFocusCode}
-              s={s}
-            />
-          )}
-          <WorkbookChangePreview plan={plan} s={s} />
-          {replyPreview && (
-            <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
-              <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
-              <div>
-                <strong>{s.t("outlookDraft.subject")}</strong>
-                <pre>{replyPreview.subject}</pre>
-              </div>
-              <div>
-                <strong>{s.t("outlookDraft.plainText")}</strong>
-                <pre>{replyPreview.plainText}</pre>
-              </div>
-              <div>
-                <strong>{s.t("outlookDraft.html")}</strong>
-                <pre>{replyPreview.html}</pre>
-              </div>
-            </section>
-          )}
-          <SignedPageComparison
-            plan={plan}
-            editorRows={editorRows}
-            focusCode={warningFocusCode}
-            s={s}
-          />
-          <EditablePlanTable
-            editor={editor}
-            rows={editorRows}
-            s={s}
-            onChange={onEditorRowsChange}
-          />
-          {plan.steps.length > 0 && <PlanExactEffects plan={plan} s={s} />}
-        </>
-      ) : (
-        <div className="flow-scroll">
-          {plan.warnings.length > 0 && (
-            <PlanWarnings warnings={plan.warnings} focusableCodes={[]} s={s} />
-          )}
-          <WorkbookChangePreview plan={plan} s={s} />
-          {replyPreview && (
-            <section className="outlook-reply-preview" aria-labelledby="outlook-reply-preview-title">
-              <h3 id="outlook-reply-preview-title">{s.t("outlookDraft.previewTitle")}</h3>
-              <div>
-                <strong>{s.t("outlookDraft.subject")}</strong>
-                <pre>{replyPreview.subject}</pre>
-              </div>
-              <div>
-                <strong>{s.t("outlookDraft.plainText")}</strong>
-                <pre>{replyPreview.plainText}</pre>
-              </div>
-              <div>
-                <strong>{s.t("outlookDraft.html")}</strong>
-                <pre>{replyPreview.html}</pre>
-              </div>
-            </section>
-          )}
-          <section className="plan-section">
-            <div className="plan-heading">
-              <strong>{s.t("plan.summary", { count: moves })}</strong>
-              <span>
-                <Eye /> {s.t("plan.readOnly")}
-              </span>
-            </div>
-            {plan.steps.length ? (
-              <div className="step-list">
-                {plan.steps.map((step, index) => (
-                  <StepRow key={`${step.kind}-${index}`} step={step} s={s} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={<FileCheck2 />}
-                title={s.t("plan.empty")}
+      <div className="flow-scroll plan-flow-scroll">
+        <PlanImpactSummary plan={plan} s={s} />
+        <ScanIndexSummary plan={plan} s={s} />
+        {editor && editorRows && onEditorRowsChange ? (
+          <>
+            {plan.warnings.length > 0 && (
+              <PlanWarnings
+                warnings={plan.warnings}
+                focusableCodes={focusableWarningCodes}
+                onFocusCode={setWarningFocusCode}
+                s={s}
               />
             )}
-          </section>
-        </div>
-      )}
-      {error && <Notice kind="error">{error}</Notice>}
+            <WorkbookChangePreview plan={plan} s={s} />
+            {replyPreview && (
+              <section
+                className="outlook-reply-preview"
+                aria-labelledby="outlook-reply-preview-title"
+              >
+                <h3 id="outlook-reply-preview-title">
+                  {s.t("outlookDraft.previewTitle")}
+                </h3>
+                <div>
+                  <strong>{s.t("outlookDraft.subject")}</strong>
+                  <pre>{replyPreview.subject}</pre>
+                </div>
+                <div>
+                  <strong>{s.t("outlookDraft.plainText")}</strong>
+                  <pre>{replyPreview.plainText}</pre>
+                </div>
+                <div>
+                  <strong>{s.t("outlookDraft.html")}</strong>
+                  <pre>{replyPreview.html}</pre>
+                </div>
+              </section>
+            )}
+            <SignedPageComparison
+              plan={plan}
+              editorRows={editorRows}
+              focusCode={warningFocusCode}
+              s={s}
+            />
+            <EditablePlanTable
+              editor={editor}
+              rows={editorRows}
+              s={s}
+              onChange={onEditorRowsChange}
+            />
+            {plan.steps.length > 0 && <PlanExactEffects plan={plan} s={s} />}
+          </>
+        ) : (
+          <>
+            {plan.warnings.length > 0 && (
+              <PlanWarnings
+                warnings={plan.warnings}
+                focusableCodes={[]}
+                s={s}
+              />
+            )}
+            <WorkbookChangePreview plan={plan} s={s} />
+            {replyPreview && (
+              <section
+                className="outlook-reply-preview"
+                aria-labelledby="outlook-reply-preview-title"
+              >
+                <h3 id="outlook-reply-preview-title">
+                  {s.t("outlookDraft.previewTitle")}
+                </h3>
+                <div>
+                  <strong>{s.t("outlookDraft.subject")}</strong>
+                  <pre>{replyPreview.subject}</pre>
+                </div>
+                <div>
+                  <strong>{s.t("outlookDraft.plainText")}</strong>
+                  <pre>{replyPreview.plainText}</pre>
+                </div>
+                <div>
+                  <strong>{s.t("outlookDraft.html")}</strong>
+                  <pre>{replyPreview.html}</pre>
+                </div>
+              </section>
+            )}
+            <section className="plan-section">
+              <div className="plan-heading">
+                <strong>{s.t("plan.summary", { count: moves })}</strong>
+                <span>
+                  <Eye /> {s.t("plan.readOnly")}
+                </span>
+              </div>
+              {plan.steps.length ? (
+                <div className="step-list">
+                  {plan.steps.map((step, index) => (
+                    <StepRow key={`${step.kind}-${index}`} step={step} s={s} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState icon={<FileCheck2 />} title={s.t("plan.empty")} />
+              )}
+            </section>
+          </>
+        )}
+        {error && <Notice kind="error">{error}</Notice>}
+      </div>
       <ActionBar
         left={
           <Button variant="ghost" onClick={onCancel}>
@@ -3376,11 +3442,7 @@ export function PlanView({
           </Button>
         }
         right={
-          <Button
-            icon={<Play />}
-            disabled={!canApply}
-            onClick={onApply}
-          >
+          <Button icon={<Play />} disabled={!canApply} onClick={onApply}>
             {s.t("action.apply")}
           </Button>
         }
@@ -3443,15 +3505,17 @@ export function summarizePlanImpact(plan: Plan): PlanImpact {
 
 function PlanImpactSummary({ plan, s }: { plan: Plan; s: Strings }) {
   const impact = summarizePlanImpact(plan);
-  const entries = ([
-    ["plan.impact.outputs", impact.outputs],
-    ["plan.impact.updates", impact.updates],
-    ["plan.impact.moves", impact.moves],
-    ["plan.impact.printJobs", impact.printJobs],
-    ["plan.impact.drafts", impact.drafts],
-    ["plan.impact.cleanup", impact.cleanup],
-    ["plan.impact.warnings", impact.warnings],
-  ] satisfies [string, number][]).filter(([, count]) => count > 0);
+  const entries = (
+    [
+      ["plan.impact.outputs", impact.outputs],
+      ["plan.impact.updates", impact.updates],
+      ["plan.impact.moves", impact.moves],
+      ["plan.impact.printJobs", impact.printJobs],
+      ["plan.impact.drafts", impact.drafts],
+      ["plan.impact.cleanup", impact.cleanup],
+      ["plan.impact.warnings", impact.warnings],
+    ] satisfies [string, number][]
+  ).filter(([, count]) => count > 0);
   return (
     <section className="plan-impact" aria-labelledby="plan-impact-title">
       <div className="plan-impact-heading">
@@ -3494,7 +3558,10 @@ function ScanIndexSummary({ plan, s }: { plan: Plan; s: Strings }) {
     ([key, value]) => key !== "scanIndex.interrupted" || value > 0,
   );
   return (
-    <section className="plan-impact scan-index-summary" aria-labelledby="scan-index-title">
+    <section
+      className="plan-impact scan-index-summary"
+      aria-labelledby="scan-index-title"
+    >
       <div className="plan-impact-heading">
         <Database aria-hidden="true" />
         <div>
@@ -3598,7 +3665,8 @@ export function summarizeWorkbookCellChanges(plan: Plan): WorkbookCellChange[] {
     const row = recordValue(rawRow);
     const rowId = previewText(row?._rowId);
     const code = previewText(row?.canonicalRfi) ?? previewText(row?.rfiNo);
-    if (rowId && code && canonicalRfiInText(code) === code) rowCodes.set(rowId, code);
+    if (rowId && code && canonicalRfiInText(code) === code)
+      rowCodes.set(rowId, code);
   }
   const add = (change: WorkbookCellChange) => {
     if (result.length < MAX_WORKBOOK_CELL_PREVIEWS) result.push(change);
@@ -3649,7 +3717,10 @@ export function summarizeWorkbookCellChanges(plan: Plan): WorkbookCellChange[] {
       const before = previewText(statusCell?.value);
       const after = previewText(update?.proposedStatus);
       const candidateCode = previewText(update?.canonicalRfi) ?? "";
-      const rfiCode = canonicalRfiInText(candidateCode) === candidateCode ? candidateCode : "";
+      const rfiCode =
+        canonicalRfiInText(candidateCode) === candidateCode
+          ? candidateCode
+          : "";
       const rfiAddress = excelCell(target?.row, target?.rfiColumn);
       const rfiBefore = previewText(rfiCell?.value);
       const rfiAfter = previewText(update?.proposedRfi);
@@ -3688,7 +3759,9 @@ function WorkbookChangePreview({ plan, s }: { plan: Plan; s: Strings }) {
           <TableProperties aria-hidden="true" />
           <strong>{s.t("plan.workbookChanges.title")}</strong>
         </span>
-        <small>{s.t("plan.workbookChanges.count", { count: changes.length })}</small>
+        <small>
+          {s.t("plan.workbookChanges.count", { count: changes.length })}
+        </small>
       </summary>
       <p>{s.t("plan.workbookChanges.help")}</p>
       <div className="workbook-change-table-wrap">
@@ -3704,9 +3777,15 @@ function WorkbookChangePreview({ plan, s }: { plan: Plan; s: Strings }) {
           </thead>
           <tbody>
             {changes.map((change, index) => (
-              <tr key={`${change.workbook}-${change.sheet}-${change.cell}-${index}`}>
+              <tr
+                key={`${change.workbook}-${change.sheet}-${change.cell}-${index}`}
+              >
                 <td>{s.t(`plan.workbookChanges.kind.${change.workbook}`)}</td>
-                <td><code>{change.sheet}!{change.cell}</code></td>
+                <td>
+                  <code>
+                    {change.sheet}!{change.cell}
+                  </code>
+                </td>
                 <td>{change.rfiCode || "—"}</td>
                 <td>{change.before || s.t("plan.workbookChanges.blank")}</td>
                 <td>{change.after || s.t("plan.workbookChanges.blank")}</td>
@@ -3786,7 +3865,10 @@ export function PlanWarnings({
           const code = canonicalRfiInText(warning.subject);
           const canFocus = Boolean(code && focusable.has(code) && onFocusCode);
           return (
-            <div key={`${warning.key}-${warning.subject}-${index}`} role="listitem">
+            <div
+              key={`${warning.key}-${warning.subject}-${index}`}
+              role="listitem"
+            >
               <div>
                 {warning.subject && <strong>{warning.subject}</strong>}
                 <span>{s.t(warning.key)}</span>
@@ -3930,7 +4012,10 @@ function SignedPageComparison({
         <figure>
           <figcaption>{s.t("rfi.signed.previewArchive")}</figcaption>
           {archivePreview ? (
-            <img src={archivePreview} alt={s.t("rfi.signed.previewArchiveAlt", { code })} />
+            <img
+              src={archivePreview}
+              alt={s.t("rfi.signed.previewArchiveAlt", { code })}
+            />
           ) : (
             <div className="signed-page-preview-empty">
               {archiveToken
@@ -3942,7 +4027,10 @@ function SignedPageComparison({
         <figure>
           <figcaption>{s.t("rfi.signed.previewSigned")}</figcaption>
           {signedPreview ? (
-            <img src={signedPreview} alt={s.t("rfi.signed.previewSignedAlt", { code })} />
+            <img
+              src={signedPreview}
+              alt={s.t("rfi.signed.previewSignedAlt", { code })}
+            />
           ) : (
             <div className="signed-page-preview-empty">
               {s.t("rfi.signed.previewUnavailable")}
@@ -3989,15 +4077,22 @@ function StepRow({
 }) {
   const source = fullPath ? step.src : step.src?.split(/[\\/]/).pop();
   const destination = fullPath ? step.dst : step.dst?.split(/[\\/]/).pop();
+  const confidence = formatConfidencePercent(step.meta.confidence);
   const rotationSummary =
     step.kind === "pdf_page_rotate" && Array.isArray(step.meta.rotations)
       ? step.meta.rotations
           .map((entry) => {
             if (!entry || typeof entry !== "object") return "";
             const page = Number((entry as Record<string, unknown>).pageIndex);
-            const target = Number((entry as Record<string, unknown>).targetRotation);
+            const target = Number(
+              (entry as Record<string, unknown>).targetRotation,
+            );
+            const pageConfidence = formatConfidencePercent(
+              (entry as Record<string, unknown>).confidence,
+              "percent",
+            );
             return Number.isInteger(page) && Number.isInteger(target)
-              ? `${page + 1} → ${target}°`
+              ? `${page + 1} → ${target}°${pageConfidence ? ` · ${s.t("ocr.confidence.short")} ${pageConfidence}` : ""}`
               : "";
           })
           .filter(Boolean)
@@ -4025,7 +4120,17 @@ function StepRow({
         )}
       </span>
       <div className="step-copy">
-        <strong>{step.noteKey ? s.t(step.noteKey) : step.kind}</strong>
+        <div className="step-title">
+          <strong>{step.noteKey ? s.t(step.noteKey) : step.kind}</strong>
+          {confidence && (
+            <span
+              className="confidence-badge"
+              title={s.t("ocr.confidence.help")}
+            >
+              {s.t("ocr.confidence.short")} {confidence}
+            </span>
+          )}
+        </div>
         <span title={step.src ?? ""}>{source || "—"}</span>
         {step.dst && (
           <span className="destination" title={step.dst}>
@@ -4033,7 +4138,9 @@ function StepRow({
           </span>
         )}
         {rotationSummary && (
-          <span>{s.t("rfi.orientation.pages")}: {rotationSummary}</span>
+          <span>
+            {s.t("rfi.orientation.pages")}: {rotationSummary}
+          </span>
         )}
       </div>
     </div>
@@ -4082,22 +4189,14 @@ function ResultView({
       <span className={`result-icon ${success ? "success" : "failure"}`}>
         {success ? <CheckCircle2 /> : <CircleAlert />}
       </span>
-      <p className="eyebrow">
-        {success ? "DOCFLOW" : s.t("ui.warnings")}
-      </p>
+      <p className="eyebrow">{success ? "DOCFLOW" : s.t("ui.warnings")}</p>
       <h1>{s.t("result.applied", { count: result.applied })}</h1>
-      <p className="muted">
-        {s.t("result.failed", { count: result.failed })}
-      </p>
-      <span className="status-label">
-        {s.t(`effect.${effectState}`)}
-      </span>
+      <p className="muted">{s.t("result.failed", { count: result.failed })}</p>
+      <span className="status-label">{s.t(`effect.${effectState}`)}</span>
       {result.cloudSynced !== undefined && (
         <span className="safe-badge">
           {result.cloudSynced ? <Check /> : <History />}
-          {result.cloudSynced
-            ? s.t("history.cloud")
-            : s.t("history.local")}
+          {result.cloudSynced ? s.t("history.cloud") : s.t("history.local")}
         </span>
       )}
       {result.errors.length > 0 && (
@@ -4125,9 +4224,11 @@ function ResultView({
               key={sheet}
               variant="secondary"
               icon={
-                copyingSheet === sheet
-                  ? <LoaderCircle className="spin" />
-                  : <TableProperties />
+                copyingSheet === sheet ? (
+                  <LoaderCircle className="spin" />
+                ) : (
+                  <TableProperties />
+                )
               }
               disabled={copyingSheet !== null}
               onClick={() => onCopy(sheet)}
@@ -4139,9 +4240,11 @@ function ResultView({
             <Button
               variant="secondary"
               icon={
-                copyingSheet !== null
-                  ? <LoaderCircle className="spin" />
-                  : <TableProperties />
+                copyingSheet !== null ? (
+                  <LoaderCircle className="spin" />
+                ) : (
+                  <TableProperties />
+                )
               }
               disabled={copyingSheet !== null}
               onClick={() => onCopy()}
@@ -4153,7 +4256,11 @@ function ResultView({
       )}
       <div className="result-actions">
         {onWorkItemEvidence && (
-          <Button variant="secondary" icon={<BadgeCheck />} onClick={onWorkItemEvidence}>
+          <Button
+            variant="secondary"
+            icon={<BadgeCheck />}
+            onClick={onWorkItemEvidence}
+          >
             {s.t("workItems.reviewEvidenceTransition")}
           </Button>
         )}
@@ -4331,6 +4438,10 @@ function ReviewScreen({
                         <span>
                           <strong>{item.name}</strong>
                           <small>{item.path}</small>
+                          <small className="review-confidence">
+                            {s.t("ocr.confidence")}:{" "}
+                            {formatConfidencePercent(item.confidence) ?? "—"}
+                          </small>
                         </span>
                       </button>
                       <input
@@ -4360,12 +4471,11 @@ function ReviewScreen({
                         }
                         small
                       />
-                      {item.targetExists &&
-                        actions[item.path] === "put" && (
-                          <span className="row-warning">
-                            <CircleAlert /> {s.t("review.willReplace")}
-                          </span>
-                        )}
+                      {item.targetExists && actions[item.path] === "put" && (
+                        <span className="row-warning">
+                          <CircleAlert /> {s.t("review.willReplace")}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -4421,9 +4531,7 @@ function HistoryScreen({
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      setPayload(
-        await bridge.call("history/list", { limit: 50 }),
-      );
+      setPayload(await bridge.call("history/list", { limit: 50 }));
     } catch (reason) {
       setError(humanError(reason, s));
     } finally {
@@ -4457,10 +4565,7 @@ function HistoryScreen({
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={
-          <IconButton
-            label={s.t("action.retry")}
-            onClick={() => void load()}
-          >
+          <IconButton label={s.t("action.retry")} onClick={() => void load()}>
             <RefreshCw />
           </IconButton>
         }
@@ -4549,13 +4654,11 @@ function HistoryScreen({
               variant="secondary"
               icon={<FolderOpen />}
               onClick={() =>
-                void chooseFolder(
-                  bridge,
-                  "history.undo",
-                  "destination",
-                ).then((folder) => {
-                  if (folder) return undo(undoRow, folder);
-                })
+                void chooseFolder(bridge, "history.undo", "destination").then(
+                  (folder) => {
+                    if (folder) return undo(undoRow, folder);
+                  },
+                )
               }
             >
               {s.t("history.undoToFolder")}
@@ -4757,10 +4860,7 @@ function AdminScreen({
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={
-          <IconButton
-            label={s.t("action.retry")}
-            onClick={() => void load()}
-          >
+          <IconButton label={s.t("action.retry")} onClick={() => void load()}>
             <RefreshCw />
           </IconButton>
         }
@@ -4799,9 +4899,7 @@ function AdminScreen({
                     <Switch
                       checked={user.allowed}
                       disabled={self || busyId === user.id}
-                      onChange={(allowed) =>
-                        void update(user, { allowed })
-                      }
+                      onChange={(allowed) => void update(user, { allowed })}
                     />
                   </label>
                   <label className="mini-toggle">
@@ -4809,9 +4907,7 @@ function AdminScreen({
                     <Switch
                       checked={user.isAdmin}
                       disabled={self || busyId === user.id}
-                      onChange={(isAdmin) =>
-                        void update(user, { isAdmin })
-                      }
+                      onChange={(isAdmin) => void update(user, { isAdmin })}
                     />
                   </label>
                 </div>
@@ -4819,10 +4915,7 @@ function AdminScreen({
             })}
           </div>
         ) : (
-          <EmptyState
-            icon={<UserRoundCog />}
-            title={s.t("admin.empty")}
-          />
+          <EmptyState icon={<UserRoundCog />} title={s.t("admin.empty")} />
         )}
         {error && <Notice kind="error">{error}</Notice>}
       </main>
@@ -4850,17 +4943,15 @@ function SettingsScreen({
   const [username, setUsername] = useState(auth.user?.username ?? "");
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
-  const [diagnostics, setDiagnostics] =
-    useState<SupportBundlePreview | null>(null);
+  const [diagnostics, setDiagnostics] = useState<SupportBundlePreview | null>(
+    null,
+  );
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const update = async (patch: Partial<AppPrefs>) => {
     try {
       onPrefs(
-        await bridge.call(
-          "settings/update",
-          patch as Record<string, unknown>,
-        ),
+        await bridge.call("settings/update", patch as Record<string, unknown>),
       );
     } catch (reason) {
       setError(humanError(reason, s));
@@ -4869,9 +4960,7 @@ function SettingsScreen({
   const saveUsername = async () => {
     setError("");
     try {
-      onAuth(
-        await bridge.call("auth/setUsername", { username }),
-      );
+      onAuth(await bridge.call("auth/setUsername", { username }));
       setSaved(s.t("prefs.account.saved"));
     } catch (reason) {
       setError(humanError(reason, s));
@@ -4908,7 +4997,9 @@ function SettingsScreen({
   const downloadDiagnostics = () => {
     if (!diagnostics) return;
     try {
-      const blob = new Blob([diagnostics.content], { type: "application/json" });
+      const blob = new Blob([diagnostics.content], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -4957,10 +5048,7 @@ function SettingsScreen({
             {saved && <Notice kind="info">{saved}</Notice>}
           </SettingsGroup>
         )}
-        <SettingsGroup
-          title={s.t("prefs.language")}
-          icon={<BadgeCheck />}
-        >
+        <SettingsGroup title={s.t("prefs.language")} icon={<BadgeCheck />}>
           <ChoiceGrid
             value={prefs.locale ?? "system"}
             options={[
@@ -4973,22 +5061,17 @@ function SettingsScreen({
             onChange={(locale) =>
               void update({
                 locale:
-                  locale === "system"
-                    ? null
-                    : (locale as AppPrefs["locale"]),
+                  locale === "system" ? null : (locale as AppPrefs["locale"]),
               })
             }
           />
         </SettingsGroup>
-        <SettingsGroup
-          title={s.t("prefs.theme")}
-          icon={<SlidersHorizontal />}
-        >
+        <SettingsGroup title={s.t("prefs.theme")} icon={<SlidersHorizontal />}>
           <Segmented
             value={prefs.theme}
-            options={(
-              ["system", "light", "dark"] as ThemePreference[]
-            ).map((theme) => [theme, s.t(`prefs.theme.${theme}`)])}
+            options={(["system", "light", "dark"] as ThemePreference[]).map(
+              (theme) => [theme, s.t(`prefs.theme.${theme}`)],
+            )}
             onChange={(theme) =>
               void update({ theme: theme as ThemePreference })
             }
@@ -5004,9 +5087,7 @@ function SettingsScreen({
             options={(["system", "sans", "serif", "mono"] as const).map(
               (font) => [font, s.t(`prefs.font.${font}`)],
             )}
-            onChange={(font) =>
-              void update({ font: font as AppPrefs["font"] })
-            }
+            onChange={(font) => void update({ font: font as AppPrefs["font"] })}
           />
         </SettingsGroup>
         <SettingsGroup
@@ -5027,9 +5108,7 @@ function SettingsScreen({
             />
             <strong>{Math.round(prefs.fontScale * 100)}%</strong>
           </div>
-          <div className="font-sample">
-            {s.t("prefs.fontSize.sample")}
-          </div>
+          <div className="font-sample">{s.t("prefs.fontSize.sample")}</div>
         </SettingsGroup>
         <SettingsGroup
           title={s.t("prefs.density")}
@@ -5057,11 +5136,7 @@ function SettingsScreen({
               <Button
                 variant="secondary"
                 icon={
-                  diagnosticsBusy ? (
-                    <LoaderCircle className="spin" />
-                  ) : (
-                    <Eye />
-                  )
+                  diagnosticsBusy ? <LoaderCircle className="spin" /> : <Eye />
                 }
                 disabled={diagnosticsBusy}
                 onClick={() => void previewDiagnostics()}
@@ -5092,7 +5167,8 @@ function SettingsScreen({
             {diagnostics && (
               <div className="support-diagnostics-preview">
                 <small>
-                  {diagnostics.fileName} · {s.t("prefs.support.size", {
+                  {diagnostics.fileName} ·{" "}
+                  {s.t("prefs.support.size", {
                     count: diagnostics.byteLength,
                   })}
                 </small>
@@ -5114,9 +5190,7 @@ function SettingsScreen({
             void bridge
               .call("settings/reset")
               .then(onPrefs)
-              .catch((reason: unknown) =>
-                setError(humanError(reason, s)),
-              )
+              .catch((reason: unknown) => setError(humanError(reason, s)))
           }
         >
           {s.t("prefs.reset")}
@@ -5246,10 +5320,7 @@ function Button({
   wide?: boolean;
 }) {
   return (
-    <button
-      className={`button ${variant} ${wide ? "wide" : ""}`}
-      {...props}
-    >
+    <button className={`button ${variant} ${wide ? "wide" : ""}`} {...props}>
       {icon}
       {children}
     </button>
@@ -5427,13 +5498,7 @@ function BusyState({
   );
 }
 
-function ActionBar({
-  left,
-  right,
-}: {
-  left: ReactNode;
-  right: ReactNode;
-}) {
+function ActionBar({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
     <div className="action-bar">
       <div>{left}</div>

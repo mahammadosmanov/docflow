@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.23.0",
+  "currentVersion": "0.24.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -414,9 +414,17 @@
       "version": "0.23.0",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.23.0",
       "summary": "Reuse durable owner-scoped scan checkpoints for unchanged RFI PDFs, resume after interruption, and keep cached analysis outside mutation authority."
+    },
+    {
+      "version": "0.24.0",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.24.0",
+      "summary": "Show OCR recognition scores out of 100 across scan-review workflows and keep preview, editor, warning, dialog, and final actions reachable on compact displays."
     }
   ]
 }
