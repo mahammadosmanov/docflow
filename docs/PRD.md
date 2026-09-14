@@ -42,6 +42,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   receive only uniquely mapped RFI Log records. Shared-cell status is derived
   from every remaining RFI; Cancelled/Rejected entries are removed; FINAL
   Worley state follows the exact REMARKS marker; excluded sheets never change.
+- **DF-017 — Resilient print handoff:** a complete Windows spool submission is
+  not failed merely because a driver immediately releases its job record.
+  Recoverable device states wait within the approved timeout, explicit terminal
+  faults remain uncertain and never auto-retry, and previous task files are
+  never restored automatically. Safe scalar settings are reusable only through
+  an explicit operator action.
 
 ## Scope
 

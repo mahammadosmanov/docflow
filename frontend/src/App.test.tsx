@@ -1804,11 +1804,24 @@ describe("DocFlow shell", () => {
     ).toBe(false);
   });
 
-  it("auto-saves parameters on change and reuses saved parameters", async () => {
-    let savedParams: Record<string, unknown> | null = null;
+  it("starts print clean and restores only previous safe settings on request", async () => {
+    const savedParams: Record<string, unknown>[] = [];
     interceptMockBridge((method, params) => {
+      if (method === "settings/params") {
+        return {
+          handled: true,
+          value: {
+            files: ["C:/stale/old-job.pdf"],
+            paper: "A3",
+            copies: 9,
+            duplex: "long",
+          },
+        };
+      }
       if (method === "settings/saveParams") {
-        savedParams = (params as { values: Record<string, unknown> }).values;
+        savedParams.push(
+          (params as { values: Record<string, unknown> }).values,
+        );
         return { handled: true, value: { ok: true } };
       }
       return { handled: false };
@@ -1823,11 +1836,38 @@ describe("DocFlow shell", () => {
     const copiesInput = await screen.findByRole("spinbutton", {
       name: /^Kopya sayısı/,
     });
-    fireEvent.change(copiesInput, { target: { value: "9" } });
+    expect(copiesInput).toHaveValue(1);
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
+      "A4",
+    );
+    expect(screen.queryByText("old-job.pdf")).toBeNull();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Önceki ayarları getir" }),
+    );
+    expect(copiesInput).toHaveValue(9);
+    expect(screen.getByRole("combobox", { name: /^Kağıt/ })).toHaveValue(
+      "A3",
+    );
+    expect(screen.getByRole("combobox", { name: /^Çift taraflı/ })).toHaveValue(
+      "long",
+    );
+
+    fireEvent.change(copiesInput, { target: { value: "7" } });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+    expect(savedParams).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Dosya ekle" }));
+    await screen.findByText("first.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     await waitFor(() => {
-      expect(savedParams).toMatchObject({ copies: 9 });
+      expect(savedParams).toHaveLength(1);
     });
+    expect(savedParams[0]).toMatchObject({ copies: 7, paper: "A3" });
+    expect(savedParams[0]).not.toHaveProperty("files");
   });
 
   it("filters and searches rows in the preview editor table", async () => {

@@ -2844,6 +2844,22 @@ mod tests {
         )
         .expect("work-item form values should be recognized but transient");
         assert!(work_item.is_empty());
+
+        let print = filter_saved_operation_params(
+            "files.batch_print",
+            serde_json::from_value(json!({
+                "files": ["C:/stale/old-job.pdf"],
+                "printer": "EPSON L15160 Series",
+                "paper": "A3",
+                "copies": 2
+            }))
+            .unwrap(),
+        )
+        .expect("print settings should exclude task-local file selections");
+        assert!(!print.contains_key("files"));
+        assert_eq!(print.get("printer"), Some(&json!("EPSON L15160 Series")));
+        assert_eq!(print.get("paper"), Some(&json!("A3")));
+        assert_eq!(print.get("copies"), Some(&json!(2)));
     }
 
     #[test]

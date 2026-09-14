@@ -18,6 +18,7 @@ and versioned with the code they govern.
 | Machine-checked maintainer and AI onboarding canon | Accepted | [`adr/0006-machine-checked-onboarding-canon.md`](adr/0006-machine-checked-onboarding-canon.md) |
 | Content-based PDF orientation with read-only source and bounded parallel preview | Accepted | [`adr/0007-safe-parallel-pdf-orientation.md`](adr/0007-safe-parallel-pdf-orientation.md) |
 | Exact RFI Log to existing Follow Up projection with grouped status/removal rules | Accepted | [`adr/0008-exact-rfi-log-follow-up-projection.md`](adr/0008-exact-rfi-log-follow-up-projection.md) |
+| Windows spool release semantics and opt-in Batch Print setting recall | Accepted | [`adr/0009-resilient-print-handoff-and-opt-in-recall.md`](adr/0009-resilient-print-handoff-and-opt-in-recall.md) |
 
 ## Adding a decision
 

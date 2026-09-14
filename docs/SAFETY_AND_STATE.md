@@ -33,6 +33,19 @@ Readiness only counts bounded pending records; it does not reconcile or mutate
 them. Uncertain print submission is never retried automatically. Retained backup
 and recovery artifacts are never automatically deleted.
 
+After Windows accepts the complete document through `EndDoc`, a missing job
+record means the driver released the spool entry and is treated as a completed
+handoff. Explicit error/deleting/deleted states remain uncertain. Offline,
+paper-out, blocked, and user-intervention states remain observable and wait
+until cancellation, recovery, completion, or the approved timeout; they do not
+fail the queue on the first poll. A transient status-read failure is retried for
+a fixed three-second observation grace, never as a second print submission.
+
+Batch Print file selections are task-local and are never stored as remembered
+parameters. Safe scalar settings are captured at Preview but a new visit starts
+from defaults. The operator may explicitly restore the previous settings or a
+named preset; neither action restores old files or resumes a queue.
+
 ## Workbook replacement
 
 Workbook preview pins original content and approved literal-cell changes. Apply

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.21.0",
+  "currentVersion": "0.22.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -398,9 +398,17 @@
       "version": "0.21.0",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.21.0",
       "summary": "Synchronize approved CIV/MEC RFI Log states into existing Follow Up tables with exact grouped identifiers, terminal-state removal, FINAL Worley projection, and closed OOXML delta verification."
+    },
+    {
+      "version": "0.22.0",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.22.0",
+      "summary": "Keep Windows physical-printer queues moving across fast spool release and recoverable device states, while making prior safe-setting recall explicit and never restoring old files."
     }
   ]
 }

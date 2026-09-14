@@ -441,20 +441,24 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         .default_printer
         .or_else(|| facts.printers.first().cloned())
         .map_or(Value::Null, Value::String);
+    let mut batch_print_files = parameter(
+        "files",
+        ParamKind::Files,
+        "param.print.files",
+        json!([]),
+        true,
+        Vec::new(),
+        BTreeMap::new(),
+        Map::new(),
+        Some("param.print.files.help"),
+    );
+    // A previous file selection is task identity, not a reusable setting. The
+    // operator must explicitly select files for every new print procedure.
+    batch_print_files.remember = false;
     let mut batch_print = operation(
         "files.batch_print",
         vec![
-            parameter(
-                "files",
-                ParamKind::Files,
-                "param.print.files",
-                json!([]),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.print.files.help"),
-            ),
+            batch_print_files,
             parameter(
                 "printer",
                 ParamKind::Choice,

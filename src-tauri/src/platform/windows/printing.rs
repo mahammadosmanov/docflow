@@ -50,10 +50,10 @@ use crate::platform::controlled_submit::{
 use crate::platform::excel::{ControlledPdfSubmitter, ExportedWorksheetPdf};
 use crate::platform::{
     WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
-    classify_windows_submitted_job_status, consume_controlled_page_bytes,
+    classify_windows_submitted_job_observation, consume_controlled_page_bytes,
     map_controlled_print_failure, validate_windows_image_frame_count,
-    windows_missing_submitted_job, windows_post_submission_cancellation,
-    windows_post_submission_failure, windows_post_submission_observation_error,
+    windows_post_submission_cancellation, windows_post_submission_failure,
+    windows_post_submission_observation_error,
 };
 use crate::print_queue::{
     PrintAdapter, PrintFailure, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
@@ -63,6 +63,7 @@ use crate::progress::CancellationToken;
 const PDF_DPI: i32 = 300;
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HANDLER_JOB_TIMEOUT: Duration = Duration::from_secs(30);
+const OBSERVATION_ERROR_GRACE: Duration = Duration::from_secs(3);
 const CONTROLLED_IMAGE_FORMATS: &[&str] = &["png", "jpg", "jpeg", "bmp", "tif", "tiff"];
 
 #[derive(Default)]
@@ -1382,9 +1383,29 @@ fn wait_for_job(
     deadline: Instant,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(), PrintFailure> {
-    let handle = PrinterHandle::open(printer).map_err(|_| {
-        windows_post_submission_observation_error(WindowsPostSubmissionObservation::PrinterOpen)
-    })?;
+    let observation_started = Instant::now();
+    let handle = loop {
+        match PrinterHandle::open(printer) {
+            Ok(handle) => break handle,
+            Err(_) if cancelled() => {
+                return Err(windows_post_submission_cancellation(false));
+            }
+            Err(_) if Instant::now() >= deadline => {
+                return Err(PrintFailure::uncertain(
+                    "Windows spool job did not finish before its timeout",
+                ));
+            }
+            Err(_) if observation_started.elapsed() < OBSERVATION_ERROR_GRACE => {
+                thread::sleep(POLL_INTERVAL);
+            }
+            Err(_) => {
+                return Err(windows_post_submission_observation_error(
+                    WindowsPostSubmissionObservation::PrinterOpen,
+                ));
+            }
+        }
+    };
+    let mut read_error_since = None;
     loop {
         if cancelled() {
             let cancel_requested =
@@ -1397,23 +1418,31 @@ fn wait_for_job(
                 "Windows spool job did not finish before its timeout",
             ));
         }
-        match job_status(handle.0, job_id)? {
-            None => return Err(windows_missing_submitted_job()),
-            Some(status)
-                if classify_windows_submitted_job_status(status)
-                    == WindowsSubmittedJobStatus::Complete =>
-            {
-                return Ok(());
+        match job_status(handle.0, job_id) {
+            // EndDoc succeeded before this observer starts. Windows printer
+            // drivers normally remove a completed job immediately unless the
+            // queue is configured to retain it. Absence without an observed
+            // error is therefore the normal terminal "released by spooler"
+            // state, not a reason to retry or stop subsequent jobs.
+            Ok(status) => match classify_windows_submitted_job_observation(status) {
+                WindowsSubmittedJobStatus::Complete => return Ok(()),
+                WindowsSubmittedJobStatus::Uncertain => {
+                    return Err(windows_post_submission_observation_error(
+                        WindowsPostSubmissionObservation::StatusFault,
+                    ));
+                }
+                WindowsSubmittedJobStatus::Pending => {
+                    read_error_since = None;
+                    thread::sleep(POLL_INTERVAL);
+                }
+            },
+            Err(error) => {
+                let first_error = read_error_since.get_or_insert_with(Instant::now);
+                if first_error.elapsed() >= OBSERVATION_ERROR_GRACE {
+                    return Err(error);
+                }
+                thread::sleep(POLL_INTERVAL);
             }
-            Some(status)
-                if classify_windows_submitted_job_status(status)
-                    == WindowsSubmittedJobStatus::Uncertain =>
-            {
-                return Err(windows_post_submission_observation_error(
-                    WindowsPostSubmissionObservation::StatusFault,
-                ));
-            }
-            Some(_) => thread::sleep(POLL_INTERVAL),
         }
     }
 }

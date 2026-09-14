@@ -197,6 +197,14 @@ filesystem identities were persisted are not automatically resumable. The UI pre
 localized discard-and-reselect migration; trusting their stored path strings would violate
 the capability boundary.
 
+Windows controlled printing considers a successful `EndDoc` followed by normal
+spool-record disappearance a completed handoff because many physical drivers
+purge completed entries before the first poll. Explicit terminal fault bits are
+still uncertain and non-retryable. Recoverable printer states keep polling within
+the approved timeout, and transient observation failures receive only a bounded
+read retry, never another print submission. Batch Print's remembered scalar
+values are opt-in at the UI; selected files never enter remembered settings.
+
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified
 readback. A downgrade requires sign-in again. Passive macOS startup reads set

@@ -364,6 +364,7 @@
         "kind": "files",
         "labelKey": "param.print.files",
         "name": "files",
+        "remember": false,
         "required": true,
         "visibleWhen": {}
       },

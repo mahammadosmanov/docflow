@@ -1250,10 +1250,13 @@ function OperationScreen({
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
   const [latestPrintQueue, setLatestPrintQueue] =
     useState<PrintQueueSummary | null>(null);
+  const [previousValues, setPreviousValues] =
+    useState<Record<string, unknown> | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     setHydrated(false);
+    setPreviousValues(null);
     const hydrationRevision = ++valuesRevision.current;
     void bridge
       .call("settings/params", {
@@ -1273,9 +1276,14 @@ function OperationScreen({
             return known.has(key) && parameter?.remember !== false;
           }),
         );
+        setPreviousValues(
+          operation.supportsPresets && Object.keys(filtered).length > 0
+            ? filtered
+            : null,
+        );
         setValues((current) => ({
           ...current,
-          ...filtered,
+          ...(operation.supportsPresets ? {} : filtered),
           ...(initialValues ?? {}),
         }));
         lastSaved.current = JSON.stringify(
@@ -1302,7 +1310,10 @@ function OperationScreen({
   }, [bridge, operation, initialValues]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    // Preset-capable procedures start from clean defaults. Their safe scalar
+    // settings are captured only when Preview is requested and are restored
+    // later solely through the explicit previous-settings action.
+    if (!hydrated || operation.supportsPresets) return;
     const sanitized = Object.fromEntries(
       Object.entries(values).filter(([name]) => {
         const param = operation.schema.find((item) => item.name === name);
@@ -1369,6 +1380,9 @@ function OperationScreen({
         opId: operation.id,
         values: sanitized,
       });
+      if (operation.supportsPresets && Object.keys(sanitized).length > 0) {
+        setPreviousValues(sanitized);
+      }
       const next = await bridge.call(
         "engine/preview",
         { opId: operation.id, values },
@@ -1567,6 +1581,27 @@ function OperationScreen({
                     }}
                     onError={setError}
                   />
+                )}
+                {operation.supportsPresets && previousValues && (
+                  <div className="resume-queue-card">
+                    <div>
+                      <strong>{s.t("params.previous.title")}</strong>
+                      <small>{s.t("params.previous.help")}</small>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      icon={<RotateCcw />}
+                      onClick={() => {
+                        valuesRevision.current += 1;
+                        setValues((current) => ({
+                          ...current,
+                          ...previousValues,
+                        }));
+                      }}
+                    >
+                      {s.t("params.previous.apply")}
+                    </Button>
+                  </div>
                 )}
                 <div className="form-stack">
                   {operation.schema

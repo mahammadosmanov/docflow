@@ -118,14 +118,14 @@ pub(crate) const fn classify_windows_submitted_job_status(
     status: u32,
 ) -> WindowsSubmittedJobStatus {
     // JOB_STATUS_* is a stable Win32 bitmask. Once submission has occurred,
-    // none of these fault/deletion states proves that paper was not produced.
+    // explicit error/deletion states do not prove that paper was not produced.
+    // Offline, paper-out, blocked, and user-intervention are recoverable queue
+    // states: the driver can report them transiently while the device wakes or
+    // refreshes consumable state, so observation waits until the approved
+    // timeout instead of stopping the queue immediately.
     const UNCERTAIN: u32 = 0x0000_0002 // ERROR
         | 0x0000_0004 // DELETING
-        | 0x0000_0020 // OFFLINE
-        | 0x0000_0040 // PAPEROUT
-        | 0x0000_0100 // DELETED
-        | 0x0000_0200 // BLOCKED_DEVQ
-        | 0x0000_0400; // USER_INTERVENTION
+        | 0x0000_0100; // DELETED
     const COMPLETE: u32 = 0x0000_0080 // PRINTED
         | 0x0000_1000; // COMPLETE
 
@@ -139,10 +139,16 @@ pub(crate) const fn classify_windows_submitted_job_status(
 }
 
 #[cfg(any(target_os = "windows", test))]
-pub(crate) fn windows_missing_submitted_job() -> crate::print_queue::PrintFailure {
-    crate::print_queue::PrintFailure::uncertain(
-        "Windows can no longer observe the submitted spool job",
-    )
+pub(crate) const fn classify_windows_submitted_job_observation(
+    status: Option<u32>,
+) -> WindowsSubmittedJobStatus {
+    match status {
+        // GetJob returns FILE_NOT_FOUND/INVALID_PARAMETER after many drivers
+        // release a completed job. This helper is called only after EndDoc has
+        // successfully transferred the complete document to the spooler.
+        None => WindowsSubmittedJobStatus::Complete,
+        Some(status) => classify_windows_submitted_job_status(status),
+    }
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -354,15 +360,8 @@ mod tests {
     }
 
     #[test]
-    fn submitted_windows_printer_fault_statuses_are_always_uncertain() {
-        for status in [
-            0x0000_0002,
-            0x0000_0020,
-            0x0000_0040,
-            0x0000_0100,
-            0x0000_0200,
-            0x0000_0400,
-        ] {
+    fn submitted_windows_terminal_fault_statuses_are_uncertain() {
+        for status in [0x0000_0002, 0x0000_0004, 0x0000_0100] {
             assert_eq!(
                 classify_windows_submitted_job_status(status),
                 WindowsSubmittedJobStatus::Uncertain
@@ -381,7 +380,37 @@ mod tests {
             classify_windows_submitted_job_status(0x0000_0010),
             WindowsSubmittedJobStatus::Pending
         );
-        assert!(windows_missing_submitted_job().uncertain);
+    }
+
+    #[test]
+    fn submitted_windows_recoverable_device_statuses_keep_waiting() {
+        for status in [
+            0x0000_0001, // PAUSED
+            0x0000_0008, // SPOOLING
+            0x0000_0010, // PRINTING
+            0x0000_0020, // OFFLINE
+            0x0000_0040, // PAPEROUT
+            0x0000_0200, // BLOCKED_DEVQ
+            0x0000_0400, // USER_INTERVENTION
+            0x0000_2000, // RETAINED
+        ] {
+            assert_eq!(
+                classify_windows_submitted_job_status(status),
+                WindowsSubmittedJobStatus::Pending
+            );
+        }
+    }
+
+    #[test]
+    fn submitted_windows_job_released_after_end_doc_is_complete() {
+        assert_eq!(
+            classify_windows_submitted_job_observation(None),
+            WindowsSubmittedJobStatus::Complete
+        );
+        assert_eq!(
+            classify_windows_submitted_job_observation(Some(0x0000_0002)),
+            WindowsSubmittedJobStatus::Uncertain
+        );
     }
 
     #[test]

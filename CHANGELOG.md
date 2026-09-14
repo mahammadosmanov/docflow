@@ -8,6 +8,30 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.22.0 - 2026-09-14
+
+### Added
+
+- Added an explicit one-click action to restore the last previewed safe Batch
+  Print settings. New visits start from clean defaults, and named presets remain
+  available for intentionally reusable procedures.
+
+### Fixed
+
+- Fixed false Windows print failures when a physical-printer driver releases a
+  successfully submitted spool job before DocFlow's first status poll.
+- Offline, paper-out, blocked, and user-intervention states now wait for recovery
+  or the approved timeout instead of stopping the queue on the first poll.
+- Brief printer-open or status-read failures now receive a bounded observation
+  retry without resubmitting the document.
+
+### Safety
+
+- Previous file selections are never remembered or restored. Only safe scalar
+  settings can be recalled explicitly.
+- Explicit error/deleting/deleted spool states remain uncertain and are never
+  automatically retried; cancellation and queue recovery semantics are preserved.
+
 ## 0.21.0 - 2026-09-14
 
 ### Added

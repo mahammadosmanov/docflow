@@ -437,6 +437,7 @@ const demoPrintOperation: OperationDef = {
       choiceLabels: {},
       visibleWhen: {},
       helpKey: "param.print.files.help",
+      remember: false,
     },
     {
       name: "printer",
