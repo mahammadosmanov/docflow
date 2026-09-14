@@ -23,6 +23,16 @@ the task-local forced full rescan has not yet run. Cached positive Worley result
 are full-hash checked in Rust, but the exact Windows 20 GB system remains an
 external acceptance gate.
 
+The Windows x64 cross-build from implementation commit
+`a9206c3790deea1e0ed130ae877cf216e8c4d4d0` completed. The OCR-inclusive ZIP
+passed the package audit, all generated checksums verified, and both executable
+artifacts identify as Windows GUI-subsystem PE files. Cross-linker PDB warnings
+were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `d609db7432de8fb8f37d3797c019c51276cbcf91ca5999f6b5aa14bafd7593f2`;
+- portable EXE: `1ff9a565b497005d10c992801df6d33878361707b5a6587ee8320a94118fabef`;
+- per-user installer: `7a61192cc758047046c00591e9e488b45a37714c5f151d0f735f23dbc2af8f8f`.
+
 ## 0.22.0 - 2026-09-14
 
 Passed source evidence after the final edit:
