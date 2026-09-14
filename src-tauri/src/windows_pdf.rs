@@ -78,10 +78,6 @@ impl InMemoryPdf {
     }
 }
 
-pub fn render_first_page_png(input: &Path, output: &Path, dpi: i32) -> Result<(), String> {
-    render_page_png(input, output, dpi, 0).map(|_| ())
-}
-
 pub fn page_count(input: &Path) -> Result<u32, String> {
     let _runtime = initialize_runtime()?;
     let (document, _input_stream) = load_document(input)?;
