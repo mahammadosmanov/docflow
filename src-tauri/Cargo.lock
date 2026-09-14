@@ -845,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "docflow"
-version = "0.26.1"
+version = "0.26.2"
 dependencies = [
  "cc",
  "chrono",
@@ -866,7 +866,6 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tempfile",
- "tokio",
  "unicode-casefold",
  "unicode-normalization",
  "ureq",

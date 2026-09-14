@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.26.2 - 2026-09-14
+
+### Changed
+
+- Removed an unused direct Tokio dependency; Tauri continues to provide the
+  asynchronous runtime used by the application.
+- Removed a duplicated PDF-orientation paragraph from the architecture canon.
+
 ## 0.26.1 - 2026-09-14
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.26.1",
+  "currentVersion": "0.26.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -462,9 +462,17 @@
       "version": "0.26.1",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.26.1",
       "summary": "Separate shared presentation controls from the main React application without changing document workflows or authority boundaries."
+    },
+    {
+      "version": "0.26.2",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.26.2",
+      "summary": "Remove an unused direct runtime dependency and duplicate architecture prose without changing application behavior."
     }
   ]
 }

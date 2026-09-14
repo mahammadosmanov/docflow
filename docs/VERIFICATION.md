@@ -4,6 +4,16 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.26.2 - 2026-09-14
+
+The unused direct Tokio declaration and its DocFlow lockfile edge were removed;
+Tokio remains a transitive Tauri dependency. Cargo check passed immediately
+after removal. The complete source gates subsequently passed: version,
+documentation, source and license audits; 23 Node and 53 React tests; production
+frontend build; Rust formatting, Clippy with warnings denied, 338 unit tests,
+213 integration tests with two operator-workbook tests intentionally ignored,
+and Cargo check. Windows/native acceptance was not run.
+
 ## 0.26.1 - 2026-09-14
 
 The shared domain-independent React controls were extracted from `App.tsx`

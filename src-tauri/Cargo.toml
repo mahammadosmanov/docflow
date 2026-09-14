@@ -1,6 +1,6 @@
 [package]
 name = "docflow"
-version = "0.26.1"
+version = "0.26.2"
 description = "Safe desktop document automation"
 authors = ["DocFlow"]
 edition = "2024"
@@ -30,7 +30,6 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tempfile = "3"
-tokio = { version = "1", features = ["sync", "time"] }
 ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 uuid = { version = "1", features = ["v4"] }
 unicode-normalization = "0.1"

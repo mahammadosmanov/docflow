@@ -142,14 +142,6 @@ orientation analysis. It preserves deterministic input/result order and is
 never used for Office automation, print submission, publication, journals, or
 Undo, where parallel effects could create collisions or unknowable outcomes.
 
-PDF orientation normalization is a separate Rust operation. Discovery is
-restricted to CIV/MEC/ELE/PRC directory trees. A bounded Rayon pool renders and
-classifies independent pages with bundled Tesseract OSD; no filesystem mutation
-occurs in that phase. The immutable Plan contains exact rotations and hashes.
-Apply stays single-threaded to preserve journal order, appends only page
-dictionary revisions in private storage, validates structural fidelity, and
-publishes review copies with capability-relative no-clobber writes.
-
 ## Operation contract
 
 ```text
