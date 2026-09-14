@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.26.1 - 2026-09-14
+
+### Changed
+
+- Moved shared, domain-independent interface controls out of the main application
+  module without changing operation behavior, styling, accessibility, or bundle
+  loading.
+
 ## 0.26.0 - 2026-09-14
 
 ### Added

@@ -4,6 +4,14 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.26.1 - 2026-09-14
+
+The shared domain-independent React controls were extracted from `App.tsx`
+without changing their markup, behavior, styling, or imports at call sites.
+All 23 Node tests and 53 React tests passed, and the production TypeScript/Vite
+build passed with the existing non-failing chunk-size advisory. Windows/native
+acceptance was not run because this refactor does not claim platform evidence.
+
 ## 0.26.0 - 2026-09-14
 
 Passed source evidence for the signed-page review increment:

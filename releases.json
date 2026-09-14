@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.26.0",
+  "currentVersion": "0.26.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -454,9 +454,17 @@
       "version": "0.26.0",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.26.0",
       "summary": "Make signed-page preview progress, approved rows, comparisons, and warning files directly understandable while routing each warning source to a hash-pinned no-clobber Review copy."
+    },
+    {
+      "version": "0.26.1",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.26.1",
+      "summary": "Separate shared presentation controls from the main React application without changing document workflows or authority boundaries."
     }
   ]
 }
