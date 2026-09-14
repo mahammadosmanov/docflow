@@ -8,7 +8,7 @@
 | `rfi.work_item_export` | Export owner-scoped work history to no-clobber JSON and Excel-safe CSV |
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
-| `rfi.follow_up_sync` | Project approved RFI status evidence into exact Follow Up cells |
+| `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue |
 | `rfi.stage_signed_first_pages` | Identify single/combined Worley pages and create review copies with exact page-one replacement |

@@ -8,6 +8,34 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.21.0 - 2026-09-14
+
+### Added
+
+- Expanded RFI Log to Follow Up synchronization across the existing CIV, MEC,
+  PCU, and Road tables, including safe insertion into uniquely mapped cells and
+  grouped RFI status aggregation.
+- Added exact parsing for historical compact RFI groups and ranges, plus a
+  current-workbook guarded-delta test that patches only a private temporary copy.
+
+### Changed
+
+- Blank RFI Log status maps to `Pending`, `Ongoing` maps to `In Progress`, and
+  `Completed` maps to `Completed`; a mixed shared cell becomes `In Progress`.
+- `Signed By Worley CIV/MEC` status synchronization now follows the exact
+  `Signed by Worley` REMARKS line and remains limited to existing FINAL tables.
+
+### Safety
+
+- Cancelled and Rejected RFI tokens are removed from grouped Follow Up cells;
+  remaining status is recalculated, or both cells are cleared when none remain.
+- `POT test`, `STAT`, `Changelog`, ELE/PRC, absent ITP sections, formulas,
+  merged cells, ambiguous multi-location mappings, and unrelated OOXML package
+  parts are never changed.
+- Apply still revalidates both workbook fingerprints, creates a verified
+  non-overwriting backup, executes only previewed literal-cell replacements,
+  verifies the closed package delta, journals the result, and supports Undo.
+
 ## 0.20.0 - 2026-09-14
 
 ### Added

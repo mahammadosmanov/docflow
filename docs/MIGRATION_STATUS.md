@@ -4,6 +4,21 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.21.0: exact RFI Log to Follow Up projection
+  - uniquely mapped CIV/MEC records update only existing CIV, MEC, PCU, and Road
+    RFI/status pairs; absent sections and ambiguous routes fail closed
+  - grouped identifiers support exact compact and bounded range forms;
+    Cancelled/Rejected tokens are removed and shared status is recalculated
+  - existing FINAL Worley CIV/MEC tables follow only an exact `Signed by Worley`
+    REMARKS line; POT test, STAT, Changelog, ELE, and PRC remain untouched
+  - macOS source verification passed: 334 Rust unit tests and 208 integration
+    tests serially, 23 Node tests, 51 React tests, Clippy with warnings denied,
+    frontend build, version/docs/source audits, and dependency-license audit
+  - a separate read-only run against operator-supplied workbook copies passed
+    preview, revise, private temporary patch, and closed OOXML delta verification
+  - Windows cross-package and Excel/OneDrive native acceptance are recorded
+    separately and are not implied by these source and package-fidelity checks
+
 - [x] Version 0.20.0: safe multi-core PDF orientation normalization
   - recursively inspects PDFs only below CIV, MEC, ELE, and PRC trees and uses
     content-based Tesseract OSD to approve an exact rotation for every page

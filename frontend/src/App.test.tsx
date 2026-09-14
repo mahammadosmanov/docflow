@@ -895,11 +895,14 @@ describe("DocFlow shell", () => {
             updates: [
               {
                 canonicalRfi: code,
+                proposedRfi: "MEC-0248/0249",
                 proposedStatus: "Signed",
                 target: {
                   row: 42,
+                  rfiColumn: 18,
                   statusColumn: 19,
                   worksheet: { name: "Signed By Worley MEC" },
+                  rfiCell: { value: "MEC-0248" },
                   statusCell: { value: "Not Signed" },
                 },
               },
@@ -941,6 +944,14 @@ describe("DocFlow shell", () => {
       {
         workbook: "followUp",
         sheet: "Signed By Worley MEC",
+        cell: "R42",
+        before: "MEC-0248",
+        after: "MEC-0248/0249",
+        rfiCode: code,
+      },
+      {
+        workbook: "followUp",
+        sheet: "Signed By Worley MEC",
         cell: "S42",
         before: "Not Signed",
         after: "Signed",
@@ -959,6 +970,8 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByText("Exact workbook cell changes"));
     expect(screen.getByText("MEC!T249")).toBeVisible();
     expect(screen.getByText("Completed; Signed by Worley")).toBeVisible();
+    expect(screen.getByText("Signed By Worley MEC!R42")).toBeVisible();
+    expect(screen.getByText("MEC-0248/0249")).toBeVisible();
     expect(screen.getByText("Signed By Worley MEC!S42")).toBeVisible();
   });
 

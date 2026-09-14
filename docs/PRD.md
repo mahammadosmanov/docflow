@@ -38,6 +38,10 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   MEC, ELE, and PRC trees is classified from rendered content. Only complete,
   high-confidence PDF decisions may create no-clobber corrected copies under a
   separate review root; the source tree remains read-only.
+- **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
+  receive only uniquely mapped RFI Log records. Shared-cell status is derived
+  from every remaining RFI; Cancelled/Rejected entries are removed; FINAL
+  Worley state follows the exact REMARKS marker; excluded sheets never change.
 
 ## Scope
 

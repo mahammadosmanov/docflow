@@ -28,7 +28,8 @@ use crate::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
         OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
         WorksheetVisibility, ordered_workbook_discovery, package_has_signature,
-        patch_workbook_sheets_guarded, read_workbook_from_reader, verify_guarded_workbook_delta,
+        patch_workbook_sheets_guarded_text, read_workbook_from_reader,
+        verify_guarded_workbook_delta_text,
     },
     rfi_log::status_columns,
 };
@@ -139,6 +140,8 @@ struct FollowUpApprovedUpdate {
     row_id: String,
     canonical_rfi: String,
     proposed_status: String,
+    #[serde(default)]
+    proposed_rfi: String,
     target: FollowUpCellTarget,
     source_evidence: Vec<SourceStatusEvidence>,
 }
@@ -192,6 +195,8 @@ struct FollowUpRow {
     source_statuses: Vec<String>,
     current_status: String,
     proposed_status: Option<String>,
+    #[serde(default)]
+    proposed_rfi_no: Option<String>,
     disposition: FollowUpDisposition,
     reason_key: String,
     selectable: bool,
@@ -375,7 +380,869 @@ pub fn mapped_follow_up_status(remark: &str) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LogState {
+    Pending,
+    InProgress,
+    Completed,
+    Remove,
+}
+
+#[derive(Clone, Debug)]
+struct SourceRecord {
+    canonical_rfi: String,
+    short_rfi: String,
+    itp: String,
+    item: String,
+    tag: String,
+    area: String,
+    location: String,
+    state: Option<LogState>,
+    worley_signed: bool,
+    evidence: Vec<SourceStatusEvidence>,
+}
+
+fn log_state(value: &str) -> Option<LogState> {
+    match normalize_header(value).as_str() {
+        "" => Some(LogState::Pending),
+        "ONGOING" | "IN PROGRESS" => Some(LogState::InProgress),
+        "COMPLETED" => Some(LogState::Completed),
+        "CANCELLED" | "CANCELED" | "REJECTED" => Some(LogState::Remove),
+        _ => None,
+    }
+}
+
+fn aggregate_status(states: impl IntoIterator<Item = LogState>) -> Option<String> {
+    let states = states
+        .into_iter()
+        .filter(|state| *state != LogState::Remove)
+        .collect::<Vec<_>>();
+    if states.is_empty() {
+        return Some(String::new());
+    }
+    if states.iter().all(|state| *state == LogState::Pending) {
+        Some("Pending".to_string())
+    } else if states.iter().all(|state| *state == LogState::Completed) {
+        Some("Completed".to_string())
+    } else {
+        Some("In Progress".to_string())
+    }
+}
+
+fn normalize_code_text(value: &str) -> String {
+    value
+        .nfc()
+        .collect::<String>()
+        .replace(['˗', '‐', '‑', '‒', '–', '—', '−'], "-")
+        .trim()
+        .to_uppercase()
+}
+
+fn itp_identity(value: &str) -> Option<(String, String)> {
+    static ITP: OnceLock<Regex> = OnceLock::new();
+    let normalized = normalize_code_text(value);
+    let captures = ITP
+        .get_or_init(|| Regex::new(r"ITP-(CIV|MEC)-([0-9]{4})(?:_[A-Z])?\z").unwrap())
+        .captures(&normalized)?;
+    Some((captures[1].to_string(), captures[2].to_string()))
+}
+
+fn item_clause(value: &str) -> Option<String> {
+    static ITEM: OnceLock<Regex> = OnceLock::new();
+    let normalized = normalize_code_text(value);
+    let captures = ITEM
+        .get_or_init(|| Regex::new(r"(?:CIV|MEC)-[0-9]+\.([0-9]+\.[0-9]+)\z").unwrap())
+        .captures(&normalized)?;
+    Some(captures[1].to_string())
+}
+
+fn split_values(value: &str) -> Vec<String> {
+    value
+        .split([',', '/', ';', '\n'])
+        .map(normalize_status)
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
+fn parse_rfi_group(value: &str) -> Option<Vec<String>> {
+    static PART: OnceLock<Regex> = OnceLock::new();
+    let mut normalized = normalize_status(value).to_uppercase().replace(',', "/");
+    if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {
+        normalized = short.to_string();
+    }
+    let mut discipline: Option<String> = None;
+    let mut numbers = Vec::new();
+    let part_regex = PART.get_or_init(|| {
+        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)-)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z").unwrap()
+    });
+    for raw_part in normalized.split('/') {
+        let raw_part = raw_part.trim();
+        if raw_part.is_empty() {
+            return None;
+        }
+        let captures = part_regex.captures(raw_part)?;
+        if let Some(found) = captures.get(1) {
+            match discipline.as_deref() {
+                Some(existing) if existing != found.as_str() => return None,
+                None => discipline = Some(found.as_str().to_string()),
+                _ => {}
+            }
+        }
+        let start = captures[2].parse::<u32>().ok()?;
+        let end = captures
+            .get(3)
+            .and_then(|value| value.as_str().parse::<u32>().ok())
+            .unwrap_or(start);
+        if end < start || end - start > 500 {
+            return None;
+        }
+        numbers.extend(start..=end);
+    }
+    let discipline = discipline?;
+    let mut seen = BTreeSet::new();
+    let result = numbers
+        .into_iter()
+        .filter(|number| seen.insert(*number))
+        .map(|number| format!("{FULL_RFI_PREFIX}{discipline}-{number:04}"))
+        .collect::<Vec<_>>();
+    (!result.is_empty()).then_some(result)
+}
+
+fn format_rfi_group(codes: &[String]) -> Option<String> {
+    let mut discipline: Option<String> = None;
+    let mut numbers = Vec::new();
+    for code in codes {
+        let (_, short) = canonical_follow_up_rfi(code)?;
+        let (found_discipline, number) = short.rsplit_once('-')?;
+        match discipline {
+            Some(ref existing) if existing != found_discipline => return None,
+            None => discipline = Some(found_discipline.to_string()),
+            _ => {}
+        }
+        numbers.push(number.to_string());
+    }
+    let discipline = discipline?;
+    Some(format!("{discipline}-{}", numbers.join("/")))
+}
+
+fn find_header_column(sheet: &WorksheetData, names: &[&str]) -> Option<u32> {
+    for row in 1..=sheet.max_row.min(16) {
+        for column in 1..=sheet.max_column.min(MAX_HEADER_COLUMNS) {
+            let token = sheet
+                .cell(row, column)
+                .map(|cell| normalize_header(&cell.value));
+            if token.as_deref().is_some_and(|token| names.contains(&token)) {
+                return Some(column);
+            }
+        }
+    }
+    None
+}
+
+fn scan_source_records(
+    discovery: &OrderedWorkbookDiscovery,
+    workbook: &WorkbookData,
+) -> Result<BTreeMap<String, SourceRecord>, BackendError> {
+    if discovery.safety.has_workbook_protection {
+        return Err(protected());
+    }
+    let mut records = BTreeMap::<String, SourceRecord>::new();
+    for discipline in ["CIV", "MEC"] {
+        let descriptor = discovery
+            .worksheets
+            .iter()
+            .find(|sheet| sheet.name.trim().eq_ignore_ascii_case(discipline))
+            .ok_or_else(workbook_invalid)?;
+        let sheet = workbook
+            .sheet(&descriptor.name)
+            .ok_or_else(workbook_invalid)?;
+        if sheet.has_sheet_protection
+            || sheet.max_row > SOURCE_FIRST_DATA_ROW + MAX_SOURCE_DATA_ROWS_PER_SHEET
+        {
+            return Err(protected());
+        }
+        validate_cell_text(sheet)?;
+        let rfi_col =
+            find_header_column(sheet, &["RFI NO.", "RFI NO"]).ok_or_else(workbook_invalid)?;
+        let itp_col = find_header_column(sheet, &["ITP NO:", "ITP NO.", "ITP NO"])
+            .ok_or_else(workbook_invalid)?;
+        let item_col =
+            find_header_column(sheet, &["ITEM NO.", "ITEM NO"]).ok_or_else(workbook_invalid)?;
+        let tag_col = find_header_column(sheet, &["TAG NO", "TAG NO."]).unwrap_or(6);
+        let area_col = find_header_column(sheet, &["AREA"]).unwrap_or(7);
+        let location_col = find_header_column(sheet, &["INSPECTION LOCATION"]).unwrap_or(14);
+        let status_col =
+            find_header_column(sheet, &["INSPECTION STATUS"]).ok_or_else(workbook_invalid)?;
+        let remarks_col = find_header_column(sheet, &["REMARKS"]).ok_or_else(workbook_invalid)?;
+        for row in SOURCE_FIRST_DATA_ROW..=sheet.max_row {
+            let Some(rfi_cell) = sheet.cell(row, rfi_col) else {
+                continue;
+            };
+            let Some(canonical_rfi) = canonical_rfi(&rfi_cell.value) else {
+                continue;
+            };
+            if !canonical_rfi.contains(&format!("-RFI-{discipline}-")) {
+                continue;
+            }
+            let short_rfi = canonical_rfi
+                .strip_prefix(FULL_RFI_PREFIX)
+                .unwrap()
+                .to_string();
+            let get = |column| {
+                sheet
+                    .cell(row, column)
+                    .map(|cell| normalize_status(&cell.value))
+                    .unwrap_or_default()
+            };
+            let status = get(status_col);
+            let remarks = get(remarks_col);
+            let evidence = SourceStatusEvidence {
+                sheet: descriptor.name.clone(),
+                row,
+                rfi_column: rfi_col,
+                status_column: status_col,
+                rfi_cell: rfi_cell.into(),
+                status_cell: sheet.cell(row, status_col).map(Into::into),
+            };
+            let incoming = SourceRecord {
+                canonical_rfi: canonical_rfi.clone(),
+                short_rfi,
+                itp: get(itp_col),
+                item: get(item_col),
+                tag: get(tag_col),
+                area: get(area_col),
+                location: get(location_col),
+                state: log_state(&status),
+                worley_signed: mapped_follow_up_status(&remarks) == "Signed",
+                evidence: vec![evidence],
+            };
+            if let Some(existing) = records.get_mut(&canonical_rfi) {
+                if existing.itp != incoming.itp
+                    || existing.item != incoming.item
+                    || existing.tag != incoming.tag
+                    || existing.area != incoming.area
+                    || existing.location != incoming.location
+                    || existing.state != incoming.state
+                    || existing.worley_signed != incoming.worley_signed
+                {
+                    existing.state = None;
+                }
+                existing.evidence.extend(incoming.evidence);
+            } else {
+                records.insert(canonical_rfi, incoming);
+            }
+        }
+    }
+    Ok(records)
+}
+
+fn approved_sheet(name: &str) -> bool {
+    matches!(
+        name,
+        "CIV" | "MEC" | "PCU" | "Road" | "Signed By Worley CIV" | "Signed By Worley MEC"
+    )
+}
+
+fn discover_approved_layouts(
+    discovery: &OrderedWorkbookDiscovery,
+    workbook: &WorkbookData,
+    has_signature: bool,
+    merge_budget: &mut MergeQueryBudget,
+) -> Result<Vec<FollowUpLayout>, BackendError> {
+    if has_signature {
+        return Err(signed_package());
+    }
+    if discovery.safety.has_workbook_protection {
+        return Err(protected());
+    }
+    let mut layouts = Vec::new();
+    for descriptor in &discovery.worksheets {
+        if !approved_sheet(&descriptor.name) {
+            continue;
+        }
+        if descriptor.visibility != WorksheetVisibility::Visible {
+            return Err(protected());
+        }
+        let sheet = workbook
+            .sheet(&descriptor.name)
+            .ok_or_else(workbook_invalid)?;
+        if sheet.has_sheet_protection {
+            return Err(protected());
+        }
+        validate_cell_text(sheet)?;
+        for row in 1..=sheet.max_row.min(10) {
+            for rfi_column in 1..sheet.max_column.min(MAX_HEADER_COLUMNS) {
+                let rfi_header = sheet
+                    .cell(row, rfi_column)
+                    .map(|cell| normalize_header(&cell.value));
+                let status_header = sheet
+                    .cell(row, rfi_column + 1)
+                    .map(|cell| normalize_header(&cell.value));
+                if rfi_header.as_deref().is_some_and(is_follow_up_rfi_header)
+                    && status_header.as_deref().is_some_and(|token| {
+                        is_follow_up_generic_status_header(token)
+                            || is_follow_up_worley_status_header(token)
+                    })
+                    && !merge_budget.contains(sheet, row, rfi_column)?
+                    && !merge_budget.contains(sheet, row, rfi_column + 1)?
+                {
+                    layouts.push(FollowUpLayout {
+                        worksheet: descriptor.clone(),
+                        header_row: row,
+                        rfi_column,
+                        status_column: rfi_column + 1,
+                    });
+                }
+            }
+        }
+    }
+    if layouts.is_empty() {
+        return Err(BackendError::validation("error.rfi.followUp.layoutMissing"));
+    }
+    Ok(layouts)
+}
+
+fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
+    let (discipline, itp) = itp_identity(&record.itp)?;
+    let clause = item_clause(&record.item)?;
+    match (discipline.as_str(), itp.as_str(), clause.as_str()) {
+        ("CIV", "0002", "1.5") => Some(("CIV", 3)),
+        ("CIV", "0002", "1.8") => Some((
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                "PCU"
+            } else {
+                "CIV"
+            },
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                4
+            } else {
+                5
+            },
+        )),
+        ("CIV", "0002", "2.1") | ("CIV", "0002", "2.2") => Some(("CIV", 7)),
+        ("CIV", "0002", "2.4") => Some((
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                "PCU"
+            } else {
+                "CIV"
+            },
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                6
+            } else {
+                9
+            },
+        )),
+        ("CIV", "0002", "2.5") => Some((
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                "PCU"
+            } else {
+                "CIV"
+            },
+            if record.tag.to_uppercase().starts_with("PCU-") {
+                8
+            } else {
+                11
+            },
+        )),
+        ("CIV", "0002", "3.1") => Some(("CIV", 13)),
+        ("CIV", "0004", "1.7") => Some(("Road", 3)),
+        ("CIV", "0004", "2.1") => Some(("Road", 5)),
+        ("CIV", "0004", "2.2") => Some(("Road", 7)),
+        ("CIV", "0004", "2.3") => Some(("Road", 9)),
+        ("CIV", "0004", "2.4") => Some(("Road", 11)),
+        ("CIV", "0004", "2.5") => Some(("Road", 13)),
+        ("CIV", "0004", "2.6") => Some(("Road", 15)),
+        ("CIV", "0004", "2.7") => Some(("Road", 17)),
+        ("CIV", "0004", "2.9") => Some(("Road", 19)),
+        ("CIV", "0004", "3.2") => Some(("Road", 23)),
+        ("CIV", "0005", "2.1") => Some(("PCU", 10)),
+        ("CIV", "0005", "2.2") => Some(("PCU", 12)),
+        ("CIV", "0005", "2.3") => Some(("PCU", 14)),
+        ("CIV", "0005", "3.6") => Some(("PCU", 16)),
+        ("MEC", "0001", "1.6") => Some(("MEC", 8)),
+        ("MEC", "0001", "2.1") | ("MEC", "0001", "2.2") | ("MEC", "0001", "2.3") => {
+            Some(("MEC", 10))
+        }
+        ("MEC", "0001", "3.3") | ("MEC", "0001", "3.4") => Some(("MEC", 12)),
+        ("MEC", "0001", "3.5") => Some(("MEC", 14)),
+        ("MEC", "0003", "3.1") => Some(("MEC", 16)),
+        ("MEC", "0004", "3.2") => Some(("MEC", 18)),
+        _ => None,
+    }
+}
+
+fn normalized_location(value: &str) -> String {
+    normalize_header(value)
+        .replace(" SITE", "")
+        .replace("PCU-", "PCS-")
+        .replace("ROAD 0", "ROAD ")
+}
+
+fn row_matches(sheet_name: &str, sheet: &WorksheetData, row: u32, record: &SourceRecord) -> bool {
+    let cell = |column| {
+        sheet
+            .cell(row, column)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default()
+    };
+    match sheet_name {
+        "CIV" => split_values(&record.tag)
+            .iter()
+            .any(|value| normalized_location(value) == cell(2)),
+        "PCU" => normalized_location(&record.tag) == cell(3),
+        "Road" => {
+            normalized_location(&record.tag) == cell(2)
+                && (record.area.is_empty() || normalized_location(&record.area).contains(&cell(1)))
+        }
+        "MEC" => {
+            let sections = split_values(&record.area);
+            let locations = split_values(&record.location);
+            if sections.len() > 1 && locations.len() > 1 {
+                return false;
+            }
+            normalized_location(&record.tag) == cell(3)
+                && sections
+                    .iter()
+                    .any(|value| normalized_location(value) == cell(4))
+                && locations
+                    .iter()
+                    .any(|value| normalized_location(value) == cell(2))
+        }
+        _ => false,
+    }
+}
+
+#[derive(Clone)]
+struct SlotWork {
+    layout: FollowUpLayout,
+    row: u32,
+    rfi_cell: CellSnapshot,
+    status_cell: CellSnapshot,
+    codes: Vec<String>,
+    current_status: String,
+    changed_rfis: BTreeSet<String>,
+    unsafe_reason: Option<&'static str>,
+}
+
+fn safe_slot(
+    layout: &FollowUpLayout,
+    sheet: &WorksheetData,
+    row: u32,
+    merge_budget: &mut MergeQueryBudget,
+) -> Result<Option<SlotWork>, BackendError> {
+    let Some(rfi_cell) = sheet.cell(row, layout.rfi_column) else {
+        return Ok(None);
+    };
+    let Some(status_cell) = sheet.cell(row, layout.status_column) else {
+        return Ok(None);
+    };
+    let unsafe_reason = if rfi_cell.formula.is_some() {
+        Some("targetRfiFormula")
+    } else if status_cell.formula.is_some() {
+        Some("targetFormula")
+    } else if merge_budget.contains(sheet, row, layout.rfi_column)? {
+        Some("targetRfiMerged")
+    } else if merge_budget.contains(sheet, row, layout.status_column)? {
+        Some("targetMerged")
+    } else {
+        None
+    };
+    let raw = normalize_status(&rfi_cell.value);
+    let codes = if raw.is_empty() {
+        Vec::new()
+    } else if let Some(codes) = parse_rfi_group(&raw) {
+        codes
+    } else {
+        return Ok(Some(SlotWork {
+            layout: layout.clone(),
+            row,
+            rfi_cell: rfi_cell.into(),
+            status_cell: status_cell.into(),
+            codes: Vec::new(),
+            current_status: normalize_status(&status_cell.value),
+            changed_rfis: BTreeSet::new(),
+            unsafe_reason: Some("invalidRfi"),
+        }));
+    };
+    Ok(Some(SlotWork {
+        layout: layout.clone(),
+        row,
+        rfi_cell: rfi_cell.into(),
+        status_cell: status_cell.into(),
+        codes,
+        current_status: normalize_status(&status_cell.value),
+        changed_rfis: BTreeSet::new(),
+        unsafe_reason,
+    }))
+}
+
+fn main_status_for_codes(
+    codes: &[String],
+    records: &BTreeMap<String, SourceRecord>,
+) -> Option<String> {
+    let states = codes
+        .iter()
+        .map(|code| records.get(code)?.state)
+        .collect::<Option<Vec<_>>>()?;
+    aggregate_status(states)
+}
+
+fn row_from_slot(
+    slot: SlotWork,
+    records: &BTreeMap<String, SourceRecord>,
+    signed: bool,
+) -> Option<FollowUpRow> {
+    if slot.changed_rfis.is_empty() || slot.unsafe_reason.is_some() {
+        return None;
+    }
+    let proposed_rfi = format_rfi_group(&slot.codes).unwrap_or_default();
+    let proposed_status = if signed {
+        if slot.codes.is_empty() {
+            String::new()
+        } else {
+            let states = slot
+                .codes
+                .iter()
+                .map(|code| records.get(code))
+                .collect::<Option<Vec<_>>>()?;
+            if states.is_empty() {
+                return None;
+            }
+            if states.iter().all(|record| record.worley_signed) {
+                "Signed".to_string()
+            } else {
+                "Not Signed".to_string()
+            }
+        }
+    } else {
+        main_status_for_codes(&slot.codes, records).unwrap_or_else(|| slot.current_status.clone())
+    };
+    if proposed_rfi == slot.rfi_cell.value && proposed_status == slot.current_status {
+        return None;
+    }
+    let canonical_rfi = slot.changed_rfis.iter().next()?.clone();
+    let record = records.get(&canonical_rfi)?;
+    Some(FollowUpRow {
+        row_id: format!(
+            "rfi-follow-up:{}:{}:{}",
+            slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
+        ),
+        sheet: slot.layout.worksheet.name.clone(),
+        row: slot.row,
+        rfi_no: record.short_rfi.clone(),
+        source_statuses: vec![record.inspection_status_for_ui()],
+        current_status: slot.current_status,
+        proposed_status: Some(proposed_status),
+        proposed_rfi_no: Some(proposed_rfi),
+        disposition: FollowUpDisposition::Ready,
+        reason_key: if record.state == Some(LogState::Remove) {
+            "warn.rfi.followUp.reason.readyRemove".to_string()
+        } else if signed {
+            "warn.rfi.followUp.reason.readyWorleySync".to_string()
+        } else {
+            "warn.rfi.followUp.reason.readyLogSync".to_string()
+        },
+        selectable: true,
+        enabled: true,
+        target: FollowUpReviewTarget {
+            worksheet: slot.layout.worksheet,
+            row: slot.row,
+            rfi_column: slot.layout.rfi_column,
+            status_column: slot.layout.status_column,
+            rfi_cell: Some(slot.rfi_cell),
+            status_cell: Some(slot.status_cell),
+        },
+        source_evidence: record.evidence.clone(),
+    })
+}
+
+impl SourceRecord {
+    fn inspection_status_for_ui(&self) -> String {
+        match self.state {
+            Some(LogState::Pending) => "Pending",
+            Some(LogState::InProgress) => "In Progress",
+            Some(LogState::Completed) => "Completed",
+            Some(LogState::Remove) => "Cancelled / Rejected",
+            None => "Manual review",
+        }
+        .to_string()
+    }
+}
+
+fn classify_workbooks_full(
+    source_discovery: &OrderedWorkbookDiscovery,
+    source_workbook: &WorkbookData,
+    target_discovery: &OrderedWorkbookDiscovery,
+    target_workbook: &WorkbookData,
+    target_has_signature: bool,
+) -> Result<Value, BackendError> {
+    let records = scan_source_records(source_discovery, source_workbook)?;
+    let mut merge_budget = MergeQueryBudget {
+        remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
+    };
+    let layouts = discover_approved_layouts(
+        target_discovery,
+        target_workbook,
+        target_has_signature,
+        &mut merge_budget,
+    )?;
+    let mut slots = BTreeMap::<(String, u32, u32), SlotWork>::new();
+    for layout in &layouts {
+        let sheet = target_workbook
+            .sheet(&layout.worksheet.name)
+            .ok_or_else(workbook_invalid)?;
+        let last = sheet
+            .max_row
+            .min(layout.header_row + MAX_FOLLOW_UP_DATA_ROWS);
+        for row in (layout.header_row + 1)..=last {
+            if let Some(slot) = safe_slot(layout, sheet, row, &mut merge_budget)? {
+                slots.insert(
+                    (layout.worksheet.name.clone(), row, layout.rfi_column),
+                    slot,
+                );
+            }
+        }
+    }
+
+    let mut present_main = BTreeSet::new();
+    let mut manual_rows = Vec::new();
+    for slot in slots
+        .values_mut()
+        .filter(|slot| !slot.layout.worksheet.name.starts_with("Signed By Worley"))
+    {
+        for code in &slot.codes {
+            present_main.insert(code.clone());
+        }
+        let removed = slot
+            .codes
+            .iter()
+            .filter(|code| {
+                records
+                    .get(*code)
+                    .is_some_and(|record| record.state == Some(LogState::Remove))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !removed.is_empty() {
+            slot.codes.retain(|code| !removed.contains(code));
+            slot.changed_rfis.extend(removed);
+        }
+        if slot
+            .codes
+            .iter()
+            .any(|code| records.get(code).and_then(|record| record.state).is_some())
+        {
+            let next = main_status_for_codes(&slot.codes, &records);
+            if next
+                .as_deref()
+                .is_some_and(|status| status != slot.current_status)
+            {
+                slot.changed_rfis.extend(slot.codes.iter().cloned());
+            }
+        }
+    }
+
+    let mut unmapped_count = 0usize;
+    for record in records
+        .values()
+        .filter(|record| record.state.is_some_and(|state| state != LogState::Remove))
+    {
+        if present_main.contains(&record.canonical_rfi) {
+            continue;
+        }
+        let Some((sheet_name, rfi_column)) = route_key(record) else {
+            continue;
+        };
+        let candidates = slots
+            .iter_mut()
+            .filter(|((sheet, _, column), slot)| {
+                sheet == sheet_name && *column == rfi_column && slot.unsafe_reason.is_none()
+            })
+            .filter(|((_, row, _), _)| {
+                row_matches(
+                    sheet_name,
+                    target_workbook.sheet(sheet_name).unwrap(),
+                    *row,
+                    record,
+                )
+            })
+            .collect::<Vec<_>>();
+        let candidate_count = candidates.len();
+        if candidate_count != 1 {
+            drop(candidates);
+            unmapped_count += 1;
+            let Some(layout) = layouts
+                .iter()
+                .find(|layout| {
+                    layout.worksheet.name == sheet_name && layout.rfi_column == rfi_column
+                })
+                .cloned()
+            else {
+                unmapped_count -= 1;
+                continue;
+            };
+            manual_rows.push(FollowUpRow {
+                row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                sheet: sheet_name.to_string(),
+                row: 0,
+                rfi_no: record.short_rfi.clone(),
+                source_statuses: vec![record.inspection_status_for_ui()],
+                current_status: String::new(),
+                proposed_status: None,
+                proposed_rfi_no: None,
+                disposition: FollowUpDisposition::ManualReview,
+                reason_key: if candidate_count == 0 {
+                    "warn.rfi.followUp.reason.mappingMissing".to_string()
+                } else {
+                    "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
+                },
+                selectable: false,
+                enabled: false,
+                target: FollowUpReviewTarget {
+                    worksheet: layout.worksheet,
+                    row: 0,
+                    rfi_column: layout.rfi_column,
+                    status_column: layout.status_column,
+                    rfi_cell: None,
+                    status_cell: None,
+                },
+                source_evidence: record.evidence.clone(),
+            });
+            continue;
+        }
+        let (_, slot) = candidates.into_iter().next().unwrap();
+        slot.codes.push(record.canonical_rfi.clone());
+        slot.changed_rfis.insert(record.canonical_rfi.clone());
+        present_main.insert(record.canonical_rfi.clone());
+    }
+
+    let mut rows = Vec::new();
+    for slot in slots
+        .values()
+        .filter(|slot| !slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .cloned()
+    {
+        if let Some(row) = row_from_slot(slot, &records, false) {
+            rows.push(row);
+        }
+    }
+
+    for slot in slots
+        .values_mut()
+        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
+    {
+        let original = slot.codes.clone();
+        slot.codes.retain(|code| {
+            !records
+                .get(code)
+                .is_some_and(|record| record.state == Some(LogState::Remove))
+        });
+        if slot.codes != original {
+            slot.changed_rfis.extend(
+                original
+                    .into_iter()
+                    .filter(|code| !slot.codes.contains(code)),
+            );
+        }
+        for code in &slot.codes {
+            if let Some(record) = records.get(code) {
+                let proposed = if record.worley_signed {
+                    "Signed"
+                } else {
+                    "Not Signed"
+                };
+                if proposed != slot.current_status {
+                    slot.changed_rfis.insert(code.clone());
+                }
+            }
+        }
+    }
+    for slot in slots
+        .values()
+        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .cloned()
+    {
+        if let Some(row) = row_from_slot(slot, &records, true) {
+            rows.push(row);
+        }
+    }
+    rows.extend(manual_rows);
+
+    if rows.len() > MAX_PREVIEW_ROWS {
+        return Err(limit_exceeded());
+    }
+    rows.sort_by(|left, right| {
+        left.sheet
+            .cmp(&right.sheet)
+            .then(left.row.cmp(&right.row))
+            .then(left.target.rfi_column.cmp(&right.target.rfi_column))
+    });
+    let mut warnings = Vec::new();
+    if unmapped_count > 0 {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.unmappedRecords".to_string(),
+            subject: unmapped_count.to_string(),
+        });
+    }
+    if rows.is_empty() {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.noRowsSelected".to_string(),
+            subject: String::new(),
+        });
+    }
+    let columns = editor_columns();
+    let primary_layout = layouts.first().ok_or_else(workbook_invalid)?.clone();
+    let editor = editor_metadata(&rows, columns);
+    let projection = json!({"layout": primary_layout, "layouts": layouts, "rows": rows, "warnings": warnings, "editor": editor});
+    validate_projection_budget(&projection)?;
+    Ok(projection)
+}
+
+fn supports_full_sync_schema(workbook: &WorkbookData) -> bool {
+    ["CIV", "MEC"].iter().all(|name| {
+        workbook.sheet(name).is_some_and(|sheet| {
+            find_header_column(sheet, &["RFI NO.", "RFI NO"]).is_some()
+                && find_header_column(sheet, &["ITP NO:", "ITP NO.", "ITP NO"]).is_some()
+                && find_header_column(sheet, &["ITEM NO.", "ITEM NO"]).is_some()
+                && find_header_column(sheet, &["INSPECTION STATUS"]).is_some()
+                && find_header_column(sheet, &["REMARKS"]).is_some()
+        })
+    })
+}
+
 pub fn classify_workbooks(
+    source_discovery: &OrderedWorkbookDiscovery,
+    source_workbook: &WorkbookData,
+    target_discovery: &OrderedWorkbookDiscovery,
+    target_workbook: &WorkbookData,
+    target_has_signature: bool,
+) -> Result<Value, BackendError> {
+    if supports_full_sync_schema(source_workbook)
+        && target_workbook
+            .sheets
+            .keys()
+            .any(|name| approved_sheet(name))
+    {
+        classify_workbooks_full(
+            source_discovery,
+            source_workbook,
+            target_discovery,
+            target_workbook,
+            target_has_signature,
+        )
+    } else {
+        classify_workbooks_legacy(
+            source_discovery,
+            source_workbook,
+            target_discovery,
+            target_workbook,
+            target_has_signature,
+        )
+    }
+}
+
+#[allow(dead_code)]
+fn classify_workbooks_legacy(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,
     target_discovery: &OrderedWorkbookDiscovery,
@@ -465,7 +1332,7 @@ pub fn classify_workbooks(
             subject: String::new(),
         });
     }
-    let columns = editor_columns();
+    let columns = editor_columns_legacy();
     let primary_layout = layouts.first().ok_or_else(workbook_invalid)?;
     {
         let projection = BorrowedAuthorityProjection {
@@ -697,6 +1564,7 @@ pub fn revise_from_open_files(
     let columns = editor_columns();
     let classification = json!({
         "layout": authority.layout,
+        "layouts": authority.layouts,
         "rows": revised_rows,
         "warnings": warnings,
         "editor": editor_metadata(&revised_rows, columns),
@@ -805,6 +1673,13 @@ fn plan_from_classification(
                     .map(|(canonical, _)| canonical)
                     .ok_or_else(workbook_invalid)?,
                 proposed_status: row.proposed_status.clone().ok_or_else(workbook_invalid)?,
+                proposed_rfi: row.proposed_rfi_no.clone().unwrap_or_else(|| {
+                    row.target
+                        .rfi_cell
+                        .as_ref()
+                        .map(|cell| cell.value.clone())
+                        .unwrap_or_default()
+                }),
                 target: FollowUpCellTarget {
                     worksheet: row.target.worksheet.clone(),
                     row: row.target.row,
@@ -1391,6 +2266,7 @@ impl BorrowedFollowUpRow<'_> {
             source_statuses: self.source_statuses.to_vec(),
             current_status: self.current_status.to_string(),
             proposed_status: self.proposed_status.map(str::to_string),
+            proposed_rfi_no: None,
             disposition: self.disposition.clone(),
             reason_key: self.reason_key.clone(),
             selectable: self.selectable,
@@ -1496,6 +2372,7 @@ fn editor_columns() -> Vec<Value> {
         json!({"key": "rfiNo", "labelKey": "rfi.followUp.column.rfiNo", "kind": "readonly"}),
         json!({"key": "sourceStatuses", "labelKey": "rfi.followUp.column.sourceStatuses", "kind": "readonly"}),
         json!({"key": "currentStatus", "labelKey": "rfi.followUp.column.currentStatus", "kind": "readonly"}),
+        json!({"key": "proposedRfiNo", "labelKey": "rfi.followUp.column.proposedRfiNo", "kind": "readonly"}),
         json!({"key": "proposedStatus", "labelKey": "rfi.followUp.column.proposedStatus", "kind": "readonly"}),
         json!({
             "key": "disposition",
@@ -1513,6 +2390,13 @@ fn editor_columns() -> Vec<Value> {
         json!({"key": "_sheet", "labelKey": "rfi.followUp.column.sheet", "kind": "readonly", "detail": true}),
         json!({"key": "_row", "labelKey": "rfi.followUp.column.row", "kind": "readonly", "detail": true}),
     ]
+}
+
+fn editor_columns_legacy() -> Vec<Value> {
+    editor_columns()
+        .into_iter()
+        .filter(|column| column.get("key").and_then(Value::as_str) != Some("proposedRfiNo"))
+        .collect()
 }
 
 fn editor_metadata(rows: &[FollowUpRow], columns: Vec<Value>) -> Value {
@@ -1594,11 +2478,13 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
             ))
             || canonical_rfi(&update.canonical_rfi).as_deref()
                 != Some(update.canonical_rfi.as_str())
-            || !matches!(update.proposed_status.as_str(), "Signed" | "Not Signed")
-            || canonical_follow_up_rfi(&update.target.rfi_cell.value)
-                .map(|(canonical, _)| canonical)
-                .as_deref()
-                != Some(update.canonical_rfi.as_str())
+            || !matches!(
+                update.proposed_status.as_str(),
+                "" | "Pending" | "In Progress" | "Completed" | "Signed" | "Not Signed"
+            )
+            || (!update.proposed_rfi.is_empty() && parse_rfi_group(&update.proposed_rfi).is_none())
+            || (!update.target.rfi_cell.value.trim().is_empty()
+                && parse_rfi_group(&update.target.rfi_cell.value).is_none())
             || update.target.rfi_cell.formula.is_some()
             || update.target.status_cell.formula.is_some()
         {
@@ -1614,8 +2500,26 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
     let meta = decode_step_meta(step)?;
     let mut updates_by_sheet = BTreeMap::<String, BTreeMap<(u32, u32), GuardedCellUpdate>>::new();
     for update in meta.updates {
-        let coordinate = (update.target.row, update.target.status_column);
-        let guarded = GuardedCellUpdate {
+        let sheet_updates = updates_by_sheet
+            .entry(update.target.worksheet.name)
+            .or_default();
+        if update.proposed_rfi != update.target.rfi_cell.value {
+            let rfi_guarded = GuardedCellUpdate {
+                expected: CellData {
+                    value: update.target.rfi_cell.value,
+                    formula: update.target.rfi_cell.formula,
+                    style: update.target.rfi_cell.style,
+                },
+                replacement: CellUpdate::Text(update.proposed_rfi),
+            };
+            if sheet_updates
+                .insert((update.target.row, update.target.rfi_column), rfi_guarded)
+                .is_some()
+            {
+                return Err(workbook_invalid());
+            }
+        }
+        let status_guarded = GuardedCellUpdate {
             expected: CellData {
                 value: update.target.status_cell.value,
                 formula: update.target.status_cell.formula,
@@ -1623,10 +2527,11 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
             },
             replacement: CellUpdate::Text(update.proposed_status),
         };
-        if updates_by_sheet
-            .entry(update.target.worksheet.name)
-            .or_default()
-            .insert(coordinate, guarded)
+        if sheet_updates
+            .insert(
+                (update.target.row, update.target.status_column),
+                status_guarded,
+            )
             .is_some()
         {
             return Err(workbook_invalid());
@@ -1646,19 +2551,25 @@ where
     R2: Read + Seek,
 {
     let updates = guarded_updates(step)?;
-    verify_guarded_workbook_delta(source, private_output, &updates).map_err(|error| {
-        match error.kind() {
+    verify_guarded_workbook_delta_text(source, private_output, &updates).map_err(
+        |error| match error.kind() {
             OoxmlErrorKind::LimitExceeded => limit_exceeded(),
             OoxmlErrorKind::Invalid => {
                 BackendError::validation("error.rfi.followUp.patchVerification")
             }
-        }
-    })
+        },
+    )
 }
 
 #[allow(dead_code)]
 pub(crate) fn changed_cell_count(step: &Step) -> Result<u64, BackendError> {
-    u64::try_from(decode_step_meta(step)?.updates.len()).map_err(|_| limit_exceeded())
+    u64::try_from(
+        guarded_updates(step)?
+            .values()
+            .map(BTreeMap::len)
+            .sum::<usize>(),
+    )
+    .map_err(|_| limit_exceeded())
 }
 
 pub(crate) fn step_workbook_paths(step: &Step) -> Result<(String, String, String), BackendError> {
@@ -1693,7 +2604,8 @@ where
     R: Read + Write + Seek,
 {
     let updates = guarded_updates(step)?;
-    patch_workbook_sheets_guarded(source, destination, &updates).map_err(map_apply_ooxml_error)?;
+    patch_workbook_sheets_guarded_text(source, destination, &updates)
+        .map_err(map_apply_ooxml_error)?;
     verify_patched_output(step, source, destination)
 }
 
@@ -1798,6 +2710,59 @@ fn limit_exceeded() -> BackendError {
 mod tests {
     use super::*;
 
+    #[test]
+    fn compound_rfi_parser_expands_historical_forms_without_guessing() {
+        let parsed = parse_rfi_group("CIV-71-77/ 100/101/162/163").unwrap();
+        assert_eq!(parsed.len(), 11);
+        assert_eq!(parsed.first().unwrap(), "AZE-SUN-INT-QMS-RFI-CIV-0071");
+        assert_eq!(parsed.last().unwrap(), "AZE-SUN-INT-QMS-RFI-CIV-0163");
+        assert_eq!(
+            format_rfi_group(&parse_rfi_group("MEC-0370/0565").unwrap()).as_deref(),
+            Some("MEC-0370/0565")
+        );
+        assert!(parse_rfi_group("CVI-0028").is_none());
+        assert!(parse_rfi_group("MEC-02Â49").is_none());
+        assert!(parse_rfi_group("MEC˗0249").is_none());
+        assert!(parse_rfi_group("CIV-0100/MEC-0101").is_none());
+        assert!(parse_rfi_group("CIV-0200-0100").is_none());
+    }
+
+    #[test]
+    fn approved_status_policy_removes_terminal_failures_and_aggregates_groups() {
+        assert_eq!(log_state("Cancelled"), Some(LogState::Remove));
+        assert_eq!(log_state("Rejected"), Some(LogState::Remove));
+        assert_eq!(
+            aggregate_status([LogState::Pending]).as_deref(),
+            Some("Pending")
+        );
+        assert_eq!(
+            aggregate_status([LogState::Completed]).as_deref(),
+            Some("Completed")
+        );
+        assert_eq!(
+            aggregate_status([LogState::Completed, LogState::Pending]).as_deref(),
+            Some("In Progress")
+        );
+        assert_eq!(aggregate_status([LogState::Remove]).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn worley_marker_requires_an_exact_line() {
+        assert_eq!(mapped_follow_up_status("Signed by Worley"), "Signed");
+        assert_eq!(
+            mapped_follow_up_status("Note\nSigned by Worley\nOther"),
+            "Signed"
+        );
+        assert_eq!(
+            mapped_follow_up_status("Not Signed by Worley"),
+            "Not Signed"
+        );
+        assert_eq!(
+            mapped_follow_up_status("Signed by Worley team"),
+            "Not Signed"
+        );
+    }
+
     fn descriptor() -> WorksheetDescriptor {
         WorksheetDescriptor {
             workbook_index: 1,
@@ -1828,6 +2793,7 @@ mod tests {
             row_id: "rfi-follow-up:7:2:2".to_string(),
             canonical_rfi: canonical_rfi.clone(),
             proposed_status: "Signed".to_string(),
+            proposed_rfi: "CIV-0001".to_string(),
             target: FollowUpCellTarget {
                 worksheet: descriptor(),
                 row: 2,
@@ -1923,6 +2889,7 @@ mod tests {
             source_statuses: vec!["Signed".to_string()],
             current_status: String::new(),
             proposed_status: Some(update.proposed_status.clone()),
+            proposed_rfi_no: Some(update.proposed_rfi.clone()),
             disposition: FollowUpDisposition::Ready,
             reason_key: "warn.rfi.followUp.reason.readySigned".to_string(),
             selectable: true,
@@ -2065,7 +3032,7 @@ mod tests {
             .sheets
             .insert("Follow Up".to_string(), target);
 
-        classify_workbooks(
+        classify_workbooks_legacy(
             &source_discovery,
             &source_workbook,
             &target_discovery,

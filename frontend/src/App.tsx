@@ -3563,12 +3563,33 @@ export function summarizeWorkbookCellChanges(plan: Plan): WorkbookCellChange[] {
       const target = recordValue(update?.target);
       const worksheet = recordValue(target?.worksheet);
       const statusCell = recordValue(target?.statusCell);
+      const rfiCell = recordValue(target?.rfiCell);
       const sheet = previewText(worksheet?.name);
       const cell = excelCell(target?.row, target?.statusColumn);
       const before = previewText(statusCell?.value);
       const after = previewText(update?.proposedStatus);
       const candidateCode = previewText(update?.canonicalRfi) ?? "";
       const rfiCode = canonicalRfiInText(candidateCode) === candidateCode ? candidateCode : "";
+      const rfiAddress = excelCell(target?.row, target?.rfiColumn);
+      const rfiBefore = previewText(rfiCell?.value);
+      const rfiAfter = previewText(update?.proposedRfi);
+      if (
+        sheet &&
+        rfiAddress &&
+        rfiBefore !== null &&
+        rfiAfter !== null &&
+        rfiBefore !== rfiAfter
+      ) {
+        add({
+          workbook: "followUp",
+          sheet,
+          cell: rfiAddress,
+          before: rfiBefore,
+          after: rfiAfter,
+          rfiCode,
+        });
+        if (result.length >= MAX_WORKBOOK_CELL_PREVIEWS) return result;
+      }
       if (!sheet || !cell || before === null || after === null) continue;
       add({ workbook: "followUp", sheet, cell, before, after, rfiCode });
       if (result.length >= MAX_WORKBOOK_CELL_PREVIEWS) return result;

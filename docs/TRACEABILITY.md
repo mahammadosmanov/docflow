@@ -18,6 +18,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-013 | docs, Windows workflow, package audit | `windows_workflow.test.mjs`, release records |
 | DF-014 | `version_manager.mjs`, manifests, release catalog | `version_manager.test.mjs`, package audit/smoke |
 | DF-015 | `operations/pdf_orientation.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs` | `pdf_orientation.rs`, `signed_pages.rs`, registry and localization tests |
+| DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs`, `rfi_follow_up_current.rs`, `ooxml_fidelity.rs` |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

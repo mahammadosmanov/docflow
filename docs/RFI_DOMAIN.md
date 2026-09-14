@@ -49,6 +49,19 @@ cell satisfy the required state. `Ongoing` corresponds to `In Progress` where th
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
 their safe headers, not assumed coordinates.
 
+For RFI Log projection, blank means `Pending`, all `Completed` means
+`Completed`, and any `Ongoing` or Completed/Pending mixture means `In Progress`.
+Cancelled and Rejected identifiers are removed before the shared status is
+recomputed. Exact historical compact forms and bounded numeric ranges are
+expanded only when unambiguous; malformed or mixed-discipline values fail closed.
+
+The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
+`Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets receive
+only FINAL behavior and use the exact `Signed by Worley` REMARKS line. `POT test`,
+`STAT`, `Changelog`, ELE/PRC, and absent ITP/item sections are never created or
+modified by this operation. A source record with multiple areas and multiple
+sections is ambiguous and remains manual rather than using a cartesian guess.
+
 ## PDF page orientation
 
 Orientation normalization searches only directory trees named `CIV`, `MEC`,
