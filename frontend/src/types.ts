@@ -48,6 +48,7 @@ export interface Step {
     | "restore_backup"
     | "print"
     | "pdf_first_page_replace"
+    | "pdf_page_rotate"
     | "cleanup_temp"
     | "outlook_reply_draft";
   src: string | null;

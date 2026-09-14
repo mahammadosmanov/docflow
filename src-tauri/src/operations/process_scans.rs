@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -10,6 +11,7 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     naming::{flat_target_for, folder_for, target_for},
+    parallel::bounded_map,
     rfi_code::{RfiMatch, RfiMethod},
 };
 
@@ -29,12 +31,15 @@ pub struct OcrRead {
     pub source: String,
 }
 
-pub trait OcrAdapter {
+pub trait OcrAdapter: Sync {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure>;
     fn supports_page_scan(&self) -> bool {
         false
     }
     fn supports_page_previews(&self) -> bool {
+        false
+    }
+    fn supports_parallel_analysis(&self) -> bool {
         false
     }
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
@@ -62,6 +67,25 @@ struct Candidate {
     modified: SystemTime,
     confidence: f64,
     source: String,
+}
+
+struct CachedFileOcr {
+    reads: BTreeMap<PathBuf, Result<OcrRead, OcrFailure>>,
+    diagnostics: String,
+}
+
+impl OcrAdapter for CachedFileOcr {
+    fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
+        self.reads.get(path).cloned().unwrap_or_else(|| {
+            Err(OcrFailure::Document(
+                "parallel OCR cache entry is missing".to_string(),
+            ))
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        self.diagnostics.clone()
+    }
 }
 
 pub fn preview<A, P, C>(
@@ -101,6 +125,27 @@ where
         )));
     }
     pdfs.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+
+    if ocr.supports_parallel_analysis() && !pdfs.is_empty() {
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        let (worker_count, results) =
+            bounded_map(&pdfs, |pdf| ocr.read(pdf)).map_err(BackendError::request_failed)?;
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        let cached = CachedFileOcr {
+            reads: pdfs.iter().cloned().zip(results).collect(),
+            diagnostics: ocr.diagnostics(),
+        };
+        let mut plan = preview(params, &cached, progress, cancelled)?;
+        plan.meta
+            .insert("workerCount".to_string(), Value::from(worker_count as u64));
+        plan.meta
+            .insert("parallelAnalysis".to_string(), Value::Bool(true));
+        return Ok(plan);
+    }
 
     let transfer_kind = if params.keep_original {
         StepKind::Copy

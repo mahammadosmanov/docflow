@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{
+    operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
     rfi_code::{RfiMethod, find},
 };
@@ -140,6 +141,10 @@ impl OcrAdapter for NativeOcr {
         cfg!(any(target_os = "macos", target_os = "windows"))
     }
 
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         let text = page_text(path, page_index)?;
         if text.trim().chars().count() >= TEXT_LAYER_MIN_CHARS {
@@ -220,6 +225,131 @@ impl OcrAdapter for NativeOcr {
                 .unwrap_or_else(|| "BULUNAMADI".to_string())
         )
     }
+}
+
+impl OrientationDetector for NativeOcr {
+    fn detect_page(&self, path: &Path, page_index: usize) -> Result<OrientationDetection, String> {
+        let tesseract = self
+            .tesseract
+            .as_deref()
+            .filter(|path| path.is_file())
+            .ok_or_else(|| "Tesseract is unavailable".to_string())?;
+        let tessdata = self
+            .tessdata
+            .as_deref()
+            .filter(|directory| bundled_regular_file(&directory.join("osd.traineddata")))
+            .ok_or_else(|| {
+                "Tesseract orientation data (osd.traineddata) is unavailable".to_string()
+            })?;
+        let temporary =
+            tempfile::tempdir().map_err(|error| format!("orientation temp: {error}"))?;
+        let rendered = temporary.path().join(format!("page-{page_index}.png"));
+        render_page_png(path, &rendered, 150, page_index)?;
+        let text = run_orientation_tesseract(tesseract, &rendered, temporary.path(), tessdata)?;
+        parse_orientation_output(&text)
+    }
+
+    fn diagnostics(&self) -> String {
+        let engine = self
+            .tesseract
+            .as_deref()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "unavailable".to_string());
+        let osd = self
+            .tessdata
+            .as_deref()
+            .is_some_and(|directory| bundled_regular_file(&directory.join("osd.traineddata")));
+        format!("tesseract={engine}; osd={osd}")
+    }
+}
+
+fn run_orientation_tesseract(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: &Path,
+) -> Result<String, String> {
+    const MAX_OUTPUT_BYTES: u64 = 1024 * 1024;
+    let stdout_path = temporary.join("orientation.stdout.txt");
+    let stderr_path = temporary.join("orientation.stderr.txt");
+    let stdout = fs::File::create(&stdout_path)
+        .map_err(|error| format!("orientation stdout create: {error}"))?;
+    let stderr = fs::File::create(&stderr_path)
+        .map_err(|error| format!("orientation stderr create: {error}"))?;
+    let mut command = Command::new(executable);
+    configure_tesseract_process(&mut command);
+    command
+        .arg(image)
+        .arg("stdout")
+        .arg("--psm")
+        .arg("0")
+        .arg("-l")
+        .arg("osd")
+        .env("TESSDATA_PREFIX", tessdata)
+        .stdin(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr);
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("orientation detector could not start: {error}"))?;
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < Duration::from_secs(30) => {
+                let output_size = fs::metadata(&stdout_path).map_or(0, |value| value.len())
+                    + fs::metadata(&stderr_path).map_or(0, |value| value.len());
+                if output_size > MAX_OUTPUT_BYTES {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("orientation detector output exceeded the limit".to_string());
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("orientation detector timed out".to_string());
+            }
+            Err(error) => return Err(format!("orientation detector wait failed: {error}")),
+        }
+    };
+    let stdout = fs::read_to_string(&stdout_path).unwrap_or_default();
+    let stderr = fs::read_to_string(&stderr_path).unwrap_or_default();
+    let combined = format!("{stdout}\n{stderr}");
+    if !status.success() {
+        return Err(format!(
+            "orientation detector failed: {}",
+            combined.lines().next().unwrap_or("unknown error")
+        ));
+    }
+    Ok(combined)
+}
+
+fn parse_orientation_output(output: &str) -> Result<OrientationDetection, String> {
+    let mut rotate_clockwise = None;
+    let mut confidence = None;
+    for line in output.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        match key.trim() {
+            "Rotate" => rotate_clockwise = value.trim().parse::<i64>().ok(),
+            "Orientation confidence" => confidence = value.trim().parse::<f64>().ok(),
+            _ => {}
+        }
+    }
+    let rotate_clockwise = rotate_clockwise
+        .filter(|value| matches!(value, 0 | 90 | 180 | 270))
+        .ok_or_else(|| "orientation result has no valid rotation".to_string())?;
+    let confidence = confidence
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .ok_or_else(|| "orientation result has no valid confidence".to_string())?;
+    Ok(OrientationDetection {
+        rotate_clockwise,
+        confidence,
+        method: "tesseract-osd:150dpi".to_string(),
+    })
 }
 
 fn tesseract_candidates() -> Vec<PathBuf> {
@@ -725,6 +855,27 @@ pub fn render_page_thumbnail_data_url(input: &Path, page_index: usize) -> Result
         "data:image/png;base64,{}",
         base64_encode(&png_bytes)
     ))
+}
+
+#[cfg(test)]
+mod orientation_tests {
+    use super::*;
+
+    #[test]
+    fn parses_tesseract_osd_rotation_and_confidence() {
+        let result = parse_orientation_output(
+            "Page number: 0\nOrientation in degrees: 270\nRotate: 90\nOrientation confidence: 18.42\nScript: Latin\n",
+        )
+        .unwrap();
+        assert_eq!(result.rotate_clockwise, 90);
+        assert_eq!(result.confidence, 18.42);
+    }
+
+    #[test]
+    fn rejects_missing_or_non_right_angle_osd_results() {
+        assert!(parse_orientation_output("Rotate: 45\nOrientation confidence: 20\n").is_err());
+        assert!(parse_orientation_output("Rotate: 90\n").is_err());
+    }
 }
 
 fn resize_gray_to_fit(

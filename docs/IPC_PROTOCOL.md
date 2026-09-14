@@ -12,6 +12,12 @@ arbitrary file/network/process authority never cross into the webview.
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,
 `frontend/src/lib/bridge.ts`, and their roster/golden tests.
 
+`rfi.normalize_pdf_orientation` accepts only opaque selections for the RFI
+system and a separate review root. Preview returns ordinary `mkdir` and
+`pdf_page_rotate` Plan steps containing approved page indexes, target rotations,
+confidence evidence, and source hashes. Apply accepts only the cached plan ID;
+React cannot supply or change a rotation step directly.
+
 ## Retired private sidecar protocol (historical)
 
 This protocol is retained only to document compatibility history. No shipping or

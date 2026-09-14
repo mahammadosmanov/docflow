@@ -180,6 +180,14 @@ export function auditPackage(root) {
           "tessdata",
           "eng.traineddata",
         ),
+        join(
+          "Contents",
+          "Resources",
+          "resources",
+          "tesseract",
+          "tessdata",
+          "osd.traineddata",
+        ),
       ]) {
         if (!existsSync(join(resolvedRoot, required))) {
           failures.push(`required packaged OCR resource is missing: ${required}`);
@@ -191,6 +199,7 @@ export function auditPackage(root) {
       for (const required of [
         join("resources", "tesseract", "tesseract.exe"),
         join("resources", "tesseract", "tessdata", "eng.traineddata"),
+        join("resources", "tesseract", "tessdata", "osd.traineddata"),
       ]) {
         if (!existsSync(join(resolvedRoot, required))) {
           failures.push(`required packaged OCR resource is missing: ${required}`);

@@ -49,6 +49,22 @@ cell satisfy the required state. `Ongoing` corresponds to `In Progress` where th
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
 their safe headers, not assumed coordinates.
 
+## PDF page orientation
+
+Orientation normalization searches only directory trees named `CIV`, `MEC`,
+`ELE`, or `PRC` below the selected RFI system root. It renders every page and
+uses Tesseract OSD to classify reading direction; paper dimensions alone are not
+evidence because a legitimate landscape form may still be upright. Preview uses
+a bounded Rust worker pool while Apply remains serial and deterministic.
+
+The selected RFI system is read-only. A PDF is actionable only when every page
+has a valid right-angle result at or above the fixed confidence threshold.
+Unreadable, low-confidence, encrypted, digitally signed, malformed, or already
+existing destinations fail closed. Approved changes append only page dictionary
+`/Rotate` revisions to copies beneath a separate review root and verify that page
+content, geometry, annotations, links, widgets, metadata, catalog entries, and
+embedded files remain unchanged.
+
 ## Mail
 
 Incoming request prose is inconsistent. Offline/model extraction proposes data;

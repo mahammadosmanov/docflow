@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, nine-operation registry, OCR,
+Confirm install, normal GUI launch, version, ten-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -45,6 +45,10 @@ pass from a macOS build or Windows cross-compile.
 7. For printing, use non-sensitive fixtures and a test printer. Verify mixed
    ordering, worksheets, ranges, A4/A3, orientation, duplex/color, cancellation,
    restart, and uncertain-job operator decisions. Never auto-retry uncertainty.
+8. For PDF orientation, use synthetic copies containing upright, sideways,
+   upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
+   Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source
+   hashes never change, review layout is preserved, and Undo is hash-guarded.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

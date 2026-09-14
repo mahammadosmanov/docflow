@@ -12,7 +12,10 @@ use docflow_lib::{
         stage_signed_pages::{StageSignedPagesParams, preview, revise},
     },
     paths::{CallerIdentity, GrantAccess, GrantScope},
-    pdf::{inspect, replace_first_page_incremental, replace_first_page_incremental_from_page},
+    pdf::{
+        inspect, replace_first_page_incremental, replace_first_page_incremental_from_page,
+        rotate_pages_incremental,
+    },
     plan_store::{BackendOrigin, PlanBinding},
     rfi_code::find,
 };
@@ -31,6 +34,44 @@ struct FixtureOcr {
 struct PageFixtureOcr {
     codes: BTreeMap<(String, usize), String>,
     previews: bool,
+}
+
+struct ParallelPageFixtureOcr {
+    codes: BTreeMap<(String, usize), String>,
+}
+
+impl OcrAdapter for ParallelPageFixtureOcr {
+    fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        let code = self
+            .codes
+            .get(&(name.to_string(), page_index))
+            .cloned()
+            .unwrap_or_default();
+        Ok(OcrRead {
+            matched: find(&code),
+            source: format!("parallel-fixture-page-{page_index}"),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "parallel fixture page OCR".to_string()
+    }
 }
 
 impl OcrAdapter for PageFixtureOcr {
@@ -109,6 +150,35 @@ fn roots(
         fs::create_dir_all(root).unwrap();
     }
     (signed, archive, review)
+}
+
+#[test]
+fn incremental_page_rotation_preserves_unrelated_pdf_content() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source.pdf");
+    let output = fixture.path().join("review.pdf");
+    write_rich_archive(&source);
+    let source_bytes = fs::read(&source).unwrap();
+    let before = inspect(&source).unwrap();
+
+    rotate_pages_incremental(&source, &output, &[(0, 90), (1, 270)]).unwrap();
+
+    let output_bytes = fs::read(&output).unwrap();
+    let after = inspect(&output).unwrap();
+    assert!(output_bytes.starts_with(&source_bytes));
+    assert_eq!(after.page_count, before.page_count);
+    assert_eq!(
+        after.incremental_revisions,
+        before.incremental_revisions + 1
+    );
+    assert_eq!(after.pages[0].rotation, 90);
+    assert_eq!(after.pages[1].rotation, 270);
+    assert_eq!(after.pages[2], before.pages[2]);
+    assert_eq!(after.pages[0].content_hash, before.pages[0].content_hash);
+    assert_eq!(after.pages[1].annotations, before.pages[1].annotations);
+    assert_eq!(after.catalog_entry_hashes, before.catalog_entry_hashes);
+    assert_eq!(after.info_hash, before.info_hash);
+    assert_eq!(after.embedded_file_hashes, before.embedded_file_hashes);
 }
 
 fn params(signed: &Path, archive: &Path, review: &Path, recursive: bool) -> StageSignedPagesParams {
@@ -272,6 +342,44 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
     assert_eq!(
         inspect(&second_output).unwrap().pages[0].content_hash,
         inspect(&signed).unwrap().pages[1].content_hash
+    );
+}
+
+#[test]
+fn combined_scan_uses_bounded_parallel_page_ocr_when_supported() {
+    const SECOND_CODE: &str = "AZE-SUN-INT-QMS-RFI-MEC-0249";
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("combined.pdf"), true);
+    write_rich_archive(&archive_root.join("CIV").join(filename_for(CODE)));
+    write_rich_archive(&archive_root.join("MEC").join(filename_for(SECOND_CODE)));
+    let ocr = ParallelPageFixtureOcr {
+        codes: BTreeMap::from([
+            (("combined.pdf".to_string(), 0), CODE.to_string()),
+            (("combined.pdf".to_string(), 1), SECOND_CODE.to_string()),
+        ]),
+    };
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(plan.meta["parallelAnalysis"], true);
+    assert!(
+        plan.meta["workerCount"]
+            .as_u64()
+            .is_some_and(|value| value >= 1)
+    );
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+            .count(),
+        2
     );
 }
 

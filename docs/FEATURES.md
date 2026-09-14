@@ -12,6 +12,7 @@
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue |
 | `rfi.stage_signed_first_pages` | Identify single/combined Worley pages and create review copies with exact page-one replacement |
+| `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
 
 ## Application features
@@ -26,6 +27,8 @@
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
 - Read-only device readiness and copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
+- Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
+  and PDF orientation; state-changing effects remain ordered and journaled.
 
 ## Intentional limits
 
@@ -33,3 +36,5 @@
 - Outlook drafts are never auto-sent.
 - Three-system replica transfer is roadmap work, not a registered operation.
 - Native Office and printer behavior is accepted only on a real Windows host.
+- PDF orientation classification requires bundled Tesseract OSD data. A PDF with
+  any low-confidence or unreadable page is left unchanged for manual review.

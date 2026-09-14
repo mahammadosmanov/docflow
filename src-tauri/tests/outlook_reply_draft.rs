@@ -412,6 +412,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.outlook_reply_draft",
             "files.batch_print",
             "rfi.stage_signed_first_pages",
+            "rfi.normalize_pdf_orientation",
             "rfi.system_sync",
         ]
     );

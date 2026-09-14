@@ -229,6 +229,199 @@ pub fn replace_first_page_incremental_from_page(
     write_result
 }
 
+/// Writes a new PDF by appending page-dictionary revisions that change only
+/// the approved display rotations. The source bytes remain an exact prefix of
+/// the result so unrelated PDF objects are preserved byte-for-byte.
+pub fn rotate_pages_incremental(
+    source_path: &Path,
+    output_path: &Path,
+    rotations: &[(usize, i64)],
+) -> Result<(), PdfError> {
+    if output_path.exists() {
+        return Err(PdfError::new(format!(
+            "review destination already exists: {}",
+            output_path.display()
+        )));
+    }
+    if rotations.is_empty() {
+        return Err(PdfError::new("no page rotations were approved"));
+    }
+    let source = ParsedPdf::load(source_path)?;
+    let before = source.inspect()?;
+    if before.encrypted {
+        return Err(PdfError::new(
+            "source PDF is encrypted; orientation repair is intentionally disabled",
+        ));
+    }
+    if before.signed {
+        return Err(PdfError::new(
+            "source PDF contains a digital signature; orientation repair would invalidate it",
+        ));
+    }
+    let mut approved = BTreeMap::new();
+    for &(page_index, rotation) in rotations {
+        if page_index >= before.page_count {
+            return Err(PdfError::new("approved page index is out of range"));
+        }
+        if !matches!(rotation, 0 | 90 | 180 | 270) {
+            return Err(PdfError::new(
+                "approved page rotation must be 0, 90, 180, or 270 degrees",
+            ));
+        }
+        if approved.insert(page_index, rotation).is_some() {
+            return Err(PdfError::new("approved page index is duplicated"));
+        }
+    }
+    let appended = build_incremental_rotations(&source, &approved)?;
+    let parent = output_path
+        .parent()
+        .ok_or_else(|| PdfError::new("review destination has no parent directory"))?;
+    if !parent.is_dir() {
+        return Err(PdfError::new("review destination parent does not exist"));
+    }
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output_path)
+        .map_err(|error| PdfError::new(format!("review output create failed: {error}")))?;
+    let write_result = (|| -> Result<(), PdfError> {
+        output
+            .write_all(&source.bytes)
+            .and_then(|()| output.write_all(&appended))
+            .and_then(|()| output.sync_all())
+            .map_err(|error| PdfError::new(format!("review output write failed: {error}")))?;
+        drop(output);
+        validate_rotated(output_path, &source.bytes, &before, &approved)
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(output_path);
+    }
+    write_result
+}
+
+fn build_incremental_rotations(
+    source: &ParsedPdf,
+    rotations: &BTreeMap<usize, i64>,
+) -> Result<Vec<u8>, PdfError> {
+    let pages = source.pages()?;
+    let mut writes = BTreeMap::<ObjectId, PdfObject>::new();
+    for (&page_index, &rotation) in rotations {
+        let page_id = *pages
+            .get(page_index)
+            .ok_or_else(|| PdfError::new("approved page index is out of range"))?;
+        let mut dictionary = source
+            .get_object(page_id)?
+            .as_dictionary()
+            .cloned()
+            .ok_or_else(|| PdfError::new("PDF page is not a dictionary"))?;
+        dictionary.insert(b"Rotate".to_vec(), PdfObject::Number(rotation.to_string()));
+        writes.insert(page_id, PdfObject::Dictionary(dictionary));
+    }
+    build_incremental_appendix(source, &writes)
+}
+
+fn build_incremental_appendix(
+    source: &ParsedPdf,
+    writes: &BTreeMap<ObjectId, PdfObject>,
+) -> Result<Vec<u8>, PdfError> {
+    if writes.is_empty() || writes.len() > MAX_OBJECTS {
+        return Err(PdfError::new("PDF incremental write set is invalid"));
+    }
+    let base_offset = source.bytes.len() + usize::from(!source.bytes.ends_with(b"\n"));
+    let mut appendix = Vec::new();
+    if !source.bytes.ends_with(b"\n") {
+        appendix.push(b'\n');
+    }
+    let mut offsets = BTreeMap::<ObjectId, usize>::new();
+    for (id, object) in writes {
+        offsets.insert(*id, base_offset + appendix.len());
+        appendix.extend_from_slice(format!("{} {} obj\n", id.0, id.1).as_bytes());
+        serialize_object(object, &mut appendix, 0)?;
+        appendix.extend_from_slice(b"\nendobj\n");
+    }
+    let xref_offset = base_offset + appendix.len();
+    appendix.extend_from_slice(b"xref\n");
+    for ((number, generation), offset) in &offsets {
+        appendix
+            .extend_from_slice(format!("{number} 1\n{offset:010} {generation:05} n \n").as_bytes());
+    }
+    let latest = source
+        .trailers
+        .first()
+        .ok_or_else(|| PdfError::new("source PDF has no trailer"))?;
+    let mut trailer = latest.clone();
+    for key in [
+        b"Size".as_slice(),
+        b"Prev",
+        b"XRefStm",
+        b"Encrypt",
+        b"Type",
+        b"W",
+        b"Index",
+        b"Length",
+        b"Filter",
+        b"DecodeParms",
+    ] {
+        trailer.remove(key);
+    }
+    trailer.insert(
+        b"Size".to_vec(),
+        PdfObject::Number((source.max_id + 1).to_string()),
+    );
+    trailer.insert(
+        b"Prev".to_vec(),
+        PdfObject::Number(source.last_xref.to_string()),
+    );
+    appendix.extend_from_slice(b"trailer\n");
+    serialize_object(&PdfObject::Dictionary(trailer), &mut appendix, 0)?;
+    appendix.extend_from_slice(format!("\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    Ok(appendix)
+}
+
+fn validate_rotated(
+    output_path: &Path,
+    source_bytes: &[u8],
+    before: &PdfInspection,
+    rotations: &BTreeMap<usize, i64>,
+) -> Result<(), PdfError> {
+    let output_bytes = read_bounded(output_path)?;
+    if !output_bytes.starts_with(source_bytes) {
+        return Err(PdfError::new(
+            "rotated PDF did not preserve the source revision bytes",
+        ));
+    }
+    let after = ParsedPdf::parse(output_bytes)?.inspect()?;
+    if after.page_count != before.page_count
+        || after.incremental_revisions != before.incremental_revisions + 1
+        || after.object_stream_count != before.object_stream_count
+        || after.catalog_entry_hashes != before.catalog_entry_hashes
+        || after.info_hash != before.info_hash
+        || after.embedded_file_hashes != before.embedded_file_hashes
+        || after.encrypted != before.encrypted
+        || after.signed != before.signed
+    {
+        return Err(PdfError::new(
+            "rotated PDF failed document-structure fidelity validation",
+        ));
+    }
+    for (index, (old, new)) in before.pages.iter().zip(&after.pages).enumerate() {
+        let expected_rotation = rotations.get(&index).copied().unwrap_or(old.rotation);
+        if new.object_id != old.object_id
+            || new.media_box != old.media_box
+            || new.crop_box != old.crop_box
+            || new.rotation != expected_rotation
+            || new.content_hash != old.content_hash
+            || new.annotations != old.annotations
+            || new.links != old.links
+            || new.widgets != old.widgets
+            || (!rotations.contains_key(&index) && new.object_hash != old.object_hash)
+        {
+            return Err(PdfError::new("rotated PDF failed page-fidelity validation"));
+        }
+    }
+    Ok(())
+}
+
 fn reject_unsupported(facts: &PdfInspection, label: &str) -> Result<(), PdfError> {
     if facts.encrypted {
         return Err(PdfError::new(format!(

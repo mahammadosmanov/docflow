@@ -633,6 +633,34 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let normalize_pdf_orientation = operation(
+        "rfi.normalize_pdf_orientation",
+        vec![
+            parameter(
+                "rfi_system_root",
+                ParamKind::Folder,
+                "param.rfi.orientation.rfiSystemRoot",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.orientation.rfiSystemRoot.help"),
+            ),
+            parameter(
+                "review_root",
+                ParamKind::Folder,
+                "param.rfi.orientation.reviewRoot",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.orientation.reviewRoot.help"),
+            ),
+        ],
+    );
+
     vec![
         work_item,
         work_item_export,
@@ -642,6 +670,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         outlook_reply_draft,
         batch_print,
         stage_signed_pages,
+        normalize_pdf_orientation,
         rfi_system_sync,
     ]
 }
@@ -667,6 +696,7 @@ mod tests {
                 "rfi.outlook_reply_draft",
                 "files.batch_print",
                 "rfi.stage_signed_first_pages",
+                "rfi.normalize_pdf_orientation",
                 "rfi.system_sync",
             ]
         );
@@ -678,7 +708,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[8];
+        let system_sync = &operations[9];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![

@@ -13,6 +13,7 @@ use crate::{
     naming::filename_for,
     ocr::render_page_thumbnail_data_url,
     operations::process_scans::{OcrAdapter, OcrFailure},
+    parallel::bounded_map,
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
     rfi_code::RfiMethod,
@@ -47,6 +48,45 @@ struct PreparedArchive {
     steps: Vec<Step>,
 }
 
+struct CachedPageOcr {
+    reads: BTreeMap<(PathBuf, usize), Result<super::process_scans::OcrRead, OcrFailure>>,
+    page_previews: bool,
+    diagnostics: String,
+}
+
+impl OcrAdapter for CachedPageOcr {
+    fn read(&self, path: &Path) -> Result<super::process_scans::OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn supports_page_previews(&self) -> bool {
+        self.page_previews
+    }
+
+    fn read_page(
+        &self,
+        path: &Path,
+        page_index: usize,
+    ) -> Result<super::process_scans::OcrRead, OcrFailure> {
+        self.reads
+            .get(&(path.to_path_buf(), page_index))
+            .cloned()
+            .unwrap_or_else(|| {
+                Err(OcrFailure::Document(
+                    "parallel page OCR cache entry is missing".to_string(),
+                ))
+            })
+    }
+
+    fn diagnostics(&self) -> String {
+        self.diagnostics.clone()
+    }
+}
+
 pub fn preview<A, P, C>(
     params: &StageSignedPagesParams,
     ocr: &A,
@@ -74,6 +114,42 @@ where
             "warn.rfi.noSignedPdfs",
             &signed_root.to_string_lossy(),
         ));
+        return Ok(plan);
+    }
+
+    if ocr.supports_parallel_analysis() {
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        let mut tasks = Vec::new();
+        for pdf in &pdfs {
+            if let Ok(facts) = inspect(pdf)
+                && fidelity_supported(&facts, PdfRole::SignedScan)
+            {
+                if tasks.len().saturating_add(facts.page_count) > MAX_SIGNED_PAGES {
+                    return Err(BackendError::validation(format!(
+                        "signed scans exceed the {MAX_SIGNED_PAGES}-page limit"
+                    )));
+                }
+                tasks.extend((0..facts.page_count).map(|page_index| (pdf.clone(), page_index)));
+            }
+        }
+        let (worker_count, results) =
+            bounded_map(&tasks, |(pdf, page_index)| ocr.read_page(pdf, *page_index))
+                .map_err(BackendError::request_failed)?;
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        let cached = CachedPageOcr {
+            reads: tasks.into_iter().zip(results).collect(),
+            page_previews: ocr.supports_page_previews(),
+            diagnostics: ocr.diagnostics(),
+        };
+        let mut plan = preview(params, &cached, progress, cancelled)?;
+        plan.meta
+            .insert("workerCount".to_string(), Value::from(worker_count as u64));
+        plan.meta
+            .insert("parallelAnalysis".to_string(), Value::Bool(true));
         return Ok(plan);
     }
 

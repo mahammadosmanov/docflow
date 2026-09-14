@@ -1,6 +1,6 @@
 [package]
 name = "docflow"
-version = "0.19.0"
+version = "0.20.0"
 description = "Safe desktop document automation"
 authors = ["DocFlow"]
 edition = "2024"
@@ -24,6 +24,7 @@ sha2 = "0.10"
 percent-encoding = "2"
 png = "0.17"
 quick-xml = "0.41"
+rayon = "1.11"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"

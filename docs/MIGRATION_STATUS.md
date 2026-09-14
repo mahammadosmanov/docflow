@@ -4,8 +4,24 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.20.0: safe multi-core PDF orientation normalization
+  - recursively inspects PDFs only below CIV, MEC, ELE, and PRC trees and uses
+    content-based Tesseract OSD to approve an exact rotation for every page
+  - the selected RFI system stays read-only; approved copies are published into
+    a separate no-clobber review tree with the same relative folder layout
+  - one uncertain page rejects the whole PDF, while encrypted, signed, malformed,
+    changed, and colliding inputs fail closed before publication
+  - Process Scans and combined Worley recognition share the bounded Rust worker
+    pool; mutation, journaling, Undo, Office work, and printing remain serial
+  - macOS source verification passed: 331 Rust unit tests and 208 integration
+    tests, with one operator-workbook test intentionally ignored; warnings-denied
+    Clippy, fmt, check, 23 Node tests, 51 React tests, production frontend build,
+    source/version/docs audits, and the 287-Cargo/173-npm/60-OCR license audit
+  - Windows package, native Tesseract OSD, OneDrive review-tree, and current
+    production-document acceptance remain external gates and were not run here
+
 - [x] Version 0.19.0: machine-checked maintainer and AI onboarding canon
-  - ordered documentation now covers requirements, all nine operations, exact
+  - ordered documentation now covers requirements, all ten operations, exact
     RFI rules, mutation/recovery state, generic editors, traceability, known
     limitations, and Windows build/operator acceptance
   - active Tauri command authority is documented before the retained historical

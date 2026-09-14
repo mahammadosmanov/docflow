@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.19.0",
+  "currentVersion": "0.20.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -382,9 +382,17 @@
       "version": "0.19.0",
       "date": "2026-09-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.19.0",
       "summary": "Add a complete machine-checked maintainer and AI onboarding canon tied to stable requirements and the exact Rust operation roster."
+    },
+    {
+      "version": "0.20.0",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.20.0",
+      "summary": "Normalize mixed RFI PDF page orientations through bounded multi-core content analysis and fidelity-checked no-clobber review copies."
     }
   ]
 }

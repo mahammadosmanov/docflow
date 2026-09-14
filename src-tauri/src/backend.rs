@@ -483,6 +483,7 @@ impl BackendRouter {
                 "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
                 "rfi.outlook_reply_draft" => native.preview_outlook_reply_draft(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
+                "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
                 "rfi.work_item_update" => native.preview_work_item(params, send),
                 "rfi.work_item_export" => native.preview_work_item_export(params, send),
                 "files.batch_print" => native.preview_batch_print(params, send),

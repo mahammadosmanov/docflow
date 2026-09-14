@@ -312,6 +312,68 @@ impl OcrAdapter for FixtureOcr {
     }
 }
 
+struct ParallelFixtureOcr;
+
+impl OcrAdapter for ParallelFixtureOcr {
+    fn read(&self, path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        let number = if path.file_name().and_then(|name| name.to_str()) == Some("second.pdf") {
+            "0065"
+        } else {
+            "0064"
+        };
+        Ok(OcrRead {
+            matched: find(&format!("AZE-SUN-INT-QMS-RFI-CIV-{number}")),
+            source: "parallel-fixture".to_string(),
+        })
+    }
+
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
+    fn diagnostics(&self) -> String {
+        "parallel fixture OCR".to_string()
+    }
+}
+
+#[test]
+fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::write(source.join("first.pdf"), b"fixture").unwrap();
+    std::fs::write(source.join("second.pdf"), b"fixture").unwrap();
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+        },
+        &ParallelFixtureOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(plan.meta["parallelAnalysis"], true);
+    assert!(
+        plan.meta["workerCount"]
+            .as_u64()
+            .is_some_and(|value| value >= 1)
+    );
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == docflow_lib::contracts::StepKind::Copy)
+            .count(),
+        2
+    );
+}
+
 struct BrokenOcr;
 
 impl OcrAdapter for BrokenOcr {

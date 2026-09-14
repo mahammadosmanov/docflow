@@ -599,6 +599,36 @@
     "titleKey": "op.rfi.stage_signed_first_pages.title"
   },
   {
+    "descriptionKey": "op.rfi.normalize_pdf_orientation.desc",
+    "id": "rfi.normalize_pdf_orientation",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.orientation.rfiSystemRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.orientation.rfiSystemRoot",
+        "name": "rfi_system_root",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.orientation.reviewRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.orientation.reviewRoot",
+        "name": "review_root",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.normalize_pdf_orientation.title"
+  },
+  {
     "descriptionKey": "op.rfi.system_sync.desc",
     "id": "rfi.system_sync",
     "schema": [

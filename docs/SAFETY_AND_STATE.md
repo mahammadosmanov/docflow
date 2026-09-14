@@ -39,3 +39,12 @@ Workbook preview pins original content and approved literal-cell changes. Apply
 creates a non-overwriting backup, writes a private candidate, verifies permitted
 OOXML deltas, then uses capability-relative guarded replacement. A crash or
 post-rename durability uncertainty remains in the journal for explicit recovery.
+
+## PDF orientation copies
+
+Orientation preview records the exact source hash, page indexes, current and
+target rotations, confidence, method, relative destination, and directory steps.
+Apply revalidates that approved hash, performs no new OCR, writes and validates a
+private incremental PDF, then publishes it no-clobber beneath the separate review
+root. The journal records the final copy hash so Undo removes it only while it is
+still the exact file DocFlow created.

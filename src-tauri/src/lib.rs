@@ -20,6 +20,7 @@ pub mod ooxml;
 pub mod operations;
 pub mod outlook_reply_draft;
 pub mod page_range;
+mod parallel;
 mod path_selection;
 pub mod paths;
 pub mod pdf;

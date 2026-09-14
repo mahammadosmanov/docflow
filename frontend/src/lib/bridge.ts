@@ -615,6 +615,37 @@ const demoSignedPagesOperation: OperationDef = {
   ],
 };
 
+const demoPdfOrientationOperation: OperationDef = {
+  id: "rfi.normalize_pdf_orientation",
+  titleKey: "op.rfi.normalize_pdf_orientation.title",
+  descriptionKey: "op.rfi.normalize_pdf_orientation.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "rfi_system_root",
+      kind: "folder",
+      labelKey: "param.rfi.orientation.rfiSystemRoot",
+      default: "",
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.orientation.rfiSystemRoot.help",
+    },
+    {
+      name: "review_root",
+      kind: "folder",
+      labelKey: "param.rfi.orientation.reviewRoot",
+      default: "",
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.orientation.reviewRoot.help",
+    },
+  ],
+};
+
 const signedOut: AuthState = {
   signedIn: false,
   allowed: false,
@@ -686,6 +717,7 @@ export class MockBridge implements Bridge {
             demoRfiFollowUpOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
+            demoPdfOrientationOperation,
             demoRfiSystemSyncOperation,
           ],
         } satisfies Bootstrap;
@@ -924,6 +956,35 @@ export class MockBridge implements Bridge {
           } satisfies Plan;
           this.printPlan = plan;
           result = plan;
+          break;
+        }
+        if (params.opId === "rfi.normalize_pdf_orientation") {
+          result = {
+            planId: "demo-orientation-plan",
+            opId: "rfi.normalize_pdf_orientation",
+            warnings: [],
+            meta: {
+              sourceReadOnly: true,
+              workerCount: 4,
+              verifiedPages: 24,
+              rotatedPages: 3,
+              actionableFiles: 2,
+              manualReviewFiles: 0,
+            },
+            steps: [
+              {
+                kind: "pdf_page_rotate",
+                src: `${mockPath(values.rfi_system_root, "/RFI System")}/MEC/RFI-0001/document.pdf`,
+                dst: `${mockPath(values.review_root, "/Orientation Review")}/MEC/RFI-0001/document.pdf`,
+                noteKey: "note.rfi.pdfOrientationNormalized",
+                meta: {
+                  rotations: [
+                    { pageIndex: 1, fromRotation: 0, targetRotation: 90 },
+                  ],
+                },
+              },
+            ],
+          } satisfies Plan;
           break;
         }
         if (params.opId === "rfi.log_add") {

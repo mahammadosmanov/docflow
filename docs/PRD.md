@@ -34,10 +34,14 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   Windows, Office, OneDrive, printer, live-service, signing, or notarization acceptance.
 - **DF-014 — Release identity:** `VERSION`, manifests, operator/AI documentation,
   changelog, release catalog, package, checksum, and tag must describe one version.
+- **DF-015 — Safe page orientation:** every page below the RFI system's CIV,
+  MEC, ELE, and PRC trees is classified from rendered content. Only complete,
+  high-confidence PDF decisions may create no-clobber corrected copies under a
+  separate review root; the source tree remains read-only.
 
 ## Scope
 
-The nine registered operations and application-level history, recovery, review,
+The ten registered operations and application-level history, recovery, review,
 settings, access control, diagnostics, and readiness surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

@@ -65,6 +65,18 @@ test("package audit accepts a Rust app and native OCR resources", () => {
       ),
       "fixture",
     );
+    writeFileSync(
+      join(
+        root,
+        "Contents",
+        "Resources",
+        "resources",
+        "tesseract",
+        "tessdata",
+        "osd.traineddata",
+      ),
+      "fixture",
+    );
 
     assert.deepEqual(auditPackage(root), []);
   } finally {

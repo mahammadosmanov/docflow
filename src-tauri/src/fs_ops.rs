@@ -31,7 +31,7 @@ use crate::{
         CallerIdentity, GrantAccess, GrantScope, PathGrant, PathGrantStore, PathIntent,
         ProvisionalPathGrants,
     },
-    pdf::replace_first_page_incremental_from_page,
+    pdf::{replace_first_page_incremental_from_page, rotate_pages_incremental},
     pdf_publish::temporary_pdf_name_matches,
     plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore, ReservedPlanId},
     progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
@@ -1368,7 +1368,10 @@ impl FilesystemAuthority {
         record: &mut JournalRecord,
         result: &mut OperationResult,
     ) -> Result<(), BackendError> {
-        if record.op_id != "rfi.stage_signed_first_pages" {
+        if !matches!(
+            record.op_id.as_str(),
+            "rfi.stage_signed_first_pages" | "rfi.normalize_pdf_orientation"
+        ) {
             return Ok(());
         }
         let directories = record
@@ -1724,6 +1727,9 @@ impl FilesystemAuthority {
             }
             StepKind::PdfFirstPageReplace => {
                 self.execute_pdf_first_page_replace(step, binding, caller, token, record)
+            }
+            StepKind::PdfPageRotate => {
+                self.execute_pdf_page_rotate(step, binding, caller, token, record)
             }
             StepKind::CleanupTemp => {
                 self.execute_cleanup_temp(step, binding, caller, token, record)
@@ -2416,6 +2422,183 @@ impl FilesystemAuthority {
         let mut actual = Step {
             kind: StepKind::Copy,
             src: Some(archive.to_string_lossy().into_owned()),
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: step.note_key.clone(),
+            meta: step.meta.clone(),
+        };
+        actual
+            .meta
+            .insert("undoSha256".to_string(), Value::String(output_hash));
+        record.steps.push(actual);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(1)
+    }
+
+    fn execute_pdf_page_rotate(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        if binding.operation_id != "rfi.normalize_pdf_orientation" {
+            return Err(StepFailure::NoEffect(
+                "PDF rotation is not authorized for this operation".to_string(),
+            ));
+        }
+        let source = required_path(step.src.as_deref(), "source PDF")?;
+        let source = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &source,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?;
+        let destination = required_path(step.dst.as_deref(), "orientation review PDF")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let expected_hash = step
+            .meta
+            .get("sourceSha256")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("source PDF hash is missing".to_string()))?;
+        let rotations = step
+            .meta
+            .get("rotations")
+            .and_then(Value::as_array)
+            .ok_or_else(|| StepFailure::NoEffect("approved PDF rotations are missing".to_string()))?
+            .iter()
+            .map(|rotation| {
+                let page_index = rotation
+                    .get("pageIndex")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved page index is invalid".to_string())
+                    })?;
+                let target = rotation
+                    .get("targetRotation")
+                    .and_then(Value::as_i64)
+                    .filter(|value| matches!(value, 0 | 90 | 180 | 270))
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved page rotation is invalid".to_string())
+                    })?;
+                Ok((page_index, target))
+            })
+            .collect::<Result<Vec<_>, StepFailure>>()?;
+        if rotations.is_empty() {
+            return Err(StepFailure::NoEffect(
+                "approved PDF rotations are empty".to_string(),
+            ));
+        }
+        let source_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &source,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let destination_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "source PDF changed after preview".to_string(),
+            ));
+        }
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        record.pending_step = Some(step.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+
+        let workspace = tempfile::tempdir().map_err(io_no_effect)?;
+        let workspace_capability =
+            crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
+        let source_copy = workspace.path().join("source.pdf");
+        let completed = workspace.path().join("completed.pdf");
+        let source_copy_anchor = workspace_capability
+            .authorize(&source_copy)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        source_copy_anchor
+            .copy_no_clobber_from(&source_anchor)
+            .map_err(io_no_effect)?;
+        if let Err(error) = rotate_pages_incremental(&source_copy, &completed, &rotations) {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(StepFailure::NoEffect(error.to_string()));
+        }
+        let completed_anchor = workspace_capability
+            .authorize(&completed)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let output_hash = completed_anchor.sha256().map_err(io_no_effect)?;
+        if token.checkpoint().is_err() {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(StepFailure::Cancelled);
+        }
+        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(StepFailure::NoEffect(
+                "approved PDF changed during apply".to_string(),
+            ));
+        }
+        if let Err(error) = destination_anchor.copy_no_clobber_from(&completed_anchor) {
+            if error.kind() != io::ErrorKind::AlreadyExists
+                && destination_anchor.open_read().is_ok()
+            {
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    destination.display()
+                )));
+            }
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(io_no_effect(error));
+        }
+        if destination_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", destination.display()))
+        })? != output_hash
+        {
+            return Err(StepFailure::OutcomeUnknown(
+                "published orientation PDF failed hash validation".to_string(),
+            ));
+        }
+        let mut actual = Step {
+            kind: StepKind::Copy,
+            src: Some(source.to_string_lossy().into_owned()),
             dst: Some(destination.to_string_lossy().into_owned()),
             note_key: step.note_key.clone(),
             meta: step.meta.clone(),

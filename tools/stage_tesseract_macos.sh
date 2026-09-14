@@ -42,7 +42,7 @@ find_tessdata() {
     "$parent/share/tessdata" \
     "$parent/share/tesseract-ocr/5/tessdata" \
     "$parent/share/tesseract-ocr/4.00/tessdata"; do
-    if [[ -n "$candidate" && -f "$candidate/eng.traineddata" ]]; then
+    if [[ -n "$candidate" && -f "$candidate/eng.traineddata" && -f "$candidate/osd.traineddata" ]]; then
       print -r -- "$candidate"
       return 0
     fi
@@ -51,10 +51,11 @@ find_tessdata() {
 }
 
 tessdata_source=$(find_tessdata "$main_source") || {
-  print -u2 "eng.traineddata was not found for $requested"
+  print -u2 "eng.traineddata and osd.traineddata were not found for $requested"
   exit 1
 }
 cp -L "$tessdata_source/eng.traineddata" "$staging/tessdata/eng.traineddata"
+cp -L "$tessdata_source/osd.traineddata" "$staging/tessdata/osd.traineddata"
 
 dependencies() {
   otool -L "$1" | tail -n +2 | awk '{print $1}'
@@ -222,6 +223,10 @@ TESSDATA_PREFIX="$staging/tessdata" "$staging/tesseract" --version >/dev/null
 languages=$(TESSDATA_PREFIX="$staging/tessdata" "$staging/tesseract" --list-langs 2>&1)
 if ! print -r -- "$languages" | grep -qx 'eng'; then
   print -u2 "Staged Tesseract does not expose the English model"
+  exit 1
+fi
+if ! print -r -- "$languages" | grep -qx 'osd'; then
+  print -u2 "Staged Tesseract does not expose the orientation model"
   exit 1
 fi
 (

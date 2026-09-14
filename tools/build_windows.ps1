@@ -178,11 +178,15 @@ try {
 
     $bundledTesseract = Join-Path $ResourceDir "tesseract.exe"
     $englishData = Join-Path $ResourceDir "tessdata\eng.traineddata"
+    $orientationData = Join-Path $ResourceDir "tessdata\osd.traineddata"
     if (-not (Test-Path $bundledTesseract -PathType Leaf)) {
         throw "The staged tesseract.exe is missing."
     }
     if (-not (Test-Path $englishData -PathType Leaf)) {
         throw "The staged English OCR data is missing."
+    }
+    if (-not (Test-Path $orientationData -PathType Leaf)) {
+        throw "The staged orientation OCR data is missing."
     }
     Assert-TesseractResourceEvidence $ResourceDir
     Write-ResourceChecksums $ResourceDir

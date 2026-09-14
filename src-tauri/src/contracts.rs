@@ -198,6 +198,7 @@ pub enum StepKind {
     RestoreBackup,
     Print,
     PdfFirstPageReplace,
+    PdfPageRotate,
     CleanupTemp,
     OutlookReplyDraft,
 }

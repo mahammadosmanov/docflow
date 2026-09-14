@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact nine-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact ten-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -56,6 +56,7 @@ and silent uninstall on a real Windows runner.
 | Documentation contract | Required-map, requirement-ID, and operation-roster audit | New operator or coding agent follows missing/stale product guidance |
 | Process Scans | parser/OCR tests + image-only packaged smoke | OCR drift, false labels, missing engine/data |
 | Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
+| PDF orientation | discipline-only discovery, confidence fail-closed, incremental fidelity, no-clobber apply/undo tests | Wrong rotation, unrelated-tree scan, source mutation, damaged PDF graph |
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |
 | RFI Follow Up | exact-match preview/revise/apply/undo and package-fidelity tests | Wrong-row updates, unsafe status projection, package damage, or recovery ambiguity |
 | RFI System/Worley sync | shared-formula fixture + operator-supplied current-template guarded-delta test | Folder Link formula overwrite, wrong control-table mapping, stale apply, shared-formula or calc-chain repair |

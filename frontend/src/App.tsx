@@ -3377,6 +3377,7 @@ export function summarizePlanImpact(plan: Plan): PlanImpact {
       case "copy":
       case "write":
       case "pdf_first_page_replace":
+      case "pdf_page_rotate":
         impact.outputs += 1;
         break;
       case "workbook_update":
@@ -3887,6 +3888,20 @@ function StepRow({
 }) {
   const source = fullPath ? step.src : step.src?.split(/[\\/]/).pop();
   const destination = fullPath ? step.dst : step.dst?.split(/[\\/]/).pop();
+  const rotationSummary =
+    step.kind === "pdf_page_rotate" && Array.isArray(step.meta.rotations)
+      ? step.meta.rotations
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return "";
+            const page = Number((entry as Record<string, unknown>).pageIndex);
+            const target = Number((entry as Record<string, unknown>).targetRotation);
+            return Number.isInteger(page) && Number.isInteger(target)
+              ? `${page + 1} → ${target}°`
+              : "";
+          })
+          .filter(Boolean)
+          .join(", ")
+      : "";
   return (
     <div className="step-row">
       <span className="step-kind">
@@ -3896,6 +3911,8 @@ function StepRow({
           <TableProperties />
         ) : step.kind === "pdf_first_page_replace" ? (
           <Files />
+        ) : step.kind === "pdf_page_rotate" ? (
+          <RotateCcw />
         ) : step.kind === "cleanup_temp" ? (
           <Trash2 />
         ) : step.kind === "copy" ? (
@@ -3913,6 +3930,9 @@ function StepRow({
           <span className="destination" title={step.dst}>
             → {destination}
           </span>
+        )}
+        {rotationSummary && (
+          <span>{s.t("rfi.orientation.pages")}: {rotationSummary}</span>
         )}
       </div>
     </div>

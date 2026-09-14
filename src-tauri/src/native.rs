@@ -25,6 +25,7 @@ use crate::{
     http::{HttpClient, HttpConfig, JsonHttp},
     journal::JournalStore,
     ocr::NativeOcr,
+    operations::pdf_orientation::{PdfOrientationParams, preview as preview_pdf_orientation},
     operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
     operations::stage_signed_pages::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
@@ -1342,6 +1343,59 @@ impl NativeBackend {
         )?)
     }
 
+    pub(crate) fn preview_pdf_orientation<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<PdfOrientationValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != "rfi.normalize_pdf_orientation" {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust PDF orientation backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let source_grant = self.filesystem.issue_grant(
+            &scope,
+            &request.values.rfi_system_root,
+            GrantAccess::Read,
+        )?;
+        let review_grant = self.filesystem.issue_grant(
+            &scope,
+            &request.values.review_root,
+            GrantAccess::ReadWrite,
+        )?;
+        let plan = preview_pdf_orientation(
+            &PdfOrientationParams {
+                rfi_system_root: request.values.rfi_system_root,
+                review_root: request.values.review_root,
+            },
+            &NativeOcr::discover(),
+            progress,
+            || false,
+        )?;
+        encode(self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                vec![source_grant.grant_id, review_grant.grant_id],
+            ),
+            plan,
+        )?)
+    }
+
     pub(crate) fn preview_batch_print<F>(
         &self,
         params: Value,
@@ -1968,6 +2022,13 @@ struct StageSignedPagesValues {
     review_root: PathBuf,
     #[serde(default)]
     scan_subfolders: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PdfOrientationValues {
+    rfi_system_root: PathBuf,
+    review_root: PathBuf,
 }
 
 #[derive(Deserialize)]

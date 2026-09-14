@@ -8,6 +8,29 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.20.0 - 2026-09-14
+
+### Added
+
+- Added multi-core page-by-page orientation analysis for every PDF below the RFI
+  system's CIV, MEC, ELE, and PRC folders, with content-based Tesseract OSD
+  detection and preserved relative folder layout in a separate review root.
+
+### Changed
+
+- Process Scans and combined Worley page recognition now use the same bounded
+  multi-core Rust analysis pool when the native OCR adapter is active. Ordered
+  Apply, journaling, Undo, Office work, and print submission remain serial.
+
+### Safety
+
+- The production RFI system remains read-only. Low-confidence, unreadable,
+  encrypted, signed, malformed, and colliding PDFs fail closed instead of being
+  partially rotated.
+- Apply uses only approved page rotations, verifies the source hash, appends only
+  page dictionary changes to a private copy, validates unrelated PDF structures,
+  publishes without overwrite, journals the result, and supports guarded Undo.
+
 ## 0.19.0 - 2026-09-13
 
 ### Added

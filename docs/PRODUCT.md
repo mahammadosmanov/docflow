@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.19.0**. `VERSION` is authoritative.
+Current product version: **0.20.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -40,6 +40,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
 13. A machine-checked documentation map, stable requirement IDs, traceability
     owners, known limitations, and Windows runbook keep human and AI handoffs
     aligned with the registered Rust operation roster.
+14. PDF orientation is inferred from rendered content, never page dimensions;
+    the RFI system remains read-only and only complete high-confidence decisions
+    may create separately reviewed copies.
 
 ## Current capabilities
 
@@ -52,6 +55,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order | Persistent resumable queue and journaled approved steps |
 | Signed-page staging | Identify individual RFI pages in single or combined Worley scans, visually compare old/new first pages, and replace page one in review copies | Exact page index and candidate are pinned; thumbnails are inert and bounded; archive and source scan stay read-only; unreadable, duplicate, ambiguous, and unsupported pages are rejected |
+| PDF orientation normalization | Make every confidently classifiable PDF page under CIV/MEC/ELE/PRC readable without manual rotation | Bounded multi-core preview; exact page rotations and source hashes; separate no-clobber review tree; structural fidelity verification; uncertain whole PDFs stay unapplied |
 | Review manager | Keep, place, or recoverably delete exceptions | Delete is a move to application trash |
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |
