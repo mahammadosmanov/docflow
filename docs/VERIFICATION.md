@@ -24,6 +24,16 @@ RFI System: exercise a representative deep tree, duplicate exact filenames,
 an unreadable folder, cancellation, and nested combined scans; verify the archive
 hashes remain unchanged and only no-clobber review copies are produced.
 
+The Windows x64 cross-build from implementation commit
+`29672facb885b3cbda9594b0ece82d688de7385e` completed. The OCR-inclusive ZIP
+passed the package audit, every generated checksum verified, and both executable
+artifacts identify as Windows GUI-subsystem PE files. Cross-linker PDB warnings
+were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `58b87c8f045745013a9fec5c73aa589e0a2b7ad16a3e690b893e2e523b1624bb`;
+- portable EXE: `d44302cc097520d7497bc33d53987171aa6973c55092bf827f525d79c48a6186`;
+- per-user installer: `faf0fe8d6b3d928b7915a58d5b42b23a4f469144b372f1090ddff37e22943cbe`.
+
 ## 0.24.2 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
