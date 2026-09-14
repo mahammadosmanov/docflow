@@ -24,6 +24,16 @@ scores are intentionally review evidence rather than calibrated probability or
 automatic approval. Native Windows/WebView2 display scaling, screen-reader, and
 representative low-confidence OCR acceptance have not yet run.
 
+The Windows x64 cross-build from implementation commit
+`ef4b6d0f72bd601a5afa86f4e1e46b113c96d0b2` completed. The OCR-inclusive ZIP
+passed the package audit, all generated checksums verified, and the installer
+and portable executable identify as Windows GUI-subsystem PE files. Cross-linker
+PDB warnings were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `e5606a209e33cc5ca9bcdffca55980d6e493aa5e8d06f6fc1d28dacc56176e53`;
+- portable EXE: `43401700c6220258dc6e0a5b1a060e8e26743ceecebff549c2a5506d76e839e1`;
+- per-user installer: `e6d530053b88a69bb7a7acbd7d29b970546775a13178d92661ff93482a560424`.
+
 ## 0.23.0 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
