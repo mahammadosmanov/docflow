@@ -10,7 +10,7 @@
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
-| `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate normal fast spool release and optionally restore previous safe settings |
+| `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; continue without duplicate submission when Windows accepts a job but exposes no final spool receipt, and optionally restore previous safe settings |
 | `rfi.stage_signed_first_pages` | Identify single/combined Worley pages and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
@@ -23,6 +23,9 @@
 - Batch Print always starts without old files or silently restored settings. One
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.
+- An accepted job whose final Windows spool receipt is unavailable is shown as
+  sent-unconfirmed and the queue continues. It is never retried automatically;
+  explicit fault, deletion, or uncertain cancellation still pauses for review.
 - Preview impact counts, exact effect paths, approved workbook cell comparisons,
   signed-page old/new thumbnails, and warning focus/filtering.
 - OCR-backed preview effects, signed-page rows, orientation decisions, and

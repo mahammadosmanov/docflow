@@ -44,10 +44,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   Worley state follows the exact REMARKS marker; excluded sheets never change.
 - **DF-017 — Resilient print handoff:** a complete Windows spool submission is
   not failed merely because a driver immediately releases its job record.
-  Recoverable device states wait within the approved timeout, explicit terminal
-  faults remain uncertain and never auto-retry, and previous task files are
-  never restored automatically. Safe scalar settings are reusable only through
-  an explicit operator action.
+  A native-app request accepted by Windows but not exposed as an identifiable
+  spool record is completed-unconfirmed, journaled, never retried, and does not
+  pause later files. Recoverable device states wait within the approved timeout,
+  explicit terminal faults and uncertain cancellation pause without auto-retry,
+  and previous task files are never restored automatically. Safe scalar settings
+  are reusable only through an explicit operator action.
 - **DF-018 — Durable incremental scanning:** repeated large RFI-system analysis
   uses an owner-, root-, operation-, algorithm-, and file-fingerprint-scoped
   local index. Every newly completed file is checkpointed immediately; changed,

@@ -36,6 +36,14 @@ flags remain pending until completion, cancellation, or the approved timeout.
 Single status-read/open failures receive a bounded three-second retry window;
 that retry observes the same job and never resubmits it.
 
+For native file-association handlers, Windows may accept `ShellExecute` while
+the application or EPSON driver never exposes a uniquely identifiable spool
+record. After the bounded acquisition window this becomes
+`completed_unconfirmed`: DocFlow journals the accepted submission, forbids a
+retry, warns the operator, and continues the remaining serial queue. An explicit
+spool fault or uncertain cancellation still pauses and is not converted to this
+state. This separation avoids both the repeated false stop and duplicate paper.
+
 This includes the two-call `GetJob` race: if the driver releases the record
 between the size probe and buffered read, the already accepted handoff is
 complete. If the record grows, DocFlow retries only the read with a larger
@@ -49,6 +57,8 @@ the long-lived reusable-procedure mechanism.
 ## Consequences
 
 - Fast-purging Windows drivers no longer create an immediate false failure.
+- Accepted native-handler jobs without a final receipt no longer stop every
+  later file; their warning remains visible in the completed result.
 - Temporary device conditions can recover without losing queue order.
 - Physical output still cannot be certified by software; explicit terminal
   faults remain visible and non-retryable.

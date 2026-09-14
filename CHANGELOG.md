@@ -8,6 +8,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.24.2 - 2026-09-14
+
+### Fixed
+
+- Batch Print no longer stops after each file when Windows accepts a native-app
+  print request but the EPSON driver exposes no identifiable spool record. The
+  job is recorded as sent without a final receipt, is never submitted twice,
+  and the queue automatically continues; explicit printer faults and uncertain
+  cancellation still pause for review.
+
 ## 0.24.1 - 2026-09-14
 
 ### Fixed

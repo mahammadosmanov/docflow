@@ -38,6 +38,9 @@ pub(crate) fn map_controlled_print_failure(
         crate::print_queue::PrintFailureKind::UnsupportedOptions => {
             "error.print.excelPrintOptionsRejected"
         }
+        crate::print_queue::PrintFailureKind::SubmittedUnconfirmed => {
+            "error.print.excelPrintCompletionUnconfirmed"
+        }
         crate::print_queue::PrintFailureKind::Uncertain => {
             "error.print.excelPrintCompletionUnconfirmed"
         }
@@ -102,7 +105,11 @@ pub(crate) fn windows_post_submission_observation_error(
             "Windows spooler reported a fault after the job was submitted"
         }
     };
-    crate::print_queue::PrintFailure::uncertain(message)
+    if stage == WindowsPostSubmissionObservation::StatusFault {
+        crate::print_queue::PrintFailure::uncertain(message)
+    } else {
+        crate::print_queue::PrintFailure::submitted_unconfirmed(message)
+    }
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -447,20 +454,24 @@ mod tests {
     }
 
     #[test]
-    fn every_windows_post_submission_observation_error_is_uncertain() {
+    fn post_submission_observation_loss_continues_but_explicit_fault_is_uncertain() {
         for stage in [
             WindowsPostSubmissionObservation::PrinterOpen,
             WindowsPostSubmissionObservation::JobEnumeration,
             WindowsPostSubmissionObservation::JobRead,
-            WindowsPostSubmissionObservation::StatusFault,
         ] {
             let failure = windows_post_submission_observation_error(stage);
             assert_eq!(
                 failure.kind,
-                crate::print_queue::PrintFailureKind::Uncertain
+                crate::print_queue::PrintFailureKind::SubmittedUnconfirmed
             );
             assert!(failure.uncertain);
         }
+        let fault = windows_post_submission_observation_error(
+            WindowsPostSubmissionObservation::StatusFault,
+        );
+        assert_eq!(fault.kind, crate::print_queue::PrintFailureKind::Uncertain);
+        assert!(fault.uncertain);
     }
 
     #[test]

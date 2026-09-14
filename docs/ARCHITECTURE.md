@@ -228,9 +228,17 @@ the approved timeout, and transient observation failures receive only a bounded
 read retry, never another print submission. Batch Print's remembered scalar
 values are opt-in at the UI; selected files never enter remembered settings.
 
+For native file-association handlers, successful `ShellExecute` is the last
+available submission boundary when the application or driver never exposes a
+uniquely identifiable spool record. That job becomes `completed_unconfirmed`:
+the accepted submission and warning are journaled, no retry is permitted, and
+the serial queue advances. Explicit spool faults and uncertain cancellation do
+not use this path and still pause for operator review.
+
 The same completed-handoff rule applies when a fast-purging driver releases the
 job between `GetJob`'s size probe and buffered read. Buffer-growth races retry
-the read without resubmission; access or other query failures remain uncertain.
+the read without resubmission; post-acceptance printer-open, enumeration, or
+read loss is completed-unconfirmed, while an observed status fault remains uncertain.
 
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified

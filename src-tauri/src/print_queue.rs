@@ -160,6 +160,7 @@ pub enum PrintFailureKind {
     Failed,
     Unsupported,
     UnsupportedOptions,
+    SubmittedUnconfirmed,
     Uncertain,
     Cancelled,
 }
@@ -244,6 +245,15 @@ impl PrintFailure {
         )
     }
 
+    pub fn submitted_unconfirmed(message: impl Into<String>) -> Self {
+        Self::new(
+            PrintFailureKind::SubmittedUnconfirmed,
+            message,
+            true,
+            RetryDisposition::Never,
+        )
+    }
+
     pub fn cancelled(message: impl Into<String>, uncertain: bool) -> Self {
         Self::new(
             PrintFailureKind::Cancelled,
@@ -301,6 +311,7 @@ fn submission_primary_classification(
             PrintFailureKind::Failed => "failed",
             PrintFailureKind::Unsupported => "unsupported",
             PrintFailureKind::UnsupportedOptions => "unsupported_options",
+            PrintFailureKind::SubmittedUnconfirmed => "submitted_unconfirmed",
             PrintFailureKind::Uncertain => "uncertain",
             PrintFailureKind::Cancelled if failure.uncertain => "cancelled_uncertain",
             PrintFailureKind::Cancelled => "cancelled",
@@ -1438,6 +1449,29 @@ impl PrintService {
                         paused = true;
                         break;
                     }
+                    Err(error) if error.kind == PrintFailureKind::SubmittedUnconfirmed => {
+                        let saved = &mut state.jobs[saved_index];
+                        saved.status = Some("completed_unconfirmed".to_string());
+                        saved.completed_at = Some(utc_now());
+                        saved.error = Some(redact_error(&error.message));
+                        state.current_job_id = None;
+                        let mut submitted_step = pending;
+                        submitted_step.meta.insert(
+                            "outcome".to_string(),
+                            Value::String("submitted_unconfirmed".to_string()),
+                        );
+                        record.steps.push(submitted_step);
+                        record.pending_step = None;
+                        self.write_journal(&record)?;
+                        self.queues.save(&mut state)?;
+                        result.applied += 1;
+                        result.errors.push(warning(
+                            "warn.print.submittedUnconfirmed",
+                            display_name(&job.path),
+                        ));
+                        completed = true;
+                        break;
+                    }
                     Err(error) => {
                         let saved = &mut state.jobs[saved_index];
                         saved.error = Some(redact_error(&error.message));
@@ -2224,6 +2258,7 @@ fn queue_counts(jobs: &[PrintJob]) -> BTreeMap<String, u64> {
         ("pending".to_string(), 0),
         ("printing".to_string(), 0),
         ("completed".to_string(), 0),
+        ("completed_unconfirmed".to_string(), 0),
         ("failed".to_string(), 0),
         ("cancelled".to_string(), 0),
         ("uncertain".to_string(), 0),

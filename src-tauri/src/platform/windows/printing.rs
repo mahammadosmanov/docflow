@@ -1273,8 +1273,9 @@ fn print_with_native_application(
     let title = display_name(&job.path).to_ascii_lowercase();
     let job_id = loop {
         if cancelled() {
-            return Err(PrintFailure::uncertain(
+            return Err(PrintFailure::cancelled(
                 "the native application was started but no spool job was identified",
+                true,
             ));
         }
         let jobs = jobs(&job.printer).map_err(|_| {
@@ -1291,7 +1292,7 @@ fn print_with_native_application(
             break job.id;
         }
         if Instant::now() >= acquisition_deadline {
-            return Err(PrintFailure::uncertain(
+            return Err(PrintFailure::submitted_unconfirmed(
                 "the native application did not expose an identifiable spool job",
             ));
         }

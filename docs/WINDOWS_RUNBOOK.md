@@ -42,9 +42,12 @@ pass from a macOS build or Windows cross-compile.
 5. Repeat with OneDrive paths, open-file locks, destination collisions, and cancellation.
 6. For Outlook, select one non-sensitive test message, preview, Apply, confirm an
    unsent Reply All draft, then exercise unchanged and edited-draft undo paths.
-7. For printing, use non-sensitive fixtures and a test printer. Verify mixed
-   ordering, worksheets, ranges, A4/A3, orientation, duplex/color, cancellation,
-   restart, and uncertain-job operator decisions. Never auto-retry uncertainty.
+7. For printing, use at least three non-sensitive mixed fixtures in one Apply.
+   Verify ordering, worksheets, ranges, A4/A3, orientation, duplex/color,
+   cancellation, restart, and uncertain-job operator decisions. A job accepted
+   without a final spool receipt must show sent-unconfirmed and advance without
+   Review remaining or duplicate output; explicit faults must still pause. Never
+   auto-retry uncertainty.
 8. For PDF orientation, use synthetic copies containing upright, sideways,
    upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
    Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source

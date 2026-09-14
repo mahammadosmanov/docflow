@@ -2505,6 +2505,55 @@ fn uncertain_and_cancelled_jobs_are_never_retried_automatically() {
 }
 
 #[test]
+fn submitted_unconfirmed_job_is_not_retried_and_queue_continues() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.push(Err(PrintFailure::submitted_unconfirmed(
+        "Windows released the receipt after accepting the job",
+    )));
+    adapter.push(Ok(()));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![first, second]);
+    values.retries = 3;
+    values.on_error = "pause".to_string();
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 2);
+    assert_eq!((result.applied, result.failed), (2, 0));
+    assert_eq!(result.meta["status"], "completed");
+    assert_eq!(result.meta["resumable"], 0);
+    assert_eq!(result.meta["counts"]["completed_unconfirmed"], 1);
+    assert_eq!(result.meta["counts"]["completed"], 1);
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors[0].key, "warn.print.submittedUnconfirmed");
+
+    let journal = std::fs::read_dir(root.path().join("journal"))
+        .unwrap()
+        .find_map(|entry| {
+            let path = entry.ok()?.path();
+            (path.extension().and_then(|value| value.to_str()) == Some("json"))
+                .then(|| std::fs::read(path).ok())
+                .flatten()
+        })
+        .expect("print journal");
+    let journal: serde_json::Value = serde_json::from_slice(&journal).unwrap();
+    assert_eq!(
+        journal["steps"][0]["meta"]["outcome"],
+        "submitted_unconfirmed"
+    );
+    assert_eq!(journal["state"], "committed");
+}
+
+#[test]
 fn restart_recovery_marks_an_active_job_uncertain_and_requires_explicit_selection() {
     let root = TempDir::new().unwrap();
     let file = root.path().join("one.pdf");

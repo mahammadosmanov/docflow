@@ -12,10 +12,11 @@ These are not silently waived by passing local tests.
   guarded unchanged-draft undo on the operator's desktop Outlook variants.
 - Microsoft Print to PDF plus representative physical/network printer output,
   cancellation, driver options, spool receipts, and uncertain recovery.
-- DocFlow 0.24.1 requires physical Windows acceptance on the EPSON L15160 Series:
-  immediate spool-record release, wake/offline/paper-out recovery, multi-job
-  ordering, cancellation, and the selected timeout must be exercised with
-  non-sensitive fixtures. Source and cross-build tests cannot certify paper output.
+- DocFlow 0.24.2 requires physical Windows acceptance on the EPSON L15160 Series:
+  native-handler receipt loss, immediate spool-record release, wake/offline/
+  paper-out recovery, multi-job ordering, cancellation, and the selected timeout
+  must be exercised with non-sensitive fixtures. Source and cross-build tests
+  cannot certify paper output.
 - Live Supabase RLS deployment/two-user verification, release signing, and macOS notarization.
 - Orientation detection and incremental-copy output on the exact Windows x64
   package, including OneDrive-backed CIV/MEC/ELE/PRC trees and representative

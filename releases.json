@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.24.1",
+  "currentVersion": "0.24.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -430,9 +430,17 @@
       "version": "0.24.1",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.24.1",
       "summary": "Continue Windows print queues when fast-purging drivers release a completed spool record between the two GetJob reads, without weakening explicit fault handling."
+    },
+    {
+      "version": "0.24.2",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.24.2",
+      "summary": "Continue strictly ordered Windows print queues after an accepted native-handler job has no identifiable final spool receipt, without retrying it or weakening explicit fault and cancellation handling."
     }
   ]
 }
