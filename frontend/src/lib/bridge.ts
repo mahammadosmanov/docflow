@@ -418,6 +418,18 @@ const demoRfiSystemSyncOperation: OperationDef = {
       visibleWhen: {},
       helpKey: "param.rfi.systemSync.followUpWorkbook.help",
     },
+    {
+      name: "force_rescan",
+      kind: "bool",
+      labelKey: "param.scanIndex.forceRescan",
+      default: false,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.scanIndex.forceRescan.help",
+      remember: false,
+    },
   ],
 };
 
@@ -643,6 +655,18 @@ const demoPdfOrientationOperation: OperationDef = {
       choiceLabels: {},
       visibleWhen: {},
       helpKey: "param.rfi.orientation.reviewRoot.help",
+    },
+    {
+      name: "force_rescan",
+      kind: "bool",
+      labelKey: "param.scanIndex.forceRescan",
+      default: false,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.scanIndex.forceRescan.help",
+      remember: false,
     },
   ],
 };
@@ -971,6 +995,14 @@ export class MockBridge implements Bridge {
               rotatedPages: 3,
               actionableFiles: 2,
               manualReviewFiles: 0,
+              scanIndex: {
+                discovered: 8,
+                reused: 6,
+                analyzed: 2,
+                failed: 0,
+                priorInterruptedRuns: 0,
+                forceRescan: Boolean(values.force_rescan),
+              },
             },
             steps: [
               {

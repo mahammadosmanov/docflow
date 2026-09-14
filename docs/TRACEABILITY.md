@@ -20,6 +20,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-015 | `operations/pdf_orientation.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs` | `pdf_orientation.rs`, `signed_pages.rs`, registry and localization tests |
 | DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs`, `rfi_follow_up_current.rs`, `ooxml_fidelity.rs` |
 | DF-017 | `platform/mod.rs`, `platform/windows/printing.rs`, `registry.rs`, generic `App.tsx` form | Windows status-policy tests, `native.rs` settings tests, `App.test.tsx` explicit-restore test |
+| DF-018 | `scan_index.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, generic `App.tsx` summary | scan-index unit tests, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, `App.test.tsx` |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

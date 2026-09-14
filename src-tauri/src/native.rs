@@ -25,7 +25,9 @@ use crate::{
     http::{HttpClient, HttpConfig, JsonHttp},
     journal::JournalStore,
     ocr::NativeOcr,
-    operations::pdf_orientation::{PdfOrientationParams, preview as preview_pdf_orientation},
+    operations::pdf_orientation::{
+        PdfOrientationParams, preview_indexed as preview_pdf_orientation,
+    },
     operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
     operations::stage_signed_pages::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
@@ -44,6 +46,7 @@ use crate::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
     },
     rfi_follow_up, rfi_log, rfi_system_sync,
+    scan_index::ScanIndex,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
     work_items::{self, WorkItemExportInput, WorkItemInput, WorkItemQueues},
 };
@@ -65,6 +68,7 @@ pub(crate) struct NativeBackend {
     outlook: OutlookDraftService,
     process_session_id: Mutex<String>,
     app_data_dir: PathBuf,
+    scan_index: ScanIndex,
 }
 
 impl NativeBackend {
@@ -75,6 +79,10 @@ impl NativeBackend {
             .map(std::path::Path::to_path_buf)
             .unwrap_or_else(|| env::temp_dir().join("docflow"));
         let _ = fs::create_dir_all(app_data_dir.join("trash"));
+        let scan_index =
+            ScanIndex::new(app_data_dir.join("scan-index.sqlite3")).map_err(|error| {
+                BackendError::protocol(format!("scan index initialization: {error}"))
+            })?;
         let journal_dir = settings_path
             .parent()
             .map(|parent| parent.join("journal"))
@@ -146,6 +154,7 @@ impl NativeBackend {
             outlook,
             process_session_id: Mutex::new(uuid::Uuid::new_v4().to_string()),
             app_data_dir,
+            scan_index,
         })
     }
 
@@ -1216,12 +1225,16 @@ impl NativeBackend {
             total: 1,
             subject: system_root.to_string_lossy().into_owned(),
         });
-        let mut plan = rfi_system_sync::preview_system_sync(
+        let mut plan = rfi_system_sync::preview_system_sync_indexed(
             &system_root,
             &source_path,
             &target_path,
             &mut source,
             &mut target,
+            Some(&self.scan_index),
+            &caller.owner_id,
+            request.values.force_rescan,
+            &mut progress,
         )?;
         let reservation = self.filesystem.reserve_plan_id();
         reservation.assign_to_empty(&mut plan)?;
@@ -1383,6 +1396,9 @@ impl NativeBackend {
             &NativeOcr::discover(),
             progress,
             || false,
+            Some(&self.scan_index),
+            &caller.owner_id,
+            request.values.force_rescan,
         )?;
         encode(self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -2006,6 +2022,8 @@ struct RfiSystemSyncPreviewValues {
     rfi_log_workbook: PathBuf,
     #[serde(rename = "follow_up_workbook")]
     follow_up_workbook: PathBuf,
+    #[serde(default)]
+    force_rescan: bool,
 }
 
 #[derive(Deserialize)]
@@ -2029,6 +2047,8 @@ struct StageSignedPagesValues {
 struct PdfOrientationValues {
     rfi_system_root: PathBuf,
     review_root: PathBuf,
+    #[serde(default)]
+    force_rescan: bool,
 }
 
 #[derive(Deserialize)]
@@ -2362,6 +2382,7 @@ mod tests {
             ),
             process_session_id: Mutex::new("epoch-initial".to_string()),
             app_data_dir: temporary.path().to_path_buf(),
+            scan_index: ScanIndex::new(temporary.path().join("scan-index.sqlite3")).unwrap(),
         }
     }
 

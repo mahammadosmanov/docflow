@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.22.0 reliability and Windows certification
+## Now — 0.23.0 reliability and Windows certification
 
 - Keep the read-only device-readiness surface accurate and actionable; startup
   must never acquire mutation authority or block on hidden credential UI.
@@ -20,6 +20,8 @@ the historical tracker.
   exact canonical-RFI recognition.
 - Retain append-only RFI work history until the operator explicitly exports and
   archives it; never delete audit history automatically.
+- Certify incremental RFI scanning on the real 20 GB OneDrive/network tree,
+  including interruption, resume, file drift, and one-run forced rescans.
 
 ## Next — deeper RFI automation
 

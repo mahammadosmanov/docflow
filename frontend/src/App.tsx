@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
+  Database,
   Download,
   Eye,
   EyeOff,
@@ -3279,6 +3280,7 @@ export function PlanView({
   return (
     <div className="flow-layout">
       <PlanImpactSummary plan={plan} s={s} />
+      <ScanIndexSummary plan={plan} s={s} />
       {editor && editorRows && onEditorRowsChange ? (
         <>
           {plan.warnings.length > 0 && (
@@ -3469,6 +3471,49 @@ function PlanImpactSummary({ plan, s }: { plan: Plan; s: Strings }) {
           ))}
         </dl>
       )}
+    </section>
+  );
+}
+
+function ScanIndexSummary({ plan, s }: { plan: Plan; s: Strings }) {
+  const raw = plan.meta?.scanIndex;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const data = raw as Record<string, unknown>;
+  const count = (key: string) =>
+    typeof data[key] === "number" && Number.isFinite(data[key])
+      ? Math.max(0, Math.trunc(data[key] as number))
+      : 0;
+  const entries: [string, number][] = [
+    ["scanIndex.discovered", count("discovered")],
+    ["scanIndex.reused", count("reused")],
+    ["scanIndex.analyzed", count("analyzed")],
+    ["scanIndex.failed", count("failed")],
+    ["scanIndex.interrupted", count("priorInterruptedRuns")],
+  ];
+  const visibleEntries = entries.filter(
+    ([key, value]) => key !== "scanIndex.interrupted" || value > 0,
+  );
+  return (
+    <section className="plan-impact scan-index-summary" aria-labelledby="scan-index-title">
+      <div className="plan-impact-heading">
+        <Database aria-hidden="true" />
+        <div>
+          <strong id="scan-index-title">{s.t("scanIndex.title")}</strong>
+          <span>
+            {data.forceRescan === true
+              ? s.t("scanIndex.forceApplied")
+              : s.t("scanIndex.help")}
+          </span>
+        </div>
+      </div>
+      <dl className="plan-impact-counts">
+        {visibleEntries.map(([key, value]) => (
+          <div key={key}>
+            <dt>{s.t(key)}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

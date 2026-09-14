@@ -8,6 +8,32 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.23.0 - 2026-09-14
+
+### Added
+
+- Added a durable local incremental scan index for RFI System Sync and PDF page
+  orientation. Each completed PDF is checkpointed independently, so interrupted
+  jobs reuse finished work instead of restarting a large RFI archive from zero.
+- Preview now reports found, reused, freshly scanned, failed, and earlier
+  interrupted counts. A task-local Force full rescan switch bypasses the index
+  once and is never remembered automatically.
+
+### Changed
+
+- Unchanged files with the same owner, root, operation profile, relative path,
+  filesystem identity, size, and modification time skip repeated PDF rendering
+  and OCR. New, changed, transiently failed, and force-selected files scan again.
+
+### Safety
+
+- Scan records, paths, fingerprints, and cached analysis stay in the local app
+  database and are not uploaded to Supabase. Existing mutation journals remain
+  the operation log and sole Undo authority.
+- Cached results optimize Preview only. They cannot authorize a document or
+  workbook change; Apply still revalidates the exact approved source hash,
+  capability, destination, and workbook guards.
+
 ## 0.22.0 - 2026-09-14
 
 ### Added

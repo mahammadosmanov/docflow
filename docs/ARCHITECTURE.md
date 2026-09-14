@@ -108,6 +108,21 @@ Apply stays single-threaded to preserve journal order, appends only page
 dictionary revisions in private storage, validates structural fidelity, and
 publishes review copies with capability-relative no-clobber writes.
 
+## Durable incremental analysis
+
+`scan_index.rs` owns a bundled-SQLite, WAL-backed local index. Its keys include
+owner, canonical root, operation ID, algorithm profile, relative file path, and
+a platform filesystem fingerprint. `scan_runs` records complete/interrupted
+runs, `scan_entries` holds the latest reusable result, and `scan_events` records
+new analyses and failures. Each completed PDF is committed independently, so a
+later run can resume after application, device, or network interruption.
+
+The index is intentionally outside the mutation authority boundary. It can skip
+expensive OCR/rendering during Preview, but it cannot produce an Apply permit,
+overwrite a destination, update a workbook, or replace Plan hash/identity
+checks. Supabase remains metadata history only; large-system paths and cached
+document analysis are local-only.
+
 The same bounded analysis pool is used by native Process Scans OCR and combined
 Worley page recognition. It preserves deterministic input/result order and is
 never used for Office automation, print submission, publication, journals, or
@@ -189,6 +204,7 @@ the pinned directory or fails closed.
 - recoverable trash: `~/.docflow/trash/`
 - print queue: `~/.docflow/print_queue.json`
 - RFI work events: `~/.docflow/work-items/events/`
+- scan checkpoints and audit: `~/.docflow/scan-index.sqlite3`
 - protocol-1 DTO casing/nullability and operation IDs: unchanged
 - Supabase `app_users` and `history` schema: compatible, with history steps inert
 

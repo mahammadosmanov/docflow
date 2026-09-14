@@ -10,7 +10,8 @@ use docflow_lib::{
     ooxml::{read_member, read_workbook_from_reader},
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
-    rfi_system_sync::{self, preview_system_sync},
+    rfi_system_sync::{self, preview_system_sync, scan_system_root_indexed},
+    scan_index::ScanIndex,
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
@@ -116,6 +117,26 @@ fn write_pdf_with_signature(path: &Path, signed: bool) {
         .as_bytes(),
     );
     fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn unchanged_system_pdf_is_reused_from_durable_index() {
+    let fixture = tempfile::tempdir().unwrap();
+    let system = fixture.path().join("RFI_SYSTEM");
+    let folder = system.join("MEC/AZE-SUN-INT-QMS-RFI-MEC-0700");
+    fs::create_dir_all(&folder).unwrap();
+    write_pdf_with_signature(
+        &folder.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-0700.pdf"),
+        true,
+    );
+    let index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+    let (first, first_stats) =
+        scan_system_root_indexed(&system, Some(&index), "owner", false, |_| {}).unwrap();
+    assert_eq!((first_stats.analyzed, first_stats.reused), (1, 0));
+    let (second, second_stats) =
+        scan_system_root_indexed(&system, Some(&index), "owner", false, |_| {}).unwrap();
+    assert_eq!((second_stats.analyzed, second_stats.reused), (0, 1));
+    assert_eq!(first, second);
 }
 
 #[test]

@@ -49,6 +49,12 @@ pass from a macOS build or Windows cross-compile.
    upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
    Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source
    hashes never change, review layout is preserved, and Undo is hash-guarded.
+9. For incremental scanning, run RFI System Sync and PDF orientation twice over
+   the same non-sensitive tree. Confirm the second Preview reports unchanged
+   files as reused without reopening them for OCR. Interrupt a larger run, add
+   and modify files, then confirm only completed unchanged entries resume while
+   new/changed/failed items scan again. Finally use Force full rescan and confirm
+   it bypasses the cache once and is off on the next visit.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

@@ -4,6 +4,25 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.23.0 - 2026-09-14
+
+Passed source evidence after the final implementation edit:
+
+- Clippy with all targets/features and warnings denied;
+- 338 Rust unit tests and 210 integration tests; the two operator-workbook
+  environment tests remained intentionally ignored;
+- durable restart/fingerprint tests plus real cache-hit tests proving unchanged
+  PDF orientation and RFI System Sync files avoid repeated analysis;
+- 23 Node tests and 52 React tests, including localized incremental-scan counts;
+- production TypeScript/Vite build and Cargo check;
+- version, documentation, source, and dependency-license audits.
+
+The frontend build retained the known non-failing chunk-size advisory. Native
+Windows/OneDrive validation of interruption, resume, file change detection, and
+the task-local forced full rescan has not yet run. Cached positive Worley results
+are full-hash checked in Rust, but the exact Windows 20 GB system remains an
+external acceptance gate.
+
 ## 0.22.0 - 2026-09-14
 
 Passed source evidence after the final edit:

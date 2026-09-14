@@ -48,6 +48,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   faults remain uncertain and never auto-retry, and previous task files are
   never restored automatically. Safe scalar settings are reusable only through
   an explicit operator action.
+- **DF-018 — Durable incremental scanning:** repeated large RFI-system analysis
+  uses an owner-, root-, operation-, algorithm-, and file-fingerprint-scoped
+  local index. Every newly completed file is checkpointed immediately; changed,
+  new, failed, or explicitly forced files are analysed again. Cached evidence
+  may reduce preview work but can never authorize Apply or replace apply-time
+  identity/hash validation.
 
 ## Scope
 

@@ -20,6 +20,9 @@ These are not silently waived by passing local tests.
 - Orientation detection and incremental-copy output on the exact Windows x64
   package, including OneDrive-backed CIV/MEC/ELE/PRC trees and representative
   sparse-text/drawing-heavy PDFs.
+- Incremental scan performance and fingerprint behavior still require native
+  Windows acceptance on the operator's actual OneDrive/network-backed 20 GB RFI
+  tree, including interruption, resume, changed files, and forced full rescan.
 - RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.

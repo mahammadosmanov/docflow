@@ -116,6 +116,40 @@ describe("DocFlow shell", () => {
     });
   });
 
+  it("shows durable incremental scan reuse without treating it as an apply effect", () => {
+    render(
+      <PlanView
+        plan={{
+          planId: "scan-index",
+          opId: "rfi.normalize_pdf_orientation",
+          steps: [],
+          warnings: [],
+          meta: {
+            scanIndex: {
+              discovered: 120,
+              reused: 116,
+              analyzed: 4,
+              failed: 0,
+              priorInterruptedRuns: 1,
+              forceRescan: false,
+            },
+          },
+        }}
+        s={makeStrings("en")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Incremental scan index")).toBeVisible();
+    expect(screen.getByText("Reused")).toBeVisible();
+    expect(screen.getByText("116")).toBeVisible();
+    expect(screen.getByText("Scanned now")).toBeVisible();
+    expect(screen.getByText("4")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
   it("opens the journal-producing operation from an eligible RFI work card", async () => {
     interceptMockBridge((method) => {
       if (method === "workItems/list") {

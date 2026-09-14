@@ -32,6 +32,10 @@
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
   and PDF orientation; state-changing effects remain ordered and journaled.
+- Durable local incremental scanning for RFI System Sync and PDF orientation.
+  Completed files survive interruption, unchanged files are reused, transient
+  failures retry, scan counts are visible in Preview, and full rescan is an
+  explicit task-local option.
 
 ## Intentional limits
 

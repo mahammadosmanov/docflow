@@ -624,6 +624,18 @@
         "name": "review_root",
         "required": true,
         "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": false,
+        "helpKey": "param.scanIndex.forceRescan.help",
+        "kind": "bool",
+        "labelKey": "param.scanIndex.forceRescan",
+        "name": "force_rescan",
+        "remember": false,
+        "required": false,
+        "visibleWhen": {}
       }
     ],
     "supportsPresets": false,
@@ -664,6 +676,18 @@
         "labelKey": "param.rfi.systemSync.followUpWorkbook",
         "name": "follow_up_workbook",
         "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": false,
+        "helpKey": "param.scanIndex.forceRescan.help",
+        "kind": "bool",
+        "labelKey": "param.scanIndex.forceRescan",
+        "name": "force_rescan",
+        "remember": false,
+        "required": false,
         "visibleWhen": {}
       }
     ],

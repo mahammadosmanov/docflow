@@ -19,6 +19,7 @@ and versioned with the code they govern.
 | Content-based PDF orientation with read-only source and bounded parallel preview | Accepted | [`adr/0007-safe-parallel-pdf-orientation.md`](adr/0007-safe-parallel-pdf-orientation.md) |
 | Exact RFI Log to existing Follow Up projection with grouped status/removal rules | Accepted | [`adr/0008-exact-rfi-log-follow-up-projection.md`](adr/0008-exact-rfi-log-follow-up-projection.md) |
 | Windows spool release semantics and opt-in Batch Print setting recall | Accepted | [`adr/0009-resilient-print-handoff-and-opt-in-recall.md`](adr/0009-resilient-print-handoff-and-opt-in-recall.md) |
+| Local durable incremental scan index with cloud-independent authority | Accepted | [`adr/0010-durable-incremental-scan-index.md`](adr/0010-durable-incremental-scan-index.md) |
 
 ## Adding a decision
 

@@ -61,6 +61,28 @@ fn parameter(
     }
 }
 
+fn transient_parameter(
+    name: &str,
+    kind: ParamKind,
+    label_key: &str,
+    default: Value,
+    help_key: Option<&str>,
+) -> ParamDef {
+    let mut parameter = parameter(
+        name,
+        kind,
+        label_key,
+        default,
+        false,
+        Vec::new(),
+        BTreeMap::new(),
+        Map::new(),
+        help_key,
+    );
+    parameter.remember = false;
+    parameter
+}
+
 fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
     OperationDef {
         id: id.to_string(),
@@ -419,6 +441,13 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 Map::new(),
                 Some("param.rfi.systemSync.followUpWorkbook.help"),
             ),
+            transient_parameter(
+                "force_rescan",
+                ParamKind::Bool,
+                "param.scanIndex.forceRescan",
+                json!(false),
+                Some("param.scanIndex.forceRescan.help"),
+            ),
         ],
     );
 
@@ -661,6 +690,13 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 BTreeMap::new(),
                 Map::new(),
                 Some("param.rfi.orientation.reviewRoot.help"),
+            ),
+            transient_parameter(
+                "force_rescan",
+                ParamKind::Bool,
+                "param.scanIndex.forceRescan",
+                json!(false),
+                Some("param.scanIndex.forceRescan.help"),
             ),
         ],
     );

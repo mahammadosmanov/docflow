@@ -1,22 +1,46 @@
 #[allow(dead_code)]
 mod support;
 
-use std::{collections::BTreeMap, fs, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
 
 use docflow_lib::{
     contracts::{Plan, StepKind},
     fs_ops::{FilesystemAuthority, file_sha256},
     operations::pdf_orientation::{
         OPERATION_ID, OrientationDetection, OrientationDetector, PdfOrientationParams, preview,
+        preview_indexed,
     },
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
+    scan_index::ScanIndex,
 };
 use support::pdf_fixture::write_rich_archive;
 
 #[derive(Default)]
 struct FakeDetector {
     pages: BTreeMap<usize, OrientationDetection>,
+}
+
+struct CountingDetector {
+    inner: FakeDetector,
+    calls: AtomicUsize,
+}
+
+impl OrientationDetector for CountingDetector {
+    fn detect_page(&self, path: &Path, page_index: usize) -> Result<OrientationDetection, String> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.inner.detect_page(path, page_index)
+    }
+
+    fn diagnostics(&self) -> String {
+        self.inner.diagnostics()
+    }
 }
 
 impl OrientationDetector for FakeDetector {
@@ -99,6 +123,73 @@ fn preview_scans_only_discipline_trees_and_proposes_confident_rotations() {
     assert_eq!(plan.meta["verifiedPages"], 3);
     assert_eq!(plan.meta["rotatedPages"], 2);
     assert!(plan.warnings.is_empty());
+}
+
+#[test]
+fn unchanged_orientation_pdf_is_reused_from_durable_index() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("system");
+    let review = fixture.path().join("review");
+    let pdf = source.join("MEC/RFI-0001/document.pdf");
+    fs::create_dir_all(pdf.parent().unwrap()).unwrap();
+    fs::create_dir_all(&review).unwrap();
+    write_rich_archive(&pdf);
+    let detector = CountingDetector {
+        inner: FakeDetector {
+            pages: BTreeMap::from([
+                (0, detection(90, 18.0)),
+                (1, detection(0, 22.0)),
+                (2, detection(180, 15.0)),
+            ]),
+        },
+        calls: AtomicUsize::new(0),
+    };
+    let scan_index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+    let params = PdfOrientationParams {
+        rfi_system_root: source,
+        review_root: review,
+    };
+    let first = preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        false,
+    )
+    .unwrap();
+    assert_eq!(first.meta["scanIndex"]["analyzed"], 1);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 3);
+
+    let second = preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        false,
+    )
+    .unwrap();
+    assert_eq!(second.meta["scanIndex"]["reused"], 1);
+    assert_eq!(second.meta["scanIndex"]["analyzed"], 0);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 3);
+    assert_eq!(first.steps, second.steps);
+
+    let forced = preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        true,
+    )
+    .unwrap();
+    assert_eq!(forced.meta["scanIndex"]["reused"], 0);
+    assert_eq!(forced.meta["scanIndex"]["analyzed"], 1);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 6);
 }
 
 #[test]
