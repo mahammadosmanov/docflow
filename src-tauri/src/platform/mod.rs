@@ -68,6 +68,23 @@ pub(crate) enum WindowsPostSubmissionObservation {
 }
 
 #[cfg(any(target_os = "windows", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WindowsJobQueryError {
+    Released,
+    RetryWithLargerBuffer,
+    Uncertain,
+}
+
+#[cfg(any(target_os = "windows", test))]
+pub(crate) const fn classify_windows_job_query_error(error: u32) -> WindowsJobQueryError {
+    match error {
+        2 | 87 => WindowsJobQueryError::Released,
+        122 => WindowsJobQueryError::RetryWithLargerBuffer,
+        _ => WindowsJobQueryError::Uncertain,
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn windows_post_submission_observation_error(
     stage: WindowsPostSubmissionObservation,
 ) -> crate::print_queue::PrintFailure {
@@ -410,6 +427,22 @@ mod tests {
         assert_eq!(
             classify_windows_submitted_job_observation(Some(0x0000_0002)),
             WindowsSubmittedJobStatus::Uncertain
+        );
+        assert_eq!(
+            classify_windows_job_query_error(2),
+            WindowsJobQueryError::Released
+        );
+        assert_eq!(
+            classify_windows_job_query_error(87),
+            WindowsJobQueryError::Released
+        );
+        assert_eq!(
+            classify_windows_job_query_error(122),
+            WindowsJobQueryError::RetryWithLargerBuffer
+        );
+        assert_eq!(
+            classify_windows_job_query_error(5),
+            WindowsJobQueryError::Uncertain
         );
     }
 

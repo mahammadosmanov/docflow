@@ -4,6 +4,24 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.24.1 - 2026-09-14
+
+Passed source evidence after the final implementation edit:
+
+- Clippy with all targets/features and warnings denied;
+- 338 Rust unit tests and 210 integration tests; the two operator-workbook
+  environment tests remained intentionally ignored;
+- Windows status-policy tests cover release on either side of the two-call
+  `GetJob` read, buffer-growth retry classification, explicit query failure,
+  terminal fault, recoverable status, and cancellation boundaries;
+- 23 Node tests and 53 React tests, production TypeScript/Vite build, Cargo
+  check, formatting, version, documentation, source, and license audits.
+
+The frontend build retained the known non-failing chunk-size advisory. Native
+Windows output on the EPSON L15160 Series remains the decisive acceptance gate:
+run at least three mixed files in one Apply and confirm the queue advances
+without Review remaining while each page is produced exactly once.
+
 ## 0.24.0 - 2026-09-14
 
 Passed source evidence after the final implementation edit:

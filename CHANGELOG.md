@@ -8,6 +8,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.24.1 - 2026-09-14
+
+### Fixed
+
+- Fixed an EPSON/Windows spooler race where a successfully printed job could be
+  released between the two `GetJob` reads and incorrectly stop Batch Print as
+  unconfirmed after every file. Normal release now continues to the next file;
+  real read errors and explicit fault/deletion states remain uncertain.
+
 ## 0.24.0 - 2026-09-14
 
 ### Added

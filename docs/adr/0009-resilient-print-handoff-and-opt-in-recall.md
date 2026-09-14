@@ -36,6 +36,11 @@ flags remain pending until completion, cancellation, or the approved timeout.
 Single status-read/open failures receive a bounded three-second retry window;
 that retry observes the same job and never resubmits it.
 
+This includes the two-call `GetJob` race: if the driver releases the record
+between the size probe and buffered read, the already accepted handoff is
+complete. If the record grows, DocFlow retries only the read with a larger
+buffer. Any other query error stays uncertain.
+
 Batch Print's file parameter is non-remembered. Safe scalar settings are stored
 only when Preview is requested. A new visit uses schema defaults and offers an
 explicit one-click restore of the previous safe settings. Named presets remain

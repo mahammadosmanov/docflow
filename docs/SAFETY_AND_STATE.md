@@ -41,6 +41,8 @@ paper-out, blocked, and user-intervention states remain observable and wait
 until cancellation, recovery, completion, or the approved timeout; they do not
 fail the queue on the first poll. A transient status-read failure is retried for
 a fixed three-second observation grace, never as a second print submission.
+Release between the `GetJob` size probe and buffered read is also completion,
+not an observation failure; a changing buffer is reread without resubmission.
 
 Batch Print file selections are task-local and are never stored as remembered
 parameters. Safe scalar settings are captured at Preview but a new visit starts

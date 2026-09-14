@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.24.0",
+  "currentVersion": "0.24.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -422,9 +422,17 @@
       "version": "0.24.0",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.24.0",
       "summary": "Show OCR recognition scores out of 100 across scan-review workflows and keep preview, editor, warning, dialog, and final actions reachable on compact displays."
+    },
+    {
+      "version": "0.24.1",
+      "date": "2026-09-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.24.1",
+      "summary": "Continue Windows print queues when fast-purging drivers release a completed spool record between the two GetJob reads, without weakening explicit fault handling."
     }
   ]
 }

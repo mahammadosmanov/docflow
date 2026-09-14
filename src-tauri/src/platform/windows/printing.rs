@@ -12,7 +12,7 @@ use std::{
 };
 
 use windows_sys::Win32::{
-    Foundation::{ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER, GetLastError},
+    Foundation::GetLastError,
     Graphics::{
         Gdi::{
             BI_RGB, BITMAPINFO, COLORONCOLOR, CreateDCW, DEVMODEW, DIB_RGB_COLORS, DM_COLOR,
@@ -49,11 +49,11 @@ use crate::platform::controlled_submit::{
 };
 use crate::platform::excel::{ControlledPdfSubmitter, ExportedWorksheetPdf};
 use crate::platform::{
-    WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
-    classify_windows_submitted_job_observation, consume_controlled_page_bytes,
-    map_controlled_print_failure, validate_windows_image_frame_count,
-    windows_post_submission_cancellation, windows_post_submission_failure,
-    windows_post_submission_observation_error,
+    WindowsJobQueryError, WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
+    classify_windows_job_query_error, classify_windows_submitted_job_observation,
+    consume_controlled_page_bytes, map_controlled_print_failure,
+    validate_windows_image_frame_count, windows_post_submission_cancellation,
+    windows_post_submission_failure, windows_post_submission_observation_error,
 };
 use crate::print_queue::{
     PrintAdapter, PrintFailure, PrintJob, PrintJobSupport, PrintSettings, PrinterInventory,
@@ -1448,37 +1448,50 @@ fn wait_for_job(
 }
 
 fn job_status(handle: PRINTER_HANDLE, job_id: u32) -> Result<Option<u32>, PrintFailure> {
-    let mut needed = 0;
-    unsafe {
-        GetJobW(handle, job_id, 1, null_mut(), 0, &mut needed);
+    for _ in 0..3 {
+        let mut needed = 0;
+        unsafe {
+            GetJobW(handle, job_id, 1, null_mut(), 0, &mut needed);
+        }
+        if needed == 0 {
+            return match classify_windows_job_query_error(unsafe { GetLastError() }) {
+                WindowsJobQueryError::Released => Ok(None),
+                WindowsJobQueryError::RetryWithLargerBuffer | WindowsJobQueryError::Uncertain => {
+                    Err(windows_post_submission_observation_error(
+                        WindowsPostSubmissionObservation::JobRead,
+                    ))
+                }
+            };
+        }
+        let mut buffer = AlignedBuffer::new(needed as usize);
+        if unsafe {
+            GetJobW(
+                handle,
+                job_id,
+                1,
+                buffer.as_mut_bytes(),
+                needed,
+                &mut needed,
+            )
+        } != 0
+        {
+            return Ok(Some(unsafe { (*buffer.as_ptr::<JOB_INFO_1W>()).Status }));
+        }
+        match classify_windows_job_query_error(unsafe { GetLastError() }) {
+            // EPSON and other fast-purging drivers can release the record
+            // between the sizing call and the buffered GetJob call.
+            WindowsJobQueryError::Released => return Ok(None),
+            WindowsJobQueryError::RetryWithLargerBuffer => continue,
+            WindowsJobQueryError::Uncertain => {
+                return Err(windows_post_submission_observation_error(
+                    WindowsPostSubmissionObservation::JobRead,
+                ));
+            }
+        }
     }
-    if needed == 0 {
-        let error = unsafe { GetLastError() };
-        return if error == ERROR_FILE_NOT_FOUND || error == ERROR_INVALID_PARAMETER {
-            Ok(None)
-        } else {
-            Err(windows_post_submission_observation_error(
-                WindowsPostSubmissionObservation::JobRead,
-            ))
-        };
-    }
-    let mut buffer = AlignedBuffer::new(needed as usize);
-    if unsafe {
-        GetJobW(
-            handle,
-            job_id,
-            1,
-            buffer.as_mut_bytes(),
-            needed,
-            &mut needed,
-        )
-    } == 0
-    {
-        return Err(windows_post_submission_observation_error(
-            WindowsPostSubmissionObservation::JobRead,
-        ));
-    }
-    Ok(Some(unsafe { (*buffer.as_ptr::<JOB_INFO_1W>()).Status }))
+    Err(windows_post_submission_observation_error(
+        WindowsPostSubmissionObservation::JobRead,
+    ))
 }
 
 struct AlignedBuffer(Vec<usize>);

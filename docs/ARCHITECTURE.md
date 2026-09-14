@@ -228,6 +228,10 @@ the approved timeout, and transient observation failures receive only a bounded
 read retry, never another print submission. Batch Print's remembered scalar
 values are opt-in at the UI; selected files never enter remembered settings.
 
+The same completed-handoff rule applies when a fast-purging driver releases the
+job between `GetJob`'s size probe and buffered read. Buffer-growth races retry
+the read without resubmission; access or other query failures remain uncertain.
+
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified
 readback. A downgrade requires sign-in again. Passive macOS startup reads set
