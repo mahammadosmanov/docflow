@@ -4,6 +4,38 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.24.2 - 2026-09-14
+
+Passed source evidence after the final implementation edit:
+
+- Clippy with all targets/features and warnings denied;
+- 338 Rust unit tests and 211 integration tests; the two operator-workbook
+  environment tests remained intentionally ignored;
+- the queue integration test proves an accepted-unconfirmed job is journaled,
+  never retried, does not become resumable, and advances to the next file;
+- Windows policy tests prove post-acceptance printer-open, enumeration, and job-
+  read loss use that continuation state while explicit status faults and
+  uncertain cancellation still pause;
+- 23 Node tests and 53 React tests, production TypeScript/Vite build, Cargo
+  check, formatting, version, documentation, source, and license audits.
+
+The frontend build retained the known non-failing chunk-size advisory. No
+software-only signal can prove physical paper output. Native Windows acceptance
+on the EPSON L15160 Series remains required: print at least three mixed files in
+one Apply and confirm the queue reaches one final result, produces each file
+exactly once, and reports any receipt-loss items as sent-unconfirmed instead of
+opening Review remaining after every file.
+
+The Windows x64 cross-build from implementation commit
+`a4290746bb73812d783db6e89e4d98c13897ccdc` completed. The OCR-inclusive ZIP
+passed the package audit, every generated checksum verified, and both executable
+artifacts identify as Windows GUI-subsystem PE files. Cross-linker PDB warnings
+were non-failing debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `6b52cc75ba95ed4a8b9e4a9468028c8d350439d13f1858e923b98a66c1ed9399`;
+- portable EXE: `ac8fd5e53b244503b3b47b22a63c6d34dd0ee6e8a9819ced70b8360ff998e014`;
+- per-user installer: `cf8603ae5a7aed1805bed43a8e3f80ce694afbf8d992a0fe6bc01d506d744dce`.
+
 ## 0.24.1 - 2026-09-14
 
 Passed source evidence after the final implementation edit:
