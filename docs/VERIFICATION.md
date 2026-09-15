@@ -4,6 +4,33 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.0.0 - 2026-09-15
+
+The breaking retirement of RFI Work Tracking, Device Readiness, Record RFI
+Work, and Export RFI Work Audit at implementation commit
+`d04e2306941d83b319afe186b43286d049cb604b` passed Rust formatting, Clippy with
+all targets/features and warnings denied, Cargo check, 335 unit tests, and 207
+integration tests; two operator-workbook tests were intentionally ignored. All
+23 Node tests and 51 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed; the build
+retained its non-failing chunk-size advisory. Registry/package evidence confirms
+that exactly nine document operations remain and the retired support/list
+routes are rejected.
+
+The Windows x64 cross-build completed from that implementation commit. The
+OCR-inclusive ZIP passed package audit and archive integrity checks, all
+generated checksums verified, and both executable artifacts identify as Windows
+GUI-subsystem PE files. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `6d7e0c7930a243304ef6c0f84b08ced59fe4ba7a4bb98c2c902a712c56207e1e`;
+- portable EXE: `aeec5416e02bd3863cd63e14449c2d97f7e531e2a06c8bc6dab226fa227436e9`;
+- per-user installer: `7ef5ec06a47bc6a1d242b0fd83647550b553923727f73e52ad16e4b8a6d8dfce`.
+
+Cross-build evidence does not establish native Windows, WebView2, Office,
+OneDrive, Outlook, physical-printer, or operator acceptance; those gates were
+not run. Existing local work-event files were deliberately left untouched as
+inactive legacy data.
+
 ## 0.28.1 - 2026-09-15
 
 The per-RFI email prerequisite and bounded wrapped-identifier fix at implementation

@@ -12,6 +12,13 @@ certification remain separate unchecked gates and are never implied by a source 
     recovery center are unchanged
   - existing local work-event files are preserved as inactive legacy data and
     are never deleted by the migration
+  - macOS source verification passed: 335 Rust unit tests and 207 integration
+    tests with two operator-workbook tests intentionally ignored; 23 Node tests,
+    51 React tests, formatting, Clippy, Cargo check, frontend build, and all
+    repository/version/documentation/license audits passed
+  - Windows x64 cross-build, OCR-inclusive package audit, archive integrity,
+    checksums, and GUI-subsystem checks passed from `d04e230`; native Windows,
+    Office, OneDrive, Outlook, printer, and operator acceptance remain external
 
 - [x] Version 0.28.1: mail-gated grouping and bounded wrapped RFI recognition
   - a readable EML/MSG match is required independently for every RFI before its
