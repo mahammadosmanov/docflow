@@ -4,6 +4,37 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.0.2 - 2026-09-15
+
+The Windows spool-observation fix at implementation commit
+`c5d9e3c0daf5a0230a1bd8400462b2f8092c6767` passed Rust formatting, Clippy with
+all targets/features and warnings denied, Cargo check, 336 unit tests, and 208
+integration tests; two operator-workbook tests were intentionally ignored. The
+new unit evidence verifies that a transient generic driver error remains under
+observation, completion wins over a stale generic error, destructive deletion
+remains uncertain, a unique renamed native-handler job is correlated, and
+ambiguous concurrent jobs are not guessed. One initial parallel full-suite run
+hit the existing test-only global mutation-lock collision; its focused rerun and
+the complete serial suite passed. All 23 Node tests and 51 React tests passed.
+Version, documentation, source, dependency-license, and production frontend
+build checks passed; the frontend build retained its non-failing chunk-size
+advisory.
+
+The Windows x64 cross-build completed from that implementation commit. The
+OCR-inclusive ZIP passed package audit and archive integrity checks, all
+generated checksums verified, and both executable artifacts identify as Windows
+GUI-subsystem PE files. Cross-linking emitted only the known non-failing
+Microsoft PDB debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `42a81f288163e82b89baa0e0e0c9c9bd1423e76a8dda981014aba71348f0670d`;
+- portable EXE: `0db289bca98aa7cda4db7f06ef2144476db4b5268fcd6e5c72d3e56bf607fd8d`;
+- per-user installer: `731fc71abcaec10ae173160fe8fa6a09f633cc2a7c2bf6042c479e12fbf78e48`.
+
+Cross-build evidence does not establish physical output or native EPSON L15160,
+Windows spooler, Office handler, OneDrive, or operator acceptance; those gates
+were not run. In particular, software cannot infer that paper exited merely
+from a spool completion/release signal.
+
 ## 1.0.1 - 2026-09-15
 
 The Word checklist boundary fix at implementation commit

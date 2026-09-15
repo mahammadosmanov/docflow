@@ -10,6 +10,14 @@ certification remain separate unchecked gates and are never implied by a source 
   - a native handler's unique new spool job is followed even when its title no
     longer contains the source filename; ambiguity still fails closed
   - queue enumeration gets a bounded observation retry without resubmission
+  - macOS source verification passed: 336 Rust unit tests and 208 integration
+    tests with two operator-workbook tests intentionally ignored; 23 Node tests,
+    51 React tests, formatting, Clippy, Cargo check, frontend build, and all
+    repository/version/documentation/license audits passed
+  - Windows x64 cross-build, OCR-inclusive package audit, archive integrity,
+    checksums, and GUI-subsystem checks passed from `c5d9e3c`; native Windows,
+    Office-handler, EPSON L15160 paper-output, and operator acceptance remain
+    external
 
 - [x] Version 1.0.1: preserve Word checklist boundaries during RFI grouping
   - Office XML extraction retains explicit line, paragraph, and table-cell
