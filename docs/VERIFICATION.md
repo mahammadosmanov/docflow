@@ -4,6 +4,32 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.0.1 - 2026-09-15
+
+The Word checklist boundary fix at implementation commit
+`abfa47f2359978995a590c4295b7d14ea4d85854` passed Rust formatting, Clippy with
+all targets/features and warnings denied, Cargo check, 335 unit tests, and 208
+integration tests; two operator-workbook tests were intentionally ignored. The
+new regression first failed against the previous extractor, then passed and
+proves that a wrapped `AZE-SUN-INT-QMS-RFI-` / `MEC-0765` in a Word table is
+recognized without joining the following `MOS No.` cell. All 23 Node tests and
+51 React tests passed. Version, documentation, source, and dependency-license
+audits plus the production frontend build passed; the build retained its
+non-failing chunk-size advisory.
+
+The Windows x64 cross-build completed from that implementation commit. The
+OCR-inclusive ZIP passed package audit and archive integrity checks, all
+generated checksums verified, and both executable artifacts identify as Windows
+GUI-subsystem PE files. Cross-linking emitted only the known non-failing
+Microsoft PDB debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `d3c471e1a26aada800228c27c748482926a3de40cddd0253700226cef9a57134`;
+- portable EXE: `1f0df7a0eea89cddbfbc9ad293144c42f0062b7bf9113ecd003bee1557604961`;
+- per-user installer: `e4512783e2a331c0838257f9301d4c6038d94be52b9e7718062501658e3aba05`.
+
+Cross-build evidence does not establish native Windows, WebView2, real Word
+checklist, OneDrive, Outlook, or operator acceptance; those gates were not run.
+
 ## 1.0.0 - 2026-09-15
 
 The breaking retirement of RFI Work Tracking, Device Readiness, Record RFI

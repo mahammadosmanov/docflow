@@ -9,6 +9,13 @@ certification remain separate unchecked gates and are never implied by a source 
     boundaries, preventing the next checklist cell from invalidating a wrapped
     exact RFI number
   - the exact ASCII identifier and per-RFI email requirements remain unchanged
+  - macOS source verification passed: 335 Rust unit tests and 208 integration
+    tests with two operator-workbook tests intentionally ignored; 23 Node tests,
+    51 React tests, formatting, Clippy, Cargo check, frontend build, and all
+    repository/version/documentation/license audits passed
+  - Windows x64 cross-build, OCR-inclusive package audit, archive integrity,
+    checksums, and GUI-subsystem checks passed from `abfa47f`; native Windows,
+    real Word/OneDrive/Outlook, and operator acceptance remain external
 
 - [x] Version 1.0.0: retire work tracking and device readiness
   - the two work-item operations, work queues, audit export, readiness panel,
