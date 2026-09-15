@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.0.0 - 2026-09-15
+
+### Removed
+
+- Removed RFI Work Tracking, its Today/Resume/Needs Review queues, Record RFI
+  Work, and Export RFI Work Audit from the UI, operation registry, and callable
+  native command surface.
+- Removed the Device Readiness dashboard panel and its background frontend/native
+  query. Workflow-specific OCR, printer, recovery, workbook, OneDrive, and
+  source-validation checks remain active where they are required.
+- Existing local work-event files are preserved as inactive legacy data; this
+  release never deletes user history automatically.
+
+### Breaking change
+
+- The registered operation roster is now nine operations. Retired operation and
+  command identifiers return unknown-operation/method errors.
+
 ## 0.28.1 - 2026-09-15
 
 ### Fixed

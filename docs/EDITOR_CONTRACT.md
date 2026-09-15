@@ -10,7 +10,7 @@ semantics.
 - Rust validates required values, types, choices, bounds, and visibility.
 - File/folder values are opaque caller- and parameter-scoped selection tokens;
   React must not manufacture trusted paths.
-- Remembered values are filtered through schema. Secrets and work-item identity
+- Remembered values are filtered through schema. Secrets and operation identity
   fields are transient.
 - Presets contain reusable operation settings only; selected files, order,
   worksheets, RFI identities, and row-specific ranges remain task-local.

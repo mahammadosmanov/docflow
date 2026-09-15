@@ -7,7 +7,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 |---|---|---|
 | DF-001, DF-002 | `plan_store.rs`, `native.rs`, `fs_ops.rs` | `filesystem_authority.rs`, backend plan tests |
 | DF-003, DF-004 | `cap_fs.rs`, `journal.rs`, `undo.rs`, `leaf_transaction.rs` | filesystem fault/recovery tests |
-| DF-005 | `rfi.rs`, `ocr.rs`, RFI operations | `process_scans.rs`, `rfi_follow_up_native.rs`, `work_items.rs` |
+| DF-005 | `rfi.rs`, `ocr.rs`, RFI operations | `process_scans.rs`, `rfi_follow_up_native.rs` |
 | DF-006 | `ooxml.rs`, `rfi_log.rs`, `rfi_follow_up.rs`, `rfi_system_sync.rs` | `ooxml_fidelity.rs`, `rfi_log_native.rs`, `rfi_system_sync_native.rs` |
 | DF-007 | `operations/stage_signed_pages.rs`, `pdf.rs` | `signed_pages.rs` integration suite |
 | DF-008 | `print_queue.rs`, `platform/*/printing.rs`, `platform/excel/` | `batch_print.rs`, controlled-submit tests |
@@ -24,7 +24,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-019 | OCR operation metadata, `native.rs` review DTO, generic `App.tsx` percent renderer and responsive CSS | `process_scans.rs`, `signed_pages.rs`, `App.test.tsx`, small-viewport Playwright evidence |
 | DF-020 | `operations/stage_signed_pages.rs`, `parallel.rs`, `registry.rs` | `signed_pages.rs` deep-recursion/parallel-evidence and symlink tests, registry protocol snapshot |
 | DF-021 | `operations/stage_signed_pages.rs`, `fs_ops.rs`, `ocr.rs`, generic `App.tsx` signed Plan surfaces and responsive CSS | `signed_pages.rs` warning-copy/hash-drift/progress tests, `App.test.tsx` signed navigator/comparison/warning-review tests |
-| DF-022 | `parallel.rs`, `operations/process_scans.rs`, `operations/stage_signed_pages.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, `work_items.rs`, `native.rs`, generic `BusyState` | parallel/progress assertions in `process_scans.rs`, `signed_pages.rs`, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, complete Rust and frontend suites |
+| DF-022 | `parallel.rs`, `operations/process_scans.rs`, `operations/stage_signed_pages.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, `native.rs`, generic `BusyState` | parallel/progress assertions in `process_scans.rs`, `signed_pages.rs`, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, complete Rust and frontend suites |
 | DF-023 | `rfi_code.rs`, `operations/rfi_file_group.rs`, `native.rs`, `registry.rs`, generic record-table UI | `process_scans.rs` bounded-line-wrap test, `rfi_file_group.rs` per-RFI mail-gate tests, registry snapshot, catalog-equality and frontend authority tests |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the

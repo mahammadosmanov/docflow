@@ -1428,12 +1428,6 @@ impl JournalStore {
         })
     }
 
-    pub(crate) fn pending_recovery_count(&self) -> Result<u64, BackendError> {
-        u64::try_from(self.scan_pending_recovery_entries()?.len()).map_err(|_| {
-            BackendError::journal_invalid("pending recovery count could not be represented")
-        })
-    }
-
     fn scan_pending_recovery_entries(&self) -> Result<VecDeque<PendingS5Entry>, BackendError> {
         let Ok(directory) = fs::read_dir(&self.root) else {
             return Ok(VecDeque::new());
@@ -2456,7 +2450,7 @@ mod tests {
     }
 
     #[test]
-    fn readiness_count_is_read_only_and_final_notice_needs_no_root_reopen() {
+    fn final_notice_recovery_needs_no_root_reopen() {
         let fixture = tempfile::tempdir().unwrap();
         let store = JournalStore::new(fixture.path().join("journals"));
         let process_lock = crate::progress::GlobalMutationLock::default();
@@ -2479,7 +2473,6 @@ mod tests {
         drop(token);
         let before = fs::read(&path).unwrap();
 
-        assert_eq!(store.pending_recovery_count().unwrap(), 1);
         assert_eq!(fs::read(&path).unwrap(), before);
 
         let process_lock = crate::progress::GlobalMutationLock::default();

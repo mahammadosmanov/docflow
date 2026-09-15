@@ -4,10 +4,8 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 0.28.1 reliability and Windows certification
+## Now — 1.0.0 reliability and Windows certification
 
-- Keep the read-only device-readiness surface accurate and actionable; startup
-  must never acquire mutation authority or block on hidden credential UI.
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
 - Keep combined multi-RFI Worley scan page identification and exact-page staging
@@ -18,8 +16,6 @@ the historical tracker.
   without committing private documents.
 - Calibrate OCR against consented representative scans and retain at least 95%
   exact canonical-RFI recognition.
-- Retain append-only RFI work history until the operator explicitly exports and
-  archives it; never delete audit history automatically.
 - Certify incremental RFI scanning on the real 20 GB OneDrive/network tree,
   including interruption, resume, file drift, and one-run forced rescans.
 

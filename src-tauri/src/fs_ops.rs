@@ -36,9 +36,7 @@ use crate::{
     plan_store::{BackendOrigin, ClaimedPlan, PlanBinding, PlanStore, ReservedPlanId},
     progress::{CancellationRegistry, CancellationToken, GlobalMutationLock},
     rfi_follow_up,
-    rfi_log::{
-        verify_workbook_step, workbook_record_count, workbook_rfi_codes, workbook_step_updates,
-    },
+    rfi_log::{verify_workbook_step, workbook_record_count, workbook_step_updates},
     rfi_system_sync,
 };
 
@@ -869,13 +867,6 @@ impl FilesystemAuthority {
             restore_step
                 .meta
                 .insert("appliedSha256".to_string(), Value::String(applied_hash));
-            restore_step.meta.insert(
-                "workItemEvidence".to_string(),
-                serde_json::json!({
-                    "workbookKind": step_meta.workbook_kind,
-                    "canonicalRfiCodes": step_meta.canonical_rfi_codes,
-                }),
-            );
             record.steps.push(restore_step);
             self.journals.write(&record)?;
 
@@ -1457,10 +1448,6 @@ impl FilesystemAuthority {
         }
         recovered.sort_by(|left, right| left.journal_id.cmp(&right.journal_id));
         Ok(recovered)
-    }
-
-    pub fn pending_recovery_count(&self) -> Result<u64, BackendError> {
-        self.journals.pending_recovery_count()
     }
 
     fn undo_follow_up(
@@ -2223,12 +2210,6 @@ impl FilesystemAuthority {
         restore_step
             .meta
             .insert("appliedSha256".to_string(), Value::String(applied_hash));
-        restore_step.meta.insert(
-            "workItemEvidence".to_string(),
-            serde_json::json!({
-                "canonicalRfiCodes": workbook_rfi_codes(step).map_err(step_no_effect)?,
-            }),
-        );
         record.steps.push(restore_step);
         record.pending_step = None;
         self.journals.write(record).map_err(step_unknown)?;

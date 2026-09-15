@@ -141,41 +141,6 @@ export interface SupportBundlePreview {
   content: string;
 }
 
-export interface ReadinessCheck {
-  id: "ocr" | "printers" | "recovery";
-  status: "ready" | "attention";
-  count: number;
-}
-
-export interface ReadinessReport {
-  overall: "ready" | "attention";
-  checks: ReadinessCheck[];
-}
-
-export interface WorkItem {
-  itemId: string;
-  title: string;
-  rfiCodes: string[];
-  stage: string;
-  updatedAt: string;
-  dueDate: string | null;
-  needsReview: boolean;
-  reason: string | null;
-  lastEventId: string;
-  sourceJournalId: string | null;
-}
-
-export interface WorkItemQueues {
-  today: WorkItem[];
-  resume: WorkItem[];
-  needsReview: WorkItem[];
-  completedCount: number;
-  invalidEventCount: number;
-  eventCount: number;
-  eventBytes: number;
-  eventLimit: number;
-}
-
 export interface ProgressEvent {
   phase: string;
   done: number;

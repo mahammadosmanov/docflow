@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact eleven-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact nine-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -67,8 +67,6 @@ and silent uninstall on a real Windows runner.
 | Security boundary | command/grant/RLS/credential tests | Tokens, cloud steps, or authority crossing into webview |
 | Credential startup | native-store contract test + normal packaged GUI launch | Hidden Keychain prompt, indefinite splash, token deletion, or webview exposure |
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
-| Device readiness | pure fact classification + typed command/UI tests + mutation-free pending-journal inspection test | Hidden OCR/printer failure, startup-time recovery mutation, stale-root failure, or overlooked interrupted work |
-| RFI work tracking | strict event validation + conflict projection + native preview/apply/list/undo + journal-evidence validation + typed queue UI | Lost resume state, cross-user exposure, silent transition conflict, stale/foreign/partial evidence, or coordination metadata authorizing document mutation |
 | Incremental scanning | durable-index restart/fingerprint tests + orientation and System Sync cache-hit tests + generic Preview summary UI test | Full rescans after interruption, stale cross-owner/root/profile reuse, transient-failure caching, or cached evidence becoming mutation authority |
 
 ## External certification gates

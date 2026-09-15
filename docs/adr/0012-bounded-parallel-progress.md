@@ -20,8 +20,7 @@ SQLite result and progress before the run continues.
 
 Use this pool for Process Scans OCR, signed-input discovery and PDF inspection,
 signed-page OCR/archive discovery, PDF-orientation discovery and page analysis,
-RFI System discovery and Worley signature detection, and multi-file RFI work
-event reads. Do not parallelize print submissions, Outlook/Office automation,
+RFI System discovery and Worley signature detection. Do not parallelize print submissions, Outlook/Office automation,
 workbook writes, Apply publication, journals, recovery, or Undo.
 
 Every registered operation reports specific localized phases through the

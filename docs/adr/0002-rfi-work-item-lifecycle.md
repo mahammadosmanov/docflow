@@ -1,7 +1,7 @@
 # ADR 0002: Local RFI work-item lifecycle
 
 - Date: 2026-09-13
-- Status: Accepted
+- Status: Superseded by [ADR 0014](0014-retire-work-tracking-and-device-readiness.md)
 
 ## Context
 

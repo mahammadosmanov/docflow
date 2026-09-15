@@ -37,10 +37,6 @@ pub(crate) enum BackendMethod {
     SupportDiagnostics,
     #[serde(rename = "support/copyDiagnostics")]
     SupportCopyDiagnostics,
-    #[serde(rename = "support/readiness")]
-    SupportReadiness,
-    #[serde(rename = "workItems/list")]
-    WorkItemsList,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -95,7 +91,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 35] = [
+    pub(crate) const ALL: [Self; 33] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -114,8 +110,6 @@ impl BackendMethod {
         Self::SettingsDeletePreset,
         Self::SupportDiagnostics,
         Self::SupportCopyDiagnostics,
-        Self::SupportReadiness,
-        Self::WorkItemsList,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -149,8 +143,6 @@ impl BackendMethod {
             Self::SettingsDeletePreset => "settings/deletePreset",
             Self::SupportDiagnostics => "support/diagnostics",
             Self::SupportCopyDiagnostics => "support/copyDiagnostics",
-            Self::SupportReadiness => "support/readiness",
-            Self::WorkItemsList => "workItems/list",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",
@@ -485,8 +477,6 @@ impl BackendRouter {
                 "rfi.outlook_reply_draft" => native.preview_outlook_reply_draft(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
                 "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
-                "rfi.work_item_update" => native.preview_work_item(params, send),
-                "rfi.work_item_export" => native.preview_work_item_export(params, send),
                 "files.batch_print" => native.preview_batch_print(params, send),
                 _ => Err(BackendError::validation("unknown operation ID")),
             }
@@ -650,6 +640,8 @@ mod tests {
             "engine/listOperations",
             "engine/previewTable",
             "internal/rfiLogGeminiContext",
+            "support/readiness",
+            "workItems/list",
         ] {
             assert!(
                 serde_json::from_value::<BackendMethod>(serde_json::json!(rejected)).is_err(),

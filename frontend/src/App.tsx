@@ -91,8 +91,6 @@ import type {
   Plan,
   PrintQueueSummary,
   ProgressEvent,
-  ReadinessCheck,
-  ReadinessReport,
   RecoveryPayload,
   ReviewAction,
   ReviewDecision,
@@ -100,8 +98,6 @@ import type {
   Step,
   SupportBundlePreview,
   ThemePreference,
-  WorkItem,
-  WorkItemQueues,
 } from "./types";
 
 type Route =
@@ -110,7 +106,6 @@ type Route =
       name: "operation";
       operation: OperationDef;
       initialValues?: Record<string, unknown>;
-      workItem?: WorkItem;
     }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
@@ -292,26 +287,13 @@ export function App() {
     case "operation":
       return (
         <OperationScreen
-          key={`${route.operation.id}:${String(route.initialValues?.item_id ?? "")}:${String(route.initialValues?.source_journal_id ?? "")}`}
+          key={route.operation.id}
           bridge={bridge}
           operation={route.operation}
           initialValues={route.initialValues}
-          workItem={route.workItem}
           s={s}
           onBack={() => setRoute({ name: "home" })}
           onReview={(destination) => setRoute({ name: "review", destination })}
-          onWorkItemEvidence={(values) => {
-            const tracker = bootstrap.operations.find(
-              (candidate) => candidate.id === "rfi.work_item_update",
-            );
-            if (tracker) {
-              setRoute({
-                name: "operation",
-                operation: tracker,
-                initialValues: values,
-              });
-            }
-          }}
         />
       );
     case "review":
@@ -647,10 +629,6 @@ function HomeScreen({
     bootstrap.auth.user?.display || bootstrap.auth.session?.email || "";
   const [reviewBusy, setReviewBusy] = useState(false);
   const [shortcutError, setShortcutError] = useState("");
-  const [readiness, setReadiness] = useState<ReadinessReport | null>(null);
-  const [readinessBusy, setReadinessBusy] = useState(true);
-  const [workItems, setWorkItems] = useState<WorkItemQueues | null>(null);
-  const [workItemsBusy, setWorkItemsBusy] = useState(true);
   const signOut = async () => onAuth(await bridge.call("auth/signOut"));
 
   const latestTheme = useRef(bootstrap.prefs.theme);
@@ -681,54 +659,6 @@ function HomeScreen({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleTheme]);
-
-  const loadReadiness = useCallback(async () => {
-    setReadinessBusy(true);
-    try {
-      setReadiness(await bridge.call("support/readiness"));
-    } catch (reason) {
-      setShortcutError(humanError(reason, s));
-    } finally {
-      setReadinessBusy(false);
-    }
-  }, [bridge, s]);
-
-  useEffect(() => {
-    void loadReadiness();
-  }, [loadReadiness]);
-
-  const loadWorkItems = useCallback(async () => {
-    setWorkItemsBusy(true);
-    try {
-      setWorkItems(await bridge.call("workItems/list"));
-    } catch (reason) {
-      setShortcutError(humanError(reason, s));
-    } finally {
-      setWorkItemsBusy(false);
-    }
-  }, [bridge, s]);
-
-  useEffect(() => {
-    void loadWorkItems();
-  }, [loadWorkItems]);
-
-  const workItemOperation = bootstrap.operations.find(
-    (operation) => operation.id === "rfi.work_item_update",
-  );
-  const workItemExportOperation = bootstrap.operations.find(
-    (operation) => operation.id === "rfi.work_item_export",
-  );
-  const runVerifiedWorkStep = (item: WorkItem) => {
-    const mapping = verifiedOperationByStage[item.stage];
-    const operation = mapping
-      ? bootstrap.operations.find(
-          (candidate) => candidate.id === mapping.operationId,
-        )
-      : undefined;
-    if (operation) {
-      navigate({ name: "operation", operation, workItem: item });
-    }
-  };
 
   const openReview = async () => {
     setReviewBusy(true);
@@ -810,182 +740,6 @@ function HomeScreen({
             <span aria-hidden="true">·</span>
             <span>v{bootstrap.version}</span>
           </div>
-        </section>
-        <section className="work-queues" aria-labelledby="work-queues-title">
-          <div className="section-heading work-queues-heading">
-            <div>
-              <p className="eyebrow">{s.t("workItems.eyebrow")}</p>
-              <h2 id="work-queues-title">{s.t("workItems.title")}</h2>
-              <p>{s.t("workItems.help")}</p>
-            </div>
-            <div className="work-queue-actions">
-              {workItems && (
-                <span className="work-store-usage">
-                  {s.t("workItems.storeUsage", {
-                    count: workItems.eventCount,
-                    limit: workItems.eventLimit,
-                    size: Math.ceil(workItems.eventBytes / 1024),
-                  })}
-                </span>
-              )}
-              <IconButton
-                label={s.t("workItems.refresh")}
-                onClick={() => void loadWorkItems()}
-                disabled={workItemsBusy}
-              >
-                <RefreshCw className={workItemsBusy ? "spin" : ""} />
-              </IconButton>
-              <Button
-                variant="secondary"
-                icon={<Download />}
-                disabled={!workItemExportOperation}
-                onClick={() =>
-                  workItemExportOperation &&
-                  navigate({
-                    name: "operation",
-                    operation: workItemExportOperation,
-                  })
-                }
-              >
-                {s.t("workItems.export")}
-              </Button>
-              <Button
-                icon={<Plus />}
-                disabled={!workItemOperation}
-                onClick={() =>
-                  workItemOperation &&
-                  navigate({ name: "operation", operation: workItemOperation })
-                }
-              >
-                {s.t("workItems.new")}
-              </Button>
-            </div>
-          </div>
-          {workItemsBusy && !workItems ? (
-            <div className="readiness-loading">
-              <LoaderCircle className="spin" /> {s.t("workItems.loading")}
-            </div>
-          ) : (
-            <div className="work-queue-grid">
-              <WorkQueue
-                icon={<CalendarDays />}
-                title={s.t("workItems.today")}
-                items={workItems?.today ?? []}
-                empty={s.t("workItems.today.empty")}
-                s={s}
-                onOpen={(item) =>
-                  workItemOperation &&
-                  navigate({
-                    name: "operation",
-                    operation: workItemOperation,
-                    initialValues: workItemTransitionValues(item),
-                  })
-                }
-                onRun={runVerifiedWorkStep}
-              />
-              <WorkQueue
-                icon={<Play />}
-                title={s.t("workItems.resume")}
-                items={workItems?.resume ?? []}
-                empty={s.t("workItems.resume.empty")}
-                s={s}
-                onOpen={(item) =>
-                  workItemOperation &&
-                  navigate({
-                    name: "operation",
-                    operation: workItemOperation,
-                    initialValues: workItemTransitionValues(item),
-                  })
-                }
-                onRun={runVerifiedWorkStep}
-              />
-              <WorkQueue
-                icon={<CircleAlert />}
-                title={s.t("workItems.needsReview")}
-                items={workItems?.needsReview ?? []}
-                empty={s.t("workItems.needsReview.empty")}
-                s={s}
-                onOpen={(item) =>
-                  workItemOperation &&
-                  navigate({
-                    name: "operation",
-                    operation: workItemOperation,
-                    initialValues: workItemTransitionValues(item),
-                  })
-                }
-                onRun={runVerifiedWorkStep}
-              />
-            </div>
-          )}
-          {Boolean(workItems?.invalidEventCount) && (
-            <Notice kind="error">
-              {s.t("workItems.invalidEvents", {
-                count: workItems?.invalidEventCount ?? 0,
-              })}
-            </Notice>
-          )}
-          {workItems &&
-            workItems.eventLimit > 0 &&
-            workItems.eventCount * 10 >= workItems.eventLimit * 9 && (
-              <Notice kind="warning">
-                {s.t("workItems.capacityWarning", {
-                  count: workItems.eventCount,
-                  limit: workItems.eventLimit,
-                })}
-              </Notice>
-            )}
-        </section>
-        <section className="readiness-card" aria-labelledby="readiness-title">
-          <div className="readiness-heading">
-            <div>
-              <p className="eyebrow">{s.t("readiness.eyebrow")}</p>
-              <h2 id="readiness-title">{s.t("readiness.title")}</h2>
-              <p>{s.t("readiness.help")}</p>
-            </div>
-            <div className="readiness-heading-actions">
-              {readiness && (
-                <span className={`readiness-overall ${readiness.overall}`}>
-                  {readiness.overall === "ready" ? (
-                    <CheckCircle2 />
-                  ) : (
-                    <CircleAlert />
-                  )}
-                  {s.t(`readiness.overall.${readiness.overall}`)}
-                </span>
-              )}
-              <IconButton
-                label={s.t("readiness.refresh")}
-                onClick={() => void loadReadiness()}
-                disabled={readinessBusy}
-              >
-                <RefreshCw className={readinessBusy ? "spin" : ""} />
-              </IconButton>
-            </div>
-          </div>
-          {readinessBusy && !readiness ? (
-            <div className="readiness-loading">
-              <LoaderCircle className="spin" /> {s.t("readiness.loading")}
-            </div>
-          ) : (
-            <div className="readiness-grid">
-              {readiness?.checks.map((check) => (
-                <ReadinessItem key={check.id} check={check} s={s} />
-              ))}
-            </div>
-          )}
-          {readiness?.checks.some(
-            (check) => check.id === "recovery" && check.status === "attention",
-          ) && (
-            <div className="readiness-action">
-              <Button
-                variant="secondary"
-                icon={<RotateCcw />}
-                onClick={() => navigate({ name: "recovery" })}
-              >
-                {s.t("readiness.openRecovery")}
-              </Button>
-            </div>
-          )}
         </section>
         <div className="dashboard-grid">
           <section className="dashboard-section">
@@ -1106,140 +860,20 @@ function HomeScreen({
   );
 }
 
-function workItemTransitionValues(item: WorkItem): Record<string, unknown> {
-  return {
-    action: "transition",
-    item_id: item.itemId,
-    stage: item.stage,
-    due_date: item.dueDate ?? "",
-    needs_review: item.needsReview,
-    reason: "",
-    source_journal_id: "",
-  };
-}
-
-const verifiedOperationByStage: Record<
-  string,
-  { operationId: string; targetStage: string }
-> = {
-  checked: { operationId: "rfi.log_add", targetStage: "numbers_assigned" },
-  publication_email_archived: {
-    operationId: "rfi.process_scans",
-    targetStage: "intec_scan_filed",
-  },
-  intec_scan_filed: {
-    operationId: "rfi.system_sync",
-    targetStage: "worley_signed_synced",
-  },
-};
-
-function WorkQueue({
-  icon,
-  title,
-  items,
-  empty,
-  s,
-  onOpen,
-  onRun,
-}: {
-  icon: ReactNode;
-  title: string;
-  items: WorkItem[];
-  empty: string;
-  s: Strings;
-  onOpen: (item: WorkItem) => void;
-  onRun?: (item: WorkItem) => void;
-}) {
-  return (
-    <section className="work-queue-column">
-      <div className="work-queue-title">
-        <span>{icon}</span>
-        <strong>{title}</strong>
-        <small>{items.length}</small>
-      </div>
-      {items.length === 0 ? (
-        <p className="work-queue-empty">{empty}</p>
-      ) : (
-        <div className="work-item-list">
-          {items.slice(0, 6).map((item) => (
-            <div className="work-item-card-shell" key={item.itemId}>
-              <button
-                type="button"
-                className="work-item-card"
-                aria-label={s.t("workItems.open", { title: item.title })}
-                onClick={() => onOpen(item)}
-              >
-                <div>
-                  <strong>{item.title}</strong>
-                  <small>
-                    {s.t(`choice.rfi.workItem.stage.${item.stage}`)}
-                  </small>
-                </div>
-                {item.rfiCodes.length > 0 && (
-                  <code>{item.rfiCodes.slice(0, 2).join(", ")}</code>
-                )}
-                <span className="work-item-id">{item.itemId}</span>
-              </button>
-              {onRun && verifiedOperationByStage[item.stage] && (
-                <button
-                  type="button"
-                  className="work-item-run"
-                  onClick={() => onRun(item)}
-                >
-                  <Play /> {s.t("workItems.runVerifiedStep")}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ReadinessItem({ check, s }: { check: ReadinessCheck; s: Strings }) {
-  const detailKey =
-    check.id === "printers" && check.status === "ready"
-      ? "readiness.printers.ready"
-      : `readiness.${check.id}.${check.status}`;
-  const icon =
-    check.id === "printers" ? (
-      <Printer />
-    ) : check.id === "recovery" ? (
-      <RotateCcw />
-    ) : (
-      <FileSearch />
-    );
-  return (
-    <div className={`readiness-item ${check.status}`}>
-      <span className="readiness-icon">{icon}</span>
-      <span>
-        <strong>{s.t(`readiness.${check.id}.title`)}</strong>
-        <small>{s.t(detailKey, { count: check.count })}</small>
-      </span>
-      {check.status === "ready" ? <Check /> : <CircleAlert />}
-    </div>
-  );
-}
-
 function OperationScreen({
   bridge,
   operation,
   initialValues,
-  workItem,
   s,
   onBack,
   onReview,
-  onWorkItemEvidence,
 }: {
   bridge: Bridge;
   operation: OperationDef;
   initialValues?: Record<string, unknown>;
-  workItem?: WorkItem;
   s: Strings;
   onBack: () => void;
   onReview: (destination: PathSelection) => void;
-  onWorkItemEvidence: (values: Record<string, unknown>) => void;
 }) {
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
@@ -1792,25 +1426,6 @@ function OperationScreen({
             )}
             copyingSheet={copyingSheet}
             onCopy={(sheet) => void copyTable(sheet)}
-            onWorkItemEvidence={
-              workItem &&
-              verifiedOperationByStage[workItem.stage]?.operationId ===
-                operation.id &&
-              result.applied > 0 &&
-              result.failed === 0 &&
-              result.journalId &&
-              (typeof result.meta?.effectState !== "string" ||
-                result.meta.effectState === "committed")
-                ? () => {
-                    const mapping = verifiedOperationByStage[workItem.stage];
-                    onWorkItemEvidence({
-                      ...workItemTransitionValues(workItem),
-                      stage: mapping.targetStage,
-                      source_journal_id: result.journalId,
-                    });
-                  }
-                : undefined
-            }
           />
         )}
       </main>
@@ -4491,7 +4106,6 @@ function ResultView({
   copyingSheet = null,
   onCopy,
   onResumePrint,
-  onWorkItemEvidence,
 }: {
   result: OperationResult;
   s: Strings;
@@ -4503,7 +4117,6 @@ function ResultView({
   copyingSheet?: string | null;
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
-  onWorkItemEvidence?: () => void;
 }) {
   const effectState =
     typeof result.meta?.effectState === "string"
@@ -4588,15 +4201,6 @@ function ResultView({
         </div>
       )}
       <div className="result-actions">
-        {onWorkItemEvidence && (
-          <Button
-            variant="secondary"
-            icon={<BadgeCheck />}
-            onClick={onWorkItemEvidence}
-          >
-            {s.t("workItems.reviewEvidenceTransition")}
-          </Button>
-        )}
         {onResumePrint && (
           <Button
             variant="secondary"

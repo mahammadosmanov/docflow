@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.28.1",
+  "currentVersion": "1.0.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -494,9 +494,17 @@
       "version": "0.28.1",
       "date": "2026-09-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.28.1",
       "summary": "Require matching email evidence before grouping each RFI and recognize exact canonical RFI codes split across bounded OCR line breaks."
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-09-15",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.0.0",
+      "summary": "Remove RFI work tracking, work audit export, and device readiness while preserving inactive legacy data and workflow-specific safety checks."
     }
   ]
 }

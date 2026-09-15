@@ -4,6 +4,15 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.0.0: retire work tracking and device readiness
+  - the two work-item operations, work queues, audit export, readiness panel,
+    frontend/native commands, schemas, types, localization, and active modules
+    are removed
+  - nine document operations remain; workflow-specific safety checks and the
+    recovery center are unchanged
+  - existing local work-event files are preserved as inactive legacy data and
+    are never deleted by the migration
+
 - [x] Version 0.28.1: mail-gated grouping and bounded wrapped RFI recognition
   - a readable EML/MSG match is required independently for every RFI before its
     folder or related copies can enter the approved Plan

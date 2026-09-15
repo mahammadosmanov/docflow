@@ -18,7 +18,7 @@ Other stable Preview phases cover scan discovery/OCR/planning, workbook reading
 and RFI-file grouping discovery/analysis/planning,
 and RFI planning, Follow Up analysis, RFI System discovery/signature/workbook/
 mapping stages, PDF-orientation discovery/analysis, printer checks/file
-inspection, work-item validation/audit preparation, Outlook selection, and
+inspection, Outlook selection, and
 `preview_ready`. Apply remains ordered and reports approved-step progress.
 
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,

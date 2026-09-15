@@ -4,8 +4,6 @@
 
 | Operation | Operator outcome |
 |---|---|
-| `rfi.work_item_update` | Create or transition a resumable append-only RFI work item |
-| `rfi.work_item_export` | Export owner-scoped work history to no-clobber JSON and Excel-safe CSV |
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
@@ -18,7 +16,6 @@
 
 ## Application features
 
-- Today, Resume, and Needs Review work queues with exact journal evidence.
 - Generic schema-driven forms, remembered safe values, typed presets, compact
   multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
 - Batch Print always starts without old files or silently restored settings. One
@@ -40,13 +37,13 @@
 - Persistent local history, explicit recovery center, guarded undo, and
   recoverable review trash.
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
-- Read-only device readiness and copy-only redacted diagnostics.
+- Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
   RFI file-name/content grouping,
   recursive signed-input and archive discovery, PDF orientation discovery and
-  page analysis, RFI System discovery/signature detection, and large RFI work
-  event reads; state-changing effects remain ordered and journaled.
+  page analysis and RFI System discovery/signature detection; state-changing
+  effects remain ordered and journaled.
 - Every registered operation reports localized preparation, discovery, analysis,
   planning, waiting, or ready stages with bounded item counters and the current
   file where available.

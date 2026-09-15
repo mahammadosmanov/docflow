@@ -5,7 +5,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 
 ## Core requirements
 
-- **DF-001 — Preview first:** every document, workbook, queue, draft, or work-item
+- **DF-001 — Preview first:** every document, workbook, queue, or draft
   mutation is previewed and explicitly approved.
 - **DF-002 — Immutable apply:** Apply consumes only the cached approved Plan; it
   does not rediscover files, rows, pages, recipients, or print settings.
@@ -92,8 +92,8 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 
 ## Scope
 
-The eleven registered operations and application-level history, recovery, review,
-settings, access control, diagnostics, and readiness surfaces are in scope. Paid
+The nine registered operations and application-level history, recovery, review,
+settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 
 ## Release criteria

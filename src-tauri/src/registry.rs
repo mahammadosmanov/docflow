@@ -94,159 +94,6 @@ fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
 }
 
 pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
-    let mut create_visibility = Map::new();
-    create_visibility.insert("action".to_string(), json!("create"));
-    let mut transition_visibility = Map::new();
-    transition_visibility.insert("action".to_string(), json!("transition"));
-    let mut work_item = operation(
-        "rfi.work_item_update",
-        vec![
-            parameter(
-                "action",
-                ParamKind::Choice,
-                "param.rfi.workItem.action",
-                json!("create"),
-                true,
-                strings(&["create", "transition"]),
-                labels(&[
-                    ("create", "choice.rfi.workItem.action.create"),
-                    ("transition", "choice.rfi.workItem.action.transition"),
-                ]),
-                Map::new(),
-                Some("param.rfi.workItem.action.help"),
-            ),
-            parameter(
-                "item_id",
-                ParamKind::Text,
-                "param.rfi.workItem.itemId",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                transition_visibility.clone(),
-                Some("param.rfi.workItem.itemId.help"),
-            ),
-            parameter(
-                "title",
-                ParamKind::Text,
-                "param.rfi.workItem.title",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                create_visibility.clone(),
-                None,
-            ),
-            parameter(
-                "rfi_codes",
-                ParamKind::LongText,
-                "param.rfi.workItem.rfiCodes",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                create_visibility,
-                Some("param.rfi.workItem.rfiCodes.help"),
-            ),
-            parameter(
-                "stage",
-                ParamKind::Choice,
-                "param.rfi.workItem.stage",
-                json!("request_captured"),
-                true,
-                strings(&[
-                    "request_captured",
-                    "checked",
-                    "numbers_assigned",
-                    "prepared_files_received",
-                    "published_ongoing",
-                    "publication_email_archived",
-                    "intec_scan_filed",
-                    "worley_signed_synced",
-                    "replicas_synced",
-                    "complete",
-                ]),
-                prefixed_labels(
-                    "choice.rfi.workItem.stage",
-                    &[
-                        "request_captured",
-                        "checked",
-                        "numbers_assigned",
-                        "prepared_files_received",
-                        "published_ongoing",
-                        "publication_email_archived",
-                        "intec_scan_filed",
-                        "worley_signed_synced",
-                        "replicas_synced",
-                        "complete",
-                    ],
-                ),
-                Map::new(),
-                Some("param.rfi.workItem.stage.help"),
-            ),
-            parameter(
-                "due_date",
-                ParamKind::Text,
-                "param.rfi.workItem.dueDate",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.workItem.dueDate.help"),
-            ),
-            parameter(
-                "needs_review",
-                ParamKind::Bool,
-                "param.rfi.workItem.needsReview",
-                json!(false),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.workItem.needsReview.help"),
-            ),
-            parameter(
-                "reason",
-                ParamKind::LongText,
-                "param.rfi.workItem.reason",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                transition_visibility,
-                Some("param.rfi.workItem.reason.help"),
-            ),
-            parameter(
-                "source_journal_id",
-                ParamKind::Text,
-                "param.rfi.workItem.sourceJournalId",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::from_iter([("action".to_string(), json!("journal_evidence"))]),
-                Some("param.rfi.workItem.sourceJournalId.help"),
-            ),
-        ],
-    );
-    for parameter in &mut work_item.schema.params {
-        parameter.remember = false;
-    }
-    let work_item_export = operation(
-        "rfi.work_item_export",
-        vec![parameter(
-            "destination",
-            ParamKind::Folder,
-            "param.rfi.workItem.exportDestination",
-            Value::Null,
-            true,
-            Vec::new(),
-            BTreeMap::new(),
-            Map::new(),
-            Some("param.rfi.workItem.exportDestination.help"),
-        )],
-    );
     let process_scans = operation(
         "rfi.process_scans",
         vec![
@@ -729,8 +576,6 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     );
 
     vec![
-        work_item,
-        work_item_export,
         process_scans,
         file_group,
         rfi_log,
@@ -756,8 +601,6 @@ mod tests {
                 .map(|operation| operation.id.as_str())
                 .collect::<Vec<_>>(),
             vec![
-                "rfi.work_item_update",
-                "rfi.work_item_export",
                 "rfi.process_scans",
                 "rfi.group_files",
                 "rfi.log_add",
@@ -769,7 +612,7 @@ mod tests {
                 "rfi.system_sync",
             ]
         );
-        let follow_up = &operations[5];
+        let follow_up = &operations[3];
         assert_eq!(
             follow_up.schema.validate(&Map::new()),
             vec![
@@ -777,7 +620,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[10];
+        let system_sync = &operations[8];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -787,7 +630,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            operations[6].schema.validate(&Map::new()),
+            operations[4].schema.validate(&Map::new()),
             vec!["error.param.required.reply_text".to_string()]
         );
 
@@ -802,7 +645,7 @@ mod tests {
     #[test]
     fn param_schema_validation_matches_frozen_required_value_rules() {
         let operations = operation_registry(RegistryFacts::default());
-        let process_scans = &operations[2];
+        let process_scans = &operations[0];
         assert_eq!(
             process_scans.schema.validate(&Map::new()),
             vec![
@@ -811,7 +654,7 @@ mod tests {
             ]
         );
 
-        let rfi_log = &operations[4];
+        let rfi_log = &operations[2];
         let values = serde_json::from_value(json!({
             "workbook": "/tmp/RFI Log.xlsx",
             "email_provider": "offline",

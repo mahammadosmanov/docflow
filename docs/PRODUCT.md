@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.28.1**. `VERSION` is authoritative.
+Current product version: **1.0.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -45,12 +45,12 @@ workbook behavior, print batches kept in order, and every change recoverable.
     may create separately reviewed copies.
 15. Incoming RFI grouping requires readable EML/MSG evidence for each exact RFI;
     missing mail blocks that RFI's folder and all related copies.
-15. Large repeated RFI scans checkpoint each completed PDF in a local,
+16. Large repeated RFI scans checkpoint each completed PDF in a local,
     owner-scoped index; reuse is visible and never substitutes for Apply guards.
-16. Independent bulk discovery and analysis use bounded multi-core workers;
+17. Independent bulk discovery and analysis use bounded multi-core workers;
     every operation reports localized stages and item progress while all effects
     that can collide or become uncertain remain ordered.
-17. Incoming top-level files can be grouped by exact RFI identity from filenames
+18. Incoming top-level files can be grouped by exact RFI identity from filenames
     or bounded content inspection; multi-RFI mail is copied to every matching
     folder while source files remain untouched.
 
@@ -58,7 +58,6 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| RFI work tracking | Resume multi-day RFI work, launch verified next steps, and export a portable audit in CSV and JSON | Owner-scoped append-only events; exact committed journal evidence; previewed no-clobber export; store capacity visibility; stale or conflicting evidence fails into review; official documents remain authoritative |
 | Process Scans | Identify, rename, organize, and review RFI PDFs | Strict `-RFI-` anchor, no-overwrite, `_review/` fallback |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into exact per-RFI folders | Top-level source is read-only; exact ASCII identifiers only; multi-RFI fan-out is previewed; collisions do not overwrite; unmatched/unreadable files go to `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
@@ -71,7 +70,6 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |
 | Support diagnostics | Preview and copy a redacted local support bundle | Bounded Rust DTO, recursive redaction, no upload or user-file scan |
-| Device readiness | See OCR, printer, and interrupted-work health before starting | Read-only bounded checks; document-specific checks remain in preview |
 
 ## Non-goals
 

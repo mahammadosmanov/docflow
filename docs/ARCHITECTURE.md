@@ -50,39 +50,6 @@ denylist, content, path, depth, item, and byte bounds apply before the determini
 JSON crosses into the webview. Collection does not scan user files or send data;
 copying the validated preview to the local clipboard is a separate explicit action.
 
-Device readiness is a separate authenticated, read-only Rust query. It reports
-only bounded OCR availability, enumerated-printer count, and pending local
-recovery count. It neither scans user folders nor treats a healthy device result
-as workbook, OneDrive, Office, or printer-output certification; those checks stay
-inside operation preview and platform release gates. The pending count uses the
-same bounded journal parser as recovery but never acquires mutation permits,
-reopens recorded roots, reconciles effects, or rewrites a journal. Finalized
-recovery notices are projected directly because their retained locator is already
-the fail-closed operator handoff; listing them needs no document-root authority.
-
-RFI work tracking stores bounded, owner-scoped, append-only JSON events beneath
-the application-data directory. Event creation and manual stage transitions use
-the same cached Plan, explicit approval, no-clobber write, journal, and undo
-boundary as document operations. The home queues are a rebuildable read-only
-projection. A stale transition creates a visible review conflict and never
-silently replaces the last proven stage. These coordination records cannot
-authorize an Excel, PDF, email, print, or replica mutation.
-
-Eligible document journals can authorize only a separate work-item transition
-preview. The validator admits committed same-owner RFI Log, successfully filed
-Process Scans, or two-workbook System Sync evidence with exact canonical RFI
-coverage. The transition remains an independently approved, journaled,
-undoable no-clobber write. Journal disappearance, undo, partial state, wrong
-operation, wrong stage, or identity mismatch fails closed into rejection or
-Needs Review; Outlook draft journals are never lifecycle evidence.
-
-RFI work audit export reads the same bounded owner-scoped event snapshot and
-prepares both lossless JSON and Excel-safe CSV outputs. The selected destination
-is capability-bound, filenames are unique, and both writes use the ordinary
-preview, approval, no-clobber journal, and undo path. Export never prunes or
-modifies the append-only store. Queue DTOs expose event count, owned valid-event
-bytes, and the fixed limit so operators can act before the store is full.
-
 Signed-page staging performs bounded page-level OCR when a Worley scan contains
 multiple RFI first pages. Preview records the exact zero-based source page index,
 whole-file fingerprint, archive candidate, and destination in the immutable
@@ -140,7 +107,7 @@ The same bounded analysis pool is used by native Process Scans OCR, incoming
 RFI file name/content inspection, combined
 Worley page recognition, signed-input and archive discovery, RFI System
 discovery and first-page signature detection, PDF-orientation discovery and
-page analysis, and large RFI work-event reads. Completed indexed PDF analyses
+page analysis. Completed indexed PDF analyses
 return to one coordinator, which writes each SQLite checkpoint immediately.
 The pool preserves deterministic input/result order and is never used for
 Office automation, print submission, publication, journals, or Undo, where
@@ -238,9 +205,10 @@ the pinned directory or fails closed.
 - journals: `~/.docflow/journal/`
 - recoverable trash: `~/.docflow/trash/`
 - print queue: `~/.docflow/print_queue.json`
-- RFI work events: `~/.docflow/work-items/events/`
+- retired RFI work events: `~/.docflow/work-items/events/` (preserved, inactive)
 - scan checkpoints and audit: `~/.docflow/scan-index.sqlite3`
-- protocol-1 DTO casing/nullability and operation IDs: unchanged
+- protocol-1 DTO casing/nullability remains compatible; retired operation IDs
+  and commands are rejected
 - Supabase `app_users` and `history` schema: compatible, with history steps inert
 
 Legacy print-queue fields remain readable, but queues written before source/root

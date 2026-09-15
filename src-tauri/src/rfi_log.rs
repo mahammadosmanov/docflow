@@ -855,16 +855,6 @@ pub(crate) fn workbook_record_count(step: &Step) -> Result<u64, BackendError> {
     Ok(u64::try_from(count).unwrap_or(u64::MAX))
 }
 
-pub(crate) fn workbook_rfi_codes(step: &Step) -> Result<Vec<String>, BackendError> {
-    let mut codes = decode_batches(step)?
-        .into_iter()
-        .flat_map(|batch| batch.records.into_iter().map(|record| record.rfi_no))
-        .collect::<Vec<_>>();
-    codes.sort();
-    codes.dedup();
-    Ok(codes)
-}
-
 pub(crate) fn verify_workbook_step(step: &Step, path: &Path) -> Result<(), BackendError> {
     let workbook = read_workbook(path).map_err(document_error)?;
     for batch in decode_batches(step)? {

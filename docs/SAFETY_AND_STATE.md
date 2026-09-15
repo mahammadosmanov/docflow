@@ -45,7 +45,7 @@ unreadable sources are preserved and copied to destination `_review`.
 | Journals | `~/.docflow/journal/` | Local undo authority and recovery evidence |
 | Trash | `~/.docflow/trash/` | Recoverable review removals |
 | Print queue | `~/.docflow/print_queue.json` | Resume state, not an undo journal |
-| Work events | `~/.docflow/work-items/events/` | Owner-scoped append-only lifecycle data |
+| Retired work events | `~/.docflow/work-items/events/` | Preserved legacy data; no active UI or operation mutates it |
 | Scan index | `~/.docflow/scan-index.sqlite3` | Owner/root/operation-scoped checkpoints and scan-run audit; never Apply authority |
 | Credentials | Windows Credential Manager/macOS Keychain | Tokens never enter settings or React |
 

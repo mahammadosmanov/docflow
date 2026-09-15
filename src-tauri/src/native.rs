@@ -41,7 +41,6 @@ use crate::{
     platform,
     print_queue::{BatchPrintParams, PrintService, default_queue_root},
     progress::GlobalMutationLock,
-    readiness::{ReadinessFacts, ReadinessReport, build_readiness},
     registry::{RegistryFacts, operation_registry},
     review::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
@@ -49,7 +48,6 @@ use crate::{
     rfi_follow_up, rfi_log, rfi_system_sync,
     scan_index::ScanIndex,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
-    work_items::{self, WorkItemExportInput, WorkItemInput, WorkItemQueues},
 };
 
 const SUPABASE_URL: &str = "https://ndpkgbfmshceffwhpqoz.supabase.co";
@@ -168,14 +166,6 @@ impl NativeBackend {
             BackendMethod::SupportDiagnostics | BackendMethod::SupportCopyDiagnostics => Err(
                 BackendError::protocol("support command reached the operation backend"),
             ),
-            BackendMethod::SupportReadiness => {
-                decode_empty(params)?;
-                encode(self.readiness()?)
-            }
-            BackendMethod::WorkItemsList => {
-                decode_empty(params)?;
-                encode(self.work_items()?)
-            }
             BackendMethod::AppBootstrap => {
                 decode_empty(params)?;
                 let auth = self.auth.restore(now())?;
@@ -745,158 +735,6 @@ impl NativeBackend {
             journals: self.filesystem.recover_pending(&caller)?,
             print_queue: self.print.latest(&caller)?,
         })
-    }
-
-    fn readiness(&self) -> Result<ReadinessReport, BackendError> {
-        let ocr = NativeOcr::discover();
-        let (ocr_available, ocr_language_data_available) = ocr.support_status();
-        let printer_inventory = self.print.inventory();
-        let (printer_inventory_available, printer_count) = match printer_inventory {
-            Ok(inventory) => (true, inventory.printers.len() as u64),
-            Err(_) => (false, 0),
-        };
-        let recovery_count = self.filesystem.pending_recovery_count()?
-            + u64::from(self.print.latest(&self.caller_identity()?)?.is_some());
-        Ok(build_readiness(ReadinessFacts {
-            ocr_available,
-            ocr_language_data_available,
-            printer_inventory_available,
-            printer_count,
-            recovery_count,
-        }))
-    }
-
-    fn work_items(&self) -> Result<WorkItemQueues, BackendError> {
-        work_items::project_with_journals(
-            &self.app_data_dir.join("work-items"),
-            &self.caller_identity()?.owner_id,
-            chrono::Local::now().date_naive(),
-            &self.journals,
-        )
-    }
-
-    pub(crate) fn preview_work_item<F>(
-        &self,
-        params: Value,
-        mut progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<WorkItemInput> = decode(params)?;
-        if request.op_id != work_items::OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust work-item backend",
-            ));
-        }
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-        let grant =
-            self.filesystem
-                .issue_grant(&scope, &self.app_data_dir, GrantAccess::ReadWrite)?;
-        progress(ProgressEvent {
-            phase: "work_item_validation".to_string(),
-            done: 0,
-            total: 1,
-            subject: request.values.title.clone(),
-        });
-        let source_journal = if request.values.source_journal_id.trim().is_empty() {
-            None
-        } else {
-            Some(self.journals.read(&request.values.source_journal_id)?)
-        };
-        let plan = work_items::preview_event_with_journal(
-            &self.app_data_dir.join("work-items"),
-            &caller.owner_id,
-            request.values,
-            &chrono::Utc::now().to_rfc3339(),
-            source_journal.as_ref(),
-        )?;
-        let cached = self.filesystem.cache_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                &caller.owner_id,
-                &caller.session_id,
-                &request.op_id,
-                vec![grant.grant_id],
-            ),
-            plan,
-        )?;
-        progress(ProgressEvent {
-            phase: "preview_ready".to_string(),
-            done: 1,
-            total: 1,
-            subject: String::new(),
-        });
-        encode(cached)
-    }
-
-    pub(crate) fn preview_work_item_export<F>(
-        &self,
-        params: Value,
-        mut progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<WorkItemExportInput> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != work_items::EXPORT_OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust work-item export backend",
-            ));
-        }
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-        let destination = PathBuf::from(&request.values.destination);
-        let grant = self
-            .filesystem
-            .issue_grant(&scope, &destination, GrantAccess::ReadWrite)?;
-        progress(ProgressEvent {
-            phase: "work_audit_collection".to_string(),
-            done: 0,
-            total: 1,
-            subject: destination.to_string_lossy().into_owned(),
-        });
-        let plan = work_items::preview_export(
-            &self.app_data_dir.join("work-items"),
-            &caller.owner_id,
-            request.values,
-            &chrono::Utc::now().to_rfc3339(),
-        )?;
-        progress(ProgressEvent {
-            phase: "work_audit_preparation".to_string(),
-            done: 1,
-            total: 1,
-            subject: destination.to_string_lossy().into_owned(),
-        });
-        let cached = self.filesystem.cache_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                &caller.owner_id,
-                &caller.session_id,
-                &request.op_id,
-                vec![grant.grant_id],
-            ),
-            plan,
-        )?;
-        progress(ProgressEvent {
-            phase: "preview_ready".to_string(),
-            done: 1,
-            total: 1,
-            subject: String::new(),
-        });
-        encode(cached)
     }
 
     pub(crate) fn preview_process_scans<F>(
@@ -2465,81 +2303,6 @@ mod tests {
     }
 
     #[test]
-    fn work_item_preview_apply_list_and_undo_use_the_native_journal_boundary() {
-        let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
-        let temporary = tempfile::tempdir().unwrap();
-        let backend = test_backend(&temporary);
-        let plan = backend
-            .preview_work_item(
-                json!({
-                    "opId": work_items::OPERATION_ID,
-                    "values": {
-                        "action": "create",
-                        "itemId": "",
-                        "title": "MEC inspection request",
-                        "rfiCodes": "AZE-SUN-INT-QMS-RFI-MEC-0249",
-                        "stage": "request_captured",
-                        "dueDate": "",
-                        "needsReview": false,
-                        "reason": ""
-                    }
-                }),
-                |_| {},
-            )
-            .unwrap();
-        let plan_id = plan["planId"].as_str().unwrap();
-        let (result, operation_id) = backend
-            .apply_native_plan(plan_id, Some(work_items::OPERATION_ID), |_| {})
-            .unwrap();
-        assert_eq!(operation_id, work_items::OPERATION_ID);
-        assert_eq!(backend.work_items().unwrap().resume.len(), 1);
-
-        let undone = backend
-            .try_native_undo(&json!({"journalId": result["journalId"]}))
-            .unwrap();
-        assert!(undone.is_some());
-        assert!(backend.work_items().unwrap().resume.is_empty());
-    }
-
-    #[test]
-    fn work_item_audit_export_uses_selected_folder_journal_and_undo() {
-        let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
-        let temporary = tempfile::tempdir().unwrap();
-        let backend = test_backend(&temporary);
-        let export_root = temporary.path().join("audit-export");
-        fs::create_dir(&export_root).unwrap();
-        let selection = backend
-            .register_selected_paths(
-                work_items::EXPORT_OPERATION_ID,
-                "destination",
-                vec![export_root.clone()],
-            )
-            .unwrap()
-            .remove(0);
-        let plan = backend
-            .preview_work_item_export(
-                json!({
-                    "opId": work_items::EXPORT_OPERATION_ID,
-                    "values": {"destination": selection}
-                }),
-                |_| {},
-            )
-            .unwrap();
-        let plan_id = plan["planId"].as_str().unwrap();
-        let (result, operation_id) = backend
-            .apply_native_plan(plan_id, Some(work_items::EXPORT_OPERATION_ID), |_| {})
-            .unwrap();
-        assert_eq!(operation_id, work_items::EXPORT_OPERATION_ID);
-        assert_eq!(fs::read_dir(&export_root).unwrap().count(), 2);
-
-        backend
-            .try_native_undo(&json!({"journalId": result["journalId"]}))
-            .unwrap()
-            .expect("export should be undoable");
-        assert_eq!(fs::read_dir(&export_root).unwrap().count(), 0);
-    }
-
-    #[test]
     fn rfi_file_group_apply_copies_without_touching_source_and_undoes_created_output() {
         let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
         let temporary = tempfile::tempdir().unwrap();
@@ -2984,20 +2747,6 @@ mod tests {
         assert_eq!(filtered.get("email_provider"), Some(&json!("gemini")));
         assert!(!filtered.contains_key("gemini_api_key"));
         assert!(!filtered.contains_key("unknown"));
-
-        let work_item = filter_saved_operation_params(
-            "rfi.work_item_update",
-            serde_json::from_value(json!({
-                "action": "transition",
-                "item_id": "work-1",
-                "stage": "checked",
-                "due_date": "2026-09-14",
-                "needs_review": false
-            }))
-            .unwrap(),
-        )
-        .expect("work-item form values should be recognized but transient");
-        assert!(work_item.is_empty());
 
         let print = filter_saved_operation_params(
             "files.batch_print",
@@ -3487,19 +3236,6 @@ mod tests {
             .expect("apply must succeed");
         assert_eq!(apply_result.applied, 2);
         assert_eq!(apply_result.failed, 0);
-        let journal = backend.journals.read(&apply_result.journal_id).unwrap();
-        let evidence = journal
-            .steps
-            .iter()
-            .filter_map(|step| step.meta.get("workItemEvidence"))
-            .collect::<Vec<_>>();
-        assert_eq!(evidence.len(), 2);
-        assert!(
-            evidence.iter().all(|item| {
-                item["canonicalRfiCodes"] == json!(["AZE-SUN-INT-QMS-RFI-CIV-0103"])
-            })
-        );
-
         // Undo
         let undo_result = backend
             .filesystem

@@ -11,11 +11,9 @@ import type {
   PrintQueueSummary,
   ProgressEventHandler,
   RecoveryPayload,
-  ReadinessReport,
   ReviewDecision,
   ReviewItem,
   SupportBundlePreview,
-  WorkItemQueues,
 } from "../types";
 
 interface CommandSpec<Params, Result> {
@@ -71,8 +69,6 @@ export interface FrontendCommandMap {
   >;
   "support/diagnostics": CommandSpec<NoParams, SupportBundlePreview>;
   "support/copyDiagnostics": CommandSpec<{ content: string }, Ok>;
-  "support/readiness": CommandSpec<NoParams, ReadinessReport>;
-  "workItems/list": CommandSpec<NoParams, WorkItemQueues>;
   "engine/preview": CommandSpec<
     { opId: string; values: Record<string, unknown> },
     Plan
@@ -141,8 +137,6 @@ export const FRONTEND_METHODS = [
   "settings/deletePreset",
   "support/diagnostics",
   "support/copyDiagnostics",
-  "support/readiness",
-  "workItems/list",
   "engine/preview",
   "engine/apply",
   "engine/cancel",

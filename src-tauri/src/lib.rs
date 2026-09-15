@@ -29,7 +29,6 @@ pub mod plan_store;
 pub mod platform;
 pub mod print_queue;
 pub mod progress;
-pub mod readiness;
 pub mod registry;
 pub mod review;
 pub mod rfi_code;
@@ -42,7 +41,6 @@ pub mod smoke;
 pub mod undo;
 #[cfg(target_os = "windows")]
 mod windows_pdf;
-pub mod work_items;
 
 use tauri::Manager;
 

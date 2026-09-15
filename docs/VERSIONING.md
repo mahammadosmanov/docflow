@@ -49,7 +49,7 @@ node tools/version_manager.mjs check --require-tag
 4. Choose the SemVer bump: patch for a compatible fix, minor for a compatible
    capability, major for an incompatible contract change.
    Use `next fix`, `next feature`, or `next breaking` to calculate it. A normal
-   completed work item must not keep incrementing prerelease labels under the
+   completed change must not keep incrementing prerelease labels under the
    same base version. Prerelease suffixes are reserved for an explicitly opened
    release-candidate cycle and require their own release plan.
 5. Run `node tools/version_manager.mjs set X.Y.Z`.
