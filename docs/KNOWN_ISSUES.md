@@ -5,9 +5,10 @@ These are not silently waived by passing local tests.
 ## External acceptance still required
 
 - RFI file grouping still requires native Windows/OneDrive acceptance with real
-  Outlook MSG/EML, content-only Office/PDF fixtures, multi-RFI mail fan-out,
-  destination collisions, interruption, Apply, and Undo. Source/cross-build
-  evidence cannot certify Outlook storage variants or live sync locks.
+  Outlook MSG/EML, content-only Office/PDF fixtures, wrapped OCR identifiers,
+  per-RFI missing-mail refusal, multi-RFI mail fan-out, destination collisions,
+  interruption, Apply, and Undo. Source/cross-build evidence cannot certify
+  Outlook storage variants or live sync locks.
 
 - Clean Windows x64 install, normal startup, package smoke, uninstall, and real
   OneDrive-backed path behavior for the exact candidate.

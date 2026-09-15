@@ -25,7 +25,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-020 | `operations/stage_signed_pages.rs`, `parallel.rs`, `registry.rs` | `signed_pages.rs` deep-recursion/parallel-evidence and symlink tests, registry protocol snapshot |
 | DF-021 | `operations/stage_signed_pages.rs`, `fs_ops.rs`, `ocr.rs`, generic `App.tsx` signed Plan surfaces and responsive CSS | `signed_pages.rs` warning-copy/hash-drift/progress tests, `App.test.tsx` signed navigator/comparison/warning-review tests |
 | DF-022 | `parallel.rs`, `operations/process_scans.rs`, `operations/stage_signed_pages.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, `work_items.rs`, `native.rs`, generic `BusyState` | parallel/progress assertions in `process_scans.rs`, `signed_pages.rs`, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, complete Rust and frontend suites |
-| DF-023 | `operations/rfi_file_group.rs`, `native.rs`, `registry.rs`, generic record-table UI | `rfi_file_group.rs`, registry snapshot, catalog-equality and frontend authority tests |
+| DF-023 | `rfi_code.rs`, `operations/rfi_file_group.rs`, `native.rs`, `registry.rs`, generic record-table UI | `process_scans.rs` bounded-line-wrap test, `rfi_file_group.rs` per-RFI mail-gate tests, registry snapshot, catalog-equality and frontend authority tests |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

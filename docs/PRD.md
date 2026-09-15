@@ -82,10 +82,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   remain ordered and single-writer.
 - **DF-023 — Safe multi-RFI file grouping:** top-level incoming files are
   matched only to exact canonical RFI identifiers found in their names or
-  bounded content inspection. Each approved source is copied into every related
-  RFI folder beneath a separate destination; the source is never changed,
-  collisions never overwrite, and unmatched or unreadable files are copied to
-  `_review` for manual handling.
+  bounded content inspection, including an exact code split by at most two line
+  breaks around its hyphens. An RFI is eligible only when a readable EML or MSG
+  file also identifies it; otherwise no folder or related copy is planned and a
+  missing-email warning names the affected RFI and files. Each eligible source
+  is copied into every related RFI folder beneath a separate destination; the
+  source is never changed, collisions never overwrite, and unmatched or
+  unreadable files are copied to `_review` for manual handling.
 
 ## Scope
 

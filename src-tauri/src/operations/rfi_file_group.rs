@@ -18,7 +18,7 @@ use crate::{
     operations::process_scans::{OcrAdapter, OcrFailure},
     parallel::bounded_map_stream,
     pdf,
-    rfi_code::RfiMethod,
+    rfi_code::{RfiMethod, exact_codes as shared_exact_codes},
 };
 
 pub const OPERATION_ID: &str = "rfi.group_files";
@@ -49,6 +49,7 @@ struct FileAnalysis {
     path: PathBuf,
     detections: Vec<Detection>,
     issue: Option<String>,
+    is_mail: bool,
 }
 
 pub fn preview<A, P, C>(
@@ -125,6 +126,34 @@ where
     let mut rows = Vec::new();
     let mut planned_directories = BTreeSet::new();
     let mut review_directory_planned = false;
+    let mail_codes = analyses
+        .iter()
+        .filter(|analysis| analysis.is_mail)
+        .flat_map(|analysis| analysis.detections.iter())
+        .map(|detection| detection.code.clone())
+        .collect::<BTreeSet<_>>();
+    let mut files_without_mail = BTreeMap::<String, BTreeSet<String>>::new();
+    for analysis in &analyses {
+        let file_name = analysis
+            .path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("<invalid file name>");
+        for detection in &analysis.detections {
+            if !mail_codes.contains(&detection.code) {
+                files_without_mail
+                    .entry(detection.code.clone())
+                    .or_default()
+                    .insert(file_name.to_string());
+            }
+        }
+    }
+    for (code, file_names) in &files_without_mail {
+        plan.warnings.push(Warning {
+            key: "warn.rfi.fileGroup.missingEmail".to_string(),
+            subject: format!("{code} — {}", summarize_file_names(file_names)),
+        });
+    }
 
     for (file_index, analysis) in analyses.into_iter().enumerate() {
         progress(ProgressEvent {
@@ -183,6 +212,9 @@ where
             });
         }
         for (detection_index, detection) in analysis.detections.iter().enumerate() {
+            if !mail_codes.contains(&detection.code) {
+                continue;
+            }
             let directory = destination.join(&detection.code);
             let target = directory.join(file_name);
             if unsafe_existing_directory(&directory) {
@@ -240,6 +272,10 @@ where
         .insert("workerCount".to_string(), Value::from(worker_count as u64));
     plan.meta
         .insert("sourceReadOnly".to_string(), Value::Bool(true));
+    plan.meta.insert(
+        "missingEmailRfiCount".to_string(),
+        Value::from(files_without_mail.len() as u64),
+    );
     plan.meta.insert(
         "editor".to_string(),
         json!({
@@ -491,6 +527,18 @@ fn analyze_file<A: OcrAdapter>(path: &Path, ocr: &A) -> FileAnalysis {
         path: path.to_path_buf(),
         detections: detections.into_values().collect(),
         issue,
+        is_mail,
+    }
+}
+
+fn summarize_file_names(file_names: &BTreeSet<String>) -> String {
+    const SHOWN: usize = 3;
+    let shown = file_names.iter().take(SHOWN).cloned().collect::<Vec<_>>();
+    let remaining = file_names.len().saturating_sub(shown.len());
+    if remaining == 0 {
+        shown.join(", ")
+    } else {
+        format!("{} (+{remaining})", shown.join(", "))
     }
 }
 
@@ -606,7 +654,7 @@ fn exact_codes(value: &str) -> BTreeSet<String> {
     let regex = RFI.get_or_init(|| {
         Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{4})").expect("exact RFI regex is valid")
     });
-    let mut codes = BTreeSet::new();
+    let mut codes = shared_exact_codes(&text);
     for captures in regex.captures_iter(&text) {
         let matched = captures.get(0).expect("RFI match exists");
         let before_invalid = text[..matched.start()]

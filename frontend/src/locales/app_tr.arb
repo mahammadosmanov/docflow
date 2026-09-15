@@ -94,6 +94,7 @@
   "warn.rfi.fileGroup.partialInspection": "Dosya adındaki eşleşme kullanılabilir ancak içerik tam incelenemedi",
   "warn.rfi.fileGroup.exists": "Hedef dosya zaten var; üzerine yazılmayacak",
   "warn.rfi.fileGroup.noFiles": "Kaynak klasörde üst düzey dosya bulunamadı",
+  "warn.rfi.fileGroup.missingEmail": "Bu RFI için EML veya MSG e-posta dosyası bulunamadı; ilgili dosyalar yerleştirilmeyecek",
   "error.param.required.destination": "Hedef klasör gerekli",
   "param.source": "Kaynak klasör",
   "param.source.help": "Taranmış PDF'lerin bulunduğu klasör",

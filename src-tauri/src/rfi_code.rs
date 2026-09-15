@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{collections::BTreeSet, sync::OnceLock};
 
 use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
@@ -44,14 +44,35 @@ pub fn canonical_and_find(value: &str) -> (String, RfiMatch) {
     (text, matched)
 }
 
+pub fn exact_codes(value: &str) -> BTreeSet<String> {
+    let text = canonical(value);
+    exact_wrapped()
+        .captures_iter(&text)
+        .filter(|captures| {
+            let matched = captures.get(0).expect("exact RFI match exists");
+            line_break_count(matched.as_str()) <= 2
+                && !text[..matched.start()]
+                    .chars()
+                    .next_back()
+                    .is_some_and(char::is_alphanumeric)
+                && !text[matched.end()..]
+                    .chars()
+                    .next()
+                    .is_some_and(char::is_alphanumeric)
+        })
+        .map(|captures| format!("{PREFIX}-{}-{}", &captures[1], &captures[2]))
+        .collect()
+}
+
 fn find_canonical(text: &str) -> RfiMatch {
     for captures in strict().captures_iter(text) {
         if !followed_by_numeric(text, captures.get(0).expect("strict match exists").end()) {
             return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
         }
     }
-    for captures in wrapped_number().captures_iter(text) {
-        if !followed_by_numeric(text, captures.get(0).expect("wrapped match exists").end()) {
+    for captures in exact_wrapped().captures_iter(text) {
+        let matched = captures.get(0).expect("wrapped match exists");
+        if line_break_count(matched.as_str()) <= 2 && !followed_by_numeric(text, matched.end()) {
             return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
         }
     }
@@ -115,12 +136,19 @@ fn strict() -> &'static Regex {
     })
 }
 
-fn wrapped_number() -> &'static Regex {
-    static WRAPPED_NUMBER: OnceLock<Regex> = OnceLock::new();
-    WRAPPED_NUMBER.get_or_init(|| {
-        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-[\t ]*(?:\r?\n[\t ]*){1,2}([0-9]{4})")
-            .expect("the wrapped RFI number pattern is valid")
+fn exact_wrapped() -> &'static Regex {
+    static EXACT_WRAPPED: OnceLock<Regex> = OnceLock::new();
+    EXACT_WRAPPED.get_or_init(|| {
+        let separator = r"[\t ]*(?:\r?\n[\t ]*){0,2}-[\t ]*(?:\r?\n[\t ]*){0,2}";
+        Regex::new(&format!(
+            "AZE{separator}SUN{separator}INT{separator}QMS{separator}RFI{separator}([A-Z]{{3}}){separator}([0-9]{{4}})"
+        ))
+        .expect("the wrapped exact RFI pattern is valid")
     })
+}
+
+fn line_break_count(value: &str) -> usize {
+    value.bytes().filter(|byte| *byte == b'\n').count()
 }
 
 fn loose() -> &'static Regex {

@@ -88,6 +88,24 @@ fn rfi_matching_recovers_a_number_wrapped_after_the_final_anchor_hyphen() {
 }
 
 #[test]
+fn rfi_matching_accepts_bounded_line_wraps_between_exact_code_segments() {
+    for wrapped in [
+        "AZE-SUN-INT-QMS-RFI-\nMEC-0765",
+        "AZE-SUN-INT-QMS-RFI-MEC\n-0765",
+        "AZE-SUN-INT-QMS-\r\nRFI-MEC-0765",
+        "AZE - SUN-INT-QMS-RFI-MEC-0765",
+    ] {
+        let matched = find(wrapped);
+        assert_eq!(matched.code, "AZE-SUN-INT-QMS-RFI-MEC-0765", "{wrapped}");
+        assert_eq!(matched.method, RfiMethod::Strict, "{wrapped}");
+    }
+    assert!(
+        !find("AZE-SUN-INT-QMS-\n\nRFI-\nMEC-0765").ok(),
+        "exact recovery must not join more than two line breaks"
+    );
+}
+
+#[test]
 fn canonical_rfi_matching_exposes_the_single_normalized_value() {
     let (normalized, matched) = canonical_and_find("aze-sun-int-qms-rfi-civ-0064");
 

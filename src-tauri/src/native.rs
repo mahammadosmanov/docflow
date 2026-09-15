@@ -2550,6 +2550,8 @@ mod tests {
         fs::create_dir(&destination).unwrap();
         let source_file = source.join("AZE-SUN-INT-QMS-RFI-CIV-1263.pdf");
         fs::write(&source_file, b"source stays unchanged").unwrap();
+        let source_mail = source.join("AZE-SUN-INT-QMS-RFI-CIV-1263.eml");
+        fs::write(&source_mail, b"Subject: RFI package").unwrap();
         let source_selection = backend
             .register_selected_paths(rfi_file_group::OPERATION_ID, "source", vec![source.clone()])
             .unwrap()
@@ -2586,15 +2588,21 @@ mod tests {
         let copied = destination
             .join("AZE-SUN-INT-QMS-RFI-CIV-1263")
             .join(source_file.file_name().unwrap());
+        let copied_mail = destination
+            .join("AZE-SUN-INT-QMS-RFI-CIV-1263")
+            .join(source_mail.file_name().unwrap());
         assert_eq!(fs::read(&source_file).unwrap(), b"source stays unchanged");
         assert_eq!(fs::read(&copied).unwrap(), b"source stays unchanged");
+        assert_eq!(fs::read(&copied_mail).unwrap(), b"Subject: RFI package");
 
         backend
             .try_native_undo(&json!({"journalId": result["journalId"]}))
             .unwrap()
             .expect("RFI file grouping should be undoable");
         assert!(source_file.exists());
+        assert!(source_mail.exists());
         assert!(!copied.exists());
+        assert!(!copied_mail.exists());
         assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-1263").exists());
     }
 

@@ -94,6 +94,7 @@
   "warn.rfi.fileGroup.partialInspection": "Fayl adındakı uyğunluq istifadə edilə bilər, lakin məzmun tam yoxlanmadı",
   "warn.rfi.fileGroup.exists": "Hədəf fayl artıq mövcuddur; üzərinə yazılmayacaq",
   "warn.rfi.fileGroup.noFiles": "Mənbə qovluğunda üst səviyyəli fayl tapılmadı",
+  "warn.rfi.fileGroup.missingEmail": "Bu RFI üçün EML və ya MSG e-poçt faylı tapılmadı; əlaqəli fayllar yerləşdirilməyəcək",
   "error.param.required.destination": "Hədəf qovluğu tələb olunur",
   "param.source": "Mənbə qovluğu",
   "param.source.help": "Skan edilmiş PDF-lərin olduğu qovluq",

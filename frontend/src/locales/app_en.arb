@@ -122,6 +122,7 @@
   "warn.rfi.fileGroup.partialInspection": "File-name matches are usable, but the content could not be fully inspected",
   "warn.rfi.fileGroup.exists": "The destination file already exists and will not be overwritten",
   "warn.rfi.fileGroup.noFiles": "No top-level files were found in the source folder",
+  "warn.rfi.fileGroup.missingEmail": "No EML or MSG email file was found for this RFI; related files will not be placed",
   "error.param.required.destination": "Destination folder is required",
   "param.source": "Source folder",
   "param.source.help": "Folder containing the scanned PDFs",

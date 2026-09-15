@@ -60,7 +60,7 @@ fn preview_groups_exact_filename_office_email_and_utf16_codes_without_mutating_s
     .unwrap();
     write_docx(
         &source.join("2.AF110-CON-MEC-002 Checklist.docx"),
-        "AZE-SUN-INT-QMS-RFI-CIV-1263",
+        "AZE-SUN-INT-QMS-RFI-\nCIV-1263",
     );
     fs::write(
         source.join("AZE-SUN-INT-QMS-RFI-CIV-1260_1261.eml"),
@@ -243,6 +243,16 @@ fn preview_skips_existing_targets_and_unsafe_folder_collisions() {
     )
     .unwrap();
     fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-CIV-1263_1264.eml"),
+        b"Subject: collision fixtures",
+    )
+    .unwrap();
+    fs::write(
+        existing_directory.join("AZE-SUN-INT-QMS-RFI-CIV-1263_1264.eml"),
+        b"existing mail target",
+    )
+    .unwrap();
+    fs::write(
         destination.join("AZE-SUN-INT-QMS-RFI-CIV-1264"),
         b"folder-name collision",
     )
@@ -265,6 +275,94 @@ fn preview_skips_existing_targets_and_unsafe_folder_collisions() {
             .iter()
             .filter(|warning| warning.key == "warn.rfi.fileGroup.exists")
             .count(),
-        2
+        4
     );
+}
+
+#[test]
+fn preview_refuses_every_rfi_output_when_that_rfi_has_no_email_file() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("incoming");
+    let destination = temporary.path().join("grouped");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-MEC-0765.pdf"),
+        b"known RFI without mail",
+    )
+    .unwrap();
+    write_docx(
+        &source.join("Tracker Installation Checklist.docx"),
+        "AZE-SUN-INT-QMS-RFI-\nMEC-0765",
+    );
+
+    let plan = preview(
+        &GroupRfiFilesParams {
+            source,
+            destination,
+        },
+        &NoOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(plan.meta["editor"]["rows"].as_array().unwrap().is_empty());
+    assert!(plan.steps.is_empty());
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.fileGroup.missingEmail"
+            && warning.subject.contains("AZE-SUN-INT-QMS-RFI-MEC-0765")
+            && warning
+                .subject
+                .contains("Tracker Installation Checklist.docx")
+    }));
+}
+
+#[test]
+fn email_requirement_is_enforced_independently_for_each_rfi() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("incoming");
+    let destination = temporary.path().join("grouped");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-MEC-0765_0766.pdf"),
+        b"two related RFIs",
+    )
+    .unwrap();
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-MEC-0765.eml"),
+        b"Subject: RFI package",
+    )
+    .unwrap();
+
+    let plan = preview(
+        &GroupRfiFilesParams {
+            source,
+            destination,
+        },
+        &NoOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert!(
+        rows.iter()
+            .all(|row| row["rfiCode"] == "AZE-SUN-INT-QMS-RFI-MEC-0765")
+    );
+    assert!(
+        rows.iter()
+            .any(|row| { row["sourceFile"] == "AZE-SUN-INT-QMS-RFI-MEC-0765_0766.pdf" })
+    );
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.fileGroup.missingEmail"
+            && warning.subject.contains("AZE-SUN-INT-QMS-RFI-MEC-0766")
+    }));
+    assert!(!plan.steps.iter().any(|step| {
+        step.dst
+            .as_deref()
+            .is_some_and(|destination| destination.contains("MEC-0766"))
+    }));
 }

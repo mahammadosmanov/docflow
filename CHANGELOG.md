@@ -8,6 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.28.1 - 2026-09-15
+
+### Fixed
+
+- Recognizes exact canonical RFI codes split across up to two OCR/content line
+  breaks around hyphens, including `AZE-SUN-INT-QMS-RFI-` followed by
+  `MEC-0765` on the next line. The shared recognizer improves Process Scans and
+  other OCR-backed RFI workflows without accepting decorated identifiers.
+- Group Files by RFI now requires at least one readable matching EML or MSG for
+  each RFI. When mail is missing, it creates no folder and copies none of that
+  RFI's related files; Preview identifies the RFI and affected files instead.
+- Mail eligibility is independent per RFI, so a multi-RFI document can still be
+  filed for the RFIs whose email evidence exists while the others remain blocked.
+
 ## 0.28.0 - 2026-09-15
 
 ### Added

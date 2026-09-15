@@ -36,6 +36,15 @@ identity or secrets.
   also inspected because one mail can belong to several RFIs. Files without a
   filename match use bounded content inspection: Office package XML, raw UTF-8/
   UTF-16 content, or every PDF page through the native OCR cascade.
+- Exact OCR/content recognition accepts whitespace and at most two total line
+  breaks around the canonical hyphens, including `...-RFI-\nMEC-0765`. Every
+  letter, digit, segment, and segment order must still be exact; decorated or
+  extended identifiers remain invalid for persisted output.
+- Each detected RFI must also be identified by at least one readable EML or MSG
+  file in the same incoming set. Without that mail evidence, Preview creates no
+  folder and proposes no copy for that RFI; one warning lists the RFI and a
+  bounded summary of affected files. Other RFIs in the same file remain
+  independently eligible when their own mail exists.
 - A mail or document matched to several exact RFIs is copied once into each
   selected canonical folder. Compact mail-name continuations such as
   `...-1260_1261,1262` inherit only the already explicit discipline.

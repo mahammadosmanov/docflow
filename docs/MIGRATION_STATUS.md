@@ -4,6 +4,14 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.28.1: mail-gated grouping and bounded wrapped RFI recognition
+  - a readable EML/MSG match is required independently for every RFI before its
+    folder or related copies can enter the approved Plan
+  - exact canonical codes split by at most two OCR/content line breaks around
+    hyphens are recognized without relaxing persisted identifier validation
+  - source files remain read-only and missing mail produces an actionable,
+    bounded warning instead of partial output
+
 - [x] Version 0.28.0: safe multi-RFI incoming file grouping
   - top-level files are matched from exact canonical filename/content evidence;
     EML/MSG can fan out to several RFI folders and content-only Office/PDF files

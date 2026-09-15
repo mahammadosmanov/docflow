@@ -94,6 +94,7 @@
   "warn.rfi.fileGroup.partialInspection": "Совпадения в имени файла доступны, но содержимое не удалось полностью проверить",
   "warn.rfi.fileGroup.exists": "Целевой файл уже существует и не будет перезаписан",
   "warn.rfi.fileGroup.noFiles": "В исходной папке нет файлов верхнего уровня",
+  "warn.rfi.fileGroup.missingEmail": "Для этого RFI не найден файл электронной почты EML или MSG; связанные файлы не будут размещены",
   "error.param.required.destination": "Требуется папка назначения",
   "param.source": "Исходная папка",
   "param.source.help": "Папка со сканированными PDF",
