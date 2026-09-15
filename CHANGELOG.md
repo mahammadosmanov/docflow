@@ -8,6 +8,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.0.1 - 2026-09-15
+
+### Fixed
+
+- Group Files by RFI now preserves Word paragraph, table-cell, and explicit line
+  boundaries while reading Office XML. Checklist RFI numbers split onto the next
+  visual line are detected without accidentally joining the following table cell
+  to the four-digit number.
+
 ## 1.0.0 - 2026-09-15
 
 ### Removed

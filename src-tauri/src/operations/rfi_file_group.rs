@@ -615,12 +615,24 @@ fn xml_text(bytes: &[u8]) -> Result<String, String> {
                     .map_err(|error| format!("Office package XML CDATA: {error}"))?;
                 text.push_str(&value);
             }
+            Ok(Event::Empty(value)) if xml_local_name(value.name().as_ref()) == b"br" => {
+                text.push('\n');
+            }
+            Ok(Event::End(value))
+                if matches!(xml_local_name(value.name().as_ref()), b"p" | b"tc" | b"tr") =>
+            {
+                text.push('\n');
+            }
             Ok(Event::Eof) => break,
             Err(error) => return Err(format!("Office package XML: {error}")),
             _ => {}
         }
     }
     Ok(text)
+}
+
+fn xml_local_name(name: &[u8]) -> &[u8] {
+    name.rsplit(|byte| *byte == b':').next().unwrap_or(name)
 }
 
 fn raw_codes(path: &Path) -> Result<BTreeSet<String>, String> {

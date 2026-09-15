@@ -40,6 +40,9 @@ identity or secrets.
   breaks around the canonical hyphens, including `...-RFI-\nMEC-0765`. Every
   letter, digit, segment, and segment order must still be exact; decorated or
   extended identifiers remain invalid for persisted output.
+- Office package inspection preserves explicit line, paragraph, and table-cell
+  boundaries. Formatting runs may remain contiguous, but text from a following
+  cell must never be joined directly to an otherwise valid four-digit number.
 - Each detected RFI must also be identified by at least one readable EML or MSG
   file in the same incoming set. Without that mail evidence, Preview creates no
   folder and proposes no copy for that RFI; one warning lists the RFI and a

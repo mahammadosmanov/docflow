@@ -4,6 +4,12 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.0.1: preserve Word checklist boundaries during RFI grouping
+  - Office XML extraction retains explicit line, paragraph, and table-cell
+    boundaries, preventing the next checklist cell from invalidating a wrapped
+    exact RFI number
+  - the exact ASCII identifier and per-RFI email requirements remain unchanged
+
 - [x] Version 1.0.0: retire work tracking and device readiness
   - the two work-item operations, work queues, audit export, readiness panel,
     frontend/native commands, schemas, types, localization, and active modules

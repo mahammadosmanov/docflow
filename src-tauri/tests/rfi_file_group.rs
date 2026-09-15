@@ -45,6 +45,16 @@ fn write_docx(path: &Path, text: &str) {
     archive.finish().unwrap();
 }
 
+fn write_docx_xml(path: &Path, xml: &str) {
+    let file = fs::File::create(path).unwrap();
+    let mut archive = ZipWriter::new(file);
+    archive
+        .start_file("word/document.xml", SimpleFileOptions::default())
+        .unwrap();
+    archive.write_all(xml.as_bytes()).unwrap();
+    archive.finish().unwrap();
+}
+
 #[test]
 fn preview_groups_exact_filename_office_email_and_utf16_codes_without_mutating_sources() {
     let temporary = tempfile::tempdir().unwrap();
@@ -165,6 +175,53 @@ fn preview_groups_exact_filename_office_email_and_utf16_codes_without_mutating_s
         step.dst
             .as_deref()
             .is_some_and(|value| value.contains("_review"))
+    }));
+}
+
+#[test]
+fn preview_finds_a_wrapped_rfi_in_a_word_table_without_joining_the_next_cell() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("incoming");
+    let destination = temporary.path().join("grouped");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    write_docx_xml(
+        &source.join("Tracker Installation Checklist.docx"),
+        concat!(
+            r#"<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tr>"#,
+            r#"<w:tc><w:p><w:r><w:t>Report/RFI No.</w:t></w:r></w:p></w:tc>"#,
+            r#"<w:tc><w:p><w:r><w:t>AZE-SUN-INT-QMS-RFI-</w:t><w:br/><w:t>MEC-0765</w:t></w:r></w:p></w:tc>"#,
+            r#"</w:tr><w:tr><w:tc><w:p><w:r><w:t>MOS No.</w:t></w:r></w:p></w:tc></w:tr>"#,
+            r#"</w:tbl></w:body></w:document>"#,
+        ),
+    );
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-MEC-0765.eml"),
+        b"Subject: AZE-SUN-INT-QMS-RFI-MEC-0765",
+    )
+    .unwrap();
+
+    let plan = preview(
+        &GroupRfiFilesParams {
+            source,
+            destination,
+        },
+        &NoOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert!(rows.iter().any(|row| {
+        row["sourceFile"] == "Tracker Installation Checklist.docx"
+            && row["rfiCode"] == "AZE-SUN-INT-QMS-RFI-MEC-0765"
+    }));
+    assert!(!plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.fileGroup.noCode"
+            && warning
+                .subject
+                .contains("Tracker Installation Checklist.docx")
     }));
 }
 
