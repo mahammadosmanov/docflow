@@ -4,6 +4,31 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.27.0 - 2026-09-15
+
+Bounded parallel discovery and analysis plus operation-wide progress stages were
+verified from implementation commit `540e352ddc96b701638d5bfc2c41312c113d9a79`.
+Rust formatting, Clippy with all targets/features and warnings denied, Cargo
+check, 338 unit tests, and 213 integration tests passed; two operator-workbook
+tests were intentionally ignored because they require supplied workbook copies.
+The version, documentation, source, package, and dependency-license audits
+passed, as did 23 Node tests, 53 React tests, and the production frontend build.
+The frontend retained its non-failing chunk-size advisory. Local Rust commands
+also reported the host's unaccepted Xcode license, but direct toolchain paths
+allowed the checked commands to complete.
+
+The Windows x64 cross-build completed from that commit. The OCR-inclusive ZIP
+and installer passed package audit, all generated checksums verified, and both
+executables identify as Windows GUI-subsystem PE files. Cross-linking emitted
+non-failing Microsoft PDB debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `83c45a14f6a27c623ddb0a44cbd47566f96c9ab3173b8ec2b3f9a41a5c739718`;
+- portable EXE: `20309814c9c92fe4012f65b3eb0f720946545c4b209416bcbfc4159bb013d5ed`;
+- per-user installer: `b1e71a03d6c7a5942859b86929c796704214738282a337314e09be7692c19f35`.
+
+Cross-build evidence does not establish native Windows, WebView2, Office,
+OneDrive, Outlook, or physical-printer acceptance; those gates were not run.
+
 ## 0.26.2 - 2026-09-14
 
 The unused direct Tokio declaration and its DocFlow lockfile edge were removed;
