@@ -14,6 +14,12 @@ Signed-page Preview reports stable progress phases: `signed_discovery`,
 `comparison_preparation`, and `preview_ready`. These events are presentation-only;
 the final returned Plan remains the sole Apply authority.
 
+Other stable Preview phases cover scan discovery/OCR/planning, workbook reading
+and RFI planning, Follow Up analysis, RFI System discovery/signature/workbook/
+mapping stages, PDF-orientation discovery/analysis, printer checks/file
+inspection, work-item validation/audit preparation, Outlook selection, and
+`preview_ready`. Apply remains ordered and reports approved-step progress.
+
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,
 `frontend/src/lib/bridge.ts`, and their roster/golden tests.
 

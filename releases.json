@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.26.2",
+  "currentVersion": "0.27.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -470,9 +470,17 @@
       "version": "0.26.2",
       "date": "2026-09-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.26.2",
       "summary": "Remove an unused direct runtime dependency and duplicate architecture prose without changing application behavior."
+    },
+    {
+      "version": "0.27.0",
+      "date": "2026-09-15",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.27.0",
+      "summary": "Use bounded multi-core read-only analysis across large RFI workflows and show localized, item-level progress stages for every registered operation."
     }
   ]
 }

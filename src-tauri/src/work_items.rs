@@ -16,6 +16,7 @@ use crate::{
     contracts::{Plan, Step, StepKind},
     errors::BackendError,
     journal::{JournalRecord, JournalState, JournalStore},
+    parallel::bounded_map,
 };
 
 pub const OPERATION_ID: &str = "rfi.work_item_update";
@@ -122,6 +123,12 @@ struct EventSnapshot {
     events: Vec<WorkItemEvent>,
     invalid_event_count: u64,
     event_bytes: u64,
+}
+
+enum EventRead {
+    Skip,
+    Invalid,
+    Owned(Box<WorkItemEvent>, u64),
 }
 
 pub fn preview_event(
@@ -396,55 +403,75 @@ fn load_events(root: &Path, owner_id: &str) -> Result<EventSnapshot, BackendErro
         Ok(entries) => entries,
         Err(_) => return Err(validation("error.workItems.storeUnavailable")),
     };
+    let paths = entries
+        .take(MAX_EVENTS + 1)
+        .map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect::<Vec<_>>();
+    if paths.len() > MAX_EVENTS {
+        return Err(validation("error.workItems.eventLimit"));
+    }
+    let reads = if paths.len() > 1 {
+        bounded_map(&paths, |path| read_event(path, owner_id))
+            .map(|(_, reads)| reads)
+            .map_err(|error| {
+                BackendError::protocol(format!("work event workers failed: {error}"))
+            })?
+    } else {
+        paths
+            .iter()
+            .map(|path| read_event(path, owner_id))
+            .collect()
+    };
     let mut snapshot = EventSnapshot::default();
-    for (index, entry) in entries.enumerate() {
-        if index >= MAX_EVENTS {
-            return Err(validation("error.workItems.eventLimit"));
-        }
-        let Ok(entry) = entry else {
-            snapshot.invalid_event_count += 1;
-            continue;
-        };
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("json") {
-            continue;
-        }
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            snapshot.invalid_event_count += 1;
-            continue;
-        };
-        if !metadata.is_file() || metadata.len() > MAX_EVENT_BYTES {
-            snapshot.invalid_event_count += 1;
-            continue;
-        }
-        let Ok(file) = fs::File::open(&path) else {
-            snapshot.invalid_event_count += 1;
-            continue;
-        };
-        let mut bytes = Vec::new();
-        if file
-            .take(MAX_EVENT_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .is_err()
-            || bytes.len() as u64 > MAX_EVENT_BYTES
-        {
-            snapshot.invalid_event_count += 1;
-            continue;
-        }
-        let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
-            snapshot.invalid_event_count += 1;
-            continue;
-        };
-        if validate_event(&event).is_err() {
-            snapshot.invalid_event_count += 1;
-            continue;
-        }
-        if event.owner_id == owner_id {
-            snapshot.event_bytes += bytes.len() as u64;
-            snapshot.events.push(event);
+    for read in reads {
+        match read {
+            EventRead::Skip => {}
+            EventRead::Invalid => snapshot.invalid_event_count += 1,
+            EventRead::Owned(event, bytes) => {
+                snapshot.event_bytes += bytes;
+                snapshot.events.push(*event);
+            }
         }
     }
     Ok(snapshot)
+}
+
+fn read_event(path: &Option<PathBuf>, owner_id: &str) -> EventRead {
+    let Some(path) = path else {
+        return EventRead::Invalid;
+    };
+    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        return EventRead::Skip;
+    }
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return EventRead::Invalid;
+    };
+    if !metadata.is_file() || metadata.len() > MAX_EVENT_BYTES {
+        return EventRead::Invalid;
+    }
+    let Ok(file) = fs::File::open(path) else {
+        return EventRead::Invalid;
+    };
+    let mut bytes = Vec::new();
+    if file
+        .take(MAX_EVENT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .is_err()
+        || bytes.len() as u64 > MAX_EVENT_BYTES
+    {
+        return EventRead::Invalid;
+    }
+    let Ok(event) = serde_json::from_slice::<WorkItemEvent>(&bytes) else {
+        return EventRead::Invalid;
+    };
+    if validate_event(&event).is_err() {
+        return EventRead::Invalid;
+    }
+    if event.owner_id == owner_id {
+        EventRead::Owned(Box::new(event), bytes.len() as u64)
+    } else {
+        EventRead::Skip
+    }
 }
 
 pub fn preview_export(

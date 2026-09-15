@@ -1045,7 +1045,7 @@ impl PrintService {
         &self,
         caller: &CallerIdentity,
         params: BatchPrintParams,
-        progress: F,
+        mut progress: F,
     ) -> Result<Plan, BackendError>
     where
         F: FnMut(ProgressEvent),
@@ -1092,6 +1092,12 @@ impl PrintService {
                 workbook_files.entry(path.clone()).or_insert(file);
             }
         }
+        progress(ProgressEvent {
+            phase: "printer_check".to_string(),
+            done: 1,
+            total: 1,
+            subject: params.printer.clone(),
+        });
         let plan = batch_print::preview_with_workbook_opener(
             &params,
             &inventory,

@@ -11,7 +11,7 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     naming::{flat_target_for, folder_for, target_for},
-    parallel::bounded_map,
+    parallel::bounded_map_stream,
     rfi_code::{RfiMatch, RfiMethod},
 };
 
@@ -101,6 +101,12 @@ where
 {
     let source = canonical_directory(&params.source, "scan source")?;
     let destination = canonical_directory(&params.destination, "scan destination")?;
+    progress(ProgressEvent {
+        phase: "scan_discovery".to_string(),
+        done: 0,
+        total: 0,
+        subject: source.to_string_lossy().into_owned(),
+    });
     let mut pdfs = fs::read_dir(&source)
         .map_err(|_| BackendError::path_invalid("scan source could not be read"))?
         .filter_map(Result::ok)
@@ -125,13 +131,34 @@ where
         )));
     }
     pdfs.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+    progress(ProgressEvent {
+        phase: "scan_discovery".to_string(),
+        done: pdfs.len() as u64,
+        total: pdfs.len() as u64,
+        subject: String::new(),
+    });
 
     if ocr.supports_parallel_analysis() && !pdfs.is_empty() {
         if cancelled() {
             return Err(BackendError::cancelled());
         }
-        let (worker_count, results) =
-            bounded_map(&pdfs, |pdf| ocr.read(pdf)).map_err(BackendError::request_failed)?;
+        let mut completed = 0_u64;
+        let total = pdfs.len() as u64;
+        let (worker_count, results) = bounded_map_stream(
+            &pdfs,
+            |pdf| ocr.read(pdf),
+            |index, _| {
+                completed += 1;
+                progress(ProgressEvent {
+                    phase: "scan_ocr".to_string(),
+                    done: completed,
+                    total,
+                    subject: pdfs[index].to_string_lossy().into_owned(),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?;
         if cancelled() {
             return Err(BackendError::cancelled());
         }
@@ -160,7 +187,7 @@ where
             return Err(BackendError::cancelled());
         }
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "scan_planning".to_string(),
             done: index as u64,
             total: pdfs.len() as u64,
             subject: String::new(),
@@ -227,7 +254,6 @@ where
             groups.push((read.matched.code, vec![candidate]));
         }
     }
-
     if pdfs.len() > 1 && failures.len() == pdfs.len() {
         return Ok(Plan {
             warnings: vec![Warning {
@@ -361,6 +387,12 @@ where
             subject: source.to_string_lossy().into_owned(),
         });
     }
+    progress(ProgressEvent {
+        phase: "preview_ready".to_string(),
+        done: 1,
+        total: 1,
+        subject: String::new(),
+    });
     Ok(plan)
 }
 

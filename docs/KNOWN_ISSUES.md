@@ -34,6 +34,11 @@ These are not silently waived by passing local tests.
 - Signed-page 0.26.0 progress stages, sticky preview navigation, enlarged
   comparisons, and hash-pinned warning copies still require native Windows/
   WebView2 acceptance with representative OneDrive input and Review roots.
+- Version 0.27.0 bounded RFI System/signature analysis, parallel recursive
+  discovery, and operation-wide progress stages require native Windows/WebView2
+  acceptance on the operator's actual OneDrive-backed tree. Verify throughput,
+  readable current-file subjects, monotonic counters, cancellation boundaries,
+  deterministic plans, and checkpoint reuse under interruption.
 - RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.

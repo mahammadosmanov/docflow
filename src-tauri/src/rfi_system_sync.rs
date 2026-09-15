@@ -23,6 +23,7 @@ use crate::{
         patch_workbook_sheets_guarded_text, read_workbook_from_reader,
         verify_guarded_workbook_delta_text,
     },
+    parallel::bounded_map_stream,
     rfi_follow_up::{WorkbookFingerprint, fingerprint_open_file},
     scan_index::{FileFingerprint, ScanIndex, ScanIndexStats},
 };
@@ -54,6 +55,32 @@ struct CachedWorleyDetection {
     signed_by_worley: bool,
     signature_reason: String,
     source_sha256: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct CandidateAnalysis {
+    record: ScannedRfiRecord,
+    relative: Option<PathBuf>,
+    fingerprint: Option<FileFingerprint>,
+    detection: Option<CachedWorleyDetection>,
+    reused: bool,
+    transient_failure: bool,
+    subject: String,
+}
+
+#[derive(Clone, Debug)]
+struct CandidateAnalysisError {
+    relative: Option<PathBuf>,
+    message: String,
+}
+
+impl CandidateAnalysisError {
+    fn new(relative: Option<&Path>, message: impl Into<String>) -> Self {
+        Self {
+            relative: relative.map(Path::to_path_buf),
+            message: message.into(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -249,78 +276,50 @@ where
         }
     }
 
-    let temp_dir = tempfile::tempdir()
-        .map_err(|error| BackendError::protocol(format!("temporary directory: {error}")))?;
+    progress(ProgressEvent {
+        phase: "system_discovery".to_string(),
+        done: 0,
+        total: 0,
+        subject: root.to_string_lossy().into_owned(),
+    });
     let mut candidates = Vec::new();
     let mut seen = BTreeSet::new();
-    for (discipline, discipline_path) in search_dirs {
-        for entry in fs::read_dir(&discipline_path)
-            .map_err(|error| BackendError::path_invalid(error.to_string()))?
-        {
-            let entry = entry.map_err(|error| BackendError::path_invalid(error.to_string()))?;
-            let rfi_folder = entry.path();
-            if !rfi_folder.is_dir() {
+    let mut discovered_dirs = 0_u64;
+    let (discovery_workers, batches) = bounded_map_stream(
+        &search_dirs,
+        |(discipline, path)| scan_system_discipline(discipline, path),
+        |index, _| {
+            discovered_dirs += 1;
+            progress(ProgressEvent {
+                phase: "system_discovery".to_string(),
+                done: discovered_dirs,
+                total: search_dirs.len() as u64,
+                subject: search_dirs[index].1.to_string_lossy().into_owned(),
+            });
+            Ok(())
+        },
+    )
+    .map_err(BackendError::request_failed)?;
+    for batch in batches {
+        for (record, folder) in batch.map_err(BackendError::path_invalid)? {
+            if !seen.insert(record.canonical_rfi.clone()) {
                 continue;
             }
-            let folder_name = entry.file_name().to_string_lossy().to_string();
-            let Some((parsed_discipline, number)) = parse_rfi_discipline_and_number(&folder_name)
-            else {
-                continue;
-            };
-            if parsed_discipline != discipline {
-                continue;
-            }
-            let canonical_rfi = format!(
-                "{}{}-{number:04}",
-                canonical_rfi_prefix(),
-                parsed_discipline
-            );
-            if !seen.insert(canonical_rfi.clone()) {
-                continue;
-            }
-            let mut pdfs = fs::read_dir(&rfi_folder)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| {
-                    path.is_file()
-                        && path
-                            .extension()
-                            .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
-                })
-                .collect::<Vec<_>>();
-            pdfs.sort();
-            let selected_pdf = pdfs
-                .iter()
-                .find(|path| {
-                    path.file_name().is_some_and(|name| {
-                        name.to_string_lossy()
-                            .to_ascii_uppercase()
-                            .starts_with("RFI NO")
-                    })
-                })
-                .cloned()
-                .or_else(|| pdfs.first().cloned());
-            candidates.push((
-                ScannedRfiRecord {
-                    discipline: parsed_discipline.to_string(),
-                    number,
-                    canonical_rfi,
-                    short_rfi: format!("{parsed_discipline}-{number:04}"),
-                    rfi_folder: rfi_folder.to_string_lossy().into_owned(),
-                    pdf_path: selected_pdf.map(|path| path.to_string_lossy().into_owned()),
-                    signed_by_worley: false,
-                    signature_reason: String::new(),
-                },
-                rfi_folder,
-            ));
+            candidates.push((record, folder));
         }
     }
+    let temp_dir = tempfile::tempdir()
+        .map_err(|error| BackendError::protocol(format!("temporary directory: {error}")))?;
     candidates.sort_by(|(left, _), (right, _)| {
         left.discipline
             .cmp(&right.discipline)
             .then(left.number.cmp(&right.number))
+    });
+    progress(ProgressEvent {
+        phase: "system_discovery".to_string(),
+        done: candidates.len() as u64,
+        total: candidates.len() as u64,
+        subject: String::new(),
     });
     let mut stats = ScanIndexStats {
         discovered: candidates.len() as u64,
@@ -347,108 +346,161 @@ where
             BackendError::request_failed(format!("scan index unavailable: {error}"))
         })?;
     let total = candidates.len() as u64;
-    let mut records = Vec::with_capacity(candidates.len());
-    for (index, (mut record, rfi_folder)) in candidates.into_iter().enumerate() {
-        let Some(pdf_path) = record.pdf_path.as_ref().map(PathBuf::from) else {
-            record.signature_reason = "No scanned PDF found in folder".to_string();
-            records.push(record);
-            progress(ProgressEvent {
-                phase: "scan".to_string(),
-                done: (index + 1) as u64,
-                total,
-                subject: rfi_folder.to_string_lossy().into_owned(),
-            });
-            continue;
-        };
-        let relative = pdf_path
-            .strip_prefix(root)
-            .map_err(|_| BackendError::path_invalid("RFI scan escaped the selected system root"))?;
-        let fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
-            BackendError::path_invalid(format!("RFI scan fingerprint failed: {error}"))
-        })?;
-        let mut cached = if force_rescan {
-            None
-        } else {
-            run.as_ref()
-                .map(|run| run.lookup::<CachedWorleyDetection>(relative, &fingerprint))
-                .transpose()
-                .map_err(|error| {
-                    BackendError::request_failed(format!("scan index read failed: {error}"))
-                })?
-                .flatten()
-        };
-        if cached.as_ref().is_some_and(|value| value.signed_by_worley) {
-            let current_hash = file_sha256(&pdf_path).map_err(|error| {
-                BackendError::path_invalid(format!("signed RFI hash failed: {error}"))
-            })?;
-            if cached
-                .as_ref()
-                .and_then(|value| value.source_sha256.as_deref())
-                != Some(current_hash.as_str())
-            {
-                cached = None;
-            }
-        }
-        let detection = if let Some(cached) = cached {
-            stats.reused += 1;
-            cached
-        } else {
-            let (signed_by_worley, signature_reason) =
-                detect_worley_signature(&pdf_path, temp_dir.path());
-            let current_fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
-                BackendError::path_invalid(format!("RFI scan fingerprint changed: {error}"))
-            })?;
-            if current_fingerprint != fingerprint {
-                if let Some(run) = &run {
-                    run.record_failure(relative, "source changed during Worley scan")
-                        .map_err(|error| {
-                            BackendError::request_failed(format!("scan checkpoint failed: {error}"))
-                        })?;
-                }
-                return Err(BackendError::validation(
-                    "RFI PDF changed during system scan; preview again",
-                ));
-            }
-            let source_sha256 = signed_by_worley
-                .then(|| file_sha256(&pdf_path))
-                .transpose()
-                .map_err(|error| {
-                    BackendError::path_invalid(format!("signed RFI hash failed: {error}"))
-                })?;
-            let detected = CachedWorleyDetection {
-                signed_by_worley,
-                signature_reason,
-                source_sha256,
+    let mut completed = 0_u64;
+    let (worker_count, analyzed) = bounded_map_stream(
+        &candidates,
+        |(record, rfi_folder)| {
+            let mut record = record.clone();
+            let Some(pdf_path) = record.pdf_path.as_ref().map(PathBuf::from) else {
+                record.signature_reason = "No scanned PDF found in folder".to_string();
+                return Ok(CandidateAnalysis {
+                    record,
+                    relative: None,
+                    fingerprint: None,
+                    detection: None,
+                    reused: false,
+                    transient_failure: false,
+                    subject: rfi_folder.to_string_lossy().into_owned(),
+                });
             };
-            let transient_failure = detected.signature_reason.starts_with("PDF render error:")
-                || detected.signature_reason.starts_with("Image read error:");
-            if let Some(run) = &run {
-                if transient_failure {
-                    run.record_failure(relative, &detected.signature_reason)
-                } else {
-                    run.record_success(relative, &fingerprint, &detected)
-                }
-                .map_err(|error| {
-                    BackendError::request_failed(format!("scan checkpoint failed: {error}"))
-                })?;
-            }
-            if transient_failure {
-                stats.failed += 1;
+            let relative = pdf_path
+                .strip_prefix(root)
+                .map_err(|_| {
+                    CandidateAnalysisError::new(None, "RFI scan escaped the selected system root")
+                })?
+                .to_path_buf();
+            let fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
+                CandidateAnalysisError::new(
+                    Some(&relative),
+                    format!("RFI scan fingerprint failed: {error}"),
+                )
+            })?;
+            let mut cached = if force_rescan {
+                None
             } else {
-                stats.analyzed += 1;
+                run.as_ref()
+                    .map(|run| run.lookup::<CachedWorleyDetection>(&relative, &fingerprint))
+                    .transpose()
+                    .map_err(|error| {
+                        CandidateAnalysisError::new(
+                            Some(&relative),
+                            format!("scan index read failed: {error}"),
+                        )
+                    })?
+                    .flatten()
+            };
+            if cached.as_ref().is_some_and(|value| value.signed_by_worley) {
+                let current_hash = file_sha256(&pdf_path).map_err(|error| {
+                    CandidateAnalysisError::new(
+                        Some(&relative),
+                        format!("signed RFI hash failed: {error}"),
+                    )
+                })?;
+                if cached
+                    .as_ref()
+                    .and_then(|value| value.source_sha256.as_deref())
+                    != Some(current_hash.as_str())
+                {
+                    cached = None;
+                }
             }
-            detected
-        };
-        record.signed_by_worley = detection.signed_by_worley;
-        record.signature_reason = detection.signature_reason;
-        records.push(record);
-        progress(ProgressEvent {
-            phase: "scan".to_string(),
-            done: (index + 1) as u64,
-            total,
-            subject: relative.to_string_lossy().into_owned(),
-        });
-    }
+            let (detection, reused, transient_failure) = if let Some(cached) = cached {
+                (cached, true, false)
+            } else {
+                let (signed_by_worley, signature_reason) =
+                    detect_worley_signature(&pdf_path, temp_dir.path());
+                let current_fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
+                    CandidateAnalysisError::new(
+                        Some(&relative),
+                        format!("RFI scan fingerprint changed: {error}"),
+                    )
+                })?;
+                if current_fingerprint != fingerprint {
+                    return Err(CandidateAnalysisError::new(
+                        Some(&relative),
+                        "RFI PDF changed during system scan; preview again",
+                    ));
+                }
+                let source_sha256 = signed_by_worley
+                    .then(|| file_sha256(&pdf_path))
+                    .transpose()
+                    .map_err(|error| {
+                        CandidateAnalysisError::new(
+                            Some(&relative),
+                            format!("signed RFI hash failed: {error}"),
+                        )
+                    })?;
+                let detection = CachedWorleyDetection {
+                    signed_by_worley,
+                    signature_reason,
+                    source_sha256,
+                };
+                let transient_failure = detection.signature_reason.starts_with("PDF render error:")
+                    || detection.signature_reason.starts_with("Image read error:");
+                (detection, false, transient_failure)
+            };
+            record.signed_by_worley = detection.signed_by_worley;
+            record.signature_reason = detection.signature_reason.clone();
+            Ok(CandidateAnalysis {
+                record,
+                relative: Some(relative.clone()),
+                fingerprint: Some(fingerprint),
+                detection: Some(detection),
+                reused,
+                transient_failure,
+                subject: relative.to_string_lossy().into_owned(),
+            })
+        },
+        |_, result: &Result<CandidateAnalysis, CandidateAnalysisError>| {
+            let item = match result {
+                Ok(item) => item,
+                Err(error) => {
+                    if let (Some(run), Some(relative)) = (&run, &error.relative) {
+                        run.record_failure(relative, &error.message)
+                            .map_err(|failure| format!("scan checkpoint failed: {failure}"))?;
+                    }
+                    return Err(error.message.clone());
+                }
+            };
+            if item.reused {
+                stats.reused += 1;
+            } else if let (Some(relative), Some(fingerprint), Some(detection)) =
+                (&item.relative, &item.fingerprint, &item.detection)
+            {
+                if let Some(run) = &run {
+                    if item.transient_failure {
+                        run.record_failure(relative, &detection.signature_reason)
+                    } else {
+                        run.record_success(relative, fingerprint, detection)
+                    }
+                    .map_err(|error| format!("scan checkpoint failed: {error}"))?;
+                }
+                if item.transient_failure {
+                    stats.failed += 1;
+                } else {
+                    stats.analyzed += 1;
+                }
+            }
+            completed += 1;
+            progress(ProgressEvent {
+                phase: "system_signature_analysis".to_string(),
+                done: completed,
+                total,
+                subject: item.subject.clone(),
+            });
+            Ok(())
+        },
+    )
+    .map_err(BackendError::request_failed)?;
+    stats.parallel_analysis = !candidates.is_empty();
+    stats.analysis_workers = worker_count.max(discovery_workers) as u64;
+    let mut records = analyzed
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| BackendError::request_failed(error.message))?
+        .into_iter()
+        .map(|item| item.record)
+        .collect::<Vec<_>>();
     if let Some(run) = run {
         run.complete(&stats).map_err(|error| {
             BackendError::request_failed(format!("scan run completion failed: {error}"))
@@ -460,6 +512,77 @@ where
             .then(left.number.cmp(&right.number))
     });
     Ok((records, stats))
+}
+
+fn scan_system_discipline(
+    discipline: &str,
+    discipline_path: &Path,
+) -> Result<Vec<(ScannedRfiRecord, PathBuf)>, String> {
+    let entries = fs::read_dir(discipline_path).map_err(|error| error.to_string())?;
+    let mut candidates = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        let rfi_folder = entry.path();
+        let folder_name = entry.file_name().to_string_lossy().to_string();
+        let Some((parsed_discipline, number)) = parse_rfi_discipline_and_number(&folder_name)
+        else {
+            continue;
+        };
+        if parsed_discipline != discipline {
+            continue;
+        }
+        let canonical_rfi = format!(
+            "{}{}-{number:04}",
+            canonical_rfi_prefix(),
+            parsed_discipline
+        );
+        let mut pdfs = fs::read_dir(&rfi_folder)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                entry
+                    .file_type()
+                    .ok()
+                    .is_some_and(|kind| kind.is_file() && !kind.is_symlink())
+                    .then(|| entry.path())
+            })
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+            })
+            .collect::<Vec<_>>();
+        pdfs.sort();
+        let selected_pdf = pdfs
+            .iter()
+            .find(|path| {
+                path.file_name().is_some_and(|name| {
+                    name.to_string_lossy()
+                        .to_ascii_uppercase()
+                        .starts_with("RFI NO")
+                })
+            })
+            .cloned()
+            .or_else(|| pdfs.first().cloned());
+        candidates.push((
+            ScannedRfiRecord {
+                discipline: parsed_discipline.to_string(),
+                number,
+                canonical_rfi,
+                short_rfi: format!("{parsed_discipline}-{number:04}"),
+                rfi_folder: rfi_folder.to_string_lossy().into_owned(),
+                pdf_path: selected_pdf.map(|path| path.to_string_lossy().into_owned()),
+                signed_by_worley: false,
+                signature_reason: String::new(),
+            },
+            rfi_folder,
+        ));
+    }
+    Ok(candidates)
 }
 
 pub(crate) fn detect_worley_signature(pdf_path: &Path, temp_dir: &Path) -> (bool, String) {
@@ -654,13 +777,24 @@ pub fn preview_system_sync_indexed<P>(
     scan_index: Option<&ScanIndex>,
     owner_id: &str,
     force_rescan: bool,
-    progress: P,
+    mut progress: P,
 ) -> Result<Plan, BackendError>
 where
     P: FnMut(ProgressEvent),
 {
-    let (scanned_rfis, scan_stats) =
-        scan_system_root_indexed(system_root, scan_index, owner_id, force_rescan, progress)?;
+    let (scanned_rfis, scan_stats) = scan_system_root_indexed(
+        system_root,
+        scan_index,
+        owner_id,
+        force_rescan,
+        &mut progress,
+    )?;
+    progress(ProgressEvent {
+        phase: "system_workbook_read".to_string(),
+        done: 0,
+        total: 2,
+        subject: rfi_log_path.to_string_lossy().into_owned(),
+    });
     rfi_log_file
         .seek(SeekFrom::Start(0))
         .map_err(|e| BackendError::protocol(e.to_string()))?;
@@ -672,6 +806,12 @@ where
         BackendError::validation(format!("error.rfi.systemSync.workbookInvalid: {e}"))
     })?;
     let rfi_log_rows = read_rfi_log_rows(&rfi_log_workbook)?;
+    progress(ProgressEvent {
+        phase: "system_workbook_read".to_string(),
+        done: 1,
+        total: 2,
+        subject: follow_up_path.to_string_lossy().into_owned(),
+    });
 
     follow_up_file
         .seek(SeekFrom::Start(0))
@@ -684,12 +824,24 @@ where
         BackendError::validation(format!("error.rfi.systemSync.workbookInvalid: {e}"))
     })?;
     let follow_up_targets = read_follow_up_targets(&follow_up_workbook)?;
+    progress(ProgressEvent {
+        phase: "system_workbook_read".to_string(),
+        done: 2,
+        total: 2,
+        subject: String::new(),
+    });
 
     let mut log_updates = BTreeMap::<String, BTreeMap<String, GuardedCellUpdateDto>>::new();
     let mut follow_up_updates = BTreeMap::<String, BTreeMap<String, GuardedCellUpdateDto>>::new();
     let mut review_rows = Vec::new();
 
     for (index, scanned) in scanned_rfis.iter().enumerate() {
+        progress(ProgressEvent {
+            phase: "system_mapping".to_string(),
+            done: index as u64,
+            total: scanned_rfis.len() as u64,
+            subject: scanned.canonical_rfi.clone(),
+        });
         let row_id = format!("sync-row-{}", index + 1);
         let matching_log = rfi_log_rows
             .iter()
@@ -943,9 +1095,23 @@ where
     meta.insert("editor".to_string(), editor);
     meta.insert(
         "scanIndex".to_string(),
-        serde_json::to_value(scan_stats)
+        serde_json::to_value(&scan_stats)
             .map_err(|error| BackendError::protocol(error.to_string()))?,
     );
+    meta.insert(
+        "parallelAnalysis".to_string(),
+        Value::Bool(scan_stats.parallel_analysis),
+    );
+    meta.insert(
+        "workerCount".to_string(),
+        Value::from(scan_stats.analysis_workers),
+    );
+    progress(ProgressEvent {
+        phase: "preview_ready".to_string(),
+        done: 1,
+        total: 1,
+        subject: String::new(),
+    });
     Ok(Plan {
         plan_id: String::new(),
         op_id: OPERATION_ID.to_string(),

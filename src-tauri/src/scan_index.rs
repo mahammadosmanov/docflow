@@ -63,6 +63,10 @@ pub struct ScanIndexStats {
     pub failed: u64,
     pub prior_interrupted_runs: u64,
     pub force_rescan: bool,
+    #[serde(default)]
+    pub parallel_analysis: bool,
+    #[serde(default)]
+    pub analysis_workers: u64,
 }
 
 pub struct ScanRun<'a> {

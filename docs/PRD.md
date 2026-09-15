@@ -74,6 +74,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   Apply copies each affected source PDF once beneath `_review`, preserving its
   signed-input subfolder path, without changing the source or overwriting a
   destination, and rejects source drift after Preview.
+- **DF-022 — Bounded parallel analysis and visible stages:** independent,
+  read-only bulk discovery and analysis use the shared bounded worker pool while
+  deterministic results, incremental checkpoints, and source revalidation remain
+  intact. Every registered operation reports localized Preview stages and item
+  progress; mutation, print submission, publication, journal, and Undo effects
+  remain ordered and single-writer.
 
 ## Scope
 

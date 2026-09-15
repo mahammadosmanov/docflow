@@ -100,7 +100,7 @@ where
     let mut warnings = Vec::new();
     for (index, path) in files.iter().enumerate() {
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "print_file_inspection".to_string(),
             done: index as u64,
             total: files.len() as u64,
             subject: String::new(),
@@ -149,7 +149,7 @@ where
         }
     }
     progress(ProgressEvent {
-        phase: "preview".to_string(),
+        phase: "preview_ready".to_string(),
         done: files.len() as u64,
         total: files.len() as u64,
         subject: String::new(),

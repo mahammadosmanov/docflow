@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.26.2**. `VERSION` is authoritative.
+Current product version: **0.27.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -45,6 +45,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
     may create separately reviewed copies.
 15. Large repeated RFI scans checkpoint each completed PDF in a local,
     owner-scoped index; reuse is visible and never substitutes for Apply guards.
+16. Independent bulk discovery and analysis use bounded multi-core workers;
+    every operation reports localized stages and item progress while all effects
+    that can collide or become uncertain remain ordered.
 
 ## Current capabilities
 
@@ -53,7 +56,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | RFI work tracking | Resume multi-day RFI work, launch verified next steps, and export a portable audit in CSV and JSON | Owner-scoped append-only events; exact committed journal evidence; previewed no-clobber export; store capacity visibility; stale or conflicting evidence fails into review; official documents remain authoritative |
 | Process Scans | Identify, rename, organize, and review RFI PDFs | Strict `-RFI-` anchor, no-overwrite, `_review/` fallback |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
-| RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Durable incremental first-page analysis; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
+| RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, and opt-in recall of safe settings without old files |
 | Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | Bounded multi-core archive discovery uses exact filenames; exact page index and candidate are pinned; thumbnails are inert and bounded; archive and source scan stay read-only; unreadable, duplicate, ambiguous, and unsupported pages are rejected |

@@ -305,7 +305,7 @@ where
         .filter(|discipline| counts.contains_key(**discipline))
         .copied()
         .collect::<Vec<_>>();
-    progress_event(&mut progress, "preview", 0, 4);
+    progress_event(&mut progress, "workbook_reading", 0, 1);
     let workbook = read_workbook(&workbook_path).map_err(document_error)?;
     checkpoint(&cancelled)?;
     let mut sources = BTreeMap::new();
@@ -316,7 +316,8 @@ where
         );
         checkpoint(&cancelled)?;
     }
-    progress_event(&mut progress, "preview", 1, 4);
+    progress_event(&mut progress, "workbook_reading", 1, 1);
+    progress_event(&mut progress, "rfi_request_analysis", 0, 1);
 
     let mut extraction = None;
     let mut extraction_discipline = None;
@@ -385,6 +386,13 @@ where
         extraction = Some(selected);
     }
     checkpoint(&cancelled)?;
+    progress_event(&mut progress, "rfi_request_analysis", 1, 1);
+    progress_event(
+        &mut progress,
+        "rfi_plan_preparation",
+        0,
+        requested.len() as u64,
+    );
 
     let issue_day = today;
     let start_day = today
@@ -393,7 +401,7 @@ where
     let mut rows = Vec::new();
     let mut batches = Vec::new();
     let mut overflowed = 0_usize;
-    for discipline in &requested {
+    for (discipline_index, discipline) in requested.iter().enumerate() {
         let source = &sources[*discipline];
         let (slots, sheet_overflowed) =
             allocate(&source.occupied, start_day, counts[*discipline], wrap)?;
@@ -435,6 +443,12 @@ where
             source_data: source.data.clone(),
         });
         rows.extend(sheet_rows);
+        progress_event(
+            &mut progress,
+            "rfi_plan_preparation",
+            (discipline_index + 1) as u64,
+            requested.len() as u64,
+        );
         checkpoint(&cancelled)?;
     }
     if !extraction_notes.is_empty() {
@@ -521,7 +535,7 @@ where
             }),
         );
     }
-    progress_event(&mut progress, "preview", 4, 4);
+    progress_event(&mut progress, "preview_ready", 1, 1);
     Ok(Plan {
         plan_id: String::new(),
         op_id: "rfi.log_add".to_string(),

@@ -21,6 +21,7 @@ and versioned with the code they govern.
 | Windows spool release semantics and opt-in Batch Print setting recall | Accepted | [`adr/0009-resilient-print-handoff-and-opt-in-recall.md`](adr/0009-resilient-print-handoff-and-opt-in-recall.md) |
 | Local durable incremental scan index with cloud-independent authority | Accepted | [`adr/0010-durable-incremental-scan-index.md`](adr/0010-durable-incremental-scan-index.md) |
 | Actionable signed-page warnings as hash-pinned no-clobber Review copies | Accepted | [`adr/0011-actionable-signed-page-warning-review.md`](adr/0011-actionable-signed-page-warning-review.md) |
+| Shared bounded read-only parallelism with operation-wide progress phases | Accepted | [`adr/0012-bounded-parallel-progress.md`](adr/0012-bounded-parallel-progress.md) |
 
 ## Adding a decision
 

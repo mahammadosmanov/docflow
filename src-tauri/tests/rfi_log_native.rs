@@ -292,7 +292,11 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
     assert_eq!(rows[0]["area"], "North Site");
     assert_eq!(rows[1]["area"], "South Site");
     assert_eq!(progress.first().unwrap().done, 0);
-    assert_eq!(progress.last().unwrap().done, 4);
+    assert_eq!(progress.last().unwrap().phase, "preview_ready");
+    assert_eq!(progress.last().unwrap().done, 1);
+    assert!(progress.iter().any(|event| {
+        event.phase == "rfi_plan_preparation" && event.done == event.total && event.total > 0
+    }));
 
     let batch = &plan.steps[0].meta["batches"][0];
     let copy_source = &plan.meta["editor"]["copySource"];

@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.27.0 - 2026-09-15
+
+### Added
+
+- Every registered operation now reports a localized, named Preview stage with
+  completed/total counts and the current file, folder, page, workbook, printer,
+  or record where available.
+
+### Changed
+
+- RFI System discovery and Worley first-page signature detection now use bounded
+  multi-core analysis. Each completed PDF still receives an immediate serial
+  SQLite checkpoint, and final Plan order remains deterministic.
+- Process Scans now reports each completed parallel OCR item. Recursive signed
+  input discovery, signed-PDF inspection, PDF-orientation discovery, and large
+  RFI work-event reads now use the shared bounded worker pool.
+- Print submission, workbook mutation, Apply publication, journal, recovery,
+  and Undo remain intentionally ordered and single-writer.
+
 ## 0.26.2 - 2026-09-14
 
 ### Changed

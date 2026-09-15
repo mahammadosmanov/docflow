@@ -799,7 +799,7 @@ impl NativeBackend {
             self.filesystem
                 .issue_grant(&scope, &self.app_data_dir, GrantAccess::ReadWrite)?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "work_item_validation".to_string(),
             done: 0,
             total: 1,
             subject: request.values.title.clone(),
@@ -827,7 +827,7 @@ impl NativeBackend {
             plan,
         )?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "preview_ready".to_string(),
             done: 1,
             total: 1,
             subject: String::new(),
@@ -862,7 +862,7 @@ impl NativeBackend {
             .filesystem
             .issue_grant(&scope, &destination, GrantAccess::ReadWrite)?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "work_audit_collection".to_string(),
             done: 0,
             total: 1,
             subject: destination.to_string_lossy().into_owned(),
@@ -873,6 +873,12 @@ impl NativeBackend {
             request.values,
             &chrono::Utc::now().to_rfc3339(),
         )?;
+        progress(ProgressEvent {
+            phase: "work_audit_preparation".to_string(),
+            done: 1,
+            total: 1,
+            subject: destination.to_string_lossy().into_owned(),
+        });
         let cached = self.filesystem.cache_plan(
             BackendOrigin::Rust,
             PlanBinding::new(
@@ -884,7 +890,7 @@ impl NativeBackend {
             plan,
         )?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "preview_ready".to_string(),
             done: 1,
             total: 1,
             subject: String::new(),
@@ -1069,7 +1075,7 @@ impl NativeBackend {
             .open_mutable()
             .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "follow_up_analysis".to_string(),
             done: 0,
             total: 1,
             subject: request
@@ -1105,7 +1111,7 @@ impl NativeBackend {
         )?;
         provisional.commit();
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "preview_ready".to_string(),
             done: 1,
             total: 1,
             subject: String::new(),
@@ -1219,12 +1225,6 @@ impl NativeBackend {
         let mut target = target_anchor
             .open_mutable()
             .map_err(|_| BackendError::validation("error.rfi.systemSync.workbookLocked"))?;
-        progress(ProgressEvent {
-            phase: "preview".to_string(),
-            done: 0,
-            total: 1,
-            subject: system_root.to_string_lossy().into_owned(),
-        });
         let mut plan = rfi_system_sync::preview_system_sync_indexed(
             &system_root,
             &source_path,
@@ -1255,12 +1255,6 @@ impl NativeBackend {
             plan,
         )?;
         provisional.commit();
-        progress(ProgressEvent {
-            phase: "preview".to_string(),
-            done: 1,
-            total: 1,
-            subject: String::new(),
-        });
         encode(cached)
     }
 
@@ -1279,7 +1273,7 @@ impl NativeBackend {
             ));
         }
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "outlook_selection".to_string(),
             done: 0,
             total: 1,
             subject: String::new(),
@@ -1288,7 +1282,7 @@ impl NativeBackend {
             .outlook
             .preview(&self.caller_identity()?, &request.values.reply_text)?;
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "preview_ready".to_string(),
             done: 1,
             total: 1,
             subject: String::new(),
@@ -2257,6 +2251,8 @@ mod tests {
 
     use super::*;
 
+    static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     struct TestCredentials(Mutex<Option<StoredSession>>);
 
     impl CredentialStore for TestCredentials {
@@ -2404,6 +2400,7 @@ mod tests {
 
     #[test]
     fn work_item_preview_apply_list_and_undo_use_the_native_journal_boundary() {
+        let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
         let temporary = tempfile::tempdir().unwrap();
         let backend = test_backend(&temporary);
         let plan = backend
@@ -2440,6 +2437,7 @@ mod tests {
 
     #[test]
     fn work_item_audit_export_uses_selected_folder_journal_and_undo() {
+        let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
         let temporary = tempfile::tempdir().unwrap();
         let backend = test_backend(&temporary);
         let export_root = temporary.path().join("audit-export");

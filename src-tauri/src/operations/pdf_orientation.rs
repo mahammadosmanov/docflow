@@ -11,7 +11,7 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
-    parallel::bounded_map_stream,
+    parallel::{bounded_map, bounded_map_stream},
     pdf::inspect,
     scan_index::{FileFingerprint, ScanIndex, ScanIndexStats},
 };
@@ -112,7 +112,20 @@ where
             ..empty_plan()
         });
     }
-    let pdfs = collect_discipline_pdfs(&source_root)?;
+    progress(ProgressEvent {
+        phase: "orientation_discovery".to_string(),
+        done: 0,
+        total: 0,
+        subject: source_root.to_string_lossy().into_owned(),
+    });
+    let (pdfs, discovery_workers) =
+        collect_discipline_pdfs(&source_root, &mut progress, &mut cancelled)?;
+    progress(ProgressEvent {
+        phase: "orientation_discovery".to_string(),
+        done: pdfs.len() as u64,
+        total: pdfs.len() as u64,
+        subject: String::new(),
+    });
     let mut plan = empty_plan();
     if pdfs.is_empty() {
         plan.warnings.push(warning(
@@ -286,7 +299,7 @@ where
     let total_pages = cached_pages.saturating_add(tasks.len()) as u64;
     for (index, (task, _)) in by_file.values().flatten().enumerate() {
         progress(ProgressEvent {
-            phase: "preview".to_string(),
+            phase: "orientation_analysis".to_string(),
             done: (index + 1) as u64,
             total: total_pages,
             subject: format!("{} · {}", task.path.display(), task.page_index + 1),
@@ -322,7 +335,7 @@ where
             completed_pages += 1;
             let task = &tasks[index];
             progress(ProgressEvent {
-                phase: "preview".to_string(),
+                phase: "orientation_analysis".to_string(),
                 done: completed_pages,
                 total: total_pages,
                 subject: format!("{} · {}", task.path.display(), task.page_index + 1),
@@ -535,8 +548,13 @@ where
             ]),
         });
     }
+    stats.parallel_analysis = !tasks.is_empty();
+    stats.analysis_workers = worker_count as u64;
     plan.meta.extend(JsonObject::from_iter([
-        ("workerCount".to_string(), Value::from(worker_count as u64)),
+        (
+            "workerCount".to_string(),
+            Value::from(worker_count.max(discovery_workers) as u64),
+        ),
         ("verifiedPages".to_string(), Value::from(verified_pages)),
         ("rotatedPages".to_string(), Value::from(rotated_pages)),
         ("actionableFiles".to_string(), Value::from(actionable_files)),
@@ -559,6 +577,12 @@ where
             BackendError::request_failed(format!("scan run completion failed: {error}"))
         })?;
     }
+    progress(ProgressEvent {
+        phase: "preview_ready".to_string(),
+        done: 1,
+        total: 1,
+        subject: String::new(),
+    });
     Ok(plan)
 }
 
@@ -593,86 +617,114 @@ fn record_unsupported(
     Ok(())
 }
 
-fn collect_discipline_pdfs(root: &Path) -> Result<Vec<PathBuf>, BackendError> {
-    let mut disciplines = Vec::new();
-    let mut visited = 0_usize;
-    find_discipline_roots(root, &mut disciplines, &mut visited)?;
-    disciplines.sort();
-    disciplines.dedup();
+fn collect_discipline_pdfs<P, C>(
+    root: &Path,
+    progress: &mut P,
+    cancelled: &mut C,
+) -> Result<(Vec<PathBuf>, usize), BackendError>
+where
+    P: FnMut(ProgressEvent),
+    C: FnMut() -> bool,
+{
+    let root_is_discipline = root
+        .file_name()
+        .map(|name| name.to_string_lossy().to_ascii_uppercase())
+        .is_some_and(|name| DISCIPLINES.contains(&name.as_str()));
+    let mut directories = vec![(root.to_path_buf(), root_is_discipline)];
     let mut pdfs = BTreeSet::new();
-    for discipline in disciplines {
-        collect_pdfs(&discipline, &mut pdfs, &mut visited)?;
+    let mut visited = 0_usize;
+    let mut scanned_directories = 0_u64;
+    let mut worker_count = 1_usize;
+    while !directories.is_empty() {
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        directories.sort();
+        let current_count = directories.len();
+        let (workers, batches) = bounded_map(&directories, |(directory, in_discipline)| {
+            scan_orientation_directory(directory, *in_discipline)
+        })
+        .map_err(BackendError::request_failed)?;
+        worker_count = worker_count.max(workers);
+        let mut next = Vec::new();
+        for batch in batches {
+            let batch = batch?;
+            visited = visited
+                .checked_add(batch.entries)
+                .ok_or_else(|| BackendError::validation("RFI system entry count overflow"))?;
+            if visited > MAX_DIRECTORY_ENTRIES {
+                return Err(BackendError::validation(
+                    "RFI system is too large to scan safely",
+                ));
+            }
+            pdfs.extend(batch.pdfs);
+            next.extend(batch.directories);
+        }
         if pdfs.len() > MAX_PDFS {
             return Err(BackendError::validation(format!(
                 "orientation scan exceeds the {MAX_PDFS}-PDF limit"
             )));
         }
+        scanned_directories += current_count as u64;
+        progress(ProgressEvent {
+            phase: "orientation_discovery".to_string(),
+            done: scanned_directories,
+            total: scanned_directories.saturating_add(next.len() as u64),
+            subject: format!("{} PDF", pdfs.len()),
+        });
+        directories = next;
     }
-    Ok(pdfs.into_iter().collect())
+    Ok((pdfs.into_iter().collect(), worker_count))
 }
 
-fn find_discipline_roots(
-    root: &Path,
-    found: &mut Vec<PathBuf>,
-    visited: &mut usize,
-) -> Result<(), BackendError> {
-    for entry in fs::read_dir(root)
+struct OrientationDirectoryBatch {
+    directories: Vec<(PathBuf, bool)>,
+    pdfs: Vec<PathBuf>,
+    entries: usize,
+}
+
+fn scan_orientation_directory(
+    directory: &Path,
+    in_discipline: bool,
+) -> Result<OrientationDirectoryBatch, BackendError> {
+    let mut batch = OrientationDirectoryBatch {
+        directories: Vec::new(),
+        pdfs: Vec::new(),
+        entries: 0,
+    };
+    for entry in fs::read_dir(directory)
         .map_err(|_| BackendError::path_invalid("RFI system folder could not be read"))?
     {
         let entry = entry.map_err(|_| BackendError::path_invalid("RFI folder entry failed"))?;
-        *visited += 1;
-        if *visited > MAX_DIRECTORY_ENTRIES {
-            return Err(BackendError::validation(
-                "RFI system is too large to scan safely",
-            ));
-        }
+        batch.entries += 1;
         let file_type = entry
             .file_type()
             .map_err(|_| BackendError::path_invalid("RFI folder metadata failed"))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
+        if file_type.is_symlink() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().to_ascii_uppercase();
-        if DISCIPLINES.contains(&name.as_str()) {
-            found.push(entry.path());
-        } else {
-            find_discipline_roots(&entry.path(), found, visited)?;
-        }
-    }
-    Ok(())
-}
-
-fn collect_pdfs(
-    root: &Path,
-    output: &mut BTreeSet<PathBuf>,
-    visited: &mut usize,
-) -> Result<(), BackendError> {
-    for entry in fs::read_dir(root)
-        .map_err(|_| BackendError::path_invalid("discipline folder could not be read"))?
-    {
-        let entry = entry.map_err(|_| BackendError::path_invalid("discipline entry failed"))?;
-        *visited += 1;
-        if *visited > MAX_DIRECTORY_ENTRIES {
-            return Err(BackendError::validation(
-                "RFI system is too large to scan safely",
-            ));
-        }
-        let file_type = entry
-            .file_type()
-            .map_err(|_| BackendError::path_invalid("discipline metadata failed"))?;
-        if file_type.is_dir() && !file_type.is_symlink() {
-            collect_pdfs(&entry.path(), output, visited)?;
-        } else if file_type.is_file()
+        if file_type.is_dir() {
+            let child_is_discipline = in_discipline
+                || DISCIPLINES.contains(
+                    &entry
+                        .file_name()
+                        .to_string_lossy()
+                        .to_ascii_uppercase()
+                        .as_str(),
+                );
+            batch.directories.push((entry.path(), child_is_discipline));
+        } else if in_discipline
+            && file_type.is_file()
             && entry
                 .path()
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
         {
-            output.insert(entry.path());
+            batch.pdfs.push(entry.path());
         }
     }
-    Ok(())
+    Ok(batch)
 }
 
 fn add_directory_steps(

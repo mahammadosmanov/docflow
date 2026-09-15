@@ -347,6 +347,7 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
     std::fs::write(source.join("first.pdf"), b"fixture").unwrap();
     std::fs::write(source.join("second.pdf"), b"fixture").unwrap();
 
+    let mut progress = Vec::new();
     let plan = preview(
         &ProcessScansParams {
             source,
@@ -355,7 +356,7 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
             keep_original: true,
         },
         &ParallelFixtureOcr,
-        |_| {},
+        |event| progress.push(event),
         || false,
     )
     .unwrap();
@@ -372,6 +373,13 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
             .filter(|step| step.kind == docflow_lib::contracts::StepKind::Copy)
             .count(),
         2
+    );
+    assert!(progress.iter().any(|event| event.phase == "scan_discovery"));
+    assert!(progress.iter().any(|event| event.phase == "scan_ocr"));
+    assert!(progress.iter().any(|event| event.phase == "scan_planning"));
+    assert_eq!(
+        progress.last().map(|event| event.phase.as_str()),
+        Some("preview_ready")
     );
 }
 

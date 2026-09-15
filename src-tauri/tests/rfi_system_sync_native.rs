@@ -130,13 +130,29 @@ fn unchanged_system_pdf_is_reused_from_durable_index() {
         true,
     );
     let index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+    let mut progress = Vec::new();
     let (first, first_stats) =
-        scan_system_root_indexed(&system, Some(&index), "owner", false, |_| {}).unwrap();
+        scan_system_root_indexed(&system, Some(&index), "owner", false, |event| {
+            progress.push(event)
+        })
+        .unwrap();
     assert_eq!((first_stats.analyzed, first_stats.reused), (1, 0));
     let (second, second_stats) =
         scan_system_root_indexed(&system, Some(&index), "owner", false, |_| {}).unwrap();
     assert_eq!((second_stats.analyzed, second_stats.reused), (0, 1));
     assert_eq!(first, second);
+    assert!(first_stats.parallel_analysis);
+    assert!(first_stats.analysis_workers >= 1);
+    assert!(
+        progress
+            .iter()
+            .any(|event| event.phase == "system_discovery")
+    );
+    assert!(
+        progress
+            .iter()
+            .any(|event| event.phase == "system_signature_analysis")
+    );
 }
 
 #[test]

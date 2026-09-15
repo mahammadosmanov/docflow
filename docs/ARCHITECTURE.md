@@ -137,10 +137,18 @@ checks. Supabase remains metadata history only; large-system paths and cached
 document analysis are local-only.
 
 The same bounded analysis pool is used by native Process Scans OCR, combined
-Worley page recognition, complete signed-page archive discovery, and page
-orientation analysis. It preserves deterministic input/result order and is
-never used for Office automation, print submission, publication, journals, or
-Undo, where parallel effects could create collisions or unknowable outcomes.
+Worley page recognition, signed-input and archive discovery, RFI System
+discovery and first-page signature detection, PDF-orientation discovery and
+page analysis, and large RFI work-event reads. Completed indexed PDF analyses
+return to one coordinator, which writes each SQLite checkpoint immediately.
+The pool preserves deterministic input/result order and is never used for
+Office automation, print submission, publication, journals, or Undo, where
+parallel effects could create collisions or unknowable outcomes.
+
+Every registered operation emits localized progress phases through the existing
+Tauri channel. Long batch phases include bounded completed/total counters and a
+current file, folder, page, workbook, printer, or record subject when available.
+Progress is presentation evidence only and cannot change Plan authority.
 
 ## Operation contract
 

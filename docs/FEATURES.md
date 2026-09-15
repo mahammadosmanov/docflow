@@ -42,8 +42,12 @@
 - Read-only device readiness and copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
-  complete recursive signed-page archive discovery, and PDF orientation;
-  state-changing effects remain ordered and journaled.
+  recursive signed-input and archive discovery, PDF orientation discovery and
+  page analysis, RFI System discovery/signature detection, and large RFI work
+  event reads; state-changing effects remain ordered and journaled.
+- Every registered operation reports localized preparation, discovery, analysis,
+  planning, waiting, or ready stages with bounded item counters and the current
+  file where available.
 - Durable local incremental scanning for RFI System Sync and PDF orientation.
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an

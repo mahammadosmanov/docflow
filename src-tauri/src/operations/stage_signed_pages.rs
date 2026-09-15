@@ -121,7 +121,8 @@ where
         total: 0,
         subject: signed_root.to_string_lossy().into_owned(),
     });
-    let pdfs = signed_pdfs(&signed_root, params.scan_subfolders)?;
+    let (pdfs, discovery_workers) =
+        signed_pdfs(&signed_root, params.scan_subfolders, &mut progress)?;
     progress(ProgressEvent {
         phase: "signed_discovery".to_string(),
         done: pdfs.len() as u64,
@@ -142,15 +143,25 @@ where
         if cancelled() {
             return Err(BackendError::cancelled());
         }
+        let mut inspected = 0_u64;
+        let (inspection_workers, inspections) = bounded_map_stream(
+            &pdfs,
+            |pdf| inspect(pdf),
+            |index, _| {
+                inspected += 1;
+                progress(ProgressEvent {
+                    phase: "signed_inspection".to_string(),
+                    done: inspected,
+                    total: pdfs.len() as u64,
+                    subject: display_name(&pdfs[index]),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?;
         let mut tasks = Vec::new();
-        for (index, pdf) in pdfs.iter().enumerate() {
-            progress(ProgressEvent {
-                phase: "signed_inspection".to_string(),
-                done: index as u64,
-                total: pdfs.len() as u64,
-                subject: display_name(pdf),
-            });
-            if let Ok(facts) = inspect(pdf)
+        for (pdf, inspection) in pdfs.iter().zip(inspections) {
+            if let Ok(facts) = inspection
                 && fidelity_supported(&facts, PdfRole::SignedScan)
             {
                 if tasks.len().saturating_add(facts.page_count) > MAX_SIGNED_PAGES {
@@ -187,8 +198,10 @@ where
             diagnostics: ocr.diagnostics(),
         };
         let mut plan = preview(params, &cached, progress, cancelled)?;
-        plan.meta
-            .insert("workerCount".to_string(), Value::from(worker_count as u64));
+        plan.meta.insert(
+            "workerCount".to_string(),
+            Value::from(worker_count.max(inspection_workers).max(discovery_workers) as u64),
+        );
         plan.meta
             .insert("parallelAnalysis".to_string(), Value::Bool(true));
         return Ok(plan);
@@ -1203,28 +1216,74 @@ fn stale_hardlink_temps(destination: &Path, review_root: &Path) -> Vec<PathBuf> 
     stale
 }
 
-fn signed_pdfs(root: &Path, recursive: bool) -> Result<Vec<PathBuf>, BackendError> {
-    let mut files = Vec::new();
-    collect_pdfs(root, recursive, &mut files)?;
-    files.sort_by(|left, right| left.to_string_lossy().cmp(&right.to_string_lossy()));
-    if files.len() > MAX_SIGNED_PDFS {
-        return Err(BackendError::validation(format!(
-            "signed scans exceed the {MAX_SIGNED_PDFS}-PDF limit"
-        )));
-    }
-    Ok(files)
-}
-
-fn collect_pdfs(
+fn signed_pdfs<P>(
     root: &Path,
     recursive: bool,
-    output: &mut Vec<PathBuf>,
-) -> Result<(), BackendError> {
-    let entries = fs::read_dir(root)
+    progress: &mut P,
+) -> Result<(Vec<PathBuf>, usize), BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    let mut files = Vec::new();
+    let mut directories = vec![root.to_path_buf()];
+    let mut scanned = 0_u64;
+    let mut worker_count = 1_usize;
+    while !directories.is_empty() {
+        directories.sort();
+        let current_count = directories.len() as u64;
+        let (workers, batches) = bounded_map(&directories, |directory| {
+            scan_signed_directory(directory, recursive)
+        })
+        .map_err(BackendError::request_failed)?;
+        worker_count = worker_count.max(workers);
+        let mut next = Vec::new();
+        for batch in batches {
+            let batch = batch?;
+            files.extend(batch.files);
+            next.extend(batch.directories);
+        }
+        if files.len() > MAX_SIGNED_PDFS {
+            return Err(BackendError::validation(format!(
+                "signed scans exceed the {MAX_SIGNED_PDFS}-PDF limit"
+            )));
+        }
+        scanned += current_count;
+        progress(ProgressEvent {
+            phase: "signed_discovery".to_string(),
+            done: scanned,
+            total: scanned.saturating_add(next.len() as u64),
+            subject: format!("{} PDF", files.len()),
+        });
+        directories = next;
+    }
+    files.sort_by(|left, right| left.to_string_lossy().cmp(&right.to_string_lossy()));
+    Ok((files, worker_count))
+}
+
+struct SignedDirectoryBatch {
+    directories: Vec<PathBuf>,
+    files: Vec<PathBuf>,
+}
+
+fn scan_signed_directory(
+    directory: &Path,
+    recursive: bool,
+) -> Result<SignedDirectoryBatch, BackendError> {
+    let entries = fs::read_dir(directory)
         .map_err(|_| BackendError::path_invalid("signed scans could not be read"))?;
+    let mut batch = SignedDirectoryBatch {
+        directories: Vec::new(),
+        files: Vec::new(),
+    };
     for entry in entries {
         let entry =
             entry.map_err(|_| BackendError::path_invalid("signed scan entry could not be read"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|_| BackendError::path_invalid("signed scan type could not be read"))?;
+        if file_type.is_symlink() {
+            continue;
+        }
         let metadata = entry
             .metadata()
             .map_err(|_| BackendError::path_invalid("signed scan metadata could not be read"))?;
@@ -1238,15 +1297,12 @@ fn collect_pdfs(
                 .and_then(|value| value.to_str())
                 .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
         {
-            output.push(entry.path());
-        } else if recursive && metadata.is_dir() && !metadata.file_type().is_symlink() {
-            collect_pdfs(&entry.path(), true, output)?;
-        }
-        if output.len() > MAX_SIGNED_PDFS {
-            break;
+            batch.files.push(entry.path());
+        } else if recursive && metadata.is_dir() {
+            batch.directories.push(entry.path());
         }
     }
-    Ok(())
+    Ok(batch)
 }
 
 struct ArchiveIndexResult {
