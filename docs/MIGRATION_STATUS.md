@@ -4,6 +4,13 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.0.2: resilient EPSON status and native-handler spool correlation
+  - transient/stale generic driver errors remain under observation and explicit
+    completion wins; deleting/deleted remain uncertain and non-retryable
+  - a native handler's unique new spool job is followed even when its title no
+    longer contains the source filename; ambiguity still fails closed
+  - queue enumeration gets a bounded observation retry without resubmission
+
 - [x] Version 1.0.1: preserve Word checklist boundaries during RFI grouping
   - Office XML extraction retains explicit line, paragraph, and table-cell
     boundaries, preventing the next checklist cell from invalidating a wrapped

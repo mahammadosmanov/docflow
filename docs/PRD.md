@@ -21,7 +21,10 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 - **DF-007 — Read-only archives:** signed-page source scans and the selected RFI
   archive are never modified; results are created beneath a separate review root.
 - **DF-008 — Strict print order:** jobs execute serially in approved order;
-  post-submission uncertainty is never retried automatically.
+  post-submission uncertainty is never retried automatically. Transient generic
+  driver faults remain under observation; destructive deletion is uncertain.
+  A native handler may be bound to its single new spool job without relying on
+  an application-controlled document title.
 - **DF-009 — Least authority:** React has no arbitrary filesystem, process,
   network, credential, Office, or printer authority. Rust owns every effect.
 - **DF-010 — Secret isolation:** access and refresh tokens stay in the native

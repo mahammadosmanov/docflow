@@ -46,8 +46,11 @@ pass from a macOS build or Windows cross-compile.
    Verify ordering, worksheets, ranges, A4/A3, orientation, duplex/color,
    cancellation, restart, and uncertain-job operator decisions. A job accepted
    without a final spool receipt must show sent-unconfirmed and advance without
-   Review remaining or duplicate output; explicit faults must still pause. Never
-   auto-retry uncertainty.
+   Review remaining or duplicate output. Exercise a native-handler title that
+   differs from its filename and confirm a unique new spool job is followed.
+   Simulate transient generic error/paper-out followed by completion and confirm
+   the same job continues without resubmission; deleting/deleted must still
+   pause. Never auto-retry uncertainty.
 8. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
    MSG, EML with several RFIs, unmatched input, and a destination collision.
    Confirm source hashes do not change, multi-RFI mail fans out correctly,

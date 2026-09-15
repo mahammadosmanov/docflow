@@ -218,8 +218,9 @@ the capability boundary.
 
 Windows controlled printing considers a successful `EndDoc` followed by normal
 spool-record disappearance a completed handoff because many physical drivers
-purge completed entries before the first poll. Explicit terminal fault bits are
-still uncertain and non-retryable. Recoverable printer states keep polling within
+purge completed entries before the first poll. Deleting/deleted states are
+uncertain and non-retryable; generic driver error, paper-out, offline, blocked,
+and user-intervention states keep polling within
 the approved timeout, and transient observation failures receive only a bounded
 read retry, never another print submission. Batch Print's remembered scalar
 values are opt-in at the UI; selected files never enter remembered settings.
@@ -228,13 +229,17 @@ For native file-association handlers, successful `ShellExecute` is the last
 available submission boundary when the application or driver never exposes a
 uniquely identifiable spool record. That job becomes `completed_unconfirmed`:
 the accepted submission and warning are journaled, no retry is permitted, and
-the serial queue advances. Explicit spool faults and uncertain cancellation do
+the serial queue advances. Destructive spool deletion and uncertain cancellation do
 not use this path and still pause for operator review.
+The handler's spool job is matched by title when possible; if it substitutes an
+application title, exactly one new post-submission job ID is accepted. Multiple
+unmatched new jobs remain ambiguous. Queue enumeration receives the same bounded
+observation grace used by job reads.
 
 The same completed-handoff rule applies when a fast-purging driver releases the
 job between `GetJob`'s size probe and buffered read. Buffer-growth races retry
 the read without resubmission; post-acceptance printer-open, enumeration, or
-read loss is completed-unconfirmed, while an observed status fault remains uncertain.
+read loss is completed-unconfirmed, while observed deletion remains uncertain.
 
 The explicit compatibility exception is credential storage: legacy plaintext
 tokens are imported once into the OS credential store and removed after verified

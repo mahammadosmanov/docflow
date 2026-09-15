@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(any(target_os = "windows", test))]
+use std::collections::HashSet;
+
 use crate::{outlook_reply_draft::OutlookAdapter, print_queue::PrintAdapter};
 
 #[cfg(not(target_os = "windows"))]
@@ -141,14 +144,12 @@ pub(crate) fn windows_post_submission_cancellation(
 pub(crate) const fn classify_windows_submitted_job_status(
     status: u32,
 ) -> WindowsSubmittedJobStatus {
-    // JOB_STATUS_* is a stable Win32 bitmask. Once submission has occurred,
-    // explicit error/deletion states do not prove that paper was not produced.
-    // Offline, paper-out, blocked, and user-intervention are recoverable queue
-    // states: the driver can report them transiently while the device wakes or
-    // refreshes consumable state, so observation waits until the approved
-    // timeout instead of stopping the queue immediately.
-    const UNCERTAIN: u32 = 0x0000_0002 // ERROR
-        | 0x0000_0004 // DELETING
+    // JOB_STATUS_* is a stable Win32 bitmask. Generic error, offline, paper-out,
+    // blocked, and user-intervention states can be transient or stale while the
+    // device wakes or refreshes consumable state, so observation waits until
+    // release, completion, cancellation, or timeout. Only destructive deletion
+    // states make the already-submitted outcome immediately uncertain.
+    const UNCERTAIN: u32 = 0x0000_0004 // DELETING
         | 0x0000_0100; // DELETED
     const COMPLETE: u32 = 0x0000_0080 // PRINTED
         | 0x0000_1000; // COMPLETE
@@ -159,6 +160,34 @@ pub(crate) const fn classify_windows_submitted_job_status(
         WindowsSubmittedJobStatus::Complete
     } else {
         WindowsSubmittedJobStatus::Pending
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn select_windows_submitted_job(
+    known_ids: &HashSet<u32>,
+    candidates: &[(u32, String)],
+    expected_title: &str,
+) -> Option<u32> {
+    let fresh = candidates
+        .iter()
+        .filter(|(id, _)| !known_ids.contains(id))
+        .collect::<Vec<_>>();
+    let expected_title = expected_title.to_ascii_lowercase();
+    let named = fresh
+        .iter()
+        .filter(|(_, document)| {
+            let document = document.to_ascii_lowercase();
+            !document.is_empty()
+                && (document.contains(&expected_title) || expected_title.contains(&document))
+        })
+        .collect::<Vec<_>>();
+    if named.len() == 1 {
+        Some(named[0].0)
+    } else if named.is_empty() && fresh.len() == 1 {
+        Some(fresh[0].0)
+    } else {
+        None
     }
 }
 
@@ -384,17 +413,22 @@ mod tests {
     }
 
     #[test]
-    fn submitted_windows_terminal_fault_statuses_are_uncertain() {
-        for status in [0x0000_0002, 0x0000_0004, 0x0000_0100] {
+    fn submitted_windows_destructive_terminal_statuses_are_uncertain() {
+        for status in [0x0000_0004, 0x0000_0100] {
             assert_eq!(
                 classify_windows_submitted_job_status(status),
                 WindowsSubmittedJobStatus::Uncertain
             );
         }
         assert_eq!(
+            classify_windows_submitted_job_status(0x0000_0002),
+            WindowsSubmittedJobStatus::Pending,
+            "a transient generic driver error must be observed until release or timeout"
+        );
+        assert_eq!(
             classify_windows_submitted_job_status(0x0000_0002 | 0x0000_1000),
-            WindowsSubmittedJobStatus::Uncertain,
-            "a fault bit must win over a simultaneous completion bit"
+            WindowsSubmittedJobStatus::Complete,
+            "an explicit completion bit must win over a stale generic driver error"
         );
         assert_eq!(
             classify_windows_submitted_job_status(0x0000_0080),
@@ -403,6 +437,44 @@ mod tests {
         assert_eq!(
             classify_windows_submitted_job_status(0x0000_0010),
             WindowsSubmittedJobStatus::Pending
+        );
+    }
+
+    #[test]
+    fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_jobs() {
+        let known = std::collections::HashSet::from([7, 8]);
+        assert_eq!(
+            select_windows_submitted_job(
+                &known,
+                &[(7, "older".to_string()), (9, "Microsoft Word".to_string())],
+                "report.docx",
+            ),
+            Some(9),
+            "a native handler may replace the filename with an application title"
+        );
+        assert_eq!(
+            select_windows_submitted_job(
+                &known,
+                &[
+                    (9, "Microsoft Word".to_string()),
+                    (10, "unrelated".to_string()),
+                ],
+                "report.docx",
+            ),
+            None,
+            "multiple unnamed new jobs are ambiguous"
+        );
+        assert_eq!(
+            select_windows_submitted_job(
+                &known,
+                &[
+                    (9, "report.docx".to_string()),
+                    (10, "unrelated".to_string()),
+                ],
+                "report.docx",
+            ),
+            Some(9),
+            "one exact title match remains authoritative among concurrent jobs"
         );
     }
 
@@ -433,7 +505,7 @@ mod tests {
         );
         assert_eq!(
             classify_windows_submitted_job_observation(Some(0x0000_0002)),
-            WindowsSubmittedJobStatus::Uncertain
+            WindowsSubmittedJobStatus::Pending
         );
         assert_eq!(
             classify_windows_job_query_error(2),

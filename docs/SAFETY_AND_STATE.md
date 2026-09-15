@@ -59,16 +59,20 @@ record means the driver released the spool entry and is treated as a completed
 handoff. When `ShellExecute` accepts a native Office/PDF/image print request but
 the driver never exposes an identifiable job record, DocFlow records the item as
 `completed_unconfirmed`, journals the accepted submission, does not retry it,
-and continues the queue. Explicit error/deleting/deleted states and uncertain
-cancellation remain uncertain and pause. Offline,
-paper-out, blocked, and user-intervention states remain observable and wait
+and continues the queue. Deleting/deleted states and uncertain cancellation
+remain uncertain and pause. Generic error, offline, paper-out, blocked, and
+user-intervention states remain observable and wait
 until cancellation, recovery, completion, or the approved timeout; they do not
-fail the queue on the first poll. A transient status-read failure is retried for
+fail the queue on the first poll. A simultaneous completion bit wins over a
+stale generic error bit. A transient status-read failure is retried for
 a fixed three-second observation grace, never as a second print submission.
 Release between the `GetJob` size probe and buffered read is also completion,
 not an observation failure; a changing buffer is reread without resubmission.
 No software-only state certifies that paper physically exited the printer; the
 completed-unconfirmed warning is retained for the final operator check.
+Native handlers are matched first by document title and then, only when unique,
+by the single new job ID created after submission. Multiple unmatched new jobs
+remain ambiguous rather than being attached to the wrong file.
 
 Batch Print file selections are task-local and are never stored as remembered
 parameters. Safe scalar settings are captured at Preview but a new visit starts

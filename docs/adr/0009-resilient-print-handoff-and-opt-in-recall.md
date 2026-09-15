@@ -66,6 +66,19 @@ the long-lived reusable-procedure mechanism.
   or authorize an old queue.
 - EPSON L15160 behavior still requires native Windows operator acceptance.
 
+## 2026-09-15 amendment
+
+Native handlers do not always preserve the source filename as the spool document
+title. DocFlow therefore accepts the single new post-submission job ID when no
+title match exists, but refuses an ambiguous set. Transient queue enumeration
+gets the existing three-second observation grace.
+
+EPSON can also expose a transient or stale generic `JOB_STATUS_ERROR`, including
+beside `COMPLETE`, after paper was produced. Generic error now remains pending
+until release, explicit completion, cancellation, or timeout; `DELETING` and
+`DELETED` remain immediately uncertain. This changes observation only and never
+resubmits a job.
+
 ## Rollback
 
 Reinstall the previous immutable release to restore application behavior. Saved

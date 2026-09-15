@@ -51,7 +51,7 @@ use crate::platform::excel::{ControlledPdfSubmitter, ExportedWorksheetPdf};
 use crate::platform::{
     WindowsJobQueryError, WindowsPostSubmissionObservation, WindowsSubmittedJobStatus,
     classify_windows_job_query_error, classify_windows_submitted_job_observation,
-    consume_controlled_page_bytes, map_controlled_print_failure,
+    consume_controlled_page_bytes, map_controlled_print_failure, select_windows_submitted_job,
     validate_windows_image_frame_count, windows_post_submission_cancellation,
     windows_post_submission_failure, windows_post_submission_observation_error,
 };
@@ -1271,6 +1271,7 @@ fn print_with_native_application(
     }
     let acquisition_deadline = std::cmp::min(Instant::now() + HANDLER_JOB_TIMEOUT, deadline);
     let title = display_name(&job.path).to_ascii_lowercase();
+    let mut enumeration_error_since = None;
     let job_id = loop {
         if cancelled() {
             return Err(PrintFailure::cancelled(
@@ -1278,18 +1279,28 @@ fn print_with_native_application(
                 true,
             ));
         }
-        let jobs = jobs(&job.printer).map_err(|_| {
-            windows_post_submission_observation_error(
-                WindowsPostSubmissionObservation::JobEnumeration,
-            )
-        })?;
-        if let Some(job) = jobs.into_iter().find(|candidate| {
-            !known_jobs.contains(&candidate.id)
-                && !candidate.document.is_empty()
-                && (candidate.document.to_ascii_lowercase().contains(&title)
-                    || title.contains(&candidate.document.to_ascii_lowercase()))
-        }) {
-            break job.id;
+        let observed = match jobs(&job.printer) {
+            Ok(observed) => {
+                enumeration_error_since = None;
+                observed
+            }
+            Err(_) => {
+                let first_error = enumeration_error_since.get_or_insert_with(Instant::now);
+                if first_error.elapsed() >= OBSERVATION_ERROR_GRACE {
+                    return Err(windows_post_submission_observation_error(
+                        WindowsPostSubmissionObservation::JobEnumeration,
+                    ));
+                }
+                thread::sleep(POLL_INTERVAL);
+                continue;
+            }
+        };
+        let candidates = observed
+            .into_iter()
+            .map(|candidate| (candidate.id, candidate.document))
+            .collect::<Vec<_>>();
+        if let Some(job_id) = select_windows_submitted_job(&known_jobs, &candidates, &title) {
+            break job_id;
         }
         if Instant::now() >= acquisition_deadline {
             return Err(PrintFailure::submitted_unconfirmed(

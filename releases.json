@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.0.1",
+  "currentVersion": "1.0.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -510,9 +510,17 @@
       "version": "1.0.1",
       "date": "2026-09-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.0.1",
       "summary": "Preserve Word paragraph, line, and table-cell boundaries so wrapped checklist RFI identifiers remain detectable without joining adjacent fields."
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-09-15",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.0.2",
+      "summary": "Keep transient EPSON driver errors under observation and correlate native handlers to a unique new spool job without duplicate submission."
     }
   ]
 }

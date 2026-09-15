@@ -8,6 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.0.2 - 2026-09-15
+
+### Fixed
+
+- EPSON and similar Windows drivers may report a transient generic error or a
+  stale error beside completion. Batch Print now keeps observing the same job
+  until completion, release, cancellation, or timeout instead of stopping
+  immediately; destructive deletion states still pause and no uncertain job is
+  automatically submitted twice.
+- Word, PowerPoint, and other native print handlers are now correlated to the
+  single new spool job even when the handler replaces the filename with an
+  application-generated title. Transient queue-enumeration failures receive the
+  existing bounded observation grace before the result becomes unconfirmed.
+
 ## 1.0.1 - 2026-09-15
 
 ### Fixed
