@@ -15,6 +15,7 @@ Signed-page Preview reports stable progress phases: `signed_discovery`,
 the final returned Plan remains the sole Apply authority.
 
 Other stable Preview phases cover scan discovery/OCR/planning, workbook reading
+and RFI-file grouping discovery/analysis/planning,
 and RFI planning, Follow Up analysis, RFI System discovery/signature/workbook/
 mapping stages, PDF-orientation discovery/analysis, printer checks/file
 inspection, work-item validation/audit preparation, Outlook selection, and

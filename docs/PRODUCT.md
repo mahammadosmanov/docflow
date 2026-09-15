@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **0.27.0**. `VERSION` is authoritative.
+Current product version: **0.28.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -48,6 +48,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
 16. Independent bulk discovery and analysis use bounded multi-core workers;
     every operation reports localized stages and item progress while all effects
     that can collide or become uncertain remain ordered.
+17. Incoming top-level files can be grouped by exact RFI identity from filenames
+    or bounded content inspection; multi-RFI mail is copied to every matching
+    folder while source files remain untouched.
 
 ## Current capabilities
 
@@ -55,6 +58,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 |---|---|---|
 | RFI work tracking | Resume multi-day RFI work, launch verified next steps, and export a portable audit in CSV and JSON | Owner-scoped append-only events; exact committed journal evidence; previewed no-clobber export; store capacity visibility; stale or conflicting evidence fails into review; official documents remain authoritative |
 | Process Scans | Identify, rename, organize, and review RFI PDFs | Strict `-RFI-` anchor, no-overwrite, `_review/` fallback |
+| RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into exact per-RFI folders | Top-level source is read-only; exact ASCII identifiers only; multi-RFI fan-out is previewed; collisions do not overwrite; unmatched/unreadable files go to `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |

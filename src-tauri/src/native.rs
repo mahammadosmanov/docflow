@@ -29,6 +29,7 @@ use crate::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
     operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
+    operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
     operations::stage_signed_pages::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
         revise as revise_stage_signed_pages,
@@ -950,6 +951,63 @@ impl NativeBackend {
         )?)
     }
 
+    pub(crate) fn preview_rfi_file_group<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<RfiFileGroupValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != rfi_file_group::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI file-group backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let provisional = self.filesystem.issue_provisional_grants(
+            &scope,
+            &[
+                (request.values.source.clone(), GrantAccess::Read),
+                (request.values.destination.clone(), GrantAccess::ReadWrite),
+            ],
+        )?;
+        let plan = preview_rfi_file_group(
+            &GroupRfiFilesParams {
+                source: request.values.source,
+                destination: request.values.destination,
+            },
+            &NativeOcr::discover(),
+            progress,
+            || false,
+        )?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                &request.op_id,
+                grant_ids,
+            ),
+            plan,
+        )?;
+        provisional.commit();
+        encode(cached)
+    }
+
     pub(crate) fn preview_rfi_log<F>(
         &self,
         params: Value,
@@ -1476,6 +1534,7 @@ impl NativeBackend {
         let payload = json!({"rows": request.rows});
         let revised = match claimed.plan.op_id.as_str() {
             "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
+            rfi_file_group::OPERATION_ID => rfi_file_group::revise(&claimed.plan, &payload)?,
             rfi_system_sync::OPERATION_ID => rfi_system_sync::revise(
                 &claimed.plan,
                 payload["rows"]
@@ -2002,6 +2061,13 @@ struct ProcessScansValues {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct RfiFileGroupValues {
+    source: PathBuf,
+    destination: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RfiFollowUpPreviewValues {
     #[serde(rename = "rfi_log_workbook")]
     rfi_log_workbook: PathBuf,
@@ -2471,6 +2537,65 @@ mod tests {
             .unwrap()
             .expect("export should be undoable");
         assert_eq!(fs::read_dir(&export_root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn rfi_file_group_apply_copies_without_touching_source_and_undoes_created_output() {
+        let _guard = WORK_ITEM_TEST_LOCK.lock().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let source = temporary.path().join("incoming");
+        let destination = temporary.path().join("grouped");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&destination).unwrap();
+        let source_file = source.join("AZE-SUN-INT-QMS-RFI-CIV-1263.pdf");
+        fs::write(&source_file, b"source stays unchanged").unwrap();
+        let source_selection = backend
+            .register_selected_paths(rfi_file_group::OPERATION_ID, "source", vec![source.clone()])
+            .unwrap()
+            .remove(0);
+        let destination_selection = backend
+            .register_selected_paths(
+                rfi_file_group::OPERATION_ID,
+                "destination",
+                vec![destination.clone()],
+            )
+            .unwrap()
+            .remove(0);
+
+        let plan = backend
+            .preview_rfi_file_group(
+                json!({
+                    "opId": rfi_file_group::OPERATION_ID,
+                    "values": {
+                        "source": source_selection,
+                        "destination": destination_selection
+                    }
+                }),
+                |_| {},
+            )
+            .unwrap();
+        let (result, operation_id) = backend
+            .apply_native_plan(
+                plan["planId"].as_str().unwrap(),
+                Some(rfi_file_group::OPERATION_ID),
+                |_| {},
+            )
+            .unwrap();
+        assert_eq!(operation_id, rfi_file_group::OPERATION_ID);
+        let copied = destination
+            .join("AZE-SUN-INT-QMS-RFI-CIV-1263")
+            .join(source_file.file_name().unwrap());
+        assert_eq!(fs::read(&source_file).unwrap(), b"source stays unchanged");
+        assert_eq!(fs::read(&copied).unwrap(), b"source stays unchanged");
+
+        backend
+            .try_native_undo(&json!({"journalId": result["journalId"]}))
+            .unwrap()
+            .expect("RFI file grouping should be undoable");
+        assert!(source_file.exists());
+        assert!(!copied.exists());
+        assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-1263").exists());
     }
 
     #[test]

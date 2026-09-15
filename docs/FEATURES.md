@@ -7,6 +7,7 @@
 | `rfi.work_item_update` | Create or transition a resumable append-only RFI work item |
 | `rfi.work_item_export` | Export owner-scoped work history to no-clobber JSON and Excel-safe CSV |
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
+| `rfi.group_files` | Detect exact RFIs in top-level filenames and file content, then copy each file into every matching RFI folder |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
@@ -42,6 +43,7 @@
 - Read-only device readiness and copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
+  RFI file-name/content grouping,
   recursive signed-input and archive discovery, PDF orientation discovery and
   page analysis, RFI System discovery/signature detection, and large RFI work
   event reads; state-changing effects remain ordered and journaled.

@@ -28,6 +28,21 @@ identity or secrets.
 
 ## Scans and signed pages
 
+### Incoming file grouping
+
+- `rfi.group_files` inspects only regular, non-hidden files immediately inside
+  the selected incoming folder. Existing subfolders are ignored and untouched.
+- A canonical filename match is sufficient for ordinary files. EML and MSG are
+  also inspected because one mail can belong to several RFIs. Files without a
+  filename match use bounded content inspection: Office package XML, raw UTF-8/
+  UTF-16 content, or every PDF page through the native OCR cascade.
+- A mail or document matched to several exact RFIs is copied once into each
+  selected canonical folder. Compact mail-name continuations such as
+  `...-1260_1261,1262` inherit only the already explicit discipline.
+- Source files are read-only. Preview proposes only no-clobber copies beneath a
+  separate destination. Unmatched or unreadable files are copied to `_review`;
+  symlinks, overlapping roots, unsafe identifiers, and occupied targets fail closed.
+
 - INTEC processing normally handles one complete RFI scan.
 - Worley processing may receive one PDF containing many signed first pages.
 - Every accepted page is linked to exactly one canonical RFI and exact page index.

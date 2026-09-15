@@ -4,6 +4,23 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.28.0 - 2026-09-15
+
+The safe multi-RFI file-grouping implementation passed Rust formatting, Clippy
+with all targets/features and warnings denied, Cargo check, 339 unit tests, and
+217 integration tests; two operator-workbook tests were intentionally ignored.
+Focused evidence covers canonical filename matches, content-only Office files,
+UTF-8 EML and UTF-16 MSG multi-RFI fan-out, ignored source subfolders, review
+copies for unmatched/unreadable files, strict rejection of decorated identifiers,
+separate-root enforcement, revise filtering, source-preserving Apply, journal,
+destination-collision handling, and Undo. All 23 Node tests and 53 React tests passed. Version, documentation,
+source, and dependency-license audits plus the production frontend build passed;
+the build retained its non-failing chunk-size advisory.
+
+These source tests do not establish native Windows, OneDrive, Outlook MSG/EML,
+WebView2, or live sync-lock acceptance. Windows cross-build evidence is recorded
+after the implementation commit is packaged.
+
 ## 0.27.0 - 2026-09-15
 
 Bounded parallel discovery and analysis plus operation-wide progress stages were

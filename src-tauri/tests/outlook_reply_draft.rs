@@ -407,6 +407,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.work_item_update",
             "rfi.work_item_export",
             "rfi.process_scans",
+            "rfi.group_files",
             "rfi.log_add",
             "rfi.follow_up_sync",
             "rfi.outlook_reply_draft",
@@ -416,7 +417,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.system_sync",
         ]
     );
-    let outlook = &operations[5];
+    let outlook = &operations[6];
     assert_eq!(outlook.schema.params.len(), 1);
     assert_eq!(outlook.schema.params[0].name, "reply_text");
     assert_eq!(

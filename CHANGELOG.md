@@ -8,6 +8,29 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 0.28.0 - 2026-09-15
+
+### Added
+
+- Added `Group Files by RFI`: it scans top-level incoming files, detects exact
+  RFI identifiers from filenames or bounded PDF/Office/EML/MSG content, and
+  previews one copy into every related canonical RFI folder.
+- Multi-RFI mail is copied to each matching folder. Unmatched or unreadable
+  files are preserved and copied to destination `_review` for manual handling.
+- The compact generic Preview supports per-row, selected-group, and all-row
+  inclusion controls and shows detection method, source file, and confidence.
+
+### Safety and performance
+
+- Source files and existing source subfolders remain untouched; source and
+  destination must be separate, symbolic links fail closed, and existing
+  targets are never overwritten.
+- Independent file inspection uses the bounded multi-core Rust worker pool with
+  visible discovery, analysis, and planning stages. Apply and Undo remain
+  ordered, journaled, and deterministic.
+- Decorated, non-ASCII, extended, malformed, and ambiguous RFI identifiers are
+  rejected instead of being silently cleaned or persisted.
+
 ## 0.27.0 - 2026-09-15
 
 ### Added

@@ -136,7 +136,8 @@ overwrite a destination, update a workbook, or replace Plan hash/identity
 checks. Supabase remains metadata history only; large-system paths and cached
 document analysis are local-only.
 
-The same bounded analysis pool is used by native Process Scans OCR, combined
+The same bounded analysis pool is used by native Process Scans OCR, incoming
+RFI file name/content inspection, combined
 Worley page recognition, signed-input and archive discovery, RFI System
 discovery and first-page signature detection, PDF-orientation discovery and
 page analysis, and large RFI work-event reads. Completed indexed PDF analyses
@@ -149,6 +150,12 @@ Every registered operation emits localized progress phases through the existing
 Tauri channel. Long batch phases include bounded completed/total counters and a
 current file, folder, page, workbook, printer, or record subject when available.
 Progress is presentation evidence only and cannot change Plan authority.
+
+Incoming RFI file grouping is a native Rust operation. Discovery is top-level
+and deterministic; independent file inspection is bounded and parallel. The
+cached Plan contains the exact source/destination copies. Apply performs those
+copies serially through the shared filesystem authority and journal, so parallel
+analysis cannot create races or bypass no-clobber checks.
 
 ## Operation contract
 

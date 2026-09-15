@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, ten-operation registry, OCR,
+Confirm install, normal GUI launch, version, eleven-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -48,6 +48,11 @@ pass from a macOS build or Windows cross-compile.
    without a final spool receipt must show sent-unconfirmed and advance without
    Review remaining or duplicate output; explicit faults must still pause. Never
    auto-retry uncertainty.
+8. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
+   MSG, EML with several RFIs, unmatched input, and a destination collision.
+   Confirm source hashes do not change, multi-RFI mail fans out correctly,
+   `_review` receives exceptions, Undo removes only created copies/folders, and
+   an existing subfolder beneath the source is ignored.
 8. For PDF orientation, use synthetic copies containing upright, sideways,
    upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
    Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "0.27.0",
+  "currentVersion": "0.28.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -478,9 +478,17 @@
       "version": "0.27.0",
       "date": "2026-09-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v0.27.0",
       "summary": "Use bounded multi-core read-only analysis across large RFI workflows and show localized, item-level progress stages for every registered operation."
+    },
+    {
+      "version": "0.28.0",
+      "date": "2026-09-15",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v0.28.0",
+      "summary": "Group mixed incoming documents and multi-RFI mail into exact no-clobber RFI folders using bounded parallel content inspection and review-first handling."
     }
   ]
 }

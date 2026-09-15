@@ -136,6 +136,37 @@ const demoOperation: OperationDef = {
   ],
 };
 
+const demoFileGroupOperation: OperationDef = {
+  id: "rfi.group_files",
+  titleKey: "op.rfi.group_files.title",
+  descriptionKey: "op.rfi.group_files.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "source",
+      kind: "folder",
+      labelKey: "param.rfi.fileGroup.source",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.fileGroup.source.help",
+    },
+    {
+      name: "destination",
+      kind: "folder",
+      labelKey: "param.rfi.fileGroup.destination",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.fileGroup.destination.help",
+    },
+  ],
+};
+
 const demoWorkItemOperation: OperationDef = {
   id: "rfi.work_item_update",
   titleKey: "op.rfi.work_item_update.title",
@@ -712,6 +743,7 @@ export class MockBridge implements Bridge {
   private prefs: AppPrefs = { ...defaultPrefs };
   private params: Record<string, unknown> = {};
   private printPlan: Plan | null = null;
+  private fileGroupPlan: Plan | null = null;
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -738,6 +770,7 @@ export class MockBridge implements Bridge {
             demoWorkItemOperation,
             demoWorkItemExportOperation,
             demoOperation,
+            demoFileGroupOperation,
             demoRfiOperation,
             demoRfiFollowUpOperation,
             demoPrintOperation,
@@ -910,6 +943,75 @@ export class MockBridge implements Bridge {
               },
             ],
           } satisfies Plan;
+          break;
+        }
+        if (params.opId === "rfi.group_files") {
+          const source = mockPath(values.source, "/Incoming");
+          const destination = mockPath(values.destination, "/Grouped");
+          const rows = [
+            {
+              _rowId: "file-group-0-0",
+              enabled: true,
+              rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1260",
+              sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260 SKETCH.pdf",
+              method: "rfi.fileGroup.method.filename",
+              confidence: 1,
+            },
+            {
+              _rowId: "file-group-1-0",
+              enabled: true,
+              rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1261",
+              sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260_1261.eml",
+              method: "rfi.fileGroup.method.mail",
+              confidence: 1,
+            },
+          ];
+          const plan = {
+            planId: "demo-file-group-plan",
+            opId: "rfi.group_files",
+            warnings: [],
+            meta: {
+              sourceReadOnly: true,
+              workerCount: 4,
+              editor: {
+                kind: "recordTable",
+                layout: "compact",
+                titleKey: "rfi.fileGroup.editor.title",
+                rowCountKey: "rfi.fileGroup.editor.rowCount",
+                groupField: "rfiCode",
+                selectionGroupFields: ["rfiCode", "sourceFile"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                requiredFields: ["enabled"],
+                columns: [
+                  { key: "enabled", labelKey: "rfi.fileGroup.column.enabled", kind: "bool", width: 64 },
+                  { key: "rfiCode", labelKey: "rfi.fileGroup.column.rfiCode", kind: "readonly", width: 260, bulk: false },
+                  { key: "sourceFile", labelKey: "rfi.fileGroup.column.sourceFile", kind: "readonly", width: 300, bulk: false },
+                  { key: "method", labelKey: "rfi.fileGroup.column.method", kind: "readonly", display: "localizedKey", width: 120, bulk: false },
+                  { key: "confidence", labelKey: "ocr.confidence", kind: "readonly", display: "percent", width: 112, bulk: false },
+                ],
+                rows,
+              },
+            },
+            steps: rows.flatMap((row) => [
+              {
+                kind: "mkdir" as const,
+                src: null,
+                dst: `${destination}/${row.rfiCode}`,
+                noteKey: "note.rfi.fileGroup.folderCreated",
+                meta: { code: row.rfiCode },
+              },
+              {
+                kind: "copy" as const,
+                src: `${source}/${row.sourceFile}`,
+                dst: `${destination}/${row.rfiCode}/${row.sourceFile}`,
+                noteKey: "note.rfi.fileGroup.copy",
+                meta: { rowId: row._rowId, code: row.rfiCode },
+              },
+            ]),
+          } satisfies Plan;
+          this.fileGroupPlan = plan;
+          result = plan;
           break;
         }
         if (params.opId === "files.batch_print") {
@@ -1140,6 +1242,30 @@ export class MockBridge implements Bridge {
         break;
       }
       case "engine/revise": {
+        if (this.fileGroupPlan && params.planId === this.fileGroupPlan.planId) {
+          const rows = Array.isArray(params.rows)
+            ? params.rows.map((row) => ({ ...row }))
+            : [];
+          const editor = this.fileGroupPlan.meta.editor as Record<string, unknown>;
+          const enabledRows = rows.filter((row) => row.enabled !== false);
+          const revised = {
+            ...this.fileGroupPlan,
+            planId: "demo-file-group-plan-revised",
+            meta: {
+              ...this.fileGroupPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps: this.fileGroupPlan.steps.filter((step) => {
+              const rowId = String(step.meta.rowId ?? "");
+              if (rowId) return enabledRows.some((row) => row._rowId === rowId);
+              const code = String(step.meta.code ?? "");
+              return !code || enabledRows.some((row) => row.rfiCode === code);
+            }),
+          } satisfies Plan;
+          this.fileGroupPlan = revised;
+          result = revised;
+          break;
+        }
         if (!this.printPlan || params.planId !== this.printPlan.planId) {
           throw new Error("Unknown demo print plan");
         }

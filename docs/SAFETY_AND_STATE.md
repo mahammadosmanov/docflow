@@ -33,6 +33,12 @@ the operation created. Review delete is a recoverable move to app trash.
 
 ## Persistent local state
 
+Incoming RFI grouping never uses the incoming folder as output. Preview scans
+only its top-level regular files and pins exact copy targets beneath a separate
+destination. Apply reuses the cached Plan, copies serially without overwrite,
+and journals every created file and directory for guarded Undo. Unmatched or
+unreadable sources are preserved and copied to destination `_review`.
+
 | State | Default location | Contract |
 |---|---|---|
 | Settings | `~/.docflow/settings.json` | Atomic, schema-filtered, secrets removed |

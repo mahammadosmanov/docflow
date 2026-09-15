@@ -212,6 +212,36 @@
     "titleKey": "op.rfi.process_scans.title"
   },
   {
+    "descriptionKey": "op.rfi.group_files.desc",
+    "id": "rfi.group_files",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.fileGroup.source.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.fileGroup.source",
+        "name": "source",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.fileGroup.destination.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.fileGroup.destination",
+        "name": "destination",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.group_files.title"
+  },
+  {
     "descriptionKey": "op.rfi.log_add.desc",
     "id": "rfi.log_add",
     "schema": [

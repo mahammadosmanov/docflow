@@ -296,6 +296,33 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             ),
         ],
     );
+    let file_group = operation(
+        "rfi.group_files",
+        vec![
+            parameter(
+                "source",
+                ParamKind::Folder,
+                "param.rfi.fileGroup.source",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.fileGroup.source.help"),
+            ),
+            parameter(
+                "destination",
+                ParamKind::Folder,
+                "param.rfi.fileGroup.destination",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.fileGroup.destination.help"),
+            ),
+        ],
+    );
 
     let mut provider_visibility = Map::new();
     provider_visibility.insert("email_provider".to_string(), json!("gemini"));
@@ -705,6 +732,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         work_item,
         work_item_export,
         process_scans,
+        file_group,
         rfi_log,
         rfi_follow_up,
         outlook_reply_draft,
@@ -731,6 +759,7 @@ mod tests {
                 "rfi.work_item_update",
                 "rfi.work_item_export",
                 "rfi.process_scans",
+                "rfi.group_files",
                 "rfi.log_add",
                 "rfi.follow_up_sync",
                 "rfi.outlook_reply_draft",
@@ -740,7 +769,7 @@ mod tests {
                 "rfi.system_sync",
             ]
         );
-        let follow_up = &operations[4];
+        let follow_up = &operations[5];
         assert_eq!(
             follow_up.schema.validate(&Map::new()),
             vec![
@@ -748,7 +777,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[9];
+        let system_sync = &operations[10];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -758,7 +787,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            operations[5].schema.validate(&Map::new()),
+            operations[6].schema.validate(&Map::new()),
             vec!["error.param.required.reply_text".to_string()]
         );
 
@@ -782,7 +811,7 @@ mod tests {
             ]
         );
 
-        let rfi_log = &operations[3];
+        let rfi_log = &operations[4];
         let values = serde_json::from_value(json!({
             "workbook": "/tmp/RFI Log.xlsx",
             "email_provider": "offline",

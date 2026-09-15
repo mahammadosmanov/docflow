@@ -4,6 +4,20 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 0.28.0: safe multi-RFI incoming file grouping
+  - top-level files are matched from exact canonical filename/content evidence;
+    EML/MSG can fan out to several RFI folders and content-only Office/PDF files
+    are supported through bounded inspection
+  - source files and existing subfolders stay untouched; collisions never
+    overwrite and unmatched/unreadable files are staged under `_review`
+  - independent file inspection is bounded and multi-core; Apply and Undo use
+    the existing ordered filesystem journal
+  - macOS source verification passed: 339 Rust unit tests and 217 integration
+    tests with two operator-workbook tests intentionally ignored; 23 Node tests,
+    53 React tests, formatting, Clippy, Cargo check, frontend build, and all
+    repository/version/documentation/license audits passed
+  - native Windows/OneDrive/Outlook acceptance remains external
+
 - [x] Version 0.21.0: exact RFI Log to Follow Up projection
   - uniquely mapped CIV/MEC records update only existing CIV, MEC, PCU, and Road
     RFI/status pairs; absent sections and ambiguous routes fail closed
@@ -36,7 +50,7 @@ certification remain separate unchecked gates and are never implied by a source 
     production-document acceptance remain external gates and were not run here
 
 - [x] Version 0.19.0: machine-checked maintainer and AI onboarding canon
-  - ordered documentation now covers requirements, all ten operations, exact
+  - ordered documentation now covers requirements, the registered operations, exact
     RFI rules, mutation/recovery state, generic editors, traceability, known
     limitations, and Windows build/operator acceptance
   - active Tauri command authority is documented before the retained historical

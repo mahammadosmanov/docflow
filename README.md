@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 0.27.0 is a Tauri 2 desktop application for ten high-risk document
+DocFlow 0.28.0 is a Tauri 2 desktop application for ten high-risk document
 workflows:
 
 - Track RFI work: append-only lifecycle events with Today, Resume, and Needs
