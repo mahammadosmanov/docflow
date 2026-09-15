@@ -6,7 +6,7 @@ OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
 ## 0.28.0 - 2026-09-15
 
-The safe multi-RFI file-grouping implementation passed Rust formatting, Clippy
+The safe multi-RFI file-grouping implementation at commit `f3dec8d` passed Rust formatting, Clippy
 with all targets/features and warnings denied, Cargo check, 339 unit tests, and
 217 integration tests; two operator-workbook tests were intentionally ignored.
 Focused evidence covers canonical filename matches, content-only Office files,
@@ -17,9 +17,17 @@ destination-collision handling, and Undo. All 23 Node tests and 53 React tests p
 source, and dependency-license audits plus the production frontend build passed;
 the build retained its non-failing chunk-size advisory.
 
-These source tests do not establish native Windows, OneDrive, Outlook MSG/EML,
-WebView2, or live sync-lock acceptance. Windows cross-build evidence is recorded
-after the implementation commit is packaged.
+The Windows x64 cross-build completed from `f3dec8d`. The OCR-inclusive ZIP
+passed package audit, generated checksums verified, and both executable artifacts
+identify as Windows GUI-subsystem PE files. Cross-linking emitted only the known
+non-failing Microsoft PDB debug-information warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `787aa47d101f7a1e23d3776cd252c936a2dcd37b44ecada242bd9c1a29a7e693`;
+- portable EXE: `7dbbb900c4c04d2a6e199dacdbe09347331c41ef8b619d2ff8c20516278ea120`;
+- per-user installer: `e921a1eb501b84a885ba564bfe50194c266c6313c66a597d719ee4ca9909e38b`.
+
+Cross-build evidence does not establish native Windows, OneDrive, Outlook
+MSG/EML, WebView2, or live sync-lock acceptance; those gates were not run.
 
 ## 0.27.0 - 2026-09-15
 

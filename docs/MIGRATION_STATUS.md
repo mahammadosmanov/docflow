@@ -16,7 +16,9 @@ certification remain separate unchecked gates and are never implied by a source 
     tests with two operator-workbook tests intentionally ignored; 23 Node tests,
     53 React tests, formatting, Clippy, Cargo check, frontend build, and all
     repository/version/documentation/license audits passed
-  - native Windows/OneDrive/Outlook acceptance remains external
+  - Windows x64 cross-build, OCR-inclusive package audit, checksums, and GUI
+    subsystem checks passed from `f3dec8d`; native Windows/OneDrive/Outlook
+    acceptance remains external
 
 - [x] Version 0.21.0: exact RFI Log to Follow Up projection
   - uniquely mapped CIV/MEC records update only existing CIV, MEC, PCU, and Road
