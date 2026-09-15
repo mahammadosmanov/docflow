@@ -4,6 +4,32 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 0.28.1 - 2026-09-15
+
+The per-RFI email prerequisite and bounded wrapped-identifier fix at implementation
+commit `85928a6a70487534cdba9712df5b5d94437137c5` passed Rust formatting,
+Clippy with all targets/features and warnings denied, Cargo check, 339 unit tests,
+and 220 integration tests; two operator-workbook tests were intentionally ignored.
+Focused tests prove the screenshot form `AZE-SUN-INT-QMS-RFI-\nMEC-0765`, bounded
+line-wrap rejection, complete refusal when mail is absent, independent eligibility
+inside a multi-RFI file, source preservation, and journaled Apply/Undo with mail.
+All 23 Node tests and 53 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed; the build
+retained its non-failing chunk-size advisory.
+
+The Windows x64 cross-build completed from that implementation commit. The
+OCR-inclusive ZIP passed package audit, all generated checksums verified, and the
+portable and installer executables identify as Windows GUI-subsystem PE files.
+Cross-linking emitted only the known non-failing Microsoft PDB debug-information
+warnings. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `0defab62dfa142314a9d04fc8ab49eb6247c604dd959457c78aed6c67231e969`;
+- portable EXE: `ca1795071a847a71427a94f8dee639069c9572fa0b366328c7323e6e809ac8fd`;
+- per-user installer: `8838fdcf55cb1333dde8a53fb59ebc64f30fb2d842eb37df372b843590867189`.
+
+Cross-build evidence does not establish native Windows, OneDrive, Outlook
+MSG/EML, WebView2, or live sync-lock acceptance; those gates were not run.
+
 ## 0.28.0 - 2026-09-15
 
 The safe multi-RFI file-grouping implementation at commit `f3dec8d` passed Rust formatting, Clippy

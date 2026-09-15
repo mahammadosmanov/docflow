@@ -11,6 +11,13 @@ certification remain separate unchecked gates and are never implied by a source 
     hyphens are recognized without relaxing persisted identifier validation
   - source files remain read-only and missing mail produces an actionable,
     bounded warning instead of partial output
+  - macOS source verification passed: 339 Rust unit tests and 220 integration
+    tests with two operator-workbook tests intentionally ignored; 23 Node tests,
+    53 React tests, formatting, Clippy, Cargo check, frontend build, and all
+    repository/version/documentation/license audits passed
+  - Windows x64 cross-build, OCR-inclusive package audit, checksums, and GUI
+    subsystem checks passed from `85928a6`; native Windows/OneDrive/Outlook
+    acceptance remains external
 
 - [x] Version 0.28.0: safe multi-RFI incoming file grouping
   - top-level files are matched from exact canonical filename/content evidence;
