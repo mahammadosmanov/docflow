@@ -6,7 +6,7 @@ Updated: 2026-09-16
 
 - Version: 1.2.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending release commit
+- Implementation commit: `e116c50`
 - Objective: safely publish one selected RFI System source to two targets, with
   retained backups, guarded Undo, optional unattended operation, and Windows startup.
 
