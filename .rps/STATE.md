@@ -6,7 +6,7 @@ Updated: 2026-09-16
 
 - Version: 1.1.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending
+- Implementation commit: `37bb37cfc64e3bdc63ddf2b28faeae4e5993b138`
 - Objective: recursively discover exact completed RFI PDFs and safely preview
   and apply their `Completed` status to the RFI Log.
 
@@ -16,7 +16,8 @@ Updated: 2026-09-16
   evidence grouping, guarded workbook changes, selection revision, Apply, and
   Undo pass the local test suite.
 - Rust, Node, React, frontend, version, documentation, source, and license checks
-  pass. Windows package evidence is pending the release build.
+  pass. Windows x64 cross-build, package audit, archive integrity, checksums, and
+  GUI-subsystem checks also pass as recorded in `docs/VERIFICATION.md`.
 
 ## External gate
 

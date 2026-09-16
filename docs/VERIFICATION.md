@@ -4,6 +4,41 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.1.0 - 2026-09-16
+
+Completion Status Sync at implementation commit
+`37bb37cfc64e3bdc63ddf2b28faeae4e5993b138` passed Rust formatting, Clippy
+with all targets/features and warnings denied, Cargo check, 336 unit tests, and
+210 integration tests; three operator-workbook tests were intentionally ignored
+in the complete suite. The new evidence covers recursive exact-name discovery,
+numeric-tail rejection, guarded blank/Ongoing-to-Completed changes, terminal and
+formula refusal, selection revision, unrelated-formula preservation, Apply,
+journal, and Undo. The completion operator test was also run explicitly against
+the available prior RFI Log copy and passed. The latest removable-volume copy
+was not readable during this session and was not claimed as verified.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed; the build
+retained its non-failing chunk-size advisory.
+
+The Windows x64 cross-build completed from that implementation commit. The
+OCR-inclusive ZIP passed package audit and archive integrity checks, all
+generated checksums verified, and both executable artifacts identify as Windows
+GUI-subsystem PE files. Cross-linking emitted only the known non-failing
+Microsoft PDB debug-information warnings. The macOS 27 host hit Rust's proc-macro
+LINKEDIT alignment defect; the documented macOS 11 deployment-target workaround
+was applied only to the build environment/configuration and the repository
+configuration was restored before evidence was committed. Artifact SHA-256
+values:
+
+- portable-with-OCR ZIP: `49ed1b8397cd65f17deb0b6a4ad5352b7832bc7eb2c546050dd2fc46e64ba4af`;
+- portable EXE: `0cf92efa0793bddbae418a4c2ca04524133e6816f64aee9bdeda3c8036669f4b`;
+- per-user installer: `3ad34760d8df6a390931dfe2f635792ef52bb44e0cba5bbd2eeea78ac75035c7`.
+
+Cross-build evidence does not establish native Windows, WebView2, OneDrive,
+Excel repair-free open/recalculate/save, real-system traversal, locking,
+performance, or operator acceptance; those gates were not run.
+
 ## 1.0.2 - 2026-09-15
 
 The Windows spool-observation fix at implementation commit

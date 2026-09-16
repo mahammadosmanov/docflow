@@ -13,6 +13,13 @@ certification remain separate unchecked gates and are never implied by a source 
   - Apply reuses workbook fingerprint, no-clobber backup, closed OOXML-delta,
     journal, and Undo controls without touching the source tree, Follow Up, or
     Worley data
+  - macOS source verification passed: 336 Rust unit tests and 210 integration
+    tests with three operator-workbook tests intentionally ignored; 23 Node
+    tests, 52 React tests, formatting, Clippy, Cargo check, frontend build, and
+    all repository/version/documentation/license audits passed
+  - Windows x64 cross-build, OCR-inclusive package audit, archive integrity,
+    checksums, and GUI-subsystem checks passed from `37bb37c`; native Windows,
+    Excel, OneDrive, current-workbook, and operator acceptance remain external
 
 - [x] Version 1.0.2: resilient EPSON status and native-handler spool correlation
   - transient/stale generic driver errors remain under observation and explicit
