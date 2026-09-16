@@ -20,6 +20,7 @@ import type {
   Plan,
   ProgressEvent,
   RecoveryPayload,
+  ReplicaAutomationStatus,
   ReviewItem,
   SupportBundlePreview,
 } from "../types";
@@ -348,6 +349,85 @@ const demoRfiCompleteStatusOperation: OperationDef = {
   ],
 };
 
+const demoReplicaPublishOperation: OperationDef = {
+  id: "files.replica_publish",
+  titleKey: "op.files.replica_publish.title",
+  descriptionKey: "op.files.replica_publish.desc",
+  supportsPresets: false,
+  schema: [
+    ...(["a", "b", "c"] as const).map((suffix) => ({
+      name: `root_${suffix}`,
+      kind: "folder" as const,
+      labelKey: `param.replica.root${suffix.toUpperCase()}`,
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: `param.replica.root${suffix.toUpperCase()}.help`,
+    })),
+    {
+      name: "source_root",
+      kind: "choice",
+      labelKey: "param.replica.sourceRoot",
+      default: "a",
+      required: true,
+      choices: ["a", "b", "c"],
+      choiceLabels: {
+        a: "choice.replica.source.a",
+        b: "choice.replica.source.b",
+        c: "choice.replica.source.c",
+      },
+      visibleWhen: {},
+      helpKey: "param.replica.sourceRoot.help",
+    },
+    {
+      name: "backup_root",
+      kind: "folder",
+      labelKey: "param.replica.backupRoot",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.replica.backupRoot.help",
+    },
+    {
+      name: "root_files",
+      kind: "text",
+      labelKey: "param.replica.rootFiles",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.replica.rootFiles.help",
+    },
+    {
+      name: "unattended",
+      kind: "bool",
+      labelKey: "param.replica.unattended",
+      default: false,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.replica.unattended.help",
+    },
+    {
+      name: "interval_minutes",
+      kind: "int",
+      labelKey: "param.replica.intervalMinutes",
+      default: 15,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.replica.intervalMinutes.help",
+    },
+  ],
+};
+
 const demoPrintOperation: OperationDef = {
   id: "files.batch_print",
   titleKey: "op.files.batch_print.title",
@@ -610,6 +690,8 @@ const defaultPrefs: AppPrefs = {
   font: "system",
   fontScale: 1,
   compact: false,
+  startWithWindows: false,
+  replicaSyncEnabled: false,
 };
 
 function mockPath(value: unknown, fallback: string): string {
@@ -661,6 +743,7 @@ export class MockBridge implements Bridge {
             demoPdfOrientationOperation,
             demoRfiSystemSyncOperation,
             demoRfiCompleteStatusOperation,
+            demoReplicaPublishOperation,
           ],
         } satisfies Bootstrap;
         break;
@@ -715,6 +798,15 @@ export class MockBridge implements Bridge {
       case "settings/reset":
         this.prefs = { ...defaultPrefs };
         result = this.prefs;
+        break;
+      case "settings/replicaStatus":
+        result = {
+          enabled: this.prefs.replicaSyncEnabled,
+          configured: false,
+          status: "idle",
+          lastSuccessUnix: null,
+          lastErrorCode: null,
+        } satisfies ReplicaAutomationStatus;
         break;
       case "settings/params":
         result = this.params;

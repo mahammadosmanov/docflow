@@ -18,7 +18,12 @@ Other stable Preview phases cover scan discovery/OCR/planning, workbook reading
 and RFI-file grouping discovery/analysis/planning,
 and RFI planning, Follow Up analysis, RFI System discovery/signature/workbook/
 mapping stages, PDF-orientation discovery/analysis, printer checks/file
-inspection, Outlook selection, and
+inspection, Outlook selection, and replica discovery/source-hash/target-hash
+stages. An unattended replica tick uses the same internal Plan and Apply
+contracts without accepting client-authored steps. The webview can only enable
+or pause the already approved stored profile through Settings. Windows startup
+is likewise a bounded boolean preference, not arbitrary command execution. Other
+operations end at
 `preview_ready`. Apply remains ordered and reports approved-step progress.
 
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,

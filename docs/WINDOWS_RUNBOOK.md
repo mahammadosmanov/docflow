@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, ten-operation registry, OCR,
+Confirm install, normal GUI launch, version, eleven-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -85,6 +85,17 @@ pass from a macOS build or Windows cross-compile.
     affected source PDF once beneath `_review` with its input subfolder layout,
     never overwrite an existing Review file, and reject a source changed after
     Preview.
+13. For replica publication, use three isolated roots and a fourth backup root.
+    Put CIV/MEC/ELE/PRC beneath each root, then exercise missing, identical,
+    changed, target-only, locked, unstable, long-path, offline, and reconnect
+    cases. Confirm changed targets are backed up and hash-verified before atomic
+    replacement; target-only files are never deleted; failure stops later effects;
+    Undo restores only unchanged published targets; backups remain after Undo.
+    Enable unattended mode with one explicit Apply, restart DocFlow, and confirm
+    later due runs need no click but pause after an injected failure. Disable and
+    re-enable the profile in Settings. Enable Windows startup, sign out/in, confirm
+    the GUI starts without a console window, then disable it and confirm
+    the per-user startup entry is removed.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

@@ -49,6 +49,7 @@ export interface Step {
     | "print"
     | "pdf_first_page_replace"
     | "pdf_page_rotate"
+    | "replica_publish"
     | "cleanup_temp"
     | "outlook_reply_draft";
   src: string | null;
@@ -81,6 +82,21 @@ export interface OperationResult {
   errors: Warning[];
   meta?: Record<string, unknown>;
   cloudSynced?: boolean;
+}
+
+export interface ReplicaAutomationStatus {
+  enabled: boolean;
+  configured: boolean;
+  status:
+    | "unconfigured"
+    | "disabled"
+    | "idle"
+    | "running"
+    | "waitingForSignIn"
+    | "deferred"
+    | "paused";
+  lastSuccessUnix: number | null;
+  lastErrorCode: string | null;
 }
 
 export interface PrintQueueSummary {
@@ -124,6 +140,8 @@ export interface AppPrefs {
   font: FontPreference;
   fontScale: number;
   compact: boolean;
+  startWithWindows: boolean;
+  replicaSyncEnabled: boolean;
 }
 
 export interface Bootstrap {

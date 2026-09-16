@@ -11,6 +11,7 @@ import type {
   PrintQueueSummary,
   ProgressEventHandler,
   RecoveryPayload,
+  ReplicaAutomationStatus,
   ReviewDecision,
   ReviewItem,
   SupportBundlePreview,
@@ -45,6 +46,7 @@ export interface FrontendCommandMap {
   >;
   "settings/update": CommandSpec<Partial<AppPrefs>, AppPrefs>;
   "settings/reset": CommandSpec<NoParams, AppPrefs>;
+  "settings/replicaStatus": CommandSpec<NoParams, ReplicaAutomationStatus>;
   "settings/params": CommandSpec<
     { opId: string },
     Record<string, unknown>
@@ -130,6 +132,7 @@ export const FRONTEND_METHODS = [
   "auth/setFlags",
   "settings/update",
   "settings/reset",
+  "settings/replicaStatus",
   "settings/params",
   "settings/saveParams",
   "settings/presets",

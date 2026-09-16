@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.1.0 reliability and Windows certification
+## Now — 1.2.0 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -20,6 +20,8 @@ the historical tracker.
   including interruption, resume, file drift, and one-run forced rescans.
 - Certify recursive exact completed-PDF discovery and guarded RFI Log status
   Apply/Undo on the current Windows/OneDrive/Excel environment.
+- Certify one-way replica publication, retained backups, Undo, unattended pause,
+  and per-user startup on the real Windows/OneDrive/GlobalProtect paths.
 
 ## Next — deeper RFI automation
 
@@ -31,16 +33,6 @@ the historical tracker.
   covered by large combined-scan usability checks.
 - Prepare consistent Outlook drafts and archive reviewed publication mail as EML
   without automatically sending it.
-
-## Then — controlled system synchronization
-
-- Compare the original, local, and INTEC/OneDrive RFI systems using hashes and
-  explicit scope boundaries.
-- Present same, missing, newer, and conflicting files before any transfer.
-- Require an explicit authority choice for every conflict; never use silent
-  last-writer-wins behavior.
-- Stage no-clobber transfers with retained backups, resumable low-bandwidth
-  queues, and no automatic retry for uncertain outcomes.
 
 ## Later — document automation breadth
 

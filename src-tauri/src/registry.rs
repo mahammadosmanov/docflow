@@ -353,6 +353,104 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let replica_publish = operation(
+        "files.replica_publish",
+        vec![
+            parameter(
+                "root_a",
+                ParamKind::Folder,
+                "param.replica.rootA",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.rootA.help"),
+            ),
+            parameter(
+                "root_b",
+                ParamKind::Folder,
+                "param.replica.rootB",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.rootB.help"),
+            ),
+            parameter(
+                "root_c",
+                ParamKind::Folder,
+                "param.replica.rootC",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.rootC.help"),
+            ),
+            parameter(
+                "source_root",
+                ParamKind::Choice,
+                "param.replica.sourceRoot",
+                json!("a"),
+                true,
+                strings(&["a", "b", "c"]),
+                labels(&[
+                    ("a", "choice.replica.source.a"),
+                    ("b", "choice.replica.source.b"),
+                    ("c", "choice.replica.source.c"),
+                ]),
+                Map::new(),
+                Some("param.replica.sourceRoot.help"),
+            ),
+            parameter(
+                "backup_root",
+                ParamKind::Folder,
+                "param.replica.backupRoot",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.backupRoot.help"),
+            ),
+            parameter(
+                "root_files",
+                ParamKind::Text,
+                "param.replica.rootFiles",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.rootFiles.help"),
+            ),
+            parameter(
+                "unattended",
+                ParamKind::Bool,
+                "param.replica.unattended",
+                json!(false),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.unattended.help"),
+            ),
+            parameter(
+                "interval_minutes",
+                ParamKind::Int,
+                "param.replica.intervalMinutes",
+                json!(15),
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.intervalMinutes.help"),
+            ),
+        ],
+    );
+
     let outlook_reply_draft = operation(
         "rfi.outlook_reply_draft",
         vec![parameter(
@@ -614,6 +712,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         normalize_pdf_orientation,
         rfi_system_sync,
         rfi_complete_status_sync,
+        replica_publish,
     ]
 }
 
@@ -640,6 +739,7 @@ mod tests {
                 "rfi.normalize_pdf_orientation",
                 "rfi.system_sync",
                 "rfi.complete_status_sync",
+                "files.replica_publish",
             ]
         );
         let follow_up = &operations[3];
@@ -665,6 +765,18 @@ mod tests {
             vec![
                 "error.param.required.rfi_system_root".to_string(),
                 "error.param.required.rfi_log_workbook".to_string(),
+            ]
+        );
+        let replica = &operations[10];
+        assert_eq!(
+            replica.schema.validate(&Map::new()),
+            vec![
+                "error.param.required.root_a".to_string(),
+                "error.param.required.root_b".to_string(),
+                "error.param.required.root_c".to_string(),
+                "error.param.required.source_root".to_string(),
+                "error.param.required.backup_root".to_string(),
+                "error.param.required.interval_minutes".to_string(),
             ]
         );
         assert_eq!(

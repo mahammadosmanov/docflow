@@ -18,3 +18,10 @@
 - Completion evidence and Worley signing are separate authorities. Completion
   Status Sync never changes Follow Up or Worley fields and never opens or
   mutates the source PDFs.
+- Replica publication is one-way: one explicit source, two targets, and a
+  separate retained-backup root. It never deletes target-only files.
+- Unattended publication is standing authorization only for the exact profile
+  successfully applied once. Any unsafe error pauses it; changing the profile
+  requires another explicit Preview and Apply.
+- Windows startup uses the current-user Run key and grants no extra filesystem
+  authority. Native Windows/OneDrive/GlobalProtect acceptance remains external.

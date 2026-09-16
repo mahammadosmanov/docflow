@@ -5,6 +5,9 @@ use std::collections::HashSet;
 
 use crate::{outlook_reply_draft::OutlookAdapter, print_queue::PrintAdapter};
 
+mod startup;
+pub(crate) use startup::set_start_with_windows;
+
 #[cfg(not(target_os = "windows"))]
 use crate::outlook_reply_draft::{
     DraftIdentity, MailItemIdentity, OutlookDraft, OutlookFailure, SelectedMailItem,

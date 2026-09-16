@@ -29,6 +29,7 @@ use crate::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
     operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
+    operations::replica_publish::{self, ReplicaPublishParams},
     operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
     operations::stage_signed_pages::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
@@ -180,10 +181,40 @@ impl NativeBackend {
             BackendMethod::SettingsUpdate => self.update_settings(params),
             BackendMethod::SettingsReset => {
                 decode_empty(params)?;
-                self.settings
-                    .save_preferences(AppPrefs::default())
+                let previous = self.settings.preferences();
+                platform::set_start_with_windows(false)
                     .map_err(|_| BackendError::settings_write())?;
+                if self.settings.save_preferences(AppPrefs::default()).is_err() {
+                    let _ = platform::set_start_with_windows(previous.start_with_windows);
+                    return Err(BackendError::settings_write());
+                }
                 encode(self.settings.preferences())
+            }
+            BackendMethod::SettingsReplicaStatus => {
+                decode_empty(params)?;
+                let preferences = self.settings.preferences();
+                let section = self.settings.section("replicaAutomation");
+                let configured = section
+                    .as_ref()
+                    .is_some_and(|value| value.contains_key("profile"));
+                let status = if !configured {
+                    "unconfigured"
+                } else if !preferences.replica_sync_enabled {
+                    "disabled"
+                } else {
+                    section
+                        .as_ref()
+                        .and_then(|value| value.get("status"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("idle")
+                };
+                Ok(json!({
+                    "enabled": preferences.replica_sync_enabled,
+                    "configured": configured,
+                    "status": status,
+                    "lastSuccessUnix": section.as_ref().and_then(|value| value.get("lastSuccessUnix")).and_then(Value::as_i64),
+                    "lastErrorCode": section.as_ref().and_then(|value| value.get("lastErrorCode")).and_then(Value::as_str),
+                }))
             }
             BackendMethod::SettingsParams => {
                 let request: OperationIdParams = decode(params)?;
@@ -329,6 +360,114 @@ impl NativeBackend {
                     .push(approved_op_id, applied, failed, journal_id, summary, now())
             },
         );
+    }
+
+    pub(crate) fn automatic_replica_tick(&self) {
+        if !self.settings.preferences().replica_sync_enabled {
+            return;
+        }
+        let Some(mut section) = self.settings.section("replicaAutomation") else {
+            self.pause_replica_automation("error.replica.profileMissing");
+            return;
+        };
+        let Some(profile) = section.get("profile").cloned() else {
+            self.pause_replica_automation("error.replica.profileMissing");
+            return;
+        };
+        let Ok(params) = serde_json::from_value::<ReplicaPublishParams>(profile) else {
+            self.pause_replica_automation("error.replica.profileInvalid");
+            return;
+        };
+        let current = now();
+        let last_attempt = section
+            .get("lastAttemptUnix")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let interval = i64::try_from(params.interval_minutes)
+            .unwrap_or(i64::MAX)
+            .saturating_mul(60);
+        if current.saturating_sub(last_attempt) < interval {
+            return;
+        }
+        section.insert("lastAttemptUnix".to_string(), Value::from(current));
+        section.insert("status".to_string(), Value::String("running".to_string()));
+        let _ = self
+            .settings
+            .save_section("replicaAutomation", Some(section.clone()));
+
+        let caller = match self.caller_identity() {
+            Ok(caller) => caller,
+            Err(error) => {
+                section.insert(
+                    "status".to_string(),
+                    Value::String("waitingForSignIn".to_string()),
+                );
+                section.insert(
+                    "lastErrorCode".to_string(),
+                    Value::String(error.code.to_string()),
+                );
+                let _ = self
+                    .settings
+                    .save_section("replicaAutomation", Some(section));
+                return;
+            }
+        };
+        let outcome = self
+            .cache_replica_plan(params, &caller, |_| {})
+            .and_then(|plan| {
+                let plan_id = plan.plan_id.clone();
+                self.filesystem
+                    .apply_with_progress(&plan_id, &caller, |_| {})
+            });
+        match outcome {
+            Ok(result) if result.failed == 0 => {
+                section.insert("status".to_string(), Value::String("idle".to_string()));
+                section.insert("lastSuccessUnix".to_string(), Value::from(current));
+                section.insert(
+                    "lastJournalId".to_string(),
+                    Value::String(result.journal_id),
+                );
+                section.remove("lastErrorCode");
+                let _ = self
+                    .settings
+                    .save_section("replicaAutomation", Some(section));
+            }
+            Ok(result) => {
+                let code = result
+                    .errors
+                    .first()
+                    .map(|warning| warning.key.as_str())
+                    .unwrap_or("error.replica.automaticApplyFailed");
+                self.pause_replica_automation(code);
+            }
+            Err(error) if matches!(error.code, "operation_in_progress" | "auth_required") => {
+                section.insert("status".to_string(), Value::String("deferred".to_string()));
+                section.insert(
+                    "lastErrorCode".to_string(),
+                    Value::String(error.code.to_string()),
+                );
+                let _ = self
+                    .settings
+                    .save_section("replicaAutomation", Some(section));
+            }
+            Err(error) => self.pause_replica_automation(error.message.as_str()),
+        }
+    }
+
+    fn pause_replica_automation(&self, error_code: &str) {
+        if let Some(mut section) = self.settings.section("replicaAutomation") {
+            section.insert("status".to_string(), Value::String("paused".to_string()));
+            section.insert(
+                "lastErrorCode".to_string(),
+                Value::String(error_code.to_string()),
+            );
+            let _ = self
+                .settings
+                .save_section("replicaAutomation", Some(section));
+        }
+        let mut preferences = self.settings.preferences();
+        preferences.replica_sync_enabled = false;
+        let _ = self.settings.save_preferences(preferences);
     }
 
     pub(crate) fn mark_undone(&self, cloud_id: &str) {
@@ -1413,6 +1552,93 @@ impl NativeBackend {
         )
     }
 
+    pub(crate) fn preview_replica_publish<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<ReplicaPublishParams> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != replica_publish::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust replica publication backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        encode(self.cache_replica_plan(request.values, &caller, progress)?)
+    }
+
+    fn cache_replica_plan<F>(
+        &self,
+        values: ReplicaPublishParams,
+        caller: &CallerIdentity,
+        progress: F,
+    ) -> Result<crate::contracts::Plan, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let roots = [
+            fs::canonicalize(&values.root_a),
+            fs::canonicalize(&values.root_b),
+            fs::canonicalize(&values.root_c),
+        ];
+        let roots = roots
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| BackendError::path_invalid("error.replica.rootInvalid"))?;
+        let backup = fs::canonicalize(&values.backup_root)
+            .map_err(|_| BackendError::path_invalid("error.replica.backupInvalid"))?;
+        let source_index = match values.source_root.as_str() {
+            "a" => 0,
+            "b" => 1,
+            "c" => 2,
+            _ => return Err(BackendError::validation("error.replica.sourceInvalid")),
+        };
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            replica_publish::OPERATION_ID,
+        );
+        let mut grants = roots
+            .iter()
+            .enumerate()
+            .map(|(index, root)| {
+                (
+                    root.clone(),
+                    if index == source_index {
+                        GrantAccess::Read
+                    } else {
+                        GrantAccess::ReadWrite
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        grants.push((backup, GrantAccess::ReadWrite));
+        let provisional = self.filesystem.issue_provisional_grants(&scope, &grants)?;
+        let plan = replica_publish::preview(&values, progress)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                replica_publish::OPERATION_ID,
+                grant_ids,
+            ),
+            plan,
+        )?;
+        provisional.commit();
+        Ok(cached)
+    }
+
     pub(crate) fn revise_native_plan(&self, params: Value) -> Result<Value, BackendError> {
         let request: ReviseParams = decode(params)?;
         let caller = self.caller_identity()?;
@@ -1537,12 +1763,47 @@ impl NativeBackend {
         let approved_op_id =
             self.filesystem
                 .validate_plan_operation(plan_id, &caller, operation_id)?;
-        let result = encode(self.filesystem.apply_with_progress(
-            plan_id,
-            &caller,
-            &mut progress,
-        )?)?;
-        Ok((result, approved_op_id))
+        let automation_profile = if approved_op_id == replica_publish::OPERATION_ID {
+            self.filesystem
+                .resolve_native_plan(plan_id, &caller)?
+                .plan
+                .meta
+                .get("automationProfile")
+                .cloned()
+        } else {
+            None
+        };
+        let mut result = self
+            .filesystem
+            .apply_with_progress(plan_id, &caller, &mut progress)?;
+        if result.failed == 0
+            && let Some(profile) = automation_profile
+        {
+            let mut section = JsonObject::new();
+            section.insert("profile".to_string(), profile);
+            section.insert("lastAttemptUnix".to_string(), Value::from(0));
+            let activated = self
+                .settings
+                .save_section("replicaAutomation", Some(section));
+            if activated.is_ok() {
+                let mut preferences = self.settings.preferences();
+                preferences.replica_sync_enabled = true;
+                if self.settings.save_preferences(preferences).is_err() {
+                    result.failed += 1;
+                    result.errors.push(crate::contracts::Warning {
+                        key: "error.replica.activationFailed".to_string(),
+                        subject: String::new(),
+                    });
+                }
+            } else {
+                result.failed += 1;
+                result.errors.push(crate::contracts::Warning {
+                    key: "error.replica.activationFailed".to_string(),
+                    subject: String::new(),
+                });
+            }
+        }
+        Ok((encode(result)?, approved_op_id))
     }
 
     pub(crate) fn cancel_native_plan(&self, plan_id: &str) -> bool {
@@ -1780,6 +2041,7 @@ impl NativeBackend {
     fn update_settings(&self, params: Value) -> Result<Value, BackendError> {
         let request: SettingsUpdate = decode(params)?;
         let mut preferences = self.settings.preferences();
+        let previous_startup = preferences.start_with_windows;
         if let PatchField::Value(locale) = request.locale {
             preferences.locale = locale;
         }
@@ -1795,9 +2057,29 @@ impl NativeBackend {
         if let Some(compact) = request.compact {
             preferences.compact = compact;
         }
-        self.settings
-            .save_preferences(preferences)
-            .map_err(|_| BackendError::settings_write())?;
+        if let Some(start_with_windows) = request.start_with_windows {
+            platform::set_start_with_windows(start_with_windows)
+                .map_err(|_| BackendError::settings_write())?;
+            preferences.start_with_windows = start_with_windows;
+        }
+        if let Some(replica_sync_enabled) = request.replica_sync_enabled {
+            if replica_sync_enabled
+                && self
+                    .settings
+                    .section("replicaAutomation")
+                    .and_then(|section| section.get("profile").cloned())
+                    .is_none()
+            {
+                return Err(BackendError::validation("error.replica.profileMissing"));
+            }
+            preferences.replica_sync_enabled = replica_sync_enabled;
+        }
+        if self.settings.save_preferences(preferences).is_err() {
+            if request.start_with_windows.is_some() {
+                let _ = platform::set_start_with_windows(previous_startup);
+            }
+            return Err(BackendError::settings_write());
+        }
         encode(self.settings.preferences())
     }
 }
@@ -2116,6 +2398,10 @@ struct SettingsUpdate {
     font_scale: Option<f64>,
     #[serde(default)]
     compact: Option<bool>,
+    #[serde(default)]
+    start_with_windows: Option<bool>,
+    #[serde(default)]
+    replica_sync_enabled: Option<bool>,
 }
 
 #[derive(Debug, Default, PartialEq)]

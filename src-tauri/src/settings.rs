@@ -346,6 +346,14 @@ impl SettingsStore {
                 .to_string(),
             font_scale: raw.get("fontScale").and_then(Value::as_f64).unwrap_or(1.0),
             compact: raw.get("compact").and_then(Value::as_bool).unwrap_or(false),
+            start_with_windows: raw
+                .get("startWithWindows")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            replica_sync_enabled: raw
+                .get("replicaSyncEnabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         })
     }
 
@@ -1060,6 +1068,8 @@ mod tests {
                 font: "mono".to_string(),
                 font_scale: 9.0,
                 compact: true,
+                start_with_windows: true,
+                replica_sync_enabled: true,
             })
             .expect("preferences should save");
         assert_eq!(
@@ -1070,6 +1080,8 @@ mod tests {
                 font: "mono".to_string(),
                 font_scale: 1.6,
                 compact: true,
+                start_with_windows: true,
+                replica_sync_enabled: true,
             }
         );
 

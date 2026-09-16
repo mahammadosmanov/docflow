@@ -31,6 +31,11 @@ change before moving authority.
 ## Non-negotiable rules
 
 1. Every mutation is preview → explicit user approval → apply → journal → undo.
+   The sole exception is an enabled `files.replica_publish` profile: its first
+   exact profile Plan requires explicit Apply, which grants standing authority
+   for later identical-profile runs. Each run still builds an immutable Plan,
+   revalidates hashes, backs up replacements, journals effects, and pauses on
+   ambiguity or failure.
 2. Apply executes only the approved cached `Plan`; it never recalculates.
 3. Never overwrite an existing destination.
 4. Undo reverses successful steps and removes only empty directories created by the operation.

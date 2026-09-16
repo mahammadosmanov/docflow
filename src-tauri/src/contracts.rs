@@ -123,6 +123,8 @@ pub struct AppPrefs {
     pub font: String,
     pub font_scale: f64,
     pub compact: bool,
+    pub start_with_windows: bool,
+    pub replica_sync_enabled: bool,
 }
 
 impl Default for AppPrefs {
@@ -133,6 +135,8 @@ impl Default for AppPrefs {
             font: "system".to_string(),
             font_scale: 1.0,
             compact: false,
+            start_with_windows: false,
+            replica_sync_enabled: false,
         }
     }
 }
@@ -199,6 +203,7 @@ pub enum StepKind {
     Print,
     PdfFirstPageReplace,
     PdfPageRotate,
+    ReplicaPublish,
     CleanupTemp,
     OutlookReplyDraft,
 }
@@ -457,7 +462,9 @@ mod tests {
                     "theme": "system",
                     "font": "system",
                     "fontScale": 1.0,
-                    "compact": false
+                    "compact": false,
+                    "startWithWindows": false,
+                    "replicaSyncEnabled": false
                 },
                 "operations": []
             })

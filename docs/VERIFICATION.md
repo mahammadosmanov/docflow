@@ -4,6 +4,38 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.2.0 - 2026-09-16
+
+The source-authoritative replica publication release passed Rust formatting,
+Clippy with all targets/features and warnings denied, Cargo check, 339 unit
+tests, and 211 integration tests; three operator-workbook tests were
+intentionally ignored. Focused evidence covers exact scope, root-overlap and
+symlink refusal, parallel hashing, source/target drift checks, retained
+backup-first replacement, final hash verification, serial fail-fast Apply,
+target-extra preservation, journal, and guarded Undo.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source,
+and dependency-license audits plus the production frontend build passed. The
+frontend retained its known non-failing chunk-size advisory. The Windows x64
+cross-check passed, including the native current-user startup Registry API and
+the closed read-only replica-status command.
+
+The Windows x64 cross-build completed from the final release worktree. The
+OCR-inclusive ZIP passed package audit and archive integrity checks, all
+generated checksums verified, and both executable artifacts identify as Windows
+GUI-subsystem PE files. Cross-linking emitted only known non-failing Microsoft
+PDB debug-information warnings. The macOS 27 proc-macro LINKEDIT workaround was
+applied only to the build environment/configuration; the repository configuration
+was restored afterward. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `50ea3e007f053cb3f411b6f98ed533777ec475eba42b5c5dab74a006f804599b`;
+- portable EXE: `f478e4f3a0358ef181c8b8e779716fec9fd50a181c15d1e4bb073f171740374e`;
+- per-user installer: `0cdef85769bd118222f5c38e9715e6c8c1bd10d56c2494241c2f7e584cc375d9`.
+
+Native Windows startup, WebView2, SharePoint/OneDrive, GlobalProtect/network,
+offline/reconnect, lock, restart, unattended scheduling, and operator Apply/Undo
+acceptance have not run. The cross-build is not evidence for those external gates.
+
 ## 1.1.0 - 2026-09-16
 
 Completion Status Sync at implementation commit

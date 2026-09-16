@@ -23,6 +23,8 @@ pub(crate) enum BackendMethod {
     SettingsUpdate,
     #[serde(rename = "settings/reset")]
     SettingsReset,
+    #[serde(rename = "settings/replicaStatus")]
+    SettingsReplicaStatus,
     #[serde(rename = "settings/params")]
     SettingsParams,
     #[serde(rename = "settings/saveParams")]
@@ -91,7 +93,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 33] = [
+    pub(crate) const ALL: [Self; 34] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -103,6 +105,7 @@ impl BackendMethod {
         Self::AuthSetFlags,
         Self::SettingsUpdate,
         Self::SettingsReset,
+        Self::SettingsReplicaStatus,
         Self::SettingsParams,
         Self::SettingsSaveParams,
         Self::SettingsPresets,
@@ -136,6 +139,7 @@ impl BackendMethod {
             Self::AppBootstrap => "app/bootstrap",
             Self::SettingsUpdate => "settings/update",
             Self::SettingsReset => "settings/reset",
+            Self::SettingsReplicaStatus => "settings/replicaStatus",
             Self::SettingsParams => "settings/params",
             Self::SettingsSaveParams => "settings/saveParams",
             Self::SettingsPresets => "settings/presets",
@@ -175,6 +179,7 @@ impl BackendMethod {
             Self::AppBootstrap
                 | Self::SettingsUpdate
                 | Self::SettingsReset
+                | Self::SettingsReplicaStatus
                 | Self::SupportDiagnostics
                 | Self::SupportCopyDiagnostics
                 | Self::AuthSignIn
@@ -221,9 +226,20 @@ fn path_dialog_filter(
 
 impl BackendRouter {
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
+        let native = Arc::new(NativeBackend::production()?);
+        let automatic = Arc::clone(&native);
+        std::thread::Builder::new()
+            .name("docflow-replica-automation".to_string())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                    automatic.automatic_replica_tick();
+                }
+            })
+            .map_err(|_| BackendError::unavailable())?;
         Ok(Self {
             app,
-            native: Arc::new(NativeBackend::production()?),
+            native,
             recent_error_codes: RecentErrorCodes::default(),
         })
     }
@@ -476,6 +492,7 @@ impl BackendRouter {
                 "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
                 "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
                 "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
+                "files.replica_publish" => native.preview_replica_publish(params, send),
                 "rfi.outlook_reply_draft" => native.preview_outlook_reply_draft(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
                 "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
@@ -592,6 +609,7 @@ mod tests {
             BackendMethod::AppBootstrap,
             BackendMethod::SettingsUpdate,
             BackendMethod::SettingsReset,
+            BackendMethod::SettingsReplicaStatus,
             BackendMethod::SupportDiagnostics,
             BackendMethod::SupportCopyDiagnostics,
             BackendMethod::AuthSignIn,

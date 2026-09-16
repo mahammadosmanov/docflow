@@ -4,6 +4,23 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.2.0: source-authoritative three-root RFI System publication
+  - one selected source publishes only CIV/MEC/ELE/PRC and named root files to
+    two targets; target-only files are warned and never deleted
+  - replacements are backup-first, hash-verified, serial, fail-fast, journaled,
+    and guarded by Undo; unsafe topology, symlinks, incomplete reads, and drift
+    fail closed
+  - one explicit Apply can store a revocable exact unattended profile; Settings
+    shows its live state, unsafe failure disables it, and Windows startup is a
+    separate current-user option
+  - source gates passed: 339 Rust unit tests, 211 integration tests with three
+    operator-workbook tests intentionally ignored, 23 Node tests, 52 React tests,
+    formatting, warnings-denied Clippy, Cargo check, frontend build, and all
+    version/documentation/source/license audits
+  - Windows x64 cross-check, OCR-inclusive build, package/archive/checksum, and
+    GUI-subsystem checks passed; native Windows/OneDrive/GlobalProtect/startup/
+    unattended operator acceptance remains external
+
 - [x] Version 1.1.0: exact completed-PDF to RFI Log status synchronization
   - a separate operation scans every nested RFI System folder with bounded
     multi-core discovery and accepts only exact canonical `RFI No.` PDF names

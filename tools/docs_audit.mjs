@@ -63,13 +63,13 @@ export function auditDocumentation(root = REPOSITORY_ROOT) {
   for (const id of documented) {
     if (!registered.has(id)) failures.push(`documented operation is not registered: ${id}`);
   }
-  if (registered.size !== 10) {
-    failures.push(`expected exactly 10 registered operations, found ${registered.size}`);
+  if (registered.size !== 11) {
+    failures.push(`expected exactly 11 registered operations, found ${registered.size}`);
   }
 
   const prd = readFileSync(join(root, "docs/PRD.md"), "utf8");
   const traceability = readFileSync(join(root, "docs/TRACEABILITY.md"), "utf8");
-  for (let index = 1; index <= 24; index += 1) {
+  for (let index = 1; index <= 25; index += 1) {
     const id = `DF-${String(index).padStart(3, "0")}`;
     if (!prd.includes(`**${id} `)) failures.push(`PRD requirement is missing: ${id}`);
     if (!traceability.includes(id)) failures.push(`requirement has no traceability owner: ${id}`);

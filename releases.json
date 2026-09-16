@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.1.0",
+  "currentVersion": "1.2.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -526,9 +526,17 @@
       "version": "1.1.0",
       "date": "2026-09-16",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.1.0",
       "summary": "Recursively detect exact completed RFI PDFs and safely preview, apply, back up, and undo RFI Log Inspection Status updates to Completed."
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-09-16",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.2.0",
+      "summary": "Publish one selected RFI System source to two targets with retained verified backups, guarded Undo, optional unattended operation, and per-user Windows startup."
     }
   ]
 }

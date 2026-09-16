@@ -92,6 +92,7 @@ import type {
   PrintQueueSummary,
   ProgressEvent,
   RecoveryPayload,
+  ReplicaAutomationStatus,
   ReviewAction,
   ReviewDecision,
   ReviewItem,
@@ -3156,6 +3157,7 @@ export function summarizePlanImpact(plan: Plan): PlanImpact {
         break;
       case "workbook_update":
       case "restore_backup":
+      case "replica_publish":
         impact.updates += 1;
         break;
       case "move":
@@ -4053,6 +4055,8 @@ function StepRow({
           <Printer />
         ) : step.kind === "workbook_update" ? (
           <TableProperties />
+        ) : step.kind === "replica_publish" ? (
+          <Database />
         ) : step.kind === "pdf_first_page_replace" ? (
           <Files />
         ) : step.kind === "pdf_page_rotate" ? (
@@ -4885,11 +4889,28 @@ function SettingsScreen({
   );
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
+  const [replicaStatus, setReplicaStatus] =
+    useState<ReplicaAutomationStatus | null>(null);
+  const refreshReplicaStatus = useCallback(async () => {
+    try {
+      setReplicaStatus(await bridge.call("settings/replicaStatus"));
+    } catch {
+      // The preference remains usable when a read-only refresh is unavailable.
+    }
+  }, [bridge]);
+  useEffect(() => {
+    void refreshReplicaStatus();
+    const timer = window.setInterval(() => void refreshReplicaStatus(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [refreshReplicaStatus]);
   const update = async (patch: Partial<AppPrefs>) => {
     try {
-      onPrefs(
-        await bridge.call("settings/update", patch as Record<string, unknown>),
+      const next = await bridge.call(
+        "settings/update",
+        patch as Record<string, unknown>,
       );
+      onPrefs(next);
+      void refreshReplicaStatus();
     } catch (reason) {
       setError(humanError(reason, s));
     }
@@ -5059,6 +5080,39 @@ function SettingsScreen({
             <Switch
               checked={prefs.compact}
               onChange={(compact) => void update({ compact })}
+            />
+          </label>
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.automation")}
+          icon={<Monitor />}
+          help={s.t("prefs.automation.help")}
+        >
+          <label className="toggle-row">
+            <span>
+              <strong>{s.t("prefs.startWithWindows")}</strong>
+            </span>
+            <Switch
+              checked={prefs.startWithWindows}
+              onChange={(startWithWindows) => void update({ startWithWindows })}
+            />
+          </label>
+          <label className="toggle-row">
+            <span>
+              <strong>{s.t("prefs.replicaSyncEnabled")}</strong>
+              <small>{s.t("prefs.replicaSyncEnabled.help")}</small>
+              {replicaStatus && (
+                <small>{s.t(`prefs.replica.status.${replicaStatus.status}`)}</small>
+              )}
+              {replicaStatus?.lastErrorCode && (
+                <small>{s.t(replicaStatus.lastErrorCode)}</small>
+              )}
+            </span>
+            <Switch
+              checked={replicaStatus?.enabled ?? prefs.replicaSyncEnabled}
+              onChange={(replicaSyncEnabled) =>
+                void update({ replicaSyncEnabled })
+              }
             />
           </label>
         </SettingsGroup>

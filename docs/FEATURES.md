@@ -14,6 +14,7 @@
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
+| `files.replica_publish` | Publish one selected RFI System source to two targets with backup-first verified replacement, Undo, and optional standing authorization |
 
 ## Application features
 
@@ -40,6 +41,10 @@
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
 - Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
+- Optional per-user Windows startup. Replica publication can run at a selected
+  interval while DocFlow is open after one explicit profile approval. Settings
+  can pause or resume that stored profile, shows its live state, and reflects an
+  automatic safety pause; any unsafe failure pauses it.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
   RFI file-name/content grouping,
   recursive signed-input and archive discovery, PDF orientation discovery and
@@ -66,7 +71,8 @@
 - Process Scans reads top-level PDFs only. Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent.
-- Three-system replica transfer is roadmap work, not a registered operation.
+- Replica publication never propagates target-only files back to the source and
+  never deletes them automatically. It is one-way publication, not bidirectional merge.
 - Native Office and printer behavior is accepted only on a real Windows host.
 - PDF orientation classification requires bundled Tesseract OSD data. A PDF with
   any low-confidence or unreadable page is left unchanged for manual review.

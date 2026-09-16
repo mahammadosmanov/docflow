@@ -4,7 +4,9 @@ Read `AGENTS.md` first and follow it for every repository change. Then read
 `docs/README.md` in its declared order. `VERSION` is current-version authority;
 Rust in `src-tauri/src/` is the sole application/mutation authority.
 
-Never bypass preview -> explicit approval -> apply -> journal -> undo, overwrite
+Never bypass preview -> authorization -> apply -> journal -> undo. The only
+standing authorization is the exact `files.replica_publish` profile after its
+first explicit Apply; changing that profile requires a new explicit Apply. Never overwrite
 an existing destination, guess or silently clean a persisted RFI identifier,
 mutate a signed-page archive/source, auto-retry an uncertain print, expose tokens
 to React, or claim Windows/Office/printer acceptance from local tests.

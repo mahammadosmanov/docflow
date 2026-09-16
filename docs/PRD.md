@@ -6,7 +6,8 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 ## Core requirements
 
 - **DF-001 — Preview first:** every document, workbook, queue, or draft
-  mutation is previewed and explicitly approved.
+  mutation is previewed and explicitly approved. DF-025 permits later
+  identical-profile replica runs under one revocable standing authorization.
 - **DF-002 — Immutable apply:** Apply consumes only the cached approved Plan; it
   does not rediscover files, rows, pages, recipients, or print settings.
 - **DF-003 — No clobber:** an existing output is never overwritten. Updates to
@@ -100,10 +101,22 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   the guarded workbook backup/delta/journal path. Missing rows/cells, formulas,
   merges, terminal or unknown statuses, malformed names, symlinks, drift, and
   incomplete discovery fail closed; Follow Up and Worley data never change.
+- **DF-025 — Source-authoritative replica publication:** an operator selects
+  one of three non-overlapping RFI System roots as source, two as targets, and a
+  separate retained-backup root. Only CIV/MEC/ELE/PRC trees and explicitly named
+  root files are in scope. Preview completes all three scans, hashes independent
+  files in the bounded worker pool, exposes each copy/replacement, never deletes
+  target extras, and refuses symlinks, overlap, drift, locks, incomplete scans,
+  or unstable files. Apply is serial and fail-fast; every replacement is backed
+  up and hash-verified before atomic publication, journaled, and undoable.
+  Optional unattended mode requires one explicit Apply of the exact profile,
+  runs only while DocFlow is open, and disables itself after any unsafe failure.
+  Backups are never automatically deleted. Windows startup is per-user and needs
+  no administrator permission.
 
 ## Scope
 
-The ten registered operations and application-level history, recovery, review,
+The eleven registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

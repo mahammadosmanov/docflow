@@ -132,6 +132,22 @@ RFI and maps them to existing literal `Inspection Status` cells. Apply reuses
 the guarded System Sync workbook replacement path, but its typed step kind
 permits only `Completed` replacements and has no Follow Up or Worley authority.
 
+RFI System replica publication is one-way and source-authoritative. Preview
+fully scans only CIV/MEC/ELE/PRC plus explicitly named root files, rejects
+symlinks and overlapping roots, and hashes independent reads in the bounded
+worker pool. Apply remains serial and fail-fast. Every replacement first creates
+and verifies a retained no-clobber backup, stages a private sibling copy, then
+atomically publishes and verifies the approved source hash. Target-only files
+are warnings and are never deleted.
+
+The first unattended replica run is still an ordinary explicit Preview and
+Apply. A successful Apply stores the exact profile as revocable standing
+authorization. While DocFlow is open, a native scheduler creates a fresh cached
+Plan at the configured interval and uses the same grants, preflight, backup,
+journal, and Undo authority. Any unsafe discovery or Apply result disables the
+profile. Windows startup is a separate per-user HKCU Run setting; it grants no
+additional filesystem authority.
+
 ## Operation contract
 
 ```text

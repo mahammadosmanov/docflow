@@ -7,6 +7,13 @@ select scoped paths -> preview immutable Plan -> explicit Apply
 -> write-ahead journal -> exact effects -> result -> optional guarded Undo
 ```
 
+Replica publication has one narrow extension: an explicit first Apply may store
+a revocable standing authorization for the exact three roots, selected source,
+backup root, file scope, and interval. Later automatic runs create fresh internal
+Plans but need no click. They never reuse an old Plan. Any profile drift, path
+loss, incomplete scan, symlink, lock, hash mismatch, unstable file, backup error,
+or publication error pauses automation.
+
 Preview is pure. Apply accepts an opaque plan ID, revalidates pinned identities
 and hashes, then executes only approved steps. Destination collisions, drift,
 locks, symlinks/reparse points, malformed input, exhausted bounds, or ambiguous
@@ -55,6 +62,16 @@ and Worley workbooks are never selected or modified by this operation.
 | Retired work events | `~/.docflow/work-items/events/` | Preserved legacy data; no active UI or operation mutates it |
 | Scan index | `~/.docflow/scan-index.sqlite3` | Owner/root/operation-scoped checkpoints and scan-run audit; never Apply authority |
 | Credentials | Windows Credential Manager/macOS Keychain | Tokens never enter settings or React |
+| Replica automation | `~/.docflow/settings.json` | Exact approved profile, due time, last journal/status; errors pause it |
+
+Replica publication scans only CIV/MEC/ELE/PRC plus explicitly named root files.
+One chosen root is read-only source authority. Target-only files remain in place
+as warnings. Missing target files use no-clobber copy. Changed targets are copied
+to a unique retained backup, backup hash is verified, source bytes are staged in
+the target parent, and only then atomically replace the target. Apply is serial
+and fail-fast. Undo removes exact created copies or restores exact retained
+backups only when the published target hash is unchanged. Backup files and
+non-empty backup directories are never automatically removed.
 
 Cloud history contains metadata only and cannot authorize local effects or undo.
 Readiness only counts bounded pending records; it does not reconcile or mutate

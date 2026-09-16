@@ -593,5 +593,66 @@
     ],
     "supportsPresets": false,
     "titleKey": "op.rfi.complete_status_sync.title"
+  },
+  {
+    "descriptionKey": "op.files.replica_publish.desc",
+    "id": "files.replica_publish",
+    "schema": [
+      {
+        "choiceLabels": {}, "choices": [], "default": null,
+        "helpKey": "param.replica.rootA.help", "kind": "folder",
+        "labelKey": "param.replica.rootA", "name": "root_a",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": null,
+        "helpKey": "param.replica.rootB.help", "kind": "folder",
+        "labelKey": "param.replica.rootB", "name": "root_b",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": null,
+        "helpKey": "param.replica.rootC.help", "kind": "folder",
+        "labelKey": "param.replica.rootC", "name": "root_c",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {
+          "a": "choice.replica.source.a",
+          "b": "choice.replica.source.b",
+          "c": "choice.replica.source.c"
+        },
+        "choices": ["a", "b", "c"], "default": "a",
+        "helpKey": "param.replica.sourceRoot.help", "kind": "choice",
+        "labelKey": "param.replica.sourceRoot", "name": "source_root",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": null,
+        "helpKey": "param.replica.backupRoot.help", "kind": "folder",
+        "labelKey": "param.replica.backupRoot", "name": "backup_root",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": "",
+        "helpKey": "param.replica.rootFiles.help", "kind": "text",
+        "labelKey": "param.replica.rootFiles", "name": "root_files",
+        "required": false, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": false,
+        "helpKey": "param.replica.unattended.help", "kind": "bool",
+        "labelKey": "param.replica.unattended", "name": "unattended",
+        "required": false, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": 15,
+        "helpKey": "param.replica.intervalMinutes.help", "kind": "int",
+        "labelKey": "param.replica.intervalMinutes", "name": "interval_minutes",
+        "required": true, "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.files.replica_publish.title"
   }
 ]

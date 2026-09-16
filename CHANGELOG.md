@@ -8,6 +8,29 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.2.0 - 2026-09-16
+
+### Added
+
+- Added one-way RFI System publication from one operator-selected source to two
+  targets. Scope is limited to CIV/MEC/ELE/PRC and explicitly named root files;
+  every copy or replacement is visible before the first Apply.
+- Added optional unattended publication. One successful explicit Apply grants
+  revocable standing authorization only to that exact source, targets, backup,
+  scope, and interval. Due runs continue while DocFlow is open; unsafe failures
+  pause the profile. Settings shows the live running, waiting, disabled, or
+  safety-paused state without exposing system paths.
+- Added optional per-user Windows startup without administrator permission.
+
+### Safety
+
+- Changed target files receive retained no-clobber backups whose hashes are
+  verified before serial atomic publication. Source and target hashes are
+  revalidated, results are journaled and Undo is guarded. Target-only files are
+  reported and never deleted; backups never expire automatically.
+- Missing selected source files, symlinks, overlapping roots, incomplete scans,
+  unstable files, locks, drift, and collisions fail closed.
+
 ## 1.1.0 - 2026-09-16
 
 ### Added

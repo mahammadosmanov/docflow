@@ -27,6 +27,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-022 | `parallel.rs`, `operations/process_scans.rs`, `operations/stage_signed_pages.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, `native.rs`, generic `BusyState` | parallel/progress assertions in `process_scans.rs`, `signed_pages.rs`, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, complete Rust and frontend suites |
 | DF-023 | `rfi_code.rs`, `operations/rfi_file_group.rs`, `native.rs`, `registry.rs`, generic record-table UI | `process_scans.rs` bounded-line-wrap test, `rfi_file_group.rs` Word-table-boundary and per-RFI mail-gate tests, registry snapshot, catalog-equality and frontend authority tests |
 | DF-024 | `rfi_system_sync.rs`, `native.rs`, `fs_ops.rs`, `ooxml.rs`, `registry.rs`, generic record-table UI | `rfi_system_sync_native.rs` recursive exact-name/status/apply/undo/conflict/current-workbook tests, registry snapshot, locale equality and frontend authority tests |
+| DF-025 | `operations/replica_publish.rs`, `fs_ops.rs`, `native.rs`, `platform/startup.rs`, `registry.rs`, generic record-table and Settings UI | `replica_publish.rs` backup/apply/undo integration test, operation unit tests, registry snapshot, Rust/frontend suites, Windows `cargo xwin check` |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

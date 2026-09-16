@@ -414,6 +414,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.normalize_pdf_orientation",
             "rfi.system_sync",
             "rfi.complete_status_sync",
+            "files.replica_publish",
         ]
     );
     let outlook = &operations[4];
