@@ -211,7 +211,8 @@ fn path_dialog_filter(
     match (operation_id, parameter_name) {
         ("rfi.log_add", "workbook")
         | ("rfi.follow_up_sync", "rfi_log_workbook" | "follow_up_workbook")
-        | ("rfi.system_sync", "rfi_log_workbook" | "follow_up_workbook") => {
+        | ("rfi.system_sync", "rfi_log_workbook" | "follow_up_workbook")
+        | ("rfi.complete_status_sync", "rfi_log_workbook") => {
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
         }
         _ => None,
@@ -474,6 +475,7 @@ impl BackendRouter {
                 "rfi.log_add" => native.preview_rfi_log(params, send),
                 "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
                 "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
+                "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
                 "rfi.outlook_reply_draft" => native.preview_outlook_reply_draft(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
                 "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
@@ -737,6 +739,10 @@ mod tests {
         );
         assert_eq!(
             path_dialog_filter("rfi.system_sync", "follow_up_workbook"),
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
+        );
+        assert_eq!(
+            path_dialog_filter("rfi.complete_status_sync", "rfi_log_workbook"),
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
         );
         assert_eq!(path_dialog_filter("rfi.process_scans", "source"), None);

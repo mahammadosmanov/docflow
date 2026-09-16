@@ -181,7 +181,7 @@ describe("frontend authority boundary", () => {
       }
     }
     const releaseSafety = read("docs/RELEASE_SAFETY.md");
-    expect(releaseSafety).toContain("exact nine-operation registry");
+    expect(releaseSafety).toContain("exact ten-operation registry");
     expect(releaseSafety).toContain("RFI Follow Up");
   });
 
@@ -216,6 +216,41 @@ describe("frontend authority boundary", () => {
       "rfi.systemSync.disposition.ready",
       "rfi.systemSync.disposition.alreadySynced",
       "rfi.systemSync.disposition.unsigned",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
+  it("defines recursive completed-PDF status sync in every locale", () => {
+    const requiredKeys = [
+      "op.rfi.complete_status_sync.title",
+      "op.rfi.complete_status_sync.desc",
+      "param.rfi.completeStatus.rfiSystemRoot",
+      "param.rfi.completeStatus.rfiSystemRoot.help",
+      "param.rfi.completeStatus.rfiLogWorkbook",
+      "param.rfi.completeStatus.rfiLogWorkbook.help",
+      "error.rfi.completeStatus.workbookInvalid",
+      "error.rfi.completeStatus.workbookLocked",
+      "error.rfi.completeStatus.workbookLayoutInvalid",
+      "warn.rfi.completeStatus.invalidPdfName",
+      "warn.rfi.completeStatus.noChangesNeeded",
+      "note.rfi.completeStatus.rfiLog",
+      "rfi.completeStatus.editor.title",
+      "rfi.completeStatus.column.pdfPath",
+      "rfi.completeStatus.column.currentStatus",
+      "rfi.completeStatus.column.proposedStatus",
+      "rfi.completeStatus.disposition.ready",
+      "rfi.completeStatus.disposition.alreadyCompleted",
+      "rfi.completeStatus.disposition.manualReview",
+      "progress.phase.completion_pdf_discovery",
+      "progress.phase.completion_workbook_read",
+      "progress.phase.completion_mapping",
     ];
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(

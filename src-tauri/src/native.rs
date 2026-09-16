@@ -1154,6 +1154,97 @@ impl NativeBackend {
         encode(cached)
     }
 
+    pub(crate) fn preview_rfi_complete_status_sync<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<RfiCompleteStatusPreviewValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != rfi_system_sync::COMPLETE_STATUS_OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI completion-status backend",
+            ));
+        }
+        let system_root = fs::canonicalize(&request.values.rfi_system_root).map_err(|error| {
+            BackendError::validation(format!(
+                "error.rfi.completeStatus.systemRootInvalid: cannot resolve root: {error}"
+            ))
+        })?;
+        let workbook_path =
+            fs::canonicalize(&request.values.rfi_log_workbook).map_err(|error| {
+                BackendError::validation(format!(
+                    "error.rfi.completeStatus.workbookInvalid: cannot resolve RFI Log: {error}"
+                ))
+            })?;
+        let workbook_root = workbook_path
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
+            .to_path_buf();
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let workbook_in_system = workbook_path.starts_with(&system_root);
+        let mut grant_requests = vec![(
+            system_root.clone(),
+            if workbook_in_system {
+                GrantAccess::ReadWrite
+            } else {
+                GrantAccess::Read
+            },
+        )];
+        if !workbook_in_system {
+            grant_requests.push((workbook_root, GrantAccess::ReadWrite));
+        }
+        let provisional = self
+            .filesystem
+            .issue_provisional_grants(&scope, &grant_requests)?;
+        let workbook_grant = provisional
+            .grants()
+            .iter()
+            .find(|grant| {
+                grant.access.allows(PathIntent::Write) && workbook_path.starts_with(&grant.root)
+            })
+            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
+        let workbook_anchor = self.filesystem.anchor_granted_path(
+            workbook_grant,
+            &workbook_path,
+            PathIntent::Write,
+        )?;
+        let mut workbook = workbook_anchor
+            .open_mutable()
+            .map_err(|_| BackendError::validation("error.rfi.completeStatus.workbookLocked"))?;
+        let mut plan = rfi_system_sync::preview_complete_status_sync(
+            &system_root,
+            &workbook_path,
+            &mut workbook,
+            progress,
+            || false,
+        )?;
+        let reservation = self.filesystem.reserve_plan_id();
+        reservation.assign_to_empty(&mut plan)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_reserved_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(caller.owner_id, caller.session_id, request.op_id, grant_ids),
+            reservation,
+            plan,
+        )?;
+        provisional.commit();
+        encode(cached)
+    }
+
     pub(crate) fn preview_outlook_reply_draft<F>(
         &self,
         params: Value,
@@ -1374,6 +1465,12 @@ impl NativeBackend {
             "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
             rfi_file_group::OPERATION_ID => rfi_file_group::revise(&claimed.plan, &payload)?,
             rfi_system_sync::OPERATION_ID => rfi_system_sync::revise(
+                &claimed.plan,
+                payload["rows"]
+                    .as_array()
+                    .ok_or_else(BackendError::invalid_params)?,
+            )?,
+            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID => rfi_system_sync::revise(
                 &claimed.plan,
                 payload["rows"]
                     .as_array()
@@ -1924,6 +2021,15 @@ struct RfiSystemSyncPreviewValues {
     follow_up_workbook: PathBuf,
     #[serde(default)]
     force_rescan: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RfiCompleteStatusPreviewValues {
+    #[serde(rename = "rfi_system_root")]
+    rfi_system_root: PathBuf,
+    #[serde(rename = "rfi_log_workbook")]
+    rfi_log_workbook: PathBuf,
 }
 
 #[derive(Deserialize)]

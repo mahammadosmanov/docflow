@@ -4,6 +4,13 @@ These are not silently waived by passing local tests.
 
 ## External acceptance still required
 
+- Completion Status Sync requires native Windows/OneDrive acceptance on a copy
+  of the current RFI Log and the real nested RFI System. Verify traversal speed,
+  exact/malformed/duplicate filenames, locks and drift, Excel repair-free open,
+  source-tree immutability, Apply, and Undo. The local current-workbook test used
+  an available prior copy because the latest removable-volume source was not
+  readable during this build session.
+
 - RFI file grouping still requires native Windows/OneDrive acceptance with real
   Outlook MSG/EML, content-only Office/PDF fixtures, wrapped OCR identifiers,
   per-RFI missing-mail refusal, multi-RFI mail fan-out, destination collisions,

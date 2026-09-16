@@ -317,6 +317,37 @@ const demoRfiSystemSyncOperation: OperationDef = {
   ],
 };
 
+const demoRfiCompleteStatusOperation: OperationDef = {
+  id: "rfi.complete_status_sync",
+  titleKey: "op.rfi.complete_status_sync.title",
+  descriptionKey: "op.rfi.complete_status_sync.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "rfi_system_root",
+      kind: "folder",
+      labelKey: "param.rfi.completeStatus.rfiSystemRoot",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.completeStatus.rfiSystemRoot.help",
+    },
+    {
+      name: "rfi_log_workbook",
+      kind: "file",
+      labelKey: "param.rfi.completeStatus.rfiLogWorkbook",
+      default: null,
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.completeStatus.rfiLogWorkbook.help",
+    },
+  ],
+};
+
 const demoPrintOperation: OperationDef = {
   id: "files.batch_print",
   titleKey: "op.files.batch_print.title",
@@ -597,6 +628,7 @@ export class MockBridge implements Bridge {
   private params: Record<string, unknown> = {};
   private printPlan: Plan | null = null;
   private fileGroupPlan: Plan | null = null;
+  private completeStatusPlan: Plan | null = null;
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -628,6 +660,7 @@ export class MockBridge implements Bridge {
             demoSignedPagesOperation,
             demoPdfOrientationOperation,
             demoRfiSystemSyncOperation,
+            demoRfiCompleteStatusOperation,
           ],
         } satisfies Bootstrap;
         break;
@@ -724,6 +757,91 @@ export class MockBridge implements Bridge {
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
         const values = params.values as Record<string, unknown>;
+        if (params.opId === "rfi.complete_status_sync") {
+          const code = "AZE-SUN-INT-QMS-RFI-MEC-0700";
+          const workbook = mockPath(
+            values.rfi_log_workbook,
+            "/Users/demo/Documents/RFI Log.xlsm",
+          );
+          const row = {
+            _rowId: "complete-row-1",
+            enabled: true,
+            selectable: true,
+            discipline: "MEC",
+            rfiNo: "MEC-0700",
+            canonicalRfi: code,
+            pdfPath: `MEC/${code}/RFI No. ${code}.pdf`,
+            pdfCount: 1,
+            pdfPaths: `MEC/${code}/RFI No. ${code}.pdf`,
+            currentStatus: "Ongoing",
+            proposedStatus: "Completed",
+            action: "Set matching Inspection Status cell(s) to Completed",
+            disposition: "rfi.completeStatus.disposition.ready",
+            reasonKey: "Exact completed RFI PDF and safe RFI Log mapping found",
+          };
+          const plan = {
+            planId: "demo-complete-status-plan",
+            opId: "rfi.complete_status_sync",
+            warnings: [],
+            meta: {
+              workerCount: 4,
+              directoriesScanned: 42,
+              entriesScanned: 500,
+              exactPdfCount: 1,
+              editor: {
+                kind: "recordTable",
+                layout: "compact",
+                titleKey: "rfi.completeStatus.editor.title",
+                rowCountKey: "rfi.completeStatus.editor.rowCount",
+                groupField: "discipline",
+                selectionGroupFields: [],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                detailsEnabled: true,
+                detailsDefaultVisible: false,
+                duplicateEnabled: false,
+                requiredFields: ["enabled"],
+                columns: [
+                  { key: "enabled", labelKey: "rfi.completeStatus.column.enabled", kind: "bool" },
+                  { key: "discipline", labelKey: "rfi.completeStatus.column.discipline", kind: "readonly" },
+                  { key: "rfiNo", labelKey: "rfi.completeStatus.column.rfiNo", kind: "readonly" },
+                  { key: "pdfPath", labelKey: "rfi.completeStatus.column.pdfPath", kind: "readonly" },
+                  { key: "currentStatus", labelKey: "rfi.completeStatus.column.currentStatus", kind: "readonly" },
+                  { key: "proposedStatus", labelKey: "rfi.completeStatus.column.proposedStatus", kind: "readonly" },
+                  { key: "disposition", labelKey: "rfi.completeStatus.column.disposition", kind: "readonly", display: "localizedKey" },
+                ],
+                rows: [row],
+              },
+            },
+            steps: [
+              {
+                kind: "workbook_update" as const,
+                src: workbook,
+                dst: `${workbook}.completion-backup`,
+                noteKey: "note.rfi.completeStatus.rfiLog",
+                meta: {
+                  syncStep: {
+                    workbookKind: "rfiLogStatus",
+                    updates: {
+                      MEC: {
+                        "10:16": {
+                          rowId: row._rowId,
+                          expectedValue: "Ongoing",
+                          replacementValue: "Completed",
+                          row: 10,
+                          col: 16,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          } satisfies Plan;
+          this.completeStatusPlan = plan;
+          result = plan;
+          break;
+        }
         if (params.opId === "rfi.group_files") {
           const source = mockPath(values.source, "/Incoming");
           const destination = mockPath(values.destination, "/Grouped");
@@ -1021,6 +1139,32 @@ export class MockBridge implements Bridge {
         break;
       }
       case "engine/revise": {
+        if (
+          this.completeStatusPlan &&
+          params.planId === this.completeStatusPlan.planId
+        ) {
+          const rows = Array.isArray(params.rows)
+            ? params.rows.map((row) => ({ ...row }))
+            : [];
+          const editor = this.completeStatusPlan.meta.editor as Record<
+            string,
+            unknown
+          >;
+          const revised = {
+            ...this.completeStatusPlan,
+            planId: "demo-complete-status-plan-revised",
+            meta: {
+              ...this.completeStatusPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps: rows.some((row) => row.enabled !== false)
+              ? this.completeStatusPlan.steps
+              : [],
+          } satisfies Plan;
+          this.completeStatusPlan = revised;
+          result = revised;
+          break;
+        }
         if (this.fileGroupPlan && params.planId === this.fileGroupPlan.planId) {
           const rows = Array.isArray(params.rows)
             ? params.rows.map((row) => ({ ...row }))

@@ -24,6 +24,7 @@ and versioned with the code they govern.
 | Shared bounded read-only parallelism with operation-wide progress phases | Accepted | [`adr/0012-bounded-parallel-progress.md`](adr/0012-bounded-parallel-progress.md) |
 | Exact no-clobber grouping of incoming files into multiple RFI folders | Accepted | [`adr/0013-safe-multi-rfi-file-grouping.md`](adr/0013-safe-multi-rfi-file-grouping.md) |
 | Retire RFI work tracking, audit export, and device readiness | Accepted | [`adr/0014-retire-work-tracking-and-device-readiness.md`](adr/0014-retire-work-tracking-and-device-readiness.md) |
+| Exact completed-PDF evidence as a separate guarded RFI Log status operation | Accepted | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
 
 ## Adding a decision
 

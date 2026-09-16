@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.1.0 - 2026-09-16
+
+### Added
+
+- Added `Mark completed RFIs from the RFI System`. It recursively scans every
+  nested folder for exact `RFI No. AZE-SUN-INT-QMS-RFI-XXX-0000.pdf` filenames
+  with bounded multi-core discovery, then previews the matching RFI Log
+  `Inspection Status` cells before setting approved rows to `Completed`.
+- Preview exposes the PDF path, duplicate count, current status, proposed
+  status, and exact workbook-cell comparison. Blank and `Ongoing` literal cells
+  are eligible; formulas, merged/missing cells, `Cancelled`, `Rejected`, unknown
+  values, invalid PDF names, and missing RFI Log rows remain manual review.
+
+### Safety
+
+- The RFI System stays read-only. Apply uses the existing fingerprint, backup,
+  closed OOXML-delta verification, journal, and guarded Undo path; it never
+  recalculates discovery or changes Follow Up/Worley data.
+
 ## 1.0.2 - 2026-09-15
 
 ### Fixed

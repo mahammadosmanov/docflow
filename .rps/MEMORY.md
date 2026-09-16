@@ -11,3 +11,10 @@
   result ambiguous.
 - Native Windows and physical-printer acceptance are separate from source tests
   and Windows cross-build/package verification.
+- Completion Status Sync accepts only exact canonical `RFI No. ...pdf` names,
+  recursively scans without following symlinks, and changes only literal blank
+  or `Ongoing` RFI Log status cells after preview. Terminal, unknown, formula,
+  merged, missing, and absent-row cases remain manual review.
+- Completion evidence and Worley signing are separate authorities. Completion
+  Status Sync never changes Follow Up or Worley fields and never opens or
+  mutates the source PDFs.

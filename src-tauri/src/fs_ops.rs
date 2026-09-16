@@ -356,10 +356,17 @@ impl FilesystemAuthority {
             }
             return self.apply_follow_up(plan_id, caller, progress);
         }
-        if inspected.plan.op_id == rfi_system_sync::OPERATION_ID {
+        if matches!(
+            inspected.plan.op_id.as_str(),
+            rfi_system_sync::OPERATION_ID | rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
+        ) {
             if inspected.plan.steps.is_empty() {
                 return Err(BackendError::validation(
-                    "warn.rfi.systemSync.noChangesNeeded",
+                    if inspected.plan.op_id == rfi_system_sync::COMPLETE_STATUS_OPERATION_ID {
+                        "warn.rfi.completeStatus.noChangesNeeded"
+                    } else {
+                        "warn.rfi.systemSync.noChangesNeeded"
+                    },
                 ));
             }
             return self.apply_rfi_system_sync(plan_id, caller, progress);

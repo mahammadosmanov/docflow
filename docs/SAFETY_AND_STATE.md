@@ -39,6 +39,13 @@ destination. Apply reuses the cached Plan, copies serially without overwrite,
 and journals every created file and directory for guarded Undo. Unmatched or
 unreadable sources are preserved and copied to destination `_review`.
 
+Completion Status Sync recursively discovers exact completed-RFI PDF filenames
+without opening or changing them. The approved Plan pins only existing safe RFI
+Log cells and their expected values. Apply does not rescan the RFI System; it
+revalidates the workbook fingerprint, creates a no-clobber backup, verifies a
+closed OOXML delta, journals replacement, and supports guarded Undo. Follow Up
+and Worley workbooks are never selected or modified by this operation.
+
 | State | Default location | Contract |
 |---|---|---|
 | Settings | `~/.docflow/settings.json` | Atomic, schema-filtered, secrets removed |

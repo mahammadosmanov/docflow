@@ -124,6 +124,14 @@ cached Plan contains the exact source/destination copies. Apply performs those
 copies serially through the shared filesystem authority and journal, so parallel
 analysis cannot create races or bypass no-clobber checks.
 
+RFI completion-status synchronization is a separate native Rust operation.
+It performs a breadth-by-depth bounded parallel walk of the selected RFI System,
+accepts only exact canonical `RFI No. <RFI>.pdf` filenames, and never opens or
+mutates those PDFs. The coordinator deterministically groups duplicate paths by
+RFI and maps them to existing literal `Inspection Status` cells. Apply reuses
+the guarded System Sync workbook replacement path, but its typed step kind
+permits only `Completed` replacements and has no Follow Up or Worley authority.
+
 ## Operation contract
 
 ```text

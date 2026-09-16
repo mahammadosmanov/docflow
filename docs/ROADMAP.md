@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.0.2 reliability and Windows certification
+## Now — 1.1.0 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -18,6 +18,8 @@ the historical tracker.
   exact canonical-RFI recognition.
 - Certify incremental RFI scanning on the real 20 GB OneDrive/network tree,
   including interruption, resume, file drift, and one-run forced rescans.
+- Certify recursive exact completed-PDF discovery and guarded RFI Log status
+  Apply/Undo on the current Windows/OneDrive/Excel environment.
 
 ## Next — deeper RFI automation
 
@@ -44,7 +46,7 @@ the historical tracker.
 
 - Printer capability discovery, preflight thumbnails, test-page gates, and
   spooler receipts
-- RFI status extraction and filing
+- Additional RFI lifecycle extraction beyond exact completed-PDF evidence
 - PDF merge/split and quality repair
 - DOCX find/replace
 - Additional register/export operations driven by generic `ParamSchema`

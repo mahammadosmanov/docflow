@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact nine-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact ten-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -60,6 +60,7 @@ and silent uninstall on a real Windows runner.
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |
 | RFI Follow Up | exact grouped-ID/mapping/status/removal tests, preview/revise/apply/undo, current-workbook temporary-copy closed-delta check | Wrong-row updates, terminal records retained, excluded-sheet mutation, package damage, or recovery ambiguity |
 | RFI System/Worley sync | shared-formula fixture + operator-supplied current-template guarded-delta test | Folder Link formula overwrite, wrong control-table mapping, stale apply, shared-formula or calc-chain repair |
+| RFI completion-status sync | deep exact-name discovery, terminal/formula refusal, preview/revise/apply/undo, and current-RFI-Log temporary-copy closed-delta test | False completion, wrong-row update, source-tree mutation, workbook repair, or unrecoverable replacement |
 | Outlook reply draft | fake-adapter identity/call-order/conditional-undo tests + Windows compile | Wrong message, recipient synthesis, accidental send, or deletion of a changed draft |
 | Batch Print | fake-adapter queue/spooler tests | Order loss, duplicated jobs, uncertain recovery |
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |

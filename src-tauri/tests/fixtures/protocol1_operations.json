@@ -563,5 +563,35 @@
     ],
     "supportsPresets": false,
     "titleKey": "op.rfi.system_sync.title"
+  },
+  {
+    "descriptionKey": "op.rfi.complete_status_sync.desc",
+    "id": "rfi.complete_status_sync",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.completeStatus.rfiSystemRoot.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.completeStatus.rfiSystemRoot",
+        "name": "rfi_system_root",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.completeStatus.rfiLogWorkbook.help",
+        "kind": "file",
+        "labelKey": "param.rfi.completeStatus.rfiLogWorkbook",
+        "name": "rfi_log_workbook",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.complete_status_sync.title"
   }
 ]

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.0.2",
+  "currentVersion": "1.1.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -518,9 +518,17 @@
       "version": "1.0.2",
       "date": "2026-09-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.0.2",
       "summary": "Keep transient EPSON driver errors under observation and correlate native handlers to a unique new spool job without duplicate submission."
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-09-16",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.1.0",
+      "summary": "Recursively detect exact completed RFI PDFs and safely preview, apply, back up, and undo RFI Log Inspection Status updates to Completed."
     }
   ]
 }

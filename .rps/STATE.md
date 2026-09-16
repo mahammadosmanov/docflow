@@ -1,27 +1,25 @@
 # DocFlow project state
 
-Updated: 2026-09-15
+Updated: 2026-09-16
 
 ## Current release
 
-- Version: 1.0.2
+- Version: 1.1.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `c5d9e3c0daf5a0230a1bd8400462b2f8092c6767`
-- Objective: make Windows batch-print spool observation resilient without
-  risking duplicate physical output.
+- Implementation commit: pending
+- Objective: recursively discover exact completed RFI PDFs and safely preview
+  and apply their `Completed` status to the RFI Log.
 
 ## Verified
 
-- Transient generic Windows driver errors remain under observation.
-- A unique new native-handler spool job can be followed despite title changes;
-  ambiguous new jobs remain unconfirmed.
-- Rust, Node, React, frontend, version, documentation, source, license, and
-  Windows cross-build/package checks passed as recorded in
-  `docs/VERIFICATION.md`.
+- Recursive bounded multi-core discovery, exact filename matching, duplicate
+  evidence grouping, guarded workbook changes, selection revision, Apply, and
+  Undo pass the local test suite.
+- Rust, Node, React, frontend, version, documentation, source, and license checks
+  pass. Windows package evidence is pending the release build.
 
 ## External gate
 
-- Test the 1.0.2 package on native Windows with the EPSON L15160 and a mixed
-  PDF, Excel, Word, and PowerPoint queue. Cross-build evidence cannot prove that
-  paper physically exited.
-
+- Test the 1.1.0 package on native Windows/OneDrive using copies of the current
+  RFI Log and nested RFI System. Confirm Excel opens the applied and undone
+  workbook without repair and that the source PDF tree remains unchanged.

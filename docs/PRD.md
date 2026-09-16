@@ -92,10 +92,18 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   is copied into every related RFI folder beneath a separate destination; the
   source is never changed, collisions never overwrite, and unmatched or
   unreadable files are copied to `_review` for manual handling.
+- **DF-024 — Exact completion-status synchronization:** a separate operation
+  recursively scans the selected read-only RFI System for exact canonical
+  `RFI No. <RFI>.pdf` filenames and previews every matched PDF, RFI Log row,
+  current `Inspection Status`, and proposed `Completed` value. Apply updates
+  only literal blank or `Ongoing` cells in existing CIV/MEC/ELE/PRC rows through
+  the guarded workbook backup/delta/journal path. Missing rows/cells, formulas,
+  merges, terminal or unknown statuses, malformed names, symlinks, drift, and
+  incomplete discovery fail closed; Follow Up and Worley data never change.
 
 ## Scope
 
-The nine registered operations and application-level history, recovery, review,
+The ten registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

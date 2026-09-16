@@ -4,6 +4,16 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.1.0: exact completed-PDF to RFI Log status synchronization
+  - a separate operation scans every nested RFI System folder with bounded
+    multi-core discovery and accepts only exact canonical `RFI No.` PDF names
+  - Preview shows the source PDF evidence and exact guarded Inspection Status
+    changes; conflicts, formulas, merges, missing rows/cells, and malformed names
+    remain manual review
+  - Apply reuses workbook fingerprint, no-clobber backup, closed OOXML-delta,
+    journal, and Undo controls without touching the source tree, Follow Up, or
+    Worley data
+
 - [x] Version 1.0.2: resilient EPSON status and native-handler spool correlation
   - transient/stale generic driver errors remain under observation and explicit
     completion wins; deleting/deleted remain uncertain and non-retryable

@@ -10,7 +10,9 @@ use docflow_lib::{
     ooxml::{read_member, read_workbook_from_reader},
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
-    rfi_system_sync::{self, preview_system_sync, scan_system_root_indexed},
+    rfi_system_sync::{
+        self, preview_complete_status_sync, preview_system_sync, scan_system_root_indexed,
+    },
     scan_index::ScanIndex,
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
@@ -152,6 +154,234 @@ fn unchanged_system_pdf_is_reused_from_durable_index() {
         progress
             .iter()
             .any(|event| event.phase == "system_signature_analysis")
+    );
+}
+
+#[test]
+fn completion_status_preview_recurses_and_patches_only_exact_safe_log_cells() {
+    let fixture = tempfile::tempdir().unwrap();
+    let fixture_path = fs::canonicalize(fixture.path()).unwrap();
+    let system = fixture_path.join("RFI_SYSTEM");
+    let nested = system.join("MEC/Area-1/deeper");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(
+        nested.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-0700.pdf"),
+        b"exact-name evidence",
+    )
+    .unwrap();
+    fs::write(
+        nested.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-07001.pdf"),
+        b"numeric suffix must not match",
+    )
+    .unwrap();
+
+    let status_sheet = worksheet([
+        row(
+            9,
+            [
+                inline("A9", "RFI No."),
+                inline("P9", "Inspection Status"),
+                inline("Q9", "KEEP"),
+            ],
+        ),
+        row(
+            10,
+            [
+                inline("A10", "AZE-SUN-INT-QMS-RFI-MEC-0700"),
+                inline("P10", "Ongoing"),
+                formula("Q10", "", "1+1"),
+            ],
+        ),
+    ]);
+    let empty_status_sheet = worksheet([row(
+        9,
+        [inline("A9", "RFI No."), inline("P9", "Inspection Status")],
+    )]);
+    let workbook = package(&[
+        ("CIV", empty_status_sheet.clone()),
+        ("MEC", status_sheet),
+        ("ELE", empty_status_sheet.clone()),
+        ("PRC", empty_status_sheet),
+    ]);
+    let log_path = fixture_path.join("RFI Log.xlsx");
+    fs::write(&log_path, workbook).unwrap();
+    let mut log_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&log_path)
+        .unwrap();
+    let mut progress = Vec::new();
+    let plan = preview_complete_status_sync(
+        &system,
+        &log_path,
+        &mut log_file,
+        |event| progress.push(event),
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(plan.op_id, rfi_system_sync::COMPLETE_STATUS_OPERATION_ID);
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(plan.meta["editor"]["rows"][0]["currentStatus"], "Ongoing");
+    assert_eq!(
+        plan.meta["editor"]["rows"][0]["proposedStatus"],
+        "Completed"
+    );
+    assert!(
+        progress
+            .iter()
+            .any(|event| event.phase == "completion_pdf_discovery")
+    );
+
+    let mut disabled_rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    disabled_rows[0]["enabled"] = serde_json::Value::Bool(false);
+    let disabled = rfi_system_sync::revise(&plan, &disabled_rows).unwrap();
+    assert!(disabled.steps.is_empty());
+    assert!(
+        disabled
+            .warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.completeStatus.noRowsSelected")
+    );
+
+    let output = fixture.path().join("patched.xlsx");
+    rfi_system_sync::execute_sync_step(&plan.steps[0], &log_path, &output).unwrap();
+    let mut patched_file = File::open(output).unwrap();
+    let patched = read_workbook_from_reader(&mut patched_file).unwrap();
+    assert_eq!(patched.sheet("MEC").unwrap().value(10, 16), "Completed");
+    assert_eq!(
+        patched
+            .sheet("MEC")
+            .unwrap()
+            .cell(10, 17)
+            .unwrap()
+            .formula
+            .as_deref(),
+        Some("1+1")
+    );
+
+    let authority = FilesystemAuthority::new(
+        fixture_path.join("completion-journal"),
+        Duration::from_secs(300),
+    );
+    let caller = CallerIdentity::new("completion-owner", "completion-session");
+    let scope = GrantScope::new(
+        &caller.owner_id,
+        &caller.session_id,
+        "completion-request",
+        rfi_system_sync::COMPLETE_STATUS_OPERATION_ID,
+    );
+    let grant = authority
+        .issue_grant(&scope, &fixture_path, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                caller.owner_id.clone(),
+                caller.session_id.clone(),
+                rfi_system_sync::COMPLETE_STATUS_OPERATION_ID,
+                vec![grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority
+        .apply_with_progress(&cached.plan_id, &caller, |_| {})
+        .unwrap();
+    assert_eq!((applied.applied, applied.failed), (1, 0));
+    let mut applied_file = File::open(&log_path).unwrap();
+    assert_eq!(
+        read_workbook_from_reader(&mut applied_file)
+            .unwrap()
+            .sheet("MEC")
+            .unwrap()
+            .value(10, 16),
+        "Completed"
+    );
+    authority.undo(&applied.journal_id, &caller, None).unwrap();
+    let mut restored_file = File::open(&log_path).unwrap();
+    assert_eq!(
+        read_workbook_from_reader(&mut restored_file)
+            .unwrap()
+            .sheet("MEC")
+            .unwrap()
+            .value(10, 16),
+        "Ongoing"
+    );
+}
+
+#[test]
+fn completion_status_preview_refuses_terminal_or_formula_controlled_cells() {
+    let fixture = tempfile::tempdir().unwrap();
+    let system = fixture.path().join("RFI_SYSTEM");
+    fs::create_dir_all(system.join("deep")).unwrap();
+    for code in [
+        "AZE-SUN-INT-QMS-RFI-CIV-0103",
+        "AZE-SUN-INT-QMS-RFI-MEC-0700",
+    ] {
+        fs::write(
+            system.join("deep").join(format!("RFI No. {code}.pdf")),
+            b"exact-name evidence",
+        )
+        .unwrap();
+    }
+    let civ = worksheet([
+        row(
+            9,
+            [inline("A9", "RFI No."), inline("P9", "Inspection Status")],
+        ),
+        row(
+            10,
+            [
+                inline("A10", "AZE-SUN-INT-QMS-RFI-CIV-0103"),
+                formula("P10", "", "1+1"),
+            ],
+        ),
+    ]);
+    let mec = worksheet([
+        row(
+            9,
+            [inline("A9", "RFI No."), inline("P9", "Inspection Status")],
+        ),
+        row(
+            10,
+            [
+                inline("A10", "AZE-SUN-INT-QMS-RFI-MEC-0700"),
+                inline("P10", "Cancelled"),
+            ],
+        ),
+    ]);
+    let empty = worksheet([row(
+        9,
+        [inline("A9", "RFI No."), inline("P9", "Inspection Status")],
+    )]);
+    let log_path = fixture.path().join("RFI Log.xlsx");
+    fs::write(
+        &log_path,
+        package(&[
+            ("CIV", civ),
+            ("MEC", mec),
+            ("ELE", empty.clone()),
+            ("PRC", empty),
+        ]),
+    )
+    .unwrap();
+    let mut file = File::options()
+        .read(true)
+        .write(true)
+        .open(&log_path)
+        .unwrap();
+    let plan =
+        preview_complete_status_sync(&system, &log_path, &mut file, |_| {}, || false).unwrap();
+    assert!(plan.steps.is_empty());
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row["enabled"] == false));
+    assert!(
+        rows.iter()
+            .all(|row| { row["disposition"] == "rfi.completeStatus.disposition.manualReview" })
     );
 }
 
@@ -514,5 +744,41 @@ fn current_workbook_templates_accept_only_closed_guarded_deltas() {
         let output = fixture.path().join(format!("guarded-output-{index}.xlsm"));
         rfi_system_sync::execute_sync_step(step, Path::new(step.src.as_deref().unwrap()), &output)
             .unwrap();
+    }
+}
+
+#[test]
+#[ignore = "requires an operator-supplied current production RFI Log copy"]
+fn current_rfi_log_accepts_only_closed_completion_status_deltas() {
+    let source = PathBuf::from(
+        std::env::var("DOCFLOW_CURRENT_RFI_LOG").expect("DOCFLOW_CURRENT_RFI_LOG is required"),
+    );
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().join("RFI_SYSTEM/deep/archive");
+    fs::create_dir_all(&root).unwrap();
+    for rfi in ["MEC-0001", "MEC-0361"] {
+        fs::write(
+            root.join(format!("RFI No. AZE-SUN-INT-QMS-RFI-{rfi}.pdf")),
+            b"exact-name evidence",
+        )
+        .unwrap();
+    }
+    let log = fixture.path().join("RFI Log.xlsm");
+    fs::copy(source, &log).unwrap();
+    let mut file = File::options().read(true).write(true).open(&log).unwrap();
+    let plan = preview_complete_status_sync(
+        &fixture.path().join("RFI_SYSTEM"),
+        &log,
+        &mut file,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 2);
+    for (index, step) in plan.steps.iter().enumerate() {
+        let output = fixture
+            .path()
+            .join(format!("completion-output-{index}.xlsm"));
+        rfi_system_sync::execute_sync_step(step, &log, &output).unwrap();
     }
 }

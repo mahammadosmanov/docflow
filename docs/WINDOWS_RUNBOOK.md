@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, nine-operation registry, OCR,
+Confirm install, normal GUI launch, version, ten-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -40,9 +40,14 @@ pass from a macOS build or Windows cross-compile.
    macros/formulas/styles/links remain, expected cells alone changed, and backup exists.
 4. Undo and compare hashes/behavior with the test copy.
 5. Repeat with OneDrive paths, open-file locks, destination collisions, and cancellation.
-6. For Outlook, select one non-sensitive test message, preview, Apply, confirm an
+6. For Completion Status Sync, place exact and malformed `RFI No.` PDF names at
+   several nesting depths. Confirm exact PDFs map to the correct existing RFI
+   Log rows, blank/Ongoing cells preview as Completed, Completed stays unchanged,
+   Cancelled/Rejected/formula/merged targets remain manual review, the RFI
+   System hashes do not change, and Apply/Undo passes Excel's repair check.
+7. For Outlook, select one non-sensitive test message, preview, Apply, confirm an
    unsent Reply All draft, then exercise unchanged and edited-draft undo paths.
-7. For printing, use at least three non-sensitive mixed fixtures in one Apply.
+8. For printing, use at least three non-sensitive mixed fixtures in one Apply.
    Verify ordering, worksheets, ranges, A4/A3, orientation, duplex/color,
    cancellation, restart, and uncertain-job operator decisions. A job accepted
    without a final spool receipt must show sent-unconfirmed and advance without
@@ -51,22 +56,22 @@ pass from a macOS build or Windows cross-compile.
    Simulate transient generic error/paper-out followed by completion and confirm
    the same job continues without resubmission; deleting/deleted must still
    pause. Never auto-retry uncertainty.
-8. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
+9. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
    MSG, EML with several RFIs, unmatched input, and a destination collision.
    Confirm source hashes do not change, multi-RFI mail fans out correctly,
    `_review` receives exceptions, Undo removes only created copies/folders, and
    an existing subfolder beneath the source is ignored.
-8. For PDF orientation, use synthetic copies containing upright, sideways,
+10. For PDF orientation, use synthetic copies containing upright, sideways,
    upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
    Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source
    hashes never change, review layout is preserved, and Undo is hash-guarded.
-9. For incremental scanning, run RFI System Sync and PDF orientation twice over
+11. For incremental scanning, run RFI System Sync and PDF orientation twice over
    the same non-sensitive tree. Confirm the second Preview reports unchanged
    files as reused without reopening them for OCR. Interrupt a larger run, add
    and modify files, then confirm only completed unchanged entries resume while
    new/changed/failed items scan again. Finally use Force full rescan and confirm
    it bypasses the cache once and is off on the next visit.
-10. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
+12. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
     place exact test archives at several nesting depths, and use nested single-
     and multi-page signed scans. Confirm every exact archive is found, duplicates
     remain selectable/ambiguous, unreadable or reparse-linked folders fail closed,

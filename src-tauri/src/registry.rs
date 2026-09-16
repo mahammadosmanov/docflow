@@ -325,6 +325,34 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let rfi_complete_status_sync = operation(
+        "rfi.complete_status_sync",
+        vec![
+            parameter(
+                "rfi_system_root",
+                ParamKind::Folder,
+                "param.rfi.completeStatus.rfiSystemRoot",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.completeStatus.rfiSystemRoot.help"),
+            ),
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.completeStatus.rfiLogWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.completeStatus.rfiLogWorkbook.help"),
+            ),
+        ],
+    );
+
     let outlook_reply_draft = operation(
         "rfi.outlook_reply_draft",
         vec![parameter(
@@ -585,6 +613,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         stage_signed_pages,
         normalize_pdf_orientation,
         rfi_system_sync,
+        rfi_complete_status_sync,
     ]
 }
 
@@ -610,6 +639,7 @@ mod tests {
                 "rfi.stage_signed_first_pages",
                 "rfi.normalize_pdf_orientation",
                 "rfi.system_sync",
+                "rfi.complete_status_sync",
             ]
         );
         let follow_up = &operations[3];
@@ -627,6 +657,14 @@ mod tests {
                 "error.param.required.rfi_system_root".to_string(),
                 "error.param.required.rfi_log_workbook".to_string(),
                 "error.param.required.follow_up_workbook".to_string(),
+            ]
+        );
+        let complete_status = &operations[9];
+        assert_eq!(
+            complete_status.schema.validate(&Map::new()),
+            vec![
+                "error.param.required.rfi_system_root".to_string(),
+                "error.param.required.rfi_log_workbook".to_string(),
             ]
         );
         assert_eq!(

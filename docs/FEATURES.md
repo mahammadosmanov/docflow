@@ -13,6 +13,7 @@
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan the RFI system and guard RFI Log plus Follow Up Worley updates |
+| `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
 
 ## Application features
 
@@ -51,6 +52,10 @@
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
   explicit task-local option.
+- Completion Status Sync uses bounded multi-core, read-only filename discovery
+  at every depth. It shows the exact PDF evidence and workbook-cell changes,
+  permits row/all selection, leaves conflicting status values for review, and
+  applies through the same backup, OOXML verification, journal, and Undo path.
 - Signed-page warnings identify the source PDF and affected page/RFI where known.
   Apply copies each affected input PDF once to `_review` with the relative input
   folder layout preserved; it never overwrites, mutates the signed input, or

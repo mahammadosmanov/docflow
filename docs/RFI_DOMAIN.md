@@ -88,6 +88,24 @@ must reject drift, formulas/merged/protected unsafe targets, unknown layouts,
 unsupported package structures, locks it cannot safely handle, or any unapproved
 OOXML delta. Backups never overwrite and are retained for operator recovery.
 
+### Completion evidence
+
+- The exact case-insensitive filename wrapper is
+  `RFI No. AZE-SUN-INT-QMS-RFI-<CIV|MEC|ELE|PRC>-<FOUR DIGITS>.pdf`;
+  the embedded canonical RFI remains exact uppercase ASCII.
+- `rfi.complete_status_sync` searches every subfolder below the selected RFI
+  System root without reading PDF contents or following symlinks. The source
+  tree is read-only; duplicate exact PDFs are displayed but still represent one
+  RFI completion decision.
+- An exact PDF means the matching RFI is complete. Preview may propose
+  `Completed` only for existing literal blank or `Ongoing` `Inspection Status`
+  cells. Repeated physical rows for the same RFI are updated together.
+- `Completed` is already synchronized. `Cancelled`, `Rejected`, formulas,
+  merged/missing cells, unknown values, malformed PDF names, and missing exact
+  RFI Log rows remain manual review and authorize no cell change.
+- This operation changes only RFI Log status cells. Follow Up, REMARKS, signed
+  sheets, and Worley state are outside its authority.
+
 A shared Follow Up status cell changes only when all RFIs represented by that
 cell satisfy the required state. `Ongoing` corresponds to `In Progress` where the
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
