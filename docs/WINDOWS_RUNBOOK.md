@@ -92,10 +92,13 @@ pass from a macOS build or Windows cross-compile.
     replacement; target-only files are never deleted; failure stops later effects;
     Undo restores only unchanged published targets; backups remain after Undo.
     Enable unattended mode with one explicit Apply, restart DocFlow, and confirm
-    later due runs need no click but pause after an injected failure. Disable and
-    re-enable the profile in Settings. Enable Windows startup, sign out/in, confirm
-    the GUI starts without a console window, then disable it and confirm
-    the per-user startup entry is removed.
+    one-minute due runs need no click. Modify a source during a due run and confirm
+    the approved settle delay defers without disabling the profile. Set low file
+    and MiB brakes separately and confirm each pauses before Apply; inspect the
+    same change manually before approving a revised profile. Inject another
+    failure and confirm it pauses. Disable and re-enable the profile in Settings.
+    Enable Windows startup, sign out/in, confirm the GUI starts without a console
+    window, then disable it and confirm the per-user startup entry is removed.
 
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.

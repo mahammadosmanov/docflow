@@ -25,7 +25,7 @@ Updated: 2026-09-17
 
 ## External gate
 
-- Build and test the next Windows package using isolated SharePoint/OneDrive,
+- Test the 1.5.0 Windows package using isolated SharePoint/OneDrive,
   GlobalProtect/network, local, and backup roots. Confirm startup, publication,
   one-minute cadence, settle timing, mass-change brakes, interruption, and Undo.
   Export a support report after representative EPSON

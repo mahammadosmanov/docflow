@@ -21,10 +21,20 @@ non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
 complete test-target compile passed; Windows test executables were not run on
 this macOS host.
 
-No Windows package was produced for this checkpoint. Native Windows testing must
-still verify one-minute scheduling, OneDrive/network modification timestamps,
-file-settle deferral, both mass-change brakes, startup, interruption, Apply, and
-Undo on isolated copies of the three real system types.
+The Windows x64 cross-build from implementation commit `18061b1` completed. The
+OCR-inclusive ZIP passed the package audit, all generated checksums verified,
+and the installer and portable executable identify as Windows GUI-subsystem PE
+files. Cross-linker PDB warnings were non-failing debug-information warnings.
+Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `34a90a6c96753bf0bb0c6dfa23728e03dff997b87614916cb81263cfe666b303`;
+- portable EXE: `7aa8b35e492eb147889a3ed4536ec182f2fc197446424853e7a1c2674ba410ac`;
+- per-user installer: `5ae7a8a4534ed294be21041d637f85eea5d03af9e5070b7a34c45c63e6d83386`.
+
+Native Windows testing must still verify one-minute scheduling,
+OneDrive/network modification timestamps, file-settle deferral, both
+mass-change brakes, startup, interruption, Apply, and Undo on isolated copies of
+the three real system types.
 
 ## 1.4.0 - 2026-09-17
 
