@@ -135,6 +135,14 @@ pub struct FilesystemAuthority {
     before_capability_effect: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
+pub(crate) enum GeneratedWriteFailure {
+    NoEffect(&'static str),
+    OutcomeUnknown(&'static str),
+}
+
+const OUTLOOK_MSG_HEADER: &[u8; 8] = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1";
+const MAX_OUTLOOK_MSG_BYTES: usize = 100 * 1024 * 1024;
+
 impl FilesystemAuthority {
     pub fn new(journal_dir: impl AsRef<Path>, ttl: Duration) -> Self {
         Self::with_mutation_lock(journal_dir, ttl, GlobalMutationLock::default())
@@ -337,6 +345,208 @@ impl FilesystemAuthority {
         caller: &CallerIdentity,
     ) -> Result<OperationResult, BackendError> {
         self.apply_with_progress(plan_id, caller, |_| {})
+    }
+
+    pub(crate) fn apply_generated_binary_write<F, P>(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+        expected_operation: &str,
+        mut progress: F,
+        producer: P,
+    ) -> Result<OperationResult, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+        P: FnOnce() -> Result<Vec<u8>, GeneratedWriteFailure>,
+    {
+        let inspected = self.plans.resolve_bound(plan_id, caller)?;
+        if inspected.plan.op_id != expected_operation
+            || inspected.plan.steps.len() != 1
+            || inspected.plan.steps[0].kind != StepKind::Write
+            || inspected.plan.steps[0]
+                .meta
+                .get("generatedBy")
+                .and_then(Value::as_str)
+                != Some("outlook_msg")
+            || inspected.plan.steps[0].meta.contains_key("content")
+        {
+            return Err(BackendError::validation("generated write plan is invalid"));
+        }
+        let claim = self
+            .plans
+            .claim_for_apply_bound(plan_id, caller, &self.mutation_lock)?;
+        let binding = claim
+            .claimed
+            .binding
+            .as_ref()
+            .ok_or_else(BackendError::plan_unavailable)?;
+        let roots =
+            self.grants
+                .roots_for_plan(&binding.grant_ids, caller, &binding.operation_id)?;
+        let root_identities = self.grants.root_identities_for_plan(
+            &binding.grant_ids,
+            caller,
+            &binding.operation_id,
+        )?;
+        let token = self.cancellations.register(plan_id);
+        let _registration = CancellationRegistration {
+            registry: &self.cancellations,
+            request_id: plan_id,
+        };
+        let approved = claim.claimed.plan.steps[0].clone();
+        let mut record = JournalRecord::fresh(
+            expected_operation,
+            &binding.owner_id,
+            &binding.session_id,
+            &claim.claimed.digest,
+        );
+        record.grant_roots = roots
+            .iter()
+            .map(|root| root.to_string_lossy().into_owned())
+            .collect();
+        record.grant_root_identities = root_identities;
+        record.state = Some(JournalState::Applying);
+        self.journals.write(&record)?;
+        progress(ProgressEvent {
+            phase: "apply".to_string(),
+            done: 0,
+            total: 1,
+            subject: approved.src.clone().unwrap_or_default(),
+        });
+        if token.checkpoint().is_err() {
+            record.state = Some(JournalState::CancelledClean);
+            self.journals.write(&record)?;
+            return Ok(operation_result_for_generated_cancelled(&record));
+        }
+        let bytes = match producer() {
+            Ok(bytes) => bytes,
+            Err(failure) => {
+                let (key, outcome_unknown) = match failure {
+                    GeneratedWriteFailure::NoEffect(key) => (key, false),
+                    GeneratedWriteFailure::OutcomeUnknown(key) => (key, true),
+                };
+                record.state = Some(if outcome_unknown {
+                    JournalState::RecoveryRequired
+                } else {
+                    JournalState::NoEffectRetryable
+                });
+                self.journals.write(&record)?;
+                let mut result = OperationResult {
+                    applied: 0,
+                    failed: 1,
+                    journal_id: record.journal_id.clone(),
+                    errors: vec![Warning {
+                        key: key.to_string(),
+                        subject: String::new(),
+                    }],
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(
+                    &mut result,
+                    if outcome_unknown {
+                        "outcome_unknown"
+                    } else {
+                        "no_effect_retryable"
+                    },
+                );
+                return Ok(result);
+            }
+        };
+        if bytes.len() > MAX_OUTLOOK_MSG_BYTES || !bytes.starts_with(OUTLOOK_MSG_HEADER) {
+            record.state = Some(JournalState::NoEffectRetryable);
+            self.journals.write(&record)?;
+            return Ok(operation_result_for_generated_failure(
+                &record,
+                "error.rfi.outlookArchive.invalidMsg",
+                false,
+            ));
+        }
+        if token.checkpoint().is_err() {
+            record.state = Some(JournalState::CancelledClean);
+            self.journals.write(&record)?;
+            return Ok(operation_result_for_generated_cancelled(&record));
+        }
+        let destination = approved
+            .dst
+            .as_deref()
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| BackendError::validation("generated destination is missing"))?;
+        let destination = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("archive destination cannot be anchored"))?;
+        let mut actual = approved;
+        actual.src = None;
+        actual.meta.remove("generatedBy");
+        record.pending_step = Some(actual.clone());
+        self.journals.write(&record)?;
+        if let Err(error) = destination.write_no_clobber(&bytes) {
+            if error.kind() != io::ErrorKind::AlreadyExists && destination.open_read().is_ok() {
+                record.state = Some(JournalState::RecoveryRequired);
+                self.journals.write(&record)?;
+                return Ok(operation_result_for_generated_failure(
+                    &record,
+                    "error.rfi.outlookArchive.writeUnknown",
+                    true,
+                ));
+            }
+            record.pending_step = None;
+            record.state = Some(JournalState::NoEffectRetryable);
+            self.journals.write(&record)?;
+            return Ok(operation_result_for_generated_failure(
+                &record,
+                if error.kind() == io::ErrorKind::AlreadyExists {
+                    "error.rfi.outlookArchive.destinationExists"
+                } else {
+                    "error.rfi.outlookArchive.writeFailed"
+                },
+                false,
+            ));
+        }
+        let hash = match destination.sha256() {
+            Ok(hash) => hash,
+            Err(_) => {
+                record.state = Some(JournalState::RecoveryRequired);
+                self.journals.write(&record)?;
+                return Ok(operation_result_for_generated_failure(
+                    &record,
+                    "error.rfi.outlookArchive.writeUnknown",
+                    true,
+                ));
+            }
+        };
+        actual
+            .meta
+            .insert("undoSha256".to_string(), Value::String(hash));
+        record.pending_step = None;
+        record.steps.push(actual);
+        record.state = Some(JournalState::Committed);
+        self.journals.write(&record)?;
+        progress(ProgressEvent {
+            phase: "apply".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        let mut result = OperationResult {
+            applied: 1,
+            failed: 0,
+            journal_id: record.journal_id.clone(),
+            errors: Vec::new(),
+            meta: JsonObject::new(),
+            cloud_synced: None,
+        };
+        insert_effect_state(&mut result, "committed");
+        Ok(result)
     }
 
     pub fn apply_with_progress<F>(
@@ -3204,6 +3414,52 @@ enum StepFailure {
     Cancelled,
 }
 
+fn operation_result_for_generated_failure(
+    record: &JournalRecord,
+    key: &str,
+    outcome_unknown: bool,
+) -> OperationResult {
+    let mut result = OperationResult {
+        applied: 0,
+        failed: 1,
+        journal_id: record.journal_id.clone(),
+        errors: vec![Warning {
+            key: key.to_string(),
+            subject: String::new(),
+        }],
+        meta: JsonObject::new(),
+        cloud_synced: None,
+    };
+    insert_effect_state(
+        &mut result,
+        if outcome_unknown {
+            "outcome_unknown"
+        } else {
+            "no_effect_retryable"
+        },
+    );
+    result
+}
+
+fn operation_result_for_generated_cancelled(record: &JournalRecord) -> OperationResult {
+    let mut result = OperationResult {
+        applied: 0,
+        failed: 0,
+        journal_id: record.journal_id.clone(),
+        errors: vec![Warning {
+            key: "warn.operation.cancelled".to_string(),
+            subject: String::new(),
+        }],
+        meta: JsonObject::new(),
+        cloud_synced: None,
+    };
+    result
+        .meta
+        .insert("cancelled".to_string(), Value::Bool(true));
+    insert_effect_state(&mut result, "cancelled_clean");
+    result
+}
+
 struct CancellationRegistration<'a> {
     registry: &'a CancellationRegistry,
     request_id: &'a str,
@@ -3533,6 +3789,133 @@ fn sync_directory(_path: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generated_outlook_msg_write_is_no_clobber_and_undoable() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("archive");
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let destination = root.join("RFI response.msg");
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new(
+                    "owner",
+                    "session",
+                    "request",
+                    "rfi.outlook_archive_selected",
+                ),
+                &root,
+                GrantAccess::Write,
+            )
+            .unwrap();
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    "owner",
+                    "session",
+                    "rfi.outlook_archive_selected",
+                    vec![grant.grant_id],
+                ),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "rfi.outlook_archive_selected".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Write,
+                        src: Some("RFI response".to_string()),
+                        dst: Some(destination.to_string_lossy().into_owned()),
+                        note_key: Some("step.rfi.outlookArchive".to_string()),
+                        meta: serde_json::json!({
+                            "generatedBy": "outlook_msg",
+                            "format": "msg"
+                        })
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let caller = CallerIdentity::new("owner", "session");
+        let bytes = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1fixture".to_vec();
+
+        let result = authority
+            .apply_generated_binary_write(
+                &cached.plan_id,
+                &caller,
+                "rfi.outlook_archive_selected",
+                |_| {},
+                || Ok(bytes.clone()),
+            )
+            .unwrap();
+
+        assert_eq!(result.applied, 1);
+        assert_eq!(fs::read(&destination).unwrap(), bytes);
+        let journal = authority.journals().read(&result.journal_id).unwrap();
+        assert_eq!(journal.steps[0].kind, StepKind::Write);
+        assert!(!journal.steps[0].meta.contains_key("generatedBy"));
+        let undone = authority.undo(&result.journal_id, &caller, None).unwrap();
+        assert_eq!(undone.applied, 1);
+        assert!(!destination.exists());
+
+        fs::write(&destination, b"existing").unwrap();
+        let collision_grant = authority
+            .issue_grant(
+                &GrantScope::new(
+                    "owner",
+                    "session",
+                    "collision-request",
+                    "rfi.outlook_archive_selected",
+                ),
+                &root,
+                GrantAccess::Write,
+            )
+            .unwrap();
+        let collision = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    "owner",
+                    "session",
+                    "rfi.outlook_archive_selected",
+                    vec![collision_grant.grant_id],
+                ),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: "rfi.outlook_archive_selected".to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Write,
+                        src: Some("RFI response".to_string()),
+                        dst: Some(destination.to_string_lossy().into_owned()),
+                        note_key: Some("step.rfi.outlookArchive".to_string()),
+                        meta: serde_json::json!({"generatedBy": "outlook_msg"})
+                            .as_object()
+                            .unwrap()
+                            .clone(),
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let collision_result = authority
+            .apply_generated_binary_write(
+                &collision.plan_id,
+                &caller,
+                "rfi.outlook_archive_selected",
+                |_| {},
+                || Ok(bytes.clone()),
+            )
+            .unwrap();
+        assert_eq!(collision_result.applied, 0);
+        assert_eq!(collision_result.failed, 1);
+        assert_eq!(fs::read(&destination).unwrap(), b"existing");
+    }
 
     #[test]
     fn workbook_output_sync_uses_a_writable_handle_for_windows() {

@@ -31,6 +31,10 @@ These are not silently waived by passing local tests.
   and Inspection Status Follow Up copies.
 - Outlook selection, Reply All, signature/quote preservation, auto-save, and
   guarded unchanged-draft undo on the operator's desktop Outlook variants.
+- Selected-mail Unicode MSG archive requires classic Outlook COM acceptance on
+  Windows: exact-selection drift, readable saved MSG, destination collision,
+  OneDrive locks, mailbox immutability, and hash-guarded Undo. New Outlook does
+  not expose the required classic Outlook COM object model.
 - Microsoft Print to PDF plus representative physical/network printer output,
   cancellation, driver options, spool receipts, and uncertain recovery.
 - DocFlow 1.0.2 requires physical Windows acceptance on the EPSON L15160 Series:

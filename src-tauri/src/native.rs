@@ -21,7 +21,7 @@ use crate::{
     credentials::OsCredentialStore,
     diagnostics::PrinterDiagnostic,
     errors::BackendError,
-    fs_ops::FilesystemAuthority,
+    fs_ops::{FilesystemAuthority, GeneratedWriteFailure},
     gemini::{DEFAULT_MODEL, FALLBACK_MODELS, GeminiClient},
     http::{HttpClient, HttpConfig, JsonHttp},
     journal::JournalStore,
@@ -36,7 +36,7 @@ use crate::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
         revise as revise_stage_signed_pages,
     },
-    outlook_reply_draft::{self, OutlookDraftService},
+    outlook_reply_draft::{self, OutlookDraftService, OutlookFailureKind},
     path_selection::{PathSelection, PathSelectionStore, SelectionKind, SelectionScope},
     paths::{CallerIdentity, GrantAccess, GrantScope, PathIntent},
     plan_store::{BackendOrigin, PlanBinding},
@@ -1429,6 +1429,66 @@ impl NativeBackend {
         encode(plan)
     }
 
+    pub(crate) fn preview_outlook_archive<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<OutlookArchiveValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != outlook_reply_draft::ARCHIVE_OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust Outlook archive backend",
+            ));
+        }
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let provisional = self.filesystem.issue_provisional_grants(
+            &scope,
+            &[(request.values.destination.clone(), GrantAccess::Write)],
+        )?;
+        progress(ProgressEvent {
+            phase: "outlook_selection".to_string(),
+            done: 0,
+            total: 1,
+            subject: String::new(),
+        });
+        let prepared = self
+            .outlook
+            .prepare_archive(&caller, &request.values.destination)?;
+        let mut plan = prepared.plan.clone();
+        let reservation = self.filesystem.reserve_plan_id();
+        reservation.assign_to_empty(&mut plan)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_reserved_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(caller.owner_id, caller.session_id, request.op_id, grant_ids),
+            reservation,
+            plan,
+        )?;
+        self.outlook.bind_archive(&cached.plan_id, prepared);
+        provisional.commit();
+        progress(ProgressEvent {
+            phase: "preview_ready".to_string(),
+            done: 1,
+            total: 1,
+            subject: String::new(),
+        });
+        encode(cached)
+    }
+
     pub(crate) fn preview_stage_signed_pages<F>(
         &self,
         params: Value,
@@ -1786,6 +1846,34 @@ impl NativeBackend {
             return Ok((
                 encode(self.print.apply(plan_id, &caller, &mut progress)?)?,
                 "files.batch_print".to_string(),
+            ));
+        }
+        if self
+            .filesystem
+            .validate_plan_operation(plan_id, &caller, operation_id)?
+            == outlook_reply_draft::ARCHIVE_OPERATION_ID
+        {
+            let result = self.filesystem.apply_generated_binary_write(
+                plan_id,
+                &caller,
+                outlook_reply_draft::ARCHIVE_OPERATION_ID,
+                &mut progress,
+                || {
+                    self.outlook
+                        .export_archive(plan_id, &caller)
+                        .map_err(|failure| match failure.kind {
+                            OutlookFailureKind::OutcomeUnknown => {
+                                GeneratedWriteFailure::OutcomeUnknown(failure.key)
+                            }
+                            OutlookFailureKind::Unsupported | OutlookFailureKind::NoEffect => {
+                                GeneratedWriteFailure::NoEffect(failure.key)
+                            }
+                        })
+                },
+            )?;
+            return Ok((
+                encode(result)?,
+                outlook_reply_draft::ARCHIVE_OPERATION_ID.to_string(),
             ));
         }
         let approved_op_id =
@@ -2346,6 +2434,12 @@ struct RfiCompleteStatusPreviewValues {
 #[serde(deny_unknown_fields)]
 struct OutlookReplyDraftValues {
     reply_text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OutlookArchiveValues {
+    destination: PathBuf,
 }
 
 #[derive(Deserialize)]

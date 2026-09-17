@@ -150,3 +150,12 @@ bounded content, and display-only behavior. Sending remains manual. Attached
 files and unusual requests also remain operator-reviewed: mail parsing may
 suggest an ITP, item, area, or requested count, but it never certifies document
 correctness or makes a lifecycle transition by itself.
+
+Selected-mail archival is a separate operation. Preview records the exact
+MailItem identity, a bounded content fingerprint, and a Windows-safe filename.
+Apply requires that same message to remain the sole Outlook selection, exports
+Outlook's native Unicode MSG representation to private temporary storage, and
+creates a no-clobber staging copy. No message is sent, moved, deleted, marked,
+or otherwise changed. The existing RFI grouping operation may later copy that
+MSG to every exact RFI it contains; grouping's per-RFI mail-evidence gate still
+applies.

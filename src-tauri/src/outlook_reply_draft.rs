@@ -18,6 +18,7 @@ use crate::{
 };
 
 pub const OPERATION_ID: &str = "rfi.outlook_reply_draft";
+pub const ARCHIVE_OPERATION_ID: &str = "rfi.outlook_archive_selected";
 pub const MAX_REPLY_TEXT_CHARS: usize = 10_000;
 const MAX_OUTLOOK_ID_CHARS: usize = 4096;
 const MAX_SUBJECT_CHARS: usize = 512;
@@ -32,6 +33,7 @@ pub struct MailItemIdentity {
 pub struct SelectedMailItem {
     pub identity: MailItemIdentity,
     pub subject: String,
+    pub fingerprint: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,6 +110,12 @@ pub trait OutlookAdapter: Send + Sync {
 
     /// Deletes only the exact durable draft when its current fingerprint still matches.
     fn delete_unchanged_draft(&self, draft: &DraftIdentity) -> Result<(), OutlookFailure>;
+
+    fn export_selected_msg(
+        &self,
+        expected: &MailItemIdentity,
+        expected_fingerprint: &str,
+    ) -> Result<Vec<u8>, OutlookFailure>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -176,9 +184,23 @@ struct OutlookPlanAuthority {
     content: ReplyContent,
 }
 
+#[derive(Clone)]
+struct OutlookArchiveAuthority {
+    owner_id: String,
+    session_id: String,
+    source: MailItemIdentity,
+    fingerprint: String,
+}
+
+pub(crate) struct PreparedArchive {
+    pub plan: Plan,
+    authority: OutlookArchiveAuthority,
+}
+
 pub struct OutlookDraftService {
     plans: PlanStore,
     authorities: Mutex<HashMap<String, OutlookPlanAuthority>>,
+    archive_authorities: Mutex<HashMap<String, OutlookArchiveAuthority>>,
     journals: JournalStore,
     mutation_lock: GlobalMutationLock,
     cancellations: CancellationRegistry,
@@ -195,11 +217,82 @@ impl OutlookDraftService {
         Self {
             plans: PlanStore::new(ttl),
             authorities: Mutex::new(HashMap::new()),
+            archive_authorities: Mutex::new(HashMap::new()),
             journals: JournalStore::new(journal_dir),
             mutation_lock,
             cancellations: CancellationRegistry::default(),
             adapter,
         }
+    }
+
+    pub(crate) fn prepare_archive(
+        &self,
+        caller: &CallerIdentity,
+        destination_root: &Path,
+    ) -> Result<PreparedArchive, BackendError> {
+        let selected = self
+            .adapter
+            .selected_mail_item()
+            .map_err(outlook_validation)?;
+        validate_selected_mail_item(&selected)?;
+        let destination = destination_root.join(archive_filename(&selected.subject));
+        if destination.exists() {
+            return Err(BackendError::validation(
+                "error.rfi.outlookArchive.destinationExists",
+            ));
+        }
+        let step = Step {
+            kind: StepKind::Write,
+            src: Some(selected.subject.clone()),
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: Some("step.rfi.outlookArchive".to_string()),
+            meta: json_object(json!({
+                "generatedBy": "outlook_msg",
+                "format": "msg",
+                "mailboxMutationAllowed": false,
+                "sendAllowed": false
+            }))?,
+        };
+        Ok(PreparedArchive {
+            plan: Plan {
+                plan_id: String::new(),
+                op_id: ARCHIVE_OPERATION_ID.to_string(),
+                steps: vec![step],
+                warnings: vec![Warning {
+                    key: "warn.rfi.outlookArchive.localCopy".to_string(),
+                    subject: selected.subject,
+                }],
+                meta: JsonObject::new(),
+            },
+            authority: OutlookArchiveAuthority {
+                owner_id: caller.owner_id.clone(),
+                session_id: caller.session_id.clone(),
+                source: selected.identity,
+                fingerprint: selected.fingerprint,
+            },
+        })
+    }
+
+    pub(crate) fn bind_archive(&self, plan_id: &str, prepared: PreparedArchive) {
+        lock_archive_authorities(&self.archive_authorities)
+            .insert(plan_id.to_string(), prepared.authority);
+    }
+
+    pub(crate) fn export_archive(
+        &self,
+        plan_id: &str,
+        caller: &CallerIdentity,
+    ) -> Result<Vec<u8>, OutlookFailure> {
+        let authority = lock_archive_authorities(&self.archive_authorities)
+            .remove(plan_id)
+            .ok_or_else(|| OutlookFailure::no_effect("error.rfi.outlookArchive.planUnavailable"))?;
+        if authority.owner_id != caller.owner_id || authority.session_id != caller.session_id {
+            return Err(OutlookFailure::no_effect(
+                "error.rfi.outlookArchive.planUnavailable",
+            ));
+        }
+        self.adapter
+            .export_selected_msg(&authority.source, &authority.fingerprint)
     }
 
     pub fn preview(&self, caller: &CallerIdentity, reply_text: &str) -> Result<Plan, BackendError> {
@@ -468,12 +561,59 @@ impl OutlookDraftService {
         self.plans.revoke(caller);
         lock_authorities(&self.authorities)
             .retain(|plan_id, _| self.plans.snapshot(plan_id).is_some());
+        lock_archive_authorities(&self.archive_authorities).retain(|_, authority| {
+            authority.owner_id != caller.owner_id || authority.session_id != caller.session_id
+        });
         self.cancellations.revoke_all();
     }
 
     pub fn journals(&self) -> &JournalStore {
         &self.journals
     }
+}
+
+pub fn archive_filename(subject: &str) -> String {
+    let mut stem = String::with_capacity(subject.len().min(120));
+    let mut previous_space = false;
+    for character in subject.trim().chars() {
+        let character = if character.is_control()
+            || matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+            ) {
+            ' '
+        } else {
+            character
+        };
+        if character.is_whitespace() {
+            if !previous_space && !stem.is_empty() {
+                stem.push(' ');
+            }
+            previous_space = true;
+        } else {
+            if stem.chars().count() >= 100 {
+                break;
+            }
+            stem.push(character);
+            previous_space = false;
+        }
+    }
+    let trimmed = stem.trim_end_matches([' ', '.']);
+    let mut stem = if trimmed.is_empty() {
+        "Outlook message".to_string()
+    } else {
+        trimmed.to_string()
+    };
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (upper.len() == 4
+            && (upper.starts_with("COM") || upper.starts_with("LPT"))
+            && upper.as_bytes()[3].is_ascii_digit()
+            && upper.as_bytes()[3] != b'0')
+    {
+        stem.insert(0, '_');
+    }
+    format!("{stem}.msg")
 }
 
 pub(crate) fn journal_is_safely_undoable(record: &JournalRecord) -> bool {
@@ -488,6 +628,11 @@ pub(crate) fn journal_is_safely_undoable(record: &JournalRecord) -> bool {
 fn validate_selected_mail_item(selected: &SelectedMailItem) -> Result<(), BackendError> {
     if !bounded_identifier(&selected.identity.entry_id)
         || !bounded_identifier(&selected.identity.store_id)
+        || selected.fingerprint.len() != 64
+        || !selected
+            .fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
     {
         return Err(BackendError::validation(
             "error.rfi.outlookDraft.selectionInvalid",
@@ -590,4 +735,93 @@ fn lock_authorities(
     authorities
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn lock_archive_authorities(
+    authorities: &Mutex<HashMap<String, OutlookArchiveAuthority>>,
+) -> MutexGuard<'_, HashMap<String, OutlookArchiveAuthority>> {
+    authorities
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::*;
+
+    struct ArchiveAdapter {
+        exported: AtomicBool,
+    }
+
+    impl OutlookAdapter for ArchiveAdapter {
+        fn selected_mail_item(&self) -> Result<SelectedMailItem, OutlookFailure> {
+            Ok(SelectedMailItem {
+                identity: MailItemIdentity {
+                    entry_id: "entry".to_string(),
+                    store_id: "store".to_string(),
+                },
+                subject: "RFI response".to_string(),
+                fingerprint: "a".repeat(64),
+            })
+        }
+
+        fn reply_all(
+            &self,
+            _expected: &MailItemIdentity,
+        ) -> Result<Box<dyn OutlookDraft>, OutlookFailure> {
+            Err(OutlookFailure::no_effect("unused"))
+        }
+
+        fn delete_unchanged_draft(&self, _draft: &DraftIdentity) -> Result<(), OutlookFailure> {
+            Err(OutlookFailure::no_effect("unused"))
+        }
+
+        fn export_selected_msg(
+            &self,
+            expected: &MailItemIdentity,
+            expected_fingerprint: &str,
+        ) -> Result<Vec<u8>, OutlookFailure> {
+            if expected.entry_id != "entry"
+                || expected.store_id != "store"
+                || expected_fingerprint != "a".repeat(64)
+            {
+                return Err(OutlookFailure::no_effect(
+                    "error.rfi.outlookArchive.selectionChanged",
+                ));
+            }
+            self.exported.store(true, Ordering::SeqCst);
+            Ok(b"msg".to_vec())
+        }
+    }
+
+    #[test]
+    fn archive_authority_is_owner_bound_and_consumed_once() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let adapter = Arc::new(ArchiveAdapter {
+            exported: AtomicBool::new(false),
+        });
+        let service = OutlookDraftService::new(
+            fixture.path().join("journal"),
+            Duration::from_secs(300),
+            GlobalMutationLock::default(),
+            adapter.clone(),
+        );
+        let caller = CallerIdentity::new("owner", "session");
+        let prepared = service.prepare_archive(&caller, fixture.path()).unwrap();
+        assert_eq!(prepared.plan.steps[0].kind, StepKind::Write);
+        assert_eq!(
+            prepared.plan.steps[0].dst.as_deref().unwrap(),
+            fixture.path().join("RFI response.msg").to_string_lossy()
+        );
+        service.bind_archive("plan", prepared);
+
+        assert_eq!(service.export_archive("plan", &caller).unwrap(), b"msg");
+        assert!(adapter.exported.load(Ordering::SeqCst));
+        assert_eq!(
+            service.export_archive("plan", &caller).unwrap_err().key,
+            "error.rfi.outlookArchive.planUnavailable"
+        );
+    }
 }

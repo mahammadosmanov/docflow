@@ -136,10 +136,16 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   before a mass change; manual Preview remains available for inspection. These
   controls are part of the exact approved profile and do not weaken backup,
   live-hash, journal, Undo, or no-delete rules.
+- **DF-029 — Guarded Outlook MSG archive:** Preview binds exactly one selected
+  Outlook MailItem identity and fingerprint to a deterministic safe filename.
+  Apply revalidates that selection, exports a Unicode MSG to private temporary
+  storage, validates the compound-file envelope, then creates one journaled
+  no-clobber local copy. It never sends, moves, deletes, or changes mailbox data;
+  Undo removes only the exact unchanged created copy.
 
 ## Scope
 
-The eleven registered operations and application-level history, recovery, review,
+The twelve registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

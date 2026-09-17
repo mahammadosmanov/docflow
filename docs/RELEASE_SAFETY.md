@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact eleven-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact twelve-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members
@@ -62,6 +62,7 @@ and silent uninstall on a real Windows runner.
 | RFI System/Worley sync | shared-formula fixture + operator-supplied current-template guarded-delta test | Folder Link formula overwrite, wrong control-table mapping, stale apply, shared-formula or calc-chain repair |
 | RFI completion-status sync | deep exact-name discovery, terminal/formula refusal, preview/revise/apply/undo, and current-RFI-Log temporary-copy closed-delta test | False completion, wrong-row update, source-tree mutation, workbook repair, or unrecoverable replacement |
 | Outlook reply draft | fake-adapter identity/call-order/conditional-undo tests + Windows compile | Wrong message, recipient synthesis, accidental send, or deletion of a changed draft |
+| Outlook MSG archive | fake-adapter selection/fingerprint/single-use authority tests, no-clobber Apply/Undo tests, registry/locale parity, and Windows compile | Wrong message, mailbox mutation, overwrite, private data in Plan, or unguarded archive deletion |
 | Batch Print | fake-adapter queue/spooler tests + Excel pre-open COM-plan and PDF envelope/native-decoder delegation contracts + Windows test-target compile | Order loss, duplicated jobs, uncertain recovery, every worksheet failing before Open, or valid Excel PDFs being rejected before native decoding |
 | Printer diagnostics | latest-owned-queue path redaction, bounded job roster, canonical copy validation, Windows test-target compile | Undiagnosable handler/driver failures, private path leakage, or logs becoming retry authority |
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |
@@ -80,7 +81,9 @@ These are never implied by source, macOS, or cross-compile success:
 - Windows clean-machine installer/startup/uninstall execution (automated in CI,
   but still pending until a workflow run from the exact source succeeds)
 - Microsoft Office open/recalculate, Excel COM, and Excel-native clipboard
-- Microsoft Outlook current-selection, Reply All, preserved signature/quote, auto-save, and unchanged-draft undo
+- Microsoft Outlook current-selection, Reply All, preserved signature/quote,
+  auto-save, unchanged-draft undo, Unicode MSG export, collision refusal, and
+  hash-guarded MSG undo
 - Microsoft Print to PDF and representative physical/network printers
 - live Supabase RLS deployment and two-user verification
 - signing and macOS notarization with authorized credentials

@@ -9,6 +9,7 @@
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
+| `rfi.outlook_archive_selected` | Revalidate one selected Outlook message and create a guarded Unicode MSG staging copy |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
@@ -86,7 +87,8 @@
 
 - Process Scans reads top-level PDFs only. Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
-- Outlook drafts are never auto-sent.
+- Outlook drafts are never auto-sent. Selected-mail archival creates only a
+  local MSG copy; it never changes, moves, deletes, or sends mailbox content.
 - Replica publication never propagates target-only files back to the source and
   never deletes them automatically. It is one-way publication, not bidirectional merge.
 - Native Office and printer behavior is accepted only on a real Windows host.

@@ -499,6 +499,21 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         )],
     );
 
+    let outlook_archive = operation(
+        "rfi.outlook_archive_selected",
+        vec![parameter(
+            "destination",
+            ParamKind::Folder,
+            "param.rfi.outlookArchive.destination",
+            Value::Null,
+            true,
+            Vec::new(),
+            BTreeMap::new(),
+            Map::new(),
+            Some("param.rfi.outlookArchive.destination.help"),
+        )],
+    );
+
     let default_printer = facts
         .default_printer
         .or_else(|| facts.printers.first().cloned())
@@ -740,6 +755,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         rfi_log,
         rfi_follow_up,
         outlook_reply_draft,
+        outlook_archive,
         batch_print,
         stage_signed_pages,
         normalize_pdf_orientation,
@@ -767,6 +783,7 @@ mod tests {
                 "rfi.log_add",
                 "rfi.follow_up_sync",
                 "rfi.outlook_reply_draft",
+                "rfi.outlook_archive_selected",
                 "files.batch_print",
                 "rfi.stage_signed_first_pages",
                 "rfi.normalize_pdf_orientation",
@@ -783,7 +800,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[8];
+        let system_sync = &operations[9];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -792,7 +809,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let complete_status = &operations[9];
+        let complete_status = &operations[10];
         assert_eq!(
             complete_status.schema.validate(&Map::new()),
             vec![
@@ -800,7 +817,7 @@ mod tests {
                 "error.param.required.rfi_log_workbook".to_string(),
             ]
         );
-        let replica = &operations[10];
+        let replica = &operations[11];
         assert_eq!(
             replica.schema.validate(&Map::new()),
             vec![

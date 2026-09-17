@@ -4,11 +4,11 @@ Updated: 2026-09-17
 
 ## Current release
 
-- Version: 1.5.2
+- Version: 1.6.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `3c9f9ca`
-- Objective: accept Excel worksheet PDFs through Windows' native decoder while
-  retaining pre-effect validation and failed-only queue resume.
+- Implementation commit: pending
+- Objective: archive one exact selected classic Outlook message as a validated,
+  journaled, no-clobber Unicode MSG staging copy without mailbox mutation.
 
 ## Verified
 
@@ -28,6 +28,9 @@ Updated: 2026-09-17
 - Operator acceptance passed on Windows with both supplied DOCX files and every
   selected worksheet from both supplied MDR workbooks; no application error or
   missing paper output was reported.
+- Selected-mail archive authority is exact owner/session-bound, single-use, and
+  fingerprint-revalidated; generated MSG writes are bounded, no-clobber,
+  journaled, and hash-guarded for Undo.
 - Rust, Node, React, frontend, version, documentation, source, and license checks
   pass. Windows x64 Rust check and test-target compilation pass as recorded in
   `docs/VERIFICATION.md`.

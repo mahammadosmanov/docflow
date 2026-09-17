@@ -264,6 +264,14 @@ impl OutlookAdapter for UnsupportedOutlookAdapter {
     fn delete_unchanged_draft(&self, _draft: &DraftIdentity) -> Result<(), OutlookFailure> {
         Err(outlook_unsupported())
     }
+
+    fn export_selected_msg(
+        &self,
+        _expected: &MailItemIdentity,
+        _expected_fingerprint: &str,
+    ) -> Result<Vec<u8>, OutlookFailure> {
+        Err(outlook_unsupported())
+    }
 }
 
 #[cfg(not(target_os = "windows"))]

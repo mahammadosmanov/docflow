@@ -4,6 +4,27 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.6.0 - 2026-09-17
+
+The selected-Outlook-message archive passed Rust formatting, Clippy with all
+targets and features with warnings denied, Cargo check, 348 unit tests, and 212
+integration tests; three operator-workbook tests remained intentionally ignored.
+Focused evidence covers owner/session-bound single-use mail authority, exact
+selection fingerprinting, bounded Windows-safe names, validated compound-file
+bytes, race-time destination collisions, journaled no-clobber Apply, and
+hash-guarded Undo.
+
+All 23 Node tests and 53 React tests passed. Version, documentation, source,
+dependency-license, and production frontend build gates passed. The retired
+Python sidecar source is absent by design, so its historical pytest and mypy
+commands collected no tests/could not find `src/docflow`; they are not release
+evidence for this Rust-authority version.
+
+Native classic-Outlook `SaveAs(olMSGUnicode)`, readable attachment preservation,
+mailbox immutability, OneDrive destination behavior, selection drift, collision,
+and Undo remain Windows operator gates. Windows x64 compile and package evidence
+will be recorded against the exact implementation commit below.
+
 ## 1.5.2 - 2026-09-17
 
 Excel PDF handoff passed Rust formatting, Clippy with all targets and features

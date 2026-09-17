@@ -8,7 +8,7 @@ use docflow_lib::journal::JournalState;
 use docflow_lib::outlook_reply_draft::{
     DraftIdentity, MailItemIdentity, OPERATION_ID, OutlookAdapter, OutlookDraft,
     OutlookDraftService, OutlookFailure, ReplyContent, SelectedMailItem, apply_reply_all,
-    build_reply_content,
+    archive_filename, build_reply_content,
 };
 use docflow_lib::paths::CallerIdentity;
 use docflow_lib::progress::GlobalMutationLock;
@@ -28,6 +28,7 @@ impl OutlookAdapter for FakeOutlook {
         Ok(SelectedMailItem {
             identity: self.selected.lock().unwrap().clone(),
             subject: "RFI response".to_string(),
+            fingerprint: "a".repeat(64),
         })
     }
 
@@ -56,6 +57,19 @@ impl OutlookAdapter for FakeOutlook {
         self.calls.lock().unwrap().push("Delete");
         self.deleted.lock().unwrap().push(draft.clone());
         Ok(())
+    }
+
+    fn export_selected_msg(
+        &self,
+        expected: &MailItemIdentity,
+        expected_fingerprint: &str,
+    ) -> Result<Vec<u8>, OutlookFailure> {
+        if expected != &*self.selected.lock().unwrap() || expected_fingerprint != "a".repeat(64) {
+            return Err(OutlookFailure::no_effect(
+                "error.rfi.outlookArchive.selectionChanged",
+            ));
+        }
+        Ok(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1fake msg".to_vec())
     }
 }
 
@@ -409,6 +423,7 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
             "rfi.log_add",
             "rfi.follow_up_sync",
             "rfi.outlook_reply_draft",
+            "rfi.outlook_archive_selected",
             "files.batch_print",
             "rfi.stage_signed_first_pages",
             "rfi.normalize_pdf_orientation",
@@ -429,4 +444,15 @@ fn registry_exposes_outlook_draft_as_a_separate_schema_generated_operation() {
         outlook.schema.validate(&serde_json::Map::new()),
         ["error.param.required.reply_text"]
     );
+}
+
+#[test]
+fn outlook_archive_filename_is_bounded_and_windows_safe() {
+    assert_eq!(
+        archive_filename(" Re: CIV/RFI:* 1263. "),
+        "Re CIV RFI 1263.msg"
+    );
+    assert_eq!(archive_filename("CON"), "_CON.msg");
+    assert_eq!(archive_filename("\n\t"), "Outlook message.msg");
+    assert!(archive_filename(&"x".repeat(500)).len() <= 104);
 }

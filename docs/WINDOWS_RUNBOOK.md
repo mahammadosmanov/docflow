@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, eleven-operation registry, OCR,
+Confirm install, normal GUI launch, version, twelve-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -47,6 +47,11 @@ pass from a macOS build or Windows cross-compile.
    System hashes do not change, and Apply/Undo passes Excel's repair check.
 7. For Outlook, select one non-sensitive test message, preview, Apply, confirm an
    unsent Reply All draft, then exercise unchanged and edited-draft undo paths.
+   Separately preview Archive Selected Outlook Mail into an isolated folder.
+   Confirm Apply creates one readable Unicode MSG without changing the mailbox,
+   changing selection after Preview is refused, an existing destination is never
+   overwritten, and Undo removes only the unchanged created copy. Repeat with
+   classic Outlook on the supported work machine; new Outlook is not COM-compatible.
 8. For printing, use at least three non-sensitive mixed fixtures in one Apply.
    Verify ordering, worksheets, ranges, A4/A3, orientation, duplex/color,
    cancellation, restart, and uncertain-job operator decisions. A job accepted

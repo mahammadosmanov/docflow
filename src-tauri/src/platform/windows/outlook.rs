@@ -1,4 +1,4 @@
-use std::{mem::ManuallyDrop, ptr::null_mut};
+use std::{fs, mem::ManuallyDrop, ptr::null_mut};
 
 use sha2::{Digest, Sha256};
 use windows::{
@@ -24,6 +24,9 @@ const OUTLOOK_PLAIN_TEXT_FORMAT: i32 = 1;
 const OUTLOOK_HTML_FORMAT: i32 = 2;
 const MAX_COM_TEXT_CHARS: usize = 1_000_000;
 const MAX_COM_ID_CHARS: usize = 4096;
+const OUTLOOK_MSG_UNICODE_FORMAT: i32 = 9;
+const MAX_ARCHIVED_MSG_BYTES: u64 = 100 * 1024 * 1024;
+const COMPOUND_FILE_HEADER: &[u8; 8] = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1";
 
 pub(crate) struct WindowsOutlookAdapter;
 
@@ -33,6 +36,7 @@ impl OutlookAdapter for WindowsOutlookAdapter {
         Ok(SelectedMailItem {
             identity: selected.identity,
             subject: selected.subject,
+            fingerprint: draft_fingerprint(&selected.mail)?,
         })
     }
 
@@ -92,6 +96,53 @@ impl OutlookAdapter for WindowsOutlookAdapter {
         dispatch_method(&item, "Delete", Vec::new())
             .map_err(|_| OutlookFailure::outcome_unknown("error.rfi.outlookDraft.deleteUnknown"))?;
         Ok(())
+    }
+
+    fn export_selected_msg(
+        &self,
+        expected: &MailItemIdentity,
+        expected_fingerprint: &str,
+    ) -> Result<Vec<u8>, OutlookFailure> {
+        let selected = selected_mail_session()?;
+        if &selected.identity != expected
+            || draft_fingerprint(&selected.mail)? != expected_fingerprint
+        {
+            return Err(OutlookFailure::no_effect(
+                "error.rfi.outlookArchive.selectionChanged",
+            ));
+        }
+        let temporary = tempfile::Builder::new()
+            .prefix("docflow-outlook-")
+            .tempdir()
+            .map_err(|_| OutlookFailure::no_effect("error.rfi.outlookArchive.exportFailed"))?;
+        let path = temporary.path().join("message.msg");
+        let path_text = path.to_string_lossy().into_owned();
+        dispatch_method(
+            &selected.mail,
+            "SaveAs",
+            vec![path_text.as_str().into(), OUTLOOK_MSG_UNICODE_FORMAT.into()],
+        )
+        .map_err(|_| OutlookFailure::outcome_unknown("error.rfi.outlookArchive.exportFailed"))?;
+        let metadata = fs::symlink_metadata(&path).map_err(|_| {
+            OutlookFailure::outcome_unknown("error.rfi.outlookArchive.exportFailed")
+        })?;
+        if !metadata.file_type().is_file()
+            || metadata.len() < COMPOUND_FILE_HEADER.len() as u64
+            || metadata.len() > MAX_ARCHIVED_MSG_BYTES
+        {
+            return Err(OutlookFailure::no_effect(
+                "error.rfi.outlookArchive.invalidMsg",
+            ));
+        }
+        let bytes = fs::read(&path).map_err(|_| {
+            OutlookFailure::outcome_unknown("error.rfi.outlookArchive.exportFailed")
+        })?;
+        if !bytes.starts_with(COMPOUND_FILE_HEADER) {
+            return Err(OutlookFailure::no_effect(
+                "error.rfi.outlookArchive.invalidMsg",
+            ));
+        }
+        Ok(bytes)
     }
 }
 

@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.5.2 reliability and Windows certification
+## Now — 1.6.0 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -32,8 +32,8 @@ the historical tracker.
   Windows and representative combined-scan acceptance evidence.
 - Keep the implemented warning search, type filtering, and exact-RFI page focus
   covered by large combined-scan usability checks.
-- Prepare consistent Outlook drafts and archive reviewed publication mail as EML
-  without automatically sending it.
+- Keep the implemented Outlook Reply All draft and selected-message Unicode MSG
+  archive covered by classic Outlook, destination-collision, and Undo acceptance.
 
 ## Later — document automation breadth
 

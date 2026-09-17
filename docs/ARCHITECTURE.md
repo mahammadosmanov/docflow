@@ -210,6 +210,10 @@ metadata first, so a revised Plan cannot display a disabled cell as executable.
 - Diagnostics preview is local and side-effect-free; there is no telemetry or
   hosted logging path.
 - Outlook reply apply revalidates the exact selected MailItem, calls ReplyAll, prepends bounded escaped content, and displays only an unsent draft; it never sends or synthesizes recipients.
+- Outlook archive apply consumes owner/session-bound native authority, revalidates
+  the exact selected MailItem fingerprint, validates Outlook's Unicode MSG
+  export in private temporary storage, and passes only verified bytes to the
+  generic capability-scoped no-clobber writer and journal.
 - Apply executes only the cached approved plan; it never recalculates.
 - Every step is durably journaled as pending before execution.
 - Existing destinations are never overwritten, including race-time collisions.

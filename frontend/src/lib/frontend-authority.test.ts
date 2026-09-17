@@ -181,7 +181,7 @@ describe("frontend authority boundary", () => {
       }
     }
     const releaseSafety = read("docs/RELEASE_SAFETY.md");
-    expect(releaseSafety).toContain("exact eleven-operation registry");
+    expect(releaseSafety).toContain("exact twelve-operation registry");
     expect(releaseSafety).toContain("RFI Follow Up");
   });
 
@@ -280,6 +280,29 @@ describe("frontend authority boundary", () => {
       "error.rfi.outlookDraft.selectionChanged",
       "error.rfi.outlookDraft.draftMissingOrChanged",
       "error.rfi.outlookDraft.undoUnavailable",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
+  it("defines the guarded Outlook MSG archive boundary in every locale", () => {
+    const requiredKeys = [
+      "op.rfi.outlook_archive_selected.title",
+      "op.rfi.outlook_archive_selected.desc",
+      "param.rfi.outlookArchive.destination",
+      "param.rfi.outlookArchive.destination.help",
+      "step.rfi.outlookArchive",
+      "warn.rfi.outlookArchive.localCopy",
+      "error.rfi.outlookArchive.destinationExists",
+      "error.rfi.outlookArchive.selectionChanged",
+      "error.rfi.outlookArchive.invalidMsg",
+      "error.rfi.outlookArchive.writeUnknown",
     ];
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(

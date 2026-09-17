@@ -223,6 +223,25 @@
     "titleKey": "op.rfi.outlook_reply_draft.title"
   },
   {
+    "descriptionKey": "op.rfi.outlook_archive_selected.desc",
+    "id": "rfi.outlook_archive_selected",
+    "schema": [
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": null,
+        "helpKey": "param.rfi.outlookArchive.destination.help",
+        "kind": "folder",
+        "labelKey": "param.rfi.outlookArchive.destination",
+        "name": "destination",
+        "required": true,
+        "visibleWhen": {}
+      }
+    ],
+    "supportsPresets": false,
+    "titleKey": "op.rfi.outlook_archive_selected.title"
+  },
+  {
     "descriptionKey": "op.files.batch_print.desc",
     "id": "files.batch_print",
     "schema": [

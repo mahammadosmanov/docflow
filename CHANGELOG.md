@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.6.0 - 2026-09-17
+
+### Added
+
+- Archive Selected Outlook Mail previews one exact classic Outlook message and
+  creates a native Unicode MSG staging copy. The deterministic Windows-safe
+  filename and destination are visible before Apply; the existing RFI grouping
+  operation can then copy the MSG into every exact related RFI folder.
+
+### Safety
+
+- Apply revalidates the exact sole MailItem selection and bounded fingerprint,
+  consumes owner/session-bound authority once, validates Outlook's private MSG
+  export, and performs one capability-scoped no-clobber write. It never sends,
+  moves, deletes, marks, or changes mailbox content.
+- The created MSG is journaled. Undo removes only its exact unchanged hash;
+  collisions, selection drift, invalid exports, locks, and uncertain writes fail
+  closed or remain recoverable.
+
 ## 1.5.2 - 2026-09-17
 
 ### Fixed

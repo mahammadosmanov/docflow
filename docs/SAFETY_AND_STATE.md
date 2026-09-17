@@ -40,6 +40,14 @@ Undo runs successful journaled steps in reverse. It refuses to overwrite later
 user edits, verifies identities/hashes, and removes only empty directories that
 the operation created. Review delete is a recoverable move to app trash.
 
+Outlook MSG archive Preview stores no body, recipient, attachment, or Outlook
+identifier in the executable Plan. Private native authority binds the plan to
+the selected MailItem identity and fingerprint. Apply consumes that authority
+once, revalidates selection before `SaveAs`, validates the private temporary MSG
+envelope and size, then performs one capability-scoped no-clobber write. Export
+failure creates no approved destination; uncertain destination writes remain
+recovery-required. Undo hash-checks and removes only the unchanged created MSG.
+
 ## Persistent local state
 
 Incoming RFI grouping never uses the incoming folder as output. Preview scans
