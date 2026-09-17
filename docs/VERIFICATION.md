@@ -4,6 +4,44 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.6.1 - 2026-09-17
+
+The OTHERS-only Worley correction passed Rust formatting, Clippy with all
+targets and features with warnings denied, Cargo check, 348 unit tests, and 214
+integration tests; four operator-file/workbook tests remained intentionally
+ignored in the ordinary suite. Focused regressions prove that only the exact
+case-insensitive canonical RFI PDF is eligible, an unrelated lower-page
+signature is ignored, a missing exact PDF remains non-actionable, and unchanged
+results use only the new detector profile.
+
+The ignored operator-PDF regression was then run explicitly with the supplied
+CIV-1041 and MEC-0737 files. CIV-1041, which has name/signature ink inside the
+bottom-right OTHERS cell, classified signed. MEC-0737, whose OTHERS cell is empty
+while other page fields contain marks, classified unsigned. The private PDFs
+were not copied into Git or release artifacts.
+
+All 23 Node tests and 53 React tests passed. Version, documentation, source,
+dependency-license, and production frontend build gates passed; the known
+non-failing frontend chunk-size advisory remains. Windows x64 Rust check and
+complete test-target compilation passed for exact implementation commit
+`989113b56aa11d33660bca83f9382e039311cee0`.
+
+The cross-build produced a GUI-subsystem portable executable and per-user NSIS
+installer. The OCR-inclusive ZIP passed package and archive-integrity audits,
+and all generated checksums verified. Cross-linker PDB warnings were non-failing
+debug-information warnings. The macOS 27 proc-macro workaround was confined to
+the build environment and a temporary macOS 11 bundle target; repository
+configuration was restored to macOS 13 afterward. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `dc0a9dd91513f3784534a21e62e23bfb30fc5251cfc1e34acbb0344df9c4a4b3`;
+- portable EXE: `1f158425b4f6a39c4c798141f5303d5729088bd9fad82e08a7a0c3b7949efad6`;
+- per-user installer: `c28e69a68e942c45159ae1959b89af29f8bedf76836e7d5133c14508ee9bbfe8`.
+
+Windows executables were cross-compiled but not run on this macOS host. Native
+Windows/OneDrive acceptance across representative scan variations remains an
+external gate; a safe false negative must be reviewed rather than weakening the
+OTHERS-only authority.
+
 ## 1.6.0 - 2026-09-17
 
 The selected-Outlook-message archive passed Rust formatting, Clippy with all

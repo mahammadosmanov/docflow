@@ -25,3 +25,8 @@
   requires another explicit Preview and Apply.
 - Windows startup uses the current-user Run key and grants no extra filesystem
   authority. Native Windows/OneDrive/GlobalProtect acceptance remains external.
+- Worley signing authority is intentionally narrow: only the exact
+  case-insensitive `RFI No. <canonical RFI>.pdf` and only actual ink in the
+  bottom-right page-one OTHERS name/signature cell. Never fall back to another
+  PDF or infer signing from contractor signatures, dates, notes, or other marks.
+  Every detector change must use a new scan-index profile.
