@@ -392,7 +392,7 @@
   "error.print.queueSourceReselectionRequired": "Bu eski yazdırma kuyruğu güvenle devam ettirilemez. Kuyruğu silip dosyaları yeniden seç.",
   "print.resume.title": "Tamamlanmamış yazdırma kuyruğu bulundu",
   "print.resume.summary": "{count} iş incelenebilir veya devam ettirilebilir",
-  "print.resume.review": "Kalanları incele",
+  "print.resume.review": "Yalnız basılmayanları yeniden dene",
   "print.resume.discard": "Kuyruğu bırak",
   "params.previous.title": "Önceki yazdırma ayarları hazır",
   "params.previous.help": "Dosyalar güvenlik için saklanmaz. Önceki yazıcı, kağıt, yön, renk ve kuyruk ayarlarını yalnız istersen getir.",

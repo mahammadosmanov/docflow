@@ -557,11 +557,14 @@ fn submit_controlled_pdf_inner(
         ));
     }
 
-    let document = crate::windows_pdf::InMemoryPdf::load(pdf_bytes)
-        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
-    let page_count = document
-        .page_count()
-        .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
+    let document = crate::windows_pdf::InMemoryPdf::load(pdf_bytes).map_err(|_| {
+        PrintFailure::failed("error.print.excelExportMalformedPdf")
+            .with_diagnostic("excel_pdf stage=native_load")
+    })?;
+    let page_count = document.page_count().map_err(|_| {
+        PrintFailure::failed("error.print.excelExportMalformedPdf")
+            .with_diagnostic("excel_pdf stage=native_page_count")
+    })?;
     let pages = selected_pdf_pages("all", page_count)
         .map_err(|error| PrintFailure::failed(error.message))?;
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;

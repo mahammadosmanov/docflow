@@ -57,8 +57,9 @@ pass from a macOS build or Windows cross-compile.
    the same job continues without resubmission; deleting/deleted must still
    pause. Include safe workbooks with several worksheets and confirm every
    selected sheet exports before submission. If Excel fails, export support
-   diagnostics and record the pathless COM stage/HRESULT. Never auto-retry
-   uncertainty.
+   diagnostics and record the pathless COM stage/HRESULT or native PDF stage.
+   Use Retry unprinted only for a saved incomplete queue; a new Preview is new
+   authority and may print completed files again. Never auto-retry uncertainty.
 9. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
    MSG, EML with several RFIs, unmatched input, and a destination collision.
    Confirm source hashes do not change, multi-RFI mail fans out correctly,

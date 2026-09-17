@@ -4,11 +4,11 @@ Updated: 2026-09-17
 
 ## Current release
 
-- Version: 1.5.1
+- Version: 1.5.2
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `4e1e22b`
-- Objective: make the Windows Excel print route match successful manual printing
-  without weakening controlled submission or duplicate-output protection.
+- Implementation commit: pending
+- Objective: accept Excel worksheet PDFs through Windows' native decoder while
+  retaining pre-effect validation and failed-only queue resume.
 
 ## Verified
 
@@ -21,13 +21,17 @@ Updated: 2026-09-17
   before configured file-effect or total-MiB mass-change limits are exceeded.
 - Excel automation no longer writes global calculation properties before a
   workbook exists, and pathless diagnostics retain COM stage/HRESULT evidence.
+- Excel private PDFs receive bounded envelope checks; Windows' native decoder
+  owns load and non-zero page-count validation before `StartDoc`.
+- The incomplete-queue action explicitly identifies failed-only retry; completed
+  and completed-unconfirmed jobs remain disabled in resumed plans.
 - Rust, Node, React, frontend, version, documentation, source, and license checks
   pass. Windows x64 Rust check and test-target compilation pass as recorded in
   `docs/VERIFICATION.md`.
 
 ## External gate
 
-- Test the 1.5.1 Windows package with isolated copies of both supplied MDR
+- Build and test the 1.5.2 Windows package with isolated copies of both supplied MDR
   workbook shapes, then continue the SharePoint/OneDrive,
   GlobalProtect/network, local, and backup roots. Confirm startup, publication,
   one-minute cadence, settle timing, mass-change brakes, interruption, and Undo.

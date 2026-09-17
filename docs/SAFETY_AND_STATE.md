@@ -116,8 +116,11 @@ receipt cases; it is not physical-output proof and cannot authorize a retry.
 
 Excel automation does not modify application-wide calculation mode before a
 workbook is open. Its read-only Open call still disables links, events, alerts,
-and macros. Pathless failure evidence records only an allowlisted COM stage and
-HRESULT.
+and macros. A private export must have a bounded PDF envelope; Windows' native
+decoder then loads it and confirms a non-zero page count before any printer job
+starts. The mutation-oriented parser is not used as a print-compatibility gate.
+Pathless failure evidence records only an allowlisted COM or native PDF stage
+and HRESULT when available.
 
 ## Incremental scan index
 

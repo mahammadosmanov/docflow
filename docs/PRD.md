@@ -53,7 +53,10 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   pause later files. Recoverable device states wait within the approved timeout,
   explicit terminal faults and uncertain cancellation pause without auto-retry,
   and previous task files are never restored automatically. Safe scalar settings
-  are reusable only through an explicit operator action.
+  are reusable only through an explicit operator action. Excel worksheet PDFs
+  pass bounded private-byte envelope checks, then Windows' native PDF decoder
+  must load them and report at least one page before `StartDoc`; the stricter
+  mutation parser is not a print-compatibility gate.
 - **DF-018 — Durable incremental scanning:** repeated large RFI-system analysis
   uses an owner-, root-, operation-, algorithm-, and file-fingerprint-scoped
   local index. Every newly completed file is checkpointed immediately; changed,

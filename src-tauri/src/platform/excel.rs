@@ -1120,11 +1120,7 @@ impl ExportedWorksheetPdf {
             .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?
             .len();
         let bytes = read_pdf_bytes_bounded(&mut source, declared_len, crate::pdf::MAX_PDF_BYTES)?;
-        let inspection = crate::pdf::inspect_bytes(Arc::clone(&bytes))
-            .map_err(|_| PrintFailure::failed("error.print.excelExportMalformedPdf"))?;
-        if inspection.page_count == 0 {
-            return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
-        }
+        validate_pdf_envelope(&bytes)?;
         self.validated_bytes = Some(bytes);
         Ok(())
     }
@@ -1154,6 +1150,19 @@ impl ExportedWorksheetPdf {
         };
         workspace.cleanup()
     }
+}
+
+fn validate_pdf_envelope(bytes: &[u8]) -> Result<(), PrintFailure> {
+    let tail = &bytes[bytes.len().saturating_sub(1_024)..];
+    if !bytes.starts_with(b"%PDF-")
+        || !tail.windows(b"%%EOF".len()).any(|part| part == b"%%EOF")
+        || !bytes
+            .windows(b"startxref".len())
+            .any(|part| part == b"startxref")
+    {
+        return Err(PrintFailure::failed("error.print.excelExportMalformedPdf"));
+    }
+    Ok(())
 }
 
 fn read_pdf_bytes_bounded(
@@ -2802,6 +2811,36 @@ mod tests {
                 assert!(submitted.lock().unwrap().is_empty());
                 assert_eq!(*events.lock().unwrap(), ["policy", "export"]);
             }
+        }
+
+        #[test]
+        fn excel_pdf_envelope_is_delegated_to_the_platform_decoder() {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let submitted = Arc::new(Mutex::new(Vec::new()));
+            let pipeline = ExcelExportPipeline::for_testing(
+                Arc::new(RecordingPolicy {
+                    events: Arc::clone(&events),
+                }),
+                Arc::new(BytesExporter {
+                    events: Arc::clone(&events),
+                    bytes: b"%PDF-1.7\nExcel-compatible objects\nstartxref\n0\n%%EOF\r\n".to_vec(),
+                }),
+                Arc::new(RecordingSubmitter {
+                    events: Arc::clone(&events),
+                    submitted: Arc::clone(&submitted),
+                }),
+            );
+            let cancellation = CancellationRegistry::default().register("platform-pdf-decoder");
+            let (_directory, source, signature) = source_fixture();
+            let job = worksheet_job(source.absolute(), signature, "MEC", 1);
+            let mut source_file = source.open_read().unwrap();
+
+            pipeline
+                .export_and_submit(&job, &source, &mut source_file, cancellation)
+                .unwrap();
+
+            assert_eq!(*events.lock().unwrap(), ["policy", "export", "submit"]);
+            assert_eq!(submitted.lock().unwrap().len(), 1);
         }
 
         #[test]

@@ -24,8 +24,10 @@
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.
 - The isolated Excel exporter avoids pre-open calculation-mode writes that fail
-  on some desktop Excel versions. Pathless diagnostics retain the failing COM
-  member stage and HRESULT when export still fails.
+  on some desktop Excel versions. It applies a bounded PDF envelope check, then
+  uses Windows' native PDF decoder and page count as the print-readiness
+  authority before printer submission. Pathless diagnostics retain the failing
+  COM or native PDF stage.
 - Settings support diagnostics includes a pathless snapshot of the latest owned
   print queue: printer inventory availability, selected printer, file formats,
   native/controlled routes, requested options, attempts, outcomes, counts, and

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.5.1",
+  "currentVersion": "1.5.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -566,9 +566,17 @@
       "version": "1.5.1",
       "date": "2026-09-17",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.5.1",
       "summary": "Fix pre-open Excel COM calculation-mode failures and retain pathless COM stage and HRESULT diagnostics."
+    },
+    {
+      "version": "1.5.2",
+      "date": "2026-09-17",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.5.2",
+      "summary": "Delegate Excel worksheet PDF compatibility to Windows' native decoder before printing and clarify failed-only queue resume."
     }
   ]
 }

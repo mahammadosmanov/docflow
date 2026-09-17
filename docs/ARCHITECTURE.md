@@ -258,6 +258,12 @@ Calculation or CalculateBeforeSave before opening a workbook because desktop
 Excel can reject those writes when no workbook exists. A COM failure preserves
 its allowlisted member stage and HRESULT only in the pathless queue diagnostic;
 the operator-facing result remains localized and source paths are omitted.
+Excel's private worksheet PDF receives bounded size, identity, header,
+`startxref`, and trailing `%%EOF` checks. Windows' native PDF decoder then loads
+the same captured bytes and verifies a non-zero page count before `StartDoc`.
+DocFlow's stricter mutation parser is intentionally not used for this
+compatibility decision because a printable Excel PDF need not satisfy every
+structure supported by the mutation engine.
 
 For native file-association handlers, successful `ShellExecute` is the last
 available submission boundary when the application or driver never exposes a

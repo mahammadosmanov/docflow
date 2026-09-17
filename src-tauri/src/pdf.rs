@@ -148,14 +148,6 @@ pub fn inspect(path: &Path) -> Result<PdfInspection, PdfError> {
     ParsedPdf::load(path)?.inspect()
 }
 
-#[cfg(any(target_os = "windows", test))]
-pub(crate) fn inspect_bytes(bytes: Arc<[u8]>) -> Result<PdfInspection, PdfError> {
-    if bytes.is_empty() || bytes.len() as u64 > MAX_PDF_BYTES {
-        return Err(PdfError::new("PDF file size is unsupported"));
-    }
-    ParsedPdf::parse(bytes)?.inspect()
-}
-
 pub fn replace_first_page_incremental(
     archive_path: &Path,
     signed_path: &Path,

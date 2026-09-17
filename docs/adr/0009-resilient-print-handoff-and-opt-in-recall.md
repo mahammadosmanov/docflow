@@ -79,6 +79,16 @@ until release, explicit completion, cancellation, or timeout; `DELETING` and
 `DELETED` remain immediately uncertain. This changes observation only and never
 resubmits a job.
 
+## 2026-09-17 amendment
+
+Excel-generated worksheet PDFs use a bounded private-file envelope check before
+Windows' native PDF decoder loads the same captured bytes and confirms a
+non-zero page count. The document-mutation parser is not a print-compatibility
+gate: it can reject valid PDF structures that Windows can safely render. Native
+decode still occurs before `StartDoc`, so a malformed document cannot create a
+printer-side effect. Support diagnostics record only the pathless native load or
+page-count stage.
+
 ## Rollback
 
 Reinstall the previous immutable release to restore application behavior. Saved

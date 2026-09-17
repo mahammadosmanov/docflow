@@ -420,7 +420,7 @@
   "error.print.queueSourceReselectionRequired": "This older print queue cannot be resumed safely. Discard it, then reselect the files.",
   "print.resume.title": "Unfinished print queue found",
   "print.resume.summary": "{count} jobs can be reviewed or resumed",
-  "print.resume.review": "Review remaining",
+  "print.resume.review": "Retry unprinted only",
   "print.resume.discard": "Discard queue",
   "params.previous.title": "Previous print settings available",
   "params.previous.help": "Files are not retained for safety. Restore the previous printer, paper, orientation, color, and queue settings only when you choose.",

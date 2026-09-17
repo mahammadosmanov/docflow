@@ -4,6 +4,32 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.5.2 - 2026-09-17
+
+Excel PDF handoff passed Rust formatting, Clippy with all targets and features
+with warnings denied, Cargo check, 346 unit tests, and 211 integration tests;
+three operator-workbook tests remained intentionally ignored. Focused evidence
+verifies empty/malformed PDFs stay blocked, bounded bytes are captured before
+submission, source substitution remains rejected, Excel-compatible envelopes
+reach the platform decoder, retries always re-export, and completed-unconfirmed
+native jobs remain excluded from saved-queue retry.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed. The known
+non-failing frontend chunk-size advisory remains. Windows x64 Rust check and
+complete test-target compilation passed. Windows test executables, desktop
+Excel, Windows native PDF decode, and EPSON paper output were not run on this
+macOS host.
+
+The reported 1.5.1 result proves Excel created a non-empty file for every one of
+the 11 and 4 selected worksheets, but DocFlow rejected each before `StartDoc` at
+its mutation-oriented PDF parser. Version 1.5.2 replaces that incompatible gate
+with a bounded envelope check followed by Windows native PDF load and non-zero
+page-count validation before printer submission. Native Windows must still
+print every selected sheet from isolated copies of both supplied MDR workbooks.
+Use Retry unprinted only on the incomplete queue so already completed DOCX jobs
+are not included in a newly approved batch.
+
 ## 1.5.1 - 2026-09-17
 
 The Excel pre-open COM fix passed Rust formatting, Clippy with all targets and

@@ -8,6 +8,26 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.5.2 - 2026-09-17
+
+### Fixed
+
+- Excel worksheet printing no longer rejects a non-empty PDF merely because
+  DocFlow's mutation-oriented PDF parser does not support one of Excel's valid
+  PDF structures. A bounded PDF envelope check now hands the private bytes to
+  Windows' native PDF decoder, which validates the document and page count
+  before any printer job starts.
+- The unfinished-queue action now explicitly says that it retries only
+  unprinted jobs. Starting a new batch remains a new approval and can print
+  previously completed files again.
+
+### Safety
+
+- Empty, oversized, incomplete, substituted, or non-PDF exports remain blocked.
+  Windows native PDF load and non-zero page-count checks run before `StartDoc`;
+  failures remain retryable without printer side effects and include a pathless
+  decoder stage in support diagnostics.
+
 ## 1.5.1 - 2026-09-17
 
 ### Fixed
