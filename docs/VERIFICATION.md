@@ -28,10 +28,19 @@ non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
 complete test-target compile passed; Windows test executables and desktop Excel
 were not run on this macOS host.
 
-No Windows package had been produced at this checkpoint. Native Windows must
-still print every selected sheet from isolated copies of both MDR workbook
-shapes. If a failure remains, the 1.5.1 support report must identify the exact
-pathless COM stage and HRESULT before another change is made.
+The Windows x64 cross-build from implementation commit `4e1e22b` completed. The
+OCR-inclusive ZIP passed the package audit, all generated checksums verified,
+and the installer and portable executable identify as Windows GUI-subsystem PE
+files. Cross-linker PDB warnings were non-failing debug-information warnings.
+Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `46c94d9e479b449eb1725578a4b8ed6faa830c2e89acdbf3a7654b81bef754ca`;
+- portable EXE: `4a4662b11240e9ad9d45411a6c95fafe17fbb3b956ac3f32382071eb27fbde6a`;
+- per-user installer: `6420b11ec3f53e083308f95a09beb89276e039775ba9c727c85763b3c910681f`.
+
+Native Windows must still print every selected sheet from isolated copies of
+both MDR workbook shapes. If a failure remains, the 1.5.1 support report must
+identify the exact pathless COM stage and HRESULT before another change is made.
 
 ## 1.5.0 - 2026-09-17
 
