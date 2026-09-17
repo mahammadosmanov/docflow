@@ -6,7 +6,7 @@ Updated: 2026-09-17
 
 - Version: 1.6.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending
+- Implementation commit: `dfcbb98`
 - Objective: archive one exact selected classic Outlook message as a validated,
   journaled, no-clobber Unicode MSG staging copy without mailbox mutation.
 
@@ -43,3 +43,6 @@ Updated: 2026-09-17
   Export a support report after representative EPSON
   L15160 Series success, partial output, empty-paper signal, and uncertain jobs;
   compare it with actual physical output before changing retry policy.
+- On classic Outlook for Windows, archive one non-sensitive selected mail into
+  an isolated folder. Verify readable MSG content/attachments, mailbox
+  immutability, selection-drift refusal, collision refusal, and guarded Undo.

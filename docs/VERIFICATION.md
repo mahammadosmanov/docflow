@@ -22,8 +22,22 @@ evidence for this Rust-authority version.
 
 Native classic-Outlook `SaveAs(olMSGUnicode)`, readable attachment preservation,
 mailbox immutability, OneDrive destination behavior, selection drift, collision,
-and Undo remain Windows operator gates. Windows x64 compile and package evidence
-will be recorded against the exact implementation commit below.
+and Undo remain Windows operator gates.
+
+Windows x64 Rust check and complete test-target compilation passed for exact
+implementation commit `dfcbb98`. The cross-build produced a GUI-subsystem
+portable executable and per-user NSIS installer. The OCR-inclusive ZIP passed
+package and archive-integrity audits and all generated checksums verified.
+Cross-linker PDB warnings were non-failing debug-information warnings. The
+macOS 27 proc-macro workaround was confined to the build environment and a
+temporary macOS 11 bundle target; repository configuration was restored to
+macOS 13 afterward. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `30cac61872c330929ec027bed5edc345b76eb92306aa62740cd996ccb5d62c99`;
+- portable EXE: `0da138e049a1bb58df6d959b46599dfbdac9e1050bd6801824828da6ccc52ba5`;
+- per-user installer: `2f0e4868af827db89504e3732db9961c2701d817dadb192d0c192ea8632f5814`.
+
+Windows test executables and live Outlook were not run on this macOS host.
 
 ## 1.5.2 - 2026-09-17
 
