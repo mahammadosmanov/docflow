@@ -25,15 +25,17 @@ Updated: 2026-09-17
   owns load and non-zero page-count validation before `StartDoc`.
 - The incomplete-queue action explicitly identifies failed-only retry; completed
   and completed-unconfirmed jobs remain disabled in resumed plans.
+- Operator acceptance passed on Windows with both supplied DOCX files and every
+  selected worksheet from both supplied MDR workbooks; no application error or
+  missing paper output was reported.
 - Rust, Node, React, frontend, version, documentation, source, and license checks
   pass. Windows x64 Rust check and test-target compilation pass as recorded in
   `docs/VERIFICATION.md`.
 
 ## External gate
 
-- Test the 1.5.2 Windows package with isolated copies of both supplied MDR
-  workbook shapes, then continue the SharePoint/OneDrive,
-  GlobalProtect/network, local, and backup roots. Confirm startup, publication,
+- Continue with the SharePoint/OneDrive, GlobalProtect/network, local, and
+  backup roots. Confirm startup, publication,
   one-minute cadence, settle timing, mass-change brakes, interruption, and Undo.
   Export a support report after representative EPSON
   L15160 Series success, partial output, empty-paper signal, and uncertain jobs;

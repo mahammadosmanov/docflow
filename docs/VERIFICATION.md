@@ -42,6 +42,13 @@ configuration was restored to macOS 13 afterward. Artifact SHA-256 values:
 - portable EXE: `c092230e982e494846382d6748e1d1b8d9ac239e6624659c65bd5fb230ec6b07`;
 - per-user installer: `ed87b0bba860bd5e6ec192bee2ca07e4a4181eac902bf2bc272e4b9ebd45b43b`.
 
+Operator acceptance on 2026-09-17 passed with the 1.5.2 Windows package and the
+reported mixed print set: both supplied DOCX files and every selected worksheet
+from the two supplied MDR workbooks printed without an application error or a
+missing output. This closes the reported Excel native-PDF compatibility defect.
+Paper-out, offline/reconnect, cancellation, concurrent external print jobs, and
+other device-fault scenarios remain separate acceptance gates.
+
 ## 1.5.1 - 2026-09-17
 
 The Excel pre-open COM fix passed Rust formatting, Clippy with all targets and
