@@ -650,6 +650,24 @@
         "helpKey": "param.replica.intervalMinutes.help", "kind": "int",
         "labelKey": "param.replica.intervalMinutes", "name": "interval_minutes",
         "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": 30,
+        "helpKey": "param.replica.settleSeconds.help", "kind": "int",
+        "labelKey": "param.replica.settleSeconds", "name": "settle_seconds",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": 250,
+        "helpKey": "param.replica.maxChangedFiles.help", "kind": "int",
+        "labelKey": "param.replica.maxChangedFiles", "name": "max_changed_files",
+        "required": true, "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {}, "choices": [], "default": 2048,
+        "helpKey": "param.replica.maxChangedMib.help", "kind": "int",
+        "labelKey": "param.replica.maxChangedMib", "name": "max_changed_mib",
+        "required": true, "visibleWhen": {}
       }
     ],
     "supportsPresets": false,

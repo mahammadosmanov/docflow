@@ -145,7 +145,9 @@ The first unattended replica run is still an ordinary explicit Preview and
 Apply. A successful Apply stores the exact profile as revocable standing
 authorization. While DocFlow is open, a native scheduler creates a fresh cached
 Plan at the configured interval and uses the same grants, preflight, backup,
-journal, and Undo authority. Any unsafe discovery or Apply result disables the
+journal, and Undo authority. Recently modified source files defer a run until
+the approved settle window passes. Approved per-run file and byte limits stop a
+mass change before Apply; other unsafe discovery or Apply results disable the
 profile. Windows startup is a separate per-user HKCU Run setting; it grants no
 additional filesystem authority.
 

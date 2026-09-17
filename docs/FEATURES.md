@@ -46,9 +46,12 @@
 - Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
 - Optional per-user Windows startup. Replica publication can run at a selected
-  interval while DocFlow is open after one explicit profile approval. Settings
+  interval, down to one minute, while DocFlow is open after one explicit profile approval. Settings
   can pause or resume that stored profile, shows its live state, and reflects an
   automatic safety pause; any unsafe failure pauses it.
+- Automatic replica publication waits for recently changed source files to
+  settle. Per-profile maximum file effects and total MiB act as mass-change
+  circuit breakers; exceeding either pauses automation before Apply.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
   RFI file-name/content grouping,
   recursive signed-input and archive discovery, PDF orientation discovery and

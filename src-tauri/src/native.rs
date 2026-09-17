@@ -419,7 +419,7 @@ impl NativeBackend {
             }
         };
         let outcome = self
-            .cache_replica_plan(params, &caller, |_| {})
+            .cache_replica_plan(params, &caller, true, |_| {})
             .and_then(|plan| {
                 let plan_id = plan.plan_id.clone();
                 self.filesystem
@@ -452,6 +452,13 @@ impl NativeBackend {
                     "lastErrorCode".to_string(),
                     Value::String(error.code.to_string()),
                 );
+                let _ = self
+                    .settings
+                    .save_section("replicaAutomation", Some(section));
+            }
+            Err(error) if error.message == "error.replica.sourceSettling" => {
+                section.insert("status".to_string(), Value::String("deferred".to_string()));
+                section.insert("lastErrorCode".to_string(), Value::String(error.message));
                 let _ = self
                     .settings
                     .save_section("replicaAutomation", Some(section));
@@ -1574,13 +1581,14 @@ impl NativeBackend {
             ));
         }
         let caller = self.caller_identity()?;
-        encode(self.cache_replica_plan(request.values, &caller, progress)?)
+        encode(self.cache_replica_plan(request.values, &caller, false, progress)?)
     }
 
     fn cache_replica_plan<F>(
         &self,
         values: ReplicaPublishParams,
         caller: &CallerIdentity,
+        automatic: bool,
         progress: F,
     ) -> Result<crate::contracts::Plan, BackendError>
     where
@@ -1625,12 +1633,21 @@ impl NativeBackend {
             .collect::<Vec<_>>();
         grants.push((backup, GrantAccess::ReadWrite));
         let provisional = self.filesystem.issue_provisional_grants(&scope, &grants)?;
-        let plan = replica_publish::preview_with_index(
-            &values,
-            &caller.owner_id,
-            &self.scan_index,
-            progress,
-        )?;
+        let plan = if automatic {
+            replica_publish::preview_automatic_with_index(
+                &values,
+                &caller.owner_id,
+                &self.scan_index,
+                progress,
+            )?
+        } else {
+            replica_publish::preview_with_index(
+                &values,
+                &caller.owner_id,
+                &self.scan_index,
+                progress,
+            )?
+        };
         let grant_ids = provisional
             .grants()
             .iter()

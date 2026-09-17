@@ -36,6 +36,9 @@ fn publication_is_backup_first_hash_verified_and_losslessly_undoable() {
         root_files: String::new(),
         unattended: false,
         interval_minutes: 15,
+        settle_seconds: 30,
+        max_changed_files: 250,
+        max_changed_mib: 2_048,
     };
     let plan = replica_publish::preview(&params, |_| {}).unwrap();
     let authority =

@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.4.0**. `VERSION` is authoritative.
+Current product version: **1.5.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -61,7 +61,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
     update without touching Follow Up or Worley data.
 20. One selected RFI System is the sole source for one-way publication to two
     targets. Replacements retain verified backups; target-only files are never
-    deleted; unattended publication pauses on any unsafe failure.
+    deleted; unattended publication supports one-minute checks, defers for
+    recently modified source files, and pauses before approved mass-change
+    limits are exceeded.
 21. Repeated replica comparisons reuse only exact fingerprint-scoped local
     SHA-256 evidence. Completed hash work survives interruption, while Apply
     always validates live files and never trusts the index as mutation authority.

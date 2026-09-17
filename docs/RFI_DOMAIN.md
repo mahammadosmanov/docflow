@@ -146,4 +146,7 @@ Incoming request prose is inconsistent. Offline/model extraction proposes data;
 the operator checks and edits the full preview before any number is assigned.
 RFI numbering comes from the current workbook, never from the email. Reply draft
 creation uses exactly one currently selected Outlook message, Reply All, escaped
-bounded content, and display-only behavior. Sending remains manual.
+bounded content, and display-only behavior. Sending remains manual. Attached
+files and unusual requests also remain operator-reviewed: mail parsing may
+suggest an ITP, item, area, or requested count, but it never certifies document
+correctness or makes a lifecycle transition by itself.

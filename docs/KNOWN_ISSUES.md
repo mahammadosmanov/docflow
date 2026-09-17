@@ -8,8 +8,9 @@ These are not silently waived by passing local tests.
   isolated non-sensitive copies of the actual SharePoint/OneDrive,
   GlobalProtect/network, and local roots. Verify long paths, locks, offline and
   reconnect states, interruption, startup enable/disable, retained backups,
-  target-only warnings, profile pause/resume, Apply, restart, and Undo. macOS
-  tests and Windows cross-compile do not certify these external systems.
+  target-only warnings, one-minute cadence, timestamp/settle behavior,
+  file/size circuit breakers, profile pause/resume, Apply, restart, and Undo.
+  macOS tests and Windows cross-compile do not certify these external systems.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy
   of the current RFI Log and the real nested RFI System. Verify traversal speed,

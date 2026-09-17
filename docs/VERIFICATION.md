@@ -4,6 +4,28 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.5.0 - 2026-09-17
+
+Guarded automatic replica publication passed Rust formatting, Clippy with all
+targets and features with warnings denied, Cargo check, 344 unit tests, and 211
+integration tests; three operator-workbook tests remained intentionally ignored.
+Focused evidence verifies that a recently modified source defers an automatic
+run and a file-effect limit stops a mass change before Apply. Registry snapshot
+evidence covers the generic settle/file/MiB controls, and the established replica
+suite still covers backup-first publication, live hash verification, journal,
+Undo, and target-extra preservation.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed. The known
+non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
+complete test-target compile passed; Windows test executables were not run on
+this macOS host.
+
+No Windows package was produced for this checkpoint. Native Windows testing must
+still verify one-minute scheduling, OneDrive/network modification timestamps,
+file-settle deferral, both mass-change brakes, startup, interruption, Apply, and
+Undo on isolated copies of the three real system types.
+
 ## 1.4.0 - 2026-09-17
 
 Pathless printer diagnostics passed Rust formatting, Clippy with all targets and

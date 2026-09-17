@@ -448,6 +448,39 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 Map::new(),
                 Some("param.replica.intervalMinutes.help"),
             ),
+            parameter(
+                "settle_seconds",
+                ParamKind::Int,
+                "param.replica.settleSeconds",
+                json!(30),
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.settleSeconds.help"),
+            ),
+            parameter(
+                "max_changed_files",
+                ParamKind::Int,
+                "param.replica.maxChangedFiles",
+                json!(250),
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.maxChangedFiles.help"),
+            ),
+            parameter(
+                "max_changed_mib",
+                ParamKind::Int,
+                "param.replica.maxChangedMib",
+                json!(2048),
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.replica.maxChangedMib.help"),
+            ),
         ],
     );
 
@@ -777,6 +810,9 @@ mod tests {
                 "error.param.required.source_root".to_string(),
                 "error.param.required.backup_root".to_string(),
                 "error.param.required.interval_minutes".to_string(),
+                "error.param.required.settle_seconds".to_string(),
+                "error.param.required.max_changed_files".to_string(),
+                "error.param.required.max_changed_mib".to_string(),
             ]
         );
         assert_eq!(

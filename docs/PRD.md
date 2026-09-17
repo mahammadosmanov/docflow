@@ -125,6 +125,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   document names, document paths, contents, credentials, and tokens; recursive
   redaction and exact copy validation remain mandatory. This evidence diagnoses
   software handoff but never certifies that paper physically exited a printer.
+- **DF-028 — Guarded near-real-time replica publication:** an approved replica
+  profile may check once per minute while DocFlow is open. Automatic publication
+  defers while any scoped source file is newer than the configured settle window.
+  Configured file-effect and total-byte brakes pause standing authorization
+  before a mass change; manual Preview remains available for inspection. These
+  controls are part of the exact approved profile and do not weaken backup,
+  live-hash, journal, Undo, or no-delete rules.
 
 ## Scope
 

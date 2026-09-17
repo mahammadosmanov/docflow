@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.4.0 is a Tauri 2 desktop application for eleven high-risk document
+DocFlow 1.5.0 is a Tauri 2 desktop application for eleven high-risk document
 workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
@@ -26,7 +26,8 @@ workflows:
   guarded RFI Log Inspection Status updates to Completed
 - Publish RFI System replicas: keep one selected source synchronized to two
   targets with retained backups, guarded Undo, optional unattended checks, and
-  incremental hashing for unchanged files
+  incremental hashing for unchanged files; settle delays and configurable
+  mass-change brakes protect automatic runs
 
 Large RFI-system scans and replica comparisons use a durable local incremental
 index. Completed work survives interruption, unchanged files skip repeated

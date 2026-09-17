@@ -9,10 +9,12 @@ select scoped paths -> preview immutable Plan -> explicit Apply
 
 Replica publication has one narrow extension: an explicit first Apply may store
 a revocable standing authorization for the exact three roots, selected source,
-backup root, file scope, and interval. Later automatic runs create fresh internal
-Plans but need no click. They never reuse an old Plan. Any profile drift, path
-loss, incomplete scan, symlink, lock, hash mismatch, unstable file, backup error,
-or publication error pauses automation.
+backup root, file scope, interval, settle window, and mass-change limits. Later
+automatic runs create fresh internal Plans but need no click. They never reuse an
+old Plan. A source file inside the settle window defers without revoking approval.
+Exceeding the approved file-effect or byte limit, profile drift, path loss,
+incomplete scan, symlink, lock, hash mismatch, unstable file, backup error, or
+publication error pauses automation before further mutation.
 
 Preview is pure. Apply accepts an opaque plan ID, revalidates pinned identities
 and hashes, then executes only approved steps. Destination collisions, drift,

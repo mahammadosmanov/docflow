@@ -71,6 +71,7 @@ and silent uninstall on a real Windows runner.
 | Package | full tree audit + packaged smoke | Source/package mismatch or retired runtime inclusion |
 | Incremental scanning | durable-index restart/fingerprint tests + orientation and System Sync cache-hit tests + generic Preview summary UI test | Full rescans after interruption, stale cross-owner/root/profile reuse, transient-failure caching, or cached evidence becoming mutation authority |
 | Incremental replica comparison | first-run/follow-up cache evidence + Windows test-target compile + Apply-time hash revalidation tests | Rehashing an unchanged 20 GB tree, cross-root reuse, stale comparison, or cache-authorized mutation |
+| Guarded automatic replica cadence | settle-window and mass-change-brake tests + registry/locale parity + Windows test-target compile | Publishing a file still being written, exceeding an approved run limit, silently revoking on an ordinary settle delay, or bypassing manual Preview |
 
 ## External certification gates
 

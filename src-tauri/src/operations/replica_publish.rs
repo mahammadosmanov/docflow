@@ -25,6 +25,10 @@ const MAX_ENTRIES: usize = 500_000;
 const MAX_ROOT_FILES: usize = 64;
 const MAX_WARNINGS: usize = 200;
 const HASH_PROFILE: &str = "sha256-v1";
+const MAX_INTERVAL_MINUTES: u64 = 1_440;
+const MAX_SETTLE_SECONDS: u64 = 3_600;
+const MAX_CHANGED_FILES: u64 = 500_000;
+const MAX_CHANGED_MIB: u64 = 1_000_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -40,10 +44,28 @@ pub struct ReplicaPublishParams {
     pub unattended: bool,
     #[serde(default = "default_interval_minutes")]
     pub interval_minutes: u64,
+    #[serde(default = "default_settle_seconds")]
+    pub settle_seconds: u64,
+    #[serde(default = "default_max_changed_files")]
+    pub max_changed_files: u64,
+    #[serde(default = "default_max_changed_mib")]
+    pub max_changed_mib: u64,
 }
 
 fn default_interval_minutes() -> u64 {
     15
+}
+
+fn default_settle_seconds() -> u64 {
+    30
+}
+
+fn default_max_changed_files() -> u64 {
+    250
+}
+
+fn default_max_changed_mib() -> u64 {
+    2_048
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -79,7 +101,7 @@ pub fn preview<P>(params: &ReplicaPublishParams, mut progress: P) -> Result<Plan
 where
     P: FnMut(ProgressEvent),
 {
-    preview_inner(params, None, &mut progress)
+    preview_inner(params, None, false, &mut progress)
 }
 
 pub fn preview_with_index<P>(
@@ -91,12 +113,25 @@ pub fn preview_with_index<P>(
 where
     P: FnMut(ProgressEvent),
 {
-    preview_inner(params, Some((owner_id, index)), &mut progress)
+    preview_inner(params, Some((owner_id, index)), false, &mut progress)
+}
+
+pub fn preview_automatic_with_index<P>(
+    params: &ReplicaPublishParams,
+    owner_id: &str,
+    index: &ScanIndex,
+    mut progress: P,
+) -> Result<Plan, BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    preview_inner(params, Some((owner_id, index)), true, &mut progress)
 }
 
 fn preview_inner<P>(
     params: &ReplicaPublishParams,
     cache: Option<(&str, &ScanIndex)>,
+    automatic: bool,
     progress: &mut P,
 ) -> Result<Plan, BackendError>
 where
@@ -113,8 +148,16 @@ where
     let backup_root = canonical_directory(&params.backup_root, "error.replica.backupInvalid")?;
     validate_root_topology(&roots, &backup_root)?;
     let root_files = parse_root_files(&params.root_files)?;
-    if !(5..=1_440).contains(&params.interval_minutes) {
+    if !(1..=MAX_INTERVAL_MINUTES).contains(&params.interval_minutes) {
         return Err(BackendError::validation("error.replica.intervalInvalid"));
+    }
+    if !(5..=MAX_SETTLE_SECONDS).contains(&params.settle_seconds) {
+        return Err(BackendError::validation("error.replica.settleInvalid"));
+    }
+    if !(1..=MAX_CHANGED_FILES).contains(&params.max_changed_files)
+        || !(1..=MAX_CHANGED_MIB).contains(&params.max_changed_mib)
+    {
+        return Err(BackendError::validation("error.replica.changeLimitInvalid"));
     }
 
     progress(ProgressEvent {
@@ -124,6 +167,9 @@ where
         subject: source_root.to_string_lossy().into_owned(),
     });
     let mut source = snapshot_tree(source_root, &root_files, true)?;
+    if automatic {
+        ensure_source_settled(&source, params.settle_seconds)?;
+    }
     progress(ProgressEvent {
         phase: "replica_discovery".to_string(),
         done: 1,
@@ -145,6 +191,7 @@ where
     let mut warnings = Vec::new();
     let mut rows = Vec::new();
     let mut target_number = 0_u64;
+    let mut changed_bytes = 0_u64;
     for (index, target_root) in roots.iter().enumerate() {
         if index == source_index {
             continue;
@@ -210,6 +257,7 @@ where
             let destination = target_root.join(relative);
             match target.files.get(relative) {
                 None => {
+                    changed_bytes = changed_bytes.saturating_add(source_file.len);
                     let mut meta = JsonObject::new();
                     meta.insert(
                         "expectedSourceSha256".to_string(),
@@ -232,6 +280,7 @@ where
                 }
                 Some(target_file) if target_file.hash == source_file.hash => {}
                 Some(target_file) => {
+                    changed_bytes = changed_bytes.saturating_add(source_file.len);
                     let backup_path = backup_run.join(relative);
                     let step_meta = ReplicaStepMeta {
                         source_sha256: source_file.hash.clone(),
@@ -288,6 +337,10 @@ where
             subject: String::new(),
         });
     }
+    let changed_file_count = rows.len() as u64;
+    if automatic {
+        enforce_automatic_change_limit(changed_file_count, changed_bytes, params)?;
+    }
     let mut meta = JsonObject::new();
     meta.insert(
         "editor".to_string(),
@@ -312,6 +365,11 @@ where
         "intervalMinutes".to_string(),
         Value::from(params.interval_minutes),
     );
+    meta.insert(
+        "changedFileCount".to_string(),
+        Value::from(changed_file_count),
+    );
+    meta.insert("changedBytes".to_string(), Value::from(changed_bytes));
     if cache.is_some() {
         meta.insert(
             "scanIndex".to_string(),
@@ -504,6 +562,36 @@ fn insert_file(
     Ok(())
 }
 
+fn ensure_source_settled(snapshot: &TreeSnapshot, settle_seconds: u64) -> Result<(), BackendError> {
+    let now = SystemTime::now();
+    let settled = snapshot.files.values().all(|file| {
+        file.modified
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age.as_secs() >= settle_seconds)
+    });
+    if settled {
+        Ok(())
+    } else {
+        Err(BackendError::validation("error.replica.sourceSettling"))
+    }
+}
+
+fn enforce_automatic_change_limit(
+    changed_file_count: u64,
+    changed_bytes: u64,
+    params: &ReplicaPublishParams,
+) -> Result<(), BackendError> {
+    if changed_file_count > params.max_changed_files
+        || changed_bytes > params.max_changed_mib.saturating_mul(1024 * 1024)
+    {
+        Err(BackendError::validation(
+            "error.replica.changeLimitExceeded",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 fn hash_snapshot<P>(
     root: &Path,
     snapshot: &mut TreeSnapshot,
@@ -690,6 +778,9 @@ mod tests {
             root_files: "RFI Log.xlsm".to_string(),
             unattended: true,
             interval_minutes: 15,
+            settle_seconds: 30,
+            max_changed_files: 250,
+            max_changed_mib: 2_048,
         }
     }
 
@@ -769,5 +860,34 @@ mod tests {
         assert_eq!(second_stats.analyzed, 0);
         assert_eq!(second_stats.reused, 2);
         assert_eq!(first.steps, second.steps);
+    }
+
+    #[test]
+    fn automatic_preview_defers_a_source_that_is_still_settling() {
+        let fixture = tempfile::tempdir().unwrap();
+        let params = params(fixture.path());
+        fs::write(params.root_a.join("RFI Log.xlsm"), b"log").unwrap();
+        let index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+
+        assert_eq!(
+            preview_automatic_with_index(&params, "owner", &index, |_| {})
+                .unwrap_err()
+                .message,
+            "error.replica.sourceSettling"
+        );
+    }
+
+    #[test]
+    fn automatic_preview_stops_before_a_mass_change() {
+        let fixture = tempfile::tempdir().unwrap();
+        let mut params = params(fixture.path());
+        params.max_changed_files = 1;
+
+        assert_eq!(
+            enforce_automatic_change_limit(2, 1, &params)
+                .unwrap_err()
+                .message,
+            "error.replica.changeLimitExceeded"
+        );
     }
 }

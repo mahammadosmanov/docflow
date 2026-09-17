@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.5.0 - 2026-09-17
+
+### Added
+
+- Automatic RFI System publication can check as often as once per minute while
+  DocFlow is open.
+- Each approved automatic profile now includes a source-file settle window and
+  configurable maximum changed-file and total-MiB circuit breakers.
+
+### Safety
+
+- A recently modified source file defers the run without publishing or revoking
+  standing approval. A mass change beyond either approved limit pauses automation
+  before Apply and remains available for manual Preview.
+- Mail extraction remains suggestion-only. Irregular requests and attached-file
+  correctness require operator review; numbering still comes only from RFI Log.
+
 ## 1.4.0 - 2026-09-17
 
 ### Added
