@@ -6,7 +6,7 @@ Updated: 2026-09-17
 
 - Version: 1.5.2
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending
+- Implementation commit: `3c9f9ca`
 - Objective: accept Excel worksheet PDFs through Windows' native decoder while
   retaining pre-effect validation and failed-only queue resume.
 
@@ -31,7 +31,7 @@ Updated: 2026-09-17
 
 ## External gate
 
-- Build and test the 1.5.2 Windows package with isolated copies of both supplied MDR
+- Test the 1.5.2 Windows package with isolated copies of both supplied MDR
   workbook shapes, then continue the SharePoint/OneDrive,
   GlobalProtect/network, local, and backup roots. Confirm startup, publication,
   one-minute cadence, settle timing, mass-change brakes, interruption, and Undo.

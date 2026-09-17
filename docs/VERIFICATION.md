@@ -30,6 +30,18 @@ print every selected sheet from isolated copies of both supplied MDR workbooks.
 Use Retry unprinted only on the incomplete queue so already completed DOCX jobs
 are not included in a newly approved batch.
 
+The Windows x64 cross-build from implementation commit `3c9f9ca` completed.
+The OCR-inclusive ZIP passed package and archive-integrity audits, all generated
+checksums verified, and the installer and portable executable identify as
+Windows GUI-subsystem PE files. Cross-linker PDB warnings were non-failing
+debug-information warnings. The macOS 27 proc-macro workaround was confined to
+the build environment and a temporary macOS 11 bundle target; the repository
+configuration was restored to macOS 13 afterward. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `ef052202e5023d5ef9f23458c89c3561038e490f14fec91111176a2111ea451b`;
+- portable EXE: `c092230e982e494846382d6748e1d1b8d9ac239e6624659c65bd5fb230ec6b07`;
+- per-user installer: `ed87b0bba860bd5e6ec192bee2ca07e4a4181eac902bf2bc272e4b9ebd45b43b`.
+
 ## 1.5.1 - 2026-09-17
 
 The Excel pre-open COM fix passed Rust formatting, Clippy with all targets and
