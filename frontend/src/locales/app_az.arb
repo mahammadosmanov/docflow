@@ -188,7 +188,7 @@
   "prefs.density.help": "Ekrana daha çox şey sığdırır. Kiçik ekranlarda faydalıdır.",
   "prefs.support.title": "Ətraflı dəstək",
   "prefs.support.help": "Yalnız oxunan, redaktə edilmiş yerli dəstək paketi yaradın.",
-  "prefs.support.privacy": "Versiya, platforma, sidecar/OCR vəziyyəti və son xəta kodları daxil edilir; sənəd məzmunu, giriş məlumatları, tokenlər və şəxsi yollar çıxarılır. Heç yerə göndərilmir.",
+  "prefs.support.privacy": "Versiya, platforma, sidecar/OCR vəziyyəti, son xəta kodları və fayl yolu olmayan son printer növbəsi nəticəsi daxil edilir; sənəd məzmunu, giriş məlumatları, tokenlər və şəxsi yollar çıxarılır. Heç yerə göndərilmir.",
   "prefs.support.preview": "Dəstək paketinə önbaxış",
   "prefs.support.previewLabel": "Dəstək paketinin önbaxışı",
   "prefs.support.size": "{count} bayt",

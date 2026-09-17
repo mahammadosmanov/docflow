@@ -188,7 +188,7 @@
   "prefs.density.help": "Ekrana daha çok şey sığdırır. Küçük ekranlarda işe yarar.",
   "prefs.support.title": "Gelişmiş destek",
   "prefs.support.help": "Salt okunur ve redakte edilmiş bir yerel destek paketi oluşturun.",
-  "prefs.support.privacy": "Sürüm, platform, sidecar/OCR durumu ve son hata kodlarını içerir; belge içeriği, kimlik bilgileri, tokenlar ve özel yollar dahil edilmez. Hiçbir yere gönderilmez.",
+  "prefs.support.privacy": "Sürüm, platform, sidecar/OCR durumu, son hata kodları ve yol içermeyen son printer kuyruk sonucunu içerir; belge içeriği, kimlik bilgileri, tokenlar ve özel yollar dahil edilmez. Hiçbir yere gönderilmez.",
   "prefs.support.preview": "Destek paketini önizle",
   "prefs.support.previewLabel": "Destek paketi önizlemesi",
   "prefs.support.size": "{count} bayt",

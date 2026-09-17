@@ -29,6 +29,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-024 | `rfi_system_sync.rs`, `native.rs`, `fs_ops.rs`, `ooxml.rs`, `registry.rs`, generic record-table UI | `rfi_system_sync_native.rs` recursive exact-name/status/apply/undo/conflict/current-workbook tests, registry snapshot, locale equality and frontend authority tests |
 | DF-025 | `operations/replica_publish.rs`, `fs_ops.rs`, `native.rs`, `platform/startup.rs`, `registry.rs`, generic record-table and Settings UI | `replica_publish.rs` backup/apply/undo integration test, operation unit tests, registry snapshot, Rust/frontend suites, Windows `cargo xwin check` |
 | DF-026 | `operations/replica_publish.rs`, `scan_index.rs`, `native.rs`, generic `App.tsx` scan-index summary | indexed replica-preview unit test, scan-index unit tests, Windows test-target compile, frontend scan-index summary test |
+| DF-027 | `print_queue.rs`, `diagnostics.rs`, `native.rs`, `backend.rs`, Settings support UI | pathless print-report and canonical-bundle tests, catalog equality, Rust/frontend suites, Windows test-target compile |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

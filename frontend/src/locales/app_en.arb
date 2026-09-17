@@ -216,7 +216,7 @@
   "prefs.density.help": "Fits more on screen. Useful on small displays.",
   "prefs.support.title": "Advanced support",
   "prefs.support.help": "Create a read-only, redacted local support bundle.",
-  "prefs.support.privacy": "Includes the version, platform, sidecar/OCR status, and recent error codes; document contents, credentials, tokens, and private paths are excluded. Nothing is sent anywhere.",
+  "prefs.support.privacy": "Includes the version, platform, sidecar/OCR status, recent error codes, and the latest pathless printer-queue result; document contents, credentials, tokens, and private paths are excluded. Nothing is sent anywhere.",
   "prefs.support.preview": "Preview support bundle",
   "prefs.support.previewLabel": "Support bundle preview",
   "prefs.support.size": "{count} bytes",

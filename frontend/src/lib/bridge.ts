@@ -828,6 +828,12 @@ export class MockBridge implements Bridge {
                 status: "missing",
               },
               sidecar: { required: false, status: "retired" },
+              printer: {
+                inventoryStatus: "available",
+                printerCount: 1,
+                defaultPrinterAvailable: true,
+                latestQueue: null,
+              },
             },
             recentErrorCodes: [],
             privacy: { delivery: "local-only", redaction: "recursive" },

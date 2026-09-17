@@ -282,6 +282,7 @@ impl BackendRouter {
     async fn support_diagnostics(&self, params: Value) -> Result<Value, BackendError> {
         validate_empty_params(&params)?;
         let recent_error_codes = self.recent_error_codes.snapshot();
+        let printer = self.native.printer_diagnostics();
         tauri::async_runtime::spawn_blocking(move || {
             let ocr = NativeOcr::discover();
             let (ocr_available, ocr_language_data_available) = ocr.support_status();
@@ -292,6 +293,7 @@ impl BackendRouter {
                 ocr_available,
                 ocr_language_data_available,
                 recent_error_codes,
+                printer,
             })?)
             .map_err(|_| BackendError::protocol("diagnostics preview encoding failed"))
         })

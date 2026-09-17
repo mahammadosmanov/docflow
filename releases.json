@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.3.0",
+  "currentVersion": "1.4.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -542,9 +542,17 @@
       "version": "1.3.0",
       "date": "2026-09-17",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.3.0",
       "summary": "Reuse exact fingerprint-scoped replica hashes from the durable local index while retaining live Apply-time validation."
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-09-17",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.4.0",
+      "summary": "Add bounded pathless printer and latest-queue evidence to the local redacted support bundle."
     }
   ]
 }

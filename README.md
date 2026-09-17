@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.3.0 is a Tauri 2 desktop application for eleven high-risk document
+DocFlow 1.4.0 is a Tauri 2 desktop application for eleven high-risk document
 workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
@@ -44,6 +44,11 @@ Large warning sets stay compact and can be searched or filtered by type; exact
 Worley RFI warnings can focus their related page comparison directly.
 Existing-cell RFI Log and Follow Up updates can also be expanded into an exact
 sheet/cell, current-value, and after-Apply comparison.
+
+Settings support diagnostics includes the latest owned print queue's pathless
+printer, format, route, option, attempt, outcome, count, and redacted-error
+evidence. It never includes document names, paths, contents, credentials, or
+tokens and never claims that software status proves physical paper output.
 
 The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
 TypeScript presentation layer. Tesseract and operating-system document/print

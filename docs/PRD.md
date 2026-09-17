@@ -119,6 +119,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   Cache hits and fresh hashes remain visible. Every changed or unknown file is
   hashed again, completed hashes are checkpointed immediately, and Apply still
   revalidates the approved live hashes before any publication.
+- **DF-027 — Pathless printer evidence:** the local support bundle includes the
+  current printer inventory state and latest owned queue's formats, routes,
+  options, attempts, outcomes, counts, and bounded error details. It excludes
+  document names, document paths, contents, credentials, and tokens; recursive
+  redaction and exact copy validation remain mandatory. This evidence diagnoses
+  software handoff but never certifies that paper physically exited a printer.
 
 ## Scope
 

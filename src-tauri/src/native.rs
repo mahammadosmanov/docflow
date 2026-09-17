@@ -19,6 +19,7 @@ use crate::{
         StepKind,
     },
     credentials::OsCredentialStore,
+    diagnostics::PrinterDiagnostic,
     errors::BackendError,
     fs_ops::FilesystemAuthority,
     gemini::{DEFAULT_MODEL, FALLBACK_MODELS, GeminiClient},
@@ -344,6 +345,11 @@ impl NativeBackend {
 
     pub(crate) fn auth_state(&self) -> crate::contracts::AuthState {
         self.auth.state()
+    }
+
+    pub(crate) fn printer_diagnostics(&self) -> PrinterDiagnostic {
+        let caller = self.caller_identity().ok();
+        self.print.diagnostics(caller.as_ref())
     }
 
     pub(crate) fn sync_result(&self, approved_op_id: &str, result: &mut Value) {

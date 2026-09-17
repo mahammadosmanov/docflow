@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, sync::Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::errors::BackendError;
@@ -25,6 +25,42 @@ pub(crate) struct DiagnosticsInput {
     pub ocr_available: bool,
     pub ocr_language_data_available: bool,
     pub recent_error_codes: Vec<String>,
+    pub printer: PrinterDiagnostic,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PrinterDiagnostic {
+    pub inventory_status: String,
+    pub printer_count: u64,
+    pub default_printer_available: bool,
+    pub latest_queue: Option<PrintQueueDiagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PrintQueueDiagnostic {
+    pub queue_status: String,
+    pub printer: String,
+    pub file_count: u64,
+    pub counts: std::collections::BTreeMap<String, u64>,
+    pub jobs: Vec<PrintJobDiagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PrintJobDiagnostic {
+    pub format: String,
+    pub route: String,
+    pub status: String,
+    pub attempts: u32,
+    pub paper: String,
+    pub orientation: String,
+    pub scaling: String,
+    pub color: String,
+    pub duplex: String,
+    pub page_range: String,
+    pub error_detail: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -86,6 +122,7 @@ pub(crate) fn build_bundle(input: DiagnosticsInput) -> Result<SupportBundlePrevi
                 required: false,
                 status: "retired",
             },
+            printer: input.printer,
         },
         recent_error_codes: input
             .recent_error_codes
@@ -184,7 +221,7 @@ fn is_bundle_shape(value: &Value) -> bool {
     }
     let Some(components) = root
         .get("components")
-        .and_then(|value| exact_object(value, &["ocr", "sidecar"]))
+        .and_then(|value| exact_object(value, &["ocr", "printer", "sidecar"]))
     else {
         return false;
     };
@@ -214,6 +251,9 @@ fn is_bundle_shape(value: &Value) -> bool {
     if sidecar.get("required").and_then(Value::as_bool) != Some(false)
         || sidecar.get("status").and_then(Value::as_str) != Some("retired")
     {
+        return false;
+    }
+    if !is_printer_shape(components.get("printer")) {
         return false;
     }
     let Some(errors) = root.get("recentErrorCodes").and_then(Value::as_array) else {
@@ -280,6 +320,7 @@ struct PlatformDiagnostic {
 struct ComponentDiagnostics {
     ocr: OcrDiagnostic,
     sidecar: SidecarDiagnostic,
+    printer: PrinterDiagnostic,
 }
 
 #[derive(Serialize)]
@@ -300,6 +341,97 @@ struct SidecarDiagnostic {
 struct PrivacyDiagnostic {
     delivery: &'static str,
     redaction: &'static str,
+}
+
+fn is_printer_shape(value: Option<&Value>) -> bool {
+    let Some(printer) = value.and_then(|value| {
+        exact_object(
+            value,
+            &[
+                "defaultPrinterAvailable",
+                "inventoryStatus",
+                "latestQueue",
+                "printerCount",
+            ],
+        )
+    }) else {
+        return false;
+    };
+    if !matches!(
+        printer.get("inventoryStatus").and_then(Value::as_str),
+        Some("available" | "unavailable")
+    ) || printer
+        .get("printerCount")
+        .and_then(Value::as_u64)
+        .is_none()
+        || !printer
+            .get("defaultPrinterAvailable")
+            .is_some_and(Value::is_boolean)
+    {
+        return false;
+    }
+    let Some(queue) = printer.get("latestQueue") else {
+        return false;
+    };
+    if queue.is_null() {
+        return true;
+    }
+    let Some(queue) = exact_object(
+        queue,
+        &["counts", "fileCount", "jobs", "printer", "queueStatus"],
+    ) else {
+        return false;
+    };
+    if ["printer", "queueStatus"].into_iter().any(|key| {
+        queue
+            .get(key)
+            .and_then(Value::as_str)
+            .is_none_or(|value| !is_bounded_safe_text(value))
+    }) || queue.get("fileCount").and_then(Value::as_u64).is_none()
+    {
+        return false;
+    }
+    let Some(counts) = queue.get("counts").and_then(Value::as_object) else {
+        return false;
+    };
+    if counts.len() > MAX_DIAGNOSTIC_ITEMS
+        || counts
+            .iter()
+            .any(|(key, value)| !is_bounded_safe_text(key) || value.as_u64().is_none())
+    {
+        return false;
+    }
+    let Some(jobs) = queue.get("jobs").and_then(Value::as_array) else {
+        return false;
+    };
+    jobs.len() <= MAX_DIAGNOSTIC_ITEMS
+        && jobs.iter().all(|job| {
+            let Some(job) = exact_object(
+                job,
+                &[
+                    "attempts",
+                    "color",
+                    "duplex",
+                    "errorDetail",
+                    "format",
+                    "orientation",
+                    "pageRange",
+                    "paper",
+                    "route",
+                    "scaling",
+                    "status",
+                ],
+            ) else {
+                return false;
+            };
+            job.get("attempts").and_then(Value::as_u64).is_some()
+                && job.iter().all(|(key, value)| {
+                    key == "attempts"
+                        || value
+                            .as_str()
+                            .is_some_and(|text| text.is_empty() || is_bounded_safe_text(text))
+                })
+        })
 }
 
 fn sanitize_error_code(code: &str) -> String {
@@ -454,6 +586,12 @@ mod tests {
             ocr_available: true,
             ocr_language_data_available: true,
             recent_error_codes,
+            printer: PrinterDiagnostic {
+                inventory_status: "available".to_string(),
+                printer_count: 1,
+                default_printer_available: true,
+                latest_queue: None,
+            },
         }
     }
 
@@ -488,6 +626,12 @@ mod tests {
                     "sidecar": {
                         "required": false,
                         "status": "retired"
+                    },
+                    "printer": {
+                        "inventoryStatus": "available",
+                        "printerCount": 1,
+                        "defaultPrinterAvailable": true,
+                        "latestQueue": null
                     }
                 },
                 "recentErrorCodes": (5..25)
@@ -503,6 +647,40 @@ mod tests {
         for rejected in ["/Users/", "\\Users\\", "accessToken", "refreshToken"] {
             assert!(!first.content.contains(rejected), "leaked {rejected}");
         }
+    }
+
+    #[test]
+    fn printer_queue_diagnostics_are_copy_valid_and_redact_private_paths() {
+        let mut value = input(Vec::new());
+        value.printer.latest_queue = Some(PrintQueueDiagnostic {
+            queue_status: "completed".to_string(),
+            printer: "EPSON L15160 Series".to_string(),
+            file_count: 1,
+            counts: [("completed_unconfirmed".to_string(), 1)]
+                .into_iter()
+                .collect(),
+            jobs: vec![PrintJobDiagnostic {
+                format: "pdf".to_string(),
+                route: "docflow".to_string(),
+                status: "completed_unconfirmed".to_string(),
+                attempts: 1,
+                paper: "A4".to_string(),
+                orientation: "auto".to_string(),
+                scaling: "fit".to_string(),
+                color: "printer".to_string(),
+                duplex: "printer".to_string(),
+                page_range: "all".to_string(),
+                error_detail: "failed at C:\\Users\\Operator\\private.pdf".to_string(),
+            }],
+        });
+
+        let bundle = build_bundle(value).unwrap();
+
+        assert!(bundle.content.contains("EPSON L15160 Series"));
+        assert!(bundle.content.contains("completed_unconfirmed"));
+        assert!(bundle.content.contains(REDACTED_PATH));
+        assert!(!bundle.content.contains("private.pdf"));
+        validate_bundle_content(&bundle.content).unwrap();
     }
 
     #[test]

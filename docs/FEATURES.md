@@ -23,6 +23,10 @@
 - Batch Print always starts without old files or silently restored settings. One
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.
+- Settings support diagnostics includes a pathless snapshot of the latest owned
+  print queue: printer inventory availability, selected printer, file formats,
+  native/controlled routes, requested options, attempts, outcomes, counts, and
+  bounded error details. Preview, copy, and download remain local and redacted.
 - An accepted job whose final Windows spool receipt is unavailable is shown as
   sent-unconfirmed and the queue continues. It is never retried automatically;
   destructive deletion or uncertain cancellation still pauses for review.

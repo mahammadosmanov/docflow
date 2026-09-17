@@ -4,6 +4,27 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.4.0 - 2026-09-17
+
+Pathless printer diagnostics passed Rust formatting, Clippy with all targets and
+features with warnings denied, Cargo check, 342 unit tests, and 211 integration
+tests; three operator-workbook tests remained intentionally ignored. Focused
+evidence verifies that printer inventory state and the latest caller-owned queue
+report include the selected route, print options, attempts, outcomes, and
+available error details while excluding source document names and paths.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed. The known
+non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
+complete test-target compile passed; Windows test executables were not run on
+this macOS host.
+
+No Windows package was produced for this checkpoint. Native Windows spooler and
+EPSON L15160 Series paper-output acceptance remain external. The diagnostics
+make a failed or uncertain run exportable and comparable; they do not prove
+physical output and do not authorize automatic retry or possible duplicate
+printing.
+
 ## 1.3.0 - 2026-09-17
 
 Incremental replica hashing passed Rust formatting, Clippy with all targets and

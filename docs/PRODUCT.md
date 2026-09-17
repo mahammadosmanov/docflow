@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.3.0**. `VERSION` is authoritative.
+Current product version: **1.4.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -65,6 +65,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
 21. Repeated replica comparisons reuse only exact fingerprint-scoped local
     SHA-256 evidence. Completed hash work survives interruption, while Apply
     always validates live files and never trusts the index as mutation authority.
+22. Local support diagnostics include bounded, pathless printer inventory and
+    latest-queue evidence so real Windows/EPSON outcomes can be compared without
+    exposing document names, contents, paths, credentials, or tokens.
 
 ## Current capabilities
 
@@ -83,7 +86,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | Review manager | Keep, place, or recoverably delete exceptions | Delete is a move to application trash |
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |
-| Support diagnostics | Preview and copy a redacted local support bundle | Bounded Rust DTO, recursive redaction, no upload or user-file scan |
+| Support diagnostics | Preview, copy, or download a redacted local bundle including latest pathless print-queue evidence | Bounded Rust DTO, recursive redaction, no upload, document path, or user-file scan |
 
 ## Non-goals
 

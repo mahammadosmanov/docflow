@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.4.0 - 2026-09-17
+
+### Added
+
+- Settings support diagnostics now includes a bounded, pathless snapshot of the
+  latest print queue owned by the signed-in operator. It records printer
+  inventory state, selected printer, formats, controlled/native routes,
+  requested options, attempts, outcomes, counts, and redacted error details.
+- The same local Preview, Copy, and Download controls produce the printer report;
+  no new service, upload, or paid dependency is used.
+
+### Safety
+
+- Printer diagnostics exclude document names, paths, contents, source identity,
+  credentials, and tokens. Recursive redaction and exact canonical clipboard
+  validation still apply.
+- Queue evidence never certifies physical paper output and never authorizes an
+  automatic retry of an uncertain or completed-unconfirmed job.
+
 ## 1.3.0 - 2026-09-17
 
 ### Added

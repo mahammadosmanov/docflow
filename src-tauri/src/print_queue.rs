@@ -20,6 +20,7 @@ use crate::{
         JsonObject, OperationResult, Plan, PrintQueueSummary, ProgressEvent, Step, StepKind,
         Warning,
     },
+    diagnostics::{PrintJobDiagnostic, PrintQueueDiagnostic, PrinterDiagnostic},
     errors::BackendError,
     fs_ops::atomic_replace,
     journal::{
@@ -901,6 +902,48 @@ impl PrintQueueStore {
         Ok(None)
     }
 
+    fn latest_owned_state(
+        &self,
+        caller: &CallerIdentity,
+    ) -> Result<Option<QueueState>, BackendError> {
+        let mut candidates = match fs::read_dir(&self.root) {
+            Ok(entries) => entries
+                .filter_map(Result::ok)
+                .filter(|entry| {
+                    entry.path().extension().and_then(|value| value.to_str()) == Some("json")
+                })
+                .filter_map(|entry| {
+                    let modified = entry.metadata().ok()?.modified().ok()?;
+                    Some((modified, entry.path()))
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => Vec::new(),
+        };
+        candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
+        let mut seen = HashSet::new();
+        for (_, path) in candidates {
+            let Some(queue_id) = path.file_stem().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            seen.insert(queue_id.to_string());
+            let Ok(state) = self.load(queue_id) else {
+                continue;
+            };
+            if state.authorize_owner(caller).is_ok() {
+                return Ok(Some(state));
+            }
+        }
+        let mut memory = lock(&self.memory)
+            .values()
+            .filter(|state| !seen.contains(&state.queue_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        memory.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+        Ok(memory
+            .into_iter()
+            .find(|state| state.authorize_owner(caller).is_ok()))
+    }
+
     pub fn discard(
         &self,
         caller: &CallerIdentity,
@@ -1039,6 +1082,26 @@ impl PrintService {
             .inventory()
             .map(PrinterInventory::normalized)
             .map_err(PrintFailure::into_backend_error)
+    }
+
+    pub(crate) fn diagnostics(&self, caller: Option<&CallerIdentity>) -> PrinterDiagnostic {
+        let inventory = self.adapter.inventory().map(PrinterInventory::normalized);
+        let latest_queue = caller
+            .and_then(|caller| self.queues.latest_owned_state(caller).ok().flatten())
+            .map(queue_diagnostic);
+        match inventory {
+            Ok(inventory) => PrinterDiagnostic {
+                inventory_status: "available".to_string(),
+                printer_count: inventory.printers.len() as u64,
+                default_printer_available: inventory.default_printer.is_some(),
+                latest_queue,
+            },
+            Err(_) => PrinterDiagnostic {
+                inventory_status: "unavailable".to_string(),
+                latest_queue,
+                ..PrinterDiagnostic::default()
+            },
+        }
     }
 
     pub fn preview<F>(
@@ -2292,6 +2355,51 @@ fn journal_step(job: &PrintJob) -> Step {
     }
 }
 
+fn queue_diagnostic(state: QueueState) -> PrintQueueDiagnostic {
+    const MAX_DIAGNOSTIC_JOBS: usize = 64;
+    let counts = queue_counts(&state.jobs);
+    let file_count = state
+        .jobs
+        .iter()
+        .filter(|job| !job.path.is_empty())
+        .map(|job| &job.path)
+        .collect::<HashSet<_>>()
+        .len() as u64;
+    let printer = state
+        .jobs
+        .iter()
+        .map(|job| job.printer.trim())
+        .find(|printer| !printer.is_empty())
+        .unwrap_or("unknown")
+        .chars()
+        .take(512)
+        .collect();
+    let first = state.jobs.len().saturating_sub(MAX_DIAGNOSTIC_JOBS);
+    let jobs = state.jobs[first..]
+        .iter()
+        .map(|job| PrintJobDiagnostic {
+            format: job.format.clone(),
+            route: job.verb.clone(),
+            status: job.status.clone().unwrap_or_else(|| "pending".to_string()),
+            attempts: job.attempts.unwrap_or_default(),
+            paper: job.paper.clone(),
+            orientation: job.orientation.clone(),
+            scaling: job.scaling.clone(),
+            color: job.color.clone(),
+            duplex: job.duplex.clone(),
+            page_range: job.page_range.clone(),
+            error_detail: job.error.as_deref().map(redact_error).unwrap_or_default(),
+        })
+        .collect();
+    PrintQueueDiagnostic {
+        queue_status: state.status,
+        printer,
+        file_count,
+        counts,
+        jobs,
+    }
+}
+
 fn utc_now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false)
 }
@@ -2343,6 +2451,42 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn printer_diagnostic_reports_routes_and_outcomes_without_file_paths() {
+        let mut job = PrintJob {
+            path: "C:\\Private\\RFI No. secret.pdf".to_string(),
+            printer: "EPSON L15160 Series".to_string(),
+            format: "pdf".to_string(),
+            verb: "docflow".to_string(),
+            status: Some("completed_unconfirmed".to_string()),
+            attempts: Some(1),
+            error: Some("driver released the spool record".to_string()),
+            ..PrintJob::default()
+        };
+        job.job_id = "job-1".to_string();
+        let report = queue_diagnostic(QueueState {
+            version: 1,
+            queue_id: "queue-1".to_string(),
+            owner_id: "owner".to_string(),
+            session_id: "session".to_string(),
+            created_at: utc_now(),
+            updated_at: utc_now(),
+            status: "completed".to_string(),
+            current_job_id: None,
+            jobs: vec![job],
+            grant_root_identities: Vec::new(),
+            source_identities: Vec::new(),
+            extra: Map::new(),
+        });
+
+        let encoded = serde_json::to_string(&report).unwrap();
+        assert_eq!(report.printer, "EPSON L15160 Series");
+        assert_eq!(report.jobs[0].route, "docflow");
+        assert_eq!(report.jobs[0].status, "completed_unconfirmed");
+        assert!(!encoded.contains("Private"));
+        assert!(!encoded.contains("secret.pdf"));
+    }
 
     #[test]
     fn cleanup_review_wire_collection_deduplicates_exact_locator() {

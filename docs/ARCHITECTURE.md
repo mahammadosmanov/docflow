@@ -45,7 +45,8 @@ artifacts; macOS package audits also inspect Mach-O dynamic links.
 
 Support diagnostics are collected through a closed, read-only Rust command. The
 fixed bundle contains only the DocFlow version, platform, retired-sidecar state,
-pathless OCR availability, and at most 20 stable recent error codes. Recursive
+pathless OCR availability, at most 20 stable recent error codes, and a bounded
+pathless snapshot of the latest owned print queue. Recursive
 denylist, content, path, depth, item, and byte bounds apply before the deterministic
 JSON crosses into the webview. Collection does not scan user files or send data;
 copying the validated preview to the local clipboard is a separate explicit action.
