@@ -154,7 +154,7 @@ impl ComApartment {
     fn initialize() -> Result<Self, PrintFailure> {
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
             .ok()
-            .map_err(|_| com_failure())?;
+            .map_err(|error| com_failure_at("initialize_sta", &error))?;
         Ok(Self)
     }
 }
@@ -250,10 +250,10 @@ fn execute_plan(
                     return Err(contract_failure());
                 }
                 let class = unsafe { CLSIDFromProgID(w!("Excel.Application")) }
-                    .map_err(|_| PrintFailure::unsupported("error.print.excelUnavailable"))?;
+                    .map_err(|error| unavailable_at("resolve_excel", &error))?;
                 let application: IDispatch =
                     unsafe { CoCreateInstance(&class, None, CLSCTX_LOCAL_SERVER) }
-                        .map_err(|_| PrintFailure::unsupported("error.print.excelUnavailable"))?;
+                        .map_err(|error| unavailable_at("create_excel", &error))?;
                 session.application = Some(application);
             }
             ComOperation::SetProperty {
@@ -447,7 +447,7 @@ fn invoke(
     let iid_null = GUID::from_u128(0);
     let mut dispatch_id = 0;
     unsafe { dispatch.GetIDsOfNames(&iid_null, &name_pointer, 1, 0, &mut dispatch_id) }
-        .map_err(|_| com_failure())?;
+        .map_err(|error| com_failure_at(&format!("lookup:{name}"), &error))?;
 
     let mut named_dispids = encoded.named_dispids;
     let parameters = DISPPARAMS {
@@ -477,7 +477,14 @@ fn invoke(
             None,
         )
     }
-    .map_err(|_| com_failure())?;
+    .map_err(|error| {
+        let action = match kind {
+            DispatchInvokeKind::Method => "method",
+            DispatchInvokeKind::PropertyGet => "get",
+            DispatchInvokeKind::PropertyPut => "set",
+        };
+        com_failure_at(&format!("{action}:{name}"), &error)
+    })?;
     Ok(result)
 }
 
@@ -508,4 +515,19 @@ fn contract_failure() -> PrintFailure {
 
 fn com_failure() -> PrintFailure {
     PrintFailure::failed("error.print.excelComFailed")
+        .with_diagnostic("excel_com stage=result_decode")
+}
+
+fn com_failure_at(stage: &str, error: &windows::core::Error) -> PrintFailure {
+    PrintFailure::failed("error.print.excelComFailed").with_diagnostic(format!(
+        "excel_com stage={stage} hresult=0x{:08X}",
+        error.code().0 as u32
+    ))
+}
+
+fn unavailable_at(stage: &str, error: &windows::core::Error) -> PrintFailure {
+    PrintFailure::unsupported("error.print.excelUnavailable").with_diagnostic(format!(
+        "excel_com stage={stage} hresult=0x{:08X}",
+        error.code().0 as u32
+    ))
 }

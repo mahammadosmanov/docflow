@@ -55,7 +55,10 @@ pass from a macOS build or Windows cross-compile.
    differs from its filename and confirm a unique new spool job is followed.
    Simulate transient generic error/paper-out followed by completion and confirm
    the same job continues without resubmission; deleting/deleted must still
-   pause. Never auto-retry uncertainty.
+   pause. Include safe workbooks with several worksheets and confirm every
+   selected sheet exports before submission. If Excel fails, export support
+   diagnostics and record the pathless COM stage/HRESULT. Never auto-retry
+   uncertainty.
 9. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
    MSG, EML with several RFIs, unmatched input, and a destination collision.
    Confirm source hashes do not change, multi-RFI mail fans out correctly,

@@ -62,7 +62,7 @@ and silent uninstall on a real Windows runner.
 | RFI System/Worley sync | shared-formula fixture + operator-supplied current-template guarded-delta test | Folder Link formula overwrite, wrong control-table mapping, stale apply, shared-formula or calc-chain repair |
 | RFI completion-status sync | deep exact-name discovery, terminal/formula refusal, preview/revise/apply/undo, and current-RFI-Log temporary-copy closed-delta test | False completion, wrong-row update, source-tree mutation, workbook repair, or unrecoverable replacement |
 | Outlook reply draft | fake-adapter identity/call-order/conditional-undo tests + Windows compile | Wrong message, recipient synthesis, accidental send, or deletion of a changed draft |
-| Batch Print | fake-adapter queue/spooler tests | Order loss, duplicated jobs, uncertain recovery |
+| Batch Print | fake-adapter queue/spooler tests + Excel pre-open COM-plan contract + Windows test-target compile | Order loss, duplicated jobs, uncertain recovery, or every worksheet failing before Open |
 | Printer diagnostics | latest-owned-queue path redaction, bounded job roster, canonical copy validation, Windows test-target compile | Undiagnosable handler/driver failures, private path leakage, or logs becoming retry authority |
 | Operation registry | Rust/TypeScript roster-drift tests | Omitted or unowned operation |
 | Localization | four-catalog key equality | Raw keys or missing language strings |

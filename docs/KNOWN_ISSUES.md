@@ -33,6 +33,9 @@ These are not silently waived by passing local tests.
   guarded unchanged-draft undo on the operator's desktop Outlook variants.
 - Microsoft Print to PDF plus representative physical/network printer output,
   cancellation, driver options, spool receipts, and uncertain recovery.
+- Excel worksheet printing 1.5.1 requires native Windows acceptance with the two
+  supplied MDR workbook shapes. Confirm every selected worksheet exports and
+  prints, and export support diagnostics if any COM stage still fails.
 - DocFlow 1.0.2 requires physical Windows acceptance on the EPSON L15160 Series:
   native-handler title substitution/receipt loss, transient generic error,
   immediate spool-record release, wake/offline/paper-out recovery, multi-job

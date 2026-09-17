@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.5.1 - 2026-09-17
+
+### Fixed
+
+- Excel worksheet printing no longer writes the application-wide Calculation
+  and CalculateBeforeSave properties before any workbook is open. Some desktop
+  Excel versions reject that sequence with COM error 1004, causing every sheet
+  in an otherwise safe workbook to fail before printing.
+- Pathless printer diagnostics now retain the exact Excel COM member stage and
+  HRESULT for a failed job while the UI keeps the localized operator message.
+
+### Safety
+
+- Workbooks still open read-only with macros, events, alerts, and link updates
+  disabled. Safety preflight, source pinning, private staging, PDF validation,
+  controlled serial submission, and no-duplicate retry rules are unchanged.
+
 ## 1.5.0 - 2026-09-17
 
 ### Added

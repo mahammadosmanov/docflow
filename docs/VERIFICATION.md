@@ -4,6 +4,35 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.5.1 - 2026-09-17
+
+The Excel pre-open COM fix passed Rust formatting, Clippy with all targets and
+features with warnings denied, Cargo check, 345 unit tests, and 211 integration
+tests; three operator-workbook tests remained intentionally ignored. Focused
+evidence verifies the complete late-bound COM plan no longer contains global
+Calculation or CalculateBeforeSave writes, both members are outside the dispatch
+allowlist, every remaining property set uses `DISPID_PROPERTYPUT`, and the
+localized failure key remains separate from pathless COM stage/HRESULT evidence.
+
+Both supplied MDR workbooks passed ZIP integrity inspection and contained 11 and
+4 worksheets respectively, matching the repeated failures reported from 1.2.0.
+Neither package exposed workbook protection, external-link, connection, query,
+or XLM macro parts in the inspected structure. The two supplied DOCX packages
+also passed ZIP integrity inspection; their accepted-unconfirmed results match
+the existing non-duplicate native-handler policy and both physically printed.
+No supplied user document was modified or committed.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed. The known
+non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
+complete test-target compile passed; Windows test executables and desktop Excel
+were not run on this macOS host.
+
+No Windows package had been produced at this checkpoint. Native Windows must
+still print every selected sheet from isolated copies of both MDR workbook
+shapes. If a failure remains, the 1.5.1 support report must identify the exact
+pathless COM stage and HRESULT before another change is made.
+
 ## 1.5.0 - 2026-09-17
 
 Guarded automatic replica publication passed Rust formatting, Clippy with all

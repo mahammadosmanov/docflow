@@ -190,6 +190,7 @@ pub struct PrintFailure {
     pub kind: PrintFailureKind,
     pub message: String,
     pub uncertain: bool,
+    diagnostic_detail: Option<String>,
     retry_disposition: RetryDisposition,
     pub(crate) cleanup_review: Option<CleanupReview>,
 }
@@ -205,6 +206,7 @@ impl PrintFailure {
             kind,
             message: message.into(),
             uncertain,
+            diagnostic_detail: None,
             retry_disposition,
             cleanup_review: None,
         }
@@ -278,6 +280,12 @@ impl PrintFailure {
     #[cfg(any(target_os = "windows", test))]
     pub(crate) fn with_retry_disposition(mut self, disposition: RetryDisposition) -> Self {
         self.retry_disposition = disposition;
+        self
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn with_diagnostic(mut self, detail: impl Into<String>) -> Self {
+        self.diagnostic_detail = Some(redact_error(&detail.into()));
         self
     }
 
@@ -1474,7 +1482,7 @@ impl PrintService {
                             }
                             .to_string(),
                         );
-                        saved.error = Some(redact_error(&error.message));
+                        saved.error = Some(failure_evidence(&error));
                         state.current_job_id = None;
                         state.status = "paused".to_string();
                         record.pending_step = if error.uncertain { Some(pending) } else { None };
@@ -1504,7 +1512,7 @@ impl PrintService {
                     Err(error) if error.kind == PrintFailureKind::Uncertain => {
                         let saved = &mut state.jobs[saved_index];
                         saved.status = Some("uncertain".to_string());
-                        saved.error = Some(redact_error(&error.message));
+                        saved.error = Some(failure_evidence(&error));
                         state.current_job_id = None;
                         state.status = "paused".to_string();
                         record.pending_step = Some(pending);
@@ -1522,7 +1530,7 @@ impl PrintService {
                         let saved = &mut state.jobs[saved_index];
                         saved.status = Some("completed_unconfirmed".to_string());
                         saved.completed_at = Some(utc_now());
-                        saved.error = Some(redact_error(&error.message));
+                        saved.error = Some(failure_evidence(&error));
                         state.current_job_id = None;
                         let mut submitted_step = pending;
                         submitted_step.meta.insert(
@@ -1543,7 +1551,7 @@ impl PrintService {
                     }
                     Err(error) => {
                         let saved = &mut state.jobs[saved_index];
-                        saved.error = Some(redact_error(&error.message));
+                        saved.error = Some(failure_evidence(&error));
                         state.current_job_id = None;
                         record.pending_step = None;
                         self.write_journal(&record)?;
@@ -2442,6 +2450,14 @@ fn redact_error(message: &str) -> String {
     }
 }
 
+fn failure_evidence(error: &PrintFailure) -> String {
+    error
+        .diagnostic_detail
+        .as_deref()
+        .map(redact_error)
+        .unwrap_or_else(|| redact_error(&error.message))
+}
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
@@ -2451,6 +2467,18 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostic_detail_is_persisted_without_replacing_the_localized_error() {
+        let failure = PrintFailure::failed("error.print.excelComFailed")
+            .with_diagnostic("excel_com stage=open hresult=0x800A03EC");
+
+        assert_eq!(failure.message, "error.print.excelComFailed");
+        assert_eq!(
+            failure_evidence(&failure),
+            "excel_com stage=open hresult=0x800A03EC"
+        );
+    }
 
     #[test]
     fn printer_diagnostic_reports_routes_and_outcomes_without_file_paths() {

@@ -252,6 +252,13 @@ the approved timeout, and transient observation failures receive only a bounded
 read retry, never another print submission. Batch Print's remembered scalar
 values are opt-in at the UI; selected files never enter remembered settings.
 
+The Windows Excel route opens each pinned private workbook copy read-only with
+macros, events, alerts, and link updates disabled. It does not set global
+Calculation or CalculateBeforeSave before opening a workbook because desktop
+Excel can reject those writes when no workbook exists. A COM failure preserves
+its allowlisted member stage and HRESULT only in the pathless queue diagnostic;
+the operator-facing result remains localized and source paths are omitted.
+
 For native file-association handlers, successful `ShellExecute` is the last
 available submission boundary when the application or driver never exposes a
 uniquely identifiable spool record. That job becomes `completed_unconfirmed`:

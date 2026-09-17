@@ -235,8 +235,6 @@ pub(crate) struct ComPlanError;
 pub(crate) fn validate_dispatch_member(name: &str) -> Result<(), ComPlanError> {
     match name {
         "AutomationSecurity"
-        | "Calculation"
-        | "CalculateBeforeSave"
         | "EnableEvents"
         | "DisplayAlerts"
         | "AskToUpdateLinks"
@@ -268,8 +266,6 @@ pub(crate) fn build_com_operation_plan(
         ComOperation::InitializeSta,
         ComOperation::CreateApplication,
         set_property("AutomationSecurity", 3.into()),
-        set_property("Calculation", (-4135).into()),
-        set_property("CalculateBeforeSave", false.into()),
         set_property("EnableEvents", false.into()),
         set_property("DisplayAlerts", false.into()),
         set_property("AskToUpdateLinks", false.into()),
@@ -450,8 +446,6 @@ mod tests {
                 ComOperation::InitializeSta,
                 ComOperation::CreateApplication,
                 set_property("AutomationSecurity", 3.into()),
-                set_property("Calculation", (-4135).into()),
-                set_property("CalculateBeforeSave", false.into()),
                 set_property("EnableEvents", false.into()),
                 set_property("DisplayAlerts", false.into()),
                 set_property("AskToUpdateLinks", false.into()),
@@ -477,7 +471,7 @@ mod tests {
             .iter()
             .filter(|operation| matches!(operation, ComOperation::SetProperty { .. }))
             .collect::<Vec<_>>();
-        assert_eq!(setters.len(), 7);
+        assert_eq!(setters.len(), 5);
         assert!(setters.iter().all(|operation| matches!(
             operation,
             ComOperation::SetProperty {
@@ -543,8 +537,6 @@ mod tests {
                 ComOperation::InitializeSta,
                 ComOperation::CreateApplication,
                 set_property("AutomationSecurity", 3.into()),
-                set_property("Calculation", (-4135).into()),
-                set_property("CalculateBeforeSave", false.into()),
                 set_property("EnableEvents", false.into()),
                 set_property("DisplayAlerts", false.into()),
                 set_property("AskToUpdateLinks", false.into()),
@@ -606,8 +598,6 @@ mod tests {
     fn dispatch_member_whitelist_rejects_calculation_refresh_link_repair_and_protected_view() {
         for allowed in [
             "AutomationSecurity",
-            "Calculation",
-            "CalculateBeforeSave",
             "EnableEvents",
             "DisplayAlerts",
             "AskToUpdateLinks",
@@ -624,6 +614,8 @@ mod tests {
             assert!(validate_dispatch_member(allowed).is_ok(), "{allowed}");
         }
         for forbidden in [
+            "Calculation",
+            "CalculateBeforeSave",
             "Calculate",
             "CalculateFull",
             "CalculateFullRebuild",
