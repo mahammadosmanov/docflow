@@ -17,12 +17,14 @@ use crate::{
     fs_ops::file_sha256,
     parallel::bounded_map_stream,
     rfi_system_sync::DISCIPLINES,
+    scan_index::{FileFingerprint, ScanIndex, ScanIndexStats},
 };
 
 pub const OPERATION_ID: &str = "files.replica_publish";
 const MAX_ENTRIES: usize = 500_000;
 const MAX_ROOT_FILES: usize = 64;
 const MAX_WARNINGS: usize = 200;
+const HASH_PROFILE: &str = "sha256-v1";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -68,7 +70,35 @@ struct TreeSnapshot {
     directories: BTreeSet<PathBuf>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct CachedHash {
+    sha256: String,
+}
+
 pub fn preview<P>(params: &ReplicaPublishParams, mut progress: P) -> Result<Plan, BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    preview_inner(params, None, &mut progress)
+}
+
+pub fn preview_with_index<P>(
+    params: &ReplicaPublishParams,
+    owner_id: &str,
+    index: &ScanIndex,
+    mut progress: P,
+) -> Result<Plan, BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    preview_inner(params, Some((owner_id, index)), &mut progress)
+}
+
+fn preview_inner<P>(
+    params: &ReplicaPublishParams,
+    cache: Option<(&str, &ScanIndex)>,
+    progress: &mut P,
+) -> Result<Plan, BackendError>
 where
     P: FnMut(ProgressEvent),
 {
@@ -100,7 +130,15 @@ where
         total: 3,
         subject: source_root.to_string_lossy().into_owned(),
     });
-    hash_snapshot(&mut source, &mut progress, "replica_source_hash")?;
+    let mut scan_stats = ScanIndexStats::default();
+    hash_snapshot(
+        source_root,
+        &mut source,
+        cache,
+        &mut scan_stats,
+        progress,
+        "replica_source_hash",
+    )?;
 
     let run_id = Uuid::new_v4().simple().to_string();
     let mut steps = Vec::new();
@@ -114,7 +152,14 @@ where
         target_number += 1;
         let target_name = ["A", "B", "C"][index];
         let mut target = snapshot_tree(target_root, &root_files, false)?;
-        hash_snapshot(&mut target, &mut progress, "replica_target_hash")?;
+        hash_snapshot(
+            target_root,
+            &mut target,
+            cache,
+            &mut scan_stats,
+            progress,
+            "replica_target_hash",
+        )?;
         progress(ProgressEvent {
             phase: "replica_discovery".to_string(),
             done: target_number + 1,
@@ -267,6 +312,13 @@ where
         "intervalMinutes".to_string(),
         Value::from(params.interval_minutes),
     );
+    if cache.is_some() {
+        meta.insert(
+            "scanIndex".to_string(),
+            serde_json::to_value(&scan_stats)
+                .map_err(|error| BackendError::protocol(error.to_string()))?,
+        );
+    }
     if params.unattended {
         meta.insert(
             "automationProfile".to_string(),
@@ -453,7 +505,10 @@ fn insert_file(
 }
 
 fn hash_snapshot<P>(
+    root: &Path,
     snapshot: &mut TreeSnapshot,
+    cache: Option<(&str, &ScanIndex)>,
+    aggregate: &mut ScanIndexStats,
     progress: &mut P,
     phase: &str,
 ) -> Result<(), BackendError>
@@ -465,40 +520,130 @@ where
         .iter()
         .map(|(relative, file)| (relative.clone(), file.clone()))
         .collect::<Vec<_>>();
-    let mut done = 0_u64;
+    let tree_total = items.len() as u64;
+    aggregate.discovered = aggregate.discovered.saturating_add(items.len() as u64);
+    let mut run = cache
+        .map(|(owner_id, index)| index.begin_run(owner_id, OPERATION_ID, HASH_PROFILE, root, false))
+        .transpose()
+        .map_err(|error| BackendError::request_failed(format!("replica index: {error}")))?;
+    if let Some((_, prior)) = &run {
+        aggregate.prior_interrupted_runs = aggregate.prior_interrupted_runs.saturating_add(*prior);
+    }
+    let mut pending = Vec::new();
+    let mut tree_reused = 0_u64;
+    for (relative, file) in items {
+        let fingerprint = FileFingerprint::read(&file.path).map_err(|error| {
+            BackendError::validation(format!("error.replica.fileUnstable: {error}"))
+        })?;
+        let cached = run
+            .as_ref()
+            .map(|(run, _)| run.lookup::<CachedHash>(&relative, &fingerprint))
+            .transpose()
+            .map_err(|error| BackendError::request_failed(format!("replica index: {error}")))?
+            .flatten()
+            .filter(|cached| valid_sha256(&cached.sha256));
+        if let Some(cached) = cached {
+            snapshot
+                .files
+                .get_mut(&relative)
+                .expect("cached file exists")
+                .hash = cached.sha256;
+            aggregate.reused = aggregate.reused.saturating_add(1);
+            tree_reused = tree_reused.saturating_add(1);
+            progress(ProgressEvent {
+                phase: phase.to_string(),
+                done: tree_reused,
+                total: tree_total,
+                subject: relative.to_string_lossy().into_owned(),
+            });
+        } else {
+            pending.push((relative, file, fingerprint));
+        }
+    }
+    let mut completed = 0_u64;
     let (_, results) = bounded_map_stream(
-        &items,
-        |(relative, file)| {
+        &pending,
+        |(relative, file, fingerprint)| {
             let hash = file_sha256(&file.path).map_err(|error| error.to_string())?;
             let metadata = fs::metadata(&file.path).map_err(|error| error.to_string())?;
             if metadata.len() != file.len || metadata.modified().ok() != file.modified {
                 return Err("file changed during scan".to_string());
             }
-            Ok((relative.clone(), hash))
+            Ok((relative.clone(), fingerprint.clone(), hash))
         },
-        |index, _| {
-            done += 1;
+        |item_index, result| {
+            completed += 1;
+            if let Some((run, _)) = &run {
+                match result {
+                    Ok((relative, fingerprint, hash)) => run
+                        .record_success(
+                            relative,
+                            fingerprint,
+                            &CachedHash {
+                                sha256: hash.clone(),
+                            },
+                        )
+                        .map_err(|error| format!("replica index: {error}"))?,
+                    Err(message) => run
+                        .record_failure(&pending[item_index].0, message)
+                        .map_err(|error| format!("replica index: {error}"))?,
+                }
+            }
             progress(ProgressEvent {
                 phase: phase.to_string(),
-                done,
-                total: items.len() as u64,
-                subject: items[index].0.to_string_lossy().into_owned(),
+                done: tree_reused.saturating_add(completed),
+                total: tree_total,
+                subject: pending[item_index].0.to_string_lossy().into_owned(),
             });
             Ok(())
         },
     )
     .map_err(BackendError::request_failed)?;
     for result in results {
-        let (relative, hash) = result.map_err(|message| {
+        let (relative, _, hash) = result.map_err(|message| {
+            aggregate.failed = aggregate.failed.saturating_add(1);
             BackendError::validation(format!("error.replica.fileUnstable: {message}"))
         })?;
+        aggregate.analyzed = aggregate.analyzed.saturating_add(1);
         snapshot
             .files
             .get_mut(&relative)
             .expect("hashed file exists")
             .hash = hash;
     }
+    if !pending.is_empty() {
+        aggregate.parallel_analysis = true;
+        aggregate.analysis_workers = aggregate
+            .analysis_workers
+            .max(crate::parallel::worker_count(pending.len()) as u64);
+    }
+    if let Some((run, _)) = run.take() {
+        let run_stats = ScanIndexStats {
+            discovered: snapshot.files.len() as u64,
+            reused: snapshot
+                .files
+                .values()
+                .filter(|file| !file.hash.is_empty())
+                .count()
+                .saturating_sub(pending.len()) as u64,
+            analyzed: pending.len() as u64,
+            failed: 0,
+            prior_interrupted_runs: 0,
+            force_rescan: false,
+            parallel_analysis: !pending.is_empty(),
+            analysis_workers: crate::parallel::worker_count(pending.len()) as u64,
+        };
+        run.complete(&run_stats)
+            .map_err(|error| BackendError::request_failed(format!("replica index: {error}")))?;
+    }
     Ok(())
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn collect_missing_directories(
@@ -600,5 +745,29 @@ mod tests {
             preview(&params, |_| {}).unwrap_err().message,
             "error.replica.sourceRootFileMissing"
         );
+    }
+
+    #[test]
+    fn indexed_preview_reuses_unchanged_hashes() {
+        let fixture = tempfile::tempdir().unwrap();
+        let params = params(fixture.path());
+        fs::write(params.root_a.join("MEC/source.pdf"), b"source").unwrap();
+        fs::write(params.root_a.join("RFI Log.xlsm"), b"log").unwrap();
+        let index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+
+        let first = preview_with_index(&params, "owner", &index, |_| {}).unwrap();
+        let second = preview_with_index(&params, "owner", &index, |_| {}).unwrap();
+
+        let first_stats: ScanIndexStats =
+            serde_json::from_value(first.meta["scanIndex"].clone()).unwrap();
+        let second_stats: ScanIndexStats =
+            serde_json::from_value(second.meta["scanIndex"].clone()).unwrap();
+        assert_eq!(first_stats.discovered, 2);
+        assert_eq!(first_stats.analyzed, 2);
+        assert_eq!(first_stats.reused, 0);
+        assert_eq!(second_stats.discovered, 2);
+        assert_eq!(second_stats.analyzed, 0);
+        assert_eq!(second_stats.reused, 2);
+        assert_eq!(first.steps, second.steps);
     }
 }

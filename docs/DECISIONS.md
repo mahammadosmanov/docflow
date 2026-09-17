@@ -26,6 +26,7 @@ and versioned with the code they govern.
 | Retire RFI work tracking, audit export, and device readiness | Accepted | [`adr/0014-retire-work-tracking-and-device-readiness.md`](adr/0014-retire-work-tracking-and-device-readiness.md) |
 | Exact completed-PDF evidence as a separate guarded RFI Log status operation | Accepted | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
 | One-way backup-first three-root publication with revocable standing authorization | Accepted | [`adr/0016-safe-unattended-replica-publication.md`](adr/0016-safe-unattended-replica-publication.md) |
+| Durable fingerprint-scoped hash reuse for replica comparison | Accepted | [`adr/0017-incremental-replica-hashing.md`](adr/0017-incremental-replica-hashing.md) |
 
 ## Adding a decision
 

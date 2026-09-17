@@ -1619,7 +1619,12 @@ impl NativeBackend {
             .collect::<Vec<_>>();
         grants.push((backup, GrantAccess::ReadWrite));
         let provisional = self.filesystem.issue_provisional_grants(&scope, &grants)?;
-        let plan = replica_publish::preview(&values, progress)?;
+        let plan = replica_publish::preview_with_index(
+            &values,
+            &caller.owner_id,
+            &self.scan_index,
+            progress,
+        )?;
         let grant_ids = provisional
             .grants()
             .iter()

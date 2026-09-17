@@ -57,6 +57,10 @@
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
   explicit task-local option.
+- Replica publication also checkpoints SHA-256 work per source and target root.
+  Later runs reuse only exact unchanged file fingerprints, show reused/fresh
+  counts in Preview, and resume from completed hash checkpoints after interruption.
+  Cached values only reduce comparison work; Apply still validates live hashes.
 - Completion Status Sync uses bounded multi-core, read-only filename discovery
   at every depth. It shows the exact PDF evidence and workbook-cell changes,
   permits row/all selection, leaves conflicting status values for review, and

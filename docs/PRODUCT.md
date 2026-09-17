@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.2.0**. `VERSION` is authoritative.
+Current product version: **1.3.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -62,6 +62,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
 20. One selected RFI System is the sole source for one-way publication to two
     targets. Replacements retain verified backups; target-only files are never
     deleted; unattended publication pauses on any unsafe failure.
+21. Repeated replica comparisons reuse only exact fingerprint-scoped local
+    SHA-256 evidence. Completed hash work survives interruption, while Apply
+    always validates live files and never trusts the index as mutation authority.
 
 ## Current capabilities
 
@@ -72,7 +75,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | RFI completion-status sync | Detect exact completed RFI PDFs at every nesting depth and mark approved RFI Log rows Completed | Read-only bounded parallel discovery; exact filenames and rows; conflicting/formula/merged targets fail closed; backup, closed OOXML delta verification, journal, and undo |
-| RFI System replica publication | Publish CIV/MEC/ELE/PRC and selected root files from one chosen source to two targets manually or under a standing authorization | Complete no-symlink scans, bounded parallel hashing, retained version backup before replacement, serial fail-fast Apply, hash verification, journal, Undo, no automatic deletion |
+| RFI System replica publication | Publish CIV/MEC/ELE/PRC and selected root files from one chosen source to two targets manually or under a standing authorization | Complete no-symlink scans, durable fingerprint-scoped incremental hashing, retained version backup before replacement, serial fail-fast Apply, live hash verification, journal, Undo, no automatic deletion |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, and opt-in recall of safe settings without old files |
 | Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | Bounded multi-core archive discovery uses exact filenames; exact page index and candidate are pinned; thumbnails are inert and bounded; archive and source scan stay read-only; unreadable, duplicate, ambiguous, and unsupported pages are rejected |

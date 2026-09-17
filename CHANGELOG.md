@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.3.0 - 2026-09-17
+
+### Added
+
+- Replica publication now stores successful SHA-256 comparison work in the
+  durable local scan index. Later runs reuse only exact unchanged file
+  fingerprints across the same owner, root, relative path, operation, and hash
+  algorithm, and Preview shows reused versus freshly hashed counts.
+- Hash checkpoints are written as each file completes, so an interrupted large
+  RFI System comparison resumes without reading every completed file again.
+
+### Safety
+
+- Cached hashes never authorize publication. Apply still reopens and validates
+  the approved live source and target hashes before backup, copy, or replacement.
+- Invalid, changed, replaced, unreadable, or differently scoped cache entries
+  are ignored and hashed again.
+
 ## 1.2.0 - 2026-09-16
 
 ### Added

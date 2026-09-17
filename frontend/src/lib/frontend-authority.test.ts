@@ -181,7 +181,7 @@ describe("frontend authority boundary", () => {
       }
     }
     const releaseSafety = read("docs/RELEASE_SAFETY.md");
-    expect(releaseSafety).toContain("exact ten-operation registry");
+    expect(releaseSafety).toContain("exact eleven-operation registry");
     expect(releaseSafety).toContain("RFI Follow Up");
   });
 

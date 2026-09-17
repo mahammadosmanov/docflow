@@ -122,6 +122,15 @@ and rejects any difference from the exact hash recorded in the approved Plan.
 A cached positive Worley signature is reused only after its stored full-file
 hash matches the live PDF; metadata alone cannot authorize workbook updates.
 
+Replica publication uses the same index for SHA-256 comparison work, with a
+separate algorithm profile and root scope for each of the three systems. It
+records each fresh hash before the run completes, so interruption does not lose
+finished work. A cache hit requires the exact file identity, size, modification
+time, owner, root, relative path, operation, and algorithm profile. Missing,
+changed, malformed, or unreadable cache evidence is hashed again. Publication
+still reopens and hashes the live approved source and target during Apply; the
+index never grants mutation authority.
+
 ## Workbook replacement
 
 Workbook preview pins original content and approved literal-cell changes. Apply

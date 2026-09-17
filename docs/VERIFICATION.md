@@ -4,6 +4,26 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.3.0 - 2026-09-17
+
+Incremental replica hashing passed Rust formatting, Clippy with all targets and
+features with warnings denied, Cargo check, 340 unit tests, and 211 integration
+tests; three operator-workbook tests remained intentionally ignored. Focused
+evidence verifies first-run hashing, a second preview with all unchanged hashes
+reused, root-scoped durable index records, identical planned effects, and the
+existing Apply-time source/target hash validation, backup, journal, and Undo path.
+
+All 23 Node tests and 52 React tests passed. Version, documentation, source, and
+dependency-license audits plus the production frontend build passed. The known
+non-failing frontend chunk-size advisory remains. The Windows x64 Rust check and
+complete test-target compile passed; Windows test executables were not run on
+this macOS host.
+
+No Windows package was produced for this checkpoint. Native Windows,
+OneDrive/SharePoint, GlobalProtect, startup, unattended scheduling, interruption,
+20 GB index performance, and operator Apply/Undo acceptance remain external.
+Printer hardware behavior was not changed or certified by this release.
+
 ## 1.2.0 - 2026-09-16
 
 The source-authoritative replica publication release passed Rust formatting,

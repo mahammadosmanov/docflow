@@ -113,6 +113,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   runs only while DocFlow is open, and disables itself after any unsafe failure.
   Backups are never automatically deleted. Windows startup is per-user and needs
   no administrator permission.
+- **DF-026 — Incremental replica comparison:** repeated replica previews reuse
+  only owner-, root-, algorithm-, relative-path-, identity-, size-, and
+  modification-time-matched SHA-256 results from the durable local scan index.
+  Cache hits and fresh hashes remain visible. Every changed or unknown file is
+  hashed again, completed hashes are checkpointed immediately, and Apply still
+  revalidates the approved live hashes before any publication.
 
 ## Scope
 
