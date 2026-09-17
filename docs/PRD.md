@@ -142,6 +142,14 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   storage, validates the compound-file envelope, then creates one journaled
   no-clobber local copy. It never sends, moves, deletes, or changes mailbox data;
   Undo removes only the exact unchanged created copy.
+- **DF-030 — Exact OTHERS-only Worley evidence:** RFI System Sync may classify
+  an RFI as Worley-signed only from the exact case-insensitive
+  `RFI No. <canonical RFI>.pdf` inside that canonical RFI folder. Page-one
+  analysis is restricted to the inner name/signature area of the bottom-right
+  `OTHERS` cell. Printed rules and any mark, name, date, note, or signature
+  elsewhere are not authority. Missing, unreadable, empty, or insufficient
+  evidence remains unsigned and authorizes no workbook change. A detector
+  revision invalidates every older cached classification.
 
 ## Scope
 

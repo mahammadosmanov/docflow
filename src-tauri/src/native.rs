@@ -3629,7 +3629,7 @@ mod tests {
         fs::create_dir_all(&civ_103_dir).unwrap();
         let civ_103_pdf = civ_103_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0103.pdf");
         {
-            let stream = "BT /F1 18 Tf 460 100 Td (E.Mammadov Signed Worley) Tj ET\n";
+            let stream = "BT /F1 18 Tf 470 195 Td (E.Mammadov Signed Worley) Tj ET\n";
             let objects = [
                 "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
                 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),

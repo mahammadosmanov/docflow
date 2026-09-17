@@ -8,6 +8,26 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.6.1 - 2026-09-17
+
+### Fixed
+
+- RFI System Sync now treats only the exact case-insensitive
+  `RFI No. <canonical RFI>.pdf` filename as Worley-signature evidence. It no
+  longer falls back to an unrelated PDF in the RFI folder.
+- Worley detection now inspects only the inner name/signature area of the
+  bottom-right `OTHERS` cell on page one. Printed table rules, contractor
+  signatures, dates, notes, and marks elsewhere cannot classify an RFI as
+  Worley-signed.
+
+### Safety
+
+- The detector fails closed when the exact PDF is missing, unreadable, empty,
+  or below the conservative `OTHERS`-ink threshold. Its algorithm profile was
+  changed, so earlier cached signature classifications are not reused.
+- Regression evidence includes the operator-supplied signed CIV-1041 and
+  unsigned MEC-0737 PDFs without adding either private document to Git.
+
 ## 1.6.0 - 2026-09-17
 
 ### Added

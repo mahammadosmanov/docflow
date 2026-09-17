@@ -106,6 +106,16 @@ OOXML delta. Backups never overwrite and are retained for operator recovery.
 - This operation changes only RFI Log status cells. Follow Up, REMARKS, signed
   sheets, and Worley state are outside its authority.
 
+RFI System Worley analysis accepts only the exact case-insensitive filename
+`RFI No. <canonical RFI>.pdf` inside the matching canonical RFI folder. It never
+falls back to another PDF. On page one, only handwriting or a signature inside
+the inner name/signature area of the bottom-right `OTHERS` cell is evidence.
+Printed table borders are removed from the measurement; contractor/subcontractor
+signatures, dates, general notes, and every other page region are ignored.
+Missing, unreadable, empty, or weak evidence is unsigned and cannot authorize a
+workbook update. Changing this detector requires a new scan-index algorithm
+profile so no earlier classification survives the change.
+
 A shared Follow Up status cell changes only when all RFIs represented by that
 cell satisfy the required state. `Ongoing` corresponds to `In Progress` where the
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by

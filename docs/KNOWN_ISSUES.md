@@ -49,6 +49,11 @@ These are not silently waived by passing local tests.
 - Incremental scan performance and fingerprint behavior still require native
   Windows acceptance on the operator's actual OneDrive/network-backed 20 GB RFI
   tree, including interruption, resume, changed files, and forced full rescan.
+- Worley OTHERS-only detection still requires native Windows acceptance across
+  representative CIV/MEC form revisions, scan resolutions, faint signatures,
+  OneDrive files, an exact missing-PDF case, and signatures placed only outside
+  OTHERS. Source regression evidence is fail-closed but cannot certify every
+  physical form or scanner variation.
 - OCR score labels and responsive plan scrolling still require native Windows
   acceptance at the operator's actual display scaling and representative small
   window sizes. Browser viewport evidence cannot certify WebView2 behavior.

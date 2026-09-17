@@ -80,6 +80,11 @@ pass from a macOS build or Windows cross-compile.
    and modify files, then confirm only completed unchanged entries resume while
    new/changed/failed items scan again. Finally use Force full rescan and confirm
    it bypasses the cache once and is off on the next visit.
+   For Worley classification, include one exact canonical RFI PDF with a real
+   signature in the bottom-right OTHERS cell, one with OTHERS empty but other
+   signatures present, and one RFI folder without its exact canonical PDF.
+   Confirm only the first is signed, the latter two authorize no workbook
+   change, and the first run after upgrading does not reuse older detector data.
 12. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
     place exact test archives at several nesting depths, and use nested single-
     and multi-page signed scans. Confirm every exact archive is found, duplicates

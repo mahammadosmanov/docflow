@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.6.0",
+  "currentVersion": "1.6.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -582,9 +582,17 @@
       "version": "1.6.0",
       "date": "2026-09-17",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.6.0",
       "summary": "Archive one exact selected classic Outlook message as a validated, journaled, no-clobber Unicode MSG staging copy."
+    },
+    {
+      "version": "1.6.1",
+      "date": "2026-09-17",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.6.1",
+      "summary": "Require the exact canonical RFI PDF and classify Worley signing only from ink inside the bottom-right OTHERS signature cell."
     }
   ]
 }

@@ -35,7 +35,7 @@ pub const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
 pub const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
 const MAX_HEADER_ROWS: u32 = 32;
 const MAX_HEADER_COLUMNS: u32 = 64;
-const SYSTEM_SCAN_PROFILE: &str = "worley-first-page-v1";
+const SYSTEM_SCAN_PROFILE: &str = "worley-first-page-v2-others-only";
 const MAX_COMPLETION_ENTRIES: usize = 250_000;
 const MAX_COMPLETION_WARNINGS: usize = 100;
 
@@ -528,7 +528,7 @@ where
         |(record, rfi_folder)| {
             let mut record = record.clone();
             let Some(pdf_path) = record.pdf_path.as_ref().map(PathBuf::from) else {
-                record.signature_reason = "No scanned PDF found in folder".to_string();
+                record.signature_reason = "Exact RFI No. PDF not found in folder".to_string();
                 return Ok(CandidateAnalysis {
                     record,
                     relative: None,
@@ -716,34 +716,23 @@ fn scan_system_discipline(
             canonical_rfi_prefix(),
             parsed_discipline
         );
-        let mut pdfs = fs::read_dir(&rfi_folder)
+        let expected_pdf = format!("RFI No. {canonical_rfi}.pdf");
+        let selected_pdf = fs::read_dir(&rfi_folder)
             .into_iter()
             .flatten()
             .flatten()
-            .filter_map(|entry| {
+            .find_map(|entry| {
                 entry
                     .file_type()
                     .ok()
                     .is_some_and(|kind| kind.is_file() && !kind.is_symlink())
                     .then(|| entry.path())
-            })
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
-            })
-            .collect::<Vec<_>>();
-        pdfs.sort();
-        let selected_pdf = pdfs
-            .iter()
-            .find(|path| {
-                path.file_name().is_some_and(|name| {
-                    name.to_string_lossy()
-                        .to_ascii_uppercase()
-                        .starts_with("RFI NO")
-                })
-            })
-            .cloned()
-            .or_else(|| pdfs.first().cloned());
+                    .filter(|path| {
+                        path.file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.eq_ignore_ascii_case(&expected_pdf))
+                    })
+            });
         candidates.push((
             ScannedRfiRecord {
                 discipline: parsed_discipline.to_string(),
@@ -774,35 +763,64 @@ pub(crate) fn detect_worley_signature(pdf_path: &Path, temp_dir: &Path) -> (bool
     if image.width < 100 || image.height < 100 {
         return (false, "Image dimensions too small".to_string());
     }
+    // The approved form's Worley evidence is the inner name/signature area of
+    // the bottom-right OTHERS cell. Everything outside this region—including
+    // contractor signatures and the general-notes area—is non-authoritative.
     let (x1, x2) = (
-        (image.width as f64 * 0.65) as usize,
-        (image.width as f64 * 0.96) as usize,
+        (image.width as f64 * 0.74) as usize,
+        (image.width as f64 * 0.92) as usize,
     );
     let (y1, y2) = (
-        (image.height as f64 * 0.76) as usize,
-        (image.height as f64 * 0.93) as usize,
+        (image.height as f64 * 0.72) as usize,
+        (image.height as f64 * 0.77) as usize,
     );
+    let width = x2.saturating_sub(x1);
+    let height = y2.saturating_sub(y1);
+    if width == 0 || height == 0 {
+        return (false, "Empty OTHERS inspection area".to_string());
+    }
+    let mut row_dark = vec![0usize; height];
+    let mut column_dark = vec![0usize; width];
+    for (row, y) in (y1..y2.min(image.height)).enumerate() {
+        for (column, x) in (x1..x2.min(image.width)).enumerate() {
+            if image.pixels[y * image.width + x] < 175 {
+                row_dark[row] += 1;
+                column_dark[column] += 1;
+            }
+        }
+    }
+    let ignored_rows = row_dark
+        .iter()
+        .map(|dark| *dark as f64 / width as f64 >= 0.35)
+        .collect::<Vec<_>>();
+    let ignored_columns = column_dark
+        .iter()
+        .map(|dark| *dark as f64 / height as f64 >= 0.35)
+        .collect::<Vec<_>>();
     let mut dark = 0usize;
     let mut total = 0usize;
-    for y in y1..y2.min(image.height) {
-        for x in x1..x2.min(image.width) {
+    for (row, y) in (y1..y2.min(image.height)).enumerate() {
+        for (column, x) in (x1..x2.min(image.width)).enumerate() {
+            if ignored_rows[row] || ignored_columns[column] {
+                continue;
+            }
             total += 1;
             dark += usize::from(image.pixels[y * image.width + x] < 175);
         }
     }
     if total == 0 {
-        return (false, "Empty inspection area".to_string());
+        return (false, "Empty OTHERS inspection area".to_string());
     }
     let ratio = dark as f64 / total as f64;
-    let signed = dark >= 160 && ratio >= 0.007;
+    let signed = dark >= 500 && ratio >= 0.025;
     let reason = if signed {
         format!(
-            "Signed by Worley (ink detected: {dark} px, {:.1}%)",
+            "Signed by Worley (OTHERS ink: {dark} px, {:.1}%)",
             ratio * 100.0
         )
     } else {
         format!(
-            "Unsigned / Box empty (ink: {dark} px, {:.2}%)",
+            "Unsigned / OTHERS empty (ink: {dark} px, {:.2}%)",
             ratio * 100.0
         )
     };

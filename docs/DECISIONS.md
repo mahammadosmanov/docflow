@@ -30,6 +30,7 @@ and versioned with the code they govern.
 | Local pathless printer evidence in the redacted support bundle | Accepted | [`adr/0018-pathless-printer-diagnostics.md`](adr/0018-pathless-printer-diagnostics.md) |
 | Guarded near-real-time replica publication | Accepted | [`adr/0019-guarded-near-real-time-replica-publication.md`](adr/0019-guarded-near-real-time-replica-publication.md) |
 | Exact selected Outlook message archived as a guarded native Unicode MSG copy | Accepted | [`adr/0020-guarded-selected-outlook-msg-archive.md`](adr/0020-guarded-selected-outlook-msg-archive.md) |
+| Exact canonical PDF and bottom-right OTHERS cell as sole Worley authority | Accepted | [`adr/0021-exact-others-worley-evidence.md`](adr/0021-exact-others-worley-evidence.md) |
 
 ## Adding a decision
 

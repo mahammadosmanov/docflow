@@ -148,6 +148,10 @@ For an actionable cached orientation result, Apply still hashes the live source
 and rejects any difference from the exact hash recorded in the approved Plan.
 A cached positive Worley signature is reused only after its stored full-file
 hash matches the live PDF; metadata alone cannot authorize workbook updates.
+The current Worley detector profile accepts only the matching canonical RFI PDF
+and only ink inside the page-one bottom-right `OTHERS` name/signature cell. A
+profile change invalidates both positive and negative results from every older
+detector; missing exact PDFs are retained as non-actionable unsigned evidence.
 
 Replica publication uses the same index for SHA-256 comparison work, with a
 separate algorithm profile and root scope for each of the three systems. It

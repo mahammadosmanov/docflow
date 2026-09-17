@@ -86,11 +86,15 @@ fn worksheet(rows: impl IntoIterator<Item = String>) -> String {
 }
 
 fn write_pdf_with_signature(path: &Path, signed: bool) {
-    let stream = if signed {
-        "BT /F1 18 Tf 460 100 Td (E.Mammadov Signed Worley) Tj ET\n"
+    if signed {
+        write_pdf_at(path, 470, 195, "E.Mammadov Signed Worley");
     } else {
-        "BT /F1 18 Tf 100 700 Td (RFI Inspection Details) Tj ET\n"
-    };
+        write_pdf_at(path, 100, 700, "RFI Inspection Details");
+    }
+}
+
+fn write_pdf_at(path: &Path, x: u32, y: u32, text: &str) {
+    let stream = format!("BT /F1 18 Tf {x} {y} Td ({text}) Tj ET\n");
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
@@ -119,6 +123,100 @@ fn write_pdf_with_signature(path: &Path, signed: bool) {
         .as_bytes(),
     );
     fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn signature_outside_others_is_not_worley_evidence() {
+    let fixture = tempfile::tempdir().unwrap();
+    let system = fixture.path().join("RFI_SYSTEM");
+    let folder = system.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-0102");
+    fs::create_dir_all(&folder).unwrap();
+    write_pdf_at(
+        &folder.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0102.pdf"),
+        460,
+        100,
+        "Unrelated lower-page signature",
+    );
+
+    let (records, _) = scan_system_root_indexed(&system, None, "owner", false, |_| {}).unwrap();
+    assert_eq!(records.len(), 1);
+    assert!(
+        !records[0].signed_by_worley,
+        "{}",
+        records[0].signature_reason
+    );
+}
+
+#[test]
+fn system_scan_requires_the_exact_canonical_rfi_pdf() {
+    let fixture = tempfile::tempdir().unwrap();
+    let system = fixture.path().join("RFI_SYSTEM");
+    let missing = system.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-0101");
+    let exact = system.join("MEC/AZE-SUN-INT-QMS-RFI-MEC-0700");
+    fs::create_dir_all(&missing).unwrap();
+    fs::create_dir_all(&exact).unwrap();
+    write_pdf_with_signature(&missing.join("inspection.pdf"), true);
+    write_pdf_with_signature(
+        &missing.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-9999.pdf"),
+        true,
+    );
+    write_pdf_with_signature(
+        &exact.join("rfi no. aze-sun-int-qms-rfi-mec-0700.PDF"),
+        true,
+    );
+
+    let (records, _) = scan_system_root_indexed(&system, None, "owner", false, |_| {}).unwrap();
+    assert_eq!(records.len(), 2);
+    let missing = records
+        .iter()
+        .find(|record| record.canonical_rfi.ends_with("CIV-0101"))
+        .unwrap();
+    assert!(missing.pdf_path.is_none());
+    assert!(!missing.signed_by_worley);
+    assert_eq!(
+        missing.signature_reason,
+        "Exact RFI No. PDF not found in folder"
+    );
+    let exact = records
+        .iter()
+        .find(|record| record.canonical_rfi.ends_with("MEC-0700"))
+        .unwrap();
+    assert!(exact.pdf_path.is_some());
+    assert!(exact.signed_by_worley);
+}
+
+#[test]
+#[ignore = "requires operator-supplied signed and unsigned RFI PDFs"]
+fn operator_worley_examples_use_only_the_others_signature_cell() {
+    let signed = std::env::var("DOCFLOW_SIGNED_WORLEY_PDF").unwrap();
+    let unsigned = std::env::var("DOCFLOW_UNSIGNED_WORLEY_PDF").unwrap();
+    let fixture = tempfile::tempdir().unwrap();
+    let system = fixture.path().join("RFI_SYSTEM");
+    let signed_folder = system.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-1041");
+    let unsigned_folder = system.join("MEC/AZE-SUN-INT-QMS-RFI-MEC-0737");
+    fs::create_dir_all(&signed_folder).unwrap();
+    fs::create_dir_all(&unsigned_folder).unwrap();
+    fs::copy(
+        signed,
+        signed_folder.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1041.pdf"),
+    )
+    .unwrap();
+    fs::copy(
+        unsigned,
+        unsigned_folder.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-0737.pdf"),
+    )
+    .unwrap();
+    let (records, _) = scan_system_root_indexed(&system, None, "owner", false, |_| {}).unwrap();
+    let signed = records
+        .iter()
+        .find(|record| record.canonical_rfi.ends_with("CIV-1041"))
+        .unwrap();
+    let unsigned = records
+        .iter()
+        .find(|record| record.canonical_rfi.ends_with("MEC-0737"))
+        .unwrap();
+    assert!(signed.signed_by_worley, "{}", signed.signature_reason);
+    assert!(!unsigned.signed_by_worley, "{}", unsigned.signature_reason);
 }
 
 #[test]
