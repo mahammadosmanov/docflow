@@ -4,6 +4,46 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.7.0 - 2026-09-18
+
+The complete Follow Up projection at implementation commit `b301c27` passed
+Rust formatting, Clippy with all targets/features and warnings denied, Cargo
+check, 348 unit tests, and 216 integration tests; four operator-file/workbook
+tests remained intentionally ignored in the ordinary suite. New focused
+evidence proves missing FINAL CIV rows are added only to uniquely matched
+prepared literal cells, exact REMARKS evidence becomes `Signed` or
+`Not Signed`, non-FINAL records are excluded, and formula-backed targets remain
+unselected manual review.
+
+The ignored current-workbook regression was run explicitly against the
+available prior copies of RFI Log and Inspection Status Follow Up. Preview and
+revision completed within the bounded authority, approved updates targeted only
+the six allowlisted sheets, and the private patched output passed closed OOXML
+package-delta verification. The source workbooks were opened read-only and were
+not copied into Git or artifacts. This is package-fidelity evidence, not Excel
+acceptance of the latest production copies.
+
+All 23 Node tests and 53 React tests passed. Version, documentation, source,
+dependency-license, and production frontend build gates passed; the known
+non-failing frontend chunk-size advisory remains.
+
+The Windows x64 cross-build completed from the implementation commit. The
+OCR-inclusive ZIP passed package and archive-integrity audits, every generated
+checksum verified, and both executables identify as Windows GUI-subsystem PE
+files. Cross-linker PDB warnings were non-failing debug-information warnings.
+The established macOS 27 proc-macro workaround was confined to the build
+environment and a temporary macOS 11 bundle target; repository configuration
+was restored to macOS 13 afterward. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `9566113fba290741a374cf93eed06bb798958cda1bd6ab920fab2ec3fc602a2c`;
+- portable EXE: `1b0e5764c279d130ce22cef889c8926538e78c82c42d23269b37da894de03edb`;
+- per-user installer: `52f6ff32b86bbcaae5c0c4d6bed8b719c5c14816887a022d8b0b870010fed01b`.
+
+Windows executables were cross-compiled but not run on this macOS host. Native
+Windows/OneDrive/Excel acceptance must confirm repair-free open, recalculation,
+Apply, backup, and Undo on isolated current-workbook copies before production
+use.
+
 ## 1.6.1 - 2026-09-17
 
 The OTHERS-only Worley correction passed Rust formatting, Clippy with all

@@ -1,14 +1,15 @@
 # DocFlow project state
 
-Updated: 2026-09-17
+Updated: 2026-09-18
 
 ## Current release
 
-- Version: 1.6.1
+- Version: 1.7.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `989113b`
-- Objective: prevent false Worley-signature classification by requiring the
-  exact canonical RFI PDF and using only the bottom-right OTHERS signature cell.
+- Implementation commit: `b301c27`
+- Objective: synchronize every authoritative existing Follow Up lifecycle and
+  FINAL Worley Signed/Not Signed field from RFI Log without touching formulas,
+  reports, absent sections, or ambiguous cells.
 
 ## Verified
 
@@ -37,9 +38,17 @@ Updated: 2026-09-17
 - The supplied signed CIV-1041 and unsigned MEC-0737 PDFs pass the external
   regression without entering Git; exact-filename, outside-cell, and missing-PDF
   synthetic regressions also pass.
+- Follow Up Sync recalculates existing CIV/MEC lifecycle groups, removes
+  Cancelled/Rejected identifiers, and synchronizes exact FINAL Worley
+  Signed/Not Signed values. A missing FINAL identifier is added only to one
+  uniquely mapped, already-prepared literal RFI/status pair.
+- Formula, merged, protected, absent, non-FINAL, and ambiguous Signed By targets
+  remain visible manual review and are not authorized for Apply.
+- The available prior RFI Log/Follow Up copies passed bounded preview/revision
+  and closed OOXML-delta verification without modifying the originals.
 - Rust, Node, React, frontend, version, documentation, source, and license checks
-  pass. Windows x64 Rust check and test-target compilation pass as recorded in
-  `docs/VERIFICATION.md`.
+  pass. The Windows x64 cross-build, package audit, checksums, and GUI-subsystem
+  checks pass as recorded in `docs/VERIFICATION.md`.
 
 ## External gate
 
@@ -55,3 +64,7 @@ Updated: 2026-09-17
 - On Windows, Preview isolated copies containing OTHERS-signed, OTHERS-empty,
   outside-cell-only, faint-signature, and missing-exact-PDF cases. Confirm only
   authoritative OTHERS ink is actionable before using a production workbook.
+- On Windows, run Follow Up Sync on isolated copies of the current RFI Log and
+  Follow Up. Confirm lifecycle groups and FINAL Signed/Not Signed values,
+  prepared missing FINAL rows, Excel repair-free open/recalculate, backup, and
+  Undo before production use.

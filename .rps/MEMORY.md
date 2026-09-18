@@ -30,3 +30,10 @@
   bottom-right page-one OTHERS name/signature cell. Never fall back to another
   PDF or infer signing from contractor signatures, dates, notes, or other marks.
   Every detector change must use a new scan-index profile.
+- RFI Log to Follow Up authority covers existing CIV, MEC, PCU, Road, and
+  Signed By Worley CIV/MEC input cells. Lifecycle status and exact FINAL
+  Signed/Not Signed values may change; report sheets and formulas recalculate
+  naturally but are never rewritten.
+- Missing FINAL identifiers may use only one uniquely matched, already-prepared
+  literal RFI/status pair. Never append a row, synthesize an absent section,
+  replace a formula, or guess an ambiguous location.
