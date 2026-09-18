@@ -4,6 +4,43 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.7.1 - 2026-09-18
+
+The orientation-recognition implementation at commit `bd1c904` was calibrated
+read-only against the consented Ventoy RFI System copy: 3,590 PDFs under
+CIV/MEC/ELE/PRC, totaling about 15.7 GB. A deterministic 24-page first-page
+sample showed only 11 pages meeting the former 150-DPI OSD threshold, versus 17
+at 250 DPI and 18 at 350 DPI. A second deterministic 60-page cross-document
+sample included upright, sideways, sparse, scanned-form, and drawing pages. The
+new selector retained the clear 90-degree case, accepted clear four-direction
+OCR winners, and rejected observed sparse and close 0/180-degree cases. The
+source tree was never mutated and no private document entered Git or artifacts.
+
+Rust formatting, Clippy with all targets/features and warnings denied, Cargo
+check, 352 unit tests, and 216 integration tests passed; four operator-file tests
+remained intentionally ignored. The six focused orientation selector tests and
+all six PDF-orientation integration tests passed after the final output-bound
+change. All 23 Node tests and 53 React tests passed. Source, documentation,
+version, dependency-license, and production frontend build gates passed. The
+removed Python sidecar leaves no Python test or mypy scope; the attempted pytest
+gate truthfully reported zero collected tests rather than a false pass.
+
+The Windows x64 cross-build completed from `bd1c904`. The OCR-inclusive ZIP
+passed archive-integrity and package audits, every generated checksum verified,
+and the packaged, portable, and ZIP-contained executables identify as Windows
+GUI-subsystem PE files. Cross-linker PDB messages were non-failing debug-symbol
+warnings. The temporary macOS 11 build target was restored to the committed
+macOS 13 configuration. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `bb57957dbb82ab4ee9c4d089efee97fb44d9a97252f4b25db332e12b16fa9e7d`;
+- portable EXE: `e90d1835bad68367d627a887676d955ffa9ba216694cecd00ae4eee35a6a4859`;
+- per-user installer: `8e1ef760dcd3b93f2145cd577f6eec36067a28d1574832e5269d56e6991bc752`.
+
+Windows executables were cross-compiled but not run on this macOS host. Native
+Windows/OneDrive acceptance must still exercise representative RFI PDFs,
+incremental cache reuse, cancellation, Preview, Apply, fidelity, and Undo before
+production use.
+
 ## 1.7.0 - 2026-09-18
 
 The complete Follow Up projection at implementation commit `b301c27` passed

@@ -6,7 +6,7 @@ Updated: 2026-09-18
 
 - Version: 1.7.1
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending release checkpoint
+- Implementation commit: `bd1c904`
 - Objective: improve real RFI-system page-orientation recognition without
   weakening fail-closed review, read-only source, or PDF-fidelity guarantees.
 
@@ -22,6 +22,9 @@ Updated: 2026-09-18
   algorithm boundary.
 - Full Rust, Node, React, source, documentation, version, and license gates pass
   for 1.7.1. Native Windows execution remains a separate acceptance gate.
+- Windows x64 installer, portable EXE, and OCR-inclusive ZIP were cross-built
+  from `bd1c904`; checksums, ZIP integrity, OCR package shape, and Windows GUI
+  subsystem checks pass. Native Windows/OneDrive execution was not run on macOS.
 
 - Durable replica hashes are reused only for the same owner, operation, source
   root, profile, relative path, identity, size, and modified time; Apply still
