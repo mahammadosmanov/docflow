@@ -92,5 +92,7 @@
 - Replica publication never propagates target-only files back to the source and
   never deletes them automatically. It is one-way publication, not bidirectional merge.
 - Native Office and printer behavior is accepted only on a real Windows host.
-- PDF orientation classification requires bundled Tesseract OSD data. A PDF with
-  any low-confidence or unreadable page is left unchanged for manual review.
+- PDF orientation classification requires bundled Tesseract OSD and English
+  data. It uses multi-resolution OSD first, then a conservative four-direction
+  OCR comparison only for unresolved pages. A PDF with any still-ambiguous or
+  unreadable page is left unchanged for manual review.

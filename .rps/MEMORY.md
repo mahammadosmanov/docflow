@@ -37,3 +37,8 @@
 - Missing FINAL identifiers may use only one uniquely matched, already-prepared
   literal RFI/status pair. Never append a row, synthesize an absent section,
   replace a formula, or guess an ambiguous location.
+- PDF orientation uses 250/350-DPI OSD consensus, then a conservative
+  four-direction English OCR score only for unresolved pages. The fallback must
+  keep minimum word, average-confidence, winner-ratio, and margin gates; sparse
+  drawings or close 0/180-degree results remain manual review. Every detector
+  change requires a new scan-index profile.

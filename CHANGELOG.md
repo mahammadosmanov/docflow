@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.7.1 - 2026-09-18
+
+### Fixed
+
+- Correct RFI PDF Page Orientation now uses a 250/350-DPI Tesseract OSD cascade
+  instead of one 150-DPI attempt. Agreeing passes can combine evidence, and
+  difficult form pages receive a bounded four-direction English OCR comparison.
+- The orientation scan-index profile changed, so earlier detector results are
+  not reused after this recognition update.
+
+### Safety
+
+- Four-direction OCR acts only when it has enough recognized words, a strong
+  average score, and a clear lead over the runner-up. Sparse drawings and close
+  0/180-degree results remain manual review instead of being guessed.
+- The selected RFI System remains read-only. Apply still uses only approved,
+  hash-pinned rotations to create no-clobber, fidelity-checked review copies.
+
 ## 1.7.0 - 2026-09-18
 
 ### Added

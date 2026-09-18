@@ -22,7 +22,7 @@ const MIN_ORIENTATION_CONFIDENCE: f64 = 10.0;
 const MAX_DIRECTORY_ENTRIES: usize = 500_000;
 const MAX_PDFS: usize = 50_000;
 const MAX_PAGES: usize = 250_000;
-const ORIENTATION_SCAN_PROFILE: &str = "content-osd-v1";
+const ORIENTATION_SCAN_PROFILE: &str = "content-orientation-cascade-v2";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PdfOrientationParams {

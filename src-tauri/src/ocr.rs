@@ -229,6 +229,8 @@ impl OcrAdapter for NativeOcr {
 
 impl OrientationDetector for NativeOcr {
     fn detect_page(&self, path: &Path, page_index: usize) -> Result<OrientationDetection, String> {
+        const PRIMARY_DPI: i32 = 250;
+        const SECONDARY_DPI: i32 = 350;
         let tesseract = self
             .tesseract
             .as_deref()
@@ -243,10 +245,44 @@ impl OrientationDetector for NativeOcr {
             })?;
         let temporary =
             tempfile::tempdir().map_err(|error| format!("orientation temp: {error}"))?;
-        let rendered = temporary.path().join(format!("page-{page_index}.png"));
-        render_page_png(path, &rendered, 150, page_index)?;
-        let text = run_orientation_tesseract(tesseract, &rendered, temporary.path(), tessdata)?;
-        parse_orientation_output(&text)
+        let primary = temporary
+            .path()
+            .join(format!("page-{page_index}-{PRIMARY_DPI}.png"));
+        render_page_png(path, &primary, PRIMARY_DPI, page_index)?;
+        let primary_detection =
+            run_orientation_tesseract(tesseract, &primary, temporary.path(), tessdata, PRIMARY_DPI)
+                .and_then(|text| parse_orientation_output(&text, PRIMARY_DPI))
+                .ok();
+        if let Some(detection) = select_osd_detection(primary_detection.as_ref(), None) {
+            return Ok(detection);
+        }
+
+        let secondary = temporary
+            .path()
+            .join(format!("page-{page_index}-{SECONDARY_DPI}.png"));
+        let secondary_detection = render_page_png(path, &secondary, SECONDARY_DPI, page_index)
+            .and_then(|()| {
+                run_orientation_tesseract(
+                    tesseract,
+                    &secondary,
+                    temporary.path(),
+                    tessdata,
+                    SECONDARY_DPI,
+                )
+            })
+            .and_then(|text| parse_orientation_output(&text, SECONDARY_DPI))
+            .ok();
+        if let Some(detection) =
+            select_osd_detection(primary_detection.as_ref(), secondary_detection.as_ref())
+        {
+            return Ok(detection);
+        }
+
+        detect_orientation_by_direction_scores(tesseract, &primary, temporary.path(), tessdata)?
+            .ok_or_else(|| {
+                "orientation remained uncertain after multi-resolution OSD and four-direction OCR"
+                    .to_string()
+            })
     }
 
     fn diagnostics(&self) -> String {
@@ -268,10 +304,11 @@ fn run_orientation_tesseract(
     image: &Path,
     temporary: &Path,
     tessdata: &Path,
+    dpi: i32,
 ) -> Result<String, String> {
     const MAX_OUTPUT_BYTES: u64 = 1024 * 1024;
-    let stdout_path = temporary.join("orientation.stdout.txt");
-    let stderr_path = temporary.join("orientation.stderr.txt");
+    let stdout_path = temporary.join(format!("orientation-{dpi}.stdout.txt"));
+    let stderr_path = temporary.join(format!("orientation-{dpi}.stderr.txt"));
     let stdout = fs::File::create(&stdout_path)
         .map_err(|error| format!("orientation stdout create: {error}"))?;
     let stderr = fs::File::create(&stderr_path)
@@ -326,7 +363,7 @@ fn run_orientation_tesseract(
     Ok(combined)
 }
 
-fn parse_orientation_output(output: &str) -> Result<OrientationDetection, String> {
+fn parse_orientation_output(output: &str, dpi: i32) -> Result<OrientationDetection, String> {
     let mut rotate_clockwise = None;
     let mut confidence = None;
     for line in output.lines() {
@@ -348,8 +385,263 @@ fn parse_orientation_output(output: &str) -> Result<OrientationDetection, String
     Ok(OrientationDetection {
         rotate_clockwise,
         confidence,
-        method: "tesseract-osd:150dpi".to_string(),
+        method: format!("tesseract-osd:{dpi}dpi"),
     })
+}
+
+fn select_osd_detection(
+    primary: Option<&OrientationDetection>,
+    secondary: Option<&OrientationDetection>,
+) -> Option<OrientationDetection> {
+    const STRONG_CONFIDENCE: f64 = 10.0;
+    const CONFLICT_CONFIDENCE: f64 = 3.0;
+    const CONSENSUS_TOTAL: f64 = 12.0;
+
+    match (primary, secondary) {
+        (Some(first), Some(second)) if first.rotate_clockwise == second.rotate_clockwise => {
+            let combined = first.confidence + second.confidence;
+            if first.confidence >= STRONG_CONFIDENCE
+                || second.confidence >= STRONG_CONFIDENCE
+                || (first.confidence >= CONFLICT_CONFIDENCE
+                    && second.confidence >= CONFLICT_CONFIDENCE
+                    && combined >= CONSENSUS_TOTAL)
+            {
+                Some(OrientationDetection {
+                    rotate_clockwise: first.rotate_clockwise,
+                    confidence: combined.clamp(STRONG_CONFIDENCE, 100.0),
+                    method: "tesseract-osd-consensus:250+350dpi".to_string(),
+                })
+            } else {
+                None
+            }
+        }
+        (Some(first), Some(second)) => {
+            let first_strong =
+                first.confidence >= STRONG_CONFIDENCE && second.confidence < CONFLICT_CONFIDENCE;
+            let second_strong =
+                second.confidence >= STRONG_CONFIDENCE && first.confidence < CONFLICT_CONFIDENCE;
+            if first_strong {
+                Some(first.clone())
+            } else if second_strong {
+                Some(second.clone())
+            } else {
+                None
+            }
+        }
+        (Some(detection), None) | (None, Some(detection))
+            if detection.confidence >= STRONG_CONFIDENCE =>
+        {
+            Some(detection.clone())
+        }
+        _ => None,
+    }
+}
+
+#[derive(Clone, Debug)]
+struct DirectionScore {
+    rotate_clockwise: i64,
+    word_count: usize,
+    confidence_sum: f64,
+}
+
+impl DirectionScore {
+    fn new(rotate_clockwise: i64, word_count: usize, confidence_sum: f64) -> Self {
+        Self {
+            rotate_clockwise,
+            word_count,
+            confidence_sum,
+        }
+    }
+
+    fn average_confidence(&self) -> f64 {
+        if self.word_count == 0 {
+            0.0
+        } else {
+            self.confidence_sum / self.word_count as f64
+        }
+    }
+}
+
+fn select_direction_score(scores: &[DirectionScore]) -> Option<OrientationDetection> {
+    const MIN_WORDS: usize = 20;
+    const MIN_AVERAGE_CONFIDENCE: f64 = 55.0;
+    const MIN_SUM_RATIO: f64 = 1.45;
+    const MIN_AVERAGE_MARGIN: f64 = 8.0;
+
+    let mut ranked = scores.iter().collect::<Vec<_>>();
+    ranked.sort_by(|left, right| {
+        right
+            .confidence_sum
+            .total_cmp(&left.confidence_sum)
+            .then_with(|| right.word_count.cmp(&left.word_count))
+    });
+    let winner = *ranked.first()?;
+    let runner_up = *ranked.get(1)?;
+    let winner_average = winner.average_confidence();
+    let runner_average = runner_up.average_confidence();
+    let sum_ratio = winner.confidence_sum / runner_up.confidence_sum.max(1.0);
+    let average_margin = winner_average - runner_average;
+    if winner.word_count < MIN_WORDS
+        || winner_average < MIN_AVERAGE_CONFIDENCE
+        || sum_ratio < MIN_SUM_RATIO
+        || average_margin < MIN_AVERAGE_MARGIN
+    {
+        return None;
+    }
+    let confidence = (10.0 + (sum_ratio - 1.0) * 35.0 + average_margin).clamp(10.0, 100.0);
+    Some(OrientationDetection {
+        rotate_clockwise: winner.rotate_clockwise,
+        confidence,
+        method: "tesseract-eng-direction-score:250dpi".to_string(),
+    })
+}
+
+fn detect_orientation_by_direction_scores(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: &Path,
+) -> Result<Option<OrientationDetection>, String> {
+    if !bundled_regular_file(&tessdata.join("eng.traineddata")) {
+        return Err("Tesseract English data is unavailable for orientation fallback".to_string());
+    }
+    let image = resize_gray_to_fit(&read_png_gray(image)?, 2_600, 2_600)?;
+    let mut scores = Vec::with_capacity(4);
+    for rotate_clockwise in [0, 90, 180, 270] {
+        let rotated = rotate_gray_clockwise(&image, rotate_clockwise)?;
+        let path = temporary.join(format!("direction-{rotate_clockwise}.pgm"));
+        write_pgm(&path, &rotated)?;
+        scores.push(run_direction_tesseract(
+            executable,
+            &path,
+            temporary,
+            tessdata,
+            rotate_clockwise,
+        )?);
+    }
+    Ok(select_direction_score(&scores))
+}
+
+fn rotate_gray_clockwise(image: &GrayImage, degrees: i64) -> Result<GrayImage, String> {
+    let (width, height) = match degrees {
+        0 | 180 => (image.width, image.height),
+        90 | 270 => (image.height, image.width),
+        _ => return Err("OCR fallback rotation is not a right angle".to_string()),
+    };
+    let mut pixels = vec![255; width.saturating_mul(height)];
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let (target_x, target_y) = match degrees {
+                0 => (x, y),
+                90 => (image.height - 1 - y, x),
+                180 => (image.width - 1 - x, image.height - 1 - y),
+                270 => (y, image.width - 1 - x),
+                _ => unreachable!(),
+            };
+            pixels[target_y * width + target_x] = image.pixels[y * image.width + x];
+        }
+    }
+    Ok(GrayImage {
+        width,
+        height,
+        pixels,
+    })
+}
+
+fn run_direction_tesseract(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: &Path,
+    rotate_clockwise: i64,
+) -> Result<DirectionScore, String> {
+    const MAX_OUTPUT_BYTES: u64 = 8 * 1024 * 1024;
+    let output_path = temporary.join(format!("direction-{rotate_clockwise}.tsv"));
+    let error_path = temporary.join(format!("direction-{rotate_clockwise}.stderr.txt"));
+    let output = fs::File::create(&output_path)
+        .map_err(|error| format!("orientation fallback output create: {error}"))?;
+    let error = fs::File::create(&error_path)
+        .map_err(|error| format!("orientation fallback stderr create: {error}"))?;
+    let mut command = Command::new(executable);
+    configure_tesseract_process(&mut command);
+    command
+        .arg(image)
+        .arg("stdout")
+        .arg("--oem")
+        .arg("3")
+        .arg("--psm")
+        .arg("11")
+        .arg("-l")
+        .arg("eng")
+        .arg("-c")
+        .arg("tessedit_create_tsv=1")
+        .env("TESSDATA_PREFIX", tessdata)
+        .stdin(Stdio::null())
+        .stdout(output)
+        .stderr(error);
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("orientation fallback could not start: {error}"))?;
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < Duration::from_secs(30) => {
+                let output_size = fs::metadata(&output_path).map_or(0, |value| value.len())
+                    + fs::metadata(&error_path).map_or(0, |value| value.len());
+                if output_size > MAX_OUTPUT_BYTES {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("orientation fallback output exceeded the limit".to_string());
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("orientation fallback timed out".to_string());
+            }
+            Err(error) => return Err(format!("orientation fallback wait failed: {error}")),
+        }
+    };
+    let output_size = fs::metadata(&output_path).map_or(0, |value| value.len())
+        + fs::metadata(&error_path).map_or(0, |value| value.len());
+    if output_size > MAX_OUTPUT_BYTES {
+        return Err("orientation fallback output exceeded the limit".to_string());
+    }
+    if !status.success() {
+        let error = fs::read_to_string(error_path).unwrap_or_default();
+        return Err(format!(
+            "orientation fallback failed: {}",
+            error.lines().next().unwrap_or("unknown error")
+        ));
+    }
+    let output = fs::read_to_string(output_path)
+        .map_err(|error| format!("orientation fallback output decode: {error}"))?;
+    let mut word_count = 0_usize;
+    let mut confidence_sum = 0.0_f64;
+    for line in output.lines().skip(1) {
+        let columns = line.splitn(12, '\t').collect::<Vec<_>>();
+        if columns.len() != 12
+            || !columns[11]
+                .chars()
+                .any(|value| value.is_ascii_alphanumeric())
+        {
+            continue;
+        }
+        let Ok(confidence) = columns[10].parse::<f64>() else {
+            continue;
+        };
+        if confidence >= 30.0 && confidence.is_finite() {
+            word_count += 1;
+            confidence_sum += confidence;
+        }
+    }
+    Ok(DirectionScore::new(
+        rotate_clockwise,
+        word_count,
+        confidence_sum,
+    ))
 }
 
 fn tesseract_candidates() -> Vec<PathBuf> {
@@ -865,6 +1157,7 @@ mod orientation_tests {
     fn parses_tesseract_osd_rotation_and_confidence() {
         let result = parse_orientation_output(
             "Page number: 0\nOrientation in degrees: 270\nRotate: 90\nOrientation confidence: 18.42\nScript: Latin\n",
+            250,
         )
         .unwrap();
         assert_eq!(result.rotate_clockwise, 90);
@@ -873,8 +1166,82 @@ mod orientation_tests {
 
     #[test]
     fn rejects_missing_or_non_right_angle_osd_results() {
-        assert!(parse_orientation_output("Rotate: 45\nOrientation confidence: 20\n").is_err());
-        assert!(parse_orientation_output("Rotate: 90\n").is_err());
+        assert!(parse_orientation_output("Rotate: 45\nOrientation confidence: 20\n", 250).is_err());
+        assert!(parse_orientation_output("Rotate: 90\n", 250).is_err());
+    }
+
+    #[test]
+    fn accepts_only_clear_four_direction_ocr_winners() {
+        let scores = [
+            DirectionScore::new(0, 104, 4_999.0),
+            DirectionScore::new(90, 288, 20_606.4),
+            DirectionScore::new(180, 207, 10_069.5),
+            DirectionScore::new(270, 106, 5_492.2),
+        ];
+        let selected = select_direction_score(&scores).expect("clear 90 degree winner");
+        assert_eq!(selected.rotate_clockwise, 90);
+        assert!(selected.confidence >= 10.0);
+        assert!(selected.confidence <= 100.0);
+    }
+
+    #[test]
+    fn rejects_sparse_or_near_tied_direction_scores() {
+        let sparse = [
+            DirectionScore::new(0, 17, 915.2),
+            DirectionScore::new(90, 11, 468.6),
+            DirectionScore::new(180, 23, 1_146.9),
+            DirectionScore::new(270, 4, 182.6),
+        ];
+        assert!(select_direction_score(&sparse).is_none());
+
+        let near_tie = [
+            DirectionScore::new(0, 219, 10_429.9),
+            DirectionScore::new(90, 13, 719.5),
+            DirectionScore::new(180, 206, 10_181.0),
+            DirectionScore::new(270, 13, 678.7),
+        ];
+        assert!(select_direction_score(&near_tie).is_none());
+    }
+
+    #[test]
+    fn combines_only_agreeing_osd_results() {
+        let first = OrientationDetection {
+            rotate_clockwise: 0,
+            confidence: 7.1,
+            method: "first".to_string(),
+        };
+        let second = OrientationDetection {
+            rotate_clockwise: 0,
+            confidence: 7.8,
+            method: "second".to_string(),
+        };
+        let selected = select_osd_detection(Some(&first), Some(&second))
+            .expect("agreeing OSD passes should combine");
+        assert_eq!(selected.rotate_clockwise, 0);
+        assert!(selected.confidence >= 10.0);
+
+        let conflict = OrientationDetection {
+            rotate_clockwise: 180,
+            confidence: 8.0,
+            method: "conflict".to_string(),
+        };
+        assert!(select_osd_detection(Some(&first), Some(&conflict)).is_none());
+    }
+
+    #[test]
+    fn rotates_grayscale_pixels_clockwise_without_mirroring() {
+        let image = GrayImage {
+            width: 2,
+            height: 3,
+            pixels: vec![1, 2, 3, 4, 5, 6],
+        };
+        let rotated = rotate_gray_clockwise(&image, 90).unwrap();
+        assert_eq!((rotated.width, rotated.height), (3, 2));
+        assert_eq!(rotated.pixels, vec![5, 3, 1, 6, 4, 2]);
+        assert_eq!(
+            rotate_gray_clockwise(&image, 180).unwrap().pixels,
+            vec![6, 5, 4, 3, 2, 1]
+        );
     }
 }
 

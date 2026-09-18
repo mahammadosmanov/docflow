@@ -85,8 +85,9 @@ These are not silently waived by passing local tests.
 - macOS DMG creation can fail on hosts where `hdiutil` reports `Device not configured`.
 - The current macOS visual launch gate requires an unlocked desktop session; a
   package smoke or process sample does not replace that inspection.
-- Tesseract OSD may not confidently classify sparse-text or drawing-only pages;
-  the whole PDF is intentionally withheld for manual review in that case.
+- Multi-resolution OSD and four-direction OCR still cannot safely infer a
+  reading direction from truly sparse or drawing-only pages; the whole PDF is
+  intentionally withheld for manual review in that case.
 
 Resolved defects belong in `CHANGELOG.md`, not here. Never list unverified
 operator data, secrets, private paths, or raw workbook contents.

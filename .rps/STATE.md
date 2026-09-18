@@ -4,14 +4,24 @@ Updated: 2026-09-18
 
 ## Current release
 
-- Version: 1.7.0
+- Version: 1.7.1
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `b301c27`
-- Objective: synchronize every authoritative existing Follow Up lifecycle and
-  FINAL Worley Signed/Not Signed field from RFI Log without touching formulas,
-  reports, absent sections, or ambiguous cells.
+- Implementation commit: pending release checkpoint
+- Objective: improve real RFI-system page-orientation recognition without
+  weakening fail-closed review, read-only source, or PDF-fidelity guarantees.
 
 ## Verified
+
+- A read-only inventory of the consented Ventoy RFI System found 3,590 PDFs
+  under CIV/MEC/ELE/PRC. A deterministic sample showed the former single
+  150-DPI pass was the main recognition bottleneck; 250/350-DPI passes and
+  conservative four-direction OCR recovered clear form orientations while
+  rejecting sparse drawings and close 0/180-degree results.
+- Orientation cascade unit tests and all six PDF-orientation integration tests
+  pass. The detector profile changed, so old cached decisions cannot cross the
+  algorithm boundary.
+- Full Rust, Node, React, source, documentation, version, and license gates pass
+  for 1.7.1. Native Windows execution remains a separate acceptance gate.
 
 - Durable replica hashes are reused only for the same owner, operation, source
   root, profile, relative path, identity, size, and modified time; Apply still
