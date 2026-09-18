@@ -4,13 +4,19 @@ Updated: 2026-09-18
 
 ## Current release
 
-- Version: 1.7.1
+- Version: 1.8.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `bd1c904`
-- Objective: improve real RFI-system page-orientation recognition without
-  weakening fail-closed review, read-only source, or PDF-fidelity guarantees.
+- Implementation commit: pending
+- Objective: support the current Follow Up workbook's PCU FINAL Worley column
+  without expanding authority to protected sheets, formulas, or overrides.
 
 ## Verified
+
+- The supplied current Follow Up workbook was inspected read-only. Its existing
+  lifecycle layouts remain compatible; the new PCU FINAL Worley column is now
+  discovered only from its exact header and paired existing FINAL RFI.
+- Focused Follow Up tests cover PCU Signed/Not Signed projection, protected POT
+  exclusion, main-before-Worley insertion order, and exact-cell mutation.
 
 - A read-only inventory of the consented Ventoy RFI System found 3,590 PDFs
   under CIV/MEC/ELE/PRC. A deterministic sample showed the former single

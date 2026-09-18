@@ -695,6 +695,26 @@ fn discover_approved_layouts(
                 }
             }
         }
+        if descriptor.name == "PCU"
+            && sheet
+                .cell(3, 18)
+                .is_some_and(|cell| normalize_header(&cell.value) == "SIGNED BY WORLEY")
+            && sheet
+                .cell(4, 16)
+                .is_some_and(|cell| is_follow_up_rfi_header(&normalize_header(&cell.value)))
+            && sheet.cell(4, 17).is_some_and(|cell| {
+                is_follow_up_generic_status_header(&normalize_header(&cell.value))
+            })
+            && !merge_budget.contains(sheet, 4, 16)?
+            && !merge_budget.contains(sheet, 3, 18)?
+        {
+            layouts.push(FollowUpLayout {
+                worksheet: descriptor.clone(),
+                header_row: 4,
+                rfi_column: 16,
+                status_column: 18,
+            });
+        }
     }
     if layouts.is_empty() {
         return Err(BackendError::validation("error.rfi.followUp.layoutMissing"));
@@ -771,14 +791,20 @@ fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
     }
 }
 
-fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, &'static str)> {
+fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, u32, &'static str)> {
     match route_key(record)? {
-        ("CIV", 13) => Some(("Signed By Worley CIV", 3, "CIV")),
-        ("MEC", 14) => Some(("Signed By Worley MEC", 8, "MEC")),
-        ("MEC", 16) => Some(("Signed By Worley MEC", 10, "MEC")),
-        ("MEC", 18) => Some(("Signed By Worley MEC", 12, "MEC")),
+        ("CIV", 13) => Some(("Signed By Worley CIV", 3, 4, "CIV")),
+        ("PCU", 16) => Some(("PCU", 16, 18, "PCU")),
+        ("MEC", 14) => Some(("Signed By Worley MEC", 8, 9, "MEC")),
+        ("MEC", 16) => Some(("Signed By Worley MEC", 10, 11, "MEC")),
+        ("MEC", 18) => Some(("Signed By Worley MEC", 12, 13, "MEC")),
         _ => None,
     }
+}
+
+fn is_signed_layout(layout: &FollowUpLayout) -> bool {
+    layout.worksheet.name.starts_with("Signed By Worley")
+        || (layout.worksheet.name == "PCU" && layout.rfi_column == 16 && layout.status_column == 18)
 }
 
 fn normalized_location(value: &str) -> String {
@@ -933,10 +959,20 @@ fn row_from_slot(
     let canonical_rfi = slot.changed_rfis.iter().next()?.clone();
     let record = records.get(&canonical_rfi)?;
     Some(FollowUpRow {
-        row_id: format!(
-            "rfi-follow-up:{}:{}:{}",
-            slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
-        ),
+        row_id: if slot.layout.status_column == slot.layout.rfi_column + 1 {
+            format!(
+                "rfi-follow-up:{}:{}:{}",
+                slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
+            )
+        } else {
+            format!(
+                "rfi-follow-up:{}:{}:{}:{}",
+                slot.layout.worksheet.sheet_id,
+                slot.row,
+                slot.layout.rfi_column,
+                slot.layout.status_column
+            )
+        },
         sheet: slot.layout.worksheet.name.clone(),
         row: slot.row,
         rfi_no: record.short_rfi.clone(),
@@ -1004,7 +1040,7 @@ fn classify_workbooks_full(
         target_has_signature,
         &mut merge_budget,
     )?;
-    let mut slots = BTreeMap::<(String, u32, u32), SlotWork>::new();
+    let mut slots = BTreeMap::<(String, u32, u32, u32), SlotWork>::new();
     for layout in &layouts {
         let sheet = target_workbook
             .sheet(&layout.worksheet.name)
@@ -1015,7 +1051,12 @@ fn classify_workbooks_full(
         for row in (layout.header_row + 1)..=last {
             if let Some(slot) = safe_slot(layout, sheet, row, &mut merge_budget)? {
                 slots.insert(
-                    (layout.worksheet.name.clone(), row, layout.rfi_column),
+                    (
+                        layout.worksheet.name.clone(),
+                        row,
+                        layout.rfi_column,
+                        layout.status_column,
+                    ),
                     slot,
                 );
             }
@@ -1026,7 +1067,7 @@ fn classify_workbooks_full(
     let mut manual_rows = Vec::new();
     for slot in slots
         .values_mut()
-        .filter(|slot| !slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .filter(|slot| !is_signed_layout(&slot.layout))
     {
         for code in &slot.codes {
             present_main.insert(code.clone());
@@ -1073,10 +1114,13 @@ fn classify_workbooks_full(
         };
         let candidates = slots
             .iter_mut()
-            .filter(|((sheet, _, column), slot)| {
-                sheet == sheet_name && *column == rfi_column && slot.unsafe_reason.is_none()
+            .filter(|((sheet, _, column, _), slot)| {
+                sheet == sheet_name
+                    && *column == rfi_column
+                    && !is_signed_layout(&slot.layout)
+                    && slot.unsafe_reason.is_none()
             })
-            .filter(|((_, row, _), _)| {
+            .filter(|((_, row, _, _), _)| {
                 row_matches(
                     sheet_name,
                     target_workbook.sheet(sheet_name).unwrap(),
@@ -1137,7 +1181,7 @@ fn classify_workbooks_full(
     let mut rows = Vec::new();
     for slot in slots
         .values()
-        .filter(|slot| !slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .filter(|slot| !is_signed_layout(&slot.layout))
         .cloned()
     {
         if let Some(row) = row_from_slot(slot, &records, false) {
@@ -1146,14 +1190,12 @@ fn classify_workbooks_full(
     }
 
     let mut present_signed_targets = BTreeSet::new();
-    for slot in slots
-        .values()
-        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
-    {
+    for slot in slots.values().filter(|slot| is_signed_layout(&slot.layout)) {
         for code in &slot.codes {
             present_signed_targets.insert((
                 slot.layout.worksheet.name.clone(),
                 slot.layout.rfi_column,
+                slot.layout.status_column,
                 code.clone(),
             ));
         }
@@ -1162,11 +1204,12 @@ fn classify_workbooks_full(
         record.state.is_some_and(|state| state != LogState::Remove)
             && signed_route_key(record).is_some()
     }) {
-        let (sheet_name, rfi_column, match_layout) =
+        let (sheet_name, rfi_column, status_column, match_layout) =
             signed_route_key(record).expect("filtered final record has a signed route");
         if present_signed_targets.contains(&(
             sheet_name.to_string(),
             rfi_column,
+            status_column,
             record.canonical_rfi.clone(),
         )) {
             continue;
@@ -1176,12 +1219,17 @@ fn classify_workbooks_full(
         };
         let candidates = slots
             .iter_mut()
-            .filter(|((sheet, _, column), _)| sheet == sheet_name && *column == rfi_column)
-            .filter(|((_, row, _), _)| row_matches(match_layout, matching_sheet, *row, record))
+            .filter(|((sheet, _, column, status), _)| {
+                sheet == sheet_name && *column == rfi_column && *status == status_column
+            })
+            .filter(|((_, row, _, _), _)| row_matches(match_layout, matching_sheet, *row, record))
             .collect::<Vec<_>>();
         let candidate_count = candidates.len();
         if candidate_count == 1 {
             let (_, slot) = candidates.into_iter().next().expect("one candidate");
+            if sheet_name == "PCU" && slot.codes.is_empty() {
+                continue;
+            }
             if let Some(reason) = slot.unsafe_reason {
                 unmapped_count += 1;
                 manual_rows.push(FollowUpRow {
@@ -1218,6 +1266,7 @@ fn classify_workbooks_full(
             present_signed_targets.insert((
                 sheet_name.to_string(),
                 rfi_column,
+                status_column,
                 record.canonical_rfi.clone(),
             ));
             continue;
@@ -1225,7 +1274,11 @@ fn classify_workbooks_full(
         unmapped_count += 1;
         let Some(layout) = layouts
             .iter()
-            .find(|layout| layout.worksheet.name == sheet_name && layout.rfi_column == rfi_column)
+            .find(|layout| {
+                layout.worksheet.name == sheet_name
+                    && layout.rfi_column == rfi_column
+                    && layout.status_column == status_column
+            })
             .cloned()
         else {
             unmapped_count -= 1;
@@ -1266,7 +1319,7 @@ fn classify_workbooks_full(
 
     for slot in slots
         .values_mut()
-        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .filter(|slot| is_signed_layout(&slot.layout))
     {
         let original = slot.codes.clone();
         slot.codes.retain(|code| {
@@ -1296,7 +1349,7 @@ fn classify_workbooks_full(
     }
     for slot in slots
         .values()
-        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
+        .filter(|slot| is_signed_layout(&slot.layout))
         .cloned()
     {
         if let Some(row) = row_from_slot(slot, &records, true) {

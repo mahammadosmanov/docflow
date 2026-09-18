@@ -4,6 +4,34 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.8.0 - 2026-09-18
+
+The supplied current `Inspection Status Follow Up.xlsm` was inspected read-only.
+It contains the established CIV, MEC, PCU, Road, Signed By Worley CIV/MEC,
+STAT, and Changelog structures plus a protected-from-DocFlow `POT test` sheet,
+a standalone PCU FINAL `Signed by Worley` column, and MEC calculated/manual
+remark fields. The source workbook SHA-256 was
+`f9adb0c2e1c1aa309096b5a89e4634959f95f6563035fde10e420d588a2dbcf8`; DocFlow
+did not save or modify it.
+
+The current-workbook ignored test was explicitly run with that supplied Follow
+Up and the available prior RFI Log copy. Preview, revision, private guarded
+patching, and closed OOXML-delta verification passed with 157 approved row pairs
+and 123 fail-closed unmapped records. This is compatibility evidence, not proof
+that the prior RFI Log represents today's production state.
+
+The final source gates passed: Rust formatting, Clippy with all targets/features
+and warnings denied, Cargo check, 352 unit tests, and 219 integration tests; four
+operator-file tests remain intentionally ignored. The focused Follow Up suite
+passed 34 tests, including PCU FINAL Signed/Not Signed projection, POT exclusion,
+main-before-Worley insertion order, and exact R-cell mutation. All 23 Node tests,
+53 React tests, source/docs/version/license audits, and production frontend build
+passed. The existing non-failing frontend chunk-size advisory remains.
+
+Windows artifacts were not executed on this macOS host. Native Excel/OneDrive
+open, recalculate, repair-dialog, Apply, backup, and Undo acceptance remains an
+external gate.
+
 ## 1.7.1 - 2026-09-18
 
 The orientation-recognition implementation at commit `bd1c904` was calibrated

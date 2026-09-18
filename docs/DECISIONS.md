@@ -31,6 +31,7 @@ and versioned with the code they govern.
 | Guarded near-real-time replica publication | Accepted | [`adr/0019-guarded-near-real-time-replica-publication.md`](adr/0019-guarded-near-real-time-replica-publication.md) |
 | Exact selected Outlook message archived as a guarded native Unicode MSG copy | Accepted | [`adr/0020-guarded-selected-outlook-msg-archive.md`](adr/0020-guarded-selected-outlook-msg-archive.md) |
 | Exact canonical PDF and bottom-right OTHERS cell as sole Worley authority | Accepted | [`adr/0021-exact-others-worley-evidence.md`](adr/0021-exact-others-worley-evidence.md) |
+| Existing PCU FINAL RFI as authority for its separate Worley status cell | Accepted | [`adr/0022-pcu-final-worley-projection.md`](adr/0022-pcu-final-worley-projection.md) |
 
 ## Adding a decision
 

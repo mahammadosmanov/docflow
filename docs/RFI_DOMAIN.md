@@ -128,14 +128,18 @@ recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
-`Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets receive
-only FINAL behavior and use the exact `Signed by Worley` REMARKS line. Existing
-FINAL rows are recalculated as `Signed` or `Not Signed`; a missing FINAL RFI may
-be added only to one uniquely matched, already-prepared literal RFI/status pair.
+`Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
+current PCU FINAL `Signed by Worley` column receive only FINAL behavior and use
+the exact `Signed by Worley` REMARKS line. Existing FINAL rows are recalculated
+as `Signed` or `Not Signed`; a missing FINAL RFI may be added only to one
+uniquely matched, already-prepared literal RFI/status pair. A newly inserted PCU
+FINAL identifier receives its Worley value on the next preview so independently
+deselecting one row cannot leave a half-applied coupled update.
 Formula-bearing, merged, absent, or ambiguous destinations remain manual. `POT test`,
-`STAT`, `Changelog`, ELE/PRC, and absent ITP/item sections are never created or
-modified by this operation. A source record with multiple areas and multiple
-sections is ambiguous and remains manual rather than using a cartesian guess.
+`STAT`, `Changelog`, MEC calculated remarks/manual overrides, ELE/PRC, and absent
+ITP/item sections are never created or modified by this operation. A source
+record with multiple areas and multiple sections is ambiguous and remains manual
+rather than using a cartesian guess.
 
 ## PDF page orientation
 

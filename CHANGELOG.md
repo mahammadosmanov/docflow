@@ -8,6 +8,25 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.8.0 - 2026-09-18
+
+### Added
+
+- RFI Log to Follow Up Sync now recognizes the current PCU FINAL `Signed by
+  Worley` column and projects exact `Signed` / `Not Signed` state from the
+  matching FINAL RFI's exact `Signed by Worley` REMARKS line.
+
+### Safety
+
+- The PCU Worley cell is updated only when its existing FINAL RFI maps exactly.
+  A newly inserted PCU FINAL RFI receives its lifecycle value first; Worley
+  state is offered on the next preview instead of creating a partially selected
+  multi-cell dependency.
+- `POT test`, `STAT`, `Changelog`, MEC calculated remarks, manual overrides,
+  formulas, and unrelated workbook content remain outside mutation authority.
+  Guarded backup, closed OOXML-delta verification, journal, and Undo remain
+  mandatory.
+
 ## 1.7.1 - 2026-09-18
 
 ### Fixed

@@ -18,7 +18,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-013 | docs, Windows workflow, package audit | `windows_workflow.test.mjs`, release records |
 | DF-014 | `version_manager.mjs`, manifests, release catalog | `version_manager.test.mjs`, package audit/smoke |
 | DF-015 | `operations/pdf_orientation.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs` | OCR cascade/consensus/direction-score unit tests, `pdf_orientation.rs`, `signed_pages.rs`, registry and localization tests |
-| DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` prepared FINAL Signed/Not Signed and formula fail-closed tests, `rfi_follow_up_current.rs`, `ooxml_fidelity.rs` |
+| DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` prepared FINAL Signed/Not Signed, PCU FINAL Worley, protected-sheet, exact-cell, and formula fail-closed tests; `rfi_follow_up_current.rs`; `ooxml_fidelity.rs` |
 | DF-017 | `print_queue.rs`, `platform/excel.rs`, `platform/mod.rs`, `platform/windows/printing.rs`, `registry.rs`, generic `App.tsx` form | Excel envelope/platform-decoder delegation tests, `batch_print.rs` accepted-unconfirmed continuation test, Windows transient-status/title/query-race policy tests, `native.rs` settings tests, locale equality, `App.test.tsx` explicit-restore test |
 | DF-018 | `scan_index.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, generic `App.tsx` summary | scan-index unit tests, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, `App.test.tsx` |
 | DF-019 | OCR operation metadata, `native.rs` review DTO, generic `App.tsx` percent renderer and responsive CSS | `process_scans.rs`, `signed_pages.rs`, `App.test.tsx`, small-viewport Playwright evidence |

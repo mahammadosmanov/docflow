@@ -37,6 +37,11 @@
 - Missing FINAL identifiers may use only one uniquely matched, already-prepared
   literal RFI/status pair. Never append a row, synthesize an absent section,
   replace a formula, or guess an ambiguous location.
+- The current PCU template has a separate FINAL `Signed by Worley` cell in
+  column R keyed by the existing FINAL RFI in column P. Sync it from the exact
+  RFI Log REMARKS line, but keep POT test, calculated remarks, and manual
+  overrides outside mutation authority. Insert a missing PCU FINAL lifecycle
+  value first and offer its Worley status on the next preview.
 - PDF orientation uses 250/350-DPI OSD consensus, then a conservative
   four-direction English OCR score only for unresolved pages. The fallback must
   keep minimum word, average-confidence, winner-ratio, and margin gates; sparse

@@ -7,7 +7,7 @@
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
-| `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state |
+| `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, and synchronize FINAL Worley state in Signed By sheets plus the current PCU FINAL Worley column |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
 | `rfi.outlook_archive_selected` | Revalidate one selected Outlook message and create a guarded Unicode MSG staging copy |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |

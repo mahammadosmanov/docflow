@@ -187,6 +187,141 @@ fn full_schema_record(
     )
 }
 
+fn pcu_final_record(row_number: u32, remarks: &str) -> String {
+    row(
+        row_number,
+        [
+            inline(&format!("A{row_number}"), "AZE-SUN-INT-QMS-RFI-CIV-1001"),
+            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-CIV-0005"),
+            inline(&format!("E{row_number}"), "CIV-2.3.6"),
+            inline(&format!("F{row_number}"), "PCS-01"),
+            inline(&format!("G{row_number}"), "Zone 1"),
+            inline(&format!("N{row_number}"), "N1"),
+            inline(&format!("T{row_number}"), "Completed"),
+            inline(&format!("V{row_number}"), remarks),
+        ],
+    )
+}
+
+fn pcu_target(final_rfi: &str, lifecycle_status: &str, worley_status: &str) -> String {
+    worksheet(
+        [
+            row(
+                3,
+                [
+                    inline("P3", "Final acceptance of PCU foundation (3.6)"),
+                    inline("R3", "Signed by Worley"),
+                ],
+            ),
+            row(4, [inline("P4", "RFI No."), inline("Q4", "STATUS")]),
+            row(
+                5,
+                [
+                    inline("B5", "N1"),
+                    inline("C5", "PCS-01"),
+                    inline("P5", final_rfi),
+                    inline("Q5", lifecycle_status),
+                    inline("R5", worley_status),
+                ],
+            ),
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn full_sync_updates_new_pcu_final_worley_column_from_exact_remark() {
+    let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
+    let target = package(&[
+        (
+            "PCU",
+            None,
+            pcu_target("CIV-1001", "Completed", "Not Signed"),
+        ),
+        (
+            "POT test",
+            None,
+            worksheet(
+                [
+                    row(3, [inline("D3", "RFI No."), inline("E3", "STATUS")]),
+                    row(4, [inline("D4", "MEC-2009"), inline("E4", "Signed")]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["_sheet"], "PCU");
+    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
+    assert_eq!(rows[0]["target"]["statusColumn"], 18);
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
+    assert!(
+        review["layouts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|layout| layout["worksheet"]["name"] != "POT test")
+    );
+}
+
+#[test]
+fn full_sync_populates_new_pcu_final_rfi_before_its_worley_cell() {
+    let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
+    let target = package(&[("PCU", None, pcu_target("", "", ""))]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["target"]["statusColumn"], 17);
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
+    assert_eq!(rows[0]["proposedStatus"], "Completed");
+}
+
+#[test]
+fn pcu_worley_plan_mutates_only_the_literal_worley_cell() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(
+        &source_path,
+        full_schema_source([pcu_final_record(10, "Signed by Worley")]).into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        package(&[(
+            "PCU",
+            None,
+            pcu_target("CIV-1001", "Completed", "Not Signed"),
+        )])
+        .into_inner(),
+    )
+    .unwrap();
+
+    let mut source_file = File::open(&source_path).unwrap();
+    let mut target_file = File::open(&target_path).unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut source_file,
+        &mut target_file,
+    )
+    .unwrap();
+    let updates = guarded_updates(&plan.steps[0]).unwrap();
+    let pcu = &updates["PCU"];
+
+    assert_eq!(pcu.len(), 1);
+    assert!(pcu.contains_key(&(5, 18)));
+    assert!(!pcu.contains_key(&(5, 16)));
+    assert!(!pcu.contains_key(&(5, 17)));
+}
+
 #[test]
 fn full_sync_adds_missing_final_rfis_and_exact_worley_statuses_to_prepared_rows() {
     let source = full_schema_source([
