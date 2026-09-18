@@ -69,8 +69,9 @@ These are not silently waived by passing local tests.
   acceptance on the operator's actual OneDrive-backed tree. Verify throughput,
   readable current-file subjects, monotonic counters, cancellation boundaries,
   deterministic plans, and checkpoint reuse under interruption.
-- RFI Log to Follow Up 0.21.0 still requires Excel-on-Windows open/recalculate/
-  save verification on consented copies. The macOS current-workbook test proves
+- RFI Log to Follow Up 1.7.0 still requires Excel-on-Windows open/recalculate/
+  save verification on consented copies, including prepared missing FINAL rows
+  and `Signed`/`Not Signed` recalculation. The macOS current-workbook test proves
   only targeted OOXML package fidelity, not Excel or OneDrive acceptance.
 
 ## Current local limitations

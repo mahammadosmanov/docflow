@@ -8,6 +8,26 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.7.0 - 2026-09-18
+
+### Added
+
+- RFI Log to Follow Up Sync now projects both lifecycle state and exact FINAL
+  Worley `Signed`/`Not Signed` state in one guarded preview.
+- Missing FINAL CIV/MEC identifiers can be added to one uniquely matched,
+  already-prepared literal RFI/status pair. The preview shows the signature
+  source value instead of presenting it as an inspection status.
+
+### Safety
+
+- Signed-row creation is limited to the approved FINAL ITP/item mappings and
+  exact location match. Formula-bearing, merged, absent, protected, or
+  ambiguous destinations remain unselected manual-review rows.
+- `POT test`, `STAT`, `Changelog`, ELE/PRC, formulas, summaries, and missing
+  workbook sections remain outside mutation authority. Apply still uses exact
+  workbook fingerprints, retained backup, closed OOXML delta verification,
+  journal, and Undo.
+
 ## 1.6.1 - 2026-09-17
 
 ### Fixed

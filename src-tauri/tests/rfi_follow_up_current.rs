@@ -1,4 +1,4 @@
-use std::{fs::File, io::Seek, path::PathBuf};
+use std::{collections::BTreeMap, fs::File, io::Seek, path::PathBuf};
 
 #[test]
 #[ignore = "requires operator-supplied current workbook paths"]
@@ -34,6 +34,17 @@ fn current_workbooks_produce_a_bounded_guarded_follow_up_plan() {
         .as_array()
         .expect("editor rows")
         .clone();
+    let mut rows_by_sheet = BTreeMap::<String, usize>::new();
+    let mut rows_by_reason = BTreeMap::<String, usize>::new();
+    for row in &submitted {
+        *rows_by_sheet
+            .entry(row["_sheet"].as_str().unwrap_or("unknown").to_string())
+            .or_default() += 1;
+        *rows_by_reason
+            .entry(row["reasonKey"].as_str().unwrap_or("unknown").to_string())
+            .or_default() += 1;
+    }
+    eprintln!("rows by sheet={rows_by_sheet:?}; rows by reason={rows_by_reason:?}");
     let mut revise_log = File::open(&log).expect("reopen RFI Log read-only");
     let mut revise_follow_up = File::open(&follow_up).expect("reopen Follow Up read-only");
     let revised = docflow_lib::rfi_follow_up::revise_from_open_files(

@@ -143,6 +143,129 @@ fn target_with_rows(rows: impl IntoIterator<Item = String>, merges: &[&str]) -> 
     ))
 }
 
+fn full_schema_source(civ_rows: impl IntoIterator<Item = String>) -> Cursor<Vec<u8>> {
+    let header = row(
+        9,
+        [
+            inline("A9", "RFI No."),
+            inline("D9", "ITP No:"),
+            inline("E9", "Item No."),
+            inline("F9", "Tag No"),
+            inline("G9", "Area"),
+            inline("N9", "Inspection Location"),
+            inline("T9", "Inspection Status"),
+            inline("V9", "Remarks"),
+        ],
+    );
+    let civ = worksheet(std::iter::once(header.clone()).chain(civ_rows), &[]);
+    let mec = worksheet([header], &[]);
+    source_package(civ, mec)
+}
+
+fn full_schema_record(
+    row_number: u32,
+    suffix: &str,
+    item: &str,
+    tag: &str,
+    remarks: &str,
+) -> String {
+    row(
+        row_number,
+        [
+            inline(
+                &format!("A{row_number}"),
+                &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
+            ),
+            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-CIV-0002"),
+            inline(&format!("E{row_number}"), item),
+            inline(&format!("F{row_number}"), tag),
+            inline(&format!("G{row_number}"), "Zone 1"),
+            inline(&format!("N{row_number}"), "N1"),
+            inline(&format!("T{row_number}"), "Completed"),
+            inline(&format!("V{row_number}"), remarks),
+        ],
+    )
+}
+
+#[test]
+fn full_sync_adds_missing_final_rfis_and_exact_worley_statuses_to_prepared_rows() {
+    let source = full_schema_source([
+        full_schema_record(10, "0001", "CIV-2.3.1", "AREA-1", "Signed by Worley"),
+        full_schema_record(11, "0002", "CIV-2.3.1", "AREA-2", ""),
+        full_schema_record(12, "0003", "CIV-2.1.5", "AREA-3", "Signed by Worley"),
+    ]);
+    let target = package(&[(
+        "Signed By Worley CIV",
+        None,
+        worksheet(
+            [
+                row(4, [inline("C4", "RFI No."), inline("D4", "Status")]),
+                row(5, [inline("B5", "AREA-1"), blank("C5"), blank("D5")]),
+                row(6, [inline("B6", "AREA-2"), blank("C6"), blank("D6")]),
+                row(7, [inline("B7", "AREA-3"), blank("C7"), blank("D7")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-0001");
+    assert_eq!(rows[0]["sourceStatuses"], json!(["Signed"]));
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+    assert_eq!(rows[1]["proposedRfiNo"], "CIV-0002");
+    assert_eq!(rows[1]["sourceStatuses"], json!(["Not Signed"]));
+    assert_eq!(rows[1]["proposedStatus"], "Not Signed");
+    assert!(
+        rows.iter()
+            .all(|row| row["reasonKey"] == "warn.rfi.followUp.reason.readyWorleySync")
+    );
+}
+
+#[test]
+fn full_sync_keeps_formula_backed_missing_final_rfi_in_manual_review() {
+    let source = full_schema_source([full_schema_record(
+        10,
+        "0001",
+        "CIV-2.3.1",
+        "AREA-1",
+        "Signed by Worley",
+    )]);
+    let target = package(&[(
+        "Signed By Worley CIV",
+        None,
+        worksheet(
+            [
+                row(4, [inline("C4", "RFI No."), inline("D4", "Status")]),
+                row(
+                    5,
+                    [
+                        inline("B5", "AREA-1"),
+                        blank("C5"),
+                        formula("D5", "LOOKUP(C5)", "Not Signed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+
+    assert_eq!(review["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        review["rows"][0]["disposition"],
+        "rfi.followUp.disposition.manualReview"
+    );
+    assert_eq!(
+        review["rows"][0]["reasonKey"],
+        "warn.rfi.followUp.reason.targetFormula"
+    );
+    assert_eq!(review["rows"][0]["enabled"], false);
+}
+
 #[test]
 fn preview_from_open_files_builds_an_inert_exact_workbook_plan() {
     let fixture = tempfile::tempdir().unwrap();

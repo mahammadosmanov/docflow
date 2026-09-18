@@ -23,7 +23,10 @@ removed before aggregation.
 
 Signed By Worley processing is limited to the existing CIV/MEC FINAL tables.
 `Signed` requires an exact `Signed by Worley` line in REMARKS; otherwise the
-known FINAL record is `Not Signed`. ELE, PRC, POT test, STAT, Changelog, absent
+known FINAL record is `Not Signed`. A missing FINAL identifier may be written
+only into one uniquely matched RFI/status pair that already exists as literal
+cells in the workbook template. The operation does not append rows, replace
+formulas, or synthesize a control-table entry. ELE, PRC, POT test, STAT, Changelog, absent
 ITP/item sections, formulas, merged cells, protected cells, and ambiguous
 multi-area/multi-section mappings are outside mutation authority.
 
@@ -34,10 +37,11 @@ then uses the existing retained-backup, journal, recovery, and Undo protocol.
 
 ## Consequences
 
-Safe uniquely mapped work becomes automatic, while unsupported or ambiguous
-work remains unchanged and is counted in preview warnings. No worksheet,
-section, row, formula, or validation is synthesized. Supporting a future Follow
-Up template requires an explicit reviewed mapping and new regression evidence.
+Safe uniquely mapped work becomes automatic, including prepared missing FINAL
+rows, while unsupported or ambiguous work remains unchanged and is counted in
+preview warnings. No worksheet, section, row, formula, or validation is
+synthesized. Supporting a future Follow Up template requires an explicit
+reviewed mapping and new regression evidence.
 
 ## Rollback
 

@@ -771,6 +771,16 @@ fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
     }
 }
 
+fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, &'static str)> {
+    match route_key(record)? {
+        ("CIV", 13) => Some(("Signed By Worley CIV", 3, "CIV")),
+        ("MEC", 14) => Some(("Signed By Worley MEC", 8, "MEC")),
+        ("MEC", 16) => Some(("Signed By Worley MEC", 10, "MEC")),
+        ("MEC", 18) => Some(("Signed By Worley MEC", 12, "MEC")),
+        _ => None,
+    }
+}
+
 fn normalized_location(value: &str) -> String {
     normalize_header(value)
         .replace(" SITE", "")
@@ -930,7 +940,15 @@ fn row_from_slot(
         sheet: slot.layout.worksheet.name.clone(),
         row: slot.row,
         rfi_no: record.short_rfi.clone(),
-        source_statuses: vec![record.inspection_status_for_ui()],
+        source_statuses: vec![if signed {
+            if record.worley_signed {
+                "Signed".to_string()
+            } else {
+                "Not Signed".to_string()
+            }
+        } else {
+            record.inspection_status_for_ui()
+        }],
         current_status: slot.current_status,
         proposed_status: Some(proposed_status),
         proposed_rfi_no: Some(proposed_rfi),
@@ -1125,6 +1143,125 @@ fn classify_workbooks_full(
         if let Some(row) = row_from_slot(slot, &records, false) {
             rows.push(row);
         }
+    }
+
+    let mut present_signed_targets = BTreeSet::new();
+    for slot in slots
+        .values()
+        .filter(|slot| slot.layout.worksheet.name.starts_with("Signed By Worley"))
+    {
+        for code in &slot.codes {
+            present_signed_targets.insert((
+                slot.layout.worksheet.name.clone(),
+                slot.layout.rfi_column,
+                code.clone(),
+            ));
+        }
+    }
+    for record in records.values().filter(|record| {
+        record.state.is_some_and(|state| state != LogState::Remove)
+            && signed_route_key(record).is_some()
+    }) {
+        let (sheet_name, rfi_column, match_layout) =
+            signed_route_key(record).expect("filtered final record has a signed route");
+        if present_signed_targets.contains(&(
+            sheet_name.to_string(),
+            rfi_column,
+            record.canonical_rfi.clone(),
+        )) {
+            continue;
+        }
+        let Some(matching_sheet) = target_workbook.sheet(sheet_name) else {
+            continue;
+        };
+        let candidates = slots
+            .iter_mut()
+            .filter(|((sheet, _, column), _)| sheet == sheet_name && *column == rfi_column)
+            .filter(|((_, row, _), _)| row_matches(match_layout, matching_sheet, *row, record))
+            .collect::<Vec<_>>();
+        let candidate_count = candidates.len();
+        if candidate_count == 1 {
+            let (_, slot) = candidates.into_iter().next().expect("one candidate");
+            if let Some(reason) = slot.unsafe_reason {
+                unmapped_count += 1;
+                manual_rows.push(FollowUpRow {
+                    row_id: format!("rfi-follow-up-signed-unsafe:{}", record.canonical_rfi),
+                    sheet: sheet_name.to_string(),
+                    row: slot.row,
+                    rfi_no: record.short_rfi.clone(),
+                    source_statuses: vec![if record.worley_signed {
+                        "Signed".to_string()
+                    } else {
+                        "Not Signed".to_string()
+                    }],
+                    current_status: slot.current_status.clone(),
+                    proposed_status: None,
+                    proposed_rfi_no: None,
+                    disposition: FollowUpDisposition::ManualReview,
+                    reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+                    selectable: false,
+                    enabled: false,
+                    target: FollowUpReviewTarget {
+                        worksheet: slot.layout.worksheet.clone(),
+                        row: slot.row,
+                        rfi_column: slot.layout.rfi_column,
+                        status_column: slot.layout.status_column,
+                        rfi_cell: Some(slot.rfi_cell.clone()),
+                        status_cell: Some(slot.status_cell.clone()),
+                    },
+                    source_evidence: record.evidence.clone(),
+                });
+                continue;
+            }
+            slot.codes.push(record.canonical_rfi.clone());
+            slot.changed_rfis.insert(record.canonical_rfi.clone());
+            present_signed_targets.insert((
+                sheet_name.to_string(),
+                rfi_column,
+                record.canonical_rfi.clone(),
+            ));
+            continue;
+        }
+        unmapped_count += 1;
+        let Some(layout) = layouts
+            .iter()
+            .find(|layout| layout.worksheet.name == sheet_name && layout.rfi_column == rfi_column)
+            .cloned()
+        else {
+            unmapped_count -= 1;
+            continue;
+        };
+        manual_rows.push(FollowUpRow {
+            row_id: format!("rfi-follow-up-signed-unmapped:{}", record.canonical_rfi),
+            sheet: sheet_name.to_string(),
+            row: 0,
+            rfi_no: record.short_rfi.clone(),
+            source_statuses: vec![if record.worley_signed {
+                "Signed".to_string()
+            } else {
+                "Not Signed".to_string()
+            }],
+            current_status: String::new(),
+            proposed_status: None,
+            proposed_rfi_no: None,
+            disposition: FollowUpDisposition::ManualReview,
+            reason_key: if candidate_count == 0 {
+                "warn.rfi.followUp.reason.mappingMissing".to_string()
+            } else {
+                "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
+            },
+            selectable: false,
+            enabled: false,
+            target: FollowUpReviewTarget {
+                worksheet: layout.worksheet,
+                row: 0,
+                rfi_column: layout.rfi_column,
+                status_column: layout.status_column,
+                rfi_cell: None,
+                status_cell: None,
+            },
+            source_evidence: record.evidence.clone(),
+        });
     }
 
     for slot in slots
