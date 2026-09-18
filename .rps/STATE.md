@@ -6,7 +6,7 @@ Updated: 2026-09-18
 
 - Version: 1.8.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending
+- Implementation commit: `4f290bc`
 - Objective: support the current Follow Up workbook's PCU FINAL Worley column
   without expanding authority to protected sheets, formulas, or overrides.
 
@@ -17,6 +17,11 @@ Updated: 2026-09-18
   discovered only from its exact header and paired existing FINAL RFI.
 - Focused Follow Up tests cover PCU Signed/Not Signed projection, protected POT
   exclusion, main-before-Worley insertion order, and exact-cell mutation.
+- Full Rust, Node, React, source, documentation, version, and license gates pass
+  for 1.8.0. The Windows x64 installer, portable EXE, and OCR-inclusive ZIP were
+  cross-built from `4f290bc`; checksums, ZIP integrity, package shape, and GUI
+  subsystem checks pass. Native Windows/Excel/OneDrive execution remains an
+  external acceptance gate.
 
 - A read-only inventory of the consented Ventoy RFI System found 3,590 PDFs
   under CIV/MEC/ELE/PRC. A deterministic sample showed the former single
@@ -26,12 +31,6 @@ Updated: 2026-09-18
 - Orientation cascade unit tests and all six PDF-orientation integration tests
   pass. The detector profile changed, so old cached decisions cannot cross the
   algorithm boundary.
-- Full Rust, Node, React, source, documentation, version, and license gates pass
-  for 1.7.1. Native Windows execution remains a separate acceptance gate.
-- Windows x64 installer, portable EXE, and OCR-inclusive ZIP were cross-built
-  from `bd1c904`; checksums, ZIP integrity, OCR package shape, and Windows GUI
-  subsystem checks pass. Native Windows/OneDrive execution was not run on macOS.
-
 - Durable replica hashes are reused only for the same owner, operation, source
   root, profile, relative path, identity, size, and modified time; Apply still
   live-revalidates source and target hashes.

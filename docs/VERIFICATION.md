@@ -28,6 +28,17 @@ main-before-Worley insertion order, and exact R-cell mutation. All 23 Node tests
 53 React tests, source/docs/version/license audits, and production frontend build
 passed. The existing non-failing frontend chunk-size advisory remains.
 
+The Windows x64 cross-build completed from implementation commit `4f290bc`.
+The installer, portable EXE, and OCR-inclusive ZIP were generated; all SHA-256
+entries verified, ZIP integrity and package audit passed, and both executables
+identify as Windows GUI-subsystem PE files. Cross-linker PDB messages were the
+known non-failing debug-symbol warnings. The temporary macOS 11 build target was
+restored to the committed macOS 13 configuration. Artifact SHA-256 values:
+
+- portable-with-OCR ZIP: `5d08fb2926c06ce22fcf2213e5370d8d1bd296f62369585bd499bcbbfa7443d0`;
+- portable EXE: `44c74ce7573420acce3ebd07d268e9801f36918b747add6b5a878083985c6794`;
+- per-user installer: `63ef3c83fb43e491caf3566510815396989f541a96847cd95bb2d11b5cc227db`.
+
 Windows artifacts were not executed on this macOS host. Native Excel/OneDrive
 open, recalculate, repair-dialog, Apply, backup, and Undo acceptance remains an
 external gate.
