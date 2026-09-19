@@ -26,6 +26,18 @@ Native classic-Outlook selection, Reply All composition, displayed table
 fidelity, saved-draft journal, and Undo acceptance cannot run on this macOS
 host and remain an external Windows gate. No mail-send authority was added.
 
+The Windows x64 cross-build completed from implementation commit
+`68f4610a7a65ea8ec209398c052312f33a2c2008`. The Windows OCR payload was
+restaged from the checksum-verified v0.6.0 release installer. ZIP integrity,
+package shape, bundled OCR checksums, and every release checksum passed; both
+executables identify as Windows GUI-subsystem PE files. Cross-linker PDB
+messages were the known non-failing debug-symbol warnings. Artifact SHA-256
+values:
+
+- portable-with-OCR ZIP: `f29afac536e1577e78a011180c12e0b27f9ad1cdedbca3f944914b85d244dd47`;
+- portable EXE: `2b766e2f08b90540ca4f2482fc41ce87cf22458bf743ad1dc8b50ec50e8f1168`;
+- per-user installer: `08ab85beed2bbd3f6f8e05eebc71731f14afa3e558ce88612895f4a0ec817c70`.
+
 ## 1.8.0 - 2026-09-18
 
 The supplied current `Inspection Status Follow Up.xlsm` was inspected read-only.

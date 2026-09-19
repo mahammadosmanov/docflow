@@ -6,7 +6,7 @@ Updated: 2026-09-19
 
 - Version: 1.9.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending final checkpoint
+- Implementation commit: `68f4610`
 - Objective: continue a successful guarded RFI Log assignment into an official
   unsent Outlook Reply All draft without recalculating identifiers or granting
   send authority.
@@ -24,6 +24,10 @@ Updated: 2026-09-19
   integration tests, 23 Node tests, 54 React tests, frontend build, and all
   source/docs/version/license audits pass. Four operator-file tests remain
   intentionally ignored. Native Windows Outlook acceptance remains external.
+- The 1.9.0 Windows x64 installer, portable executable, and OCR-inclusive ZIP
+  were cross-built from `68f4610`. Release checksums, ZIP integrity, package
+  shape, bundled OCR checksums, and GUI-subsystem checks pass. Execution on
+  native Windows remains external.
 
 - The supplied current Follow Up workbook was inspected read-only. Its existing
   lifecycle layouts remain compatible; the new PCU FINAL Worley column is now
