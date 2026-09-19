@@ -21,6 +21,7 @@ import {
   History,
   LoaderCircle,
   LogOut,
+  Mail,
   Monitor,
   Moon,
   Play,
@@ -107,6 +108,7 @@ type Route =
       name: "operation";
       operation: OperationDef;
       initialValues?: Record<string, unknown>;
+      initialPlan?: Plan;
     }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
@@ -292,9 +294,22 @@ export function App() {
           bridge={bridge}
           operation={route.operation}
           initialValues={route.initialValues}
+          initialPlan={route.initialPlan}
           s={s}
           onBack={() => setRoute({ name: "home" })}
           onReview={(destination) => setRoute({ name: "review", destination })}
+          onPrepareRfiReply={(preparedPlan) => {
+            const operation = bootstrap.operations.find(
+              (candidate) => candidate.id === "rfi.outlook_reply_draft",
+            );
+            if (operation) {
+              setRoute({
+                name: "operation",
+                operation,
+                initialPlan: preparedPlan,
+              });
+            }
+          }}
         />
       );
     case "review":
@@ -865,16 +880,20 @@ function OperationScreen({
   bridge,
   operation,
   initialValues,
+  initialPlan,
   s,
   onBack,
   onReview,
+  onPrepareRfiReply,
 }: {
   bridge: Bridge;
   operation: OperationDef;
   initialValues?: Record<string, unknown>;
+  initialPlan?: Plan;
   s: Strings;
   onBack: () => void;
   onReview: (destination: PathSelection) => void;
+  onPrepareRfiReply: (plan: Plan) => void;
 }) {
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
@@ -888,8 +907,8 @@ function OperationScreen({
   const lastSaved = useRef("");
   const [stage, setStage] = useState<
     "form" | "previewing" | "preview" | "applying" | "result"
-  >("form");
-  const [plan, setPlan] = useState<Plan | null>(null);
+  >(initialPlan ? "preview" : "form");
+  const [plan, setPlan] = useState<Plan | null>(initialPlan ?? null);
   const [result, setResult] = useState<OperationResult | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [progressTrail, setProgressTrail] = useState<ProgressEvent[]>([]);
@@ -1157,6 +1176,20 @@ function OperationScreen({
       setError(humanError(reason, s));
     } finally {
       setCopyingSheet(null);
+    }
+  };
+  const prepareRfiReply = async () => {
+    if (!plan || !result?.journalId) return;
+    setError("");
+    try {
+      onPrepareRfiReply(
+        await bridge.call("engine/rfiReplyPreview", {
+          planId: plan.planId,
+          journalId: result.journalId,
+        }),
+      );
+    } catch (reason) {
+      setError(humanError(reason, s));
     }
   };
   const undo = async () => {
@@ -1427,6 +1460,14 @@ function OperationScreen({
             )}
             copyingSheet={copyingSheet}
             onCopy={(sheet) => void copyTable(sheet)}
+            onPrepareRfiReply={
+              operation.id === "rfi.log_add" &&
+              result.applied > 0 &&
+              result.failed === 0 &&
+              result.meta?.resumeAvailable !== true
+                ? () => void prepareRfiReply()
+                : undefined
+            }
           />
         )}
       </main>
@@ -4110,6 +4151,7 @@ function ResultView({
   copyingSheet = null,
   onCopy,
   onResumePrint,
+  onPrepareRfiReply,
 }: {
   result: OperationResult;
   s: Strings;
@@ -4121,6 +4163,7 @@ function ResultView({
   copyingSheet?: string | null;
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
+  onPrepareRfiReply?: () => void;
 }) {
   const effectState =
     typeof result.meta?.effectState === "string"
@@ -4205,6 +4248,15 @@ function ResultView({
         </div>
       )}
       <div className="result-actions">
+        {onPrepareRfiReply && (
+          <Button
+            variant="secondary"
+            icon={<Mail />}
+            onClick={onPrepareRfiReply}
+          >
+            {s.t("rfi.action.prepareReply")}
+          </Button>
+        )}
         {onResumePrint && (
           <Button
             variant="secondary"

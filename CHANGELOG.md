@@ -8,6 +8,22 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.0 - 2026-09-19
+
+### Added
+
+- A successful RFI Log Apply now offers **Prepare Outlook reply**. Rust rebuilds
+  every affected discipline's exact approved Excel table and opens a separate
+  unsent Reply All preview for the currently selected classic Outlook mail.
+
+### Safety
+
+- The handoff accepts only the same owner/session-bound RFI Plan, never
+  recalculates numbers, and is unavailable after failed or partial workbook
+  results. Outlook selection is revalidated; recipients are not added and mail
+  is never sent. Workbook and draft remain separate preview/apply/journal/undo
+  operations.
+
 ## 1.8.0 - 2026-09-18
 
 ### Added

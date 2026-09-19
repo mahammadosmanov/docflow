@@ -1818,6 +1818,31 @@ impl NativeBackend {
         Ok(json!({"count": payload.count}))
     }
 
+    pub(crate) fn preview_rfi_reply(&self, params: Value) -> Result<Value, BackendError> {
+        let request: RfiReplyPreviewParams = decode(params)?;
+        let caller = self.caller_identity()?;
+        let claimed = self
+            .filesystem
+            .resolve_native_plan(&request.plan_id, &caller)?;
+        if claimed.plan.op_id != "rfi.log_add" {
+            return Err(BackendError::validation(
+                "native plan does not contain an RFI table",
+            ));
+        }
+        let journal = self.filesystem.journals().read(&request.journal_id)?;
+        if !committed_rfi_reply_matches(&journal, &caller, &claimed.digest) {
+            return Err(BackendError::validation(
+                "error.rfi.outlookDraft.rfiLogNotCommitted",
+            ));
+        }
+        let payload = rfi_log::reply_payload(&claimed.plan)?;
+        let content = outlook_reply_draft::ReplyContent {
+            plain_text: payload.plain,
+            html: payload.html,
+        };
+        encode(self.outlook.preview_content(&caller, content)?)
+    }
+
     pub(crate) fn apply_native_plan<F>(
         &self,
         plan_id: &str,
@@ -2477,6 +2502,25 @@ struct TableParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RfiReplyPreviewParams {
+    plan_id: String,
+    journal_id: String,
+}
+
+fn committed_rfi_reply_matches(
+    journal: &crate::journal::JournalRecord,
+    caller: &CallerIdentity,
+    plan_digest: &str,
+) -> bool {
+    journal.op_id == "rfi.log_add"
+        && journal.state == Some(crate::journal::JournalState::Committed)
+        && journal.owner_id.as_deref() == Some(caller.owner_id.as_str())
+        && journal.session_id.as_deref() == Some(caller.session_id.as_str())
+        && journal.plan_digest.as_deref() == Some(plan_digest)
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReviewScanParams {
     destination: PathSelection,
@@ -2670,6 +2714,25 @@ mod tests {
     use super::*;
 
     static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn rfi_reply_requires_exact_committed_plan_provenance() {
+        let caller = CallerIdentity::new("owner", "session");
+        let mut journal = crate::journal::JournalRecord::new(
+            "journal",
+            "rfi.log_add",
+            "2026-09-19T00:00:00Z",
+            "owner",
+            "session",
+            "digest",
+        );
+        journal.state = Some(crate::journal::JournalState::Committed);
+
+        assert!(committed_rfi_reply_matches(&journal, &caller, "digest"));
+        assert!(!committed_rfi_reply_matches(&journal, &caller, "other"));
+        journal.state = Some(crate::journal::JournalState::PartialCommitted);
+        assert!(!committed_rfi_reply_matches(&journal, &caller, "digest"));
+    }
 
     struct TestCredentials(Mutex<Option<StoredSession>>);
 

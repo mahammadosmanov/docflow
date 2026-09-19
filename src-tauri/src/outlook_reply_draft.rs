@@ -20,6 +20,8 @@ use crate::{
 pub const OPERATION_ID: &str = "rfi.outlook_reply_draft";
 pub const ARCHIVE_OPERATION_ID: &str = "rfi.outlook_archive_selected";
 pub const MAX_REPLY_TEXT_CHARS: usize = 10_000;
+const MAX_REPLY_HTML_BYTES: usize = 1024 * 1024;
+const MAX_GENERATED_REPLY_BYTES: usize = 1024 * 1024;
 const MAX_OUTLOOK_ID_CHARS: usize = 4096;
 const MAX_SUBJECT_CHARS: usize = 512;
 
@@ -297,6 +299,23 @@ impl OutlookDraftService {
 
     pub fn preview(&self, caller: &CallerIdentity, reply_text: &str) -> Result<Plan, BackendError> {
         let content = build_reply_content(reply_text).map_err(outlook_validation)?;
+        self.preview_content(caller, content)
+    }
+
+    pub fn preview_content(
+        &self,
+        caller: &CallerIdentity,
+        content: ReplyContent,
+    ) -> Result<Plan, BackendError> {
+        if content.plain_text.trim().is_empty()
+            || content.plain_text.len() > MAX_GENERATED_REPLY_BYTES
+            || content.html.is_empty()
+            || content.html.len() > MAX_REPLY_HTML_BYTES
+        {
+            return Err(BackendError::validation(
+                "error.rfi.outlookDraft.replyTooLong",
+            ));
+        }
         let selected = self
             .adapter
             .selected_mail_item()

@@ -13,7 +13,7 @@ use docflow_lib::{
     ooxml::read_workbook,
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
-    rfi_log::{copy_payload, preview, preview_table, revise},
+    rfi_log::{copy_payload, preview, preview_table, reply_payload, revise},
 };
 use serde_json::{Map, Value, json};
 use tempfile::TempDir;
@@ -332,6 +332,11 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
     assert!(payload.plain.contains("\t"));
     assert!(!payload.plain.contains("KEEP EXPIRY"));
     assert!(!payload.html.contains("KEEP STATUS"));
+    let reply = reply_payload(&plan).unwrap();
+    assert_eq!(reply.count, payload.count);
+    assert_eq!(reply.plain, payload.plain);
+    assert!(reply.html.starts_with("<table"));
+    assert!(reply.html.ends_with("<br><br>"));
 
     let mut edited = rows.clone();
     edited[1]["location"] = json!("South foundation");

@@ -71,6 +71,8 @@ pub(crate) enum BackendMethod {
     EngineRevise,
     #[serde(rename = "engine/copyTable")]
     EngineCopyTable,
+    #[serde(rename = "engine/rfiReplyPreview")]
+    EngineRfiReplyPreview,
     #[serde(rename = "engine/reviewScan")]
     EngineReviewScan,
     #[serde(rename = "engine/reviewPreview")]
@@ -93,7 +95,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 34] = [
+    pub(crate) const ALL: [Self; 35] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -121,6 +123,7 @@ impl BackendMethod {
         Self::EnginePrintQueueResume,
         Self::EngineRevise,
         Self::EngineCopyTable,
+        Self::EngineRfiReplyPreview,
         Self::EngineReviewScan,
         Self::EngineReviewPreview,
         Self::EngineUndo,
@@ -163,6 +166,7 @@ impl BackendMethod {
             Self::EnginePrintQueueResume => "engine/printQueueResume",
             Self::EngineRevise => "engine/revise",
             Self::EngineCopyTable => "engine/copyTable",
+            Self::EngineRfiReplyPreview => "engine/rfiReplyPreview",
             Self::EngineReviewScan => "engine/reviewScan",
             Self::EngineReviewPreview => "engine/reviewPreview",
             Self::EngineUndo => "engine/undo",
@@ -257,11 +261,14 @@ impl BackendRouter {
             BackendMethod::EnginePreview => self.preview(params, progress).await,
             BackendMethod::EngineApply => self.apply(params, progress).await,
             BackendMethod::EngineCancel => self.cancel(params).await,
-            BackendMethod::EngineRevise | BackendMethod::EngineCopyTable => {
+            BackendMethod::EngineRevise
+            | BackendMethod::EngineCopyTable
+            | BackendMethod::EngineRfiReplyPreview => {
                 let native = Arc::clone(&self.native);
                 tauri::async_runtime::spawn_blocking(move || match method {
                     BackendMethod::EngineRevise => native.revise_native_plan(params),
                     BackendMethod::EngineCopyTable => native.copy_native_table(params),
+                    BackendMethod::EngineRfiReplyPreview => native.preview_rfi_reply(params),
                     _ => unreachable!("native plan method checked by caller"),
                 })
                 .await

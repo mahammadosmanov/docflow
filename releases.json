@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.8.0",
+  "currentVersion": "1.9.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -614,9 +614,17 @@
       "version": "1.8.0",
       "date": "2026-09-18",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.8.0",
       "summary": "Synchronize the current PCU FINAL Worley status column while preserving protected sheets, formulas, and manual overrides."
+    },
+    {
+      "version": "1.9.0",
+      "date": "2026-09-19",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.0",
+      "summary": "Continue a successful guarded RFI Log update into a separately reviewed unsent Outlook Reply All draft with exact approved tables."
     }
   ]
 }

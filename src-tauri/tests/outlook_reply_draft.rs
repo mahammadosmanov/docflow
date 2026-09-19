@@ -232,6 +232,34 @@ fn service_journals_a_durable_unsent_draft_and_undo_deletes_that_exact_unchanged
 }
 
 #[test]
+fn service_preserves_a_guarded_rfi_table_in_the_unsent_reply_preview() {
+    let fixture = tempfile::tempdir().unwrap();
+    let outlook = Arc::new(FakeOutlook {
+        selected: Arc::new(Mutex::new(mail_identity("source-entry"))),
+        calls: Arc::new(Mutex::new(Vec::new())),
+        durable: None,
+        current_draft: Arc::new(Mutex::new(None)),
+        deleted: Arc::new(Mutex::new(Vec::new())),
+    });
+    let service = OutlookDraftService::new(
+        fixture.path(),
+        Duration::from_secs(300),
+        GlobalMutationLock::default(),
+        outlook,
+    );
+    let content = ReplyContent {
+        plain_text: "RFI No.\tITP No.\r\nCIV-0008\tCIV-0005".to_string(),
+        html: "<table><tr><td>CIV-0008</td></tr></table><br><br>".to_string(),
+    };
+
+    let plan = service.preview_content(&caller(), content.clone()).unwrap();
+
+    assert_eq!(plan.meta["replyPreview"]["plainText"], content.plain_text);
+    assert_eq!(plan.meta["replyPreview"]["html"], content.html);
+    assert_eq!(plan.meta["replyPreview"]["subject"], "RFI response");
+}
+
+#[test]
 fn service_refuses_undo_when_outlook_did_not_auto_save_a_durable_draft() {
     let fixture = tempfile::tempdir().unwrap();
     let calls = Arc::new(Mutex::new(Vec::new()));

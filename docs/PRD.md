@@ -150,6 +150,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   elsewhere are not authority. Missing, unreadable, empty, or insufficient
   evidence remains unsigned and authorizes no workbook change. A detector
   revision invalidates every older cached classification.
+- **DF-031 — Guarded issue-to-reply handoff:** only a fully successful,
+  owner/session-bound `rfi.log_add` Plan may prepare its exact approved rows as
+  a separate unsent Outlook Reply All Plan. The handoff preserves escaped table
+  formatting, never recalculates RFI numbers, adds no recipients, sends no mail,
+  and requires its own Preview and Apply.
 
 ## Scope
 

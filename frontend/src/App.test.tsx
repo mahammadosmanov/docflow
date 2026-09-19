@@ -1273,6 +1273,43 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
   });
 
+  it("continues a successful RFI Log apply into a guarded Outlook reply preview", async () => {
+    let handoff: Record<string, unknown> | null = null;
+    interceptMockBridge((method, params) => {
+      if (method === "engine/rfiReplyPreview") handoff = params;
+      return { handled: false };
+    });
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+    await screen.findByText("RFI kayıtlarını kontrol et ve düzenle");
+    fireEvent.click(screen.getByRole("button", { name: "Uygula" }));
+
+    const next = await screen.findByRole("button", {
+      name: "Outlook yanıtını hazırla",
+    });
+    fireEvent.click(next);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Gönderilmemiş Outlook yanıtı önizlemesi",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getAllByText(/AZE-SUN-INT-QMS-RFI-CIV-0008/),
+    ).toHaveLength(2);
+    expect(handoff).toEqual({
+      planId: "demo-rfi-plan",
+      journalId: "demo-journal",
+    });
+    expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
+  });
+
   it("renders the signed first-page staging form from its schema", async () => {
     render(<App />);
     await signIn();

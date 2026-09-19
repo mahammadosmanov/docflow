@@ -1,16 +1,29 @@
 # DocFlow project state
 
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 ## Current release
 
-- Version: 1.8.0
+- Version: 1.9.0
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `4f290bc`
-- Objective: support the current Follow Up workbook's PCU FINAL Worley column
-  without expanding authority to protected sheets, formulas, or overrides.
+- Implementation commit: pending final checkpoint
+- Objective: continue a successful guarded RFI Log assignment into an official
+  unsent Outlook Reply All draft without recalculating identifiers or granting
+  send authority.
 
 ## Verified
+
+- The reply continuation is offered only after a non-partial committed
+  `rfi.log_add` journal and requires the exact owner, session, Plan digest, and
+  journal identity. CIV/MEC/ELE/PRC tables retain their approved values and
+  canonical order in plain text and escaped HTML.
+- The Outlook reply remains a separate preview/Apply operation. It neither adds
+  recipients nor sends mail, and the established selection-fingerprint and
+  unsent-draft journal/Undo controls remain in force.
+- Rust 1.97.1 formatting, Clippy, Cargo check, 353 serial unit tests, 220
+  integration tests, 23 Node tests, 54 React tests, frontend build, and all
+  source/docs/version/license audits pass. Four operator-file tests remain
+  intentionally ignored. Native Windows Outlook acceptance remains external.
 
 - The supplied current Follow Up workbook was inspected read-only. Its existing
   lifecycle layouts remain compatible; the new PCU FINAL Worley column is now
@@ -69,6 +82,11 @@ Updated: 2026-09-18
   checks pass as recorded in `docs/VERIFICATION.md`.
 
 ## External gate
+
+- On classic Outlook for Windows, select a non-sensitive RFI request, complete
+  an isolated RFI Log Apply, prepare the reply, and verify exact table rows,
+  Reply All recipients, display-without-send behavior, selection-drift refusal,
+  durable draft journaling, and guarded Undo.
 
 - Continue with the SharePoint/OneDrive, GlobalProtect/network, local, and
   backup roots. Confirm startup, publication,

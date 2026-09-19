@@ -233,6 +233,26 @@ const demoRfiOperation: OperationDef = {
   ],
 };
 
+const demoOutlookReplyOperation: OperationDef = {
+  id: "rfi.outlook_reply_draft",
+  titleKey: "op.rfi.outlook_reply_draft.title",
+  descriptionKey: "op.rfi.outlook_reply_draft.desc",
+  supportsPresets: false,
+  schema: [
+    {
+      name: "reply_text",
+      kind: "longText",
+      labelKey: "param.rfi.outlookReplyDraft.replyText",
+      default: "",
+      required: true,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.outlookReplyDraft.replyText.help",
+    },
+  ],
+};
+
 const demoRfiFollowUpOperation: OperationDef = {
   id: "rfi.follow_up_sync",
   titleKey: "op.rfi.follow_up_sync.title",
@@ -770,6 +790,7 @@ export class MockBridge implements Bridge {
             demoOperation,
             demoFileGroupOperation,
             demoRfiOperation,
+            demoOutlookReplyOperation,
             demoRfiFollowUpOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
@@ -1348,6 +1369,30 @@ export class MockBridge implements Bridge {
         result = revised;
         break;
       }
+      case "engine/rfiReplyPreview":
+        result = {
+          planId: "demo-rfi-reply-plan",
+          opId: "rfi.outlook_reply_draft",
+          steps: [
+            {
+              kind: "outlook_reply_draft",
+              src: "RFI number request",
+              dst: null,
+              noteKey: "step.rfi.outlookReplyDraft",
+              meta: { displayOnly: true, sendAllowed: false },
+            },
+          ],
+          warnings: [],
+          meta: {
+            replyPreview: {
+              subject: "RFI number request",
+              plainText:
+                "RFI No.\tITP No.\r\nAZE-SUN-INT-QMS-RFI-CIV-0008\tCIV-0005",
+              html: "<table><tr><td>AZE-SUN-INT-QMS-RFI-CIV-0008</td></tr></table><br><br>",
+            },
+          },
+        } satisfies Plan;
+        break;
       case "engine/apply":
         onProgress?.({ phase: "apply", done: 1, total: 1 });
         result = {

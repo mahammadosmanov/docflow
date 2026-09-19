@@ -94,6 +94,10 @@ export interface FrontendCommandMap {
     { planId: string; sheet?: string },
     { count: number }
   >;
+  "engine/rfiReplyPreview": CommandSpec<
+    { planId: string; journalId: string },
+    Plan
+  >;
   "engine/reviewScan": CommandSpec<
     { destination: PathSelection },
     ReviewItem[]
@@ -148,6 +152,7 @@ export const FRONTEND_METHODS = [
   "engine/printQueueResume",
   "engine/revise",
   "engine/copyTable",
+  "engine/rfiReplyPreview",
   "engine/reviewScan",
   "engine/reviewPreview",
   "engine/undo",

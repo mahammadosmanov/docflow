@@ -743,6 +743,54 @@ pub fn copy_payload(plan: &Plan, sheet: Option<&str>) -> Result<ClipboardPayload
     })
 }
 
+pub fn reply_payload(plan: &Plan) -> Result<ClipboardPayload, BackendError> {
+    let editor = plan
+        .meta
+        .get("editor")
+        .and_then(Value::as_object)
+        .ok_or_else(|| BackendError::validation("bu planda kopyalanabilir tablo yok"))?;
+    let sources = editor
+        .get("copySources")
+        .and_then(Value::as_object)
+        .ok_or_else(|| BackendError::validation("bu planda kopyalanabilir tablo yok"))?;
+    let sheets = DISCIPLINES
+        .into_iter()
+        .filter(|sheet| sources.contains_key(*sheet))
+        .collect::<Vec<_>>();
+    if sheets.is_empty() {
+        return Err(BackendError::validation(
+            "bu planda kopyalanabilir tablo yok",
+        ));
+    }
+
+    let multiple = sheets.len() > 1;
+    let mut plain_parts = Vec::with_capacity(sheets.len());
+    let mut html_parts = Vec::with_capacity(sheets.len());
+    let mut count = 0usize;
+    for sheet in sheets {
+        let payload = copy_payload(plan, Some(sheet))?;
+        count += payload.count;
+        plain_parts.push(if multiple {
+            format!("{sheet}\r\n{}", payload.plain)
+        } else {
+            payload.plain
+        });
+        html_parts.push(if multiple {
+            format!("<div style=\"font-family:Arial,sans-serif;font-size:10pt;font-weight:700;margin:0 0 6px 0;\">{sheet}</div>{}", payload.html)
+        } else {
+            payload.html
+        });
+    }
+    let plain = plain_parts.join("\r\n\r\n");
+    let html = format!("{}<br><br>", html_parts.join("<br>"));
+    if plain.len() > MAX_TABLE_BYTES || html.len() > MAX_TABLE_BYTES {
+        return Err(BackendError::validation(
+            "clipboard table exceeded the size limit",
+        ));
+    }
+    Ok(ClipboardPayload { plain, html, count })
+}
+
 pub(crate) fn workbook_step_updates(step: &Step) -> Result<WorkbookUpdates, BackendError> {
     let batches = decode_batches(step)?;
     let mut sheets = BTreeMap::new();

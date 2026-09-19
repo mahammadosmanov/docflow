@@ -42,6 +42,10 @@
   RFI Log REMARKS line, but keep POT test, calculated remarks, and manual
   overrides outside mutation authority. Insert a missing PCU FINAL lifecycle
   value first and offer its Worley status on the next preview.
+- RFI Log to Outlook continuation requires the exact committed `rfi.log_add`
+  journal, owner/session, and Plan digest. Reuse the approved table values in a
+  separate Outlook preview; never recalculate identifiers, invent recipients or
+  message prose, or add send authority.
 - PDF orientation uses 250/350-DPI OSD consensus, then a conservative
   four-direction English OCR score only for unresolved pages. The fallback must
   keep minimum word, average-confidence, winner-ratio, and margin gates; sparse

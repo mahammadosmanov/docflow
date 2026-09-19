@@ -21,6 +21,9 @@
 
 - Generic schema-driven forms, remembered safe values, typed presets, compact
   multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
+- A successful RFI Log Apply can continue directly into a separate, reviewable
+  Outlook Reply All Plan containing the exact approved tables for every affected
+  discipline. It opens an unsent draft only; it never sends or invents message text.
 - Batch Print always starts without old files or silently restored settings. One
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.

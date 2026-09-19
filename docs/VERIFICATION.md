@@ -4,6 +4,28 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.9.0 - 2026-09-19
+
+The RFI Log operation now offers an Outlook Reply All continuation only after a
+fully committed, non-partial assignment. The handoff requires the exact
+owner/session, source Plan digest, and committed `rfi.log_add` journal. It
+reuses the approved CIV/MEC/ELE/PRC table values without recalculating RFI
+numbers, opens a separate preview, and retains the existing no-send Outlook
+boundary.
+
+The final source gates passed with Rust 1.97.1: formatting, Clippy with all
+targets/features and warnings denied, Cargo check, 353 serial unit tests, and
+220 integration tests; four operator-file tests remained intentionally ignored.
+The first parallel Rust run exposed one pre-existing global-operation-lock test
+collision; that test passed alone and the complete serial run passed. All 23
+Node tests, 54 React tests, source/docs/version/license audits, and the
+production frontend build passed. The existing non-failing frontend chunk-size
+advisory remains.
+
+Native classic-Outlook selection, Reply All composition, displayed table
+fidelity, saved-draft journal, and Undo acceptance cannot run on this macOS
+host and remain an external Windows gate. No mail-send authority was added.
+
 ## 1.8.0 - 2026-09-18
 
 The supplied current `Inspection Status Follow Up.xlsm` was inspected read-only.

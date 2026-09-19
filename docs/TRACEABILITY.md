@@ -33,6 +33,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-028 | `operations/replica_publish.rs`, `native.rs`, `registry.rs`, generic schema UI, four locale catalogs | automatic settle/mass-limit unit tests, registry fixture, Rust/frontend suites, Windows test-target compile |
 | DF-029 | `outlook_reply_draft.rs`, `platform/windows/outlook.rs`, `native.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | fake Outlook archive authority tests, generated-write Apply/Undo test, registry fixture, locale parity, Windows test-target compile |
 | DF-030 | `rfi_system_sync.rs`, `scan_index.rs` | `rfi_system_sync_native.rs` exact-filename, synthetic OTHERS, cache-profile, and operator-supplied signed/unsigned PDF tests |
+| DF-031 | `rfi_log.rs`, `outlook_reply_draft.rs`, `native.rs`, `backend.rs`, generic `App.tsx` result flow | `rfi_log_native.rs`, `outlook_reply_draft.rs`, backend command roster, locale parity, and `App.test.tsx` guarded handoff test |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

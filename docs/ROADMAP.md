@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.8.0 reliability and Windows certification
+## Now — 1.9.0 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -23,6 +23,8 @@ the historical tracker.
 - Certify one-way replica publication, retained backups, Undo, unattended pause,
   settle delays, mass-change brakes, one-minute cadence, and per-user startup on
   the real Windows/OneDrive/GlobalProtect paths.
+- Certify the guarded RFI Log to selected classic-Outlook Reply All handoff with
+  single- and multi-discipline requests on Windows.
 
 ## Next — deeper RFI automation
 
