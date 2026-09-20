@@ -72,7 +72,7 @@ fn publication_is_backup_first_hash_verified_and_losslessly_undoable() {
         .unwrap();
 
     let applied = authority.apply(&cached.plan_id, &caller()).unwrap();
-    assert_eq!(applied.failed, 0);
+    assert_eq!(applied.failed, 0, "replica errors: {:#?}", applied.errors);
     for target in &roots[1..] {
         assert_eq!(fs::read(target.join("CIV/changed.pdf")).unwrap(), b"new");
         assert_eq!(

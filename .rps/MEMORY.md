@@ -57,3 +57,7 @@
   Release, and upload only commit-bound verified assets. This authority never
   includes secrets, operator documents, deployment, spending, or production
   data mutation.
+- Windows refuses workbook replacement while any ordinary preview or
+  fingerprint `File` handle remains open, even though Unix permits the same
+  sequence. Explicitly drop those handles before guarded backup/replacement;
+  keep Windows fixture handles scoped the same way as production.

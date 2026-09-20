@@ -4,9 +4,9 @@ Updated: 2026-09-20
 
 ## Current release
 
-- Version: 1.9.1
+- Version: 1.9.2
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable `v1.9.1` release checkpoint
+- Implementation commit: immutable v1.9.2 release checkpoint
 - Objective: preserve every catalog version in the canonical private GitHub
   repository and require future completed slices to be pushed, tagged, and
   released after verification.
@@ -19,6 +19,9 @@ Updated: 2026-09-20
   published GitHub Release. Verified available Windows assets were uploaded for
   0.6.0, 0.7.0-rc.1, 1.8.0, and 1.9.0; source-only historical releases do not
   claim a missing binary.
+- The 1.9.1 source checkpoint, tag, and GitHub Release are preserved. Its
+  Windows run 35494732675 exposed three Windows-only test failures before
+  packaging; no installer was published from that failed run.
 
 - The reply continuation is offered only after a non-partial committed
   `rfi.log_add` journal and requires the exact owner, session, Plan digest, and

@@ -8,6 +8,21 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.2 - 2026-09-20
+
+### Fixed
+
+- RFI System workbook Apply now closes every preview and fingerprint handle
+  before replacing the approved workbook. Windows no longer rejects the
+  operation with `os error 32` because DocFlow itself still holds the file.
+
+### Safety
+
+- Preview, source fingerprints, retained backup, exact approved Plan, journal,
+  and Undo rules remain unchanged. Windows tests explicitly release fixture
+  handles before Apply and report replica failure details when a platform step
+  fails.
+
 ## 1.9.1 - 2026-09-20
 
 ### Fixed

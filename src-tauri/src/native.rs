@@ -1284,6 +1284,8 @@ impl NativeBackend {
             request.values.force_rescan,
             &mut progress,
         )?;
+        drop(source);
+        drop(target);
         let reservation = self.filesystem.reserve_plan_id();
         reservation.assign_to_empty(&mut plan)?;
         let grant_ids = provisional
@@ -1380,6 +1382,7 @@ impl NativeBackend {
             progress,
             || false,
         )?;
+        drop(workbook);
         let reservation = self.filesystem.reserve_plan_id();
         reservation.assign_to_empty(&mut plan)?;
         let grant_ids = provisional

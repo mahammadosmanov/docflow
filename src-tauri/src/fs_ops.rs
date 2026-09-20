@@ -1006,6 +1006,7 @@ impl FilesystemAuthority {
                     "error.rfi.systemSync.workbookChanged",
                 ));
             }
+            drop(current_workbook);
 
             let backup_cap = self.grants.authorize_capability_for_plan(
                 &binding.grant_ids,

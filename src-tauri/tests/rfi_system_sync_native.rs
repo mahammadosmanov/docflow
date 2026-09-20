@@ -317,6 +317,7 @@ fn completion_status_preview_recurses_and_patches_only_exact_safe_log_cells() {
         || false,
     )
     .unwrap();
+    drop(log_file);
 
     assert_eq!(plan.op_id, rfi_system_sync::COMPLETE_STATUS_OPERATION_ID);
     assert_eq!(plan.steps.len(), 1);
@@ -698,6 +699,8 @@ fn test_system_sync_full_preview_apply_and_undo() {
         &mut follow_up_file,
     )
     .unwrap();
+    drop(rfi_log_file);
+    drop(follow_up_file);
 
     // Setup FilesystemAuthority for Apply & Undo
     let journal_root = fixture_path.join("journal");
