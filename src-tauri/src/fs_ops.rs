@@ -2122,19 +2122,34 @@ impl FilesystemAuthority {
         );
         record.pending_step = Some(restore.clone());
         self.journals.write(record).map_err(step_unknown)?;
-        if let Err(error) = atomic_replace_capability_with_retry(&temporary, &target) {
+        #[cfg(windows)]
+        let replacement =
+            overwrite_existing_capability(&temporary, &target, &meta.expected_target_sha256);
+        #[cfg(not(windows))]
+        let replacement = atomic_replace_capability_with_retry(&temporary, &target);
+        if let Err(error) = replacement {
             return Err(replacement_failure(&target, error));
         }
         match target.sha256() {
             Ok(hash) if hash == meta.source_sha256 => {}
-            Ok(_) | Err(_) => {
-                if rollback_from_backup_capability(&backup, &target, &meta.source_sha256).is_ok() {
+            Ok(_applied_hash) => {
+                #[cfg(windows)]
+                let rollback = target.overwrite_verified_from(&backup, &_applied_hash);
+                #[cfg(not(windows))]
+                let rollback =
+                    rollback_from_backup_capability(&backup, &target, &meta.expected_target_sha256);
+                if rollback.is_ok() {
                     record.pending_step = None;
                     self.journals.write(record).map_err(step_unknown)?;
                     return Err(StepFailure::NoEffect(
                         "error.replica.publishVerificationFailed".to_string(),
                     ));
                 }
+                return Err(StepFailure::OutcomeUnknown(
+                    "error.replica.publishVerificationFailed".to_string(),
+                ));
+            }
+            Err(_) => {
                 return Err(StepFailure::OutcomeUnknown(
                     "error.replica.publishVerificationFailed".to_string(),
                 ));
@@ -3528,6 +3543,16 @@ fn replacement_failure(destination: &AnchoredPath, error: io::Error) -> StepFail
     StepFailure::OutcomeUnknown(format!("{}: {error}", destination.absolute().display()))
 }
 
+#[cfg(any(windows, test))]
+fn overwrite_existing_capability(
+    source: &AnchoredPath,
+    destination: &AnchoredPath,
+    expected_destination_sha256: &str,
+) -> io::Result<()> {
+    destination.overwrite_verified_from(source, expected_destination_sha256)?;
+    source.remove_file_durable()
+}
+
 fn create_temporary(parent: &Path, destination: &Path) -> io::Result<(PathBuf, File)> {
     if !parent.is_dir() {
         return Err(io::Error::new(
@@ -4395,5 +4420,23 @@ mod tests {
                 .to_string_lossy()
                 .contains("restore-")
         }));
+    }
+
+    #[test]
+    fn verified_in_place_replacement_removes_the_staged_copy() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let target = fixture.path().join("target.pdf");
+        let staged = fixture.path().join(".target.pdf.docflow-replica.tmp");
+        fs::write(&target, b"old").unwrap();
+        fs::write(&staged, b"new").unwrap();
+        let expected = file_sha256(&target).unwrap();
+
+        let capability = crate::cap_fs::CapabilityRoot::open(fixture.path()).unwrap();
+        let target = capability.authorize(&target).unwrap().anchor().unwrap();
+        let staged = capability.authorize(&staged).unwrap().anchor().unwrap();
+        overwrite_existing_capability(&staged, &target, &expected).unwrap();
+
+        assert_eq!(fs::read(target.absolute()).unwrap(), b"new");
+        assert!(!staged.absolute().exists());
     }
 }

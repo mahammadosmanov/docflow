@@ -65,3 +65,8 @@
   used by retry policy. Converting `os error 32` to a string disables the
   existing outer sharing-violation retry even when the message still displays
   the original code.
+- Windows may permanently reject replace-by-rename for an existing replica
+  target even with delete-sharing handles and bounded retries. For this
+  operation, use the existing same-handle verified overwrite: validate the old
+  hash, retain backup and pending journal first, write/flush/verify, then remove
+  the staged copy.

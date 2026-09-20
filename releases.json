@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.3",
+  "currentVersion": "1.9.4",
   "releases": [
     {
       "version": "0.1.0",
@@ -646,9 +646,17 @@
       "version": "1.9.3",
       "date": "2026-09-20",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.3",
       "summary": "Preserve native Windows sharing-violation codes so guarded replica replacement uses its bounded retry instead of stopping early."
+    },
+    {
+      "version": "1.9.4",
+      "date": "2026-09-20",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.4",
+      "summary": "Publish replica replacements through a hash-verified in-place Windows write while retaining backup-first recovery and exact rollback validation."
     }
   ]
 }
