@@ -51,7 +51,7 @@ change before moving authority.
 13. Never expose a Supabase service-role or secret key in a desktop client.
 14. Windows and macOS remain supported.
 15. Preserve existing non-secret settings, journal, trash, queue, DTO, and cloud formats unless an accepted decision explicitly changes one.
-16. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible.
+16. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible. After applicable checks pass, push that commit to the canonical GitHub branch and publish its immutable version tag and GitHub Release; this repository has standing owner authorization for those backup actions. Never include secrets, operator documents, generated caches, or unverified package claims.
 17. Classify every completed slice with `node tools/version_manager.mjs next`: `fix` increments PATCH, `feature` increments MINOR, and `breaking` increments MAJOR. Do not extend a prerelease train unless an explicit release-candidate plan is active.
 18. Multi-core execution is allowed for independent read-only discovery or
     analysis. Apply, publication, journal order, and Undo remain deterministic;
@@ -65,8 +65,8 @@ change before moving authority.
 - Keep the frontend thin and commands closed, typed, bounded, and authorized in Rust.
 - Never add an interpreter, application sidecar, shell/process authority, or a second mutation backend.
 - Do not modify `legacy/` or generated output under `app/build/`, `frontend/dist/`, `src-tauri/target/`, or local environment directories.
-- Advance the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and create a focused git commit at the end of each completed work item.
-- Do not push, publish, deploy, or release unless the user explicitly requests it.
+- Advance the project version across all manifests (`node tools/version_manager.mjs set <next-version>`), create a focused git commit, push the canonical branch, and publish its immutable tag and GitHub Release at the end of each completed work item.
+- Standing authorization covers DocFlow source commits, version tags, GitHub Releases, and verified release assets in the canonical private repository. It does not cover deployment, production-document mutation, secrets, spending, or other external publication.
 
 ## Verification
 

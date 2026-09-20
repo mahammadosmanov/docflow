@@ -1,17 +1,24 @@
 # DocFlow project state
 
-Updated: 2026-09-19
+Updated: 2026-09-20
 
 ## Current release
 
-- Version: 1.9.0
+- Version: 1.9.1
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: `68f4610`
-- Objective: continue a successful guarded RFI Log assignment into an official
-  unsent Outlook Reply All draft without recalculating identifiers or granting
-  send authority.
+- Implementation commit: immutable `v1.9.1` release checkpoint
+- Objective: preserve every catalog version in the canonical private GitHub
+  repository and require future completed slices to be pushed, tagged, and
+  released after verification.
 
 ## Verified
+
+- The canonical branch was pushed through the 1.9.0 verification commit; local
+  and remote branch tips matched before the 1.9.1 metadata change.
+- Every version in `releases.json` through 1.9.0 has an immutable Git tag and a
+  published GitHub Release. Verified available Windows assets were uploaded for
+  0.6.0, 0.7.0-rc.1, 1.8.0, and 1.9.0; source-only historical releases do not
+  claim a missing binary.
 
 - The reply continuation is offered only after a non-partial committed
   `rfi.log_add` journal and requires the exact owner, session, Plan digest, and

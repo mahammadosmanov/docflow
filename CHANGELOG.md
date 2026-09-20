@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.1 - 2026-09-20
+
+### Fixed
+
+- Backfilled immutable Git tags and GitHub Releases for every version recorded
+  in the release catalog. Existing verified `0.6.0`, `0.7.0-rc.1`, `1.8.0`, and
+  `1.9.0` Windows packages are retained as release assets.
+- Completed DocFlow changes now require a verified commit, canonical branch
+  push, immutable version tag, and GitHub Release instead of remaining on one
+  workstation.
+
+### Safety
+
+- Source-only historical releases are labelled by their available Assets; no
+  missing installer is represented as verified or reconstructed from an
+  unrelated build. Secrets, operator documents, caches, deployment, and
+  production data remain outside standing backup authority.
+
 ## 1.9.0 - 2026-09-19
 
 ### Added

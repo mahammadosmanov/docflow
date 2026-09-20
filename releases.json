@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.0",
+  "currentVersion": "1.9.1",
   "releases": [
     {
       "version": "0.1.0",
       "date": "2026-07-26",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.1.0",
       "summary": "First verified Windows package with Process Scans, RFI Log, and Batch Print."
     },
     {
@@ -15,7 +15,7 @@
       "date": "2026-07-27",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.2.0",
       "summary": "Email-assisted RFI drafting, native Excel copy, systematic app versioning, and lightweight Windows UI artifacts."
     },
     {
@@ -23,7 +23,7 @@
       "date": "2026-07-27",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.2.1",
       "summary": "Gemini schema, Azerbaijani mail parsing, compact tag expansion, and short item lookup fixes."
     },
     {
@@ -31,7 +31,7 @@
       "date": "2026-07-27",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.2.2",
       "summary": "Gemini model fallback and compatibility update."
     },
     {
@@ -39,7 +39,7 @@
       "date": "2026-07-28",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.2.3",
       "summary": "Modern and legacy Gemini structured-output compatibility."
     },
     {
@@ -47,7 +47,7 @@
       "date": "2026-07-28",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.2.4",
       "summary": "Correct Gemini response-format MIME handling."
     },
     {
@@ -55,7 +55,7 @@
       "date": "2026-07-29",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.3.0",
       "summary": "Workbook-backed Outlook mail-table preview and native formatted copy."
     },
     {
@@ -63,7 +63,7 @@
       "date": "2026-07-29",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.4.0",
       "summary": "Optional flat output mode for Process Scans."
     },
     {
@@ -71,7 +71,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.4.1",
       "summary": "Dynamic RFI workbook mapping and Excel-native clipboard flow."
     },
     {
@@ -79,7 +79,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.4.2",
       "summary": "Single-pass large-workbook processing and clipboard performance fixes."
     },
     {
@@ -87,7 +87,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.4.3",
       "summary": "Reliable multi-RFI Excel automation and process cleanup."
     },
     {
@@ -95,7 +95,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.4.4",
       "summary": "Hidden, non-interactive Excel preparation until native copy completes."
     },
     {
@@ -103,7 +103,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.5.0",
       "summary": "Multi-sheet CIV, MEC, ELE, and PRC RFI workflow with atomic apply and undo."
     },
     {
@@ -111,7 +111,7 @@
       "date": "2026-07-30",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.5.1",
       "summary": "Packaged sidecar startup and Windows layout compatibility fixes."
     },
     {
@@ -119,7 +119,7 @@
       "date": "2026-07-31",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.5.2",
       "summary": "Independent per-sheet scheduling and compact copy-action layout."
     },
     {
@@ -127,7 +127,7 @@
       "date": "2026-08-01",
       "channel": "stable",
       "status": "archived",
-      "tag": null,
+      "tag": "v0.5.3",
       "summary": "MEC row-number editing and workbook-backed mail copy."
     },
     {
@@ -135,7 +135,7 @@
       "date": "2026-08-03",
       "channel": "stable",
       "status": "superseded",
-      "tag": null,
+      "tag": "v0.5.4",
       "summary": "Unicode-safe RFI lookup transport and production workbook validation."
     },
     {
@@ -622,9 +622,17 @@
       "version": "1.9.0",
       "date": "2026-09-19",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.0",
       "summary": "Continue a successful guarded RFI Log update into a separately reviewed unsent Outlook Reply All draft with exact approved tables."
+    },
+    {
+      "version": "1.9.1",
+      "date": "2026-09-20",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.1",
+      "summary": "Backfill immutable GitHub source checkpoints for every catalog version and require each completed version to be committed, pushed, tagged, and released."
     }
   ]
 }

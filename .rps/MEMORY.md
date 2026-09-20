@@ -51,3 +51,9 @@
   keep minimum word, average-confidence, winner-ratio, and margin gates; sparse
   drawings or close 0/180-degree results remain manual review. Every detector
   change requires a new scan-index profile.
+- The owner granted standing authorization to back up every completed DocFlow
+  slice to the canonical private GitHub repository. After applicable checks,
+  commit and push the source, create the immutable version tag and GitHub
+  Release, and upload only commit-bound verified assets. This authority never
+  includes secrets, operator documents, deployment, spending, or production
+  data mutation.

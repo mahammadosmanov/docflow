@@ -56,8 +56,12 @@ node tools/version_manager.mjs check --require-tag
 6. Move Unreleased notes into `## X.Y.Z - YYYY-MM-DD`.
 7. Update current/superseded entries and intended tag in `releases.json`.
 8. Run every applicable gate in `docs/RELEASE_SAFETY.md`.
-9. Tag the exact reviewed commit `vX.Y.Z`; never move or reuse a published tag.
-10. The Windows workflow validates identity, builds/smokes the installer, and
+9. Push the reviewed commit to the canonical GitHub branch immediately after
+   verification; do not leave completed source checkpoints only on one device.
+10. Tag the exact reviewed commit `vX.Y.Z`; never move or reuse a published tag.
+11. Publish a GitHub Release for every catalog version. Upload only artifacts
+    whose checksums and package evidence bind them to that exact commit.
+12. The Windows workflow validates identity, builds/smokes the installer, and
     refuses to replace an existing GitHub Release asset.
 
 Historical tag exceptions remain unchanged. Git, Markdown, JSON, Node, and GitHub
