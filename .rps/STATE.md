@@ -4,9 +4,9 @@ Updated: 2026-09-20
 
 ## Current release
 
-- Version: 1.9.2
+- Version: 1.9.3
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable v1.9.2 release checkpoint
+- Implementation commit: immutable v1.9.3 release checkpoint
 - Objective: preserve every catalog version in the canonical private GitHub
   repository and require future completed slices to be pushed, tagged, and
   released after verification.
@@ -22,6 +22,10 @@ Updated: 2026-09-20
 - The 1.9.1 source checkpoint, tag, and GitHub Release are preserved. Its
   Windows run 35494732675 exposed three Windows-only test failures before
   packaging; no installer was published from that failed run.
+- The 1.9.2 source checkpoint and tag are preserved. Windows run 35495891429
+  passed the workbook handle-lifetime regressions, then exposed a replica
+  rename sharing violation whose native code was hidden from the outer bounded
+  retry; no installer was published from that failed run.
 
 - The reply continuation is offered only after a non-partial committed
   `rfi.log_add` journal and requires the exact owner, session, Plan digest, and

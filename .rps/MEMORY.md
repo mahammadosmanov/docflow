@@ -61,3 +61,7 @@
   fingerprint `File` handle remains open, even though Unix permits the same
   sequence. Explicitly drop those handles before guarded backup/replacement;
   keep Windows fixture handles scoped the same way as production.
+- Preserve native Windows `io::Error` codes across capability-layer boundaries
+  used by retry policy. Converting `os error 32` to a string disables the
+  existing outer sharing-violation retry even when the message still displays
+  the original code.

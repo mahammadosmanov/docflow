@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.2",
+  "currentVersion": "1.9.3",
   "releases": [
     {
       "version": "0.1.0",
@@ -638,9 +638,17 @@
       "version": "1.9.2",
       "date": "2026-09-20",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.2",
       "summary": "Close RFI System preview and fingerprint handles before guarded workbook replacement so Windows Apply does not conflict with DocFlow's own open files."
+    },
+    {
+      "version": "1.9.3",
+      "date": "2026-09-20",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.3",
+      "summary": "Preserve native Windows sharing-violation codes so guarded replica replacement uses its bounded retry instead of stopping early."
     }
   ]
 }

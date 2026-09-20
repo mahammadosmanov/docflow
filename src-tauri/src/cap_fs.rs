@@ -1880,7 +1880,7 @@ impl PlatformDirectory {
                 nt_open_relative(&self.0, source, NtLeafKind::MutableAny, NtDisposition::Open)?;
             rename_open_handle(&source, &destination_parent, destination, replace)
         })
-        .map_err(|error| io::Error::new(error.kind(), format!("commit relative rename: {error}")))
+        .map_err(|error| preserve_os_error("commit relative rename", error))
     }
 
     fn sync_all(&self) -> io::Result<()> {
@@ -2170,6 +2170,14 @@ fn retry_windows_sharing_violation(
         }
     }
     unreachable!("bounded retry loop always returns")
+}
+
+#[cfg(any(windows, test))]
+fn preserve_os_error(context: &str, error: io::Error) -> io::Error {
+    match error.raw_os_error() {
+        Some(code) => io::Error::from_raw_os_error(code),
+        None => io::Error::new(error.kind(), format!("{context}: {error}")),
+    }
 }
 
 fn is_cross_device(error: &io::Error) -> bool {
@@ -2712,6 +2720,15 @@ mod tests {
         .unwrap_err();
         assert_eq!(denied.raw_os_error(), Some(5));
         assert_eq!(denied_attempts, 1);
+    }
+
+    #[test]
+    fn contextual_io_errors_keep_retryable_windows_codes() {
+        let error = super::preserve_os_error(
+            "commit relative rename",
+            std::io::Error::from_raw_os_error(32),
+        );
+        assert_eq!(error.raw_os_error(), Some(32));
     }
 
     #[test]

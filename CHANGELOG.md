@@ -8,6 +8,20 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.3 - 2026-09-20
+
+### Fixed
+
+- Windows capability-relative rename errors now retain their native OS code.
+  Transient sharing violations can reach the existing bounded replacement retry
+  instead of stopping replica publication after the short inner retry.
+
+### Safety
+
+- Retry remains bounded and applies only to the existing Windows access-error
+  allowlist. Source/target hash validation, backup-first publication, journal,
+  verification, fail-fast behavior, and Undo are unchanged.
+
 ## 1.9.2 - 2026-09-20
 
 ### Fixed
