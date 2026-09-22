@@ -4,6 +4,30 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.9.8 - 2026-09-22
+
+The consented Ventoy RFI System was inspected read-only. The recursive audit
+found 1,861 strong-reference cover PDFs whose exact canonical parent folder and
+`RFI No.` filename agreed. A deterministic 120-file baseline produced 85
+reference agreements, 35 Review outcomes, no runtime errors, and no reference
+mismatch. The bounded raw-grayscale PSM 11 fallback increased that same sample
+to 114 agreements and six Review outcomes without a reference mismatch.
+
+The final full-corpus run produced 1,771 reference agreements, 88 safe Review
+outcomes, no OCR/runtime errors, and two reference mismatches. Visual inspection
+showed both folder/filename references were wrong and OCR returned the visible
+page codes. The 88 Review outcomes comprised 63 competing-code observations,
+18 insufficient-consensus cases, and seven no-candidate cases. Folder/filename
+agreement remains reference evidence, not ground truth; no private PDF, RFI
+identifier, or corpus path is committed or packaged.
+
+Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 365 serial unit
+tests, and 221 integration tests passed; five operator-file tests remained
+intentionally ignored. All 23 Node and 54 React tests, the frontend build,
+source/version/documentation audits, and 295-Cargo/173-npm/60-OCR license and
+resource-checksum checks passed. Native Windows packaging and runtime remain a
+separate release gate and are not implied by this macOS evidence.
+
 ## 1.9.7 - 2026-09-22
 
 Searchable PDF text is now non-authoritative evidence: automatic RFI identity

@@ -85,3 +85,9 @@
 - Describe evidence only inside its proven boundary: heuristic scores are not
   accuracy probabilities, spool handoff is not physical paper output, and an
   unknown external result must never be relabelled as success.
+- Corpus folder and filename agreement is reference evidence, not OCR ground
+  truth. Every OCR/reference mismatch must stop the audit for visual review;
+  a mismatch can reveal a misfiled production PDF rather than an OCR error.
+- RFI identity OCR may use the bounded raw-grayscale PSM 11 fallback only after
+  the adaptive cascade fails. It still needs one conflict-free code across at
+  least three DPIs and two exact reads; a single competing code keeps Review.

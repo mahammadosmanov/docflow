@@ -4,6 +4,12 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.9.8: corpus-calibrated sparse-text OCR fallback
+  - the shared identity engine adds raw-grayscale PSM 11 evidence only when the
+    adaptive cascade cannot decide, without relaxing exact consensus or conflict vetoes
+  - a read-only recursive corpus audit measures reference agreement separately
+    from ground truth and blocks unresolved folder/filename mismatches
+
 - [x] Version 1.9.7: truthful OCR evidence and visible-page authority
   - searchable PDF text can corroborate or veto an RFI identity but can no
     longer authorize automatic naming without visible-page OCR consensus

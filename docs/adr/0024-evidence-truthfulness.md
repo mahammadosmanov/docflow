@@ -20,6 +20,9 @@ plausible OCR token is not an approved RFI identity.
 - A page or text layer containing multiple exact RFI codes is ambiguous.
 - Signed-page replacement accepts only the same exact conflict-free identity;
   repaired or fuzzy codes remain manual review.
+- OCR cascade changes require a consented, read-only corpus comparison. They may
+  improve automatic coverage only while retaining zero wrong automatic labels;
+  one competing code keeps the document in Review regardless of vote count.
 - Printer states distinguish rejected, submitted, completed by the spooler,
   and submitted without a retained receipt. DocFlow never claims that paper
   physically exited a printer without operator evidence.

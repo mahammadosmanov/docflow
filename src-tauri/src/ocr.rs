@@ -51,6 +51,8 @@ const OCR_CASCADE: [OcrAttempt; 4] = [
         psm: 6,
     },
 ];
+const RAW_FALLBACK_DPI: [i32; 5] = [250, 300, 350, 400, 450];
+const RAW_FALLBACK_PSM: u8 = 11;
 
 #[derive(Clone, Debug)]
 pub struct NativeOcr {
@@ -151,20 +153,56 @@ impl OcrAdapter for NativeOcr {
                     .map(|matched| (attempt.dpi, matched)),
             );
         }
+        if let Some((matched, votes, dpi_count)) =
+            select_rfi_consensus(&observations, text_layer.as_ref())
+        {
+            return Ok(consensus_read(
+                matched,
+                votes,
+                dpi_count,
+                text_layer.as_ref(),
+                false,
+            ));
+        }
+
+        for (index, dpi) in RAW_FALLBACK_DPI.into_iter().enumerate() {
+            if let std::collections::hash_map::Entry::Vacant(entry) = gray_cache.entry(dpi) {
+                let rendered = temporary
+                    .path()
+                    .join(format!("page-{page_index}-{dpi}.png"));
+                render_page_png(path, &rendered, dpi, page_index).map_err(OcrFailure::Document)?;
+                entry.insert(read_png_gray(&rendered).map_err(OcrFailure::Document)?);
+            }
+            let image = temporary.path().join(format!("raw-{dpi}.pgm"));
+            write_pgm(
+                &image,
+                gray_cache
+                    .get(&dpi)
+                    .expect("render cache contains every fallback DPI"),
+            )
+            .map_err(OcrFailure::Document)?;
+            let text = run_tesseract(
+                self.tesseract.as_deref().expect("validated Tesseract path"),
+                &image,
+                temporary.path(),
+                self.tessdata.as_deref(),
+                RAW_FALLBACK_PSM,
+                OCR_CASCADE.len() + index,
+            )?;
+            observations.extend(rfi_matches(&text).into_iter().map(|matched| (dpi, matched)));
+        }
+
         Ok(
             match select_rfi_consensus(&observations, text_layer.as_ref()) {
-                Some((matched, votes, dpi_count)) => OcrRead {
-                    source: format!(
-                        "ocr:consensus:{votes}votes:{dpi_count}dpi:{}",
-                        text_layer_evidence(text_layer.as_ref(), &matched.code)
-                    ),
-                    matched,
-                },
+                Some((matched, votes, dpi_count)) => {
+                    consensus_read(matched, votes, dpi_count, text_layer.as_ref(), true)
+                }
                 None => OcrRead {
                     matched: find(""),
                     source: format!(
-                        "ocr:ambiguous-or-unconfirmed:{}",
-                        rfi_observation_summary(&observations)
+                        "ocr:ambiguous-or-unconfirmed:{}:{}",
+                        rfi_observation_summary(&observations),
+                        text_layer_observation_summary(text_layer.as_ref())
                     ),
                 },
             },
@@ -179,6 +217,23 @@ impl OcrAdapter for NativeOcr {
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "BULUNAMADI".to_string())
         )
+    }
+}
+
+fn consensus_read(
+    matched: RfiMatch,
+    votes: usize,
+    dpi_count: usize,
+    text_layer: Option<&BTreeSet<String>>,
+    used_fallback: bool,
+) -> OcrRead {
+    OcrRead {
+        source: format!(
+            "ocr:consensus{}:{votes}votes:{dpi_count}dpi:{}",
+            if used_fallback { "-fallback" } else { "" },
+            text_layer_evidence(text_layer, &matched.code)
+        ),
+        matched,
     }
 }
 
@@ -197,6 +252,17 @@ fn text_layer_evidence(text_layer: Option<&BTreeSet<String>>, code: &str) -> &'s
         Some(codes) if !codes.is_empty() => "text-conflicts",
         Some(_) => "text-no-exact-code",
         None => "no-text-layer",
+    }
+}
+
+fn text_layer_observation_summary(text_layer: Option<&BTreeSet<String>>) -> String {
+    match text_layer {
+        None => "no-text-layer".to_string(),
+        Some(codes) if codes.is_empty() => "text-no-exact-code".to_string(),
+        Some(codes) => format!(
+            "text-codes={}",
+            codes.iter().cloned().collect::<Vec<_>>().join(",")
+        ),
     }
 }
 
@@ -1435,6 +1501,23 @@ mod tests {
     }
 
     #[test]
+    fn rfi_consensus_accepts_two_exact_fallback_reads_after_consistent_repairs() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-O648")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-O648")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-O648")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-0648")),
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-0648")),
+        ];
+
+        let (matched, votes, dpi_count) =
+            select_rfi_consensus(&observations, None).expect("exact fallback corroborates repairs");
+
+        assert_eq!(matched.code, "AZE-SUN-INT-QMS-RFI-CIV-0648");
+        assert_eq!((votes, dpi_count), (2, 3));
+    }
+
+    #[test]
     fn rfi_consensus_accepts_one_exact_code_across_three_resolutions() {
         let observations = [
             (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
@@ -1474,6 +1557,18 @@ mod tests {
         ]);
 
         assert!(select_rfi_consensus(&observations, Some(&ambiguous_text)).is_none());
+    }
+
+    #[test]
+    fn ambiguous_ocr_diagnostics_preserve_text_layer_evidence() {
+        assert_eq!(
+            text_layer_observation_summary(Some(&BTreeSet::from([
+                "AZE-SUN-INT-QMS-RFI-CIV-1286".to_string(),
+                "AZE-SUN-INT-QMS-RFI-CIV-4286".to_string(),
+            ]))),
+            "text-codes=AZE-SUN-INT-QMS-RFI-CIV-1286,AZE-SUN-INT-QMS-RFI-CIV-4286"
+        );
+        assert_eq!(text_layer_observation_summary(None), "no-text-layer");
     }
 
     #[test]

@@ -59,7 +59,18 @@ or cross-target checks:
 
 Use isolated Rust fixtures and representative consented scans. Only change the
 OCR cascade after measuring representative documents. Maintain at least 95%
-extraction accuracy and keep the strict `-RFI-` anchor.
+exact coverage with zero wrong automatic labels and keep the strict `-RFI-`
+anchor. The recursive RFI System audit accepts only exact cover filenames inside
+their matching canonical folder as strong labels, never modifies the corpus,
+and exits with status 2 for every OCR/reference mismatch. Folder and filename
+agreement is reference evidence, not ground truth; visually resolve every
+mismatch before making a precision claim:
+
+```bash
+DOCFLOW_OPERATOR_TESSERACT=<tesseract> cargo run \
+  --manifest-path src-tauri/Cargo.toml --release \
+  --example ocr_corpus_audit -- <RFI-System> 0 <outside-corpus-report.json> 4
+```
 
 ## Adding a document operation
 

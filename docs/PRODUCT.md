@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.9.7**. `VERSION` is authoritative.
+Current product version: **1.9.8**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -103,7 +103,8 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 ## Success criteria
 
-- Representative OCR calibration remains at least 95% accurate.
+- Representative consented OCR calibration retains at least 95% exact coverage
+  with zero wrong automatic RFI labels; ambiguous evidence remains Review.
 - Preview never changes source or destination state.
 - Apply/undo returns the test fixture to its original hash when no later user edit exists.
 - Source, frontend, Rust, license, package-content, packaged operation, and

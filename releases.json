@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.7",
+  "currentVersion": "1.9.8",
   "releases": [
     {
       "version": "0.1.0",
@@ -678,9 +678,17 @@
       "version": "1.9.7",
       "date": "2026-09-22",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.7",
       "summary": "Require visible-page OCR evidence, reject conflicting searchable text, and label heuristic scores without claiming certainty."
+    },
+    {
+      "version": "1.9.8",
+      "date": "2026-09-22",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.8",
+      "summary": "Recover exact RFI identifiers with a measured sparse-text OCR fallback while preserving conflict rejection and truthful corpus evidence."
     }
   ]
 }

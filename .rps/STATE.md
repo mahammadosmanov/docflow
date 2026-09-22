@@ -4,13 +4,23 @@ Updated: 2026-09-22
 
 ## Current release
 
-- Version: 1.9.7
+- Version: 1.9.8
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: v1.9.7 release checkpoint
+- Implementation commit: pending v1.9.8 OCR calibration checkpoint
 - Objective: keep heuristic, platform, and external evidence inside their
   proven boundaries and route uncertainty to Review.
 
 ## Verified
+
+- A consented read-only audit covered 1,861 exact RFI cover references. The
+  shared raw-grayscale sparse-text fallback raised deterministic sample
+  reference coverage from 70.83% to 95.00% without weakening conflict vetoes.
+- The full corpus produced 1,771 reference agreements, 88 safe Review outcomes,
+  no runtime errors, and two visually resolved source-reference errors where
+  OCR matched the visible page. Folder/filename agreement is not ground truth.
+- Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 365 serial unit
+  tests, 221 integration tests, 23 Node tests, 54 React tests, frontend build,
+  and source/version/docs/license audits pass. Five operator tests remain ignored.
 
 - Searchable PDF text no longer bypasses visible-page OCR. It may corroborate
   one exact consensus code or veto automation when it conflicts or contains

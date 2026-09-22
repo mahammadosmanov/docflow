@@ -8,6 +8,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.8 - 2026-09-22
+
+### Fixed
+
+- RFI identity OCR now runs a bounded raw-grayscale sparse-text fallback at
+  250/300/350/400/450 DPI only after the existing adaptive cascade cannot form
+  an exact consensus. Clear older scans are recognized more often without
+  weakening the three-resolution, two-exact-read, or conflict-veto rules.
+- Ambiguous OCR diagnostics now identify searchable-text-layer evidence instead
+  of hiding whether that evidence was absent, empty, or conflicting.
+
+### Safety
+
+- A reusable read-only RFI System audit compares visible OCR with exact matching
+  folder/filename references, rejects report output inside the source corpus,
+  and exits non-zero for every reference mismatch. Reference agreement is not
+  described as ground-truth precision; every mismatch requires visual review.
+
 ## 1.9.7 - 2026-09-22
 
 ### Fixed
