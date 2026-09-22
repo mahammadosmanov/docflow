@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.4",
+  "currentVersion": "1.9.5",
   "releases": [
     {
       "version": "0.1.0",
@@ -654,9 +654,17 @@
       "version": "1.9.4",
       "date": "2026-09-20",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.4",
       "summary": "Publish replica replacements through a hash-verified in-place Windows write while retaining backup-first recovery and exact rollback validation."
+    },
+    {
+      "version": "1.9.5",
+      "date": "2026-09-22",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.5",
+      "summary": "Allow guarded Follow Up synchronization to verify approved literal cells that are intentionally cleared when Cancelled or Rejected RFIs are removed."
     }
   ]
 }

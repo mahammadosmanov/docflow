@@ -8,6 +8,21 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.5 - 2026-09-22
+
+### Fixed
+
+- RFI Log to Follow Up Apply now accepts an approved literal cell becoming
+  empty, including removal of the last Cancelled or Rejected RFI in a lifecycle
+  group. The closed OOXML verifier no longer rejects DocFlow's own valid empty
+  inline-string output.
+
+### Safety
+
+- Empty output is accepted only when the approved replacement is exactly empty.
+  Extra XML children, formulas, values, attributes, styles, merged cells,
+  protected targets, and every non-approved package change remain rejected.
+
 ## 1.9.4 - 2026-09-20
 
 ### Fixed

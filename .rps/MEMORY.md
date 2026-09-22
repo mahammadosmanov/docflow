@@ -70,3 +70,7 @@
   operation, use the existing same-handle verified overwrite: validate the old
   hash, retain backup and pending journal first, write/flush/verify, then remove
   the staged copy.
+- Quick-XML represents `<t></t>` with no text child. The guarded Follow Up
+  verifier must accept that shape only when the approved replacement is exactly
+  empty; otherwise Cancelled/Rejected removal can write a safe private output
+  and then reject it before publication.

@@ -2448,10 +2448,7 @@ fn validate_exact_guarded_output_value(
             "guarded output inline string is invalid",
         ));
     };
-    if text.namespace.as_deref() != Some(namespace)
-        || !has_local_name(text, b"t")
-        || text.children.len() != 1
-    {
+    if text.namespace.as_deref() != Some(namespace) || !has_local_name(text, b"t") {
         return Err(OoxmlError::invalid(
             "guarded output inline string is invalid",
         ));
@@ -2471,14 +2468,18 @@ fn validate_exact_guarded_output_value(
             "guarded output inline string attributes are invalid",
         ));
     }
-    let XmlNode::Raw(Event::Text(value)) = &text.children[0] else {
-        return Err(OoxmlError::invalid(
-            "guarded output inline string text is invalid",
-        ));
+    let decoded = match text.children.as_slice() {
+        [] if expected.is_empty() => String::new(),
+        [XmlNode::Raw(Event::Text(value))] => value
+            .decode()
+            .map_err(|_| OoxmlError::invalid("guarded output inline string text is invalid"))?
+            .into_owned(),
+        _ => {
+            return Err(OoxmlError::invalid(
+                "guarded output inline string text is invalid",
+            ));
+        }
     };
-    let decoded = value
-        .decode()
-        .map_err(|_| OoxmlError::invalid("guarded output inline string text is invalid"))?;
     if decode_entities(&decoded) != expected {
         return Err(OoxmlError::invalid(
             "guarded output inline string text is invalid",
@@ -4001,9 +4002,11 @@ mod tests {
     use zip::{ZipWriter, write::SimpleFileOptions};
 
     use super::{
-        CellUpdate, MAX_APPLY_MERGE_COMPARISONS, MergeComparisonBudget, OoxmlErrorKind,
-        WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
-        parse_document_with_limits, patch_workbook_sheets, read_workbook, sheet_infos_from_path,
+        CellData, CellUpdate, GuardedCellUpdate, MAX_APPLY_MERGE_COMPARISONS,
+        MergeComparisonBudget, OoxmlErrorKind, WorksheetDescriptor, WorksheetVisibility,
+        ordered_workbook_discovery, parse_document_with_limits, patch_workbook_sheets,
+        patch_workbook_sheets_guarded_text, read_workbook, sheet_infos_from_path,
+        verify_guarded_workbook_delta_text,
     };
 
     const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -4766,6 +4769,45 @@ mod tests {
 
         let data = read_workbook(&destination).unwrap();
         assert_eq!(data.sheet("MEC").unwrap().value(1, 1), "new");
+    }
+
+    #[test]
+    fn guarded_text_patch_can_clear_a_literal_cell() {
+        let workbook = format!(
+            r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Follow Up" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+        );
+        let relationships = format!(
+            r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+        );
+        let worksheet = format!(
+            r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Pending</t></is></c></row></sheetData></worksheet>"#
+        );
+        let mut source = fixture(
+            &workbook,
+            &relationships,
+            &[("xl/worksheets/sheet1.xml", worksheet.as_bytes())],
+        );
+        let updates = BTreeMap::from([(
+            "Follow Up".to_string(),
+            BTreeMap::from([(
+                (1, 1),
+                GuardedCellUpdate {
+                    expected: CellData {
+                        value: "Pending".to_string(),
+                        formula: None,
+                        style: None,
+                    },
+                    replacement: CellUpdate::Text(String::new()),
+                },
+            )]),
+        )]);
+        let mut destination = Cursor::new(Vec::new());
+
+        patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+        source.set_position(0);
+        destination.set_position(0);
+
+        verify_guarded_workbook_delta_text(&mut source, &mut destination, &updates).unwrap();
     }
 
     #[test]

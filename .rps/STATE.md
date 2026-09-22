@@ -1,17 +1,25 @@
 # DocFlow project state
 
-Updated: 2026-09-20
+Updated: 2026-09-22
 
 ## Current release
 
-- Version: 1.9.4
+- Version: 1.9.5
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable v1.9.4 release checkpoint
-- Objective: preserve every catalog version in the canonical private GitHub
-  repository and require future completed slices to be pushed, tagged, and
-  released after verification.
+- Implementation commit: v1.9.5 release checkpoint
+- Objective: allow the guarded Follow Up writer to verify approved literal
+  cells that intentionally become empty, without widening workbook mutation
+  authority.
 
 ## Verified
+
+- A focused regression reproduces the former Apply failure by clearing a
+  literal Follow Up cell through the production guarded writer and closed
+  package-delta verifier. The fixed verifier accepts an empty text node only
+  when the approved replacement is exactly empty.
+- All 34 RFI Log to Follow Up integration tests pass. Cancelled/Rejected
+  removal, formula/merge/protection refusal, exact FINAL Worley state, prepared
+  missing FINAL handling, retained recovery, and Undo remain covered.
 
 - The canonical branch was pushed through the 1.9.0 verification commit; local
   and remote branch tips matched before the 1.9.1 metadata change.
@@ -38,7 +46,7 @@ Updated: 2026-09-20
 - The Outlook reply remains a separate preview/Apply operation. It neither adds
   recipients nor sends mail, and the established selection-fingerprint and
   unsent-draft journal/Undo controls remain in force.
-- Rust 1.97.1 formatting, Clippy, Cargo check, 353 serial unit tests, 220
+- Rust 1.97.1 formatting, Clippy, Cargo check, 356 serial unit tests, 220
   integration tests, 23 Node tests, 54 React tests, frontend build, and all
   source/docs/version/license audits pass. Four operator-file tests remain
   intentionally ignored. Native Windows Outlook acceptance remains external.
