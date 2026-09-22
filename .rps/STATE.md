@@ -4,13 +4,24 @@ Updated: 2026-09-22
 
 ## Current release
 
-- Version: 1.9.6
+- Version: 1.9.7
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: v1.9.6 release checkpoint
-- Objective: prevent a single plausible OCR digit error from silently naming
-  or creating an RFI archive destination.
+- Implementation commit: v1.9.7 release checkpoint
+- Objective: keep heuristic, platform, and external evidence inside their
+  proven boundaries and route uncertainty to Review.
 
 ## Verified
+
+- Searchable PDF text no longer bypasses visible-page OCR. It may corroborate
+  one exact consensus code or veto automation when it conflicts or contains
+  multiple exact codes.
+- Signed-page staging accepts only exact conflict-free RFI identities. OCR UI
+  labels now describe heuristic evidence rather than an accuracy probability,
+  and mail extraction no longer exposes a provider-generated confidence claim.
+- The CIV-1286 operator PDF passed the new read-only path as exact CIV-1286.
+  Rust 1.97.1 formatting, Clippy, Cargo check, 363 serial unit tests, 221
+  integration tests, 23 Node tests, 54 React tests, frontend build, and all
+  source/docs/version/license audits pass. Five operator tests remain ignored.
 
 - The operator-supplied CIV-1286 PDF was inspected read-only and passed the new
   four-pass, multi-resolution OCR consensus as exact CIV-1286. The file remains

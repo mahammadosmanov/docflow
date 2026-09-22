@@ -4,6 +4,19 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.9.7: truthful OCR evidence and visible-page authority
+  - searchable PDF text can corroborate or veto an RFI identity but can no
+    longer authorize automatic naming without visible-page OCR consensus
+  - multiple exact codes in one OCR pass or text layer, conflicting text, and
+    repaired/fuzzy signed-page identities remain manual review
+  - OCR percentages are labelled as heuristic evidence instead of accuracy
+    probability; provider-generated mail confidence is no longer displayed
+  - Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 363 unit and
+    221 integration tests passed; five operator tests remain ignored in the
+    ordinary suite. The CIV-1286 operator regression passed separately
+  - 23 Node and 54 React tests, frontend build, and source, docs, version, and
+    license audits passed. Native Windows package acceptance remains separate
+
 - [x] Version 1.2.0: source-authoritative three-root RFI System publication
   - one selected source publishes only CIV/MEC/ELE/PRC and named root files to
     two targets; target-only files are warned and never deleted

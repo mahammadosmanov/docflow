@@ -107,7 +107,7 @@
   "warnings": [
     {
       "key": "warn.rfi.emailExtracted",
-      "subject": "offline | CIV 1 RFI | confidence 83%"
+      "subject": "offline | CIV 1 RFI"
     },
     {
       "key": "warn.rfi.overflowMoved",

@@ -79,3 +79,9 @@
   conflict-free code across at least three DPIs and two exact reads. In an
   established archive, a detected code must also have an existing exact RFI
   folder or remain in Review.
+- Searchable PDF text is not visible-page truth. It may corroborate or veto the
+  visible OCR consensus, but never authorize RFI naming alone; conflicting or
+  multiple exact codes remain Review.
+- Describe evidence only inside its proven boundary: heuristic scores are not
+  accuracy probabilities, spool handoff is not physical paper output, and an
+  unknown external result must never be relabelled as success.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.6",
+  "currentVersion": "1.9.7",
   "releases": [
     {
       "version": "0.1.0",
@@ -670,9 +670,17 @@
       "version": "1.9.6",
       "date": "2026-09-22",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.6",
       "summary": "Require conflict-free multi-resolution OCR consensus for Process Scans and review unknown RFI folders instead of creating them."
+    },
+    {
+      "version": "1.9.7",
+      "date": "2026-09-22",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.7",
+      "summary": "Require visible-page OCR evidence, reject conflicting searchable text, and label heuristic scores without claiming certainty."
     }
   ]
 }

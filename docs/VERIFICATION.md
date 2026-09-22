@@ -4,6 +4,31 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.9.7 - 2026-09-22
+
+Searchable PDF text is now non-authoritative evidence: automatic RFI identity
+requires the existing conflict-free visible-page OCR consensus. A conflicting
+or multi-code text layer vetoes automation, and multiple exact candidates in a
+single rendered OCR pass remain ambiguous. Signed-page staging accepts only an
+exact consensus identity. Heuristic OCR scores are no longer labelled as
+accuracy confidence, and mail extraction no longer displays a provider's
+self-reported percentage.
+
+The supplied CIV-1286 operator PDF passed the new path read-only as exact
+`AZE-SUN-INT-QMS-RFI-CIV-1286` in 14.47 seconds. It stayed outside Git and the
+release package. Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check,
+363 serial unit tests, and 221 integration tests passed; five operator tests
+remained intentionally ignored in the ordinary suite. All 23 Node and 54 React
+tests, the frontend build, and source, documentation, version, and dependency
+license audits passed. One unrelated UI timing test missed its default wait in
+an earlier combined run and passed immediately in isolation and in the final
+complete run.
+
+The newer host-default Rust 1.98.1 introduced unrelated new Clippy warnings;
+release gates used the repository and CI pinned Rust 1.97.1. Native Windows
+packaging, startup, bundled OCR, and installer execution require the exact
+commit's Windows workflow and are not claimed by this local source evidence.
+
 ## 1.9.0 - 2026-09-19
 
 The RFI Log operation now offers an Outlook Reply All continuation only after a

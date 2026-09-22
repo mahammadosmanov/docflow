@@ -8,6 +8,26 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.7 - 2026-09-22
+
+### Fixed
+
+- Searchable PDF text can no longer authorize an RFI identity without matching
+  visible-page OCR consensus. A stale conflicting text layer, multiple exact
+  codes in one OCR pass, or multiple exact text-layer codes now routes the file
+  to Review instead of silently naming or filing it.
+- Signed-page staging now accepts only exact conflict-free RFI identities;
+  repaired and fuzzy OCR tokens remain manual review.
+
+### Safety
+
+- OCR percentages are labelled as heuristic evidence scores, not accuracy
+  probabilities or confirmations. Email extraction no longer displays a
+  provider-generated percentage as factual confidence.
+- The accepted evidence-truthfulness decision records that platform handoff is
+  not physical completion, heuristic evidence is not proof, and unknown or
+  conflicting evidence must fail closed.
+
 ## 1.9.6 - 2026-09-22
 
 ### Fixed

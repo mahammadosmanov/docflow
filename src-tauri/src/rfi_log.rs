@@ -363,11 +363,8 @@ where
         warnings.push(Warning {
             key: "warn.rfi.emailExtracted".to_string(),
             subject: format!(
-                "{} | {} {} RFI | confidence {:.0}%",
-                selected.provider,
-                discipline,
-                counts[&discipline],
-                selected.confidence * 100.0
+                "{} | {} {} RFI",
+                selected.provider, discipline, counts[&discipline]
             ),
         });
         if provider == "gemini" {

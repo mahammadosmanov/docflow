@@ -166,7 +166,7 @@ fn slice5_shared_rfi_and_naming_fixture_matches_the_frozen_compatibility_oracle(
 
 #[cfg(target_os = "macos")]
 #[test]
-fn native_pdf_adapter_uses_the_searchable_text_fast_path() {
+fn native_pdf_adapter_never_trusts_searchable_text_without_visible_page_ocr() {
     let fixture = tempfile::TempDir::new().unwrap();
     let pdf = fixture.path().join("searchable.pdf");
     write_text_pdf(
@@ -175,13 +175,11 @@ fn native_pdf_adapter_uses_the_searchable_text_fast_path() {
     );
     let adapter = NativeOcr::with_tesseract("/path/that/must/not/be-needed");
 
-    let read = adapter
+    let error = adapter
         .read(&pdf)
-        .expect("PDFKit should expose searchable text");
+        .expect_err("searchable text alone must not authorize an RFI label");
 
-    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-0064");
-    assert_eq!(read.matched.method, RfiMethod::Strict);
-    assert_eq!(read.source, "text-layer");
+    assert_eq!(error, OcrFailure::EngineMissing);
 }
 
 #[cfg(target_os = "macos")]

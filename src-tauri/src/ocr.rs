@@ -11,7 +11,7 @@ use std::{
 use crate::{
     operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
-    rfi_code::{RfiMatch, RfiMethod, find},
+    rfi_code::{RfiMatch, RfiMethod, exact_codes, find},
 };
 
 const TEXT_LAYER_MIN_CHARS: usize = 50;
@@ -107,15 +107,8 @@ impl OcrAdapter for NativeOcr {
 
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         let text = page_text(path, page_index)?;
-        if text.trim().chars().count() >= TEXT_LAYER_MIN_CHARS {
-            let matched = find(&text);
-            if matches!(matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
-                return Ok(OcrRead {
-                    matched,
-                    source: "text-layer".to_string(),
-                });
-            }
-        }
+        let text_layer =
+            (text.trim().chars().count() >= TEXT_LAYER_MIN_CHARS).then(|| exact_codes(&text));
         if self.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
             return Err(OcrFailure::EngineMissing);
         }
@@ -152,22 +145,30 @@ impl OcrAdapter for NativeOcr {
                 attempt.psm,
                 index,
             )?;
-            let matched = find(&text);
-            observations.push((attempt.dpi, matched));
+            observations.extend(
+                rfi_matches(&text)
+                    .into_iter()
+                    .map(|matched| (attempt.dpi, matched)),
+            );
         }
-        Ok(match select_rfi_consensus(&observations) {
-            Some((matched, votes, dpi_count)) => OcrRead {
-                matched,
-                source: format!("ocr:consensus:{votes}votes:{dpi_count}dpi"),
+        Ok(
+            match select_rfi_consensus(&observations, text_layer.as_ref()) {
+                Some((matched, votes, dpi_count)) => OcrRead {
+                    source: format!(
+                        "ocr:consensus:{votes}votes:{dpi_count}dpi:{}",
+                        text_layer_evidence(text_layer.as_ref(), &matched.code)
+                    ),
+                    matched,
+                },
+                None => OcrRead {
+                    matched: find(""),
+                    source: format!(
+                        "ocr:ambiguous-or-unconfirmed:{}",
+                        rfi_observation_summary(&observations)
+                    ),
+                },
             },
-            None => OcrRead {
-                matched: find(""),
-                source: format!(
-                    "ocr:ambiguous-or-unconfirmed:{}",
-                    rfi_observation_summary(&observations)
-                ),
-            },
-        })
+        )
     }
 
     fn diagnostics(&self) -> String {
@@ -178,6 +179,24 @@ impl OcrAdapter for NativeOcr {
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "BULUNAMADI".to_string())
         )
+    }
+}
+
+fn rfi_matches(text: &str) -> Vec<RfiMatch> {
+    let codes = exact_codes(text);
+    if codes.is_empty() {
+        vec![find(text)]
+    } else {
+        codes.into_iter().map(|code| find(&code)).collect()
+    }
+}
+
+fn text_layer_evidence(text_layer: Option<&BTreeSet<String>>, code: &str) -> &'static str {
+    match text_layer {
+        Some(codes) if codes.len() == 1 && codes.contains(code) => "text-agrees",
+        Some(codes) if !codes.is_empty() => "text-conflicts",
+        Some(_) => "text-no-exact-code",
+        None => "no-text-layer",
     }
 }
 
@@ -200,7 +219,10 @@ fn rfi_observation_summary(observations: &[(i32, RfiMatch)]) -> String {
         .join(",")
 }
 
-fn select_rfi_consensus(observations: &[(i32, RfiMatch)]) -> Option<(RfiMatch, usize, usize)> {
+fn select_rfi_consensus(
+    observations: &[(i32, RfiMatch)],
+    text_layer: Option<&BTreeSet<String>>,
+) -> Option<(RfiMatch, usize, usize)> {
     const MIN_STRICT_VOTES: usize = 2;
     const MIN_DISTINCT_DPI: usize = 3;
     const CONSENSUS_CONFIDENCE: f64 = 0.95;
@@ -215,6 +237,11 @@ fn select_rfi_consensus(observations: &[(i32, RfiMatch)]) -> Option<(RfiMatch, u
     }
 
     let code = *observed_codes.iter().next()?;
+    if text_layer
+        .is_some_and(|codes| !codes.is_empty() && (codes.len() != 1 || !codes.contains(code)))
+    {
+        return None;
+    }
     let mut strict = observations.iter().filter_map(|(_, matched)| {
         (matched.method == RfiMethod::Strict && matched.code == code).then_some(matched)
     });
@@ -1382,7 +1409,7 @@ mod tests {
             (350, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
         ];
 
-        assert!(select_rfi_consensus(&observations).is_none());
+        assert!(select_rfi_consensus(&observations, None).is_none());
     }
 
     #[test]
@@ -1393,7 +1420,7 @@ mod tests {
             (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
         ];
 
-        assert!(select_rfi_consensus(&observations).is_none());
+        assert!(select_rfi_consensus(&observations, None).is_none());
     }
 
     #[test]
@@ -1404,7 +1431,7 @@ mod tests {
             (200, find("AZE-SUN-INT-QMS-RFI-CIV-I286")),
         ];
 
-        assert!(select_rfi_consensus(&observations).is_none());
+        assert!(select_rfi_consensus(&observations, None).is_none());
     }
 
     #[test]
@@ -1415,11 +1442,50 @@ mod tests {
             (200, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
         ];
 
-        let (matched, votes, dpi_count) = select_rfi_consensus(&observations).unwrap();
+        let (matched, votes, dpi_count) = select_rfi_consensus(&observations, None).unwrap();
 
         assert_eq!(matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1286");
         assert_eq!(matched.confidence, 0.95);
         assert_eq!((votes, dpi_count), (3, 3));
+    }
+
+    #[test]
+    fn rfi_consensus_rejects_a_conflicting_searchable_text_layer() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+        ];
+        let stale_text = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-4286".to_string()]);
+
+        assert!(select_rfi_consensus(&observations, Some(&stale_text)).is_none());
+    }
+
+    #[test]
+    fn rfi_consensus_rejects_multiple_searchable_text_layer_codes() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+        ];
+        let ambiguous_text = BTreeSet::from([
+            "AZE-SUN-INT-QMS-RFI-CIV-1286".to_string(),
+            "AZE-SUN-INT-QMS-RFI-CIV-4286".to_string(),
+        ]);
+
+        assert!(select_rfi_consensus(&observations, Some(&ambiguous_text)).is_none());
+    }
+
+    #[test]
+    fn one_ocr_pass_with_multiple_exact_codes_is_ambiguous() {
+        let matches = rfi_matches("AZE-SUN-INT-QMS-RFI-CIV-1286 AZE-SUN-INT-QMS-RFI-CIV-4286");
+
+        assert_eq!(matches.len(), 2);
+        assert!(
+            matches
+                .iter()
+                .all(|matched| matched.method == RfiMethod::Strict)
+        );
     }
 
     #[test]

@@ -309,7 +309,7 @@ where
                     continue;
                 }
             };
-            if !matches!(read.matched.method, RfiMethod::Strict | RfiMethod::Repaired) {
+            if read.matched.method != RfiMethod::Strict {
                 push_warning_review(
                     &mut plan,
                     &mut warning_reviews,
@@ -318,7 +318,7 @@ where
                     pdf,
                     Some(page_index),
                     None,
-                    "No exact canonical RFI code was recognized",
+                    "No conflict-free exact canonical RFI code was recognized",
                 );
                 continue;
             }
