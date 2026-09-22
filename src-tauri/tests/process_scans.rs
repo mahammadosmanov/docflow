@@ -255,11 +255,25 @@ fn native_image_only_pdf_runs_through_platform_renderer_and_real_tesseract() {
         .expect("image-only PDF should use the real packaged-shape OCR adapter");
 
     assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-0064");
-    assert!(matches!(
-        read.matched.method,
-        RfiMethod::Strict | RfiMethod::Repaired
-    ));
-    assert_eq!(read.source, "ocr:dpi300:b0.35:blk31:psm6");
+    assert_eq!(read.matched.method, RfiMethod::Strict);
+    assert!(read.source.starts_with("ocr:consensus:"), "{}", read.source);
+}
+
+#[test]
+#[ignore = "requires an operator-supplied Process Scans PDF"]
+fn operator_process_scan_pdf_matches_the_expected_exact_rfi() {
+    let path = std::env::var_os("DOCFLOW_OPERATOR_PROCESS_SCAN_PDF")
+        .map(std::path::PathBuf::from)
+        .expect("DOCFLOW_OPERATOR_PROCESS_SCAN_PDF is required");
+    let expected = std::env::var("DOCFLOW_OPERATOR_PROCESS_SCAN_RFI")
+        .expect("DOCFLOW_OPERATOR_PROCESS_SCAN_RFI is required");
+
+    let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
+        .map(NativeOcr::with_tesseract)
+        .unwrap_or_else(NativeOcr::discover);
+    let read = ocr.read(&path).unwrap();
+
+    assert_eq!(read.matched.code, expected, "source={}", read.source);
 }
 
 #[cfg(target_os = "macos")]
@@ -434,6 +448,50 @@ impl OcrAdapter for LowConfidenceOcr {
     fn diagnostics(&self) -> String {
         "fixture OCR available".to_string()
     }
+}
+
+struct UnknownFolderOcr;
+
+impl OcrAdapter for UnknownFolderOcr {
+    fn read(&self, _path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        Ok(OcrRead {
+            matched: find("AZE-SUN-INT-QMS-RFI-CIV-4286"),
+            source: "fixture-consensus".to_string(),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "fixture OCR available".to_string()
+    }
+}
+
+#[test]
+fn existing_rfi_archive_never_creates_an_ocr_invented_folder() {
+    let fixture = tempfile::TempDir::new().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(destination.join("AZE-SUN-INT-QMS-RFI-CIV-1286")).unwrap();
+    std::fs::write(source.join("scan.pdf"), b"PDF").unwrap();
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+        },
+        &UnknownFolderOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(plan.warnings[0].key, "warn.unknown_rfi_folder");
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.steps[0].kind, docflow_lib::contracts::StepKind::Copy);
+    assert_eq!(plan.steps[0].meta["reason"], "unknown_rfi_folder");
+    assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-4286").exists());
 }
 
 #[test]

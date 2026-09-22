@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::{BufReader, BufWriter, Write},
     path::{Path, PathBuf},
@@ -11,7 +11,7 @@ use std::{
 use crate::{
     operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
-    rfi_code::{RfiMethod, find},
+    rfi_code::{RfiMatch, RfiMethod, find},
 };
 
 const TEXT_LAYER_MIN_CHARS: usize = 50;
@@ -21,74 +21,34 @@ const ADAPTIVE_C: i32 = 10;
 struct OcrAttempt {
     dpi: i32,
     band: f64,
-    band_label: &'static str,
     block: usize,
     psm: u8,
 }
 
-const OCR_CASCADE: [OcrAttempt; 9] = [
+const OCR_CASCADE: [OcrAttempt; 4] = [
     OcrAttempt {
         dpi: 300,
         band: 0.35,
-        band_label: "0.35",
         block: 31,
-        psm: 6,
-    },
-    OcrAttempt {
-        dpi: 300,
-        band: 0.35,
-        band_label: "0.35",
-        block: 41,
         psm: 6,
     },
     OcrAttempt {
         dpi: 250,
         band: 0.35,
-        band_label: "0.35",
         block: 31,
         psm: 6,
     },
     OcrAttempt {
         dpi: 200,
         band: 0.35,
-        band_label: "0.35",
         block: 31,
         psm: 6,
-    },
-    OcrAttempt {
-        dpi: 300,
-        band: 0.55,
-        band_label: "0.55",
-        block: 31,
-        psm: 6,
-    },
-    OcrAttempt {
-        dpi: 300,
-        band: 0.35,
-        band_label: "0.35",
-        block: 31,
-        psm: 11,
     },
     OcrAttempt {
         dpi: 350,
         band: 0.35,
-        band_label: "0.35",
         block: 41,
         psm: 6,
-    },
-    OcrAttempt {
-        dpi: 300,
-        band: 0.55,
-        band_label: "0.55",
-        block: 41,
-        psm: 4,
-    },
-    OcrAttempt {
-        dpi: 300,
-        band: 1.00,
-        band_label: "1.0",
-        block: 31,
-        psm: 11,
     },
 ];
 
@@ -162,7 +122,7 @@ impl OcrAdapter for NativeOcr {
         let temporary = tempfile::tempdir()
             .map_err(|error| OcrFailure::Document(format!("OCR temp directory: {error}")))?;
         let mut gray_cache = HashMap::<i32, GrayImage>::new();
-        let mut repaired = None;
+        let mut observations = Vec::with_capacity(OCR_CASCADE.len());
         for (index, attempt) in OCR_CASCADE.iter().enumerate() {
             if let std::collections::hash_map::Entry::Vacant(entry) = gray_cache.entry(attempt.dpi)
             {
@@ -193,25 +153,19 @@ impl OcrAdapter for NativeOcr {
                 index,
             )?;
             let matched = find(&text);
-            let source = format!(
-                "ocr:dpi{}:b{}:blk{}:psm{}",
-                attempt.dpi, attempt.band_label, attempt.block, attempt.psm
-            );
-            if matched.method == RfiMethod::Strict {
-                return Ok(OcrRead { matched, source });
-            }
-            if matched.method == RfiMethod::Repaired && repaired.is_none() {
-                repaired = Some(matched);
-            }
+            observations.push((attempt.dpi, matched));
         }
-        Ok(match repaired {
-            Some(matched) => OcrRead {
+        Ok(match select_rfi_consensus(&observations) {
+            Some((matched, votes, dpi_count)) => OcrRead {
                 matched,
-                source: "ocr:repaired".to_string(),
+                source: format!("ocr:consensus:{votes}votes:{dpi_count}dpi"),
             },
             None => OcrRead {
                 matched: find(""),
-                source: "ocr:miss".to_string(),
+                source: format!(
+                    "ocr:ambiguous-or-unconfirmed:{}",
+                    rfi_observation_summary(&observations)
+                ),
             },
         })
     }
@@ -225,6 +179,57 @@ impl OcrAdapter for NativeOcr {
                 .unwrap_or_else(|| "BULUNAMADI".to_string())
         )
     }
+}
+
+fn rfi_observation_summary(observations: &[(i32, RfiMatch)]) -> String {
+    let mut summary = BTreeMap::<&str, (usize, BTreeSet<i32>)>::new();
+    for (dpi, matched) in observations.iter().filter(|(_, matched)| matched.ok()) {
+        let entry = summary
+            .entry(matched.code.as_str())
+            .or_insert_with(|| (0, BTreeSet::new()));
+        entry.0 += 1;
+        entry.1.insert(*dpi);
+    }
+    if summary.is_empty() {
+        return "no-candidate".to_string();
+    }
+    summary
+        .into_iter()
+        .map(|(code, (votes, dpis))| format!("{code}={votes}votes/{}dpi", dpis.len()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn select_rfi_consensus(observations: &[(i32, RfiMatch)]) -> Option<(RfiMatch, usize, usize)> {
+    const MIN_STRICT_VOTES: usize = 2;
+    const MIN_DISTINCT_DPI: usize = 3;
+    const CONSENSUS_CONFIDENCE: f64 = 0.95;
+
+    let observed_codes = observations
+        .iter()
+        .filter(|(_, matched)| matched.ok())
+        .map(|(_, matched)| matched.code.as_str())
+        .collect::<BTreeSet<_>>();
+    if observed_codes.len() != 1 {
+        return None;
+    }
+
+    let code = *observed_codes.iter().next()?;
+    let mut strict = observations.iter().filter_map(|(_, matched)| {
+        (matched.method == RfiMethod::Strict && matched.code == code).then_some(matched)
+    });
+    let mut matched = strict.next()?.clone();
+    let strict_votes = 1 + strict.count();
+    let dpis = observations
+        .iter()
+        .filter(|(_, matched)| matched.ok() && matched.code == code)
+        .map(|(dpi, _)| *dpi)
+        .collect::<BTreeSet<_>>();
+    if strict_votes < MIN_STRICT_VOTES || dpis.len() < MIN_DISTINCT_DPI {
+        return None;
+    }
+    matched.confidence = CONSENSUS_CONFIDENCE;
+    Some((matched, strict_votes, dpis.len()))
 }
 
 impl OrientationDetector for NativeOcr {
@@ -1367,6 +1372,55 @@ fn page_text(_path: &Path, _page_index: usize) -> Result<String, OcrFailure> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rfi_consensus_rejects_one_conflicting_strict_digit_read() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-4286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (350, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+        ];
+
+        assert!(select_rfi_consensus(&observations).is_none());
+    }
+
+    #[test]
+    fn rfi_consensus_requires_three_distinct_render_resolutions() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+        ];
+
+        assert!(select_rfi_consensus(&observations).is_none());
+    }
+
+    #[test]
+    fn rfi_consensus_requires_two_exact_reads_not_only_repairs() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-I286")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-I286")),
+        ];
+
+        assert!(select_rfi_consensus(&observations).is_none());
+    }
+
+    #[test]
+    fn rfi_consensus_accepts_one_exact_code_across_three_resolutions() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
+        ];
+
+        let (matched, votes, dpi_count) = select_rfi_consensus(&observations).unwrap();
+
+        assert_eq!(matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1286");
+        assert_eq!(matched.confidence, 0.95);
+        assert_eq!((votes, dpi_count), (3, 3));
+    }
 
     #[test]
     fn production_discovery_ignores_environment_tesseract_overrides() {

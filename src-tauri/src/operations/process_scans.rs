@@ -179,6 +179,8 @@ where
     } else {
         StepKind::Move
     };
+    let requires_existing_rfi_folder =
+        params.organize_into_rfi_folders && destination_contains_exact_rfi_folder(&destination);
     let mut plan = empty_plan();
     let mut groups: Vec<(String, Vec<Candidate>)> = Vec::new();
     let mut failures = Vec::<(PathBuf, String)>::new();
@@ -208,7 +210,7 @@ where
                 continue;
             }
         };
-        if !read.matched.ok() || read.matched.confidence < MIN_CONFIDENCE {
+        if read.matched.method != RfiMethod::Strict || read.matched.confidence < MIN_CONFIDENCE {
             plan.warnings.push(Warning {
                 key: if read.matched.ok() {
                     "warn.low_confidence".to_string()
@@ -323,6 +325,32 @@ where
                 "note.needs_review",
                 meta,
             ));
+        } else if requires_existing_rfi_folder
+            && folder.as_ref().is_some_and(|folder| !folder.is_dir())
+        {
+            plan.warnings.push(Warning {
+                key: "warn.unknown_rfi_folder".to_string(),
+                subject: format!("{} — {code}", display_name(&winner.path)),
+            });
+            let mut meta = JsonObject::new();
+            meta.insert("code".to_string(), Value::String(code.clone()));
+            meta.insert("confidence".to_string(), Value::from(winner.confidence));
+            meta.insert("source".to_string(), Value::String(winner.source.clone()));
+            meta.insert(
+                "reason".to_string(),
+                Value::String("unknown_rfi_folder".to_string()),
+            );
+            plan.steps.push(step(
+                transfer_kind,
+                Some(&winner.path),
+                Some(
+                    &destination
+                        .join(REVIEW_DIR)
+                        .join(display_name(&winner.path)),
+                ),
+                "note.needs_review",
+                meta,
+            ));
         } else {
             let folder_created = folder.as_ref().is_some_and(|folder| !folder.is_dir());
             if let Some(folder) = folder.as_ref().filter(|folder| !folder.is_dir()) {
@@ -394,6 +422,21 @@ where
         subject: String::new(),
     });
     Ok(plan)
+}
+
+fn destination_contains_exact_rfi_folder(destination: &Path) -> bool {
+    fs::read_dir(destination).is_ok_and(|entries| {
+        entries.filter_map(Result::ok).any(|entry| {
+            let Ok(file_type) = entry.file_type() else {
+                return false;
+            };
+            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                return false;
+            };
+            let matched = crate::rfi_code::find(&name);
+            file_type.is_dir() && matched.method == RfiMethod::Strict && matched.code == name
+        })
+    })
 }
 
 fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, BackendError> {

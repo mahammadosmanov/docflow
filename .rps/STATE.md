@@ -4,14 +4,23 @@ Updated: 2026-09-22
 
 ## Current release
 
-- Version: 1.9.5
+- Version: 1.9.6
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: v1.9.5 release checkpoint
-- Objective: allow the guarded Follow Up writer to verify approved literal
-  cells that intentionally become empty, without widening workbook mutation
-  authority.
+- Implementation commit: v1.9.6 release checkpoint
+- Objective: prevent a single plausible OCR digit error from silently naming
+  or creating an RFI archive destination.
 
 ## Verified
+
+- The operator-supplied CIV-1286 PDF was inspected read-only and passed the new
+  four-pass, multi-resolution OCR consensus as exact CIV-1286. The file remains
+  outside Git and is covered by an ignored operator regression hook.
+- Consensus rejects any competing code such as 4286, requires support across
+  three DPIs with at least two exact reads, and reports image OCR at 95% rather
+  than a misleading 100%.
+- When the selected destination already contains exact RFI folders, an OCR code
+  without an existing folder is routed to Review and cannot create a new
+  folder. Empty/new destinations retain the established folder-creation flow.
 
 - A focused regression reproduces the former Apply failure by clearing a
   literal Follow Up cell through the production guarded writer and closed
@@ -46,9 +55,9 @@ Updated: 2026-09-22
 - The Outlook reply remains a separate preview/Apply operation. It neither adds
   recipients nor sends mail, and the established selection-fingerprint and
   unsent-draft journal/Undo controls remain in force.
-- Rust 1.97.1 formatting, Clippy, Cargo check, 356 serial unit tests, 220
+- Rust 1.97.1 formatting, Clippy, Cargo check, 360 serial unit tests, 221
   integration tests, 23 Node tests, 54 React tests, frontend build, and all
-  source/docs/version/license audits pass. Four operator-file tests remain
+  source/docs/version/license audits pass. Five operator-file tests remain
   intentionally ignored. Native Windows Outlook acceptance remains external.
 - The 1.9.0 Windows x64 installer, portable executable, and OCR-inclusive ZIP
   were cross-built from `68f4610`. Release checksums, ZIP integrity, package

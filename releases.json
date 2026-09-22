@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.5",
+  "currentVersion": "1.9.6",
   "releases": [
     {
       "version": "0.1.0",
@@ -662,9 +662,17 @@
       "version": "1.9.5",
       "date": "2026-09-22",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.5",
       "summary": "Allow guarded Follow Up synchronization to verify approved literal cells that are intentionally cleared when Cancelled or Rejected RFIs are removed."
+    },
+    {
+      "version": "1.9.6",
+      "date": "2026-09-22",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.6",
+      "summary": "Require conflict-free multi-resolution OCR consensus for Process Scans and review unknown RFI folders instead of creating them."
     }
   ]
 }

@@ -74,3 +74,8 @@
   verifier must accept that shape only when the approved replacement is exactly
   empty; otherwise Cancelled/Rejected removal can write a safe private output
   and then reject it before publication.
+- A strict RFI regex match proves only that OCR produced a plausible shape; it
+  does not prove the digits are correct. Process Scans image OCR requires one
+  conflict-free code across at least three DPIs and two exact reads. In an
+  established archive, a detected code must also have an existing exact RFI
+  folder or remain in Review.

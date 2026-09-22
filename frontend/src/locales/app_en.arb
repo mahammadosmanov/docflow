@@ -134,6 +134,7 @@
   "note.unreadable": "Unreadable — will be moved to review",
   "warn.no_code": "RFI number not found",
   "warn.low_confidence": "Low confidence — needs review",
+  "warn.unknown_rfi_folder": "Detected RFI folder does not exist — moved to review",
   "warn.unreadable": "File could not be read",
   "warn.revision_guessed": "Revision number guessed",
   "warn.duplicate": "Duplicate RFI number — moved to review",

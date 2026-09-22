@@ -106,6 +106,7 @@
   "note.unreadable": "Okunamadı — incelemeye taşınacak",
   "warn.no_code": "RFI numarası bulunamadı",
   "warn.low_confidence": "Düşük güven — kontrol gerekli",
+  "warn.unknown_rfi_folder": "Algılanan RFI klasörü mevcut değil — incelemeye taşındı",
   "warn.unreadable": "Dosya okunamadı",
   "warn.revision_guessed": "Revizyon numarası tahmin edildi",
   "warn.duplicate": "Yinelenen RFI numarası — incelemeye taşındı",

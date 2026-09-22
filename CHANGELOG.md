@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.6 - 2026-09-22
+
+### Fixed
+
+- Process Scans no longer treats the first regex-shaped OCR result as 100%
+  reliable. Automatic naming now requires one non-conflicting RFI code across
+  at least three render resolutions, including at least two exact OCR reads.
+- An existing RFI archive no longer creates a new folder for an OCR-only code
+  that has no matching folder. The scan is routed to Review instead.
+
+### Safety
+
+- Any competing RFI candidate, insufficient multi-resolution support, repaired
+  or fuzzy-only result remains non-actionable. Confirmed image OCR is displayed
+  as 95%, not a misleading 100%. The supplied CIV-1286 scan is retained as an
+  external regression and passes the new consensus path.
+
 ## 1.9.5 - 2026-09-22
 
 ### Fixed
