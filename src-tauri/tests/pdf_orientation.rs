@@ -200,6 +200,9 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
     fs::create_dir_all(pdf.parent().unwrap()).unwrap();
     fs::create_dir_all(&review).unwrap();
     write_rich_archive(&pdf);
+    let second_pdf = source.join("PRC/RFI-0002/document.pdf");
+    fs::create_dir_all(second_pdf.parent().unwrap()).unwrap();
+    write_rich_archive(&second_pdf);
     let detector = CountingDetector {
         inner: FakeDetector {
             pages: BTreeMap::from([
@@ -225,22 +228,37 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
         false,
     )
     .unwrap();
-    assert_eq!(first.meta["scanIndex"]["analyzed"], 1);
-    assert_eq!(detector.calls.load(Ordering::SeqCst), 3);
+    assert_eq!(first.meta["scanIndex"]["analyzed"], 2);
+    assert_eq!(first.meta["inspectionWorkers"], 2);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 6);
 
+    let mut second_progress = Vec::new();
     let second = preview_indexed(
         &params,
         &detector,
-        |_| {},
+        |event| second_progress.push(event),
         || false,
         Some(&scan_index),
         "owner",
         false,
     )
     .unwrap();
-    assert_eq!(second.meta["scanIndex"]["reused"], 1);
+    assert_eq!(second.meta["scanIndex"]["reused"], 2);
     assert_eq!(second.meta["scanIndex"]["analyzed"], 0);
-    assert_eq!(detector.calls.load(Ordering::SeqCst), 3);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 6);
+    let inspection_events = second_progress
+        .iter()
+        .filter(|event| event.phase == "orientation_inspection")
+        .collect::<Vec<_>>();
+    assert_eq!(inspection_events.first().unwrap().done, 0);
+    assert_eq!(inspection_events.last().unwrap().done, 2);
+    assert!(
+        second_progress
+            .iter()
+            .filter(|event| event.phase == "orientation_analysis")
+            .count()
+            <= 2
+    );
     assert_eq!(first.steps, second.steps);
 
     let forced = preview_indexed(
@@ -254,8 +272,78 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
     )
     .unwrap();
     assert_eq!(forced.meta["scanIndex"]["reused"], 0);
-    assert_eq!(forced.meta["scanIndex"]["analyzed"], 1);
+    assert_eq!(forced.meta["scanIndex"]["analyzed"], 2);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 12);
+}
+
+#[test]
+fn cached_and_new_pdfs_keep_deterministic_review_order() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("system");
+    let review = fixture.path().join("review");
+    let mec_pdf = source.join("MEC/RFI-0001/document.pdf");
+    let prc_pdf = source.join("PRC/RFI-0002/document.pdf");
+    fs::create_dir_all(mec_pdf.parent().unwrap()).unwrap();
+    fs::create_dir_all(&review).unwrap();
+    write_rich_archive(&mec_pdf);
+    let detector = CountingDetector {
+        inner: FakeDetector {
+            pages: BTreeMap::from([
+                (0, detection(90, 18.0)),
+                (1, detection(0, 22.0)),
+                (2, detection(0, 15.0)),
+            ]),
+        },
+        calls: AtomicUsize::new(0),
+    };
+    let scan_index = ScanIndex::new(fixture.path().join("scan-index.sqlite3")).unwrap();
+    let params = PdfOrientationParams {
+        rfi_system_root: source,
+        review_root: review,
+    };
+    preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        false,
+    )
+    .unwrap();
+
+    fs::create_dir_all(prc_pdf.parent().unwrap()).unwrap();
+    write_rich_archive(&prc_pdf);
+    let mixed = preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        false,
+    )
+    .unwrap();
+    assert_eq!(mixed.meta["scanIndex"]["reused"], 1);
+    assert_eq!(mixed.meta["scanIndex"]["analyzed"], 1);
     assert_eq!(detector.calls.load(Ordering::SeqCst), 6);
+    let sources = mixed
+        .steps
+        .iter()
+        .filter(|step| step.kind == StepKind::PdfPageRotate)
+        .map(|step| step.src.as_deref().unwrap())
+        .collect::<Vec<_>>();
+    let expected = [
+        fs::canonicalize(mec_pdf)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+        fs::canonicalize(prc_pdf)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+    ];
+    assert_eq!(sources, expected);
 }
 
 #[test]

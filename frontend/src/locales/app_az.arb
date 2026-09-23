@@ -662,6 +662,7 @@
   "progress.phase.system_workbook_read": "RFI iş kitabları oxunur",
   "progress.phase.system_mapping": "İmzalar iş kitabı qeydləri ilə uyğunlaşdırılır",
   "progress.phase.orientation_discovery": "İstiqaməti yoxlanacaq PDF-lər tapılır",
+  "progress.phase.orientation_inspection": "PDF quruluşu və skan keşi yoxlanılır",
   "progress.phase.orientation_analysis": "PDF səhifə istiqamətləri təhlil edilir",
   "progress.phase.printer_check": "Printer hazırlığı yoxlanılır",
   "progress.phase.print_file_inspection": "Çap faylları və parametrləri yoxlanılır",

@@ -4,21 +4,23 @@ Updated: 2026-09-23
 
 ## Current release
 
-- Version: 1.9.10
+- Version: 1.9.11
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable `v1.9.9` tag after release
-- Objective: prevent large PRC orientation previews from losing their selected
-  path authority when scanning exceeds the grant lifetime.
+- Implementation commit: immutable `v1.9.11` tag after release
+- Objective: reduce full RFI System orientation Preview time without weakening
+  OCR decisions or parallelizing Apply.
 
 ## Current slice
 
-- Orientation preview now renews exact selected source/review grants after its
-  read-only scan and before caching the plan. Apply retains hash and identity
-  revalidation. A short-TTL regression reproduces expiry during preview.
-- Source gates passed: 23 Node tests, 54 React tests, frontend build,
-  version/docs/source/license audits, Rust formatting, warnings-denied Clippy,
-  367 serial Rust unit tests, integration tests, Cargo check, and the final
-  short-TTL regression rerun. Native Windows acceptance remains pending.
+- PDF structure inspection and cache lookup run in deterministic two-file
+  parallel batches; page OCR remains capped at four workers. Cached-page
+  progress is coalesced, and PDF inspection has a visible progress stage.
+- The focused orientation tests passed, including mixed cached/new files,
+  first-run, cache reuse, forced rescan, safe Apply, and Undo. Node, UI,
+  source/docs/version/license audits, frontend build, Rust formatting,
+  warnings-denied Clippy, 367 serial Rust unit tests, all runnable integration
+  tests, and Cargo check passed. Native Windows throughput and operator
+  acceptance remain unmeasured.
 
 ## Verified
 

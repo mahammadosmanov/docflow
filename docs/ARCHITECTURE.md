@@ -82,11 +82,14 @@ same token used by Plan revision. Missing support or exhausted bounds require
 manual PDF review and never expand or alter Apply authority.
 
 PDF orientation normalization is a separate Rust operation. Discovery is
-restricted to CIV/MEC/ELE/PRC directory trees. A bounded Rayon pool renders and
+restricted to CIV/MEC/ELE/PRC directory trees. Uncached PDF structure inspection
+and cached fingerprint lookups run in ordered two-file batches so large PDF
+memory use remains bounded. A separate bounded Rayon pool renders and
 classifies independent pages with a 250/350-DPI bundled-Tesseract OSD cascade.
 Only unresolved pages enter a four-direction English OCR comparison, whose
 minimum word count, average score, and winner margin fail closed; no filesystem
 mutation occurs in that phase. The immutable Plan contains exact rotations and hashes.
+Cached page replay coalesces progress events without skipping a cached decision.
 Apply stays single-threaded to preserve journal order, appends only page
 dictionary revisions in private storage, validates structural fidelity, and
 publishes review copies with capability-relative no-clobber writes.

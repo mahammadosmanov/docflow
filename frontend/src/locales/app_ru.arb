@@ -662,6 +662,7 @@
   "progress.phase.system_workbook_read": "Чтение книг RFI",
   "progress.phase.system_mapping": "Сопоставление подписей с записями книг",
   "progress.phase.orientation_discovery": "Поиск PDF для проверки ориентации",
+  "progress.phase.orientation_inspection": "Проверка структуры PDF и кеша сканирования",
   "progress.phase.orientation_analysis": "Анализ ориентации страниц PDF",
   "progress.phase.printer_check": "Проверка готовности принтера",
   "progress.phase.print_file_inspection": "Проверка файлов и параметров печати",

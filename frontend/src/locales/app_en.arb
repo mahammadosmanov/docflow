@@ -690,6 +690,7 @@
   "progress.phase.system_workbook_read": "Reading RFI workbooks",
   "progress.phase.system_mapping": "Matching signatures to workbook records",
   "progress.phase.orientation_discovery": "Finding PDFs for orientation checks",
+  "progress.phase.orientation_inspection": "Checking PDF structure and scan cache",
   "progress.phase.orientation_analysis": "Analysing PDF page orientation",
   "progress.phase.printer_check": "Checking printer readiness",
   "progress.phase.print_file_inspection": "Inspecting print files and settings",

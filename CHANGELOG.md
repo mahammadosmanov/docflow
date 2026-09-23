@@ -8,6 +8,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.11 - 2026-09-23
+
+### Improved
+
+- Large RFI orientation previews now inspect PDF structure and scan-cache
+  fingerprints in bounded two-file parallel batches before page OCR. A new
+  progress stage shows how many PDFs have been inspected.
+- Repeated previews emit fewer progress events while replaying cached pages.
+  Exact page decisions, source checks, scan checkpoints, Plan order, serial
+  Apply, and no-clobber review output remain unchanged.
+
 ## 1.9.10 - 2026-09-23
 
 ### Fixed

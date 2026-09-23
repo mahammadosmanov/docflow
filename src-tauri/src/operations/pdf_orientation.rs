@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -11,8 +12,8 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
-    parallel::{bounded_map, bounded_map_stream},
-    pdf::inspect,
+    parallel::{bounded_map, bounded_map_stream, worker_count},
+    pdf::{PdfError, PdfInspection, inspect},
     scan_index::{FileFingerprint, ScanIndex, ScanIndexStats},
 };
 
@@ -56,6 +57,14 @@ struct PdfWork {
     page_count: usize,
     source_hash: Option<String>,
     cached: bool,
+}
+
+struct PreparedPdf {
+    path: PathBuf,
+    relative: PathBuf,
+    fingerprint: FileFingerprint,
+    cached: Option<CachedPdfOrientation>,
+    inspection: Option<Result<PdfInspection, PdfError>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -164,133 +173,192 @@ where
     let mut initial_fingerprints = BTreeMap::<PathBuf, FileFingerprint>::new();
     let mut by_file =
         BTreeMap::<PathBuf, Vec<(PageTask, Result<OrientationDetection, String>)>>::new();
-    for path in pdfs {
+    let total_pdfs = pdfs.len() as u64;
+    let mut inspected_pdfs = 0_u64;
+    progress(ProgressEvent {
+        phase: "orientation_inspection".to_string(),
+        done: 0,
+        total: total_pdfs,
+        subject: String::new(),
+    });
+    let inspection_workers = worker_count(pdfs.len()).min(2);
+    let inspection_pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(inspection_workers)
+        .thread_name(|index| format!("docflow-pdf-inspection-{index}"))
+        .build()
+        .map_err(|error| {
+            BackendError::request_failed(format!("PDF inspection workers could not start: {error}"))
+        })?;
+    // Keep at most two large parsed PDFs in flight; page OCR uses its own pool.
+    for batch in pdfs.chunks(2) {
         if cancelled() {
             return Err(BackendError::cancelled());
         }
-        let relative = path
-            .strip_prefix(&source_root)
-            .map_err(|_| BackendError::path_invalid("PDF escaped the selected RFI root"))?
-            .to_path_buf();
-        let fingerprint = FileFingerprint::read(&path).map_err(|error| {
-            BackendError::path_invalid(format!("orientation fingerprint failed: {error}"))
-        })?;
-        let cached = if force_rescan {
-            None
-        } else {
-            run.as_ref()
-                .map(|run| run.lookup::<CachedPdfOrientation>(&relative, &fingerprint))
-                .transpose()
-                .map_err(|error| {
-                    BackendError::request_failed(format!("scan index read failed: {error}"))
-                })?
-                .flatten()
-        };
-        if let Some(cached) = cached {
-            stats.reused += 1;
-            if let Some(reason) = cached.unsupported {
-                plan.warnings.push(warning(
-                    "warn.rfi.orientationUnsupported",
-                    &format!("{} — {reason}", relative.display()),
-                ));
-                continue;
-            }
-            if cached.page_count == 0 || cached.pages.len() != cached.page_count {
-                return Err(BackendError::request_failed(
-                    "cached orientation result is structurally invalid",
-                ));
-            }
-            let mut cached_results = Vec::with_capacity(cached.page_count);
-            for (page_index, page) in cached.pages.into_iter().enumerate() {
-                let result = match (page.detection, page.error) {
-                    (Some(detection), None) => Ok(detection),
-                    (None, Some(error)) => Err(error),
-                    _ => {
-                        return Err(BackendError::request_failed(
-                            "cached orientation page is structurally invalid",
-                        ));
-                    }
-                };
-                cached_results.push((
-                    PageTask {
+        let prepared = inspection_pool.install(|| {
+            batch
+                .par_iter()
+                .map(|path| {
+                    let relative = path
+                        .strip_prefix(&source_root)
+                        .map_err(|_| {
+                            BackendError::path_invalid("PDF escaped the selected RFI root")
+                        })?
+                        .to_path_buf();
+                    let fingerprint = FileFingerprint::read(path).map_err(|error| {
+                        BackendError::path_invalid(format!(
+                            "orientation fingerprint failed: {error}"
+                        ))
+                    })?;
+                    let cached = if force_rescan {
+                        None
+                    } else {
+                        run.as_ref()
+                            .map(|run| run.lookup::<CachedPdfOrientation>(&relative, &fingerprint))
+                            .transpose()
+                            .map_err(|error| {
+                                BackendError::request_failed(format!(
+                                    "scan index read failed: {error}"
+                                ))
+                            })?
+                            .flatten()
+                    };
+                    let inspection = cached.is_none().then(|| inspect(path));
+                    Ok::<_, BackendError>(PreparedPdf {
                         path: path.clone(),
-                        page_index,
-                        current_rotation: normalize_rotation(page.current_rotation)?,
-                    },
-                    result,
-                ));
+                        relative,
+                        fingerprint,
+                        cached,
+                        inspection,
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+        for prepared in prepared {
+            if cancelled() {
+                return Err(BackendError::cancelled());
             }
-            by_file.insert(path.clone(), cached_results);
-            work.push(PdfWork {
+            let PreparedPdf {
                 path,
                 relative,
-                page_count: cached.page_count,
-                source_hash: cached.source_sha256,
-                cached: true,
+                fingerprint,
+                cached,
+                inspection,
+            } = prepared?;
+            inspected_pdfs += 1;
+            progress(ProgressEvent {
+                phase: "orientation_inspection".to_string(),
+                done: inspected_pdfs,
+                total: total_pdfs,
+                subject: relative.to_string_lossy().into_owned(),
             });
-            continue;
-        }
-        match inspect(&path) {
-            Ok(facts) if facts.encrypted => record_unsupported(
-                run.as_ref(),
-                &relative,
-                &fingerprint,
-                "encrypted PDF",
-                &mut stats,
-                &mut plan,
-            )?,
-            Ok(facts) if facts.signed => record_unsupported(
-                run.as_ref(),
-                &relative,
-                &fingerprint,
-                "digitally signed PDF",
-                &mut stats,
-                &mut plan,
-            )?,
-            Ok(facts) if facts.page_count == 0 => record_unsupported(
-                run.as_ref(),
-                &relative,
-                &fingerprint,
-                "PDF has no pages",
-                &mut stats,
-                &mut plan,
-            )?,
-            Ok(facts) => {
-                if tasks.len().saturating_add(facts.page_count) > MAX_PAGES {
-                    return Err(BackendError::validation(format!(
-                        "orientation scan exceeds the {MAX_PAGES}-page limit"
-                    )));
+            if let Some(cached) = cached {
+                stats.reused += 1;
+                if let Some(reason) = cached.unsupported {
+                    plan.warnings.push(warning(
+                        "warn.rfi.orientationUnsupported",
+                        &format!("{} — {reason}", relative.display()),
+                    ));
+                    continue;
                 }
-                for (page_index, page) in facts.pages.iter().enumerate() {
-                    tasks.push(PageTask {
-                        path: path.clone(),
-                        page_index,
-                        current_rotation: normalize_rotation(page.rotation)?,
-                    });
+                if cached.page_count == 0 || cached.pages.len() != cached.page_count {
+                    return Err(BackendError::request_failed(
+                        "cached orientation result is structurally invalid",
+                    ));
                 }
-                initial_fingerprints.insert(path.clone(), fingerprint);
+                let mut cached_results = Vec::with_capacity(cached.page_count);
+                for (page_index, page) in cached.pages.into_iter().enumerate() {
+                    let result = match (page.detection, page.error) {
+                        (Some(detection), None) => Ok(detection),
+                        (None, Some(error)) => Err(error),
+                        _ => {
+                            return Err(BackendError::request_failed(
+                                "cached orientation page is structurally invalid",
+                            ));
+                        }
+                    };
+                    cached_results.push((
+                        PageTask {
+                            path: path.clone(),
+                            page_index,
+                            current_rotation: normalize_rotation(page.current_rotation)?,
+                        },
+                        result,
+                    ));
+                }
+                by_file.insert(path.clone(), cached_results);
                 work.push(PdfWork {
                     path,
                     relative,
-                    page_count: facts.page_count,
-                    source_hash: None,
-                    cached: false,
+                    page_count: cached.page_count,
+                    source_hash: cached.source_sha256,
+                    cached: true,
                 });
+                continue;
             }
-            Err(error) => {
-                if let Some(run) = &run {
-                    run.record_failure(&relative, &error.to_string())
-                        .map_err(|failure| {
-                            BackendError::request_failed(format!(
-                                "scan checkpoint failed: {failure}"
-                            ))
-                        })?;
+            match inspection.ok_or_else(|| {
+                BackendError::request_failed("uncached PDF has no inspection result")
+            })? {
+                Ok(facts) if facts.encrypted => record_unsupported(
+                    run.as_ref(),
+                    &relative,
+                    &fingerprint,
+                    "encrypted PDF",
+                    &mut stats,
+                    &mut plan,
+                )?,
+                Ok(facts) if facts.signed => record_unsupported(
+                    run.as_ref(),
+                    &relative,
+                    &fingerprint,
+                    "digitally signed PDF",
+                    &mut stats,
+                    &mut plan,
+                )?,
+                Ok(facts) if facts.page_count == 0 => record_unsupported(
+                    run.as_ref(),
+                    &relative,
+                    &fingerprint,
+                    "PDF has no pages",
+                    &mut stats,
+                    &mut plan,
+                )?,
+                Ok(facts) => {
+                    if tasks.len().saturating_add(facts.page_count) > MAX_PAGES {
+                        return Err(BackendError::validation(format!(
+                            "orientation scan exceeds the {MAX_PAGES}-page limit"
+                        )));
+                    }
+                    for (page_index, page) in facts.pages.iter().enumerate() {
+                        tasks.push(PageTask {
+                            path: path.clone(),
+                            page_index,
+                            current_rotation: normalize_rotation(page.rotation)?,
+                        });
+                    }
+                    initial_fingerprints.insert(path.clone(), fingerprint);
+                    work.push(PdfWork {
+                        path,
+                        relative,
+                        page_count: facts.page_count,
+                        source_hash: None,
+                        cached: false,
+                    });
                 }
-                stats.failed += 1;
-                plan.warnings.push(warning(
-                    "warn.rfi.orientationUnsupported",
-                    &format!("{} — {error}", relative.display()),
-                ));
+                Err(error) => {
+                    if let Some(run) = &run {
+                        run.record_failure(&relative, &error.to_string())
+                            .map_err(|failure| {
+                                BackendError::request_failed(format!(
+                                    "scan checkpoint failed: {failure}"
+                                ))
+                            })?;
+                    }
+                    stats.failed += 1;
+                    plan.warnings.push(warning(
+                        "warn.rfi.orientationUnsupported",
+                        &format!("{} — {error}", relative.display()),
+                    ));
+                }
             }
         }
     }
@@ -298,12 +366,15 @@ where
     let cached_pages = by_file.values().map(Vec::len).sum::<usize>();
     let total_pages = cached_pages.saturating_add(tasks.len()) as u64;
     for (index, (task, _)) in by_file.values().flatten().enumerate() {
-        progress(ProgressEvent {
-            phase: "orientation_analysis".to_string(),
-            done: (index + 1) as u64,
-            total: total_pages,
-            subject: format!("{} · {}", task.path.display(), task.page_index + 1),
-        });
+        let done = index + 1;
+        if done == 1 || done.is_multiple_of(128) || done == cached_pages {
+            progress(ProgressEvent {
+                phase: "orientation_analysis".to_string(),
+                done: done as u64,
+                total: total_pages,
+                subject: format!("{} · {}", task.path.display(), task.page_index + 1),
+            });
+        }
     }
     let mut completed_pages = cached_pages as u64;
     let task_rotations = tasks
@@ -553,7 +624,11 @@ where
     plan.meta.extend(JsonObject::from_iter([
         (
             "workerCount".to_string(),
-            Value::from(worker_count.max(discovery_workers) as u64),
+            Value::from(worker_count.max(discovery_workers).max(inspection_workers) as u64),
+        ),
+        (
+            "inspectionWorkers".to_string(),
+            Value::from(inspection_workers as u64),
         ),
         ("verifiedPages".to_string(), Value::from(verified_pages)),
         ("rotatedPages".to_string(), Value::from(rotated_pages)),

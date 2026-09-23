@@ -56,6 +56,9 @@
 - Long orientation scans may exceed the 30-minute path-grant TTL. Authorize the
   exact selected roots before scanning, then bind the cached Plan to fresh
   exact-root grants after scanning; do not extend authority to another path.
+- Orientation preflight may inspect two independent PDFs at once, but its
+  results must merge in path order and each chunk must bound parsed-PDF memory.
+  Page OCR uses the separate bounded worker pool; Apply remains serial.
 - The owner granted standing authorization to back up every completed DocFlow
   slice to the canonical private GitHub repository. After applicable checks,
   commit and push the source, create the immutable version tag and GitHub
