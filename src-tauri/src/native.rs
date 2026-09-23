@@ -1574,6 +1574,31 @@ impl NativeBackend {
             uuid::Uuid::new_v4().to_string(),
             &request.op_id,
         );
+        let _source_grant = self.filesystem.issue_grant(
+            &scope,
+            &request.values.rfi_system_root,
+            GrantAccess::Read,
+        )?;
+        let _review_grant = self.filesystem.issue_grant(
+            &scope,
+            &request.values.review_root,
+            GrantAccess::ReadWrite,
+        )?;
+        let plan = preview_pdf_orientation(
+            &PdfOrientationParams {
+                rfi_system_root: request.values.rfi_system_root.clone(),
+                review_root: request.values.review_root.clone(),
+            },
+            &NativeOcr::discover(),
+            progress,
+            || false,
+            Some(&self.scan_index),
+            &caller.owner_id,
+            request.values.force_rescan,
+        )?;
+        // Large RFI trees can take longer than the grant TTL to inspect. Bind the
+        // finished plan to fresh grants for the exact same selected roots; Apply
+        // still revalidates the approved plan and filesystem identities.
         let source_grant = self.filesystem.issue_grant(
             &scope,
             &request.values.rfi_system_root,
@@ -1583,18 +1608,6 @@ impl NativeBackend {
             &scope,
             &request.values.review_root,
             GrantAccess::ReadWrite,
-        )?;
-        let plan = preview_pdf_orientation(
-            &PdfOrientationParams {
-                rfi_system_root: request.values.rfi_system_root,
-                review_root: request.values.review_root,
-            },
-            &NativeOcr::discover(),
-            progress,
-            || false,
-            Some(&self.scan_index),
-            &caller.owner_id,
-            request.values.force_rescan,
         )?;
         encode(self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -2809,6 +2822,58 @@ mod tests {
             .chain(auth_responses("owner"))
             .collect();
         test_backend_with_responses(temporary, responses)
+    }
+
+    #[test]
+    fn orientation_preview_survives_grant_expiry_during_large_scan() {
+        let temporary = tempfile::tempdir().unwrap();
+        let mut backend = test_backend(&temporary);
+        backend.filesystem = FilesystemAuthority::new(
+            temporary.path().join("short-grant-journal"),
+            Duration::from_millis(100),
+        );
+        let source = temporary.path().join("RFI System");
+        let review = temporary.path().join("Review");
+        std::fs::create_dir_all(source.join("PRC")).unwrap();
+        std::fs::create_dir_all(&review).unwrap();
+        let caller = backend.caller_identity().unwrap();
+        let selected_source = backend
+            .selections
+            .issue(
+                &caller,
+                "rfi.normalize_pdf_orientation",
+                "rfi_system_root",
+                &source,
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let selected_review = backend
+            .selections
+            .issue(
+                &caller,
+                "rfi.normalize_pdf_orientation",
+                "review_root",
+                &review,
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let mut delayed = false;
+        let result = backend.preview_pdf_orientation(
+            json!({
+                "opId": "rfi.normalize_pdf_orientation",
+                "values": {
+                    "rfi_system_root": selected_source,
+                    "review_root": selected_review
+                }
+            }),
+            |_| {
+                if !delayed {
+                    std::thread::sleep(Duration::from_millis(200));
+                    delayed = true;
+                }
+            },
+        );
+        assert!(result.is_ok(), "{result:?}");
     }
 
     fn test_backend_with_responses(

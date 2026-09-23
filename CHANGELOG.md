@@ -8,6 +8,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.10 - 2026-09-23
+
+### Fixed
+
+- Long PDF orientation previews, including large PRC trees, no longer fail at
+  the end with `path_grant_not_found_or_expired` when scanning exceeds the
+  30-minute path-grant lifetime. The completed plan is bound to fresh grants
+  for the same selected source and review folders; Apply still revalidates it.
+
 ## 1.9.9 - 2026-09-23
 
 ### Fixed

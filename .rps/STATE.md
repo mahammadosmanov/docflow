@@ -4,11 +4,21 @@ Updated: 2026-09-23
 
 ## Current release
 
-- Version: 1.9.9
+- Version: 1.9.10
 - Branch: `review/rust-tauri-migration`
 - Implementation commit: immutable `v1.9.9` tag after release
-- Objective: classify more sparse PDF pages without silently rotating an
-  uncertain page or publishing a partial correction.
+- Objective: prevent large PRC orientation previews from losing their selected
+  path authority when scanning exceeds the grant lifetime.
+
+## Current slice
+
+- Orientation preview now renews exact selected source/review grants after its
+  read-only scan and before caching the plan. Apply retains hash and identity
+  revalidation. A short-TTL regression reproduces expiry during preview.
+- Source gates passed: 23 Node tests, 54 React tests, frontend build,
+  version/docs/source/license audits, Rust formatting, warnings-denied Clippy,
+  367 serial Rust unit tests, integration tests, Cargo check, and the final
+  short-TTL regression rerun. Native Windows acceptance remains pending.
 
 ## Verified
 
