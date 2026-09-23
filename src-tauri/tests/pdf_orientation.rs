@@ -12,6 +12,7 @@ use std::{
 use docflow_lib::{
     contracts::{Plan, StepKind},
     fs_ops::{FilesystemAuthority, file_sha256},
+    ocr::NativeOcr,
     operations::pdf_orientation::{
         OPERATION_ID, OrientationDetection, OrientationDetector, PdfOrientationParams, preview,
         preview_indexed,
@@ -54,6 +55,71 @@ impl OrientationDetector for FakeDetector {
     fn diagnostics(&self) -> String {
         "fake orientation detector".to_string()
     }
+}
+
+#[test]
+#[ignore = "requires an operator-supplied PDF and page numbers"]
+fn operator_orientation_pages_match_visual_review() {
+    let path = std::env::var_os("DOCFLOW_OPERATOR_ORIENTATION_PDF")
+        .map(std::path::PathBuf::from)
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_PDF is required");
+    let pages = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_PAGES")
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_PAGES is required");
+    let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
+        .map(NativeOcr::with_tesseract)
+        .unwrap_or_else(NativeOcr::discover);
+    for entry in pages.split(',') {
+        let (page, expected) = entry.split_once(':').expect("page:rotation");
+        let page_number = page.parse::<usize>().expect("page number");
+        let detected = ocr.detect_page(&path, page_number - 1);
+        if expected == "review" {
+            assert!(detected.is_err(), "page {page_number} must stay in Review");
+        } else {
+            let expected = expected.parse::<i64>().expect("expected rotation");
+            let detected = detected.unwrap_or_else(|error| panic!("page {page_number}: {error}"));
+            assert_eq!(detected.rotate_clockwise, expected, "page {page_number}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an operator-supplied RFI tree and matching fragment"]
+fn operator_orientation_directory_preview_reaches_expected_pdf() {
+    let root = std::env::var_os("DOCFLOW_OPERATOR_ORIENTATION_ROOT")
+        .map(std::path::PathBuf::from)
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_ROOT is required");
+    let fragment = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT")
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT is required");
+    let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
+        .map(NativeOcr::with_tesseract)
+        .unwrap_or_else(NativeOcr::discover);
+    let review = tempfile::tempdir().unwrap();
+    let plan = preview(
+        &PdfOrientationParams {
+            rfi_system_root: root,
+            review_root: review.path().to_path_buf(),
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let warnings = plan
+        .warnings
+        .iter()
+        .filter(|warning| warning.subject.contains(&fragment))
+        .collect::<Vec<_>>();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(
+        plan.steps.iter().any(|step| {
+            step.kind == StepKind::PdfPageRotate
+                && step
+                    .src
+                    .as_deref()
+                    .is_some_and(|path| path.contains(&fragment))
+        }),
+        "expected a review copy plan for {fragment}"
+    );
 }
 
 fn detection(rotate_clockwise: i64, confidence: f64) -> OrientationDetection {

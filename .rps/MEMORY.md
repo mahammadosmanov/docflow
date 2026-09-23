@@ -47,10 +47,12 @@
   separate Outlook preview; never recalculate identifiers, invent recipients or
   message prose, or add send authority.
 - PDF orientation uses 250/350-DPI OSD consensus, then a conservative
-  four-direction English OCR score only for unresolved pages. The fallback must
-  keep minimum word, average-confidence, winner-ratio, and margin gates; sparse
-  drawings or close 0/180-degree results remain manual review. Every detector
-  change requires a new scan-index profile.
+  four-direction English OCR score only for unresolved pages. If the 250-DPI
+  score remains uncertain, a 350-DPI pass may decide with the same strict gates
+  or with matching OSD and OCR evidence at both resolutions plus separate
+  minimum word, average-confidence, winner-ratio, and margin gates. Sparse
+  drawings or conflicting results remain manual review. Every detector change
+  requires a new scan-index profile.
 - The owner granted standing authorization to back up every completed DocFlow
   slice to the canonical private GitHub repository. After applicable checks,
   commit and push the source, create the immutable version tag and GitHub

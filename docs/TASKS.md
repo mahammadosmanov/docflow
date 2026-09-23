@@ -72,6 +72,15 @@ DOCFLOW_OPERATOR_TESSERACT=<tesseract> cargo run \
   --example ocr_corpus_audit -- <RFI-System> 0 <outside-corpus-report.json> 4
 ```
 
+For orientation issues, visually inspect the affected pages first. The
+read-only operator test accepts `DOCFLOW_OPERATOR_ORIENTATION_PDF`,
+`DOCFLOW_OPERATOR_ORIENTATION_PAGES` as comma-separated `page:clockwiseDegrees`
+or `page:review`, and optional `DOCFLOW_OPERATOR_TESSERACT`. The separate
+directory Preview regression accepts `DOCFLOW_OPERATOR_ORIENTATION_ROOT` and
+`DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT`; it requires a planned
+rotation for the named PDF and no warning for that PDF. Keep source PDFs out
+of Git and use a separate temporary review root.
+
 ## Adding a document operation
 
 1. Add and register the Rust operation under `src-tauri/src/operations/`.

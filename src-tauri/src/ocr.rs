@@ -376,11 +376,44 @@ impl OrientationDetector for NativeOcr {
             return Ok(detection);
         }
 
-        detect_orientation_by_direction_scores(tesseract, &primary, temporary.path(), tessdata)?
-            .ok_or_else(|| {
-                "orientation remained uncertain after multi-resolution OSD and four-direction OCR"
-                    .to_string()
+        let (first, first_scores) = detect_orientation_by_direction_scores(
+            tesseract,
+            &primary,
+            temporary.path(),
+            tessdata,
+            PRIMARY_DPI,
+        )?;
+        if let Some(detection) = first {
+            return Ok(detection);
+        }
+        if !secondary.is_file() {
+            render_page_png(path, &secondary, SECONDARY_DPI, page_index)?;
+        }
+        let (second, second_scores) = detect_orientation_by_direction_scores(
+            tesseract,
+            &secondary,
+            temporary.path(),
+            tessdata,
+            SECONDARY_DPI,
+        )?;
+        second
+            .or_else(|| {
+                select_correlated_direction_score(
+                    &first_scores,
+                    &second_scores,
+                    primary_detection.as_ref(),
+                    secondary_detection.as_ref(),
+                )
             })
+            .ok_or_else(|| {
+            format!(
+                "orientation uncertain after 250/350-DPI OSD and four-direction OCR; OSD 250dpi {}, 350dpi {}; OCR 250dpi [{}], 350dpi [{}]",
+                osd_summary(primary_detection.as_ref()),
+                osd_summary(secondary_detection.as_ref()),
+                direction_summary(&first_scores),
+                direction_summary(&second_scores),
+            )
+        })
     }
 
     fn diagnostics(&self) -> String {
@@ -560,7 +593,7 @@ impl DirectionScore {
     }
 }
 
-fn select_direction_score(scores: &[DirectionScore]) -> Option<OrientationDetection> {
+fn select_direction_score(scores: &[DirectionScore], dpi: i32) -> Option<OrientationDetection> {
     const MIN_WORDS: usize = 20;
     const MIN_AVERAGE_CONFIDENCE: f64 = 55.0;
     const MIN_SUM_RATIO: f64 = 1.45;
@@ -590,7 +623,7 @@ fn select_direction_score(scores: &[DirectionScore]) -> Option<OrientationDetect
     Some(OrientationDetection {
         rotate_clockwise: winner.rotate_clockwise,
         confidence,
-        method: "tesseract-eng-direction-score:250dpi".to_string(),
+        method: format!("tesseract-eng-direction-score:{dpi}dpi"),
     })
 }
 
@@ -599,15 +632,17 @@ fn detect_orientation_by_direction_scores(
     image: &Path,
     temporary: &Path,
     tessdata: &Path,
-) -> Result<Option<OrientationDetection>, String> {
+    dpi: i32,
+) -> Result<(Option<OrientationDetection>, Vec<DirectionScore>), String> {
     if !bundled_regular_file(&tessdata.join("eng.traineddata")) {
         return Err("Tesseract English data is unavailable for orientation fallback".to_string());
     }
-    let image = resize_gray_to_fit(&read_png_gray(image)?, 2_600, 2_600)?;
+    let max_side = if dpi >= 350 { 3_500 } else { 2_600 };
+    let image = resize_gray_to_fit(&read_png_gray(image)?, max_side, max_side)?;
     let mut scores = Vec::with_capacity(4);
     for rotate_clockwise in [0, 90, 180, 270] {
         let rotated = rotate_gray_clockwise(&image, rotate_clockwise)?;
-        let path = temporary.join(format!("direction-{rotate_clockwise}.pgm"));
+        let path = temporary.join(format!("direction-{dpi}-{rotate_clockwise}.pgm"));
         write_pgm(&path, &rotated)?;
         scores.push(run_direction_tesseract(
             executable,
@@ -615,9 +650,68 @@ fn detect_orientation_by_direction_scores(
             temporary,
             tessdata,
             rotate_clockwise,
+            dpi,
         )?);
     }
-    Ok(select_direction_score(&scores))
+    Ok((select_direction_score(&scores, dpi), scores))
+}
+
+fn direction_summary(scores: &[DirectionScore]) -> String {
+    let mut ranked = scores.iter().collect::<Vec<_>>();
+    ranked.sort_by(|left, right| right.confidence_sum.total_cmp(&left.confidence_sum));
+    ranked
+        .into_iter()
+        .take(2)
+        .map(|score| {
+            format!(
+                "{}°:{}w/{:.0}",
+                score.rotate_clockwise, score.word_count, score.confidence_sum
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn osd_summary(detection: Option<&OrientationDetection>) -> String {
+    detection.map_or_else(
+        || "unavailable".to_string(),
+        |value| format!("{}°/{:.1}", value.rotate_clockwise, value.confidence),
+    )
+}
+
+fn select_correlated_direction_score(
+    primary: &[DirectionScore],
+    secondary: &[DirectionScore],
+    primary_osd: Option<&OrientationDetection>,
+    secondary_osd: Option<&OrientationDetection>,
+) -> Option<OrientationDetection> {
+    let first_osd = primary_osd?;
+    let second_osd = secondary_osd?;
+    if first_osd.rotate_clockwise != second_osd.rotate_clockwise
+        || first_osd.confidence < 0.5
+        || second_osd.confidence < 0.5
+    {
+        return None;
+    }
+    for scores in [primary, secondary] {
+        let mut ranked = scores.iter().collect::<Vec<_>>();
+        ranked.sort_by(|left, right| right.confidence_sum.total_cmp(&left.confidence_sum));
+        let winner = *ranked.first()?;
+        let runner = *ranked.get(1)?;
+        if winner.rotate_clockwise != first_osd.rotate_clockwise
+            || winner.word_count < 20
+            || winner.average_confidence() < 45.0
+            || winner.confidence_sum / runner.confidence_sum.max(1.0) < 1.04
+            || winner.average_confidence() - runner.average_confidence() < 5.0
+        {
+            return None;
+        }
+    }
+    Some(OrientationDetection {
+        rotate_clockwise: first_osd.rotate_clockwise,
+        confidence: 10.0,
+        method: "tesseract-osd-ocr-consensus:250+350dpi".to_string(),
+    })
 }
 
 fn rotate_gray_clockwise(image: &GrayImage, degrees: i64) -> Result<GrayImage, String> {
@@ -652,10 +746,11 @@ fn run_direction_tesseract(
     temporary: &Path,
     tessdata: &Path,
     rotate_clockwise: i64,
+    dpi: i32,
 ) -> Result<DirectionScore, String> {
     const MAX_OUTPUT_BYTES: u64 = 8 * 1024 * 1024;
-    let output_path = temporary.join(format!("direction-{rotate_clockwise}.tsv"));
-    let error_path = temporary.join(format!("direction-{rotate_clockwise}.stderr.txt"));
+    let output_path = temporary.join(format!("direction-{dpi}-{rotate_clockwise}.tsv"));
+    let error_path = temporary.join(format!("direction-{dpi}-{rotate_clockwise}.stderr.txt"));
     let output = fs::File::create(&output_path)
         .map_err(|error| format!("orientation fallback output create: {error}"))?;
     let error = fs::File::create(&error_path)
@@ -1276,7 +1371,7 @@ mod orientation_tests {
             DirectionScore::new(180, 207, 10_069.5),
             DirectionScore::new(270, 106, 5_492.2),
         ];
-        let selected = select_direction_score(&scores).expect("clear 90 degree winner");
+        let selected = select_direction_score(&scores, 250).expect("clear 90 degree winner");
         assert_eq!(selected.rotate_clockwise, 90);
         assert!(selected.confidence >= 10.0);
         assert!(selected.confidence <= 100.0);
@@ -1290,7 +1385,7 @@ mod orientation_tests {
             DirectionScore::new(180, 23, 1_146.9),
             DirectionScore::new(270, 4, 182.6),
         ];
-        assert!(select_direction_score(&sparse).is_none());
+        assert!(select_direction_score(&sparse, 250).is_none());
 
         let near_tie = [
             DirectionScore::new(0, 219, 10_429.9),
@@ -1298,7 +1393,78 @@ mod orientation_tests {
             DirectionScore::new(180, 206, 10_181.0),
             DirectionScore::new(270, 13, 678.7),
         ];
-        assert!(select_direction_score(&near_tie).is_none());
+        assert!(select_direction_score(&near_tie, 250).is_none());
+    }
+
+    #[test]
+    fn weak_cover_needs_matching_osd_and_ocr_at_both_resolutions() {
+        let primary = [
+            DirectionScore::new(0, 21, 1_287.0),
+            DirectionScore::new(90, 20, 1_029.0),
+            DirectionScore::new(180, 13, 600.0),
+            DirectionScore::new(270, 12, 550.0),
+        ];
+        let secondary = [
+            DirectionScore::new(0, 52, 2_586.0),
+            DirectionScore::new(90, 20, 900.0),
+            DirectionScore::new(180, 56, 2_377.0),
+            DirectionScore::new(270, 19, 800.0),
+        ];
+        let osd = OrientationDetection {
+            rotate_clockwise: 0,
+            confidence: 1.8,
+            method: "osd".to_string(),
+        };
+        assert!(select_direction_score(&secondary, 350).is_none());
+        assert_eq!(
+            select_correlated_direction_score(&primary, &secondary, Some(&osd), Some(&osd))
+                .unwrap()
+                .rotate_clockwise,
+            0
+        );
+        let conflicting_osd = OrientationDetection {
+            rotate_clockwise: 180,
+            ..osd.clone()
+        };
+        assert!(
+            select_correlated_direction_score(
+                &primary,
+                &secondary,
+                Some(&osd),
+                Some(&conflicting_osd)
+            )
+            .is_none()
+        );
+        let conflicting_ocr = [
+            secondary[0].clone(),
+            secondary[1].clone(),
+            DirectionScore::new(180, 80, 5_000.0),
+            secondary[3].clone(),
+        ];
+        assert!(
+            select_correlated_direction_score(&primary, &conflicting_ocr, Some(&osd), Some(&osd))
+                .is_none()
+        );
+        let sparse = [
+            DirectionScore::new(0, 10, 600.0),
+            DirectionScore::new(90, 3, 90.0),
+            DirectionScore::new(180, 4, 160.0),
+            DirectionScore::new(270, 3, 100.0),
+        ];
+        assert!(
+            select_correlated_direction_score(&sparse, &secondary, Some(&osd), Some(&osd))
+                .is_none()
+        );
+        let near_tie = [
+            DirectionScore::new(0, 52, 2_400.0),
+            secondary[1].clone(),
+            DirectionScore::new(180, 56, 2_350.0),
+            secondary[3].clone(),
+        ];
+        assert!(
+            select_correlated_direction_score(&primary, &near_tie, Some(&osd), Some(&osd))
+                .is_none()
+        );
     }
 
     #[test]

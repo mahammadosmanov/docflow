@@ -4,6 +4,31 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.9.9 - 2026-09-23
+
+The four reported ELE PDF pages were rendered and visually inspected from the
+consented read-only Ventoy RFI System. Each is already upright. A separate
+page in the affected ELE RFI PDF is visibly sideways and needs a 90-degree
+rotation. The opt-in operator test passed those page expectations on macOS.
+Synthetic rotated copies of a sparse cover classified 90- and 180-degree
+corrections correctly; an unresolved 270-degree variant stayed in Review.
+These checks validate this host's PDF renderer and Tesseract, not the user's
+Windows renderer or installed OCR package.
+
+The detector now retries unresolved 250-DPI pages with 350-DPI four-direction
+OCR. Weak decisions need agreeing OSD and OCR at both resolutions plus bounded
+word, average-confidence, score-ratio, and margin evidence. A changed scan
+profile forces the affected pages to be re-analysed. Files with any remaining
+uncertain page still receive no partial correction and no source mutation.
+
+Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 366 serial unit
+tests, and the integration suite passed. Seven operator-file tests remain
+intentionally ignored in the ordinary suite. All 23 Node and 54 React tests,
+frontend build, source/version/documentation audits, and dependency-license
+checks passed. A full ELE directory Preview finished in 177.48 seconds and
+planned a corrected copy of the affected ELE RFI PDF without a warning for that
+PDF. The exact-commit Windows package run remains a separate gate.
+
 ## 1.9.8 - 2026-09-22
 
 The consented Ventoy RFI System was inspected read-only. The recursive audit

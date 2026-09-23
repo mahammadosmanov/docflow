@@ -8,6 +8,23 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.9 - 2026-09-23
+
+### Fixed
+
+- Sparse covers and scanned forms now receive a second four-direction OCR pass
+  at 350 DPI when the 250-DPI result remains uncertain. Weak results are
+  accepted only when both OSD resolutions and both OCR passes agree and meet
+  minimum word, confidence, margin, and ratio gates.
+- Remaining orientation warnings include compact OSD and OCR evidence for the
+  affected page, so manual review can identify why a PDF was withheld.
+
+### Safety
+
+- The orientation scan profile changed, invalidating old cached decisions.
+  Ambiguous pages still prevent a partial corrected PDF; the source RFI System
+  remains untouched.
+
 ## 1.9.8 - 2026-09-22
 
 ### Fixed

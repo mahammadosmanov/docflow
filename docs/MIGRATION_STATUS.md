@@ -4,6 +4,12 @@ Updated by verified implementation runs. A slice checkbox records source/local v
 current worktree; external Windows-host, Office, printer, signing, notarization, and live-service
 certification remain separate unchecked gates and are never implied by a source slice.
 
+- [x] Version 1.9.9: guarded second-resolution PDF orientation analysis
+  - uncertain 250-DPI pages receive a 350-DPI four-direction OCR pass; weak
+    decisions need OSD and OCR agreement at both resolutions
+  - the orientation cache profile changes; unresolved pages identify evidence
+    and keep the whole PDF in manual review
+
 - [x] Version 1.9.8: corpus-calibrated sparse-text OCR fallback
   - the shared identity engine adds raw-grayscale PSM 11 evidence only when the
     adaptive cascade cannot decide, without relaxing exact consensus or conflict vetoes

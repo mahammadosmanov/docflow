@@ -1,16 +1,34 @@
 # DocFlow project state
 
-Updated: 2026-09-22
+Updated: 2026-09-23
 
 ## Current release
 
-- Version: 1.9.8
+- Version: 1.9.9
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: pending v1.9.8 OCR calibration checkpoint
-- Objective: keep heuristic, platform, and external evidence inside their
-  proven boundaries and route uncertainty to Review.
+- Implementation commit: immutable `v1.9.9` tag after release
+- Objective: classify more sparse PDF pages without silently rotating an
+  uncertain page or publishing a partial correction.
 
 ## Verified
+
+- The ELE operator pages that produced Windows uncertainty were inspected
+  visually and passed read-only macOS orientation checks, including a visibly
+  sideways page that correctly needs a 90-degree rotation. Synthetic cover
+  rotations at 90 and 180 degrees were classified correctly; the 270-degree
+  case remained Review rather than receiving a false automatic decision.
+- The orientation detector now performs a second four-direction OCR pass at
+  350 DPI only after 250 DPI remains uncertain. A weak decision requires
+  agreeing OSD and OCR at both resolutions plus word, average, ratio, and
+  margin gates. The scan cache profile is now v3, so prior orientation results
+  are not reused. Native Windows operator acceptance remains pending.
+- The full ELE directory Preview finished in 177.48 seconds using only the
+  read-only source and a temporary review root. The affected ELE RFI PDF now
+  produces an orientation correction Plan without a warning for that PDF.
+- Source gates for 1.9.9: 23 Node and 54 React tests, frontend build,
+  source/docs/version audits, license audit, Rust 1.97.1 formatting,
+  warnings-denied Clippy, 366 serial unit tests, integration tests, and Cargo
+  check passed. Native Windows operator acceptance remains pending.
 
 - A consented read-only audit covered 1,861 exact RFI cover references. The
   shared raw-grayscale sparse-text fallback raised deterministic sample
