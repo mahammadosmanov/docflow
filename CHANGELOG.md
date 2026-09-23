@@ -8,6 +8,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.12 - 2026-09-23
+
+### Fixed
+
+- The orientation parallelism regression test now respects the runtime's
+  available CPU count. Windows CI runners with only two available CPUs
+  correctly reserve one and use one PDF-inspection worker; capable machines
+  still use two. This corrects the 1.9.11 Windows test gate without changing
+  orientation decisions or production worker limits.
+
 ## 1.9.11 - 2026-09-23
 
 ### Improved

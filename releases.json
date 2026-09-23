@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.9.11",
+  "currentVersion": "1.9.12",
   "releases": [
     {
       "version": "0.1.0",
@@ -710,9 +710,17 @@
       "version": "1.9.11",
       "date": "2026-09-23",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.9.11",
       "summary": "Accelerate large orientation previews with bounded parallel PDF preflight and lighter cached-page progress."
+    },
+    {
+      "version": "1.9.12",
+      "date": "2026-09-23",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.9.12",
+      "summary": "Correct the Windows orientation parallelism regression test for CPU-limited runners, preserving the bounded optimization."
     }
   ]
 }

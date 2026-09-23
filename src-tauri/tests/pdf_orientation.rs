@@ -229,7 +229,11 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
     )
     .unwrap();
     assert_eq!(first.meta["scanIndex"]["analyzed"], 2);
-    assert_eq!(first.meta["inspectionWorkers"], 2);
+    let expected_workers = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .saturating_sub(1)
+        .clamp(1, 2);
+    assert_eq!(first.meta["inspectionWorkers"], expected_workers as u64);
     assert_eq!(detector.calls.load(Ordering::SeqCst), 6);
 
     let mut second_progress = Vec::new();

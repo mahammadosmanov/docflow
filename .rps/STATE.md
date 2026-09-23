@@ -4,9 +4,9 @@ Updated: 2026-09-23
 
 ## Current release
 
-- Version: 1.9.11
+- Version: 1.9.12
 - Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable `v1.9.11` tag after release
+- Implementation commit: immutable `v1.9.12` tag after release
 - Objective: reduce full RFI System orientation Preview time without weakening
   OCR decisions or parallelizing Apply.
 
@@ -21,6 +21,15 @@ Updated: 2026-09-23
   warnings-denied Clippy, 367 serial Rust unit tests, all runnable integration
   tests, and Cargo check passed. Native Windows throughput and operator
   acceptance remain unmeasured.
+- The 1.9.11 Windows CI run 35827485034 failed only the new
+  `inspectionWorkers == 2` test assertion: its two-CPU runner correctly used
+  one worker to reserve a CPU. The 1.9.12 test derives the expected worker
+  count from the runner; the production algorithm is unchanged. The 1.9.11
+  release is source-only with no installer. All 1.9.12 source gates passed:
+  23 Node tests, 54 UI tests, frontend build, version/docs/source/license
+  audits, Rust formatting, warnings-denied Clippy, 367 serial Rust unit
+  tests, runnable integration tests, and Cargo check. Windows build and
+  package acceptance are pending.
 
 ## Verified
 
