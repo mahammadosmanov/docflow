@@ -27,7 +27,9 @@ Updated: 2026-09-25
   constants compiled unused on Linux, and libc's platform-specific `S_IFREG`
   type made a portable conversion look redundant. The constants are now
   target-gated and the required conversion has a narrow lint annotation. Local
-  pinned Rust gates pass; the corrected remote run is pending.
+  pinned Rust gates pass. The next CI run cleared Clippy and exposed the
+  matching platform-specific import in `auth_http.rs`; that import is now
+  target-gated, and another remote run is pending.
 - PDF structure inspection and cache lookup run in deterministic two-file
   parallel batches; page OCR remains capped at four workers. Cached-page
   progress is coalesced, and PDF inspection has a visible progress stage.

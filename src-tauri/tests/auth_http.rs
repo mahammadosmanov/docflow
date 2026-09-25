@@ -8,9 +8,11 @@ use std::{
     time::Duration,
 };
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use docflow_lib::credentials::OsCredentialStore;
 use docflow_lib::{
     auth::{AuthConfig, AuthService},
-    credentials::{CredentialError, CredentialStore, OsCredentialStore, StoredSession},
+    credentials::{CredentialError, CredentialStore, StoredSession},
     http::{HttpClient, HttpConfig, HttpError, HttpResponse, JsonHttp},
     settings::SettingsStore,
 };
