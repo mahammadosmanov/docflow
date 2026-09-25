@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.0",
+  "currentVersion": "1.10.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -734,9 +734,17 @@
       "version": "1.10.0",
       "date": "2026-09-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.10.0",
       "summary": "Split ordered batch RFI scans into page-only PDFs and file CIV, MEC, ELE, and PRC results under discipline folders."
+    },
+    {
+      "version": "1.10.1",
+      "date": "2026-09-25",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.10.1",
+      "summary": "Make Process Scans discipline-folder regression tests portable across Windows and Unix paths."
     }
   ]
 }

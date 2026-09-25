@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.1 - 2026-09-25
+
+### Fixed
+
+- Process Scans discipline-folder regressions now check path components across
+  Windows and Unix separators, so the Windows release gate tests the same
+  folder structure on both platforms.
+
 ## 1.10.0 - 2026-09-25
 
 ### Improved

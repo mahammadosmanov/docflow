@@ -468,10 +468,22 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
         .collect::<Vec<_>>();
     assert_eq!(extracts.len(), 4);
     assert_eq!(extracts[0].meta["pageIndexes"], json!([0, 1]));
-    assert!(extracts[0].dst.as_deref().unwrap().contains("/CIV/"));
-    assert!(extracts[1].dst.as_deref().unwrap().contains("/MEC/"));
-    assert!(extracts[2].dst.as_deref().unwrap().contains("/ELE/"));
-    assert!(extracts[3].dst.as_deref().unwrap().contains("/PRC/"));
+    assert!(has_path_component(
+        extracts[0].dst.as_deref().unwrap(),
+        "CIV"
+    ));
+    assert!(has_path_component(
+        extracts[1].dst.as_deref().unwrap(),
+        "MEC"
+    ));
+    assert!(has_path_component(
+        extracts[2].dst.as_deref().unwrap(),
+        "ELE"
+    ));
+    assert!(has_path_component(
+        extracts[3].dst.as_deref().unwrap(),
+        "PRC"
+    ));
 
     let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
     let scope = GrantScope::new("owner-1", "session-1", "batch-1", "rfi.process_scans");
@@ -592,13 +604,16 @@ fn uncertain_batch_pages_and_their_continuations_go_to_review() {
             .unwrap()
             .contains("_review")
     );
-    assert!(
-        find_pages(json!([3]))
-            .dst
-            .as_deref()
-            .unwrap()
-            .contains("/MEC/")
-    );
+    assert!(has_path_component(
+        find_pages(json!([3])).dst.as_deref().unwrap(),
+        "MEC"
+    ));
+}
+
+fn has_path_component(path: &str, expected: &str) -> bool {
+    path.replace('\\', "/")
+        .split('/')
+        .any(|component| component == expected)
 }
 
 struct ParallelFixtureOcr;
