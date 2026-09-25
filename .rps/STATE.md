@@ -8,15 +8,19 @@ Updated: 2026-09-25
 - Branch: `rohtolos/process-scans-batch-pdfs`
 - Objective: reduce repeated PDF decoding during Process Scans page OCR without
   changing recognition passes, confidence gates, or ambiguity handling.
-- Release state: source gates pass; Windows package verification is pending.
+- Release state: `v1.10.2` passed Windows Release workflow `36125434510` for
+  exact commit `1397a074ac807359662d12bed041b9e807dd9268`; installer, checksum,
+  manifest, and smoke evidence are published. Installer SHA-256:
+  `2dbc375a68848a30e72f942123e482b07183f01b227305194b097e1c29b2a840`.
 
 ## Current slice
 
 - Process Scans opens a single platform PDF document per page OCR sequence and
   reuses it for text extraction and every DPI render. OCR decisions and output
   ordering remain unchanged. Exact operator OCR returned CIV-1286 before and
-  after the change (15.79 s baseline, 15.91 s after; single-page runtime is
-  dominated by OCR itself). Full stacked-PDF throughput is not yet measured.
+  after the change (15.79 s baseline, 15.91 s after); this single-page sample is
+  dominated by OCR itself, so stacked-PDF wall-clock improvement is not yet
+  measured. Each page now opens the source PDF once instead of once per OCR DPI.
 
 - Process Scans now scans page order inside a multi-page PDF. Strict exact RFI
   starts form groups; plain no-candidate pages continue the group; uncertain,
@@ -30,9 +34,10 @@ Updated: 2026-09-25
 - Focused Process Scans integration: 24 passed, 0 failed, 1 ignored. Pinned Rust
   1.97.1 all-feature Cargo suite (368 unit tests and all runnable integrations),
   Clippy, check, and format pass. Node (23), React (54), frontend build,
-  version/docs/source/license audits pass. Native Windows build/install/startup/
-  OCR/package/uninstall evidence is pending on the release workflow. Office and
-  printer acceptance remain outside source and package evidence.
+  version/docs/source/license audits pass. Windows workflow built the installer,
+  passed Tesseract OCR and clean install/startup/package/uninstall smoke, and
+  published checksummed evidence. Office and printer acceptance remain outside
+  source and package evidence.
 - Windows 1.10.0 workflow run `36109512980` passed setup and Tesseract install,
   then failed the full Rust suite because the new Process Scans assertions
   searched for `/CIV/` and `/MEC/` in Windows paths. No installer was produced.
