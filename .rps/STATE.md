@@ -23,6 +23,11 @@ Updated: 2026-09-25
   suite, and check pass; 23 Node tests, 54 React tests, frontend build, version,
   docs, source, and license audits pass. Native Windows/Excel acceptance remains
   pending.
+- PR CI exposed three Linux-only Rust warnings: macOS/Windows credential
+  constants compiled unused on Linux, and libc's platform-specific `S_IFREG`
+  type made a portable conversion look redundant. The constants are now
+  target-gated and the required conversion has a narrow lint annotation. Local
+  pinned Rust gates pass; the corrected remote run is pending.
 - PDF structure inspection and cache lookup run in deterministic two-file
   parallel batches; page OCR remains capped at four workers. Cached-page
   progress is coalesced, and PDF inspection has a visible progress stage.

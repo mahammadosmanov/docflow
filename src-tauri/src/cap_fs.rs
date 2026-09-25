@@ -589,8 +589,12 @@ impl FileSecuritySnapshot {
 impl CreationSecurityDescriptor {
     pub(crate) fn current_owner_only() -> io::Result<Self> {
         #[cfg(unix)]
+        // libc exposes S_IFREG as u32 on Linux and i32 on macOS.
+        #[allow(clippy::useless_conversion)]
+        let mode = u32::from(libc::S_IFREG | 0o600);
+        #[cfg(unix)]
         let access = PlatformFileAccess::Unix {
-            mode: u32::from(libc::S_IFREG | 0o600),
+            mode,
             uid: unsafe { libc::geteuid() },
             gid: unsafe { libc::getegid() },
             links: 1,

@@ -110,7 +110,9 @@ impl Default for OsCredentialStore {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 const SERVICE: &str = "com.docflow.desktop.supabase";
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 const ACCOUNT: &str = "session-v1";
 
 #[cfg(target_os = "macos")]
