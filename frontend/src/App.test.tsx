@@ -89,6 +89,7 @@ describe("DocFlow shell", () => {
       "write",
       "pdf_first_page_replace",
       "pdf_page_rotate",
+      "pdf_pages_extract",
       "workbook_update",
       "restore_backup",
       "move",
@@ -116,7 +117,7 @@ describe("DocFlow shell", () => {
         meta: {},
       }),
     ).toEqual({
-      outputs: 4,
+      outputs: 5,
       updates: 2,
       moves: 2,
       printJobs: 1,

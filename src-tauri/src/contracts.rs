@@ -203,6 +203,7 @@ pub enum StepKind {
     Print,
     PdfFirstPageReplace,
     PdfPageRotate,
+    PdfPagesExtract,
     ReplicaPublish,
     CleanupTemp,
     OutlookReplyDraft,

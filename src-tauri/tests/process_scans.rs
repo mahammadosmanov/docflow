@@ -343,6 +343,264 @@ impl OcrAdapter for FixtureOcr {
     }
 }
 
+struct PageFixtureOcr(Vec<String>);
+
+impl OcrAdapter for PageFixtureOcr {
+    fn read(&self, path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, _path: &std::path::Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let text = self
+            .0
+            .get(page_index)
+            .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
+        Ok(OcrRead {
+            matched: if text == "[ambiguous]" {
+                find("")
+            } else {
+                find(text)
+            },
+            source: if text == "[ambiguous]" {
+                "ocr:ambiguous-or-unconfirmed:test".to_string()
+            } else {
+                "page-fixture".to_string()
+            },
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "page fixture OCR".to_string()
+    }
+}
+
+fn write_multi_page_pdf(path: &std::path::Path, page_count: usize) {
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        format!(
+            "<< /Type /Pages /Kids [{}] /Count {page_count} >>",
+            (0..page_count)
+                .map(|index| format!("{} 0 R", index + 3))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+    ];
+    for page in 0..page_count {
+        objects.push(format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 {} 0 R >> >> /Contents {} 0 R >>",
+            page_count + 3,
+            page_count + 4 + page
+        ));
+    }
+    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string());
+    for page in 0..page_count {
+        let stream = format!("BT /F1 18 Tf 36 700 Td (PAGE {page}) Tj ET\n");
+        objects.push(format!(
+            "<< /Length {} >>\nstream\n{stream}endstream",
+            stream.len()
+        ));
+    }
+    let mut bytes = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{}\nendobj\n", index + 1, object).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    std::fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    let trash = fixture.path().join("app-data/trash");
+    let journal = fixture.path().join("journal");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::create_dir_all(&trash).unwrap();
+    let combined = source.join("batch.pdf");
+    write_multi_page_pdf(&combined, 5);
+    let codes = [
+        "AZE-SUN-INT-QMS-RFI-CIV-0064",
+        "",
+        "AZE-SUN-INT-QMS-RFI-MEC-0072",
+        "AZE-SUN-INT-QMS-RFI-ELE-0080",
+        "AZE-SUN-INT-QMS-RFI-PRC-0091",
+    ];
+    let plan = preview(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: false,
+            trash_root: Some(trash.clone()),
+        },
+        &PageFixtureOcr(codes.iter().map(|code| code.to_string()).collect()),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert!(combined.is_file(), "Preview must not move the input");
+    assert!(std::fs::read_dir(&destination).unwrap().next().is_none());
+    let extracts = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    assert_eq!(extracts.len(), 4);
+    assert_eq!(extracts[0].meta["pageIndexes"], json!([0, 1]));
+    assert!(extracts[0].dst.as_deref().unwrap().contains("/CIV/"));
+    assert!(extracts[1].dst.as_deref().unwrap().contains("/MEC/"));
+    assert!(extracts[2].dst.as_deref().unwrap().contains("/ELE/"));
+    assert!(extracts[3].dst.as_deref().unwrap().contains("/PRC/"));
+
+    let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
+    let scope = GrantScope::new("owner-1", "session-1", "batch-1", "rfi.process_scans");
+    let source_grant = authority
+        .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+        .unwrap();
+    let destination_grant = authority
+        .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let trash_grant = authority
+        .issue_grant(&scope, &trash, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner-1",
+                "session-1",
+                "rfi.process_scans",
+                vec![
+                    source_grant.grant_id,
+                    destination_grant.grant_id,
+                    trash_grant.grant_id,
+                ],
+            ),
+            plan,
+        )
+        .unwrap();
+    let caller = CallerIdentity::new("owner-1", "session-1");
+    let applied = authority.apply(&cached.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    assert!(!combined.exists());
+    assert_eq!(std::fs::read_dir(&trash).unwrap().count(), 1);
+
+    let trashed_source = std::fs::read_dir(&trash)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let source_facts = docflow_lib::pdf::inspect(&trashed_source).unwrap();
+    let expected_pages = [
+        ("CIV", "AZE-SUN-INT-QMS-RFI-CIV-0064", vec![0, 1]),
+        ("MEC", "AZE-SUN-INT-QMS-RFI-MEC-0072", vec![2]),
+        ("ELE", "AZE-SUN-INT-QMS-RFI-ELE-0080", vec![3]),
+        ("PRC", "AZE-SUN-INT-QMS-RFI-PRC-0091", vec![4]),
+    ];
+    for (discipline, code, page_indexes) in expected_pages {
+        let output = destination
+            .join(discipline)
+            .join(code)
+            .join(filename_for(code));
+        let output_facts = docflow_lib::pdf::inspect(&output).unwrap();
+        assert_eq!(output_facts.page_count, page_indexes.len());
+        for (actual, index) in output_facts.pages.iter().zip(page_indexes) {
+            assert_eq!(actual.content_hash, source_facts.pages[index].content_hash);
+        }
+    }
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert!(combined.is_file());
+    assert!(std::fs::read_dir(&trash).unwrap().next().is_none());
+    assert!(std::fs::read_dir(&destination).unwrap().next().is_none());
+}
+
+#[test]
+fn uncertain_batch_pages_and_their_continuations_go_to_review() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let combined = source.join("uncertain.pdf");
+    write_multi_page_pdf(&combined, 4);
+    let ocr = PageFixtureOcr(vec![
+        "AZE-SUN-INT-QMS-RFI-CIV-0064".to_string(),
+        "[ambiguous]".to_string(),
+        String::new(),
+        "AZE-SUN-INT-QMS-RFI-MEC-0010".to_string(),
+    ]);
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            trash_root: None,
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extracted = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    assert_eq!(extracted.len(), 3);
+    let find_pages = |pages: serde_json::Value| {
+        extracted
+            .iter()
+            .find(|step| step.meta["pageIndexes"] == pages)
+            .unwrap()
+    };
+    assert!(
+        !find_pages(json!([0]))
+            .dst
+            .as_deref()
+            .unwrap()
+            .contains("_review")
+    );
+    assert!(
+        find_pages(json!([1, 2]))
+            .dst
+            .as_deref()
+            .unwrap()
+            .contains("_review")
+    );
+    assert!(
+        find_pages(json!([3]))
+            .dst
+            .as_deref()
+            .unwrap()
+            .contains("/MEC/")
+    );
+}
+
 struct ParallelFixtureOcr;
 
 impl OcrAdapter for ParallelFixtureOcr {
@@ -384,6 +642,7 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            trash_root: None,
         },
         &ParallelFixtureOcr,
         |event| progress.push(event),
@@ -478,6 +737,7 @@ fn existing_rfi_archive_never_creates_an_ocr_invented_folder() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: true,
+            trash_root: None,
         },
         &UnknownFolderOcr,
         |_| {},
@@ -507,6 +767,7 @@ fn keep_original_copies_low_confidence_files_into_review() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            trash_root: None,
         },
         &LowConfidenceOcr,
         |_| {},
@@ -536,6 +797,7 @@ fn keep_original_copies_ocr_document_errors_into_review() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            trash_root: None,
         },
         &FixtureOcr,
         |_| {},
@@ -567,6 +829,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            trash_root: None,
         },
         &FixtureOcr,
         |_| {},
@@ -614,6 +877,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
     assert_eq!(
         std::fs::read(
             destination
+                .join("CIV")
                 .join("AZE-SUN-INT-QMS-RFI-CIV-0064")
                 .join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf")
         )
@@ -752,6 +1016,7 @@ fn missing_ocr_engine_returns_one_diagnostic_and_a_zero_step_plan() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            trash_root: None,
         },
         &MissingOcr,
         |_| {},
@@ -783,6 +1048,7 @@ fn a_broken_ocr_install_fails_closed_and_preview_cancellation_is_inert() {
         destination: destination.clone(),
         organize_into_rfi_folders: true,
         keep_original: false,
+        trash_root: None,
     };
 
     let broken = preview(&params, &BrokenOcr, |_| {}, || false).unwrap();
@@ -812,16 +1078,18 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: true,
+            trash_root: None,
         },
         &FixtureOcr,
         |_| {},
         || false,
     )
     .unwrap();
-    assert_eq!(plan.steps.len(), 1);
-    assert_eq!(plan.steps[0].kind, docflow_lib::contracts::StepKind::Copy);
+    assert_eq!(plan.steps.len(), 2);
+    assert_eq!(plan.steps[0].kind, docflow_lib::contracts::StepKind::Mkdir);
+    assert_eq!(plan.steps[1].kind, docflow_lib::contracts::StepKind::Copy);
     assert_eq!(
-        std::path::Path::new(plan.steps[0].dst.as_deref().unwrap()).file_name(),
+        std::path::Path::new(plan.steps[1].dst.as_deref().unwrap()).file_name(),
         Some(std::ffi::OsStr::new(
             "RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf"
         ))
@@ -853,10 +1121,11 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
             &CallerIdentity::new("owner-1", "session-1"),
         )
         .unwrap();
-    assert_eq!((applied.applied, applied.failed), (1, 0));
+    assert_eq!((applied.applied, applied.failed), (2, 0));
     assert!(source.join("scan.pdf").is_file());
     assert!(
         destination
+            .join("CIV")
             .join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf")
             .is_file()
     );
@@ -876,6 +1145,7 @@ fn process_scans_apply_cancellation_is_observed_before_the_first_mutation() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            trash_root: None,
         },
         &FixtureOcr,
         |_| {},
@@ -938,13 +1208,17 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: false,
+            trash_root: None,
         },
         &FixtureOcr,
         |_| {},
         || false,
     )
     .unwrap();
-    let target = destination.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf");
+    let target = destination
+        .join("CIV")
+        .join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf");
+    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
     std::fs::write(&target, b"USER DATA").unwrap();
 
     let authority = FilesystemAuthority::new(
@@ -977,7 +1251,7 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
         )
         .unwrap();
 
-    assert_eq!((result.applied, result.failed), (0, 1));
+    assert_eq!((result.applied, result.failed), (1, 1));
     assert_eq!(std::fs::read(&target).unwrap(), b"USER DATA");
     assert_eq!(std::fs::read(source.join("scan.pdf")).unwrap(), b"SOURCE");
 }
@@ -1020,6 +1294,7 @@ fn process_scans_rejects_an_unbounded_source_before_ocr() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: false,
+            trash_root: None,
         },
         &MissingOcr,
         |_| {},

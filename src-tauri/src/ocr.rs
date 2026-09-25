@@ -199,11 +199,7 @@ impl OcrAdapter for NativeOcr {
                 }
                 None => OcrRead {
                     matched: find(""),
-                    source: format!(
-                        "ocr:ambiguous-or-unconfirmed:{}:{}",
-                        rfi_observation_summary(&observations),
-                        text_layer_observation_summary(text_layer.as_ref())
-                    ),
+                    source: unconfirmed_page_source(&observations, text_layer.as_ref()),
                 },
             },
         )
@@ -283,6 +279,24 @@ fn rfi_observation_summary(observations: &[(i32, RfiMatch)]) -> String {
         .map(|(code, (votes, dpis))| format!("{code}={votes}votes/{}dpi", dpis.len()))
         .collect::<Vec<_>>()
         .join(",")
+}
+
+fn unconfirmed_page_source(
+    observations: &[(i32, RfiMatch)],
+    text_layer: Option<&BTreeSet<String>>,
+) -> String {
+    let has_candidate = observations.iter().any(|(_, matched)| matched.ok())
+        || text_layer.is_some_and(|codes| !codes.is_empty());
+    format!(
+        "ocr:{}:{}:{}",
+        if has_candidate {
+            "ambiguous-or-unconfirmed"
+        } else {
+            "no-candidate"
+        },
+        rfi_observation_summary(observations),
+        text_layer_observation_summary(text_layer)
+    )
 }
 
 fn select_rfi_consensus(
@@ -1631,6 +1645,30 @@ fn page_text(_path: &Path, _page_index: usize) -> Result<String, OcrFailure> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unconfirmed_page_source_distinguishes_empty_pages_from_ambiguous_codes() {
+        let empty = [(150, find(""))];
+        assert!(
+            unconfirmed_page_source(&empty, Some(&BTreeSet::new()))
+                .starts_with("ocr:no-candidate:")
+        );
+
+        let conflicting = [
+            (150, find("AZE-SUN-INT-QMS-RFI-CIV-0064")),
+            (200, find("AZE-SUN-INT-QMS-RFI-MEC-0064")),
+        ];
+        assert!(
+            unconfirmed_page_source(&conflicting, None)
+                .starts_with("ocr:ambiguous-or-unconfirmed:")
+        );
+
+        let searchable_code = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-0064".to_string()]);
+        assert!(
+            unconfirmed_page_source(&empty, Some(&searchable_code))
+                .starts_with("ocr:ambiguous-or-unconfirmed:")
+        );
+    }
 
     #[test]
     fn rfi_consensus_rejects_one_conflicting_strict_digit_read() {

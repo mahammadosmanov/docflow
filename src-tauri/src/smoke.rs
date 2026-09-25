@@ -192,6 +192,7 @@ fn run_ocr_operation_fixture(
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: true,
+            trash_root: None,
         },
         &ocr,
         |_| {},

@@ -1,11 +1,13 @@
 use std::{
     collections::BTreeMap,
     fs,
+    io::Read,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
@@ -18,6 +20,8 @@ use crate::{
 const MIN_CONFIDENCE: f64 = 0.8;
 const REVIEW_DIR: &str = "_review";
 const MAX_SCAN_PDFS: usize = 10_000;
+const MAX_SCAN_PAGES: usize = 20_000;
+const DISCIPLINE_FOLDERS: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OcrFailure {
@@ -35,6 +39,9 @@ pub trait OcrAdapter: Sync {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure>;
     fn supports_page_scan(&self) -> bool {
         false
+    }
+    fn inspect_pdf(&self, _path: &Path) -> Option<Result<crate::pdf::PdfInspection, String>> {
+        None
     }
     fn supports_page_previews(&self) -> bool {
         false
@@ -60,27 +67,61 @@ pub struct ProcessScansParams {
     pub destination: PathBuf,
     pub organize_into_rfi_folders: bool,
     pub keep_original: bool,
+    pub trash_root: Option<PathBuf>,
 }
 
 struct Candidate {
     path: PathBuf,
+    pages: Option<Vec<usize>>,
+    source_hash: Option<String>,
     modified: SystemTime,
     confidence: f64,
     source: String,
 }
 
-struct CachedFileOcr {
-    reads: BTreeMap<PathBuf, Result<OcrRead, OcrFailure>>,
+struct ReviewPages {
+    path: PathBuf,
+    pages: Vec<usize>,
+    reason: String,
+}
+
+struct PageGroup {
+    code: Option<String>,
+    pages: Vec<usize>,
+    confidence: f64,
+    source: String,
+    reason: String,
+}
+
+struct CachedPageOcr {
+    reads: BTreeMap<(PathBuf, usize), Result<OcrRead, OcrFailure>>,
+    inspections: BTreeMap<PathBuf, Result<crate::pdf::PdfInspection, String>>,
+    page_scan: bool,
     diagnostics: String,
 }
 
-impl OcrAdapter for CachedFileOcr {
+impl OcrAdapter for CachedPageOcr {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
-        self.reads.get(path).cloned().unwrap_or_else(|| {
-            Err(OcrFailure::Document(
-                "parallel OCR cache entry is missing".to_string(),
-            ))
-        })
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        self.page_scan
+    }
+
+    fn inspect_pdf(&self, path: &Path) -> Option<Result<crate::pdf::PdfInspection, String>> {
+        self.inspections.get(path).cloned()
+    }
+
+    fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        self.reads
+            .get(&(path.to_path_buf(), page_index))
+            .cloned()
+            .unwrap_or_else(|| {
+                Err(OcrFailure::Document(
+                    "parallel page OCR cache entry is missing".to_string(),
+                ))
+            })
     }
 
     fn diagnostics(&self) -> String {
@@ -113,8 +154,8 @@ where
         .filter_map(|entry| {
             let name = entry.file_name();
             let name = name.to_str()?;
-            let metadata = entry.metadata().ok()?;
-            (metadata.is_file()
+            let file_type = entry.file_type().ok()?;
+            (file_type.is_file()
                 && !name.starts_with('.')
                 && entry
                     .path()
@@ -142,33 +183,89 @@ where
         if cancelled() {
             return Err(BackendError::cancelled());
         }
+        let (inspection_workers, inspections) = if ocr.supports_page_scan() {
+            let mut completed = 0_u64;
+            let (workers, results) = bounded_map_stream(
+                &pdfs,
+                |pdf| crate::pdf::inspect(pdf),
+                |index, _| {
+                    completed += 1;
+                    progress(ProgressEvent {
+                        phase: "scan_discovery".to_string(),
+                        done: completed,
+                        total: pdfs.len() as u64,
+                        subject: display_name(&pdfs[index]),
+                    });
+                    Ok(())
+                },
+            )
+            .map_err(BackendError::request_failed)?;
+            (
+                workers,
+                pdfs.iter()
+                    .cloned()
+                    .zip(
+                        results
+                            .into_iter()
+                            .map(|result| result.map_err(|error| error.to_string())),
+                    )
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        } else {
+            (0, BTreeMap::new())
+        };
+        let mut tasks = Vec::new();
+        let mut total_pages = 0_usize;
+        for pdf in &pdfs {
+            let page_count = inspections
+                .get(pdf)
+                .and_then(|inspection| inspection.as_ref().ok())
+                .map_or(1, |facts| facts.page_count);
+            total_pages = total_pages.saturating_add(page_count);
+            if total_pages > MAX_SCAN_PAGES {
+                return Err(BackendError::validation(format!(
+                    "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
+                )));
+            }
+            if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
+                tasks.extend((0..page_count).map(|page| (pdf.clone(), page)));
+            }
+        }
         let mut completed = 0_u64;
-        let total = pdfs.len() as u64;
-        let (worker_count, results) = bounded_map_stream(
-            &pdfs,
-            |pdf| ocr.read(pdf),
-            |index, _| {
-                completed += 1;
-                progress(ProgressEvent {
-                    phase: "scan_ocr".to_string(),
-                    done: completed,
-                    total,
-                    subject: pdfs[index].to_string_lossy().into_owned(),
-                });
-                Ok(())
-            },
-        )
-        .map_err(BackendError::request_failed)?;
+        let (ocr_workers, results) = if tasks.is_empty() {
+            (0, Vec::new())
+        } else {
+            bounded_map_stream(
+                &tasks,
+                |(pdf, page)| ocr.read_page(pdf, *page),
+                |index, _| {
+                    completed += 1;
+                    let (pdf, page) = &tasks[index];
+                    progress(ProgressEvent {
+                        phase: "scan_ocr".to_string(),
+                        done: completed,
+                        total: tasks.len() as u64,
+                        subject: format!("{} — #{}", display_name(pdf), page + 1),
+                    });
+                    Ok(())
+                },
+            )
+            .map_err(BackendError::request_failed)?
+        };
         if cancelled() {
             return Err(BackendError::cancelled());
         }
-        let cached = CachedFileOcr {
-            reads: pdfs.iter().cloned().zip(results).collect(),
+        let cached = CachedPageOcr {
+            reads: tasks.into_iter().zip(results).collect(),
+            inspections,
+            page_scan: ocr.supports_page_scan(),
             diagnostics: ocr.diagnostics(),
         };
         let mut plan = preview(params, &cached, progress, cancelled)?;
-        plan.meta
-            .insert("workerCount".to_string(), Value::from(worker_count as u64));
+        plan.meta.insert(
+            "workerCount".to_string(),
+            Value::from(ocr_workers.max(inspection_workers) as u64),
+        );
         plan.meta
             .insert("parallelAnalysis".to_string(), Value::Bool(true));
         return Ok(plan);
@@ -184,6 +281,9 @@ where
     let mut plan = empty_plan();
     let mut groups: Vec<(String, Vec<Candidate>)> = Vec::new();
     let mut failures = Vec::<(PathBuf, String)>::new();
+    let mut review_pages = Vec::<ReviewPages>::new();
+    let mut split_sources = BTreeMap::<PathBuf, String>::new();
+    let mut scanned_pages = 0_usize;
     for (index, pdf) in pdfs.iter().enumerate() {
         if cancelled() {
             return Err(BackendError::cancelled());
@@ -194,7 +294,188 @@ where
             total: pdfs.len() as u64,
             subject: String::new(),
         });
-        let read = match ocr.read(pdf) {
+        let inspection = if ocr.supports_page_scan() {
+            Some(
+                ocr.inspect_pdf(pdf)
+                    .unwrap_or_else(|| crate::pdf::inspect(pdf).map_err(|error| error.to_string())),
+            )
+        } else {
+            None
+        };
+        let facts = match inspection {
+            Some(Ok(facts)) => Some(facts),
+            Some(Err(error)) => {
+                failures.push((pdf.clone(), error));
+                continue;
+            }
+            None => None,
+        };
+        let page_count = facts.as_ref().map_or(1, |facts| facts.page_count);
+        scanned_pages = scanned_pages.saturating_add(page_count);
+        if scanned_pages > MAX_SCAN_PAGES {
+            return Err(BackendError::validation(format!(
+                "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
+            )));
+        }
+        if page_count == 0 {
+            failures.push((pdf.clone(), "PDF has no pages".to_string()));
+            continue;
+        }
+        if page_count > 1 {
+            if !facts.as_ref().is_some_and(crate::pdf::extraction_supported) {
+                failures.push((
+                    pdf.clone(),
+                    "PDF features prevent safe page separation".to_string(),
+                ));
+                continue;
+            }
+            let source_hash = hash_pdf(pdf).map_err(BackendError::path_invalid)?;
+            let mut local_groups = Vec::<PageGroup>::new();
+            let mut active = None::<PageGroup>;
+            let mut seen_codes = std::collections::BTreeSet::new();
+            for page_index in 0..page_count {
+                if cancelled() {
+                    return Err(BackendError::cancelled());
+                }
+                let read = match ocr.read_page(pdf, page_index) {
+                    Ok(read) => read,
+                    Err(OcrFailure::EngineMissing) => {
+                        return Ok(Plan {
+                            warnings: vec![Warning {
+                                key: "warn.no_ocr".to_string(),
+                                subject: ocr.diagnostics(),
+                            }],
+                            ..empty_plan()
+                        });
+                    }
+                    Err(OcrFailure::Document(error)) => {
+                        flush_page_group(&mut active, &mut local_groups);
+                        active = Some(PageGroup {
+                            code: None,
+                            pages: vec![page_index],
+                            confidence: 0.0,
+                            source: String::new(),
+                            reason: format!("unreadable page: {error}"),
+                        });
+                        continue;
+                    }
+                };
+                let exact = read.matched.method == RfiMethod::Strict
+                    && read.matched.confidence >= MIN_CONFIDENCE
+                    && crate::rfi_code::find(&read.matched.code).code == read.matched.code
+                    && crate::rfi_code::find(&read.matched.code).method == RfiMethod::Strict;
+                if exact {
+                    let code = read.matched.code.clone();
+                    let continues = active
+                        .as_ref()
+                        .is_some_and(|group| group.code.as_ref() == Some(&code));
+                    if continues {
+                        active
+                            .as_mut()
+                            .expect("current group exists")
+                            .pages
+                            .push(page_index);
+                        continue;
+                    }
+                    flush_page_group(&mut active, &mut local_groups);
+                    if !seen_codes.insert(code.clone()) {
+                        active = Some(PageGroup {
+                            code: None,
+                            pages: vec![page_index],
+                            confidence: read.matched.confidence,
+                            source: read.source,
+                            reason: format!("duplicate RFI page for {code}"),
+                        });
+                    } else {
+                        active = Some(PageGroup {
+                            code: Some(code),
+                            pages: vec![page_index],
+                            confidence: read.matched.confidence,
+                            source: read.source,
+                            reason: String::new(),
+                        });
+                    }
+                } else if read.matched.method == RfiMethod::Miss
+                    && !read.source.starts_with("ocr:ambiguous-or-unconfirmed:")
+                {
+                    if let Some(group) = active.as_mut() {
+                        group.pages.push(page_index);
+                    } else {
+                        active = Some(PageGroup {
+                            code: None,
+                            pages: vec![page_index],
+                            confidence: 0.0,
+                            source: read.source,
+                            reason: "page precedes the first exact RFI identity".to_string(),
+                        });
+                    }
+                } else {
+                    flush_page_group(&mut active, &mut local_groups);
+                    active = Some(PageGroup {
+                        code: None,
+                        pages: vec![page_index],
+                        confidence: read.matched.confidence,
+                        source: read.source,
+                        reason: format!(
+                            "uncertain RFI evidence: {}",
+                            method_name(read.matched.method)
+                        ),
+                    });
+                }
+            }
+            flush_page_group(&mut active, &mut local_groups);
+            if hash_pdf(pdf).map_err(BackendError::path_invalid)? != source_hash {
+                return Err(BackendError::path_invalid(
+                    "scan source changed during Preview",
+                ));
+            }
+            split_sources.insert(pdf.clone(), source_hash.clone());
+            for group in local_groups {
+                if let Some(code) = group.code {
+                    if let Some((_, candidates)) =
+                        groups.iter_mut().find(|(value, _)| value == &code)
+                    {
+                        candidates.push(Candidate {
+                            path: pdf.clone(),
+                            pages: Some(group.pages),
+                            source_hash: Some(source_hash.clone()),
+                            modified: fs::metadata(pdf)
+                                .and_then(|metadata| metadata.modified())
+                                .unwrap_or(UNIX_EPOCH),
+                            confidence: group.confidence,
+                            source: group.source,
+                        });
+                    } else {
+                        groups.push((
+                            code,
+                            vec![Candidate {
+                                path: pdf.clone(),
+                                pages: Some(group.pages),
+                                source_hash: Some(source_hash.clone()),
+                                modified: fs::metadata(pdf)
+                                    .and_then(|metadata| metadata.modified())
+                                    .unwrap_or(UNIX_EPOCH),
+                                confidence: group.confidence,
+                                source: group.source,
+                            }],
+                        ));
+                    }
+                } else {
+                    plan.warnings.push(Warning {
+                        key: "warn.no_code".to_string(),
+                        subject: format!("{} — {}", display_name(pdf), page_range(&group.pages)),
+                    });
+                    review_pages.push(ReviewPages {
+                        path: pdf.clone(),
+                        pages: group.pages,
+                        reason: group.reason,
+                    });
+                }
+            }
+            continue;
+        }
+
+        let read = match ocr.read_page(pdf, 0) {
             Ok(read) => read,
             Err(OcrFailure::EngineMissing) => {
                 return Ok(Plan {
@@ -241,6 +522,8 @@ where
 
         let candidate = Candidate {
             path: pdf.clone(),
+            pages: None,
+            source_hash: None,
             modified: fs::metadata(pdf)
                 .and_then(|metadata| metadata.modified())
                 .unwrap_or(UNIX_EPOCH),
@@ -283,17 +566,33 @@ where
         ));
     }
 
+    for review in review_pages {
+        let target = review_target(&destination, &review.path, &review.pages);
+        let candidate = Candidate {
+            path: review.path.clone(),
+            pages: Some(review.pages),
+            source_hash: split_sources.get(&review.path).cloned(),
+            modified: UNIX_EPOCH,
+            confidence: 0.0,
+            source: String::new(),
+        };
+        let mut meta = JsonObject::new();
+        meta.insert("reason".to_string(), Value::String(review.reason));
+        push_candidate_output(
+            &mut plan,
+            &candidate,
+            &target,
+            "note.needs_review",
+            meta,
+            params.keep_original,
+        );
+    }
+
     for (code, mut files) in groups {
         files.sort_by_key(|candidate| std::cmp::Reverse(candidate.modified));
         let winner = files.remove(0);
-        let folder = params
-            .organize_into_rfi_folders
-            .then(|| folder_for(&destination, &code));
-        let target = if params.organize_into_rfi_folders {
-            target_for(&destination, &code)
-        } else {
-            flat_target_for(&destination, &code)
-        };
+        let (folder, target) =
+            process_scan_targets(&destination, &code, params.organize_into_rfi_folders);
         if same_file(&winner.path, &target) {
             continue;
         }
@@ -314,17 +613,22 @@ where
                 "target".to_string(),
                 Value::String(target.to_string_lossy().into_owned()),
             );
-            plan.steps.push(step(
-                transfer_kind,
-                Some(&winner.path),
-                Some(
-                    &destination
+            let review_target = winner.pages.as_ref().map_or_else(
+                || {
+                    destination
                         .join(REVIEW_DIR)
-                        .join(display_name(&winner.path)),
-                ),
+                        .join(display_name(&winner.path))
+                },
+                |pages| review_target(&destination, &winner.path, pages),
+            );
+            push_candidate_output(
+                &mut plan,
+                &winner,
+                &review_target,
                 "note.needs_review",
                 meta,
-            ));
+                params.keep_original,
+            );
         } else if requires_existing_rfi_folder
             && folder.as_ref().is_some_and(|folder| !folder.is_dir())
         {
@@ -340,17 +644,22 @@ where
                 "reason".to_string(),
                 Value::String("unknown_rfi_folder".to_string()),
             );
-            plan.steps.push(step(
-                transfer_kind,
-                Some(&winner.path),
-                Some(
-                    &destination
+            let review_target = winner.pages.as_ref().map_or_else(
+                || {
+                    destination
                         .join(REVIEW_DIR)
-                        .join(display_name(&winner.path)),
-                ),
+                        .join(display_name(&winner.path))
+                },
+                |pages| review_target(&destination, &winner.path, pages),
+            );
+            push_candidate_output(
+                &mut plan,
+                &winner,
+                &review_target,
                 "note.needs_review",
                 meta,
-            ));
+                params.keep_original,
+            );
         } else {
             let folder_created = folder.as_ref().is_some_and(|folder| !folder.is_dir());
             if let Some(folder) = folder.as_ref().filter(|folder| !folder.is_dir()) {
@@ -367,19 +676,20 @@ where
             let mut meta = JsonObject::new();
             meta.insert("code".to_string(), Value::String(code.clone()));
             meta.insert("confidence".to_string(), Value::from(winner.confidence));
-            meta.insert("source".to_string(), Value::String(winner.source));
+            meta.insert("source".to_string(), Value::String(winner.source.clone()));
             meta.insert(
                 "intoFolder".to_string(),
                 Value::Bool(params.organize_into_rfi_folders),
             );
             meta.insert("folderCreated".to_string(), Value::Bool(folder_created));
-            plan.steps.push(step(
-                transfer_kind,
-                Some(&winner.path),
-                Some(&target),
+            push_candidate_output(
+                &mut plan,
+                &winner,
+                &target,
                 "note.renamed",
                 meta,
-            ));
+                params.keep_original,
+            );
         }
 
         for older in files {
@@ -399,11 +709,42 @@ where
                 "kept".to_string(),
                 Value::String(display_name(&winner.path)),
             );
-            plan.steps.push(step(
-                transfer_kind,
-                Some(&older.path),
-                Some(&destination.join(REVIEW_DIR).join(display_name(&older.path))),
+            let review_target = older.pages.as_ref().map_or_else(
+                || destination.join(REVIEW_DIR).join(display_name(&older.path)),
+                |pages| review_target(&destination, &older.path, pages),
+            );
+            push_candidate_output(
+                &mut plan,
+                &older,
+                &review_target,
                 "note.needs_review",
+                meta,
+                params.keep_original,
+            );
+        }
+    }
+
+    if !params.keep_original && !split_sources.is_empty() {
+        let trash_root = params.trash_root.as_deref().ok_or_else(|| {
+            BackendError::path_invalid("recoverable trash is unavailable for batch scans")
+        })?;
+        let trash_root = canonical_directory(trash_root, "recoverable trash")?;
+        for (pdf, source_hash) in split_sources {
+            let trash_name = format!(
+                "process-scans-{}_{}",
+                uuid::Uuid::new_v4(),
+                display_name(&pdf)
+            );
+            let mut meta = JsonObject::new();
+            meta.insert(
+                "expectedSourceSha256".to_string(),
+                Value::String(source_hash),
+            );
+            plan.steps.push(step(
+                StepKind::Move,
+                Some(&pdf),
+                Some(&trash_root.join(trash_name)),
+                "note.deleted",
                 meta,
             ));
         }
@@ -425,7 +766,14 @@ where
 }
 
 fn destination_contains_exact_rfi_folder(destination: &Path) -> bool {
-    fs::read_dir(destination).is_ok_and(|entries| {
+    exact_rfi_folder_in(destination)
+        || DISCIPLINE_FOLDERS
+            .iter()
+            .any(|discipline| exact_rfi_folder_in(&destination.join(discipline)))
+}
+
+fn exact_rfi_folder_in(directory: &Path) -> bool {
+    fs::read_dir(directory).is_ok_and(|entries| {
         entries.filter_map(Result::ok).any(|entry| {
             let Ok(file_type) = entry.file_type() else {
                 return false;
@@ -437,6 +785,113 @@ fn destination_contains_exact_rfi_folder(destination: &Path) -> bool {
             file_type.is_dir() && matched.method == RfiMethod::Strict && matched.code == name
         })
     })
+}
+
+fn flush_page_group(active: &mut Option<PageGroup>, groups: &mut Vec<PageGroup>) {
+    if let Some(group) = active.take() {
+        groups.push(group);
+    }
+}
+
+fn process_scan_targets(
+    destination: &Path,
+    code: &str,
+    organize: bool,
+) -> (Option<PathBuf>, PathBuf) {
+    let discipline = crate::rfi_code::find(code).discipline;
+    let discipline_root = DISCIPLINE_FOLDERS
+        .contains(&discipline.as_str())
+        .then(|| destination.join(&discipline));
+    let root = discipline_root.as_deref().unwrap_or(destination);
+    if organize {
+        let folder = folder_for(root, code);
+        (Some(folder.clone()), target_for(root, code))
+    } else {
+        let target = flat_target_for(root, code);
+        (discipline_root, target)
+    }
+}
+
+fn review_target(destination: &Path, source: &Path, pages: &[usize]) -> PathBuf {
+    let stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("scan");
+    let first = pages.first().copied().unwrap_or(0) + 1;
+    let last = pages.last().copied().unwrap_or(first - 1) + 1;
+    destination
+        .join(REVIEW_DIR)
+        .join(format!("{stem} - pages {first:04}-{last:04}.pdf"))
+}
+
+fn page_range(pages: &[usize]) -> String {
+    match (pages.first(), pages.last()) {
+        (Some(first), Some(last)) => format!("pages {}-{}", first + 1, last + 1),
+        _ => "pages unavailable".to_string(),
+    }
+}
+
+fn push_candidate_output(
+    plan: &mut Plan,
+    candidate: &Candidate,
+    destination: &Path,
+    note_key: &str,
+    mut meta: JsonObject,
+    keep_original: bool,
+) {
+    if let Some(pages) = candidate.pages.as_deref() {
+        meta.insert(
+            "pageIndexes".to_string(),
+            Value::Array(pages.iter().map(|page| Value::from(*page as u64)).collect()),
+        );
+        meta.insert(
+            "sourceSha256".to_string(),
+            Value::String(
+                candidate
+                    .source_hash
+                    .as_deref()
+                    .expect("split page candidate has a Preview source hash")
+                    .to_string(),
+            ),
+        );
+        plan.steps.push(step(
+            StepKind::PdfPagesExtract,
+            Some(&candidate.path),
+            Some(destination),
+            note_key,
+            meta,
+        ));
+    } else {
+        plan.steps.push(step(
+            if keep_original {
+                StepKind::Copy
+            } else {
+                StepKind::Move
+            },
+            Some(&candidate.path),
+            Some(destination),
+            note_key,
+            meta,
+        ));
+    }
+}
+
+fn hash_pdf(path: &Path) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() || metadata.len() > crate::pdf::MAX_PDF_BYTES {
+        return Err("source PDF is not a bounded regular file".to_string());
+    }
+    let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, BackendError> {

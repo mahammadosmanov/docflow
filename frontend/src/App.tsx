@@ -3194,6 +3194,7 @@ export function summarizePlanImpact(plan: Plan): PlanImpact {
       case "write":
       case "pdf_first_page_replace":
       case "pdf_page_rotate":
+      case "pdf_pages_extract":
         impact.outputs += 1;
         break;
       case "workbook_update":
@@ -4089,6 +4090,14 @@ function StepRow({
           .filter(Boolean)
           .join(", ")
       : "";
+  const extractionPages =
+    step.kind === "pdf_pages_extract" && Array.isArray(step.meta.pageIndexes)
+      ? step.meta.pageIndexes
+          .map((page) => Number(page))
+          .filter(Number.isInteger)
+          .map((page) => page + 1)
+          .join(", ")
+      : "";
   return (
     <div className="step-row">
       <span className="step-kind">
@@ -4102,6 +4111,8 @@ function StepRow({
           <Files />
         ) : step.kind === "pdf_page_rotate" ? (
           <RotateCcw />
+        ) : step.kind === "pdf_pages_extract" ? (
+          <Files />
         ) : step.kind === "cleanup_temp" ? (
           <Trash2 />
         ) : step.kind === "copy" ? (
@@ -4133,6 +4144,11 @@ function StepRow({
         {rotationSummary && (
           <span>
             {s.t("rfi.orientation.pages")}: {rotationSummary}
+          </span>
+        )}
+        {extractionPages && (
+          <span>
+            {s.t("rfi.orientation.pages")}: {extractionPages}
           </span>
         )}
       </div>

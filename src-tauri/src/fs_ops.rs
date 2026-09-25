@@ -628,7 +628,14 @@ impl FilesystemAuthority {
             meta: JsonObject::new(),
             cloud_synced: None,
         };
-        let fail_fast = claim.claimed.plan.op_id == replica_publish::OPERATION_ID;
+        let fail_fast = claim.claimed.plan.op_id == replica_publish::OPERATION_ID
+            || (claim.claimed.plan.op_id == "rfi.process_scans"
+                && claim
+                    .claimed
+                    .plan
+                    .steps
+                    .iter()
+                    .any(|step| step.kind == StepKind::PdfPagesExtract));
         if fail_fast {
             self.preflight_replica_steps(&claim.claimed.plan.steps, binding, caller)?;
         }
@@ -1944,6 +1951,9 @@ impl FilesystemAuthority {
             StepKind::PdfPageRotate => {
                 self.execute_pdf_page_rotate(step, binding, caller, token, record)
             }
+            StepKind::PdfPagesExtract => {
+                self.execute_pdf_pages_extract(step, binding, caller, token, record)
+            }
             StepKind::ReplicaPublish => {
                 self.execute_replica_publish(step, binding, caller, token, record)
             }
@@ -2945,6 +2955,11 @@ impl FilesystemAuthority {
             .map_err(step_no_effect)?
             .anchor()
             .map_err(io_no_effect)?;
+        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "source PDF changed after preview".to_string(),
+            ));
+        }
         let destination_anchor = self
             .grants
             .authorize_capability_for_plan(
@@ -2957,11 +2972,6 @@ impl FilesystemAuthority {
             .map_err(step_no_effect)?
             .anchor()
             .map_err(io_no_effect)?;
-        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
-            return Err(StepFailure::NoEffect(
-                "source PDF changed after preview".to_string(),
-            ));
-        }
         token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
         record.pending_step = Some(step.clone());
         record.state = Some(JournalState::Applying);
@@ -3022,6 +3032,169 @@ impl FilesystemAuthority {
         {
             return Err(StepFailure::OutcomeUnknown(
                 "published orientation PDF failed hash validation".to_string(),
+            ));
+        }
+        let mut actual = Step {
+            kind: StepKind::Copy,
+            src: Some(source.to_string_lossy().into_owned()),
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: step.note_key.clone(),
+            meta: step.meta.clone(),
+        };
+        actual
+            .meta
+            .insert("undoSha256".to_string(), Value::String(output_hash));
+        record.steps.push(actual);
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(1)
+    }
+
+    fn execute_pdf_pages_extract(
+        &self,
+        step: &Step,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        token: &CancellationToken,
+        record: &mut JournalRecord,
+    ) -> Result<u64, StepFailure> {
+        if binding.operation_id != "rfi.process_scans" {
+            return Err(StepFailure::NoEffect(
+                "PDF page extraction is not authorized for this operation".to_string(),
+            ));
+        }
+        let source = required_path(step.src.as_deref(), "batch scan PDF")?;
+        let source = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &source,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?;
+        let destination = required_path(step.dst.as_deref(), "extracted RFI PDF")?;
+        let destination = self
+            .grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?;
+        let expected_hash = step
+            .meta
+            .get("sourceSha256")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("batch scan hash is missing".to_string()))?;
+        let page_indexes = step
+            .meta
+            .get("pageIndexes")
+            .and_then(Value::as_array)
+            .filter(|indexes| !indexes.is_empty())
+            .ok_or_else(|| StepFailure::NoEffect("approved PDF pages are missing".to_string()))?
+            .iter()
+            .map(|index| {
+                index
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved PDF page is invalid".to_string())
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if page_indexes.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(StepFailure::NoEffect(
+                "approved PDF page order is invalid".to_string(),
+            ));
+        }
+        let source_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &source,
+                PathIntent::Read,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "batch scan changed after Preview".to_string(),
+            ));
+        }
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        let workspace = tempfile::tempdir().map_err(io_no_effect)?;
+        let workspace_capability =
+            crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
+        let source_copy = workspace.path().join("batch.pdf");
+        let completed = workspace.path().join("extracted.pdf");
+        let source_copy_anchor = workspace_capability
+            .authorize(&source_copy)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        source_copy_anchor
+            .copy_no_clobber_from(&source_anchor)
+            .map_err(io_no_effect)?;
+        crate::pdf::extract_pages(&source_copy, &page_indexes, &completed)
+            .map_err(|error| StepFailure::NoEffect(error.to_string()))?;
+        let completed_anchor = workspace_capability
+            .authorize(&completed)
+            .map_err(io_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        let output_hash = completed_anchor.sha256().map_err(io_no_effect)?;
+        if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
+            return Err(StepFailure::NoEffect(
+                "batch scan changed during Apply".to_string(),
+            ));
+        }
+        token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
+        let destination_parent = destination.parent().ok_or_else(|| {
+            StepFailure::NoEffect("extracted PDF destination has no parent".to_string())
+        })?;
+        self.create_missing_directories(destination_parent, step, binding, caller, token, record)?;
+        let destination_anchor = self
+            .grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                &destination,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)?;
+        record.pending_step = Some(step.clone());
+        record.state = Some(JournalState::Applying);
+        self.journals.write(record).map_err(step_unknown)?;
+        if let Err(error) = destination_anchor.copy_no_clobber_from(&completed_anchor) {
+            if error.kind() != io::ErrorKind::AlreadyExists
+                && destination_anchor.open_read().is_ok()
+            {
+                return Err(StepFailure::OutcomeUnknown(format!(
+                    "{}: {error}",
+                    destination.display()
+                )));
+            }
+            record.pending_step = None;
+            self.journals.write(record).map_err(step_unknown)?;
+            return Err(io_no_effect(error));
+        }
+        if destination_anchor.sha256().map_err(|error| {
+            StepFailure::OutcomeUnknown(format!("{}: {error}", destination.display()))
+        })? != output_hash
+        {
+            return Err(StepFailure::OutcomeUnknown(
+                "extracted PDF failed hash validation".to_string(),
             ));
         }
         let mut actual = Step {

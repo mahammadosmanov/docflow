@@ -54,7 +54,7 @@ and silent uninstall on a real Windows runner.
 |---|---|---|
 | Version contract | Node version check | Mixed UI/installer versions |
 | Documentation contract | Required-map, requirement-ID, and operation-roster audit | New operator or coding agent follows missing/stale product guidance |
-| Process Scans | parser/OCR tests + image-only packaged smoke | OCR drift, false labels, missing engine/data |
+| Process Scans | parser/OCR and multi-page extraction tests + image-only packaged smoke | OCR drift, false labels, missing engine/data, page loss or hidden cross-RFI content |
 | Signed pages | rotated/cropped/fidelity PDF tests | Archive mutation, wrong page geometry, partial output |
 | PDF orientation | discipline-only discovery, confidence fail-closed, incremental fidelity, no-clobber apply/undo tests | Wrong rotation, unrelated-tree scan, source mutation, damaged PDF graph |
 | RFI Log | workbook/OOXML fixtures | Formula, validation, style, lock, and repair damage |

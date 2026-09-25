@@ -8,6 +8,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.0 - 2026-09-25
+
+### Improved
+
+- Process Scans now separates ordered multi-RFI scans from one PDF into exact
+  page-only PDFs, names them through the existing RFI rules, and files CIV,
+  MEC, ELE, and PRC results under matching discipline folders. Uncertain pages
+  go to Review; the source scan remains recoverable and Undo restores it.
+
 ## 1.9.13 - 2026-09-25
 
 ### Fixed

@@ -918,27 +918,47 @@ impl NativeBackend {
         let destination_grant =
             self.filesystem
                 .issue_grant(&scope, &request.values.dest, GrantAccess::ReadWrite)?;
+        let trash_grant = if request.values.keep_original {
+            None
+        } else {
+            Some(self.filesystem.issue_grant(
+                &scope,
+                &self.app_data_dir.join("trash"),
+                GrantAccess::ReadWrite,
+            )?)
+        };
         let plan = preview_process_scans(
             &ProcessScansParams {
                 source: request.values.source,
                 destination: request.values.dest,
                 organize_into_rfi_folders: request.values.organize_into_rfi_folders,
                 keep_original: request.values.keep_original,
+                trash_root: (!request.values.keep_original)
+                    .then(|| self.app_data_dir.join("trash")),
             },
             &NativeOcr::discover(),
             &mut progress,
             || false,
         )?;
-        encode(self.filesystem.cache_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                &caller.owner_id,
-                &caller.session_id,
-                &request.op_id,
-                vec![source_grant.grant_id, destination_grant.grant_id],
-            ),
-            plan,
-        )?)
+        encode(
+            self.filesystem.cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    &caller.owner_id,
+                    &caller.session_id,
+                    &request.op_id,
+                    [
+                        Some(source_grant.grant_id),
+                        Some(destination_grant.grant_id),
+                        trash_grant.map(|grant| grant.grant_id),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                ),
+                plan,
+            )?,
+        )
     }
 
     pub(crate) fn preview_rfi_file_group<F>(

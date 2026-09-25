@@ -49,6 +49,7 @@ export interface Step {
     | "print"
     | "pdf_first_page_replace"
     | "pdf_page_rotate"
+    | "pdf_pages_extract"
     | "replica_publish"
     | "cleanup_temp"
     | "outlook_reply_draft";

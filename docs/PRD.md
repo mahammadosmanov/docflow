@@ -155,6 +155,18 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   a separate unsent Outlook Reply All Plan. The handoff preserves escaped table
   formatting, never recalculates RFI numbers, adds no recipients, sends no mail,
   and requires its own Preview and Apply.
+- **DF-032 — Ordered batch RFI scan separation:** Process Scans may inspect one
+  top-level multi-page PDF as a sequential stack. A page with one strict,
+  high-confidence RFI code starts that RFI; a page with no candidate continues
+  the current RFI. Pages before the first identified RFI, uncertain pages, and
+  duplicate RFI starts remain separate Review output. Each output contains only
+  its approved pages, retains existing canonical filenames and duplicate/no-
+  clobber rules, and places CIV/MEC/ELE/PRC results beneath matching discipline
+  folders. Preview pins source hashes and exact page indexes; Apply extracts
+  only those pages, verifies fidelity, journals every output, and moves the
+  combined source to recoverable trash only after all its outputs succeed when
+  Keep original is off. Unsupported or drifted PDFs fail closed to Review or
+  Apply refusal; no page is silently dropped.
 
 ## Scope
 

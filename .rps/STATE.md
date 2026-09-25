@@ -2,27 +2,32 @@
 
 Updated: 2026-09-25
 
-## Current release
+## Current candidate
 
-- Version: 1.9.12
-- Branch: `review/rust-tauri-migration`
-- Implementation commit: immutable `v1.9.12` tag after release
-- Objective: reduce full RFI System orientation Preview time without weakening
-  OCR decisions or parallelizing Apply.
+- Version: 1.10.0
+- Branch: `rohtolos/process-scans-batch-pdfs`
+- Objective: split ordered multi-RFI scan PDFs into exact page-only outputs and
+  file CIV/MEC/ELE/PRC results beneath their discipline folders.
+- Release state: local source gates pass; Windows CI/package smoke remains
+  pending before the immutable tag and GitHub Release.
 
 ## Current slice
 
-- Version 1.9.13 branch `rohtolos/follow-up-pcu-worley-header` fixes PCU
-  Worley-layout discovery: the supplied workbook stores `Signed by Worley` in
-  R3 with line breaks, while header normalization only trimmed outer spaces.
-  Whitespace is now collapsed before header matching. The actual workbook was
-  read-only parsed with a synthetic source row; Preview correctly proposed
-  `PCU!R5` `Signed` → `Not Signed`. The workbook was not changed.
-- The regression test uses the exact multiline header shape. All 35 Follow Up
-  integration tests pass. Pinned Rust 1.97.1 format, Clippy, serial full Cargo
-  suite, and check pass; 23 Node tests, 54 React tests, frontend build, version,
-  docs, source, and license audits pass. Native Windows/Excel acceptance remains
-  pending.
+- Process Scans now scans page order inside a multi-page PDF. Strict exact RFI
+  starts form groups; plain no-candidate pages continue the group; uncertain,
+  unreadable, leading, and repeated-code groups are Review outputs. Page-only
+  reconstruction preserves approved page content and refuses unsupported PDF
+  structures. The combined source moves to app trash only after outputs succeed
+  when Keep original is off.
+- CIV/MEC/ELE/PRC output paths always include the discipline folder, with the
+  existing organized or flat naming choice beneath it. Other disciplines retain
+  the existing layout.
+- Focused Process Scans integration: 24 passed, 0 failed, 1 ignored. Pinned Rust
+  1.97.1 all-feature Cargo suite, Clippy, check, and format pass. Node (23), React
+  (54), frontend build, version/docs/source/license audits pass. The Windows
+  target is installed; native Windows build/install/startup/OCR/package/uninstall
+  evidence is pending on the release workflow. Office/printer acceptance remains
+  outside source and package evidence.
 - PR CI exposed three Linux-only Rust warnings: macOS/Windows credential
   constants compiled unused on Linux, and libc's platform-specific `S_IFREG`
   type made a portable conversion look redundant. The constants are now

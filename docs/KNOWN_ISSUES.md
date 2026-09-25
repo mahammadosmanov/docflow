@@ -77,7 +77,9 @@ These are not silently waived by passing local tests.
 
 ## Current local limitations
 
-- Process Scans is intentionally top-level only.
+- Process Scans intentionally discovers only top-level source PDFs. Multi-page
+  batch PDFs are split in scanned order; unsupported PDF features and ambiguous
+  page identities remain in `_review` for manual handling.
 - Signed-page preview thumbnails are capped at 20 accepted rows and 12 MiB of
   encoded preview data; open the PDFs manually beyond either bound.
 - The frontend production bundle currently emits a non-failing size advisory;

@@ -221,6 +221,216 @@ pub fn replace_first_page_incremental_from_page(
     write_result
 }
 
+/// Writes a standalone PDF containing only the approved source pages.
+/// Unselected page objects and catalog-level content are never copied.
+pub fn extract_pages(
+    source_path: &Path,
+    page_indexes: &[usize],
+    output_path: &Path,
+) -> Result<(), PdfError> {
+    if output_path.exists() {
+        return Err(PdfError::new("PDF extraction destination already exists"));
+    }
+    if page_indexes.is_empty() {
+        return Err(PdfError::new("no PDF pages were approved for extraction"));
+    }
+    let source = ParsedPdf::load(source_path)?;
+    let before = source.inspect()?;
+    if !extraction_supported(&before) {
+        return Err(PdfError::new(
+            "PDF contains features that cannot be safely separated",
+        ));
+    }
+    let pages = source.pages()?;
+    let mut selected = Vec::with_capacity(page_indexes.len());
+    let mut unique = HashSet::new();
+    for &index in page_indexes {
+        if index >= pages.len() || !unique.insert(index) {
+            return Err(PdfError::new("approved PDF page indexes are invalid"));
+        }
+        selected.push(pages[index]);
+    }
+    let bytes = build_extracted_pdf(&source, &selected)?;
+    let parent = output_path
+        .parent()
+        .ok_or_else(|| PdfError::new("PDF extraction destination has no parent"))?;
+    if !parent.is_dir() {
+        return Err(PdfError::new(
+            "PDF extraction destination parent is missing",
+        ));
+    }
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output_path)
+        .map_err(|error| PdfError::new(format!("PDF extraction output create failed: {error}")))?;
+    let result = (|| {
+        output
+            .write_all(&bytes)
+            .and_then(|()| output.sync_all())
+            .map_err(|error| {
+                PdfError::new(format!("PDF extraction output write failed: {error}"))
+            })?;
+        drop(output);
+        validate_extracted_pdf(output_path, &source, &selected)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(output_path);
+    }
+    result
+}
+
+pub(crate) fn extraction_supported(facts: &PdfInspection) -> bool {
+    !facts.encrypted
+        && !facts.signed
+        && facts.embedded_file_hashes.is_empty()
+        && ![
+            "StructTreeRoot",
+            "OCProperties",
+            "AcroForm",
+            "Names",
+            "Outlines",
+            "PageLabels",
+            "OpenAction",
+            "ViewerPreferences",
+            "Dests",
+            "OutputIntents",
+            "Metadata",
+        ]
+        .iter()
+        .any(|key| facts.catalog_entry_hashes.contains_key(*key))
+        && facts
+            .pages
+            .iter()
+            .all(|page| page.annotations == 0 && page.widgets == 0)
+}
+
+fn build_extracted_pdf(source: &ParsedPdf, selected: &[ObjectId]) -> Result<Vec<u8>, PdfError> {
+    let all_pages = source.pages()?;
+    let selected_targets = selected
+        .iter()
+        .enumerate()
+        .map(|(index, source_id)| (*source_id, ((index + 3) as u32, 0)))
+        .collect::<HashMap<_, _>>();
+    let selected_sources = all_pages.iter().copied().collect::<HashSet<_>>();
+    let mut importer = Importer {
+        source,
+        target_pages: selected_targets.clone(),
+        source_page_ids: selected_sources,
+        next_id: (selected.len() + 3) as u32,
+        assigned: HashMap::new(),
+        objects: BTreeMap::new(),
+        visiting: HashSet::new(),
+    };
+    let mut writes = BTreeMap::new();
+    for source_page in selected {
+        let mut dictionary = source
+            .get_object(*source_page)?
+            .as_dictionary()
+            .cloned()
+            .ok_or_else(|| PdfError::new("selected PDF page is not a dictionary"))?;
+        materialize_inherited_page_values(source, *source_page, &mut dictionary)?;
+        dictionary.remove(b"Parent".as_slice());
+        let imported = importer.import_object(PdfObject::Dictionary(dictionary), 0)?;
+        let mut dictionary = match imported {
+            PdfObject::Dictionary(dictionary) => dictionary,
+            _ => {
+                return Err(PdfError::new(
+                    "selected PDF page import changed object type",
+                ));
+            }
+        };
+        dictionary.insert(b"Parent".to_vec(), PdfObject::Reference((2, 0)));
+        writes.insert(
+            selected_targets[source_page],
+            PdfObject::Dictionary(dictionary),
+        );
+    }
+    let info = source
+        .trailers
+        .first()
+        .and_then(|trailer| trailer.get(b"Info".as_slice()))
+        .cloned()
+        .map(|info| importer.import_object(info, 0))
+        .transpose()?;
+    writes.extend(importer.objects);
+    let kids = selected
+        .iter()
+        .map(|page| PdfObject::Reference(selected_targets[page]))
+        .collect();
+    let mut pages = Dictionary::new();
+    pages.insert(b"Type".to_vec(), PdfObject::Name(b"Pages".to_vec()));
+    pages.insert(b"Kids".to_vec(), PdfObject::Array(kids));
+    pages.insert(
+        b"Count".to_vec(),
+        PdfObject::Number(selected.len().to_string()),
+    );
+    writes.insert((2, 0), PdfObject::Dictionary(pages));
+    let mut catalog = Dictionary::new();
+    catalog.insert(b"Type".to_vec(), PdfObject::Name(b"Catalog".to_vec()));
+    catalog.insert(b"Pages".to_vec(), PdfObject::Reference((2, 0)));
+    writes.insert((1, 0), PdfObject::Dictionary(catalog));
+    if writes.len() > MAX_OBJECTS {
+        return Err(PdfError::new("extracted PDF object graph is too large"));
+    }
+
+    let mut bytes = b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n".to_vec();
+    let mut offsets = BTreeMap::new();
+    for (id, object) in &writes {
+        offsets.insert(*id, bytes.len());
+        bytes.extend_from_slice(format!("{} {} obj\n", id.0, id.1).as_bytes());
+        serialize_object(object, &mut bytes, 0)?;
+        bytes.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = bytes.len();
+    let size = offsets.keys().map(|id| id.0).max().unwrap_or(0) + 1;
+    bytes.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+    for number in 1..size {
+        let offset = offsets
+            .get(&(number, 0))
+            .ok_or_else(|| PdfError::new("extracted PDF object roster is incomplete"))?;
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    let mut trailer = Dictionary::new();
+    trailer.insert(b"Size".to_vec(), PdfObject::Number(size.to_string()));
+    trailer.insert(b"Root".to_vec(), PdfObject::Reference((1, 0)));
+    if let Some(info) = info {
+        trailer.insert(b"Info".to_vec(), info);
+    }
+    bytes.extend_from_slice(b"trailer\n");
+    serialize_object(&PdfObject::Dictionary(trailer), &mut bytes, 0)?;
+    bytes.extend_from_slice(format!("\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+    Ok(bytes)
+}
+
+fn validate_extracted_pdf(
+    path: &Path,
+    source: &ParsedPdf,
+    selected: &[ObjectId],
+) -> Result<(), PdfError> {
+    let expected = selected
+        .iter()
+        .map(|id| source.inspect_page(*id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let after = ParsedPdf::load(path)?.inspect()?;
+    if after.page_count != expected.len()
+        || after.pages.iter().zip(expected).any(|(actual, expected)| {
+            actual.content_hash != expected.content_hash
+                || actual.media_box != expected.media_box
+                || actual.crop_box != expected.crop_box
+                || actual.rotation != expected.rotation
+                || actual.annotations != expected.annotations
+                || actual.links != expected.links
+                || actual.widgets != expected.widgets
+        })
+    {
+        return Err(PdfError::new(
+            "extracted PDF failed page-fidelity validation",
+        ));
+    }
+    Ok(())
+}
+
 /// Writes a new PDF by appending page-dictionary revisions that change only
 /// the approved display rotations. The source bytes remain an exact prefix of
 /// the result so unrelated PDF objects are preserved byte-for-byte.
@@ -523,8 +733,7 @@ fn build_incremental_replacement(
     let signed_page_ids = signed_pages.iter().copied().collect::<HashSet<_>>();
     let mut importer = Importer {
         source: signed,
-        source_first_page: signed_page,
-        target_first_page: archive_page,
+        target_pages: HashMap::from([(signed_page, archive_page)]),
         source_page_ids: signed_page_ids,
         next_id: archive.max_id.saturating_add(1),
         assigned: HashMap::new(),
@@ -600,8 +809,7 @@ fn build_incremental_replacement(
 
 struct Importer<'a> {
     source: &'a ParsedPdf,
-    source_first_page: ObjectId,
-    target_first_page: ObjectId,
+    target_pages: HashMap<ObjectId, ObjectId>,
     source_page_ids: HashSet<ObjectId>,
     next_id: u32,
     assigned: HashMap<ObjectId, ObjectId>,
@@ -617,8 +825,8 @@ impl Importer<'_> {
             ));
         }
         Ok(match object {
-            PdfObject::Reference(id) if id == self.source_first_page => {
-                PdfObject::Reference(self.target_first_page)
+            PdfObject::Reference(id) if self.target_pages.contains_key(&id) => {
+                PdfObject::Reference(self.target_pages[&id])
             }
             PdfObject::Reference(id) if self.source_page_ids.contains(&id) => {
                 return Err(PdfError::new(
