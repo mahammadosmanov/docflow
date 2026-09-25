@@ -35,6 +35,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-030 | `rfi_system_sync.rs`, `scan_index.rs` | `rfi_system_sync_native.rs` exact-filename, synthetic OTHERS, cache-profile, and operator-supplied signed/unsigned PDF tests |
 | DF-031 | `rfi_log.rs`, `outlook_reply_draft.rs`, `native.rs`, `backend.rs`, generic `App.tsx` result flow | `rfi_log_native.rs`, `outlook_reply_draft.rs`, backend command roster, locale parity, and `App.test.tsx` guarded handoff test |
 | DF-032 | `operations/process_scans.rs`, `pdf.rs`, `fs_ops.rs`, `native.rs` | `process_scans.rs` page grouping, discipline paths, extraction fidelity, collision, source drift, apply/undo, and Windows compile checks |
+| DF-033 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` mixed CIV/PCU per-RFI status remarks, preservation, idempotent replacement, exact remark-cell preview/apply/undo, and unsafe-target review |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

@@ -4,6 +4,28 @@ Updated: 2026-09-25
 
 ## Current candidate
 
+- Version: 1.10.3
+- Branch: `rohtolos/follow-up-mixed-status-remarks`
+- Objective: add guarded per-RFI status remarks for mixed completed groups on
+  CIV and PCU Follow Up sheets.
+- Release state: source gates pass on Rust 1.97.1; Windows package acceptance,
+  PR review, push, tag, and GitHub Release remain pending.
+
+## Current slice
+
+- Mixed groups with at least two RFIs and one `Completed` source status preview
+  every member's mapped status in the row's Remarks cell on CIV and PCU only.
+  Existing operator text is retained, generated lines replace themselves on
+  later syncs, absent blank cells are pinned and created only inside existing
+  rows, and unresolved source statuses go to manual review.
+- Added tests cover CIV and PCU preview values, preservation, missing-cell
+  creation, rejection of missing-row creation, and unresolved-status refusal.
+  Rust unit/integration suites, Node and React tests, frontend build, Clippy,
+  Cargo check, format, version/docs/source/license audits pass. Windows package
+  and operator workbook acceptance remain pending.
+
+## Previous candidate
+
 - Version: 1.10.2
 - Branch: `rohtolos/process-scans-batch-pdfs`
 - Objective: reduce repeated PDF decoding during Process Scans page OCR without
@@ -13,7 +35,7 @@ Updated: 2026-09-25
   manifest, and smoke evidence are published. Installer SHA-256:
   `2dbc375a68848a30e72f942123e482b07183f01b227305194b097e1c29b2a840`.
 
-## Current slice
+## Previous slice
 
 - Process Scans opens a single platform PDF document per page OCR sequence and
   reuses it for text extraction and every DPI render. OCR decisions and output
