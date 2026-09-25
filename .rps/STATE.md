@@ -1,6 +1,6 @@
 # DocFlow project state
 
-Updated: 2026-09-23
+Updated: 2026-09-25
 
 ## Current release
 
@@ -12,6 +12,17 @@ Updated: 2026-09-23
 
 ## Current slice
 
+- Version 1.9.13 branch `rohtolos/follow-up-pcu-worley-header` fixes PCU
+  Worley-layout discovery: the supplied workbook stores `Signed by Worley` in
+  R3 with line breaks, while header normalization only trimmed outer spaces.
+  Whitespace is now collapsed before header matching. The actual workbook was
+  read-only parsed with a synthetic source row; Preview correctly proposed
+  `PCU!R5` `Signed` → `Not Signed`. The workbook was not changed.
+- The regression test uses the exact multiline header shape. All 35 Follow Up
+  integration tests pass. Pinned Rust 1.97.1 format, Clippy, serial full Cargo
+  suite, and check pass; 23 Node tests, 54 React tests, frontend build, version,
+  docs, source, and license audits pass. Native Windows/Excel acceptance remains
+  pending.
 - PDF structure inspection and cache lookup run in deterministic two-file
   parallel batches; page OCR remains capped at four workers. Cached-page
   progress is coalesced, and PDF inspection has a visible progress stage.

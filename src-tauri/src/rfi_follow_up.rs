@@ -2828,7 +2828,11 @@ fn normalize_status(value: &str) -> String {
 }
 
 fn normalize_header(value: &str) -> String {
-    normalize_status(value).to_ascii_uppercase()
+    normalize_status(value)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase()
 }
 
 fn is_follow_up_rfi_header(token: &str) -> bool {

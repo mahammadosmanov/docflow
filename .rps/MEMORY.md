@@ -42,6 +42,9 @@
   RFI Log REMARKS line, but keep POT test, calculated remarks, and manual
   overrides outside mutation authority. Insert a missing PCU FINAL lifecycle
   value first and offer its Worley status on the next preview.
+- PCU R3 may encode `Signed by Worley` with line breaks between words. Header
+  normalization must collapse internal whitespace before matching; outer trim
+  alone skips the column-R Worley layout while still discovering P/Q lifecycle.
 - RFI Log to Outlook continuation requires the exact committed `rfi.log_add`
   journal, owner/session, and Plan digest. Reuse the approved table values in a
   separate Outlook preview; never recalculate identifiers, invent recipients or

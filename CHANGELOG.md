@@ -8,6 +8,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.9.13 - 2026-09-25
+
+### Fixed
+
+- Follow Up Sync now recognizes the PCU `Signed by Worley` header when Excel
+  stores its words on separate lines, so the keyed FINAL status in column R
+  appears in Preview and can be applied through the existing guarded plan.
+
 ## 1.9.12 - 2026-09-23
 
 ### Fixed

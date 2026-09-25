@@ -270,6 +270,23 @@ fn full_sync_updates_new_pcu_final_worley_column_from_exact_remark() {
 }
 
 #[test]
+fn full_sync_discovers_multiline_pcu_worley_header_from_current_workbook() {
+    let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
+    let target_sheet = pcu_target("CIV-1001", "Completed", "Not Signed")
+        .replace("Signed by Worley", "Signed \nby \nWorley");
+    let target = package(&[("PCU", None, target_sheet)]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["_sheet"], "PCU");
+    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
+    assert_eq!(rows[0]["target"]["statusColumn"], 18);
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+}
+
+#[test]
 fn full_sync_populates_new_pcu_final_rfi_before_its_worley_cell() {
     let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
     let target = package(&[("PCU", None, pcu_target("", "", ""))]);
