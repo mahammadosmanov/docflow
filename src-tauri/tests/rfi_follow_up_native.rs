@@ -169,6 +169,26 @@ fn full_schema_record(
     tag: &str,
     remarks: &str,
 ) -> String {
+    full_schema_record_with_status(
+        row_number,
+        suffix,
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        item,
+        tag,
+        "Completed",
+        remarks,
+    )
+}
+
+fn full_schema_record_with_status(
+    row_number: u32,
+    suffix: &str,
+    itp: &str,
+    item: &str,
+    tag: &str,
+    status: &str,
+    remarks: &str,
+) -> String {
     row(
         row_number,
         [
@@ -176,15 +196,260 @@ fn full_schema_record(
                 &format!("A{row_number}"),
                 &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
             ),
-            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-CIV-0002"),
+            inline(&format!("D{row_number}"), itp),
             inline(&format!("E{row_number}"), item),
             inline(&format!("F{row_number}"), tag),
             inline(&format!("G{row_number}"), "Zone 1"),
             inline(&format!("N{row_number}"), "N1"),
-            inline(&format!("T{row_number}"), "Completed"),
+            inline(&format!("T{row_number}"), status),
             inline(&format!("V{row_number}"), remarks),
         ],
     )
+}
+
+#[test]
+fn mixed_completed_groups_preview_individual_remarks_only_on_civ_and_pcu() {
+    let source = full_schema_source([
+        full_schema_record_with_status(
+            10,
+            "1222",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Completed",
+            "",
+        ),
+        full_schema_record_with_status(
+            11,
+            "1223",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Ongoing",
+            "",
+        ),
+        full_schema_record_with_status(
+            12,
+            "1224",
+            "AZE-SUN-INT-QMS-ITP-CIV-0005",
+            "CIV-3.6",
+            "PCS-01",
+            "Completed",
+            "",
+        ),
+        full_schema_record_with_status(
+            13,
+            "1225",
+            "AZE-SUN-INT-QMS-ITP-CIV-0005",
+            "CIV-3.6",
+            "PCS-01",
+            "Ongoing",
+            "",
+        ),
+    ]);
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(
+                        1,
+                        [
+                            inline("B1", "Tag"),
+                            inline("C1", "RFI No."),
+                            inline("D1", "STATUS"),
+                            inline("Q1", "Remarks"),
+                        ],
+                    ),
+                    row(
+                        2,
+                        [
+                            inline("B2", "AREA-1"),
+                            inline("C2", "CIV-1222/1223"),
+                            inline("D2", "Pending"),
+                            inline(
+                                "Q2",
+                                "operator note\nRFI Status Sync: CIV-1222 In Progress, CIV-1223 In Progress",
+                            ),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "PCU",
+            None,
+            worksheet(
+                [
+                    row(
+                        3,
+                        [
+                            inline("P3", "Final acceptance of PCU foundation (3.6)"),
+                            inline("R3", "Signed by Worley"),
+                        ],
+                    ),
+                    row(
+                        4,
+                        [
+                            inline("P4", "RFI No."),
+                            inline("Q4", "STATUS"),
+                            inline("U4", "Remarks"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("B5", "N1"),
+                            inline("C5", "PCS-01"),
+                            inline("P5", "CIV-1224/1225"),
+                            inline("Q5", "Pending"),
+                            inline("R5", "Signed"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [
+                    row(
+                        1,
+                        [
+                            inline("B1", "Tag"),
+                            inline("C1", "RFI No."),
+                            inline("D1", "STATUS"),
+                            inline("Q1", "Remarks"),
+                        ],
+                    ),
+                    row(
+                        2,
+                        [
+                            inline("B2", "OTHER"),
+                            inline("C2", "CIV-1222/1223"),
+                            inline("D2", "Pending"),
+                            inline("Q2", "operator note"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let review = classify(source.clone(), target.clone()).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    let civ = rows.iter().find(|row| row["_sheet"] == "CIV").unwrap();
+    let pcu = rows
+        .iter()
+        .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 17)
+        .unwrap();
+    let pcu_signed = rows
+        .iter()
+        .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 18)
+        .unwrap();
+    let mec = rows.iter().find(|row| row["_sheet"] == "MEC").unwrap();
+
+    assert_eq!(
+        civ["proposedRemark"],
+        "operator note\nRFI Status Sync: CIV-1222 Completed, CIV-1223 In Progress"
+    );
+    assert_eq!(civ["remarkCellAddress"], "Q2");
+    assert_eq!(
+        pcu["proposedRemark"],
+        "RFI Status Sync: CIV-1224 Completed, CIV-1225 In Progress"
+    );
+    assert_eq!(pcu["remarkCellAddress"], "U5");
+    assert_eq!(pcu["target"]["remarkCellExists"], false);
+    assert!(pcu_signed["proposedRemark"].is_null());
+    assert!(mec["proposedRemark"].is_null());
+
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(&source_path, source.into_inner()).unwrap();
+    std::fs::write(&target_path, target.into_inner()).unwrap();
+    let mut source_file = File::open(&source_path).unwrap();
+    let mut target_file = File::open(&target_path).unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut source_file,
+        &mut target_file,
+    )
+    .unwrap();
+    let updates = guarded_updates(&plan.steps[0]).unwrap();
+
+    assert!(!updates["CIV"][&(2, 17)].create_if_absent);
+    assert!(updates["PCU"][&(5, 21)].create_if_absent);
+}
+
+#[test]
+fn mixed_group_with_unknown_source_status_stays_in_manual_review() {
+    let source = full_schema_source([
+        full_schema_record_with_status(
+            10,
+            "1222",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Completed",
+            "",
+        ),
+        full_schema_record_with_status(
+            11,
+            "1223",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Unrecognized status",
+            "",
+        ),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                        inline("Q1", "Remarks"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", "CIV-1222/1223"),
+                        inline("D2", "In Progress"),
+                        inline(
+                            "Q2",
+                            "RFI Status Sync: CIV-1222 Completed, CIV-1223 In Progress",
+                        ),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let row = &review["rows"][0];
+
+    assert_eq!(row["disposition"], "rfi.followUp.disposition.manualReview");
+    assert_eq!(
+        row["reasonKey"],
+        "warn.rfi.followUp.reason.sourceStatusUnknown"
+    );
+    assert!(row["proposedRemark"].is_null());
 }
 
 fn pcu_final_record(row_number: u32, remarks: &str) -> String {

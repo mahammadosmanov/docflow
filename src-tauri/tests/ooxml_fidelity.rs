@@ -10,7 +10,8 @@ use docflow_lib::{
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, WorksheetVisibility, ordered_workbook_discovery,
         package_has_signature, patch_workbook_sheets, patch_workbook_sheets_guarded,
-        read_workbook_from_reader, verify_guarded_workbook_delta,
+        patch_workbook_sheets_guarded_text, read_workbook_from_reader,
+        verify_guarded_workbook_delta, verify_guarded_workbook_delta_text,
     },
 };
 use tempfile::TempDir;
@@ -119,6 +120,58 @@ fn cursor_member(source: &Cursor<Vec<u8>>, name: &str) -> Vec<u8> {
     bytes
 }
 
+#[test]
+fn guarded_text_patch_can_materialize_only_a_missing_cell_in_an_existing_row() {
+    let sheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>RFI</t></is></c></row></sheetData></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(MAIN, &[("CIV", None, &sheet)], false, false);
+    let updates = BTreeMap::from([(
+        "CIV".to_string(),
+        BTreeMap::from([(
+            (2, 17),
+            GuardedCellUpdate {
+                expected: CellData::default(),
+                replacement: CellUpdate::Text("RFI Status Sync: CIV-1222 Completed".to_string()),
+                create_if_absent: true,
+            },
+        )]),
+    )]);
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    verify_guarded_workbook_delta_text(&mut source, &mut destination, &updates).unwrap();
+    destination.seek(SeekFrom::Start(0)).unwrap();
+    let workbook = read_workbook_from_reader(&mut destination).unwrap();
+
+    assert_eq!(
+        workbook.sheet("CIV").unwrap().value(2, 17),
+        "RFI Status Sync: CIV-1222 Completed"
+    );
+}
+
+#[test]
+fn guarded_text_patch_rejects_creating_a_missing_row() {
+    let sheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>RFI</t></is></c></row></sheetData></worksheet>"#
+    );
+    let mut source = worksheet_facts_package(MAIN, &[("CIV", None, &sheet)], false, false);
+    let updates = BTreeMap::from([(
+        "CIV".to_string(),
+        BTreeMap::from([(
+            (3, 17),
+            GuardedCellUpdate {
+                expected: CellData::default(),
+                replacement: CellUpdate::Text("RFI Status Sync: CIV-1222 Completed".to_string()),
+                create_if_absent: true,
+            },
+        )]),
+    )]);
+    let mut destination = Cursor::new(Vec::new());
+
+    assert!(patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).is_err());
+}
+
 fn replace_cursor_member(
     source: &Cursor<Vec<u8>>,
     name: &str,
@@ -172,6 +225,7 @@ fn guarded_follow_up_patch_changes_only_authorized_value_events() {
                         style: Some("7".to_string()),
                     },
                     replacement: CellUpdate::Text("Signed".to_string()),
+                    create_if_absent: false,
                 },
             )]),
         )]);
@@ -222,6 +276,7 @@ fn guarded_follow_up_verifier_compares_expanded_events_not_attribute_quote_bytes
                     style: Some("7".to_string()),
                 },
                 replacement: CellUpdate::Text("Signed".to_string()),
+                create_if_absent: false,
             },
         )]),
     )]);
@@ -260,6 +315,7 @@ fn guarded_follow_up_verifier_rejects_unapproved_event_and_package_deltas() {
                     style: Some("7".to_string()),
                 },
                 replacement: CellUpdate::Text("Signed".to_string()),
+                create_if_absent: false,
             },
         )]),
     )]);
@@ -316,6 +372,7 @@ fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
             style: Some("7".to_string()),
         },
         replacement: CellUpdate::Text("Signed".to_string()),
+        create_if_absent: false,
     };
     let invalid_sets = [
         BTreeMap::new(),
@@ -329,6 +386,7 @@ fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
                         ..approved.expected.clone()
                     },
                     replacement: approved.replacement.clone(),
+                    create_if_absent: false,
                 },
             )]),
         )]),
@@ -339,6 +397,7 @@ fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
                 GuardedCellUpdate {
                     expected: approved.expected.clone(),
                     replacement: CellUpdate::Text("Rejected".to_string()),
+                    create_if_absent: false,
                 },
             )]),
         )]),
@@ -414,6 +473,7 @@ fn guarded_writer_stays_on_pinned_handles_after_visible_parent_swap() {
                     style: Some("7".to_string()),
                 },
                 replacement: CellUpdate::Text("Signed".to_string()),
+                create_if_absent: false,
             },
         )]),
     )]);

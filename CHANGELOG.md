@@ -8,6 +8,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.3 - 2026-09-25
+
+### Fixed
+
+- Follow Up sync now records individual statuses for mixed completed RFI groups
+  in the existing CIV and PCU row Remarks cells, while preserving other notes.
+
 ## 1.10.2 - 2026-09-25
 
 ### Improved

@@ -1824,6 +1824,7 @@ pub fn execute_sync_step(
                     style: update.expected_style.clone(),
                 },
                 replacement: CellUpdate::Text(update.replacement_value.clone()),
+                create_if_absent: false,
             };
             if updates
                 .entry(sheet.clone())

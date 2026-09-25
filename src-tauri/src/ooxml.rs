@@ -74,6 +74,7 @@ pub enum CellUpdate {
 pub struct GuardedCellUpdate {
     pub expected: CellData,
     pub replacement: CellUpdate,
+    pub create_if_absent: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -636,6 +637,8 @@ fn validate_guarded_update_set(
                         &update.replacement,
                         CellUpdate::Text(value) if matches!(value.as_str(), "Signed" | "Not Signed")
                     )
+                || update.create_if_absent
+                    && (status_values_only || update.expected != CellData::default())
             {
                 return Err(OoxmlError::invalid("guarded replacement is invalid"));
             }
@@ -663,13 +666,16 @@ fn validate_guarded_source(
             return Err(OoxmlError::invalid("guarded worksheet is protected"));
         }
         for (&coordinate, update) in updates {
-            let cell = sheet
-                .cells
-                .get(&coordinate)
-                .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
-            if cell != &update.expected || cell.formula.is_some() {
+            let current = sheet.cells.get(&coordinate);
+            let absent_is_expected = update.create_if_absent
+                && update.expected == CellData::default()
+                && current.is_none()
+                && sheet.cells.keys().any(|(row, _)| *row == coordinate.0);
+            let present_is_expected = !update.create_if_absent
+                && current.is_some_and(|cell| cell == &update.expected && cell.formula.is_none());
+            if !absent_is_expected && !present_is_expected {
                 return Err(OoxmlError::invalid(
-                    "guarded target cell no longer matches its approved value",
+                    "guarded target cell presence or value no longer matches its approved state",
                 ));
             }
             for range in &sheet.merged_ranges {
@@ -2192,14 +2198,28 @@ fn patch_sheet_xml_guarded(
             "guarded worksheet row is missing or ambiguous",
         )?;
         let coordinate = cell_reference(row_number, column_number);
-        let cell = unique_direct_child_by_attribute_mut(
+        let cell = match optional_unique_direct_child_by_attribute_mut(
             row,
             b"c",
             &namespace,
             b"r",
             &coordinate,
-            "guarded worksheet cell is missing or ambiguous",
-        )?;
+            "guarded worksheet cell is ambiguous",
+        )? {
+            Some(cell) if !update.create_if_absent => cell,
+            None if update.create_if_absent => ensure_guarded_cell(
+                row,
+                row_number,
+                column_number,
+                &namespace,
+                prefix.as_deref(),
+            )?,
+            _ => {
+                return Err(OoxmlError::invalid(
+                    "guarded worksheet cell presence changed",
+                ));
+            }
+        };
         patch_guarded_cell_value(
             cell,
             &namespace,
@@ -2311,6 +2331,14 @@ fn guarded_sheet_tokens(
             )
         })
         .ok_or_else(|| OoxmlError::invalid("guarded worksheet namespace is invalid"))?;
+    let prefix = root
+        .start
+        .name()
+        .as_ref()
+        .split(|byte| *byte == b':')
+        .next()
+        .filter(|_| root.start.name().as_ref().contains(&b':'))
+        .map(|prefix| String::from_utf8_lossy(prefix).into_owned());
     let sheet_data = single_child_element_in_namespace_mut(
         root,
         b"sheetData",
@@ -2327,14 +2355,28 @@ fn guarded_sheet_tokens(
             "guarded worksheet row is missing or ambiguous",
         )?;
         let coordinate = cell_reference(row_number, column_number);
-        let cell = unique_direct_child_by_attribute_mut(
+        let cell = match optional_unique_direct_child_by_attribute_mut(
             row,
             b"c",
             &namespace,
             b"r",
             &coordinate,
-            "guarded worksheet cell is missing or ambiguous",
-        )?;
+            "guarded worksheet cell is ambiguous",
+        )? {
+            Some(cell) if !update.create_if_absent || output => cell,
+            None if update.create_if_absent && !output => ensure_guarded_cell(
+                row,
+                row_number,
+                column_number,
+                &namespace,
+                prefix.as_deref(),
+            )?,
+            _ => {
+                return Err(OoxmlError::invalid(
+                    "guarded worksheet cell presence changed",
+                ));
+            }
+        };
         normalize_guarded_cell_for_tokens(cell, &namespace, &coordinate, update, output)?;
     }
 
@@ -2601,6 +2643,39 @@ fn unique_direct_child_by_attribute_mut<'a>(
     match &mut parent.children[matches[0]] {
         XmlNode::Element(element) => Ok(element),
         XmlNode::Raw(_) => Err(OoxmlError::invalid(error)),
+    }
+}
+
+fn optional_unique_direct_child_by_attribute_mut<'a>(
+    parent: &'a mut XmlElement,
+    local_name: &[u8],
+    namespace: &[u8],
+    attribute_name: &[u8],
+    attribute_value: &str,
+    error: &str,
+) -> Result<Option<&'a mut XmlElement>, OoxmlError> {
+    let matches = parent
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace)
+                    && has_local_name(child, local_name)
+                    && attribute(child, attribute_name).as_deref() == Some(attribute_value) =>
+            {
+                Some(index)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [index] => match &mut parent.children[*index] {
+            XmlNode::Element(element) => Ok(Some(element)),
+            XmlNode::Raw(_) => Err(OoxmlError::invalid(error)),
+        },
+        _ => Err(OoxmlError::invalid(error)),
     }
 }
 
@@ -3307,6 +3382,28 @@ fn ensure_cell<'a>(
         XmlNode::Element(cell) => Ok(cell),
         XmlNode::Raw(_) => Err(OoxmlError::invalid("worksheet cell insertion failed")),
     }
+}
+
+fn ensure_guarded_cell<'a>(
+    row: &'a mut XmlElement,
+    row_number: u32,
+    column_number: u32,
+    namespace: &[u8],
+    prefix: Option<&str>,
+) -> Result<&'a mut XmlElement, OoxmlError> {
+    let coordinate = cell_reference(row_number, column_number);
+    let cell = ensure_cell(row, row_number, column_number, None)?;
+    cell.namespace = Some(namespace.to_vec());
+    let qualified_name = prefix
+        .map(|prefix| format!("{prefix}:c"))
+        .unwrap_or_else(|| "c".to_string());
+    cell.start.set_name(qualified_name.as_bytes());
+    cell.attributes = vec![ExpandedAttribute {
+        namespace: None,
+        local_name: b"r".to_vec(),
+        value: coordinate.into_bytes(),
+    }];
+    Ok(cell)
 }
 
 fn write_update(cell: &mut XmlElement, update: &CellUpdate) {
@@ -4798,6 +4895,7 @@ mod tests {
                         style: None,
                     },
                     replacement: CellUpdate::Text(String::new()),
+                    create_if_absent: false,
                 },
             )]),
         )]);

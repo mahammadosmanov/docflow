@@ -167,6 +167,15 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   combined source to recoverable trash only after all its outputs succeed when
   Keep original is off. Unsupported or drifted PDFs fail closed to Review or
   Apply refusal; no page is silently dropped.
+- **DF-033 — Mixed Follow Up status remarks:** `rfi.follow_up_sync` writes the
+  individual mapped status of every RFI in a shared group to the existing row
+  Remarks cell on CIV and PCU only when at least two RFIs resolve and one is
+  Completed. Existing remarks are preserved; one generated status line is
+  replaced on later syncs. The remark cell is included in the exact approved
+  Plan and guarded Apply. Unsafe or missing remark targets leave the affected
+  update in manual review. A physically absent blank target may be created only
+  in the existing row and header-defined Remarks column. MEC, Road, and Signed
+  By remarks never change.
 
 ## Scope
 
