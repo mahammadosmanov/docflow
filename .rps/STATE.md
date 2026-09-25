@@ -4,14 +4,19 @@ Updated: 2026-09-25
 
 ## Current candidate
 
-- Version: 1.10.0
+- Version: 1.10.2
 - Branch: `rohtolos/process-scans-batch-pdfs`
-- Objective: split ordered multi-RFI scan PDFs into exact page-only outputs and
-  file CIV/MEC/ELE/PRC results beneath their discipline folders.
-- Release state: local source gates pass; Windows CI/package smoke remains
-  pending before the immutable tag and GitHub Release.
+- Objective: reduce repeated PDF decoding during Process Scans page OCR without
+  changing recognition passes, confidence gates, or ambiguity handling.
+- Release state: source gates pass; Windows package verification is pending.
 
 ## Current slice
+
+- Process Scans opens a single platform PDF document per page OCR sequence and
+  reuses it for text extraction and every DPI render. OCR decisions and output
+  ordering remain unchanged. Exact operator OCR returned CIV-1286 before and
+  after the change (15.79 s baseline, 15.91 s after; single-page runtime is
+  dominated by OCR itself). Full stacked-PDF throughput is not yet measured.
 
 - Process Scans now scans page order inside a multi-page PDF. Strict exact RFI
   starts form groups; plain no-candidate pages continue the group; uncertain,
@@ -23,11 +28,17 @@ Updated: 2026-09-25
   existing organized or flat naming choice beneath it. Other disciplines retain
   the existing layout.
 - Focused Process Scans integration: 24 passed, 0 failed, 1 ignored. Pinned Rust
-  1.97.1 all-feature Cargo suite, Clippy, check, and format pass. Node (23), React
-  (54), frontend build, version/docs/source/license audits pass. The Windows
-  target is installed; native Windows build/install/startup/OCR/package/uninstall
-  evidence is pending on the release workflow. Office/printer acceptance remains
-  outside source and package evidence.
+  1.97.1 all-feature Cargo suite (368 unit tests and all runnable integrations),
+  Clippy, check, and format pass. Node (23), React (54), frontend build,
+  version/docs/source/license audits pass. Native Windows build/install/startup/
+  OCR/package/uninstall evidence is pending on the release workflow. Office and
+  printer acceptance remain outside source and package evidence.
+- Windows 1.10.0 workflow run `36109512980` passed setup and Tesseract install,
+  then failed the full Rust suite because the new Process Scans assertions
+  searched for `/CIV/` and `/MEC/` in Windows paths. No installer was produced.
+  Version 1.10.1 makes the assertions separator-independent. Windows workflow
+  `36111425818` passed all tests, installer build, clean install/startup/package
+  smoke, installed-tree audit, uninstall, artifact manifest, and release upload.
 - PR CI exposed three Linux-only Rust warnings: macOS/Windows credential
   constants compiled unused on Linux, and libc's platform-specific `S_IFREG`
   type made a portable conversion look redundant. The constants are now

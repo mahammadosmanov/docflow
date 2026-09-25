@@ -36,7 +36,7 @@ impl Drop for RuntimeGuard {
 pub(crate) struct InMemoryPdf {
     document: PdfDocument,
     _random_access_stream: IRandomAccessStream,
-    _memory_stream: IStream,
+    _memory_stream: Option<IStream>,
     _runtime: RuntimeGuard,
 }
 
@@ -60,7 +60,18 @@ impl InMemoryPdf {
         Ok(Self {
             document,
             _random_access_stream: random_access_stream,
-            _memory_stream: memory_stream,
+            _memory_stream: Some(memory_stream),
+            _runtime: runtime,
+        })
+    }
+
+    pub(crate) fn open_path(path: &Path) -> Result<Self, String> {
+        let runtime = initialize_runtime()?;
+        let (document, random_access_stream) = load_document(path)?;
+        Ok(Self {
+            document,
+            _random_access_stream: random_access_stream,
+            _memory_stream: None,
             _runtime: runtime,
         })
     }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.1",
+  "currentVersion": "1.10.2",
   "releases": [
     {
       "version": "0.1.0",
@@ -742,9 +742,17 @@
       "version": "1.10.1",
       "date": "2026-09-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.10.1",
       "summary": "Make Process Scans discipline-folder regression tests portable across Windows and Unix paths."
+    },
+    {
+      "version": "1.10.2",
+      "date": "2026-09-25",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.10.2",
+      "summary": "Reuse the decoded PDF during each Process Scans page OCR sequence to reduce repeated document loading."
     }
   ]
 }

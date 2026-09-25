@@ -8,6 +8,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.2 - 2026-09-25
+
+### Improved
+
+- Process Scans reuses one decoded PDF document across each page's text check
+  and OCR-resolution renders, reducing repeated PDF loading for stacked scans.
+
 ## 1.10.1 - 2026-09-25
 
 ### Fixed
