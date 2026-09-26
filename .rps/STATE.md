@@ -14,8 +14,13 @@ Updated: 2026-09-26
   check, Node/React tests, frontend build, format, version/docs/source/license
   audits pass locally. Rust 1.98 Clippy adds nine unrelated
   `chunks_exact_to_as_chunks` failures; release toolchain is pinned at 1.97.1.
-  Need final diff review, source checkpoint, and Windows 1.10.6 draft installer
-  workflow. No Windows artifact or native Office acceptance yet.
+  Commit `bc0a15be15c3b2886ab3dc5bd8bcb15499542fbc` is pushed. Windows run
+  `36245298684` passed build, clean installer smoke, manifest binding, and
+  draft upload. The draft is
+  `https://github.com/mahammadosmanov/docflow/releases/tag/untagged-d7eb46481ca84ed17eb3`.
+  Linux CI run `36245292685` failed at linking with
+  `ld terminated with signal 7 [Bus error]`; no Rust assertion failed. Native
+  Windows Office/Excel acceptance remains pending.
 
 ## 1.10.6 slice
 
