@@ -133,14 +133,19 @@ expanded only when unambiguous; malformed or mixed-discipline values fail closed
 For supported CIV/MEC routes, including FINAL routes, a source record with no
 matching row in the current Follow Up template is outside its scope and is
 skipped without a warning. If more than one row matches, the record remains in
-manual review, except that a CIV record with multiple exact area tags may map
-to multiple distinct existing rows when every target row has a different tag
-named in the source. Duplicate target rows for one tag remain manual review;
-this rule does not create cartesian mappings. Repeated MEC records may map to
-multiple existing MEC rows only when every source row agrees on ITP, item,
-status, and Worley evidence, and every destination has a unique exact
-`(Tag No, Area, Inspection Location)` context. Duplicate contexts, conflicting
-source values, and multi-valued MEC contexts remain manual review.
+manual review, except that CIV and MEC records may map to distinct existing
+rows when each destination is justified by a different exact source context.
+For CIV, each target area tag must be named in the source. For MEC, repeated
+source rows must agree on ITP, item, status, and Worley evidence; a single row
+may enumerate several `Area` values only when `Tag No` and `Inspection Location`
+each contain one value. Every destination must match one exact
+`(Tag No, Area, Inspection Location)` tuple. Target cells such as `N10/N11` may
+match either exact location token; substring matches are not allowed. For CIV
+ITP `0002` routes `1.8`, `2.4`, and `2.5`, exact `PCS-` tags select the PCU
+section like `PCU-` tags. An explicit area suffix such as `PCS-19/S1,S2,S3`
+limits matching to existing PCU rows for those named areas. These rules never
+create rows or sections. Duplicate contexts, conflicting source values, and
+other multi-valued contexts remain manual review.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the

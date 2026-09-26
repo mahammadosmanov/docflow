@@ -18,12 +18,14 @@ contexts could update the wrong area.
 
 A repeated MEC RFI may map to multiple existing MEC Follow Up rows only when
 all source records agree on normalized ITP, item, lifecycle status, and Worley
-state. Each source record must have one exact tag, area, and inspection
-location. Every candidate destination must match one distinct exact
-`(Tag No, Area, Inspection Location)` tuple present in the source records.
-Duplicate destination tuples, conflicting source values, missing context,
-multi-valued context cells, and unrelated pre-existing placements remain
-manual review.
+state. Each source record must have one exact tag and inspection location.
+`Area` may contain several explicit values in one row; each value forms one
+exact `(Tag No, Area, Inspection Location)` tuple with the single tag and
+location. Every candidate destination must match one distinct tuple. A target
+location cell may contain slash/comma-delimited exact values such as
+`N10/N11`; each token is compared exactly. Duplicate destination tuples,
+conflicting source values, missing context, multiple tag or location values,
+and unrelated pre-existing placements remain manual review.
 
 No section, row, or cell is created. All other multi-row mappings retain manual
 review. Existing formula, merge, protection, exact-cell, and Remarks safeguards
@@ -54,7 +56,8 @@ Workbook edits remain guarded and journaled for Undo.
 - `docs/TRACEABILITY.md` and `docs/RELEASE_SAFETY.md`: include distinct-context
   fan-out and duplicate-context regressions.
 - `src-tauri/src/rfi_follow_up.rs`: retain per-source route contexts and fan
-  out only across distinct exact MEC tuples.
+  out only across distinct exact MEC tuples, including one explicit multi-area
+  field.
 - `src-tauri/tests/rfi_follow_up_native.rs`: cover safe fan-out and duplicate
   tuple refusal.
 

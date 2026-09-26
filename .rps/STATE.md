@@ -4,23 +4,53 @@ Updated: 2026-09-26
 
 ## Current candidate
 
-- Version: 1.10.6
+- Version: 1.10.8
 - Branch: `rohtolos/follow-up-unmatched-skip`
+- Objective: match the supplied RFI Log to exact existing Follow Up contexts,
+  including MEC inspection locations, PCS blocks, and explicit multi-area rows.
+- Release state: all 48 Follow Up native tests pass. Latest supplied-workbook
+  plan has 66 approved cell pairs and 47 ambiguous MEC rows for operator review.
+  A guarded review copy was created; original workbook hashes are unchanged.
+  Full release checks remain pending.
+
+## 1.10.8 slice
+
+- MEC source discovery now accepts the `INSP. LOC./AREA` header variant. This
+  fixed the exact MEC-0791 context match without relaxing target matching.
+- Native regression confirms MEC-0791 maps to its existing Follow Up row.
+- Supplied workbook scan recognizes both `INSPECTION LOCATION` and
+  `INSP. LOC./AREA`; exact PCS routes use block identity, composite PCS tags
+  match explicit area tokens within the uniquely identified CIV zone, and MEC
+  multi-area records map only when each target tuple is distinct.
+- Latest plan: 50 lifecycle and 16 Worley updates; 47 source RFIs have multiple
+  MEC candidates and remain manual. No rows or sections are invented.
+- Review copy: `Inspection Status Follow Up - Detailed Sync - Review Pending
+  v2.xlsm`; manual review list: `Follow Up - Detailed Sync Manual Review v2.csv`.
+  The earlier `Safe Sync` copy and `Ongoing Missing` CSV are superseded.
+- Verification: supplied-workbook guarded plan and 48 native Follow Up tests
+  pass; full Rust suite, 54 frontend tests, frontend build, pinned Rust 1.97.1
+  Clippy, Cargo check, format, version/docs/source/license audits pass. Current
+  Rust 1.98 Clippy reports nine existing `chunks_exact_to_as_chunks` lints in
+  `ocr.rs`, `rfi_file_group.rs`, and `pdf.rs`; pinned release Clippy is clean.
+- Windows Excel acceptance remains pending.
+
+## 1.10.6 carried slice
+
+- Follow Up Sync maps repeated MEC RFIs to separate existing rows when each
+  exact tag, area, and inspection-location tuple is unique.
+- S5 retained files now cap at 256 while the 8 GiB bound remains unchanged.
+- Commit `bc0a15be15c3b2886ab3dc5bd8bcb15499542fbc` is pushed; Windows run
+  `36245298684` passed its recorded gates. Linux CI linker failure and Windows
+  Excel acceptance remain pending.
+
+## Previous current candidate (1.10.6)
+
 - Objective: synchronize exact multi-row CIV/MEC Follow Up mappings and raise
   the bounded retained S5 file capacity after operator Apply failures.
-- Release state: supplied current workbooks produce 28 approved row pairs and
-  no warnings; guarded temporary-copy OOXML delta verification passes.
-  Follow Up native suite (44), pinned Rust 1.97.1 full suite, Clippy, Cargo
-  check, Node/React tests, frontend build, format, version/docs/source/license
-  audits pass locally. Rust 1.98 Clippy adds nine unrelated
-  `chunks_exact_to_as_chunks` failures; release toolchain is pinned at 1.97.1.
-  Commit `bc0a15be15c3b2886ab3dc5bd8bcb15499542fbc` is pushed. Windows run
-  `36245298684` passed build, clean installer smoke, manifest binding, and
-  draft upload. The draft is
+- Supplied prior workbook preview produced 28 approved row pairs and no
+  warnings; this is historical evidence and predates the broader workbook scan.
+- Release draft:
   `https://github.com/mahammadosmanov/docflow/releases/tag/untagged-d7eb46481ca84ed17eb3`.
-  Linux CI run `36245292685` failed at linking with
-  `ld terminated with signal 7 [Bus error]`; no Rust assertion failed. Native
-  Windows Office/Excel acceptance remains pending.
 
 ## 1.10.6 slice
 

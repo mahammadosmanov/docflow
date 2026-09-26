@@ -49,8 +49,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   CIV area tags may map to their respective distinct existing rows. Repeated
   MEC records may map to multiple existing rows only when each row has a unique
   exact `(Tag No, Area, Inspection Location)` context from same-status,
-  same-item source records. Duplicate contexts and all other non-unique matches
-  remain manual review. Shared-cell status is derived from every remaining RFI;
+  same-item source records. An exact `PCS-` tag selects PCU routes like `PCU-`;
+  explicit section suffixes restrict candidates to those exact existing PCU
+  rows. MEC may split a target cell's slash/comma-delimited location values and
+  may fan one source row across distinct explicit Area values only when Tag No
+  and Inspection Location are each single-valued. Duplicate contexts and all
+  other non-unique matches remain manual review. No rows or sections are
+  created. Shared-cell status is derived from every remaining RFI;
   Cancelled/Rejected entries are removed; FINAL Worley state follows the exact
   REMARKS marker; excluded sheets never change.
 - **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are

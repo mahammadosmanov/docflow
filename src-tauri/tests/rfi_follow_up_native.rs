@@ -216,6 +216,26 @@ fn full_schema_mec_record(
     location: &str,
     status: &str,
 ) -> String {
+    full_schema_mec_record_with_itp(
+        row_number,
+        suffix,
+        (
+            "AZE-SUN-INT-QMS-ITP-MEC-0001",
+            item,
+            tag,
+            area,
+            location,
+            status,
+        ),
+    )
+}
+
+fn full_schema_mec_record_with_itp(
+    row_number: u32,
+    suffix: &str,
+    fields: (&str, &str, &str, &str, &str, &str),
+) -> String {
+    let (itp, item, tag, area, location, status) = fields;
     row(
         row_number,
         [
@@ -223,7 +243,7 @@ fn full_schema_mec_record(
                 &format!("A{row_number}"),
                 &format!("AZE-SUN-INT-QMS-RFI-MEC-{suffix}"),
             ),
-            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-MEC-0001"),
+            inline(&format!("D{row_number}"), itp),
             inline(&format!("E{row_number}"), item),
             inline(&format!("F{row_number}"), tag),
             inline(&format!("G{row_number}"), area),
@@ -419,6 +439,310 @@ fn mixed_completed_groups_update_status_without_writing_remarks() {
 
     assert!(!updates["CIV"].contains_key(&(2, 17)));
     assert!(!updates["PCU"].contains_key(&(5, 21)));
+}
+
+#[test]
+fn full_sync_recognizes_the_mec_inspection_location_header_variant() {
+    let civ = worksheet(
+        [row(
+            9,
+            [
+                inline("A9", "RFI No."),
+                inline("D9", "ITP No:"),
+                inline("E9", "Item No."),
+                inline("F9", "Tag No"),
+                inline("G9", "Area"),
+                inline("N9", "Inspection Location"),
+                inline("T9", "Inspection Status"),
+                inline("V9", "Remarks"),
+            ],
+        )],
+        &[],
+    );
+    let mec = worksheet(
+        [
+            row(
+                9,
+                [
+                    inline("A9", "RFI No."),
+                    inline("D9", "ITP No:"),
+                    inline("E9", "Item No."),
+                    inline("F9", "Tag No"),
+                    inline("G9", "Area"),
+                    inline("O9", "INSP. LOC./AREA"),
+                    inline("Q9", "Inspection Status"),
+                    inline("W9", "Remarks"),
+                ],
+            ),
+            row(
+                10,
+                [
+                    inline("A10", "AZE-SUN-INT-QMS-RFI-MEC-0791"),
+                    inline("D10", "AZE-SUN-INT-QMS-ITP-MEC-0003"),
+                    inline("E10", "MEC-3.3.1"),
+                    inline("F10", "PCS-07"),
+                    inline("G10", "S3"),
+                    inline("O10", "N10"),
+                    inline("Q10", "Ongoing"),
+                    blank("W10"),
+                ],
+            ),
+        ],
+        &[],
+    );
+    let source = source_package(civ, mec);
+    let target = package(&[(
+        "MEC",
+        None,
+        worksheet(
+            [
+                row(3, [inline("P3", "FINAL")]),
+                row(4, [inline("P4", "RFI No."), inline("Q4", "STATUS")]),
+                row(
+                    5,
+                    [
+                        inline("B5", "N10"),
+                        inline("C5", "PCS-07"),
+                        inline("D5", "S3"),
+                        blank("P5"),
+                        blank("Q5"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["rfiNo"], "MEC-0791");
+    assert_eq!(rows[0]["_sheet"], "MEC");
+    assert_eq!(rows[0]["_row"], 5);
+    assert_eq!(rows[0]["proposedStatus"], "In Progress");
+    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+}
+
+#[test]
+fn full_sync_routes_pcu_final_tag_to_the_exact_pcu_section_row() {
+    let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
+    let target = package(&[("PCU", None, pcu_target("", "", ""))]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["_sheet"], "PCU");
+    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
+    assert_eq!(rows[0]["proposedStatus"], "Completed");
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
+    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+}
+
+#[test]
+fn full_sync_routes_composite_pcs_areas_to_matching_civ_zone_rows() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "1401",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.2.4",
+        "PCS-19/S1,S2,S3",
+        "Ongoing",
+        "",
+    )]);
+    let target = package(&[
+        (
+            "MEC",
+            None,
+            worksheet(
+                [
+                    row(5, [inline("A5", "Zone 4"), inline("C5", "PCS-19")]),
+                    row(6, [inline("A6", "Zone 4"), inline("C6", "PCS-20")]),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
+                    row(
+                        20,
+                        [
+                            inline("A20", "Zone 4"),
+                            inline("B20", "S1"),
+                            blank("I20"),
+                            blank("J20"),
+                        ],
+                    ),
+                    row(
+                        21,
+                        [
+                            inline("A21", "Zone 4"),
+                            inline("B21", "S2"),
+                            blank("I21"),
+                            blank("J21"),
+                        ],
+                    ),
+                    row(
+                        22,
+                        [
+                            inline("A22", "Zone 4"),
+                            inline("B22", "S3"),
+                            blank("I22"),
+                            blank("J22"),
+                        ],
+                    ),
+                    row(
+                        23,
+                        [
+                            inline("A23", "Zone 3"),
+                            inline("B23", "S1"),
+                            blank("I23"),
+                            blank("J23"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 3, "{review}");
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["_row"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![20, 21, 22]
+    );
+    assert!(rows.iter().all(|row| {
+        row["_sheet"] == "CIV"
+            && row["target"]["rfiColumn"] == 9
+            && row["proposedRfiNo"] == "CIV-1401"
+            && row["disposition"] == "rfi.followUp.disposition.ready"
+    }));
+}
+
+#[test]
+fn full_sync_maps_mec_multiarea_rfi_to_distinct_rows_and_split_target_location() {
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet(
+            std::iter::once(full_schema_mec_header()).chain([
+                full_schema_mec_record_with_itp(
+                    10,
+                    "0790",
+                    (
+                        "AZE-SUN-INT-QMS-ITP-MEC-0003",
+                        "MEC-3.3.1",
+                        "PCS-21",
+                        "S1,S2,S4",
+                        "S2",
+                        "Ongoing",
+                    ),
+                ),
+                full_schema_mec_record_with_itp(
+                    11,
+                    "0786",
+                    (
+                        "AZE-SUN-INT-QMS-ITP-MEC-0004",
+                        "MEC-4.3.2",
+                        "PCS-08",
+                        "S4",
+                        "N11",
+                        "Ongoing",
+                    ),
+                ),
+            ]),
+            &[],
+        ),
+    );
+    let target = package(&[(
+        "MEC",
+        None,
+        worksheet(
+            [
+                row(
+                    4,
+                    [
+                        inline("P4", "RFI No."),
+                        inline("Q4", "STATUS"),
+                        inline("R4", "RFI No."),
+                        inline("S4", "STATUS"),
+                    ],
+                ),
+                row(
+                    5,
+                    [
+                        inline("B5", "S2"),
+                        inline("C5", "PCS-21"),
+                        inline("D5", "S1"),
+                        blank("P5"),
+                        blank("Q5"),
+                    ],
+                ),
+                row(
+                    6,
+                    [
+                        inline("B6", "S2"),
+                        inline("C6", "PCS-21"),
+                        inline("D6", "S2"),
+                        blank("P6"),
+                        blank("Q6"),
+                    ],
+                ),
+                row(
+                    7,
+                    [
+                        inline("B7", "S2"),
+                        inline("C7", "PCS-21"),
+                        inline("D7", "S4"),
+                        blank("P7"),
+                        blank("Q7"),
+                    ],
+                ),
+                row(
+                    8,
+                    [
+                        inline("B8", "N10/N11"),
+                        inline("C8", "PCS-08"),
+                        inline("D8", "S4"),
+                        blank("R8"),
+                        blank("S8"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    let mec0790 = rows
+        .iter()
+        .filter(|row| row["rfiNo"] == "MEC-0790")
+        .collect::<Vec<_>>();
+    assert_eq!(mec0790.len(), 3, "{review}");
+    assert_eq!(
+        mec0790
+            .iter()
+            .map(|row| row["_row"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![5, 6, 7]
+    );
+    let mec0786 = rows.iter().find(|row| row["rfiNo"] == "MEC-0786").unwrap();
+    assert_eq!(mec0786["_row"], 8);
+    assert_eq!(mec0786["target"]["rfiColumn"], 18);
+    assert!(rows.iter().all(|row| {
+        row["disposition"] == "rfi.followUp.disposition.ready"
+            && row["proposedStatus"] == "In Progress"
+    }));
 }
 
 #[test]

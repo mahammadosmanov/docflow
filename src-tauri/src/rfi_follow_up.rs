@@ -394,7 +394,6 @@ struct SourceRecord {
     short_rfi: String,
     itp: String,
     item: String,
-    tag: String,
     state: Option<LogState>,
     worley_signed: bool,
     contexts: Vec<SourceRouteContext>,
@@ -576,7 +575,8 @@ fn scan_source_records(
             find_header_column(sheet, &["ITEM NO.", "ITEM NO"]).ok_or_else(workbook_invalid)?;
         let tag_col = find_header_column(sheet, &["TAG NO", "TAG NO."]).unwrap_or(6);
         let area_col = find_header_column(sheet, &["AREA"]).unwrap_or(7);
-        let location_col = find_header_column(sheet, &["INSPECTION LOCATION"]).unwrap_or(14);
+        let location_col =
+            find_header_column(sheet, &["INSPECTION LOCATION", "INSP. LOC./AREA"]).unwrap_or(14);
         let status_col =
             find_header_column(sheet, &["INSPECTION STATUS"]).ok_or_else(workbook_invalid)?;
         let remarks_col = find_header_column(sheet, &["REMARKS"]).ok_or_else(workbook_invalid)?;
@@ -625,7 +625,6 @@ fn scan_source_records(
                 short_rfi,
                 itp,
                 item,
-                tag,
                 state: log_state(&status),
                 worley_signed: mapped_follow_up_status(&remarks) == "Signed",
                 contexts: vec![context],
@@ -744,44 +743,25 @@ fn discover_approved_layouts(
 fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
     let (discipline, itp) = itp_identity(&record.itp)?;
     let clause = item_clause(&record.item)?;
+    let pcu_tag = record.contexts.iter().any(|context| {
+        let tags = normalized_parts(&context.tag);
+        tags.iter().any(|tag| tag.starts_with("PCS-"))
+            || normalize_header(&context.tag).starts_with("PCU-")
+    });
     match (discipline.as_str(), itp.as_str(), clause.as_str()) {
         ("CIV", "0002", "1.5") => Some(("CIV", 3)),
         ("CIV", "0002", "1.8") => Some((
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                "PCU"
-            } else {
-                "CIV"
-            },
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                4
-            } else {
-                5
-            },
+            if pcu_tag { "PCU" } else { "CIV" },
+            if pcu_tag { 4 } else { 5 },
         )),
         ("CIV", "0002", "2.1") | ("CIV", "0002", "2.2") => Some(("CIV", 7)),
         ("CIV", "0002", "2.4") => Some((
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                "PCU"
-            } else {
-                "CIV"
-            },
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                6
-            } else {
-                9
-            },
+            if pcu_tag { "PCU" } else { "CIV" },
+            if pcu_tag { 6 } else { 9 },
         )),
         ("CIV", "0002", "2.5") => Some((
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                "PCU"
-            } else {
-                "CIV"
-            },
-            if record.tag.to_uppercase().starts_with("PCU-") {
-                8
-            } else {
-                11
-            },
+            if pcu_tag { "PCU" } else { "CIV" },
+            if pcu_tag { 8 } else { 11 },
         )),
         ("CIV", "0002", "3.1") => Some(("CIV", 13)),
         ("CIV", "0004", "1.7") => Some(("Road", 3)),
@@ -833,7 +813,74 @@ fn normalized_location(value: &str) -> String {
         .replace("ROAD 0", "ROAD ")
 }
 
-fn row_matches(sheet_name: &str, sheet: &WorksheetData, row: u32, record: &SourceRecord) -> bool {
+fn normalized_parts(value: &str) -> Vec<String> {
+    split_values(value)
+        .into_iter()
+        .map(|part| normalized_location(&part))
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
+fn pcu_row_matches(sheet: &WorksheetData, row: u32, context: &SourceRouteContext) -> bool {
+    let tags = normalized_parts(&context.tag);
+    let blocks = tags
+        .iter()
+        .filter(|tag| tag.starts_with("PCS-"))
+        .collect::<Vec<_>>();
+    let block = if blocks.len() == 1 {
+        blocks[0].clone()
+    } else if blocks.is_empty() && normalize_header(&context.tag).starts_with("PCU-") {
+        normalized_location(&context.tag)
+    } else {
+        return false;
+    };
+    if sheet
+        .cell(row, 3)
+        .map(|cell| normalized_location(&cell.value))
+        .as_deref()
+        != Some(block.as_str())
+    {
+        return false;
+    }
+    let areas = tags
+        .iter()
+        .filter(|tag| !tag.starts_with("PCS-"))
+        .collect::<Vec<_>>();
+    areas.is_empty()
+        || sheet.cell(row, 2).is_some_and(|cell| {
+            normalized_parts(&cell.value)
+                .iter()
+                .any(|part| areas.iter().any(|area| **area == *part))
+        })
+}
+
+fn unique_zone_for_pcs(target_workbook: &WorkbookData, pcs: &str) -> Option<String> {
+    let sheet = target_workbook.sheet("MEC")?;
+    let zones = (1..=sheet.max_row)
+        .filter_map(|row| {
+            let block = sheet.cell(row, 3)?;
+            (normalized_location(&block.value) == pcs)
+                .then(|| {
+                    sheet
+                        .cell(row, 1)
+                        .map(|cell| normalized_location(&cell.value))
+                })
+                .flatten()
+        })
+        .filter(|zone| !zone.is_empty())
+        .collect::<BTreeSet<_>>();
+    (zones.len() == 1)
+        .then(|| zones.into_iter().next())
+        .flatten()
+}
+
+fn row_matches(
+    sheet_name: &str,
+    sheet: &WorksheetData,
+    row: u32,
+    record: &SourceRecord,
+    target_workbook: &WorkbookData,
+) -> bool {
     let cell = |column| {
         sheet
             .cell(row, column)
@@ -842,14 +889,30 @@ fn row_matches(sheet_name: &str, sheet: &WorksheetData, row: u32, record: &Sourc
     };
     match sheet_name {
         "CIV" => record.contexts.iter().any(|context| {
-            split_values(&context.tag)
+            let tags = normalized_parts(&context.tag);
+            let pcs = tags
                 .iter()
-                .any(|value| normalized_location(value) == cell(2))
+                .filter(|tag| tag.starts_with("PCS-"))
+                .collect::<Vec<_>>();
+            if pcs.len() == 1 && tags.len() > 1 {
+                let areas = tags
+                    .iter()
+                    .filter(|tag| !tag.starts_with("PCS-"))
+                    .cloned()
+                    .chain(normalized_parts(&context.area))
+                    .collect::<BTreeSet<_>>();
+                unique_zone_for_pcs(target_workbook, pcs[0]).as_deref() == Some(cell(1).as_str())
+                    && areas.contains(&cell(2))
+            } else if pcs.is_empty() {
+                tags.iter().any(|value| value == &cell(2))
+            } else {
+                false
+            }
         }),
         "PCU" => record
             .contexts
             .iter()
-            .any(|context| normalized_location(&context.tag) == cell(3)),
+            .any(|context| pcu_row_matches(sheet, row, context)),
         "Road" => record.contexts.iter().any(|context| {
             normalized_location(&context.tag) == cell(2)
                 && (context.area.is_empty()
@@ -858,15 +921,17 @@ fn row_matches(sheet_name: &str, sheet: &WorksheetData, row: u32, record: &Sourc
         "MEC" => record.contexts.iter().any(|context| {
             let sections = split_values(&context.area);
             let locations = split_values(&context.location);
-            sections.len() <= 1
-                && locations.len() <= 1
-                && normalized_location(&context.tag) == cell(3)
+            let tags = normalized_parts(&context.tag);
+            !sections.is_empty()
+                && locations.len() == 1
+                && tags.len() == 1
+                && normalized_parts(&cell(3)).contains(&tags[0])
                 && sections
                     .iter()
-                    .any(|value| normalized_location(value) == cell(4))
+                    .any(|value| normalized_parts(&cell(4)).contains(&normalized_location(value)))
                 && locations
                     .iter()
-                    .any(|value| normalized_location(value) == cell(2))
+                    .any(|value| normalized_parts(&cell(2)).contains(&normalized_location(value)))
         }),
         _ => false,
     }
@@ -899,6 +964,62 @@ fn distinct_civ_area_rows(
     })
 }
 
+fn distinct_civ_zone_area_rows(
+    target_workbook: &WorkbookData,
+    candidates: &[(String, u32, u32, u32)],
+    record: &SourceRecord,
+) -> bool {
+    if candidates.len() < 2 {
+        return false;
+    }
+    let Some(sheet) = target_workbook.sheet("CIV") else {
+        return false;
+    };
+    let contexts = record
+        .contexts
+        .iter()
+        .filter_map(|context| {
+            let tags = normalized_parts(&context.tag);
+            let pcs = tags
+                .iter()
+                .filter(|tag| tag.starts_with("PCS-"))
+                .collect::<Vec<_>>();
+            let areas = tags
+                .iter()
+                .filter(|tag| !tag.starts_with("PCS-"))
+                .cloned()
+                .chain(normalized_parts(&context.area))
+                .collect::<BTreeSet<_>>();
+            let zone = if pcs.len() == 1 {
+                unique_zone_for_pcs(target_workbook, pcs[0])
+            } else {
+                None
+            };
+            (!areas.is_empty())
+                .then(|| zone.map(|zone| (zone, areas)))
+                .flatten()
+        })
+        .collect::<Vec<_>>();
+    if contexts.is_empty() {
+        return false;
+    }
+    let mut matched = BTreeSet::new();
+    candidates.iter().all(|(_, row, _, _)| {
+        let zone = sheet
+            .cell(*row, 1)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default();
+        let area = sheet
+            .cell(*row, 2)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default();
+        contexts
+            .iter()
+            .any(|(expected_zone, areas)| expected_zone == &zone && areas.contains(&area))
+            && matched.insert((*row, zone, area))
+    })
+}
+
 fn distinct_mec_context_rows(
     target_workbook: &WorkbookData,
     candidates: &[(String, u32, u32, u32)],
@@ -912,39 +1033,42 @@ fn distinct_mec_context_rows(
     };
     let mut source_contexts = BTreeSet::new();
     for context in &record.contexts {
-        let tags = split_values(&context.tag);
-        let areas = split_values(&context.area);
-        let locations = split_values(&context.location);
-        if tags.len() != 1 || areas.len() != 1 || locations.len() != 1 {
+        let tags = normalized_parts(&context.tag);
+        let areas = normalized_parts(&context.area);
+        let locations = normalized_parts(&context.location);
+        if tags.len() != 1 || areas.is_empty() || locations.len() != 1 {
             return false;
         }
-        source_contexts.insert((
-            normalized_location(&tags[0]),
-            normalized_location(&areas[0]),
-            normalized_location(&locations[0]),
-        ));
+        source_contexts.extend(
+            areas
+                .into_iter()
+                .map(|area| (tags[0].clone(), area, locations[0].clone())),
+        );
     }
     let mut matched_contexts = BTreeSet::new();
     candidates.iter().all(|(_, row, _, _)| {
-        let context = (
-            sheet
-                .cell(*row, 3)
-                .map(|cell| normalized_location(&cell.value))
-                .unwrap_or_default(),
-            sheet
-                .cell(*row, 4)
-                .map(|cell| normalized_location(&cell.value))
-                .unwrap_or_default(),
-            sheet
-                .cell(*row, 2)
-                .map(|cell| normalized_location(&cell.value))
-                .unwrap_or_default(),
-        );
-        !context.0.is_empty()
-            && !context.1.is_empty()
-            && !context.2.is_empty()
-            && source_contexts.contains(&context)
-            && matched_contexts.insert(context)
+        let tags = sheet
+            .cell(*row, 3)
+            .map(|cell| normalized_parts(&cell.value))
+            .unwrap_or_default();
+        let areas = sheet
+            .cell(*row, 4)
+            .map(|cell| normalized_parts(&cell.value))
+            .unwrap_or_default();
+        let locations = sheet
+            .cell(*row, 2)
+            .map(|cell| normalized_parts(&cell.value))
+            .unwrap_or_default();
+        let matches = source_contexts
+            .iter()
+            .filter(|context| {
+                tags.contains(&context.0)
+                    && areas.contains(&context.1)
+                    && locations.contains(&context.2)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        matches.len() == 1 && matched_contexts.insert(matches[0].clone())
     })
 }
 
@@ -1205,6 +1329,24 @@ fn classify_workbooks_full(
         let Some((sheet_name, rfi_column)) = route_key(record) else {
             continue;
         };
+        let composite_pcs_route = record.contexts.iter().any(|context| {
+            let tags = normalized_parts(&context.tag);
+            tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
+        });
+        let (sheet_name, rfi_column) = if composite_pcs_route {
+            (
+                "CIV",
+                if rfi_column == 4 {
+                    5
+                } else if rfi_column == 6 {
+                    9
+                } else {
+                    11
+                },
+            )
+        } else {
+            (sheet_name, rfi_column)
+        };
         let candidates = slots
             .iter()
             .filter(|((sheet, _, column, _), slot)| {
@@ -1219,10 +1361,42 @@ fn classify_workbooks_full(
                     target_workbook.sheet(sheet_name).unwrap(),
                     *row,
                     record,
+                    target_workbook,
                 )
             })
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
+        let mut candidates = candidates;
+        if candidates.is_empty() && sheet_name == "CIV" {
+            let source_tags = record
+                .contexts
+                .iter()
+                .flat_map(|context| normalized_parts(&context.tag))
+                .collect::<BTreeSet<_>>();
+            if source_tags.iter().any(|tag| {
+                tag.starts_with("PCS-") && unique_zone_for_pcs(target_workbook, tag).is_some()
+            }) {
+                candidates = slots
+                    .iter()
+                    .filter(|((sheet, _, column, _), slot)| {
+                        sheet == "CIV"
+                            && *column == rfi_column
+                            && !is_signed_layout(&slot.layout)
+                            && slot.unsafe_reason.is_none()
+                    })
+                    .filter(|((_, row, _, _), _)| {
+                        row_matches(
+                            "CIV",
+                            target_workbook.sheet("CIV").unwrap(),
+                            *row,
+                            record,
+                            target_workbook,
+                        )
+                    })
+                    .map(|(key, _)| key.clone())
+                    .collect();
+            }
+        }
         let candidate_count = candidates.len();
         let existing_slots = slots
             .iter()
@@ -1240,7 +1414,8 @@ fn classify_workbooks_full(
         }
         let exact_multi_area = candidate_count > 1
             && ((sheet_name == "CIV"
-                && distinct_civ_area_rows(target_workbook, &candidates, record))
+                && (distinct_civ_area_rows(target_workbook, &candidates, record)
+                    || distinct_civ_zone_area_rows(target_workbook, &candidates, record)))
                 || (sheet_name == "MEC"
                     && distinct_mec_context_rows(target_workbook, &candidates, record)));
         if candidate_count > 1 && !exact_multi_area {
@@ -1416,7 +1591,9 @@ fn classify_workbooks_full(
             .filter(|((sheet, _, column, status), _)| {
                 sheet == sheet_name && *column == rfi_column && *status == status_column
             })
-            .filter(|((_, row, _, _), _)| row_matches(match_layout, matching_sheet, *row, record))
+            .filter(|((_, row, _, _), _)| {
+                row_matches(match_layout, matching_sheet, *row, record, target_workbook)
+            })
             .collect::<Vec<_>>();
         let candidate_count = candidates.len();
         if candidate_count == 0 {

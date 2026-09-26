@@ -3,6 +3,28 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.10.8 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync now recognizes the MEC `INSP. LOC./AREA` source header, so
+  exact inspection-location matches such as MEC-0791 can reach their existing
+  target row.
+- Follow Up Sync now treats exact `PCS-` tags as PCU routes, uses explicit
+  block-area suffixes to find the PCU row, and resolves MEC composite target
+  locations and single-row multi-area contexts against distinct existing rows.
+
+## 1.10.7 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync now recognizes the MEC `INSP. LOC./AREA` source header, so
+  exact inspection-location matches such as MEC-0791 can reach their existing
+  target row.
+- Follow Up Sync now treats exact `PCS-` tags as PCU routes, uses explicit
+  block-area suffixes to find the PCU row, and resolves MEC composite target
+  locations and single-row multi-area contexts against distinct existing rows.
+
 ## 1.10.6 - 2026-09-26
 
 ### Fixed

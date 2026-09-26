@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.6",
+  "currentVersion": "1.10.8",
   "releases": [
     {
       "version": "0.1.0",
@@ -782,9 +782,25 @@
       "version": "1.10.6",
       "date": "2026-09-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.10.6",
       "summary": "Map exact distinct MEC route contexts and raise bounded S5 retained-file capacity to 256."
+    },
+    {
+      "version": "1.10.8",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.10.8",
+      "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
+    },
+    {
+      "version": "1.10.7",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.10.7",
+      "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
     }
   ]
 }
