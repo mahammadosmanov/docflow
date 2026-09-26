@@ -68,7 +68,7 @@
   "plan.exact.title": "{count} təsdiqlənmiş dəqiq təsir",
   "plan.exact.help": "Tam mənbə və hədəf yollarını yoxlamaq üçün açın",
   "op.rfi.process_scans.title": "Skanları emal et",
-  "op.rfi.process_scans.desc": "İlk səhifədəki RFI nömrəsini oxuyur, skan edilmiş PDF-ləri adlandırır və seçdiyiniz qaydada saxlayır.",
+  "op.rfi.process_scans.desc": "Hər səhifədə RFI nömrəsini oxuyur, səhifə istiqamətini düzəldir və skan edilmiş PDF-ləri seçilmiş quruluşda saxlayır.",
   "op.rfi.group_files.title": "RFI fayllarını qrupla",
   "op.rfi.group_files.desc": "Fayl adında və məzmununda dəqiq RFI nömrələrini tapır, faylları uyğun RFI qovluqlarına kopyalayır.",
   "param.rfi.fileGroup.source": "Gələn fayllar qovluğu",
@@ -913,5 +913,10 @@
   "prefs.replica.status.running": "Vəziyyət: İşləyir",
   "prefs.replica.status.waitingForSignIn": "Vəziyyət: Giriş gözlənilir",
   "prefs.replica.status.deferred": "Vəziyyət: Digər əməliyyat bitənədək təxirə salınıb",
-  "prefs.replica.status.paused": "Vəziyyət: Təhlükəsizlik üçün dayandırılıb"
+  "prefs.replica.status.paused": "Vəziyyət: Təhlükəsizlik üçün dayandırılıb",
+  "param.rfi.processScans.correctOrientation": "Emal zamanı səhifə istiqamətini düzəlt",
+  "param.rfi.processScans.correctOrientation.help": "İstiqaməti etibarlı müəyyən edilən səhifələri döndərir. Qeyri-müəyyən PDF dəyişdirilmədən _review qovluğuna gedir.",
+  "warn.rfi.processScansOrientationReview": "Səhifə istiqaməti etibarlı müəyyən edilmədi; PDF _review qovluğuna göndərildi",
+  "progress.phase.scan_orientation": "PDF səhifələrinin istiqaməti yoxlanılır",
+  "rfi.extraction.pages": "Çıxarılan səhifələr"
 }

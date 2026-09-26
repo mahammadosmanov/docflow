@@ -2,6 +2,21 @@
 
 Updated: 2026-09-26
 
+## Isolated feature candidate
+
+- Version: 1.11.0
+- Branch: `codex/process-scans-rotation`
+- Objective: apply confident page rotations during Process Scans without
+  changing source PDFs or the existing Preview/Apply/Undo authority flow.
+- State: implementation and static checks complete. Rust all-target check,
+  pinned Rust 1.97.1 Clippy, frontend TypeScript/Vite builds, version/docs/source
+  audits, and dependency license audit pass. Tests were not run. A dedicated
+  local source commit is created; no push, tag, or GitHub Release has been created.
+- Behavior: correction defaults on; uncertain input PDFs go unchanged to
+  `_review`; Apply extracts and rotates only cached Plan outputs.
+- Next: request/run feature regression and full project suites, then reconcile
+  version metadata with concurrent 1.10.7 work before any release publication.
+
 ## Current candidate
 
 - Version: 1.10.8

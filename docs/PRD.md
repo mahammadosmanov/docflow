@@ -183,6 +183,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   combined source to recoverable trash only after all its outputs succeed when
   Keep original is off. Unsupported or drifted PDFs fail closed to Review or
   Apply refusal; no page is silently dropped.
+- **DF-035 — Process Scans orientation:** Process Scans checks every input PDF
+  page with the existing bounded orientation detector by default. It applies
+  only confident page rotations to the approved output, leaves source PDFs
+  unchanged, and sends any PDF with uncertain orientation to `_review` intact.
+  Operators may disable orientation correction in the schema-driven form.
 - **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
   `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
   remain read-only source evidence for Worley Signed/Not Signed status.

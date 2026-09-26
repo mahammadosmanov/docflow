@@ -119,6 +119,11 @@ The pool preserves deterministic input/result order and is never used for
 Office automation, print submission, publication, journals, or Undo, where
 parallel effects could create collisions or unknowable outcomes.
 
+Process Scans orientation reuses the PDF orientation detector. Preview pins each
+source hash and exact target rotation into its immutable Plan. Apply extracts
+selected pages and rotates the private output before no-clobber publication;
+uncertain input PDFs go unchanged to `_review`.
+
 Every registered operation emits localized progress phases through the existing
 Tauri channel. Long batch phases include bounded completed/total counters and a
 current file, folder, page, workbook, printer, or record subject when available.

@@ -68,7 +68,7 @@
   "plan.exact.title": "{count} onaylı kesin etki",
   "plan.exact.help": "Tam kaynak ve hedef yollarını incelemek için aç",
   "op.rfi.process_scans.title": "Taramaları İşle",
-  "op.rfi.process_scans.desc": "İlk sayfadaki RFI numarasını okur, taranmış PDF'leri adlandırır ve seçtiğiniz düzende kaydeder.",
+  "op.rfi.process_scans.desc": "Her sayfadaki RFI numarasını okur, sayfa yönlerini düzeltir ve taranmış PDF’leri seçtiğiniz düzende kaydeder.",
   "op.rfi.group_files.title": "RFI Dosyalarını Grupla",
   "op.rfi.group_files.desc": "Dosya adı ve içerikteki kesin RFI numaralarını bulur; dosyaları ilgili RFI klasörlerine kopyalar.",
   "param.rfi.fileGroup.source": "Gelen dosyalar klasörü",
@@ -913,5 +913,10 @@
   "prefs.replica.status.running": "Durum: Çalışıyor",
   "prefs.replica.status.waitingForSignIn": "Durum: Oturum açılması bekleniyor",
   "prefs.replica.status.deferred": "Durum: Başka işlem bitene kadar ertelendi",
-  "prefs.replica.status.paused": "Durum: Güvenlik nedeniyle duraklatıldı"
+  "prefs.replica.status.paused": "Durum: Güvenlik nedeniyle duraklatıldı",
+  "param.rfi.processScans.correctOrientation": "İşlerken sayfa yönlerini düzelt",
+  "param.rfi.processScans.correctOrientation.help": "Güvenle belirlenen sayfaları RFI çıktısına döndürür. Belirsiz PDF, değiştirilmeden _review alanına gider.",
+  "warn.rfi.processScansOrientationReview": "Sayfa yönü güvenle belirlenemedi; PDF _review alanına alındı",
+  "progress.phase.scan_orientation": "PDF sayfa yönleri denetleniyor",
+  "rfi.extraction.pages": "Çıkarılan sayfalar"
 }

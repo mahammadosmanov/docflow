@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.8",
+  "currentVersion": "1.11.0",
   "releases": [
     {
       "version": "0.1.0",
@@ -790,7 +790,7 @@
       "version": "1.10.8",
       "date": "2026-09-26",
       "channel": "stable",
-      "status": "current",
+      "status": "supported",
       "tag": "v1.10.8",
       "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
     },
@@ -801,6 +801,14 @@
       "status": "superseded",
       "tag": "v1.10.7",
       "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
+    },
+    {
+      "version": "1.11.0",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.11.0",
+      "summary": "Add safe page-orientation correction to Process Scans using the existing detector and no-clobber PDF output path."
     }
   ]
 }

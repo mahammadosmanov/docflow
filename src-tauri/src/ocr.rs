@@ -259,6 +259,18 @@ impl OcrAdapter for NativeOcr {
         true
     }
 
+    fn supports_orientation(&self) -> bool {
+        true
+    }
+
+    fn detect_orientation(
+        &self,
+        path: &Path,
+        page_index: usize,
+    ) -> Result<OrientationDetection, String> {
+        OrientationDetector::detect_page(self, path, page_index)
+    }
+
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         #[cfg(target_os = "windows")]
         if self.tesseract.as_ref().is_none_or(|path| !path.is_file()) {

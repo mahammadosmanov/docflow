@@ -933,6 +933,7 @@ impl NativeBackend {
                 destination: request.values.dest,
                 organize_into_rfi_folders: request.values.organize_into_rfi_folders,
                 keep_original: request.values.keep_original,
+                correct_orientation: request.values.correct_orientation,
                 trash_root: (!request.values.keep_original)
                     .then(|| self.app_data_dir.join("trash")),
             },
@@ -2451,6 +2452,8 @@ struct ProcessScansValues {
     organize_into_rfi_folders: bool,
     #[serde(default)]
     keep_original: bool,
+    #[serde(default = "default_true")]
+    correct_orientation: bool,
 }
 
 #[derive(Deserialize)]

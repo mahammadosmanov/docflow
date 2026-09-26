@@ -141,6 +141,17 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 Map::new(),
                 None,
             ),
+            parameter(
+                "correct_orientation",
+                ParamKind::Bool,
+                "param.rfi.processScans.correctOrientation",
+                json!(true),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.processScans.correctOrientation.help"),
+            ),
         ],
     );
     let file_group = operation(

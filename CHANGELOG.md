@@ -3,6 +3,13 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.0 - 2026-09-26
+
+### Added
+
+- Process Scans now corrects confidently detected page rotations by default.
+  Uncertain PDFs go unchanged to `_review`; source files remain unchanged.
+
 ## 1.10.8 - 2026-09-26
 
 ### Fixed

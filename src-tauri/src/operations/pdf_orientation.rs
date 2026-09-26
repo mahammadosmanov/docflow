@@ -19,7 +19,7 @@ use crate::{
 
 pub const OPERATION_ID: &str = "rfi.normalize_pdf_orientation";
 const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
-const MIN_ORIENTATION_CONFIDENCE: f64 = 10.0;
+pub const MIN_ORIENTATION_CONFIDENCE: f64 = 10.0;
 const MAX_DIRECTORY_ENTRIES: usize = 500_000;
 const MAX_PDFS: usize = 50_000;
 const MAX_PAGES: usize = 250_000;

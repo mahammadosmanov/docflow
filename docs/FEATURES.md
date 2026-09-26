@@ -91,7 +91,9 @@
 - Process Scans discovers top-level PDFs only. It separates sequential RFI
   batches by page, keeps pages without an RFI candidate with the current RFI,
   and sends uncertain pages to `_review`. CIV/MEC/ELE/PRC outputs use matching
-  discipline folders. Signed-page input recursion defaults
+  discipline folders. Page orientation correction defaults on and uses the
+  existing bounded detector; uncertain files go unchanged to `_review`.
+  Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent. Selected-mail archival creates only a
   local MSG copy; it never changes, moves, deletes, or sends mailbox content.

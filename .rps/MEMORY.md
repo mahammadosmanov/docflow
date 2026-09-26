@@ -118,3 +118,7 @@
 - RFI identity OCR may use the bounded raw-grayscale PSM 11 fallback only after
   the adaptive cascade fails. It still needs one conflict-free code across at
   least three DPIs and two exact reads; a single competing code keeps Review.
+- Process Scans can reuse `pdf_orientation::OrientationDetector` for incoming
+  PDFs. Keep source PDFs read-only, pin hashes and output-page rotations in the
+  immutable Plan, and route any file with an uncertain page unchanged to
+  `_review`. Apply extracts first and rotates only its private output copy.

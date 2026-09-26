@@ -4071,7 +4071,8 @@ function StepRow({
   const destination = fullPath ? step.dst : step.dst?.split(/[\\/]/).pop();
   const confidence = formatConfidencePercent(step.meta.confidence);
   const rotationSummary =
-    step.kind === "pdf_page_rotate" && Array.isArray(step.meta.rotations)
+    (step.kind === "pdf_page_rotate" || step.kind === "pdf_pages_extract") &&
+    Array.isArray(step.meta.rotations)
       ? step.meta.rotations
           .map((entry) => {
             if (!entry || typeof entry !== "object") return "";
@@ -4148,7 +4149,7 @@ function StepRow({
         )}
         {extractionPages && (
           <span>
-            {s.t("rfi.orientation.pages")}: {extractionPages}
+            {s.t("rfi.extraction.pages")}: {extractionPages}
           </span>
         )}
       </div>

@@ -177,3 +177,9 @@ Apply revalidates that approved hash, performs no new OCR, writes and validates 
 private incremental PDF, then publishes it no-clobber beneath the separate review
 root. The journal records the final copy hash so Undo removes it only while it is
 still the exact file DocFlow created.
+
+Process Scans uses the same detector for incoming files. Its Plan pins the
+source hash, selected page indexes, and target rotations. Apply extracts the
+approved pages, applies those rotations in private storage, verifies the PDF,
+then publishes through the existing no-clobber journal path. An uncertain page
+sends its entire source PDF unchanged to `_review`.

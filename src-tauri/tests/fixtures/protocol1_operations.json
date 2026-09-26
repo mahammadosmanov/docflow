@@ -46,6 +46,17 @@
         "name": "keep_original",
         "required": false,
         "visibleWhen": {}
+      },
+      {
+        "choiceLabels": {},
+        "choices": [],
+        "default": true,
+        "helpKey": "param.rfi.processScans.correctOrientation.help",
+        "kind": "bool",
+        "labelKey": "param.rfi.processScans.correctOrientation",
+        "name": "correct_orientation",
+        "required": false,
+        "visibleWhen": {}
       }
     ],
     "supportsPresets": false,

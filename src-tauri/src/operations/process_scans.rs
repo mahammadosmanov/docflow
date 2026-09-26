@@ -22,6 +22,7 @@ const REVIEW_DIR: &str = "_review";
 const MAX_SCAN_PDFS: usize = 10_000;
 const MAX_SCAN_PAGES: usize = 20_000;
 const DISCIPLINE_FOLDERS: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
+type ApprovedRotation = (usize, i64, f64);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OcrFailure {
@@ -49,6 +50,16 @@ pub trait OcrAdapter: Sync {
     fn supports_parallel_analysis(&self) -> bool {
         false
     }
+    fn supports_orientation(&self) -> bool {
+        false
+    }
+    fn detect_orientation(
+        &self,
+        _path: &Path,
+        _page_index: usize,
+    ) -> Result<crate::operations::pdf_orientation::OrientationDetection, String> {
+        Err("page orientation detection is unavailable".to_string())
+    }
     fn read_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         if page_index == 0 {
             self.read(path)
@@ -67,6 +78,7 @@ pub struct ProcessScansParams {
     pub destination: PathBuf,
     pub organize_into_rfi_folders: bool,
     pub keep_original: bool,
+    pub correct_orientation: bool,
     pub trash_root: Option<PathBuf>,
 }
 
@@ -77,12 +89,14 @@ struct Candidate {
     modified: SystemTime,
     confidence: f64,
     source: String,
+    rotations: Vec<ApprovedRotation>,
 }
 
 struct ReviewPages {
     path: PathBuf,
     pages: Vec<usize>,
     reason: String,
+    rotations: Vec<ApprovedRotation>,
 }
 
 struct PageGroup {
@@ -98,6 +112,10 @@ struct CachedPageOcr {
     inspections: BTreeMap<PathBuf, Result<crate::pdf::PdfInspection, String>>,
     page_scan: bool,
     diagnostics: String,
+    orientations: BTreeMap<
+        (PathBuf, usize),
+        Result<crate::operations::pdf_orientation::OrientationDetection, String>,
+    >,
 }
 
 impl OcrAdapter for CachedPageOcr {
@@ -126,6 +144,21 @@ impl OcrAdapter for CachedPageOcr {
 
     fn diagnostics(&self) -> String {
         self.diagnostics.clone()
+    }
+
+    fn supports_orientation(&self) -> bool {
+        !self.orientations.is_empty()
+    }
+
+    fn detect_orientation(
+        &self,
+        path: &Path,
+        page_index: usize,
+    ) -> Result<crate::operations::pdf_orientation::OrientationDetection, String> {
+        self.orientations
+            .get(&(path.to_path_buf(), page_index))
+            .cloned()
+            .unwrap_or_else(|| Err("page orientation result is missing".to_string()))
     }
 }
 
@@ -231,6 +264,29 @@ where
                 tasks.extend((0..page_count).map(|page| (pdf.clone(), page)));
             }
         }
+        let (orientation_workers, orientations) =
+            if params.correct_orientation && ocr.supports_orientation() {
+                let mut completed = 0_u64;
+                let (workers, results) = bounded_map_stream(
+                    &tasks,
+                    |(pdf, page)| ocr.detect_orientation(pdf, *page),
+                    |index, _| {
+                        completed += 1;
+                        let (pdf, page) = &tasks[index];
+                        progress(ProgressEvent {
+                            phase: "scan_orientation".to_string(),
+                            done: completed,
+                            total: tasks.len() as u64,
+                            subject: format!("{} — #{}", display_name(pdf), page + 1),
+                        });
+                        Ok(())
+                    },
+                )
+                .map_err(BackendError::request_failed)?;
+                (workers, tasks.iter().cloned().zip(results).collect())
+            } else {
+                (0, BTreeMap::new())
+            };
         let mut completed = 0_u64;
         let (ocr_workers, results) = if tasks.is_empty() {
             (0, Vec::new())
@@ -260,6 +316,7 @@ where
             inspections,
             page_scan: ocr.supports_page_scan(),
             diagnostics: ocr.diagnostics(),
+            orientations,
         };
         let mut plan = preview(params, &cached, progress, cancelled)?;
         plan.meta.insert(
@@ -268,6 +325,10 @@ where
         );
         plan.meta
             .insert("parallelAnalysis".to_string(), Value::Bool(true));
+        plan.meta.insert(
+            "orientationWorkerCount".to_string(),
+            Value::from(orientation_workers as u64),
+        );
         return Ok(plan);
     }
 
@@ -321,6 +382,78 @@ where
             failures.push((pdf.clone(), "PDF has no pages".to_string()));
             continue;
         }
+        let mut rotations = Vec::new();
+        let orientation_source_hash = params
+            .correct_orientation
+            .then(|| hash_pdf(pdf).map_err(BackendError::path_invalid))
+            .transpose()?;
+        if params.correct_orientation {
+            let orientation_results = (0..page_count)
+                .map(|page_index| {
+                    let detected = ocr.detect_orientation(pdf, page_index)?;
+                    let current = facts
+                        .as_ref()
+                        .and_then(|facts| facts.pages.get(page_index))
+                        .map_or(0, |page| page.rotation);
+                    if !detected.confidence.is_finite()
+                        || detected.confidence
+                            < crate::operations::pdf_orientation::MIN_ORIENTATION_CONFIDENCE
+                        || !matches!(detected.rotate_clockwise, 0 | 90 | 180 | 270)
+                    {
+                        return Err(format!("page {} orientation is uncertain", page_index + 1));
+                    }
+                    let target = (current + detected.rotate_clockwise) % 360;
+                    Ok((page_index, current, target, detected.confidence))
+                })
+                .collect::<Result<Vec<_>, String>>()
+                .and_then(|results| {
+                    let rotations = results
+                        .into_iter()
+                        .filter_map(|(page, current, target, confidence)| {
+                            (target != current).then_some((page, target, confidence))
+                        })
+                        .collect::<Vec<_>>();
+                    if !rotations.is_empty()
+                        && facts.as_ref().is_some_and(|facts| {
+                            facts.signed
+                                || facts.encrypted
+                                || !crate::pdf::extraction_supported(facts)
+                        })
+                    {
+                        Err("PDF features prevent safe orientation correction".to_string())
+                    } else {
+                        Ok(rotations)
+                    }
+                });
+            match orientation_results {
+                Ok(detected_rotations) => {
+                    rotations = detected_rotations;
+                    if let Some(expected) = orientation_source_hash.as_deref()
+                        && hash_pdf(pdf).map_err(BackendError::path_invalid)? != expected
+                    {
+                        return Err(BackendError::path_invalid(
+                            "scan source changed during orientation analysis",
+                        ));
+                    }
+                }
+                Err(reason) => {
+                    plan.warnings.push(Warning {
+                        key: "warn.rfi.processScansOrientationReview".to_string(),
+                        subject: format!("{} — {reason}", display_name(pdf)),
+                    });
+                    let mut meta = JsonObject::new();
+                    meta.insert("reason".to_string(), Value::String(reason));
+                    plan.steps.push(step(
+                        transfer_kind,
+                        Some(pdf),
+                        Some(&destination.join(REVIEW_DIR).join(display_name(pdf))),
+                        "note.needs_review",
+                        meta,
+                    ));
+                    continue;
+                }
+            }
+        }
         if page_count > 1 {
             if !facts.as_ref().is_some_and(crate::pdf::extraction_supported) {
                 failures.push((
@@ -330,6 +463,14 @@ where
                 continue;
             }
             let source_hash = hash_pdf(pdf).map_err(BackendError::path_invalid)?;
+            if orientation_source_hash
+                .as_deref()
+                .is_some_and(|expected| expected != source_hash.as_str())
+            {
+                return Err(BackendError::path_invalid(
+                    "scan source changed during Preview",
+                ));
+            }
             let mut local_groups = Vec::<PageGroup>::new();
             let mut active = None::<PageGroup>;
             let mut seen_codes = std::collections::BTreeSet::new();
@@ -432,35 +573,48 @@ where
             split_sources.insert(pdf.clone(), source_hash.clone());
             for group in local_groups {
                 if let Some(code) = group.code {
+                    let pages = group.pages;
+                    let group_rotations = rotations
+                        .iter()
+                        .filter(|(page, _, _)| pages.contains(page))
+                        .copied()
+                        .collect::<Vec<_>>();
                     if let Some((_, candidates)) =
                         groups.iter_mut().find(|(value, _)| value == &code)
                     {
                         candidates.push(Candidate {
                             path: pdf.clone(),
-                            pages: Some(group.pages),
+                            pages: Some(pages.clone()),
                             source_hash: Some(source_hash.clone()),
                             modified: fs::metadata(pdf)
                                 .and_then(|metadata| metadata.modified())
                                 .unwrap_or(UNIX_EPOCH),
                             confidence: group.confidence,
                             source: group.source,
+                            rotations: group_rotations.clone(),
                         });
                     } else {
                         groups.push((
                             code,
                             vec![Candidate {
                                 path: pdf.clone(),
-                                pages: Some(group.pages),
+                                pages: Some(pages),
                                 source_hash: Some(source_hash.clone()),
                                 modified: fs::metadata(pdf)
                                     .and_then(|metadata| metadata.modified())
                                     .unwrap_or(UNIX_EPOCH),
                                 confidence: group.confidence,
                                 source: group.source,
+                                rotations: group_rotations,
                             }],
                         ));
                     }
                 } else {
+                    let group_rotations = rotations
+                        .iter()
+                        .filter(|(page, _, _)| group.pages.contains(page))
+                        .copied()
+                        .collect();
                     plan.warnings.push(Warning {
                         key: "warn.no_code".to_string(),
                         subject: format!("{} — {}", display_name(pdf), page_range(&group.pages)),
@@ -469,6 +623,7 @@ where
                         path: pdf.clone(),
                         pages: group.pages,
                         reason: group.reason,
+                        rotations: group_rotations,
                     });
                 }
             }
@@ -520,15 +675,29 @@ where
             continue;
         }
 
+        let source_hash = (!rotations.is_empty())
+            .then(|| orientation_source_hash.clone())
+            .flatten();
+        if let Some(expected) = source_hash.as_deref()
+            && hash_pdf(pdf).map_err(BackendError::path_invalid)? != expected
+        {
+            return Err(BackendError::path_invalid(
+                "scan source changed during Preview",
+            ));
+        }
+        if let Some(source_hash) = source_hash.as_ref() {
+            split_sources.insert(pdf.clone(), source_hash.clone());
+        }
         let candidate = Candidate {
             path: pdf.clone(),
-            pages: None,
-            source_hash: None,
+            pages: source_hash.as_ref().map(|_| vec![0]),
+            source_hash,
             modified: fs::metadata(pdf)
                 .and_then(|metadata| metadata.modified())
                 .unwrap_or(UNIX_EPOCH),
             confidence: read.matched.confidence,
             source: read.source,
+            rotations,
         };
         if let Some((_, files)) = groups
             .iter_mut()
@@ -575,6 +744,7 @@ where
             modified: UNIX_EPOCH,
             confidence: 0.0,
             source: String::new(),
+            rotations: review.rotations,
         };
         let mut meta = JsonObject::new();
         meta.insert("reason".to_string(), Value::String(review.reason));
@@ -854,6 +1024,26 @@ fn push_candidate_output(
                     .to_string(),
             ),
         );
+        if !candidate.rotations.is_empty() {
+            let rotations = pages
+                .iter()
+                .enumerate()
+                .filter_map(|(output_page, source_page)| {
+                    candidate
+                        .rotations
+                        .iter()
+                        .find(|(page, _, _)| page == source_page)
+                        .map(|(_, target, confidence)| {
+                            serde_json::json!({
+                                "pageIndex": output_page,
+                                "targetRotation": target,
+                                "confidence": confidence,
+                            })
+                        })
+                })
+                .collect::<Vec<_>>();
+            meta.insert("rotations".to_string(), Value::Array(rotations));
+        }
         plan.steps.push(step(
             StepKind::PdfPagesExtract,
             Some(&candidate.path),

@@ -36,6 +36,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-030 | `rfi_system_sync.rs`, `scan_index.rs` | `rfi_system_sync_native.rs` exact-filename, synthetic OTHERS, cache-profile, and operator-supplied signed/unsigned PDF tests |
 | DF-031 | `rfi_log.rs`, `outlook_reply_draft.rs`, `native.rs`, `backend.rs`, generic `App.tsx` result flow | `rfi_log_native.rs`, `outlook_reply_draft.rs`, backend command roster, locale parity, and `App.test.tsx` guarded handoff test |
 | DF-032 | `operations/process_scans.rs`, `pdf.rs`, `fs_ops.rs`, `native.rs` | `process_scans.rs` page grouping, discipline paths, extraction fidelity, collision, source drift, apply/undo, and Windows compile checks |
+| DF-035 | `operations/process_scans.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | Process Scans orientation decisions, uncertainty routing, rotation fidelity, source drift, no-clobber Apply/Undo, registry snapshot, and four-locale parity |
 | DF-033 | Retired by ADR 0028 | `rfi_follow_up_native.rs` confirms mixed-status groups update lifecycle status without adding Follow Up Remarks fields or guarded Remarks cell writes |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the

@@ -3134,7 +3134,8 @@ impl FilesystemAuthority {
         let workspace_capability =
             crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
         let source_copy = workspace.path().join("batch.pdf");
-        let completed = workspace.path().join("extracted.pdf");
+        let extracted = workspace.path().join("extracted.pdf");
+        let rotated = workspace.path().join("rotated.pdf");
         let source_copy_anchor = workspace_capability
             .authorize(&source_copy)
             .map_err(io_no_effect)?
@@ -3143,8 +3144,39 @@ impl FilesystemAuthority {
         source_copy_anchor
             .copy_no_clobber_from(&source_anchor)
             .map_err(io_no_effect)?;
-        crate::pdf::extract_pages(&source_copy, &page_indexes, &completed)
+        crate::pdf::extract_pages(&source_copy, &page_indexes, &extracted)
             .map_err(|error| StepFailure::NoEffect(error.to_string()))?;
+        let rotations = step
+            .meta
+            .get("rotations")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|rotation| {
+                let page_index = rotation
+                    .get("pageIndex")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved output page is invalid".to_string())
+                    })?;
+                let target = rotation
+                    .get("targetRotation")
+                    .and_then(Value::as_i64)
+                    .filter(|value| matches!(value, 0 | 90 | 180 | 270))
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved output rotation is invalid".to_string())
+                    })?;
+                Ok((page_index, target))
+            })
+            .collect::<Result<Vec<_>, StepFailure>>()?;
+        let completed = if rotations.is_empty() {
+            extracted
+        } else {
+            crate::pdf::rotate_pages_incremental(&extracted, &rotated, &rotations)
+                .map_err(|error| StepFailure::NoEffect(error.to_string()))?;
+            rotated
+        };
         let completed_anchor = workspace_capability
             .authorize(&completed)
             .map_err(io_no_effect)?

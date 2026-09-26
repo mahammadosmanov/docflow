@@ -132,6 +132,17 @@ const demoOperation: OperationDef = {
       visibleWhen: {},
       helpKey: null,
     },
+    {
+      name: "correct_orientation",
+      kind: "bool",
+      labelKey: "param.rfi.processScans.correctOrientation",
+      default: true,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.rfi.processScans.correctOrientation.help",
+    },
   ],
 };
 

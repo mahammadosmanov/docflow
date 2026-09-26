@@ -28,6 +28,15 @@ identity or secrets.
 
 ## Scans and signed pages
 
+### Process Scans orientation
+
+- `rfi.process_scans` checks each input PDF page with the existing orientation
+  detector by default. Confident corrections apply only to the new output copy.
+- If any page in a PDF remains uncertain, the complete original PDF goes to
+  `_review` unchanged. Apply rotates only the exact approved output pages and
+  revalidates the source hash; the source is never rotated in place.
+- Operators may disable correction through the Process Scans parameter form.
+
 ### Incoming file grouping
 
 - `rfi.group_files` inspects only regular, non-hidden files immediately inside

@@ -96,7 +96,7 @@
     }
   },
   "op.rfi.process_scans.title": "Process Scans",
-  "op.rfi.process_scans.desc": "Reads the RFI number on the first page, renames scanned PDFs, and saves them in your chosen layout.",
+  "op.rfi.process_scans.desc": "Reads each page for its RFI number, corrects page orientation, and saves scanned PDFs in your chosen layout.",
   "op.rfi.group_files.title": "Group Files by RFI",
   "op.rfi.group_files.desc": "Finds exact RFI numbers in file names and contents, then copies files into each related RFI folder.",
   "param.rfi.fileGroup.source": "Incoming files folder",
@@ -941,5 +941,10 @@
   "prefs.replica.status.running": "Status: Running",
   "prefs.replica.status.waitingForSignIn": "Status: Waiting for sign-in",
   "prefs.replica.status.deferred": "Status: Deferred until another operation finishes",
-  "prefs.replica.status.paused": "Status: Paused for safety"
+  "prefs.replica.status.paused": "Status: Paused for safety",
+  "param.rfi.processScans.correctOrientation": "Correct page orientation while processing",
+  "param.rfi.processScans.correctOrientation.help": "Rotates pages with a confident orientation result. Uncertain PDFs go unchanged to _review.",
+  "warn.rfi.processScansOrientationReview": "Page orientation was uncertain; PDF was sent to _review",
+  "progress.phase.scan_orientation": "Checking PDF page orientation",
+  "rfi.extraction.pages": "Extracted pages"
 }
