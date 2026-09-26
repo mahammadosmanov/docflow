@@ -9,11 +9,13 @@ Updated: 2026-09-26
 - Objective: skip supported RFI Log routes absent from the Follow Up template
   while retaining manual review for non-unique row matches.
 - Release state: all local source gates pass on macOS with Rust 1.97.1. The
-  supplied workbook preview was read-only. PR #34 is open; two Linux CI attempts
-  failed when `ld` crashed with signal 7 during test linking, so Cargo jobs are
-  now bounded to one for a retry. Windows release workflow is still running on
-  feature commit `c07282d`; review, immutable tag, and stable GitHub Release
-  remain pending.
+  supplied workbook preview was read-only. PR #34 is open. Linux CI still fails
+  when `ld` crashes with signal 7 during test linking, including after Cargo
+  jobs were bounded to one. Windows workflow `36221590137` passed build,
+  installer smoke, and manifest checks on feature commit `c07282d`; its private
+  draft installer SHA-256 is
+  `845642ca220ecfa0722f81218a300163482ec4feffc2e3027e4e282fe995455c`.
+  Review, immutable tag, and stable GitHub Release remain pending.
 
 ## Current slice
 
