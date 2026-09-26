@@ -3726,6 +3726,8 @@ mod tests {
         assert_eq!(result["cloudSynced"], true);
     }
 
+    // This path needs the native PDF page renderer; Linux intentionally lacks it.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn preview_rfi_system_sync_with_nested_workbooks_succeeds_and_applies() {
         use std::io::{Cursor, Write};

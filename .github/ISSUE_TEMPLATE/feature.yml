@@ -26,6 +26,20 @@ body:
         - Undo restores ...
     validations:
       required: true
+  - type: textarea
+    id: slice_and_timing
+    attributes:
+      label: First slice and timing baseline
+      description: Link the smallest first slice. For performance work, record representative input, platform, and current elapsed time; otherwise write not performance-sensitive.
+    validations:
+      required: true
+  - type: textarea
+    id: platform_acceptance
+    attributes:
+      label: Platform acceptance
+      description: Name required Windows, Excel, Outlook, OneDrive, OCR, or printer checks. Write none when not applicable.
+    validations:
+      required: true
   - type: dropdown
     id: data_risk
     attributes:

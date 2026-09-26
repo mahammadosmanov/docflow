@@ -32,3 +32,11 @@
 - [ ] `npm run audit:licenses`
 
 Paste concise real results and any platform-only omission below.
+
+## Performance and platform evidence
+
+- Baseline and after timings (same representative input/platform), or not performance-sensitive:
+- Focused checks and elapsed time:
+- Required Windows/Office/OneDrive/printer acceptance and status:
+- [ ] Independent analysis only is parallel; Apply/journal/Undo remain ordered
+- [ ] `docs/FEATURE_DEVELOPMENT.md` followed; pending evidence recorded

@@ -3,6 +3,16 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.5 - 2026-09-27
+
+### Changed
+
+- Standardized feature work around small slices, comparable performance
+  measurements, fast focused checks, and explicit platform acceptance.
+- Frontend, Rust format/lint, and Rust test jobs now run concurrently; Rust
+  dependency downloads use a lockfile-keyed cache while compilation remains
+  bounded.
+
 ## 1.11.4 - 2026-09-27
 
 ### Fixed

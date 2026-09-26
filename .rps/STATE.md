@@ -31,6 +31,26 @@ Updated: 2026-09-27
 - Next: install v1.11.4 and confirm the three ambiguous FINAL Worley rows remain
   available for operator review.
 
+## Parallel feature-delivery workflow improvement
+
+- Version: 1.11.5 (`fix`)
+- Local gates passed: version, docs/source audits, 23 Node tooling tests,
+  54 frontend tests, production build, Rust 1.97.1 fmt/Clippy/tests/check, and
+  license audit. Windows packaging has not run.
+- PR CI Node job passed (31–33s); separate Rust format/lint passed in 4m30s.
+  Combined Rust jobs twice hit `rust-lld` Bus error. Splitting them fixed that,
+  then exposed one platform-only native-PDF unit test failing on Linux because
+  Linux intentionally has no page renderer. Its end-to-end test is now gated to
+  macOS/Windows; full macOS Rust suite passes (369 tests). Awaiting final CI.
+- Added `docs/FEATURE_DEVELOPMENT.md` and linked it from the documentation map.
+- Feature issue/PR templates request a first slice, comparable timing evidence,
+  focused-check timing, and applicable platform acceptance.
+- Quality CI runs independent Node/React and Rust jobs concurrently; Rust
+  registry/Git dependencies use a lockfile-keyed cache while build concurrency
+  remains bounded to one.
+- The branch is rebased onto v1.11.4 and the source changes are ready for
+  release validation.
+
 ## Previous release baseline: 1.11.3
 
 - Process Scans sparse drawing orientation fix was released as v1.11.3. Its
