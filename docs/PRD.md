@@ -45,10 +45,18 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 - **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
   receive uniquely mapped RFI Log records. A supported route with no matching
   Follow Up row, including a FINAL item with no prepared target row, is outside
-  the current template scope and is silently skipped; multiple matching rows
+  the current template scope and is silently skipped. Multiple distinct exact
+  CIV area tags may map to their respective distinct existing rows. Repeated
+  MEC records may map to multiple existing rows only when each row has a unique
+  exact `(Tag No, Area, Inspection Location)` context from same-status,
+  same-item source records. Duplicate contexts and all other non-unique matches
   remain manual review. Shared-cell status is derived from every remaining RFI;
   Cancelled/Rejected entries are removed; FINAL Worley state follows the exact
   REMARKS marker; excluded sheets never change.
+- **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
+  limited to 256 files and 8 GiB of logical charge across the workbook parent
+  and `.docflow-backups`. Apply and Undo refuse before mutation when the
+  projected bound would be exceeded.
 - **DF-017 — Resilient print handoff:** a complete Windows spool submission is
   not failed merely because a driver immediately releases its job record.
   A native-app request accepted by Windows but not exposed as an identifiable

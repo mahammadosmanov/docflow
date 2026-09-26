@@ -3,10 +3,15 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
-## Unreleased
+## 1.10.6 - 2026-09-26
 
-Record user-visible changes here while they are being developed. Move them into
-a dated version section as part of the release commit.
+### Fixed
+
+- Follow Up Sync now maps repeated MEC RFIs to separate existing rows when
+  each exact tag, area, and inspection-location tuple is unique. Duplicate or
+  conflicting route contexts remain in manual review.
+- Follow Up Apply now allows up to 256 retained recovery files, while keeping
+  the 8 GiB limit and refusing before mutation when either bound is exceeded.
 
 ## 1.10.5 - 2026-09-26
 

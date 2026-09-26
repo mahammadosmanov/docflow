@@ -207,6 +207,49 @@ fn full_schema_record_with_status(
     )
 }
 
+fn full_schema_mec_record(
+    row_number: u32,
+    suffix: &str,
+    item: &str,
+    tag: &str,
+    area: &str,
+    location: &str,
+    status: &str,
+) -> String {
+    row(
+        row_number,
+        [
+            inline(
+                &format!("A{row_number}"),
+                &format!("AZE-SUN-INT-QMS-RFI-MEC-{suffix}"),
+            ),
+            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-MEC-0001"),
+            inline(&format!("E{row_number}"), item),
+            inline(&format!("F{row_number}"), tag),
+            inline(&format!("G{row_number}"), area),
+            inline(&format!("N{row_number}"), location),
+            inline(&format!("T{row_number}"), status),
+            blank(&format!("V{row_number}")),
+        ],
+    )
+}
+
+fn full_schema_mec_header() -> String {
+    row(
+        9,
+        [
+            inline("A9", "RFI No."),
+            inline("D9", "ITP No:"),
+            inline("E9", "Item No."),
+            inline("F9", "Tag No"),
+            inline("G9", "Area"),
+            inline("N9", "Inspection Location"),
+            inline("T9", "Inspection Status"),
+            inline("V9", "Remarks"),
+        ],
+    )
+}
+
 #[test]
 fn mixed_completed_groups_update_status_without_writing_remarks() {
     let source = full_schema_source([
@@ -442,6 +485,192 @@ fn full_sync_keeps_multiple_matching_follow_up_rows_in_manual_review() {
         rows[0]["disposition"],
         "rfi.followUp.disposition.manualReview"
     );
+    assert_eq!(
+        rows[0]["reasonKey"],
+        "warn.rfi.followUp.reason.mappingAmbiguous"
+    );
+}
+
+#[test]
+fn full_sync_fans_out_a_record_only_across_distinct_exact_civ_area_tags() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0041",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.1.5",
+        "N2, N6",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "N2"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "N6"), blank("C3"), blank("D3")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{review}");
+    assert!(rows.iter().all(|row| {
+        row["disposition"] == "rfi.followUp.disposition.ready"
+            && row["rfiNo"] == "CIV-0041"
+            && row["proposedStatus"] == "Completed"
+    }));
+    assert!(review["warnings"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn full_sync_does_not_fan_out_across_duplicate_civ_area_rows() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0041",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.1.5",
+        "N2, N6",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "N2"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "N2"), blank("C3"), blank("D3")]),
+                row(4, [inline("B4", "N6"), blank("C4"), blank("D4")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(
+        rows[0]["reasonKey"],
+        "warn.rfi.followUp.reason.mappingAmbiguous"
+    );
+    assert_eq!(review["warnings"][0]["subject"], "1");
+}
+
+#[test]
+fn full_sync_fans_out_mec_rfi_only_across_distinct_exact_route_contexts() {
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet(
+            std::iter::once(full_schema_mec_header()).chain([
+                full_schema_mec_record(10, "0120", "MEC-1.3.5", "PCS-06", "S3", "N2", "Completed"),
+                full_schema_mec_record(11, "0120", "MEC-1.3.5", "PCS-06", "S4", "N2", "Completed"),
+            ]),
+            &[],
+        ),
+    );
+    let target = package(&[(
+        "MEC",
+        None,
+        worksheet(
+            [
+                row(1, [inline("N1", "RFI No."), inline("O1", "STATUS")]),
+                row(
+                    2,
+                    [
+                        inline("B2", "N2"),
+                        inline("C2", "PCS-06"),
+                        inline("D2", "S3"),
+                        blank("N2"),
+                        blank("O2"),
+                    ],
+                ),
+                row(
+                    3,
+                    [
+                        inline("B3", "N2"),
+                        inline("C3", "PCS-06"),
+                        inline("D3", "S4"),
+                        blank("N3"),
+                        blank("O3"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{review}");
+    assert!(rows.iter().all(|row| {
+        row["disposition"] == "rfi.followUp.disposition.ready"
+            && row["rfiNo"] == "MEC-0120"
+            && row["proposedStatus"] == "Completed"
+    }));
+    assert!(review["warnings"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn full_sync_keeps_duplicate_mec_route_context_rows_in_manual_review() {
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet(
+            std::iter::once(full_schema_mec_header()).chain([
+                full_schema_mec_record(10, "0120", "MEC-1.3.5", "PCS-06", "S3", "N2", "Completed"),
+                full_schema_mec_record(11, "0120", "MEC-1.3.5", "PCS-06", "S4", "N2", "Completed"),
+            ]),
+            &[],
+        ),
+    );
+    let target = package(&[(
+        "MEC",
+        None,
+        worksheet(
+            [
+                row(1, [inline("N1", "RFI No."), inline("O1", "STATUS")]),
+                row(
+                    2,
+                    [
+                        inline("B2", "N2"),
+                        inline("C2", "PCS-06"),
+                        inline("D2", "S3"),
+                        blank("N2"),
+                        blank("O2"),
+                    ],
+                ),
+                row(
+                    3,
+                    [
+                        inline("B3", "N2"),
+                        inline("C3", "PCS-06"),
+                        inline("D3", "S3"),
+                        blank("N3"),
+                        blank("O3"),
+                    ],
+                ),
+                row(
+                    4,
+                    [
+                        inline("B4", "N2"),
+                        inline("C4", "PCS-06"),
+                        inline("D4", "S4"),
+                        blank("N4"),
+                        blank("O4"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{review}");
     assert_eq!(
         rows[0]["reasonKey"],
         "warn.rfi.followUp.reason.mappingAmbiguous"
@@ -844,6 +1073,13 @@ fn follow_up_retained_apply_revalidates_open_workbooks_at_every_boundary() {
         target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner();
     std::fs::write(&source_path, &source_bytes).unwrap();
     std::fs::write(&target_path, &original_target).unwrap();
+    for index in 0..64 {
+        std::fs::write(
+            root.join(format!(".docflow-s5-backup-prior-{index}.xlsx")),
+            b"retained recovery evidence",
+        )
+        .unwrap();
+    }
     let mut source = File::open(&source_path).unwrap();
     let mut target = File::options()
         .read(true)

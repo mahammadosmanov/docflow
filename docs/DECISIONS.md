@@ -27,6 +27,9 @@ and versioned with the code they govern.
 | Exact completed-PDF evidence as a separate guarded RFI Log status operation | Accepted | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
 | Per-RFI mixed-status remarks on CIV and PCU Follow Up sheets | Superseded | [`adr/0026-mixed-rfi-status-remarks.md`](adr/0026-mixed-rfi-status-remarks.md) |
 | Keep Follow Up Sync away from worksheet Remarks cells | Accepted | [`adr/0028-remove-follow-up-status-remarks.md`](adr/0028-remove-follow-up-status-remarks.md) |
+| Exact multi-area CIV Follow Up fan-out | Accepted | [`adr/0029-exact-civ-multi-area-follow-up.md`](adr/0029-exact-civ-multi-area-follow-up.md) |
+| Larger bounded S5 retained-file capacity | Accepted | [`adr/0030-bounded-s5-retained-file-capacity.md`](adr/0030-bounded-s5-retained-file-capacity.md) |
+| Exact route-context MEC Follow Up fan-out | Accepted | [`adr/0031-exact-mec-context-follow-up.md`](adr/0031-exact-mec-context-follow-up.md) |
 | Skip supported Follow Up routes with no existing target row | Accepted | [`adr/0027-follow-up-no-match-scope.md`](adr/0027-follow-up-no-match-scope.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Accepted | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |

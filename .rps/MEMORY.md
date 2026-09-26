@@ -1,5 +1,11 @@
 # DocFlow project memory
 
+- Follow Up Sync groups duplicate source rows only when ITP, item, status, and
+  Worley evidence agree. MEC multi-row fan-out requires each existing target
+  row to match a distinct exact `(tag, area, inspection location)` source
+  context; CIV multi-area fan-out requires distinct exact tags. Never infer a
+  cartesian route. S5 retained-file cap is 256 while the 8 GiB bound remains;
+  on quota errors, inspect the exact file and byte counts before cleanup.
 - The authoritative repository is `/Users/rohtolos/Documents/GitHub/docflow`.
 - Print submission is serial. Never automatically resubmit an uncertain job;
   it may already have produced paper.

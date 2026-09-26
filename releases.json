@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.5",
+  "currentVersion": "1.10.6",
   "releases": [
     {
       "version": "0.1.0",
@@ -774,9 +774,17 @@
       "version": "1.10.5",
       "date": "2026-09-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.10.5",
       "summary": "Remove generated mixed-status remarks from Follow Up Sync while preserving status updates and Worley source mapping."
+    },
+    {
+      "version": "1.10.6",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.10.6",
+      "summary": "Map exact distinct MEC route contexts and raise bounded S5 retained-file capacity to 256."
     }
   ]
 }

@@ -133,7 +133,14 @@ expanded only when unambiguous; malformed or mixed-discipline values fail closed
 For supported CIV/MEC routes, including FINAL routes, a source record with no
 matching row in the current Follow Up template is outside its scope and is
 skipped without a warning. If more than one row matches, the record remains in
-manual review.
+manual review, except that a CIV record with multiple exact area tags may map
+to multiple distinct existing rows when every target row has a different tag
+named in the source. Duplicate target rows for one tag remain manual review;
+this rule does not create cartesian mappings. Repeated MEC records may map to
+multiple existing MEC rows only when every source row agrees on ITP, item,
+status, and Worley evidence, and every destination has a unique exact
+`(Tag No, Area, Inspection Location)` context. Duplicate contexts, conflicting
+source values, and multi-valued MEC contexts remain manual review.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the

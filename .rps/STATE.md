@@ -4,17 +4,34 @@ Updated: 2026-09-26
 
 ## Current candidate
 
-- Version: 1.10.5
+- Version: 1.10.6
 - Branch: `rohtolos/follow-up-unmatched-skip`
-- Objective: remove generated mixed-status Remarks writes from Follow Up Sync.
-- Release state: local Rust/frontend tests, build, Clippy, check, formatting,
-  version/docs/source/license audits pass on macOS with Rust 1.97.1. PR #34 is
-  open. Its latest Linux check still fails when `ld` crashes with signal 7
-  during test linking, including after Cargo jobs were bounded to one. Windows
-  1.10.5 build and clean installer smoke are pending; stable tag/release waits
-  for applicable source gates.
+- Objective: synchronize exact multi-row CIV/MEC Follow Up mappings and raise
+  the bounded retained S5 file capacity after operator Apply failures.
+- Release state: supplied current workbooks produce 28 approved row pairs and
+  no warnings; guarded temporary-copy OOXML delta verification passes.
+  Follow Up native suite (44), pinned Rust 1.97.1 full suite, Clippy, Cargo
+  check, Node/React tests, frontend build, format, version/docs/source/license
+  audits pass locally. Rust 1.98 Clippy adds nine unrelated
+  `chunks_exact_to_as_chunks` failures; release toolchain is pinned at 1.97.1.
+  Need final diff review, source checkpoint, and Windows 1.10.6 draft installer
+  workflow. No Windows artifact or native Office acceptance yet.
 
-## Current slice
+## 1.10.6 slice
+
+- Repeated MEC records retain every exact `(tag, area, inspection location)`
+  source context only when ITP, item, lifecycle status, and Worley evidence
+  agree. Distinct target tuples map independently; duplicate or incomplete
+  contexts remain manual review. CIV exact distinct-tag fan-out is preserved.
+- S5 retained files now cap at 256, with the 8 GiB bound unchanged. A native
+  Apply test seeds 64 prior files to verify the previous count limit no longer
+  blocks a reservation.
+- Updated current workbook pair preview: 28 approved cell-update rows across
+  CIV (12), MEC (3), PCU (12), and Road (1); 27 lifecycle rows and 1 Worley
+  row; zero warnings. Temporary-copy guarded OOXML delta check passes.
+- Release workflow and Windows installer acceptance remain pending.
+
+## 1.10.5 carried behavior
 
 - Follow Up Sync now previews and applies only RFI number and status cells. It
   never adds, replaces, or clears Follow Up worksheet Remarks. RFI Log REMARKS
@@ -33,6 +50,14 @@ Updated: 2026-09-26
   format, Clippy, Cargo check, frontend tests/build, version/docs/source and
   license audits pass locally; ignored tests still require their operator
   fixtures. Linux CI linker failures are tracked above.
+
+## Previous candidate
+
+- Version: 1.10.5
+- Objective: remove generated mixed-status Remarks writes from Follow Up Sync.
+- Release state: source branch has PR #34; its latest Linux check failed when
+  `ld` crashed with signal 7 during test linking. Windows 1.10.5 draft build
+  status remains historical and does not verify 1.10.6.
 
 ## Previous candidate
 

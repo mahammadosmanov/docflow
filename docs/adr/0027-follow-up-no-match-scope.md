@@ -19,7 +19,8 @@ template's scope. This includes FINAL records whose item has no prepared row.
 Skip it without adding a manual-review row or incrementing the unmapped-record
 warning. A source record matching exactly one existing row continues through
 the current guarded sync. A record matching multiple rows remains unselected in
-manual review and contributes to the warning count.
+manual review and contributes to the warning count, except for the exact CIV
+multi-area case added by [ADR 0029](0029-exact-civ-multi-area-follow-up.md).
 
 This rule does not create sections, rows, or cells. Formula, merged, protected,
 and other unsafe matched targets continue through existing manual review.

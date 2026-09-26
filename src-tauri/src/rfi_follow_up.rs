@@ -395,11 +395,17 @@ struct SourceRecord {
     itp: String,
     item: String,
     tag: String,
-    area: String,
-    location: String,
     state: Option<LogState>,
     worley_signed: bool,
+    contexts: Vec<SourceRouteContext>,
     evidence: Vec<SourceStatusEvidence>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourceRouteContext {
+    tag: String,
+    area: String,
+    location: String,
 }
 
 fn log_state(value: &str) -> Option<LogState> {
@@ -596,6 +602,16 @@ fn scan_source_records(
             };
             let status = get(status_col);
             let remarks = get(remarks_col);
+            let itp = get(itp_col);
+            let item = get(item_col);
+            let tag = get(tag_col);
+            let area = get(area_col);
+            let location = get(location_col);
+            let context = SourceRouteContext {
+                tag: tag.clone(),
+                area: area.clone(),
+                location: location.clone(),
+            };
             let evidence = SourceStatusEvidence {
                 sheet: descriptor.name.clone(),
                 row,
@@ -607,25 +623,28 @@ fn scan_source_records(
             let incoming = SourceRecord {
                 canonical_rfi: canonical_rfi.clone(),
                 short_rfi,
-                itp: get(itp_col),
-                item: get(item_col),
-                tag: get(tag_col),
-                area: get(area_col),
-                location: get(location_col),
+                itp,
+                item,
+                tag,
                 state: log_state(&status),
                 worley_signed: mapped_follow_up_status(&remarks) == "Signed",
+                contexts: vec![context],
                 evidence: vec![evidence],
             };
             if let Some(existing) = records.get_mut(&canonical_rfi) {
                 if existing.itp != incoming.itp
                     || existing.item != incoming.item
-                    || existing.tag != incoming.tag
-                    || existing.area != incoming.area
-                    || existing.location != incoming.location
                     || existing.state != incoming.state
                     || existing.worley_signed != incoming.worley_signed
+                    || route_key(existing) != route_key(&incoming)
                 {
                     existing.state = None;
+                } else {
+                    for context in incoming.contexts.iter() {
+                        if !existing.contexts.contains(context) {
+                            existing.contexts.push(context.clone());
+                        }
+                    }
                 }
                 existing.evidence.extend(incoming.evidence);
             } else {
@@ -822,30 +841,111 @@ fn row_matches(sheet_name: &str, sheet: &WorksheetData, row: u32, record: &Sourc
             .unwrap_or_default()
     };
     match sheet_name {
-        "CIV" => split_values(&record.tag)
+        "CIV" => record.contexts.iter().any(|context| {
+            split_values(&context.tag)
+                .iter()
+                .any(|value| normalized_location(value) == cell(2))
+        }),
+        "PCU" => record
+            .contexts
             .iter()
-            .any(|value| normalized_location(value) == cell(2)),
-        "PCU" => normalized_location(&record.tag) == cell(3),
-        "Road" => {
-            normalized_location(&record.tag) == cell(2)
-                && (record.area.is_empty() || normalized_location(&record.area).contains(&cell(1)))
-        }
-        "MEC" => {
-            let sections = split_values(&record.area);
-            let locations = split_values(&record.location);
-            if sections.len() > 1 && locations.len() > 1 {
-                return false;
-            }
-            normalized_location(&record.tag) == cell(3)
+            .any(|context| normalized_location(&context.tag) == cell(3)),
+        "Road" => record.contexts.iter().any(|context| {
+            normalized_location(&context.tag) == cell(2)
+                && (context.area.is_empty()
+                    || normalized_location(&context.area).contains(&cell(1)))
+        }),
+        "MEC" => record.contexts.iter().any(|context| {
+            let sections = split_values(&context.area);
+            let locations = split_values(&context.location);
+            sections.len() <= 1
+                && locations.len() <= 1
+                && normalized_location(&context.tag) == cell(3)
                 && sections
                     .iter()
                     .any(|value| normalized_location(value) == cell(4))
                 && locations
                     .iter()
                     .any(|value| normalized_location(value) == cell(2))
-        }
+        }),
         _ => false,
     }
+}
+
+fn distinct_civ_area_rows(
+    target_workbook: &WorkbookData,
+    candidates: &[(String, u32, u32, u32)],
+    record: &SourceRecord,
+) -> bool {
+    if candidates.len() < 2 {
+        return false;
+    }
+    let Some(sheet) = target_workbook.sheet("CIV") else {
+        return false;
+    };
+    let source_tags = record
+        .contexts
+        .iter()
+        .flat_map(|context| split_values(&context.tag))
+        .map(|value| normalized_location(&value))
+        .collect::<BTreeSet<_>>();
+    let mut matched_tags = BTreeSet::new();
+    candidates.iter().all(|(_, row, _, _)| {
+        let tag = sheet
+            .cell(*row, 2)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default();
+        !tag.is_empty() && source_tags.contains(&tag) && matched_tags.insert(tag)
+    })
+}
+
+fn distinct_mec_context_rows(
+    target_workbook: &WorkbookData,
+    candidates: &[(String, u32, u32, u32)],
+    record: &SourceRecord,
+) -> bool {
+    if candidates.len() < 2 {
+        return false;
+    }
+    let Some(sheet) = target_workbook.sheet("MEC") else {
+        return false;
+    };
+    let mut source_contexts = BTreeSet::new();
+    for context in &record.contexts {
+        let tags = split_values(&context.tag);
+        let areas = split_values(&context.area);
+        let locations = split_values(&context.location);
+        if tags.len() != 1 || areas.len() != 1 || locations.len() != 1 {
+            return false;
+        }
+        source_contexts.insert((
+            normalized_location(&tags[0]),
+            normalized_location(&areas[0]),
+            normalized_location(&locations[0]),
+        ));
+    }
+    let mut matched_contexts = BTreeSet::new();
+    candidates.iter().all(|(_, row, _, _)| {
+        let context = (
+            sheet
+                .cell(*row, 3)
+                .map(|cell| normalized_location(&cell.value))
+                .unwrap_or_default(),
+            sheet
+                .cell(*row, 4)
+                .map(|cell| normalized_location(&cell.value))
+                .unwrap_or_default(),
+            sheet
+                .cell(*row, 2)
+                .map(|cell| normalized_location(&cell.value))
+                .unwrap_or_default(),
+        );
+        !context.0.is_empty()
+            && !context.1.is_empty()
+            && !context.2.is_empty()
+            && source_contexts.contains(&context)
+            && matched_contexts.insert(context)
+    })
 }
 
 #[derive(Clone)]
@@ -1063,15 +1163,11 @@ fn classify_workbooks_full(
         }
     }
 
-    let mut present_main = BTreeSet::new();
     let mut manual_rows = Vec::new();
     for slot in slots
         .values_mut()
         .filter(|slot| !is_signed_layout(&slot.layout))
     {
-        for code in &slot.codes {
-            present_main.insert(code.clone());
-        }
         let removed = slot
             .codes
             .iter()
@@ -1106,14 +1202,11 @@ fn classify_workbooks_full(
         .values()
         .filter(|record| record.state.is_some_and(|state| state != LogState::Remove))
     {
-        if present_main.contains(&record.canonical_rfi) {
-            continue;
-        }
         let Some((sheet_name, rfi_column)) = route_key(record) else {
             continue;
         };
         let candidates = slots
-            .iter_mut()
+            .iter()
             .filter(|((sheet, _, column, _), slot)| {
                 sheet == sheet_name
                     && *column == rfi_column
@@ -1128,17 +1221,32 @@ fn classify_workbooks_full(
                     record,
                 )
             })
+            .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
         let candidate_count = candidates.len();
+        let existing_slots = slots
+            .iter()
+            .filter(|(_, slot)| slot.codes.contains(&record.canonical_rfi))
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
         if candidate_count == 0 {
             // A recognized source route with no corresponding Follow Up row is
             // outside this workbook's current scope. Keep it out of the review
             // queue; records matching multiple rows still require operator review.
-            drop(candidates);
             continue;
         }
-        if candidate_count != 1 {
-            drop(candidates);
+        if candidate_count == 1 && !existing_slots.is_empty() {
+            continue;
+        }
+        let exact_multi_area = candidate_count > 1
+            && ((sheet_name == "CIV"
+                && distinct_civ_area_rows(target_workbook, &candidates, record))
+                || (sheet_name == "MEC"
+                    && distinct_mec_context_rows(target_workbook, &candidates, record)));
+        if candidate_count > 1 && !exact_multi_area {
+            if !existing_slots.is_empty() {
+                continue;
+            }
             unmapped_count += 1;
             let Some(layout) = layouts
                 .iter()
@@ -1179,10 +1287,45 @@ fn classify_workbooks_full(
             });
             continue;
         }
-        let (_, slot) = candidates.into_iter().next().unwrap();
-        slot.codes.push(record.canonical_rfi.clone());
-        slot.changed_rfis.insert(record.canonical_rfi.clone());
-        present_main.insert(record.canonical_rfi.clone());
+        let already_mapped_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
+        if already_mapped_elsewhere {
+            unmapped_count += 1;
+            let layout = slots
+                .get(&candidates[0])
+                .map(|slot| slot.layout.clone())
+                .ok_or_else(workbook_invalid)?;
+            manual_rows.push(FollowUpRow {
+                row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                sheet: sheet_name.to_string(),
+                row: 0,
+                rfi_no: record.short_rfi.clone(),
+                source_statuses: vec![record.inspection_status_for_ui()],
+                current_status: String::new(),
+                proposed_status: None,
+                proposed_rfi_no: None,
+                disposition: FollowUpDisposition::ManualReview,
+                reason_key: "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
+                selectable: false,
+                enabled: false,
+                target: FollowUpReviewTarget {
+                    worksheet: layout.worksheet,
+                    row: 0,
+                    rfi_column: layout.rfi_column,
+                    status_column: layout.status_column,
+                    rfi_cell: None,
+                    status_cell: None,
+                },
+                source_evidence: record.evidence.clone(),
+            });
+            continue;
+        }
+        for key in candidates {
+            let slot = slots.get_mut(&key).ok_or_else(workbook_invalid)?;
+            if !slot.codes.contains(&record.canonical_rfi) {
+                slot.codes.push(record.canonical_rfi.clone());
+                slot.changed_rfis.insert(record.canonical_rfi.clone());
+            }
+        }
     }
 
     let mut rows = Vec::new();
