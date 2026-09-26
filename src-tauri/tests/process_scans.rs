@@ -642,6 +642,132 @@ impl OcrAdapter for ParallelFixtureOcr {
     }
 }
 
+struct OrientationFixtureOcr {
+    uncertain: bool,
+}
+
+impl OcrAdapter for OrientationFixtureOcr {
+    fn read(&self, _path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        Ok(OcrRead {
+            matched: find("AZE-SUN-INT-QMS-RFI-CIV-0064"),
+            source: "orientation-fixture".to_string(),
+        })
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn inspect_pdf(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<Result<docflow_lib::pdf::PdfInspection, String>> {
+        Some(docflow_lib::pdf::inspect(path).map_err(|error| error.to_string()))
+    }
+
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
+    fn supports_orientation(&self) -> bool {
+        true
+    }
+
+    fn detect_orientation(
+        &self,
+        _path: &std::path::Path,
+        _page_index: usize,
+    ) -> Result<docflow_lib::operations::pdf_orientation::OrientationDetection, String> {
+        if self.uncertain {
+            return Err("fixture orientation is uncertain".to_string());
+        }
+        Ok(
+            docflow_lib::operations::pdf_orientation::OrientationDetection {
+                rotate_clockwise: 90,
+                confidence: 15.0,
+                method: "fixture".to_string(),
+            },
+        )
+    }
+
+    fn diagnostics(&self) -> String {
+        "orientation fixture OCR".to_string()
+    }
+}
+
+#[test]
+fn process_scans_adds_confident_orientation_to_cached_plan() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    write_multi_page_pdf(&source.join("batch.pdf"), 1);
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr { uncertain: false },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extraction = plan
+        .steps
+        .iter()
+        .find(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .expect("confident orientation must use cached PDF extraction");
+    assert_eq!(extraction.meta["rotations"][0]["pageIndex"], json!(0));
+    assert_eq!(extraction.meta["rotations"][0]["targetRotation"], json!(90));
+    assert_eq!(extraction.meta["rotations"][0]["confidence"], json!(15.0));
+    assert!(extraction.meta["sourceSha256"].as_str().is_some());
+}
+
+#[test]
+fn process_scans_routes_uncertain_orientation_to_review_unchanged() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf(&pdf, 1);
+    let before = std::fs::read(&pdf).unwrap();
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr { uncertain: true },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(&pdf).unwrap(), before);
+    assert!(plan.steps.iter().any(|step| {
+        step.dst
+            .as_deref()
+            .is_some_and(|path| path.ends_with("_review/batch.pdf"))
+            && step.kind == docflow_lib::contracts::StepKind::Copy
+    }));
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| { step.kind != docflow_lib::contracts::StepKind::PdfPagesExtract })
+    );
+}
+
 #[test]
 fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
     let fixture = tempfile::tempdir().unwrap();
