@@ -1,21 +1,22 @@
 # DocFlow project state
 
-Updated: 2026-09-26
+Updated: 2026-09-27
 
 ## Isolated feature candidate
 
 - Version: 1.11.0
-- Branch: `codex/process-scans-rotation`
+- Branch: `codex/process-scans-rotation`, based on canonical `de00322` / 1.10.8.
 - Objective: apply confident page rotations during Process Scans without
   changing source PDFs or the existing Preview/Apply/Undo authority flow.
-- State: implementation and static checks complete. Rust all-target check,
-  pinned Rust 1.97.1 Clippy, frontend TypeScript/Vite builds, version/docs/source
-  audits, and dependency license audit pass. Tests were not run. A dedicated
-  local source commit is created; no push, tag, or GitHub Release has been created.
+- State: implementation complete. Focused Process Scans suite passes (26, 1
+  operator-PDF test ignored); full Rust, Node/frontend, format, Clippy, Cargo
+  check, version/docs/source, and license audits pass. Version is 1.11.0.
+  Commits `04d3e71` and `9435918` are local; canonical branch push and tag-triggered
+  Windows Release workflow remain pending.
 - Behavior: correction defaults on; uncertain input PDFs go unchanged to
   `_review`; Apply extracts and rotates only cached Plan outputs.
-- Next: request/run feature regression and full project suites, then reconcile
-  version metadata with concurrent 1.10.7 work before any release publication.
+- Next: fast-forward and push the canonical branch, push immutable `v1.11.0`
+  to trigger the Windows installer and Release workflow, then verify its result.
 
 ## Current candidate
 
