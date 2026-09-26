@@ -389,6 +389,76 @@ fn mixed_completed_groups_preview_individual_remarks_only_on_civ_and_pcu() {
 }
 
 #[test]
+fn full_sync_silently_skips_a_supported_route_without_a_follow_up_row() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0041",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-3.1.5",
+        "AREA-1",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")])],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+
+    assert!(review["rows"].as_array().unwrap().is_empty());
+    assert!(
+        review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|warning| warning["key"] != "warn.rfi.followUp.unmappedRecords")
+    );
+}
+
+#[test]
+fn full_sync_keeps_multiple_matching_follow_up_rows_in_manual_review() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0041",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-3.1.5",
+        "AREA-1",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "AREA-1"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "AREA-1"), blank("C3"), blank("D3")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(
+        rows[0]["disposition"],
+        "rfi.followUp.disposition.manualReview"
+    );
+    assert_eq!(
+        rows[0]["reasonKey"],
+        "warn.rfi.followUp.reason.mappingAmbiguous"
+    );
+}
+
+#[test]
 fn mixed_group_with_unknown_source_status_stays_in_manual_review() {
     let source = full_schema_source([
         full_schema_record_with_status(
@@ -681,6 +751,39 @@ fn full_sync_keeps_formula_backed_missing_final_rfi_in_manual_review() {
         "warn.rfi.followUp.reason.targetFormula"
     );
     assert_eq!(review["rows"][0]["enabled"], false);
+}
+
+#[test]
+fn full_sync_silently_skips_final_rfi_without_a_prepared_follow_up_row() {
+    let source = full_schema_source([full_schema_record(
+        10,
+        "0001",
+        "CIV-2.3.1",
+        "AREA-1",
+        "Signed by Worley",
+    )]);
+    let target = package(&[(
+        "Signed By Worley CIV",
+        None,
+        worksheet(
+            [
+                row(4, [inline("C4", "RFI No."), inline("D4", "Status")]),
+                row(5, [inline("B5", "OTHER-AREA"), blank("C5"), blank("D5")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+
+    assert!(review["rows"].as_array().unwrap().is_empty());
+    assert!(
+        review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|warning| warning["key"] != "warn.rfi.followUp.unmappedRecords")
+    );
 }
 
 #[test]

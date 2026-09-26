@@ -1367,6 +1367,13 @@ fn classify_workbooks_full(
             })
             .collect::<Vec<_>>();
         let candidate_count = candidates.len();
+        if candidate_count == 0 {
+            // A recognized source route with no corresponding Follow Up row is
+            // outside this workbook's current scope. Keep it out of the review
+            // queue; records matching multiple rows still require operator review.
+            drop(candidates);
+            continue;
+        }
         if candidate_count != 1 {
             drop(candidates);
             unmapped_count += 1;
@@ -1536,6 +1543,12 @@ fn classify_workbooks_full(
             .filter(|((_, row, _, _), _)| row_matches(match_layout, matching_sheet, *row, record))
             .collect::<Vec<_>>();
         let candidate_count = candidates.len();
+        if candidate_count == 0 {
+            // No prepared row means this FINAL item is absent from the current
+            // Follow Up template. Do not treat absence as a failed sync.
+            drop(candidates);
+            continue;
+        }
         if candidate_count == 1 {
             let (_, slot) = candidates.into_iter().next().expect("one candidate");
             if sheet_name == "PCU" && slot.codes.is_empty() {

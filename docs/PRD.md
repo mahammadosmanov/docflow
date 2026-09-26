@@ -43,9 +43,12 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   high-confidence PDF decisions may create no-clobber corrected copies under a
   separate review root; the source tree remains read-only.
 - **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
-  receive only uniquely mapped RFI Log records. Shared-cell status is derived
-  from every remaining RFI; Cancelled/Rejected entries are removed; FINAL
-  Worley state follows the exact REMARKS marker; excluded sheets never change.
+  receive uniquely mapped RFI Log records. A supported route with no matching
+  Follow Up row, including a FINAL item with no prepared target row, is outside
+  the current template scope and is silently skipped; multiple matching rows
+  remain manual review. Shared-cell status is derived from every remaining RFI;
+  Cancelled/Rejected entries are removed; FINAL Worley state follows the exact
+  REMARKS marker; excluded sheets never change.
 - **DF-017 — Resilient print handoff:** a complete Windows spool submission is
   not failed merely because a driver immediately releases its job record.
   A native-app request accepted by Windows but not exposed as an identifiable

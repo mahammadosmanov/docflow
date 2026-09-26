@@ -37,6 +37,10 @@
 - Missing FINAL identifiers may use only one uniquely matched, already-prepared
   literal RFI/status pair. Never append a row, synthesize an absent section,
   replace a formula, or guess an ambiguous location.
+- For the supplied 2026-09-26 workbook pair, 166 supported source routes had no
+  matching current Follow Up row, including absent FINAL sections. These are
+  skipped without warning; 7 true multi-row matches remain manual review. Keep
+  this distinction in Preview and never generate rows to eliminate warnings.
 - The current PCU template has a separate FINAL `Signed by Worley` cell in
   column R keyed by the existing FINAL RFI in column P. Sync it from the exact
   RFI Log REMARKS line, but keep POT test, calculated remarks, and manual

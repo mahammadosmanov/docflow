@@ -8,6 +8,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.4 - 2026-09-26
+
+### Fixed
+
+- Follow Up sync quietly skips supported RFI routes and FINAL items that have
+  no matching row in the current template; multiple matches still require
+  manual review. On the supplied workbook pair this reduces unmapped warnings
+  from 173 to 7.
+
 ## 1.10.3 - 2026-09-25
 
 ### Fixed

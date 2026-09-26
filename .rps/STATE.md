@@ -1,8 +1,32 @@
 # DocFlow project state
 
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 ## Current candidate
+
+- Version: 1.10.4
+- Branch: `rohtolos/follow-up-unmatched-skip`
+- Objective: skip supported RFI Log routes absent from the Follow Up template
+  while retaining manual review for non-unique row matches.
+- Release state: all source gates pass on macOS with Rust 1.97.1. The supplied
+  workbook preview was read-only. PR review, push, immutable tag, and the
+  Windows release workflow remain pending.
+
+## Current slice
+
+- Recognized CIV/MEC routes with zero rows in the current Follow Up template are
+  skipped without an unmapped-record warning, including FINAL routes without a
+  prepared row. Multiple matching rows still go to manual review; unique rows
+  continue through the existing guarded sync.
+- Read-only preview of the supplied workbooks reduced the unmapped warning from
+  173 to 7: 166 no-match routes are skipped, 7 multi-row matches remain manual.
+  The preview also found 361 ready lifecycle updates, 1 ready Worley update, and
+  42 Follow Up entries missing from RFI Log source data. Synthetic regression
+  tests cover standard/FINAL no-match skips and ambiguous-row review. Rust tests,
+  format, Clippy, Cargo check, frontend tests/build, version/docs/source and
+  license audits pass; ignored tests still require their operator fixtures.
+
+## Previous candidate
 
 - Version: 1.10.3
 - Branch: `rohtolos/follow-up-mixed-status-remarks`
@@ -10,19 +34,11 @@ Updated: 2026-09-25
   CIV and PCU Follow Up sheets.
 - Release state: source gates pass on Rust 1.97.1; Windows package acceptance,
   PR review, push, tag, and GitHub Release remain pending.
-
-## Current slice
-
 - Mixed groups with at least two RFIs and one `Completed` source status preview
   every member's mapped status in the row's Remarks cell on CIV and PCU only.
   Existing operator text is retained, generated lines replace themselves on
   later syncs, absent blank cells are pinned and created only inside existing
   rows, and unresolved source statuses go to manual review.
-- Added tests cover CIV and PCU preview values, preservation, missing-cell
-  creation, rejection of missing-row creation, and unresolved-status refusal.
-  Rust unit/integration suites, Node and React tests, frontend build, Clippy,
-  Cargo check, format, version/docs/source/license audits pass. Windows package
-  and operator workbook acceptance remain pending.
 
 ## Previous candidate
 

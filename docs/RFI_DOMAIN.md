@@ -138,6 +138,10 @@ For RFI Log projection, blank means `Pending`, all `Completed` means
 Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
+For supported CIV/MEC routes, including FINAL routes, a source record with no
+matching row in the current Follow Up template is outside its scope and is
+skipped without a warning. If more than one row matches, the record remains in
+manual review.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
@@ -147,11 +151,11 @@ as `Signed` or `Not Signed`; a missing FINAL RFI may be added only to one
 uniquely matched, already-prepared literal RFI/status pair. A newly inserted PCU
 FINAL identifier receives its Worley value on the next preview so independently
 deselecting one row cannot leave a half-applied coupled update.
-Formula-bearing, merged, absent, or ambiguous destinations remain manual. `POT test`,
-`STAT`, `Changelog`, MEC calculated remarks/manual overrides, ELE/PRC, and absent
-ITP/item sections are never created or modified by this operation. A source
-record with multiple areas and multiple sections is ambiguous and remains manual
-rather than using a cartesian guess.
+Formula-bearing, merged, or otherwise unsafe matched destinations remain
+manual. `POT test`, `STAT`, `Changelog`, MEC calculated remarks/manual overrides,
+ELE/PRC, and absent ITP/item sections are never created or modified by this
+operation. A source record with multiple areas and multiple sections is
+ambiguous and remains manual rather than using a cartesian guess.
 
 ## PDF page orientation
 
