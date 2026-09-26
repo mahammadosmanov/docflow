@@ -34,6 +34,9 @@
   Signed By Worley CIV/MEC input cells. Lifecycle status and exact FINAL
   Signed/Not Signed values may change; report sheets and formulas recalculate
   naturally but are never rewritten.
+- Follow Up Sync never writes worksheet Remarks cells. RFI Log REMARKS are
+  read-only Worley evidence; legacy generated `RFI Status Sync:` lines remain
+  untouched rather than being cleaned automatically.
 - Missing FINAL identifiers may use only one uniquely matched, already-prepared
   literal RFI/status pair. Never append a row, synthesize an absent section,
   replace a formula, or guess an ambiguous location.

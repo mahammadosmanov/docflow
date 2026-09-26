@@ -1,7 +1,7 @@
 # ADR 0026: Mixed RFI status remarks on CIV and PCU Follow Up sheets
 
 - Date: 2026-09-25
-- Status: Accepted
+- Status: Superseded by [ADR 0028](0028-remove-follow-up-status-remarks.md)
 
 ## Context
 
@@ -59,5 +59,5 @@ workbook; source rollback uses the previous immutable code release.
 - `src-tauri/src/ooxml.rs`: create a pinned blank cell only in an existing row
   when the approved Follow Up Remarks target was physically absent.
 
-No prior decision is voided; this extends the Follow Up projection accepted
-under ADR 0008.
+This decision extended the Follow Up projection accepted under ADR 0008. ADR
+0028 supersedes the generated-remark behavior; its history remains here.

@@ -208,7 +208,7 @@ fn full_schema_record_with_status(
 }
 
 #[test]
-fn mixed_completed_groups_preview_individual_remarks_only_on_civ_and_pcu() {
+fn mixed_completed_groups_update_status_without_writing_remarks() {
     let source = full_schema_source([
         full_schema_record_with_status(
             10,
@@ -348,26 +348,16 @@ fn mixed_completed_groups_preview_individual_remarks_only_on_civ_and_pcu() {
         .iter()
         .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 17)
         .unwrap();
-    let pcu_signed = rows
-        .iter()
-        .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 18)
-        .unwrap();
-    let mec = rows.iter().find(|row| row["_sheet"] == "MEC").unwrap();
-
-    assert_eq!(
-        civ["proposedRemark"],
-        "operator note\nRFI Status Sync: CIV-1222 Completed, CIV-1223 In Progress"
-    );
-    assert_eq!(civ["remarkCellAddress"], "Q2");
-    assert_eq!(
-        pcu["proposedRemark"],
-        "RFI Status Sync: CIV-1224 Completed, CIV-1225 In Progress"
-    );
-    assert_eq!(pcu["remarkCellAddress"], "U5");
-    assert_eq!(pcu["target"]["remarkCellExists"], false);
-    assert!(pcu_signed["proposedRemark"].is_null());
-    assert!(mec["proposedRemark"].is_null());
-
+    assert_eq!(civ["proposedStatus"], "In Progress");
+    assert_eq!(pcu["proposedStatus"], "In Progress");
+    assert!(rows.iter().all(|row| {
+        row.get("currentRemark").is_none()
+            && row.get("proposedRemark").is_none()
+            && row.get("remarkCellAddress").is_none()
+            && row["target"].get("remarkColumn").is_none()
+            && row["target"].get("remarkCell").is_none()
+            && row["target"].get("remarkCellExists").is_none()
+    }));
     let fixture = tempfile::tempdir().unwrap();
     let source_path = fixture.path().join("RFI Log.xlsx");
     let target_path = fixture.path().join("Follow Up.xlsx");
@@ -384,8 +374,8 @@ fn mixed_completed_groups_preview_individual_remarks_only_on_civ_and_pcu() {
     .unwrap();
     let updates = guarded_updates(&plan.steps[0]).unwrap();
 
-    assert!(!updates["CIV"][&(2, 17)].create_if_absent);
-    assert!(updates["PCU"][&(5, 21)].create_if_absent);
+    assert!(!updates["CIV"].contains_key(&(2, 17)));
+    assert!(!updates["PCU"].contains_key(&(5, 21)));
 }
 
 #[test]
@@ -519,7 +509,7 @@ fn mixed_group_with_unknown_source_status_stays_in_manual_review() {
         row["reasonKey"],
         "warn.rfi.followUp.reason.sourceStatusUnknown"
     );
-    assert!(row["proposedRemark"].is_null());
+    assert!(row.get("proposedRemark").is_none());
 }
 
 fn pcu_final_record(row_number: u32, remarks: &str) -> String {

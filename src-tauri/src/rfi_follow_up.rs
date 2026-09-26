@@ -109,15 +109,6 @@ struct FollowUpReviewTarget {
     status_column: u32,
     rfi_cell: Option<CellSnapshot>,
     status_cell: Option<CellSnapshot>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_column: Option<u32>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_cell: Option<CellSnapshot>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_cell_exists: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -140,15 +131,6 @@ struct FollowUpCellTarget {
     status_column: u32,
     rfi_cell: CellSnapshot,
     status_cell: CellSnapshot,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_column: Option<u32>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_cell: Option<CellSnapshot>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_cell_exists: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -160,9 +142,6 @@ struct FollowUpApprovedUpdate {
     proposed_status: String,
     #[serde(default)]
     proposed_rfi: String,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proposed_remark: Option<String>,
     target: FollowUpCellTarget,
     source_evidence: Vec<SourceStatusEvidence>,
 }
@@ -218,15 +197,6 @@ struct FollowUpRow {
     proposed_status: Option<String>,
     #[serde(default)]
     proposed_rfi_no: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    current_remark: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proposed_remark: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remark_cell_address: Option<String>,
     disposition: FollowUpDisposition,
     reason_key: String,
     selectable: bool,
@@ -890,191 +860,6 @@ struct SlotWork {
     unsafe_reason: Option<&'static str>,
 }
 
-#[derive(Clone)]
-struct FollowUpRemarkUpdate {
-    column: u32,
-    current: CellSnapshot,
-    cell_exists: bool,
-    proposed: String,
-}
-
-const FOLLOW_UP_STATUS_REMARK_PREFIX: &str = "RFI Status Sync:";
-
-fn remark_column(sheet: &WorksheetData) -> Result<Option<u32>, BackendError> {
-    let columns = (1..=sheet.max_row.min(16))
-        .flat_map(|row| (1..=sheet.max_column.min(MAX_HEADER_COLUMNS)).map(move |col| (row, col)))
-        .filter_map(|(row, col)| {
-            sheet
-                .cell(row, col)
-                .filter(|cell| normalize_header(&cell.value) == "REMARKS")
-                .map(|_| col)
-        })
-        .collect::<BTreeSet<_>>();
-    match columns.len() {
-        0 => Ok(None),
-        1 => Ok(columns.first().copied()),
-        _ => Err(workbook_invalid()),
-    }
-}
-
-fn replace_status_remark(current: &str, entries: &[String]) -> Option<String> {
-    let mut proposed = current
-        .split_inclusive('\n')
-        .filter(|line| {
-            !line
-                .trim_end_matches(['\r', '\n'])
-                .trim_start()
-                .starts_with(FOLLOW_UP_STATUS_REMARK_PREFIX)
-        })
-        .collect::<String>();
-    if !entries.is_empty() {
-        let generated = format!("{FOLLOW_UP_STATUS_REMARK_PREFIX} {}", entries.join(", "));
-        if !proposed.is_empty() && !proposed.ends_with('\n') {
-            proposed.push('\n');
-        }
-        proposed.push_str(&generated);
-    }
-    (proposed != current).then_some(proposed)
-}
-
-fn individual_status(state: LogState) -> &'static str {
-    match state {
-        LogState::Pending => "Pending",
-        LogState::InProgress => "In Progress",
-        LogState::Completed => "Completed",
-        LogState::Remove => "Cancelled / Rejected",
-    }
-}
-
-fn prepare_mixed_status_remarks(
-    slots: &mut BTreeMap<(String, u32, u32, u32), SlotWork>,
-    records: &BTreeMap<String, SourceRecord>,
-    workbook: &WorkbookData,
-    merge_budget: &mut MergeQueryBudget,
-) -> Result<BTreeMap<(String, u32), FollowUpRemarkUpdate>, BackendError> {
-    let row_keys = slots
-        .iter()
-        .filter(|((sheet, _, _, _), slot)| {
-            matches!(sheet.as_str(), "CIV" | "PCU") && !is_signed_layout(&slot.layout)
-        })
-        .map(|((sheet, row, _, _), _)| (sheet.clone(), *row))
-        .collect::<BTreeSet<_>>();
-    let mut updates = BTreeMap::new();
-    for (sheet_name, row) in row_keys {
-        let row_slots = slots
-            .iter()
-            .filter(|((sheet, candidate_row, _, _), slot)| {
-                sheet == &sheet_name && *candidate_row == row && !is_signed_layout(&slot.layout)
-            })
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
-        let mut entries = Vec::new();
-        let mut seen_entries = BTreeSet::new();
-        let mut incomplete_status = None;
-        for key in &row_slots {
-            let slot = slots.get(key).ok_or_else(workbook_invalid)?;
-            if slot.codes.len() < 2 {
-                continue;
-            }
-            let mut group = Vec::with_capacity(slot.codes.len());
-            for code in &slot.codes {
-                let Some(record) = records.get(code) else {
-                    incomplete_status = Some("sourceMissing");
-                    break;
-                };
-                let Some(state) = record.state else {
-                    incomplete_status = Some("sourceStatusUnknown");
-                    break;
-                };
-                let Some((_, short)) = canonical_follow_up_rfi(code) else {
-                    incomplete_status = Some("sourceStatusUnknown");
-                    break;
-                };
-                group.push(format!("{short} {}", individual_status(state)));
-            }
-            if incomplete_status.is_some() {
-                break;
-            }
-            if group.len() != slot.codes.len() {
-                continue;
-            }
-            if group.iter().any(|entry| entry.ends_with(" Completed")) {
-                entries.extend(
-                    group
-                        .into_iter()
-                        .filter(|entry| seen_entries.insert(entry.clone())),
-                );
-            }
-        }
-        if let Some(reason) = incomplete_status {
-            for key in &row_slots {
-                if let Some(slot) = slots.get_mut(key)
-                    && slot.unsafe_reason.is_none()
-                {
-                    slot.unsafe_reason = Some(reason);
-                }
-            }
-            continue;
-        }
-        let sheet = workbook.sheet(&sheet_name).ok_or_else(workbook_invalid)?;
-        let column = match remark_column(sheet) {
-            Ok(Some(column)) => column,
-            Ok(None) | Err(_) if !entries.is_empty() => {
-                for key in &row_slots {
-                    if let Some(slot) = slots.get_mut(key) {
-                        slot.unsafe_reason = Some("targetRemarkMissing");
-                    }
-                }
-                continue;
-            }
-            Ok(None) | Err(_) => continue,
-        };
-        let cell = sheet.cell(row, column);
-        let current = cell.map(CellSnapshot::from).unwrap_or_default();
-        let cell_exists = cell.is_some();
-        let has_generated = current.value.lines().any(|line| {
-            line.trim_start()
-                .starts_with(FOLLOW_UP_STATUS_REMARK_PREFIX)
-        });
-        if entries.is_empty() && !has_generated {
-            continue;
-        }
-        if current.formula.is_some() || merge_budget.contains(sheet, row, column)? {
-            for key in &row_slots {
-                if let Some(slot) = slots.get_mut(key) {
-                    slot.unsafe_reason = Some("targetRemarkUnsafe");
-                }
-            }
-            continue;
-        }
-        if let Some(proposed) = replace_status_remark(&current.value, &entries) {
-            if proposed.len() > MAX_CELL_TEXT_CHARS {
-                for key in &row_slots {
-                    if let Some(slot) = slots.get_mut(key) {
-                        slot.unsafe_reason = Some("targetRemarkUnsafe");
-                    }
-                }
-                continue;
-            }
-            let update = FollowUpRemarkUpdate {
-                column,
-                current,
-                cell_exists,
-                proposed,
-            };
-            for key in &row_slots {
-                if let Some(slot) = slots.get_mut(key)
-                    && let Some(code) = slot.codes.first().cloned()
-                {
-                    slot.changed_rfis.insert(code);
-                }
-            }
-            updates.insert((sheet_name, row), update);
-        }
-    }
-    Ok(updates)
-}
-
 fn safe_slot(
     layout: &FollowUpLayout,
     sheet: &WorksheetData,
@@ -1142,7 +927,6 @@ fn row_from_slot(
     slot: SlotWork,
     records: &BTreeMap<String, SourceRecord>,
     signed: bool,
-    remark: Option<&FollowUpRemarkUpdate>,
 ) -> Option<FollowUpRow> {
     if slot.changed_rfis.is_empty() || slot.unsafe_reason.is_some() {
         return None;
@@ -1169,11 +953,7 @@ fn row_from_slot(
     } else {
         main_status_for_codes(&slot.codes, records).unwrap_or_else(|| slot.current_status.clone())
     };
-    let proposed_remark = remark.map(|update| update.proposed.clone());
-    if proposed_rfi == slot.rfi_cell.value
-        && proposed_status == slot.current_status
-        && proposed_remark.is_none()
-    {
+    if proposed_rfi == slot.rfi_cell.value && proposed_status == slot.current_status {
         return None;
     }
     let canonical_rfi = slot.changed_rfis.iter().next()?.clone();
@@ -1208,9 +988,6 @@ fn row_from_slot(
         current_status: slot.current_status,
         proposed_status: Some(proposed_status),
         proposed_rfi_no: Some(proposed_rfi),
-        current_remark: remark.map(|update| update.current.value.clone()),
-        proposed_remark,
-        remark_cell_address: remark.map(|update| cell_address(slot.row, update.column)),
         disposition: FollowUpDisposition::Ready,
         reason_key: if record.state == Some(LogState::Remove) {
             "warn.rfi.followUp.reason.readyRemove".to_string()
@@ -1228,23 +1005,9 @@ fn row_from_slot(
             status_column: slot.layout.status_column,
             rfi_cell: Some(slot.rfi_cell),
             status_cell: Some(slot.status_cell),
-            remark_column: remark.map(|update| update.column),
-            remark_cell: remark.map(|update| update.current.clone()),
-            remark_cell_exists: remark.map(|update| update.cell_exists),
         },
         source_evidence: record.evidence.clone(),
     })
-}
-
-fn cell_address(row: u32, mut column: u32) -> String {
-    let mut letters = Vec::new();
-    while column > 0 {
-        let digit = (column - 1) % 26;
-        letters.push((b'A' + digit as u8) as char);
-        column = (column - 1) / 26;
-    }
-    letters.reverse();
-    format!("{}{row}", letters.into_iter().collect::<String>())
 }
 
 impl SourceRecord {
@@ -1396,9 +1159,6 @@ fn classify_workbooks_full(
                 current_status: String::new(),
                 proposed_status: None,
                 proposed_rfi_no: None,
-                current_remark: None,
-                proposed_remark: None,
-                remark_cell_address: None,
                 disposition: FollowUpDisposition::ManualReview,
                 reason_key: if candidate_count == 0 {
                     "warn.rfi.followUp.reason.mappingMissing".to_string()
@@ -1414,9 +1174,6 @@ fn classify_workbooks_full(
                     status_column: layout.status_column,
                     rfi_cell: None,
                     status_cell: None,
-                    remark_column: None,
-                    remark_cell: None,
-                    remark_cell_exists: None,
                 },
                 source_evidence: record.evidence.clone(),
             });
@@ -1428,81 +1185,57 @@ fn classify_workbooks_full(
         present_main.insert(record.canonical_rfi.clone());
     }
 
-    let remarks =
-        prepare_mixed_status_remarks(&mut slots, &records, target_workbook, &mut merge_budget)?;
-    for slot in slots.values().filter(|slot| {
-        slot.unsafe_reason.is_some_and(|reason| {
-            reason.starts_with("targetRemark")
-                || matches!(reason, "sourceMissing" | "sourceStatusUnknown")
-        })
-    }) {
-        let Some(canonical) = slot.changed_rfis.iter().chain(slot.codes.iter()).next() else {
-            continue;
-        };
-        let record = records.get(canonical);
-        let remark_column = target_workbook
-            .sheet(&slot.layout.worksheet.name)
-            .and_then(|sheet| remark_column(sheet).ok().flatten());
-        let remark_cell = remark_column
-            .and_then(|column| {
-                target_workbook
-                    .sheet(&slot.layout.worksheet.name)
-                    .and_then(|sheet| sheet.cell(slot.row, column))
-            })
-            .map(CellSnapshot::from);
-        let remark_cell_exists = remark_column.map(|_| remark_cell.is_some());
-        manual_rows.push(FollowUpRow {
-            row_id: format!(
-                "rfi-follow-up-remark-unsafe:{}:{}:{}",
-                slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
-            ),
-            sheet: slot.layout.worksheet.name.clone(),
-            row: slot.row,
-            rfi_no: record
-                .map(|record| record.short_rfi.clone())
-                .or_else(|| canonical_follow_up_rfi(canonical).map(|(_, short)| short))
-                .unwrap_or_else(|| canonical.clone()),
-            source_statuses: record
-                .map(|record| vec![record.inspection_status_for_ui()])
-                .unwrap_or_default(),
-            current_status: slot.current_status.clone(),
-            proposed_status: None,
-            proposed_rfi_no: None,
-            current_remark: remark_cell.as_ref().map(|cell| cell.value.clone()),
-            proposed_remark: None,
-            remark_cell_address: remark_column.map(|column| cell_address(slot.row, column)),
-            disposition: FollowUpDisposition::ManualReview,
-            reason_key: format!(
-                "warn.rfi.followUp.reason.{}",
-                slot.unsafe_reason.unwrap_or("targetRemarkUnsafe")
-            ),
-            selectable: false,
-            enabled: false,
-            target: FollowUpReviewTarget {
-                worksheet: slot.layout.worksheet.clone(),
-                row: slot.row,
-                rfi_column: slot.layout.rfi_column,
-                status_column: slot.layout.status_column,
-                rfi_cell: Some(slot.rfi_cell.clone()),
-                status_cell: Some(slot.status_cell.clone()),
-                remark_column,
-                remark_cell,
-                remark_cell_exists,
-            },
-            source_evidence: record
-                .map(|record| record.evidence.clone())
-                .unwrap_or_default(),
-        });
-    }
-
     let mut rows = Vec::new();
     for slot in slots
         .values()
         .filter(|slot| !is_signed_layout(&slot.layout))
         .cloned()
     {
-        let remark = remarks.get(&(slot.layout.worksheet.name.clone(), slot.row));
-        if let Some(row) = row_from_slot(slot, &records, false, remark) {
+        let source_issue = slot.codes.iter().find_map(|code| {
+            if !records.contains_key(code) {
+                Some("sourceMissing")
+            } else if records
+                .get(code)
+                .is_some_and(|record| record.state.is_none())
+            {
+                Some("sourceStatusUnknown")
+            } else {
+                None
+            }
+        });
+        if slot.unsafe_reason.is_none()
+            && let Some(reason) = source_issue
+            && let Some(record) = slot.codes.iter().find_map(|code| records.get(code))
+        {
+            manual_rows.push(FollowUpRow {
+                row_id: format!(
+                    "rfi-follow-up-source-unsafe:{}:{}:{}",
+                    slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
+                ),
+                sheet: slot.layout.worksheet.name.clone(),
+                row: slot.row,
+                rfi_no: record.short_rfi.clone(),
+                source_statuses: vec![record.inspection_status_for_ui()],
+                current_status: slot.current_status.clone(),
+                proposed_status: None,
+                proposed_rfi_no: None,
+                disposition: FollowUpDisposition::ManualReview,
+                reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+                selectable: false,
+                enabled: false,
+                target: FollowUpReviewTarget {
+                    worksheet: slot.layout.worksheet.clone(),
+                    row: slot.row,
+                    rfi_column: slot.layout.rfi_column,
+                    status_column: slot.layout.status_column,
+                    rfi_cell: Some(slot.rfi_cell.clone()),
+                    status_cell: Some(slot.status_cell.clone()),
+                },
+                source_evidence: record.evidence.clone(),
+            });
+            continue;
+        }
+        if let Some(row) = row_from_slot(slot, &records, false) {
             rows.push(row);
         }
     }
@@ -1569,9 +1302,6 @@ fn classify_workbooks_full(
                     current_status: slot.current_status.clone(),
                     proposed_status: None,
                     proposed_rfi_no: None,
-                    current_remark: None,
-                    proposed_remark: None,
-                    remark_cell_address: None,
                     disposition: FollowUpDisposition::ManualReview,
                     reason_key: format!("warn.rfi.followUp.reason.{reason}"),
                     selectable: false,
@@ -1583,9 +1313,6 @@ fn classify_workbooks_full(
                         status_column: slot.layout.status_column,
                         rfi_cell: Some(slot.rfi_cell.clone()),
                         status_cell: Some(slot.status_cell.clone()),
-                        remark_column: None,
-                        remark_cell: None,
-                        remark_cell_exists: None,
                     },
                     source_evidence: record.evidence.clone(),
                 });
@@ -1627,9 +1354,6 @@ fn classify_workbooks_full(
             current_status: String::new(),
             proposed_status: None,
             proposed_rfi_no: None,
-            current_remark: None,
-            proposed_remark: None,
-            remark_cell_address: None,
             disposition: FollowUpDisposition::ManualReview,
             reason_key: if candidate_count == 0 {
                 "warn.rfi.followUp.reason.mappingMissing".to_string()
@@ -1645,9 +1369,6 @@ fn classify_workbooks_full(
                 status_column: layout.status_column,
                 rfi_cell: None,
                 status_cell: None,
-                remark_column: None,
-                remark_cell: None,
-                remark_cell_exists: None,
             },
             source_evidence: record.evidence.clone(),
         });
@@ -1688,7 +1409,7 @@ fn classify_workbooks_full(
         .filter(|slot| is_signed_layout(&slot.layout))
         .cloned()
     {
-        if let Some(row) = row_from_slot(slot, &records, true, None) {
+        if let Some(row) = row_from_slot(slot, &records, true) {
             rows.push(row);
         }
     }
@@ -2206,7 +1927,6 @@ fn plan_from_classification(
                         .map(|cell| cell.value.clone())
                         .unwrap_or_default()
                 }),
-                proposed_remark: row.proposed_remark.clone(),
                 target: FollowUpCellTarget {
                     worksheet: row.target.worksheet.clone(),
                     row: row.target.row,
@@ -2218,9 +1938,6 @@ fn plan_from_classification(
                         .status_cell
                         .clone()
                         .ok_or_else(workbook_invalid)?,
-                    remark_column: row.target.remark_column,
-                    remark_cell: row.target.remark_cell.clone(),
-                    remark_cell_exists: row.target.remark_cell_exists,
                 },
                 source_evidence: row.source_evidence.clone(),
             })
@@ -2797,9 +2514,6 @@ impl BorrowedFollowUpRow<'_> {
             current_status: self.current_status.to_string(),
             proposed_status: self.proposed_status.map(str::to_string),
             proposed_rfi_no: None,
-            current_remark: None,
-            proposed_remark: None,
-            remark_cell_address: None,
             disposition: self.disposition.clone(),
             reason_key: self.reason_key.clone(),
             selectable: self.selectable,
@@ -2811,9 +2525,6 @@ impl BorrowedFollowUpRow<'_> {
                 status_column: self.target.status_column,
                 rfi_cell: self.target.rfi_cell.cloned(),
                 status_cell: self.target.status_cell.cloned(),
-                remark_column: None,
-                remark_cell: None,
-                remark_cell_exists: None,
             },
             source_evidence: self.source_evidence.to_vec(),
         }
@@ -2910,8 +2621,6 @@ fn editor_columns() -> Vec<Value> {
         json!({"key": "currentStatus", "labelKey": "rfi.followUp.column.currentStatus", "kind": "readonly"}),
         json!({"key": "proposedRfiNo", "labelKey": "rfi.followUp.column.proposedRfiNo", "kind": "readonly"}),
         json!({"key": "proposedStatus", "labelKey": "rfi.followUp.column.proposedStatus", "kind": "readonly"}),
-        json!({"key": "currentRemark", "labelKey": "rfi.followUp.column.currentRemark", "kind": "readonly", "detail": true}),
-        json!({"key": "proposedRemark", "labelKey": "rfi.followUp.column.proposedRemark", "kind": "readonly"}),
         json!({
             "key": "disposition",
             "labelKey": "rfi.followUp.column.disposition",
@@ -2927,7 +2636,6 @@ fn editor_columns() -> Vec<Value> {
         }),
         json!({"key": "_sheet", "labelKey": "rfi.followUp.column.sheet", "kind": "readonly", "detail": true}),
         json!({"key": "_row", "labelKey": "rfi.followUp.column.row", "kind": "readonly", "detail": true}),
-        json!({"key": "remarkCellAddress", "labelKey": "rfi.followUp.column.remarkCell", "kind": "readonly", "detail": true}),
     ]
 }
 
@@ -2937,7 +2645,7 @@ fn editor_columns_legacy() -> Vec<Value> {
         .filter(|column| {
             !matches!(
                 column.get("key").and_then(Value::as_str),
-                Some("proposedRfiNo" | "currentRemark" | "proposedRemark" | "remarkCellAddress")
+                Some("proposedRfiNo")
             )
         })
         .collect()
@@ -3008,24 +2716,6 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
-        let remark_target_valid = match (
-            update.target.remark_column,
-            update.target.remark_cell.as_ref(),
-            update.target.remark_cell_exists,
-            update.proposed_remark.as_ref(),
-        ) {
-            (None, None, None, None) => true,
-            (Some(column), Some(cell), Some(cell_exists), Some(proposed)) => {
-                matches!(update.target.worksheet.name.as_str(), "CIV" | "PCU")
-                    && column != update.target.rfi_column
-                    && column != update.target.status_column
-                    && cell.formula.is_none()
-                    && (cell_exists || cell == &CellSnapshot::default())
-                    && proposed.len() <= MAX_CELL_TEXT_CHARS
-                    && proposed != &cell.value
-            }
-            _ => false,
-        };
         let valid_layout = meta.all_layouts().any(|layout| {
             layout.worksheet == update.target.worksheet
                 && layout.rfi_column == update.target.rfi_column
@@ -3049,7 +2739,6 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
                 && parse_rfi_group(&update.target.rfi_cell.value).is_none())
             || update.target.rfi_cell.formula.is_some()
             || update.target.status_cell.formula.is_some()
-            || !remark_target_valid
         {
             return Err(workbook_invalid());
         }
@@ -3100,30 +2789,6 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
             .is_some()
         {
             return Err(workbook_invalid());
-        }
-        if let (Some(column), Some(cell), Some(cell_exists), Some(proposed)) = (
-            update.target.remark_column,
-            update.target.remark_cell,
-            update.target.remark_cell_exists,
-            update.proposed_remark,
-        ) {
-            let key = (update.target.row, column);
-            let guarded = GuardedCellUpdate {
-                expected: CellData {
-                    value: cell.value,
-                    formula: cell.formula,
-                    style: cell.style,
-                },
-                replacement: CellUpdate::Text(proposed),
-                create_if_absent: !cell_exists,
-            };
-            if let Some(existing) = sheet_updates.get(&key) {
-                if existing != &guarded {
-                    return Err(workbook_invalid());
-                }
-            } else {
-                sheet_updates.insert(key, guarded);
-            }
         }
     }
     Ok(updates_by_sheet)
@@ -3387,7 +3052,6 @@ mod tests {
             canonical_rfi: canonical_rfi.clone(),
             proposed_status: "Signed".to_string(),
             proposed_rfi: "CIV-0001".to_string(),
-            proposed_remark: None,
             target: FollowUpCellTarget {
                 worksheet: descriptor(),
                 row: 2,
@@ -3398,9 +3062,6 @@ mod tests {
                     ..CellSnapshot::default()
                 },
                 status_cell: CellSnapshot::default(),
-                remark_column: None,
-                remark_cell: None,
-                remark_cell_exists: None,
             },
             source_evidence: Vec::new(),
         }
@@ -3487,9 +3148,6 @@ mod tests {
             current_status: String::new(),
             proposed_status: Some(update.proposed_status.clone()),
             proposed_rfi_no: Some(update.proposed_rfi.clone()),
-            current_remark: None,
-            proposed_remark: None,
-            remark_cell_address: None,
             disposition: FollowUpDisposition::Ready,
             reason_key: "warn.rfi.followUp.reason.readySigned".to_string(),
             selectable: true,
@@ -3501,9 +3159,6 @@ mod tests {
                 status_column: 2,
                 rfi_cell: Some(update.target.rfi_cell.clone()),
                 status_cell: Some(update.target.status_cell.clone()),
-                remark_column: None,
-                remark_cell: None,
-                remark_cell_exists: None,
             },
             source_evidence: Vec::new(),
         };

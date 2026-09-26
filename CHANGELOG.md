@@ -8,6 +8,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 Record user-visible changes here while they are being developed. Move them into
 a dated version section as part of the release commit.
 
+## 1.10.5 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync no longer adds generated mixed-status text to worksheet
+  Remarks cells. RFI Log REMARKS remain read-only evidence for Worley status.
+
 ## 1.10.4 - 2026-09-26
 
 ### Fixed

@@ -4,21 +4,23 @@ Updated: 2026-09-26
 
 ## Current candidate
 
-- Version: 1.10.4
+- Version: 1.10.5
 - Branch: `rohtolos/follow-up-unmatched-skip`
-- Objective: skip supported RFI Log routes absent from the Follow Up template
-  while retaining manual review for non-unique row matches.
-- Release state: all local source gates pass on macOS with Rust 1.97.1. The
-  supplied workbook preview was read-only. PR #34 is open. Linux CI still fails
-  when `ld` crashes with signal 7 during test linking, including after Cargo
-  jobs were bounded to one. Windows workflow `36221590137` passed build,
-  installer smoke, and manifest checks on feature commit `c07282d`; its private
-  draft installer SHA-256 is
-  `845642ca220ecfa0722f81218a300163482ec4feffc2e3027e4e282fe995455c`.
-  Review, immutable tag, and stable GitHub Release remain pending.
+- Objective: remove generated mixed-status Remarks writes from Follow Up Sync.
+- Release state: local Rust/frontend tests, build, Clippy, check, formatting,
+  version/docs/source/license audits pass on macOS with Rust 1.97.1. PR #34 is
+  open. Its latest Linux check still fails when `ld` crashes with signal 7
+  during test linking, including after Cargo jobs were bounded to one. Windows
+  1.10.5 build and clean installer smoke are pending; stable tag/release waits
+  for applicable source gates.
 
 ## Current slice
 
+- Follow Up Sync now previews and applies only RFI number and status cells. It
+  never adds, replaces, or clears Follow Up worksheet Remarks. RFI Log REMARKS
+  remain read-only Worley evidence. Older generated `RFI Status Sync:` text is
+  left untouched. ADR 0028 supersedes ADR 0026. Regression coverage confirms
+  mixed groups still receive aggregate statuses without remark-cell writes.
 - Recognized CIV/MEC routes with zero rows in the current Follow Up template are
   skipped without an unmapped-record warning, including FINAL routes without a
   prepared row. Multiple matching rows still go to manual review; unique rows
@@ -34,13 +36,28 @@ Updated: 2026-09-26
 
 ## Previous candidate
 
+- Version: 1.10.4
+- Branch: `rohtolos/follow-up-unmatched-skip`
+- Objective: skip supported source routes absent from the Follow Up template
+  while retaining manual review for non-unique row matches.
+- The read-only supplied-workbook preview reduced the unmapped warning from
+  173 to 7: 166 no-match routes were skipped and 7 multi-row matches stayed in
+  manual review. It found 361 ready lifecycle updates, 1 ready Worley update,
+  and 42 Follow Up RFIs with no source record. Windows draft installer was
+  built from feature commit `c07282d` and passed clean install/startup/uninstall
+  smoke; SHA-256 is
+  `845642ca220ecfa0722f81218a300163482ec4feffc2e3027e4e282fe995455c`.
+
+## Previous candidate
+
 - Version: 1.10.3
 - Branch: `rohtolos/follow-up-mixed-status-remarks`
 - Objective: add guarded per-RFI status remarks for mixed completed groups on
   CIV and PCU Follow Up sheets.
 - Release state: source gates pass on Rust 1.97.1; Windows package acceptance,
   PR review, push, tag, and GitHub Release remain pending.
-- Mixed groups with at least two RFIs and one `Completed` source status preview
+- This generated-remarks behavior was retired by ADR 0028 in version 1.10.5.
+  Mixed groups with at least two RFIs and one `Completed` source status preview
   every member's mapped status in the row's Remarks cell on CIV and PCU only.
   Existing operator text is retained, generated lines replace themselves on
   later syncs, absent blank cells are pinned and created only inside existing
