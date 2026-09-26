@@ -41,6 +41,9 @@
   matching current Follow Up row, including absent FINAL sections. These are
   skipped without warning; 7 true multi-row matches remain manual review. Keep
   this distinction in Preview and never generate rows to eliminate warnings.
+- GitHub Ubuntu quality runners twice crashed `ld` with signal 7 while linking
+  different Rust integration binaries. Retry with `CARGO_BUILD_JOBS=1` to bound
+  concurrent linkers; local macOS Rust gates passed.
 - The current PCU template has a separate FINAL `Signed by Worley` cell in
   column R keyed by the existing FINAL RFI in column P. Sync it from the exact
   RFI Log REMARKS line, but keep POT test, calculated remarks, and manual

@@ -8,9 +8,12 @@ Updated: 2026-09-26
 - Branch: `rohtolos/follow-up-unmatched-skip`
 - Objective: skip supported RFI Log routes absent from the Follow Up template
   while retaining manual review for non-unique row matches.
-- Release state: all source gates pass on macOS with Rust 1.97.1. The supplied
-  workbook preview was read-only. PR review, push, immutable tag, and the
-  Windows release workflow remain pending.
+- Release state: all local source gates pass on macOS with Rust 1.97.1. The
+  supplied workbook preview was read-only. PR #34 is open; two Linux CI attempts
+  failed when `ld` crashed with signal 7 during test linking, so Cargo jobs are
+  now bounded to one for a retry. Windows release workflow is still running on
+  feature commit `c07282d`; review, immutable tag, and stable GitHub Release
+  remain pending.
 
 ## Current slice
 
@@ -24,7 +27,8 @@ Updated: 2026-09-26
   42 Follow Up entries missing from RFI Log source data. Synthetic regression
   tests cover standard/FINAL no-match skips and ambiguous-row review. Rust tests,
   format, Clippy, Cargo check, frontend tests/build, version/docs/source and
-  license audits pass; ignored tests still require their operator fixtures.
+  license audits pass locally; ignored tests still require their operator
+  fixtures. Linux CI linker failures are tracked above.
 
 ## Previous candidate
 
