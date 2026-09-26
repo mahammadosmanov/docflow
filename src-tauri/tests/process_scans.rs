@@ -758,7 +758,7 @@ fn process_scans_routes_uncertain_orientation_to_review_unchanged() {
     assert!(plan.steps.iter().any(|step| {
         step.dst
             .as_deref()
-            .is_some_and(|path| path.ends_with("_review/batch.pdf"))
+            .is_some_and(|path| path.replace('\\', "/").ends_with("_review/batch.pdf"))
             && step.kind == docflow_lib::contracts::StepKind::Copy
     }));
     assert!(

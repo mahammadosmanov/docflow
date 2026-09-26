@@ -3,6 +3,13 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.1 - 2026-09-27
+
+### Fixed
+
+- Process Scans orientation review regression now normalizes path separators,
+  so the test checks correctly on Windows and Unix.
+
 ## 1.11.0 - 2026-09-26
 
 ### Added

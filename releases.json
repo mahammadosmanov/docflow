@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.11.0",
+  "currentVersion": "1.11.1",
   "releases": [
     {
       "version": "0.1.0",
@@ -806,9 +806,17 @@
       "version": "1.11.0",
       "date": "2026-09-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.11.0",
       "summary": "Add safe page-orientation correction to Process Scans using the existing detector and no-clobber PDF output path."
+    },
+    {
+      "version": "1.11.1",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.11.1",
+      "summary": "Fix Windows path matching in Process Scans orientation regression coverage."
     }
   ]
 }

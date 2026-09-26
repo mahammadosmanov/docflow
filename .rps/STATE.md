@@ -2,23 +2,24 @@
 
 Updated: 2026-09-27
 
-## Isolated feature candidate
+## Process Scans rotation release candidate
 
-- Version: 1.11.0
-- Branch: `codex/process-scans-rotation`, based on canonical `de00322` / 1.10.8.
+- Version: 1.11.1
+- Branch: `rohtolos/follow-up-unmatched-skip`, based on pushed `440e3a5`.
 - Objective: apply confident page rotations during Process Scans without
   changing source PDFs or the existing Preview/Apply/Undo authority flow.
-- State: implementation complete. Focused Process Scans suite passes (26, 1
-  operator-PDF test ignored); full Rust, Node/frontend, format, Clippy, Cargo
-  check, version/docs/source, and license audits pass. Version is 1.11.0.
-  Commits `04d3e71` and `9435918` are local; canonical branch push and tag-triggered
-  Windows Release workflow remain pending.
-- Behavior: correction defaults on; uncertain input PDFs go unchanged to
-  `_review`; Apply extracts and rotates only cached Plan outputs.
-- Next: fast-forward and push the canonical branch, push immutable `v1.11.0`
-  to trigger the Windows installer and Release workflow, then verify its result.
+- Behavior: correction defaults on; uncertain PDFs go unchanged to `_review`;
+  Apply rotates extracted outputs from the immutable Plan.
+- Verification: Process Scans suite 26 passed, 1 operator-PDF test ignored;
+  full Rust suite, 54 frontend tests, frontend build, format, Clippy, Cargo
+  check, version/docs/source and license audits pass.
+- `v1.11.0` tag remains immutable. Its Windows workflow failed only because a
+  Process Scans test assumed slash separators. The assertion now normalizes
+  path separators. Windows rerun for `v1.11.1` is pending.
+- Next: commit, push canonical branch, tag `v1.11.1`, and verify Windows
+  installer, package smoke, checksums, and published Release.
 
-## Current candidate
+## Previous release baseline
 
 - Version: 1.10.8
 - Branch: `rohtolos/follow-up-unmatched-skip`
