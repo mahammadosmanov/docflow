@@ -46,12 +46,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   receive uniquely mapped RFI Log records. A supported route with no matching
   Follow Up row, including a FINAL item with no prepared target row, is outside
   the current template scope and is silently skipped. Multiple distinct exact
-  CIV area tags may map to their respective distinct existing rows. Repeated
-  MEC records may map to multiple existing rows only when each row has a unique
+  CIV area tags may map to their respective distinct existing rows, except any
+  CIV source RFI with a `Tag No` beginning `PCS-`: those RFIs are outside Follow
+  Up scope, are never added, and are removed from existing groups. This includes
+  composite tags such as `PCS-19/S1,S2,S3`. Repeated MEC records may map to
+  multiple existing rows only when each row has a unique
   exact `(Tag No, Area, Inspection Location)` context from same-status,
-  same-item source records. An exact `PCS-` tag selects PCU routes like `PCU-`;
-  explicit section suffixes restrict candidates to those exact existing PCU
-  rows. MEC may split a target cell's slash/comma-delimited location values and
+  same-item source records. MEC may split a target cell's slash/comma-delimited location values and
   may fan one source row across distinct explicit Area values only when Tag No
   and Inspection Location are each single-valued. Duplicate contexts and all
   other non-unique matches remain manual review. No rows or sections are

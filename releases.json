@@ -1,7 +1,15 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.11.1",
+  "currentVersion": "1.11.2",
   "releases": [
+    {
+      "version": "1.11.2",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.11.2",
+      "summary": "Exclude CIV PCS-tagged RFIs from Follow Up, remove prior entries, and clear stale group status."
+    },
     {
       "version": "0.1.0",
       "date": "2026-07-26",
@@ -814,7 +822,7 @@
       "version": "1.11.1",
       "date": "2026-09-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.11.1",
       "summary": "Fix Windows path matching in Process Scans orientation regression coverage."
     }

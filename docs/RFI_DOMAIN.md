@@ -149,17 +149,20 @@ source rows must agree on ITP, item, status, and Worley evidence; a single row
 may enumerate several `Area` values only when `Tag No` and `Inspection Location`
 each contain one value. Every destination must match one exact
 `(Tag No, Area, Inspection Location)` tuple. Target cells such as `N10/N11` may
-match either exact location token; substring matches are not allowed. For CIV
-ITP `0002` routes `1.8`, `2.4`, and `2.5`, exact `PCS-` tags select the PCU
-section like `PCU-` tags. An explicit area suffix such as `PCS-19/S1,S2,S3`
-limits matching to existing PCU rows for those named areas. These rules never
-create rows or sections. Duplicate contexts, conflicting source values, and
-other multi-valued contexts remain manual review.
+match either exact location token; substring matches are not allowed. Any CIV
+RFI Log record whose `Tag No` starts with `PCS-` is outside Follow Up scope,
+regardless of ITP, item, Area, or composite suffix. It is never added and is
+removed from an existing Follow Up group during the next approved sync. This
+rule includes values such as `PCS-19/S1,S2,S3` and takes precedence over the
+older PCU routing behavior. It never creates rows or sections.
+Duplicate contexts, conflicting source values, and other multi-valued contexts
+remain manual review.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
 current PCU FINAL `Signed by Worley` column receive only FINAL behavior and use
-the exact `Signed by Worley` REMARKS line. Existing FINAL rows are recalculated
+the exact `Signed by Worley` REMARKS line, except CIV source RFIs tagged `PCS-`
+which are excluded by the rule above. Existing FINAL rows are recalculated
 as `Signed` or `Not Signed`; a missing FINAL RFI may be added only to one
 uniquely matched, already-prepared literal RFI/status pair. A newly inserted PCU
 FINAL identifier receives its Worley value on the next preview so independently

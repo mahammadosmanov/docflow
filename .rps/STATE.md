@@ -2,22 +2,33 @@
 
 Updated: 2026-09-27
 
-## Process Scans rotation release candidate
+## Follow Up CIV PCS exclusion fix
 
-- Version: 1.11.1
-- Branch: `rohtolos/follow-up-unmatched-skip`, based on pushed `440e3a5`.
-- Objective: apply confident page rotations during Process Scans without
-  changing source PDFs or the existing Preview/Apply/Undo authority flow.
-- Behavior: correction defaults on; uncertain PDFs go unchanged to `_review`;
-  Apply rotates extracted outputs from the immutable Plan.
-- Verification: Process Scans suite 26 passed, 1 operator-PDF test ignored;
-  full Rust suite, 54 frontend tests, frontend build, format, Clippy, Cargo
-  check, version/docs/source and license audits pass.
-- `v1.11.0` tag remains immutable. Its Windows workflow failed only because a
-  Process Scans test assumed slash separators. The assertion now normalizes
-  path separators. Windows rerun for `v1.11.1` is pending.
-- Next: commit, push canonical branch, tag `v1.11.1`, and verify Windows
-  installer, package smoke, checksums, and published Release.
+- Version: 1.11.2
+- Objective: keep CIV `PCS-` Tag No RFIs out of Follow Up, including removal
+  from existing groups and status clearing when no supported RFIs remain.
+- Source scan found 44 such RFIs; 10 unique IDs appeared in four existing CIV
+  and PCU Follow Up rows. A separate cleanup copy removes those 10 IDs and
+  preserves the remaining grouped RFIs/statuses. Only two worksheet XML parts
+  changed; VBA hash and original workbook hashes are unchanged.
+- Cleanup copy: `Inspection Status Follow Up - PCS Removed Review Pending
+  v3.xlsm`; guarded delta verification passed. Four matching rows yielded 16
+  approved cell edits. The user's originals were not overwritten.
+- Follow Up native suite: 49 passed. Full Rust suite passed (368 library,
+  49 Follow Up integration, remaining integration suites; 4 ignored operator
+  fixtures). Frontend: 23 tool tests and 54 UI tests passed; production build
+  passed. Clippy, Cargo check, fmt, version/docs/source and license audits
+  passed. Frontend build reports the existing >500 kB bundle warning.
+- Current supplied-workbook preview: 60 approved row pairs; 47 ambiguous MEC
+  rows remain manual. Current cleanup copy was separately verified.
+- macOS source checks only; Windows installer, Office, and package acceptance
+  remain unverified.
+- Next: commit/push/tag/release v1.11.2.
+
+## Previous release baseline: 1.11.1
+
+- Process Scans orientation regression now normalizes path separators for
+  Windows and Unix. The tagged 1.11.1 release remains immutable.
 
 ## Previous release baseline
 

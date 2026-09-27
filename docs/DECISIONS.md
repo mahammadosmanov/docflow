@@ -30,7 +30,8 @@ and versioned with the code they govern.
 | Exact multi-area CIV Follow Up fan-out | Accepted | [`adr/0029-exact-civ-multi-area-follow-up.md`](adr/0029-exact-civ-multi-area-follow-up.md) |
 | Larger bounded S5 retained-file capacity | Accepted | [`adr/0030-bounded-s5-retained-file-capacity.md`](adr/0030-bounded-s5-retained-file-capacity.md) |
 | Exact route-context MEC Follow Up fan-out | Accepted | [`adr/0031-exact-mec-context-follow-up.md`](adr/0031-exact-mec-context-follow-up.md) |
-| Exact PCS and composite Follow Up context matching | Accepted | [`adr/0032-exact-pcs-and-composite-follow-up-contexts.md`](adr/0032-exact-pcs-and-composite-follow-up-contexts.md) |
+| Exact PCS and composite Follow Up context matching | Superseded | [`adr/0032-exact-pcs-and-composite-follow-up-contexts.md`](adr/0032-exact-pcs-and-composite-follow-up-contexts.md) |
+| Exclude CIV PCS-tagged RFI Log records from Follow Up | Accepted | [`adr/0033-exclude-civ-pcs-rfis-from-follow-up.md`](adr/0033-exclude-civ-pcs-rfis-from-follow-up.md) |
 | Skip supported Follow Up routes with no existing target row | Accepted | [`adr/0027-follow-up-no-match-scope.md`](adr/0027-follow-up-no-match-scope.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Accepted | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |

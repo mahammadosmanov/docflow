@@ -395,6 +395,7 @@ struct SourceRecord {
     itp: String,
     item: String,
     state: Option<LogState>,
+    excluded_civ_pcs: bool,
     worley_signed: bool,
     contexts: Vec<SourceRouteContext>,
     evidence: Vec<SourceStatusEvidence>,
@@ -620,18 +621,25 @@ fn scan_source_records(
                 rfi_cell: rfi_cell.into(),
                 status_cell: sheet.cell(row, status_col).map(Into::into),
             };
+            let excluded_civ_pcs = discipline == "CIV"
+                && split_values(&context.tag)
+                    .iter()
+                    .any(|tag| normalize_header(tag).starts_with("PCS-"));
             let incoming = SourceRecord {
                 canonical_rfi: canonical_rfi.clone(),
                 short_rfi,
                 itp,
                 item,
                 state: log_state(&status),
+                excluded_civ_pcs,
                 worley_signed: mapped_follow_up_status(&remarks) == "Signed",
                 contexts: vec![context],
                 evidence: vec![evidence],
             };
             if let Some(existing) = records.get_mut(&canonical_rfi) {
-                if existing.itp != incoming.itp
+                if existing.excluded_civ_pcs || incoming.excluded_civ_pcs {
+                    existing.excluded_civ_pcs = true;
+                } else if existing.itp != incoming.itp
                     || existing.item != incoming.item
                     || existing.state != incoming.state
                     || existing.worley_signed != incoming.worley_signed
@@ -1174,6 +1182,8 @@ fn row_from_slot(
                 "Not Signed".to_string()
             }
         }
+    } else if slot.codes.is_empty() {
+        String::new()
     } else {
         main_status_for_codes(&slot.codes, records).unwrap_or_else(|| slot.current_status.clone())
     };
@@ -1213,7 +1223,7 @@ fn row_from_slot(
         proposed_status: Some(proposed_status),
         proposed_rfi_no: Some(proposed_rfi),
         disposition: FollowUpDisposition::Ready,
-        reason_key: if record.state == Some(LogState::Remove) {
+        reason_key: if record.excluded_civ_pcs || record.state == Some(LogState::Remove) {
             "warn.rfi.followUp.reason.readyRemove".to_string()
         } else if signed {
             "warn.rfi.followUp.reason.readyWorleySync".to_string()
@@ -1229,6 +1239,43 @@ fn row_from_slot(
             status_column: slot.layout.status_column,
             rfi_cell: Some(slot.rfi_cell),
             status_cell: Some(slot.status_cell),
+        },
+        source_evidence: record.evidence.clone(),
+    })
+}
+
+fn unsafe_slot_review(
+    slot: &SlotWork,
+    records: &BTreeMap<String, SourceRecord>,
+) -> Option<FollowUpRow> {
+    let reason = slot.unsafe_reason?;
+    let record = slot
+        .changed_rfis
+        .iter()
+        .find_map(|code| records.get(code))?;
+    Some(FollowUpRow {
+        row_id: format!(
+            "rfi-follow-up-removal-unsafe:{}:{}:{}",
+            slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
+        ),
+        sheet: slot.layout.worksheet.name.clone(),
+        row: slot.row,
+        rfi_no: record.short_rfi.clone(),
+        source_statuses: vec![record.inspection_status_for_ui()],
+        current_status: slot.current_status.clone(),
+        proposed_status: None,
+        proposed_rfi_no: None,
+        disposition: FollowUpDisposition::ManualReview,
+        reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+        selectable: false,
+        enabled: false,
+        target: FollowUpReviewTarget {
+            worksheet: slot.layout.worksheet.clone(),
+            row: slot.row,
+            rfi_column: slot.layout.rfi_column,
+            status_column: slot.layout.status_column,
+            rfi_cell: Some(slot.rfi_cell.clone()),
+            status_cell: Some(slot.status_cell.clone()),
         },
         source_evidence: record.evidence.clone(),
     })
@@ -1288,17 +1335,14 @@ fn classify_workbooks_full(
     }
 
     let mut manual_rows = Vec::new();
-    for slot in slots
-        .values_mut()
-        .filter(|slot| !is_signed_layout(&slot.layout))
-    {
+    for slot in slots.values_mut() {
         let removed = slot
             .codes
             .iter()
             .filter(|code| {
-                records
-                    .get(*code)
-                    .is_some_and(|record| record.state == Some(LogState::Remove))
+                records.get(*code).is_some_and(|record| {
+                    record.excluded_civ_pcs || record.state == Some(LogState::Remove)
+                })
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -1322,10 +1366,9 @@ fn classify_workbooks_full(
     }
 
     let mut unmapped_count = 0usize;
-    for record in records
-        .values()
-        .filter(|record| record.state.is_some_and(|state| state != LogState::Remove))
-    {
+    for record in records.values().filter(|record| {
+        !record.excluded_civ_pcs && record.state.is_some_and(|state| state != LogState::Remove)
+    }) {
         let Some((sheet_name, rfi_column)) = route_key(record) else {
             continue;
         };
@@ -1553,6 +1596,13 @@ fn classify_workbooks_full(
             });
             continue;
         }
+        if slot.unsafe_reason.is_some() && !slot.changed_rfis.is_empty() {
+            if let Some(row) = unsafe_slot_review(&slot, &records) {
+                unmapped_count += 1;
+                manual_rows.push(row);
+            }
+            continue;
+        }
         if let Some(row) = row_from_slot(slot, &records, false) {
             rows.push(row);
         }
@@ -1570,7 +1620,8 @@ fn classify_workbooks_full(
         }
     }
     for record in records.values().filter(|record| {
-        record.state.is_some_and(|state| state != LogState::Remove)
+        !record.excluded_civ_pcs
+            && record.state.is_some_and(|state| state != LogState::Remove)
             && signed_route_key(record).is_some()
     }) {
         let (sheet_name, rfi_column, status_column, match_layout) =
@@ -1729,6 +1780,13 @@ fn classify_workbooks_full(
         .filter(|slot| is_signed_layout(&slot.layout))
         .cloned()
     {
+        if slot.unsafe_reason.is_some() && !slot.changed_rfis.is_empty() {
+            if let Some(row) = unsafe_slot_review(&slot, &records) {
+                unmapped_count += 1;
+                manual_rows.push(row);
+            }
+            continue;
+        }
         if let Some(row) = row_from_slot(slot, &records, true) {
             rows.push(row);
         }
@@ -3085,11 +3143,13 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
                 replacement: CellUpdate::Text(update.proposed_rfi),
                 create_if_absent: false,
             };
-            if sheet_updates
-                .insert((update.target.row, update.target.rfi_column), rfi_guarded)
-                .is_some()
-            {
-                return Err(workbook_invalid());
+            let key = (update.target.row, update.target.rfi_column);
+            if let Some(existing) = sheet_updates.get(&key) {
+                if existing != &rfi_guarded {
+                    return Err(workbook_invalid());
+                }
+            } else {
+                sheet_updates.insert(key, rfi_guarded);
             }
         }
         let status_guarded = GuardedCellUpdate {

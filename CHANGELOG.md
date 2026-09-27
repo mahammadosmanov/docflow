@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.2 - 2026-09-27
+
+### Fixed
+
+- Follow Up Sync excludes every CIV RFI Log record whose `Tag No` starts with
+  `PCS-`, including composite PCS/area values. It removes these RFIs from
+  existing groups and clears the status when no supported RFIs remain.
+
 ## 1.11.1 - 2026-09-27
 
 ### Fixed

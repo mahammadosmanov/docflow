@@ -412,7 +412,8 @@ fn mixed_completed_groups_update_status_without_writing_remarks() {
         .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 17)
         .unwrap();
     assert_eq!(civ["proposedStatus"], "In Progress");
-    assert_eq!(pcu["proposedStatus"], "In Progress");
+    assert_eq!(pcu["proposedStatus"], "");
+    assert_eq!(pcu["proposedRfiNo"], "");
     assert!(rows.iter().all(|row| {
         row.get("currentRemark").is_none()
             && row.get("proposedRemark").is_none()
@@ -438,7 +439,8 @@ fn mixed_completed_groups_update_status_without_writing_remarks() {
     let updates = guarded_updates(&plan.steps[0]).unwrap();
 
     assert!(!updates["CIV"].contains_key(&(2, 17)));
-    assert!(!updates["PCU"].contains_key(&(5, 21)));
+    assert!(updates["PCU"].contains_key(&(5, 16)));
+    assert!(updates["PCU"].contains_key(&(5, 17)));
 }
 
 #[test]
@@ -525,23 +527,79 @@ fn full_sync_recognizes_the_mec_inspection_location_header_variant() {
 }
 
 #[test]
-fn full_sync_routes_pcu_final_tag_to_the_exact_pcu_section_row() {
+fn full_sync_does_not_route_civ_pcs_final_tag_into_pcu_section() {
     let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
     let target = package(&[("PCU", None, pcu_target("", "", ""))]);
 
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 1, "{review}");
-    assert_eq!(rows[0]["_sheet"], "PCU");
-    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
-    assert_eq!(rows[0]["proposedStatus"], "Completed");
-    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
-    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+    assert!(rows.is_empty(), "{review}");
 }
 
 #[test]
-fn full_sync_routes_composite_pcs_areas_to_matching_civ_zone_rows() {
+fn full_sync_keeps_literal_pcu_tagged_civ_final_in_scope() {
+    let source =
+        full_schema_source([pcu_final_record(10, "Signed by Worley").replace("PCS-01", "PCU-01")]);
+    let target = package(&[("PCU", None, pcu_target("", "", ""))]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+
+    assert!(!rows.is_empty(), "{review}");
+    assert!(rows.iter().any(|row| row["proposedRfiNo"] == "CIV-1001"));
+}
+
+#[test]
+fn full_sync_excludes_every_civ_pcs_tagged_rfi_from_follow_up() {
+    for tag in ["PCS-19", "PCS-19/S1,S2,S3"] {
+        let source = full_schema_source([full_schema_record_with_status(
+            10,
+            "1401",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-2.2.4",
+            tag,
+            "Ongoing",
+            "",
+        )]);
+        let target = package(&[
+            (
+                "MEC",
+                None,
+                worksheet(
+                    [row(5, [inline("A5", "Zone 4"), inline("C5", "PCS-19")])],
+                    &[],
+                ),
+            ),
+            (
+                "CIV",
+                None,
+                worksheet(
+                    [
+                        row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
+                        row(
+                            20,
+                            [
+                                inline("A20", "Zone 4"),
+                                inline("B20", "S1"),
+                                inline("I20", ""),
+                                inline("J20", ""),
+                            ],
+                        ),
+                    ],
+                    &[],
+                ),
+            ),
+            ("PCU", None, pcu_target("", "", "")),
+        ]);
+
+        let review = classify(source, target).unwrap();
+        assert!(
+            review["rows"].as_array().unwrap().is_empty(),
+            "tag={tag}: {review}"
+        );
+    }
+
     let source = full_schema_source([full_schema_record_with_status(
         10,
         "1401",
@@ -551,82 +609,30 @@ fn full_sync_routes_composite_pcs_areas_to_matching_civ_zone_rows() {
         "Ongoing",
         "",
     )]);
-    let target = package(&[
-        (
-            "MEC",
-            None,
-            worksheet(
-                [
-                    row(5, [inline("A5", "Zone 4"), inline("C5", "PCS-19")]),
-                    row(6, [inline("A6", "Zone 4"), inline("C6", "PCS-20")]),
-                ],
-                &[],
-            ),
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
+                row(
+                    20,
+                    [
+                        inline("A20", "Zone 4"),
+                        inline("B20", "S1"),
+                        inline("I20", "CIV-1401"),
+                        inline("J20", "In Progress"),
+                    ],
+                ),
+            ],
+            &[],
         ),
-        (
-            "CIV",
-            None,
-            worksheet(
-                [
-                    row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
-                    row(
-                        20,
-                        [
-                            inline("A20", "Zone 4"),
-                            inline("B20", "S1"),
-                            blank("I20"),
-                            blank("J20"),
-                        ],
-                    ),
-                    row(
-                        21,
-                        [
-                            inline("A21", "Zone 4"),
-                            inline("B21", "S2"),
-                            blank("I21"),
-                            blank("J21"),
-                        ],
-                    ),
-                    row(
-                        22,
-                        [
-                            inline("A22", "Zone 4"),
-                            inline("B22", "S3"),
-                            blank("I22"),
-                            blank("J22"),
-                        ],
-                    ),
-                    row(
-                        23,
-                        [
-                            inline("A23", "Zone 3"),
-                            inline("B23", "S1"),
-                            blank("I23"),
-                            blank("J23"),
-                        ],
-                    ),
-                ],
-                &[],
-            ),
-        ),
-    ]);
-
+    )]);
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
-
-    assert_eq!(rows.len(), 3, "{review}");
-    assert_eq!(
-        rows.iter()
-            .map(|row| row["_row"].as_u64().unwrap())
-            .collect::<Vec<_>>(),
-        vec![20, 21, 22]
-    );
-    assert!(rows.iter().all(|row| {
-        row["_sheet"] == "CIV"
-            && row["target"]["rfiColumn"] == 9
-            && row["proposedRfiNo"] == "CIV-1401"
-            && row["disposition"] == "rfi.followUp.disposition.ready"
-    }));
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["proposedRfiNo"], "");
+    assert_eq!(rows[0]["proposedStatus"], "");
 }
 
 #[test]
@@ -1108,7 +1114,7 @@ fn pcu_target(final_rfi: &str, lifecycle_status: &str, worley_status: &str) -> S
 }
 
 #[test]
-fn full_sync_updates_new_pcu_final_worley_column_from_exact_remark() {
+fn full_sync_removes_pcs_tagged_pcu_final_from_existing_follow_up_rows() {
     let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
     let target = package(&[
         (
@@ -1132,12 +1138,10 @@ fn full_sync_updates_new_pcu_final_worley_column_from_exact_remark() {
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["_sheet"], "PCU");
-    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
-    assert_eq!(rows[0]["target"]["statusColumn"], 18);
-    assert_eq!(rows[0]["proposedStatus"], "Signed");
-    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
+    assert!(!rows.is_empty(), "{review}");
+    assert!(rows.iter().all(|row| {
+        row["_sheet"] == "PCU" && row["proposedRfiNo"] == "" && row["proposedStatus"] == ""
+    }));
     assert!(
         review["layouts"]
             .as_array()
@@ -1148,7 +1152,7 @@ fn full_sync_updates_new_pcu_final_worley_column_from_exact_remark() {
 }
 
 #[test]
-fn full_sync_discovers_multiline_pcu_worley_header_from_current_workbook() {
+fn full_sync_removes_pcs_tagged_pcu_final_with_multiline_worley_header() {
     let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
     let target_sheet = pcu_target("CIV-1001", "Completed", "Not Signed")
         .replace("Signed by Worley", "Signed \nby \nWorley");
@@ -1157,29 +1161,26 @@ fn full_sync_discovers_multiline_pcu_worley_header_from_current_workbook() {
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["_sheet"], "PCU");
-    assert_eq!(rows[0]["target"]["rfiColumn"], 16);
-    assert_eq!(rows[0]["target"]["statusColumn"], 18);
-    assert_eq!(rows[0]["proposedStatus"], "Signed");
+    assert!(!rows.is_empty(), "{review}");
+    assert!(
+        rows.iter()
+            .all(|row| row["proposedRfiNo"] == "" && row["proposedStatus"] == "")
+    );
 }
 
 #[test]
-fn full_sync_populates_new_pcu_final_rfi_before_its_worley_cell() {
+fn full_sync_does_not_add_pcs_tagged_pcu_final_to_empty_follow_up() {
     let source = full_schema_source([pcu_final_record(10, "Signed by Worley")]);
     let target = package(&[("PCU", None, pcu_target("", "", ""))]);
 
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["target"]["statusColumn"], 17);
-    assert_eq!(rows[0]["proposedRfiNo"], "CIV-1001");
-    assert_eq!(rows[0]["proposedStatus"], "Completed");
+    assert!(rows.is_empty(), "{review}");
 }
 
 #[test]
-fn pcu_worley_plan_mutates_only_the_literal_worley_cell() {
+fn pcu_worley_plan_clears_rfi_and_status_for_excluded_pcs_final() {
     let fixture = tempfile::tempdir().unwrap();
     let source_path = fixture.path().join("RFI Log.xlsx");
     let target_path = fixture.path().join("Follow Up.xlsx");
@@ -1211,10 +1212,10 @@ fn pcu_worley_plan_mutates_only_the_literal_worley_cell() {
     let updates = guarded_updates(&plan.steps[0]).unwrap();
     let pcu = &updates["PCU"];
 
-    assert_eq!(pcu.len(), 1);
+    assert!(pcu.len() >= 2);
+    assert!(pcu.contains_key(&(5, 16)));
+    assert!(pcu.contains_key(&(5, 17)));
     assert!(pcu.contains_key(&(5, 18)));
-    assert!(!pcu.contains_key(&(5, 16)));
-    assert!(!pcu.contains_key(&(5, 17)));
 }
 
 #[test]
