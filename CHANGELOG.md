@@ -3,6 +3,20 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.7 - 2026-09-27
+
+### Fixed
+
+- Keep signed-page preview assertions out of platform-independent planning
+  tests; native rendered previews remain covered by supported platform checks.
+
+## 1.11.6 - 2026-09-27
+
+### Fixed
+
+- Keep PDF renderer and OCR integration tests on supported macOS and Windows
+  runners; Linux continues to run platform-independent Rust tests.
+
 ## 1.11.5 - 2026-09-27
 
 ### Changed

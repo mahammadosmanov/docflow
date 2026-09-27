@@ -1,12 +1,28 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.11.5",
+  "currentVersion": "1.11.7",
   "releases": [
+    {
+      "version": "1.11.7",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.11.7",
+      "summary": "Separate signed-page planning assertions from native rendered preview assertions."
+    },
+    {
+      "version": "1.11.6",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.6",
+      "summary": "Run PDF renderer and OCR integration tests only on supported macOS and Windows runners."
+    },
     {
       "version": "1.11.5",
       "date": "2026-09-27",
       "channel": "stable",
-      "status": "current",
+      "status": "archived",
       "tag": "v1.11.5",
       "summary": "Standardize feature delivery measurement and verification; parallelize frontend, Rust lint, and Rust test jobs."
     },

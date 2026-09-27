@@ -1,5 +1,7 @@
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use std::fs::OpenOptions;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{Cursor, Write},
     path::{Path, PathBuf},
     time::Duration,
@@ -7,13 +9,14 @@ use std::{
 
 use docflow_lib::{
     fs_ops::FilesystemAuthority,
-    ooxml::{read_member, read_workbook_from_reader},
+    ooxml::read_workbook_from_reader,
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
-    rfi_system_sync::{
-        self, preview_complete_status_sync, preview_system_sync, scan_system_root_indexed,
-    },
-    scan_index::ScanIndex,
+    rfi_system_sync::{self, preview_complete_status_sync, preview_system_sync},
+};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use docflow_lib::{
+    ooxml::read_member, rfi_system_sync::scan_system_root_indexed, scan_index::ScanIndex,
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
@@ -126,6 +129,7 @@ fn write_pdf_at(path: &Path, x: u32, y: u32, text: &str) {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn signature_outside_others_is_not_worley_evidence() {
     let fixture = tempfile::tempdir().unwrap();
     let system = fixture.path().join("RFI_SYSTEM");
@@ -148,6 +152,7 @@ fn signature_outside_others_is_not_worley_evidence() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn system_scan_requires_the_exact_canonical_rfi_pdf() {
     let fixture = tempfile::tempdir().unwrap();
     let system = fixture.path().join("RFI_SYSTEM");
@@ -186,6 +191,7 @@ fn system_scan_requires_the_exact_canonical_rfi_pdf() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[ignore = "requires operator-supplied signed and unsigned RFI PDFs"]
 fn operator_worley_examples_use_only_the_others_signature_cell() {
     let signed = std::env::var("DOCFLOW_SIGNED_WORLEY_PDF").unwrap();
@@ -220,6 +226,7 @@ fn operator_worley_examples_use_only_the_others_signature_cell() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn unchanged_system_pdf_is_reused_from_durable_index() {
     let fixture = tempfile::tempdir().unwrap();
     let system = fixture.path().join("RFI_SYSTEM");
@@ -485,6 +492,7 @@ fn completion_status_preview_refuses_terminal_or_formula_controlled_cells() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn test_system_sync_full_preview_apply_and_undo() {
     let fixture = tempfile::tempdir().unwrap();
     let fixture_path = fs::canonicalize(fixture.path()).unwrap();

@@ -400,6 +400,23 @@ Updated: 2026-09-27
   pass. The Windows x64 cross-build, package audit, checksums, and GUI-subsystem
   checks pass as recorded in `docs/VERIFICATION.md`.
 
+## Feature delivery workflow (1.11.6)
+
+- CI run `36333564684` passed Node/React and Rust format/Clippy but found Linux
+  failures in PDF/OCR integration tests that call platform renderers unavailable
+  on Linux. The Rust core test job did not complete.
+- Added macOS/Windows cfgs to renderer-dependent integration tests. On macOS,
+  `cargo +1.97.1 test --manifest-path src-tauri/Cargo.toml --test
+  rfi_system_sync_native` passes (6 passed, 3 operator-data tests ignored).
+- Classified this CI fix as `fix` and advanced the version to 1.11.6.
+- A Linux run also exposed a signed-page planning test asserting native-rendered
+  image previews. It now exercises the platform-independent plan with previews
+  disabled; the focused planning test passes on macOS.
+- Classified this test correction as `fix` and advanced the version to 1.11.7.
+- Next: rerun all applicable local source gates, push the fix, require green CI,
+  then tag/publish only after the exact commit is validated. Windows Office,
+  OneDrive, OCR, and printer acceptance remains a separate manual gate.
+
 ## External gate
 
 - On classic Outlook for Windows, select a non-sensitive RFI request, complete
