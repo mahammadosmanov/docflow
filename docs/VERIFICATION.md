@@ -20,8 +20,14 @@ layouts. Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 369 unit
 tests, and all enabled integration tests pass; seven operator-data tests remain
 ignored. All 23 Node and 54 React tests pass. The frontend build, version,
 documentation, source, and dependency-license audits pass. The build retains the
-existing Vite warning for a 638.65 kB JavaScript chunk. The tagged Windows
-installer and clean NSIS smoke workflow remain the release gates.
+existing Vite warning for a 638.65 kB JavaScript chunk. Windows Release run
+`36304760149` passed in 26m47s, including installer build, clean NSIS
+install/startup/package/uninstall smoke, and publication of `v1.11.4`. Its
+manifest binds to commit `9f7f6f47efc7fdad62cc4c8b044839e8b99c2c90`. The
+published manifest, smoke evidence, checksum, installer SHA-256, and release
+asset digests passed six downloaded-metadata consistency checks. Microsoft
+Office/Excel recalculation, physical-printer, signing, and notarization
+acceptance remain outside the automated workflow.
 
 ## 1.9.9 - 2026-09-23
 

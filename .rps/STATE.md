@@ -24,8 +24,12 @@ Updated: 2026-09-27
 - Regression reproduced the false positive before the fix and passed after it.
   Full local Rust, Node, UI, frontend build, formatting, Clippy, Cargo check,
   version, docs, source, and license checks pass. Seven operator-data tests
-  remain ignored. Windows package workflow is pending.
-- Next: commit, push, tag, and publish v1.11.4.
+  remain ignored. Windows release run `36304760149` passed installer build,
+  clean NSIS install/startup/package/uninstall smoke, and asset-manifest checks.
+  Release `v1.11.4` is published. Manual Office/Excel acceptance remains
+  outside this workflow.
+- Next: install v1.11.4 and confirm the three ambiguous FINAL Worley rows remain
+  available for operator review.
 
 ## Previous release baseline: 1.11.3
 
