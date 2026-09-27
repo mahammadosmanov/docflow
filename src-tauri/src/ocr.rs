@@ -582,6 +582,9 @@ impl OrientationDetector for NativeOcr {
         )?;
         second
             .or_else(|| {
+                select_correlated_header_score(&first_scores, &second_scores)
+            })
+            .or_else(|| {
                 select_correlated_direction_score(
                     &first_scores,
                     &second_scores,
@@ -757,6 +760,8 @@ struct DirectionScore {
     rotate_clockwise: i64,
     word_count: usize,
     confidence_sum: f64,
+    header_word_count: usize,
+    header_confidence_sum: f64,
 }
 
 impl DirectionScore {
@@ -765,7 +770,15 @@ impl DirectionScore {
             rotate_clockwise,
             word_count,
             confidence_sum,
+            header_word_count: 0,
+            header_confidence_sum: 0.0,
         }
+    }
+
+    fn with_header(mut self, word_count: usize, confidence_sum: f64) -> Self {
+        self.header_word_count = word_count;
+        self.header_confidence_sum = confidence_sum;
+        self
     }
 
     fn average_confidence(&self) -> f64 {
@@ -823,6 +836,7 @@ fn detect_orientation_by_direction_scores(
     }
     let max_side = if dpi >= 350 { 3_500 } else { 2_600 };
     let image = resize_gray_to_fit(&read_png_gray(image)?, max_side, max_side)?;
+    let (width, height) = (image.width, image.height);
     let mut scores = Vec::with_capacity(4);
     for rotate_clockwise in [0, 90, 180, 270] {
         let rotated = rotate_gray_clockwise(&image, rotate_clockwise)?;
@@ -835,6 +849,11 @@ fn detect_orientation_by_direction_scores(
             tessdata,
             rotate_clockwise,
             dpi,
+            if matches!(rotate_clockwise, 90 | 270) {
+                width
+            } else {
+                height
+            },
         )?);
     }
     Ok((select_direction_score(&scores, dpi), scores))
@@ -931,6 +950,7 @@ fn run_direction_tesseract(
     tessdata: &Path,
     rotate_clockwise: i64,
     dpi: i32,
+    image_height: usize,
 ) -> Result<DirectionScore, String> {
     const MAX_OUTPUT_BYTES: u64 = 8 * 1024 * 1024;
     let output_path = temporary.join(format!("direction-{dpi}-{rotate_clockwise}.tsv"));
@@ -997,6 +1017,8 @@ fn run_direction_tesseract(
         .map_err(|error| format!("orientation fallback output decode: {error}"))?;
     let mut word_count = 0_usize;
     let mut confidence_sum = 0.0_f64;
+    let mut header_word_count = 0_usize;
+    let mut header_confidence_sum = 0.0_f64;
     for line in output.lines().skip(1) {
         let columns = line.splitn(12, '\t').collect::<Vec<_>>();
         if columns.len() != 12
@@ -1012,13 +1034,59 @@ fn run_direction_tesseract(
         if confidence >= 30.0 && confidence.is_finite() {
             word_count += 1;
             confidence_sum += confidence;
+            let top = columns[7].parse::<usize>().unwrap_or(image_height);
+            let height = columns[9].parse::<usize>().unwrap_or(0);
+            if top.saturating_add(height / 2) <= image_height / 6 {
+                header_word_count += 1;
+                header_confidence_sum += confidence;
+            }
         }
     }
-    Ok(DirectionScore::new(
-        rotate_clockwise,
-        word_count,
-        confidence_sum,
-    ))
+    Ok(
+        DirectionScore::new(rotate_clockwise, word_count, confidence_sum)
+            .with_header(header_word_count, header_confidence_sum),
+    )
+}
+
+fn select_correlated_header_score(
+    primary: &[DirectionScore],
+    secondary: &[DirectionScore],
+) -> Option<OrientationDetection> {
+    const MIN_HEADER_WORDS: usize = 3;
+    const MIN_HEADER_CONFIDENCE: f64 = 120.0;
+    const MIN_HEADER_RATIO: f64 = 1.8;
+    const MIN_HEADER_MARGIN: f64 = 80.0;
+
+    fn winner(scores: &[DirectionScore]) -> Option<&DirectionScore> {
+        let mut ranked = scores
+            .iter()
+            .filter(|score| {
+                score.header_word_count >= MIN_HEADER_WORDS
+                    && score.header_confidence_sum >= MIN_HEADER_CONFIDENCE
+            })
+            .collect::<Vec<_>>();
+        ranked.sort_by(|left, right| {
+            right
+                .header_confidence_sum
+                .total_cmp(&left.header_confidence_sum)
+                .then_with(|| right.header_word_count.cmp(&left.header_word_count))
+        });
+        let best = *ranked.first()?;
+        let runner = ranked
+            .get(1)
+            .map_or(0.0, |score| score.header_confidence_sum);
+        (best.header_confidence_sum - runner >= MIN_HEADER_MARGIN
+            && best.header_confidence_sum / runner.max(1.0) >= MIN_HEADER_RATIO)
+            .then_some(best)
+    }
+
+    let first = winner(primary)?;
+    let second = winner(secondary)?;
+    (first.rotate_clockwise == second.rotate_clockwise).then(|| OrientationDetection {
+        rotate_clockwise: first.rotate_clockwise,
+        confidence: 10.0,
+        method: "tesseract-page-header-consensus:250+350dpi".to_string(),
+    })
 }
 
 fn tesseract_candidates() -> Vec<PathBuf> {
@@ -1547,6 +1615,36 @@ mod orientation_tests {
             DirectionScore::new(270, 13, 678.7),
         ];
         assert!(select_direction_score(&near_tie, 250).is_none());
+    }
+
+    #[test]
+    fn page_header_consensus_resolves_conflicting_drawing_text_directions() {
+        let primary = [
+            DirectionScore::new(0, 14, 767.0).with_header(5, 218.0),
+            DirectionScore::new(90, 11, 604.0).with_header(1, 45.0),
+            DirectionScore::new(180, 4, 100.0),
+            DirectionScore::new(270, 3, 90.0),
+        ];
+        let secondary = [
+            DirectionScore::new(0, 8, 434.0).with_header(4, 180.0),
+            DirectionScore::new(90, 10, 640.0).with_header(1, 48.0),
+            DirectionScore::new(180, 9, 448.0),
+            DirectionScore::new(270, 3, 100.0),
+        ];
+        assert_eq!(
+            select_correlated_header_score(&primary, &secondary)
+                .expect("both DPIs identify the same page-header direction")
+                .rotate_clockwise,
+            0
+        );
+
+        let conflicting_header = [
+            DirectionScore::new(0, 8, 434.0),
+            DirectionScore::new(90, 10, 640.0).with_header(4, 190.0),
+            DirectionScore::new(180, 9, 448.0),
+            DirectionScore::new(270, 3, 100.0),
+        ];
+        assert!(select_correlated_header_score(&primary, &conflicting_header).is_none());
     }
 
     #[test]

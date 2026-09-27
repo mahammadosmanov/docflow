@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.3 - 2026-09-27
+
+### Fixed
+
+- Process Scans now cross-checks the top-page RFI header at 250 and 350 DPI
+  when map/drawing text conflicts with OSD. It auto-selects only a strong,
+  agreeing header direction; otherwise the page remains in `_review`.
+
 ## 1.11.2 - 2026-09-27
 
 ### Fixed

@@ -2,28 +2,32 @@
 
 Updated: 2026-09-27
 
-## Follow Up CIV PCS exclusion fix
+## Process Scans sparse drawing orientation fix
 
-- Version: 1.11.2
-- Objective: keep CIV `PCS-` Tag No RFIs out of Follow Up, including removal
-  from existing groups and status clearing when no supported RFIs remain.
-- Source scan found 44 such RFIs; 10 unique IDs appeared in four existing CIV
-  and PCU Follow Up rows. A separate cleanup copy removes those 10 IDs and
-  preserves the remaining grouped RFIs/statuses. Only two worksheet XML parts
-  changed; VBA hash and original workbook hashes are unchanged.
-- Cleanup copy: `Inspection Status Follow Up - PCS Removed Review Pending
-  v3.xlsm`; guarded delta verification passed. Four matching rows yielded 16
-  approved cell edits. The user's originals were not overwritten.
-- Follow Up native suite: 49 passed. Full Rust suite passed (368 library,
-  49 Follow Up integration, remaining integration suites; 4 ignored operator
-  fixtures). Frontend: 23 tool tests and 54 UI tests passed; production build
-  passed. Clippy, Cargo check, fmt, version/docs/source and license audits
-  passed. Frontend build reports the existing >500 kB bundle warning.
-- Current supplied-workbook preview: 60 approved row pairs; 47 ambiguous MEC
-  rows remain manual. Current cleanup copy was separately verified.
-- macOS source checks only; Windows installer, Office, and package acceptance
-  remain unverified.
-- Next: commit/push/tag/release v1.11.2.
+- Version: 1.11.3
+- Objective: resolve the supplied low-text drawing page using its standard
+  top-page handwritten RFI header without weakening the conservative body OCR
+  orientation thresholds.
+- Root cause: body OCR combined the RFI header with sideways drawing labels;
+  lower-confidence OSD/body signals disagreed, so a page with a legible
+  repeated header went to `_review`.
+- Fix: when body scoring is inconclusive, require a strong top-one-sixth OCR
+  header winner at both 250 and 350 DPI, same direction, minimum three words,
+  confidence sum 120, ratio 1.8 and 80-point margin. Otherwise retain review.
+  Scan profile advanced to v4 to invalidate prior detector outcomes.
+- Supplied 26-page PDF scanned with native app OCR: header consensus resolves
+  pages 2, 11, and 16 to 0 degrees; operator-selected-page test passes. Pages
+  with unresolved/conflicting signals remain review. No PDF output was written.
+- Tests: 369 Rust library and all enabled integration tests passed; the
+  operator PDF test passed for pages 2, 11, and 16 at expected 0 degrees.
+  Frontend has 23 tool and 54 UI tests passed. Clippy, Cargo check, fmt,
+  version/docs/source and dependency-license audits passed; frontend build
+  passed with the existing >500 kB chunk warning.
+- The entire 26-page PDF was analyzed. Pages whose competing evidence remains
+  ambiguous still go to `_review`; no PDF was changed or produced.
+- macOS source validation only; Windows and packaged Office acceptance remain
+  unverified.
+- Next: commit, push, tag, and publish v1.11.3.
 
 ## Previous release baseline: 1.11.1
 

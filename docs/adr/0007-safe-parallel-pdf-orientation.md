@@ -2,7 +2,8 @@
 
 - Date: 2026-09-14
 - Status: Accepted
-- Amended: 2026-09-18 — multi-resolution OSD and conservative direction scoring
+- Amended: 2026-09-27 — two-resolution RFI page-header consensus for sparse
+  drawings
 
 ## Context
 
@@ -30,8 +31,13 @@ OSD pass; agreeing evidence may combine. If OSD remains uncertain, the 250-DPI
 page is compared in all four right-angle directions with English OCR. That
 fallback accepts only at least 20 recognized words, average confidence at least
 55, a winner score at least 1.45 times the runner-up, and an average-confidence
-margin of at least 8. A complete PDF becomes actionable only if every page has
-a valid right-angle result with normalized confidence at least 10.0.
+margin of at least 8. If that conflicts or lacks enough body text, it checks
+the top one-sixth of each four-direction OCR result for a clear page-header
+winner at both resolutions. Header consensus requires at least three words,
+confidence sum 120, a 1.8 winner ratio, and an 80-point margin at each DPI, with
+the same direction winning both. A complete PDF becomes actionable only if
+every page has a valid right-angle result with normalized confidence at least
+10.0.
 
 Preview records source hashes and exact page rotations. Apply does not repeat
 OCR. It copies the approved source to private storage, appends only revised page
@@ -45,6 +51,7 @@ Multi-core work is limited to independent read-only analysis, so deterministic
 mutation order and recovery remain unchanged. The higher-resolution and
 four-direction fallbacks cost more CPU only after the fast pass is uncertain.
 Sparse-text, drawing-only, close 0/180-degree, or otherwise uncertain pages
-require manual review rather than risking a wrong rotation. Rollback is ordinary
-guarded Undo of generated review copies; removing the registered operation and
-its step executor restores the prior product without migrating user data.
+still require manual review rather than risking a wrong rotation. Rollback is
+ordinary guarded Undo of generated review copies; removing the registered
+operation and its step executor restores the prior product without migrating
+user data.
