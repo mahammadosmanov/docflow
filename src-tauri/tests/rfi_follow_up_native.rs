@@ -1298,6 +1298,107 @@ fn full_sync_keeps_formula_backed_missing_final_rfi_in_manual_review() {
 }
 
 #[test]
+fn full_sync_ignores_formula_summary_in_lifecycle_comparison_and_mapping() {
+    let header = full_schema_mec_header();
+    let source_records = [
+        full_schema_mec_record(10, "0001", "MEC-1.3.5", "PCS-01", "S1", "N1", "Completed")
+            .replace(&blank("V10"), &inline("V10", "Signed by Worley")),
+        full_schema_mec_record(11, "0001", "MEC-1.3.5", "PCS-01", "S2", "N1", "Completed")
+            .replace(&blank("V11"), &inline("V11", "Signed by Worley")),
+    ];
+    let source = source_package(
+        worksheet([header.clone()], &[]),
+        worksheet(std::iter::once(header).chain(source_records), &[]),
+    );
+    let target = package(&[
+        (
+            "MEC",
+            None,
+            worksheet(
+                [
+                    row(4, [inline("N4", "RFI No."), inline("O4", "STATUS")]),
+                    row(
+                        5,
+                        [
+                            inline("A5", "Zone 1"),
+                            inline("B5", "N1"),
+                            inline("C5", "PCS-01"),
+                            inline("D5", "S1"),
+                            inline("N5", "MEC-0001"),
+                            inline("O5", "Completed"),
+                        ],
+                    ),
+                    row(
+                        6,
+                        [
+                            inline("A6", "Zone 1"),
+                            inline("B6", "N1"),
+                            inline("C6", "PCS-01"),
+                            inline("D6", "S2"),
+                            inline("N6", "MEC-0001"),
+                            inline("O6", "Completed"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+        (
+            "Signed By Worley MEC",
+            None,
+            worksheet(
+                [
+                    row(3, [inline("S3", "RFI No."), inline("T3", "Worley Status")]),
+                    row(
+                        4,
+                        [
+                            inline("H4", "RFI No."),
+                            inline("I4", "STATUS"),
+                            inline("S4", "MEC-0001"),
+                            inline("T4", "Signed"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("A5", "Zone 1"),
+                            inline("B5", "N1"),
+                            inline("C5", "PCS-01"),
+                            inline("D5", "S1"),
+                            inline("H5", "MEC-0001"),
+                            formula("I5", "T4", "Signed"),
+                        ],
+                    ),
+                    row(
+                        6,
+                        [
+                            inline("A6", "Zone 1"),
+                            inline("B6", "N1"),
+                            inline("C6", "PCS-01"),
+                            inline("D6", "S2"),
+                            inline("H6", "MEC-0001"),
+                            formula("I6", "T4", "Signed"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+
+    let review = classify(source, target).unwrap();
+
+    assert!(review["rows"].as_array().unwrap().is_empty(), "{review}");
+    assert!(
+        review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|warning| { warning["key"] != "warn.rfi.followUp.unmappedRecords" })
+    );
+}
+
+#[test]
 fn full_sync_silently_skips_final_rfi_without_a_prepared_follow_up_row() {
     let source = full_schema_source([full_schema_record(
         10,

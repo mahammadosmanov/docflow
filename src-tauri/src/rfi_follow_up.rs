@@ -1350,10 +1350,12 @@ fn classify_workbooks_full(
             slot.codes.retain(|code| !removed.contains(code));
             slot.changed_rfis.extend(removed);
         }
-        if slot
-            .codes
-            .iter()
-            .any(|code| records.get(code).and_then(|record| record.state).is_some())
+        // Signed By layouts show Worley state, not RFI lifecycle state.
+        if !is_signed_layout(&slot.layout)
+            && slot
+                .codes
+                .iter()
+                .any(|code| records.get(code).and_then(|record| record.state).is_some())
         {
             let next = main_status_for_codes(&slot.codes, &records);
             if next
@@ -1441,9 +1443,12 @@ fn classify_workbooks_full(
             }
         }
         let candidate_count = candidates.len();
+        // Signed By rows repeat RFIs as Worley summaries, not lifecycle placements.
         let existing_slots = slots
             .iter()
-            .filter(|(_, slot)| slot.codes.contains(&record.canonical_rfi))
+            .filter(|(_, slot)| {
+                !is_signed_layout(&slot.layout) && slot.codes.contains(&record.canonical_rfi)
+            })
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
         if candidate_count == 0 {

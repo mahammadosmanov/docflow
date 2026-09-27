@@ -4,6 +4,25 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.11.4 - 2026-09-27
+
+A read-only Preview on the supplied RFI Log and Follow Up workbooks reduced the
+manual-review list from 130 entries to three. The 127 false positives came from
+comparing Worley `Signed` formula summaries to lifecycle `Completed` values and
+counting those summaries as alternate lifecycle placements. One uniquely
+mapped lifecycle update is ready. Three FINAL Worley entries still match
+multiple prepared contexts, so they remain manual review under the single-row
+authority rule. Neither workbook was modified.
+
+The regression reproduced the formula-backed false review before the fix and
+passes with lifecycle comparison and placement checks limited to non-Signed
+layouts. Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 369 unit
+tests, and all enabled integration tests pass; seven operator-data tests remain
+ignored. All 23 Node and 54 React tests pass. The frontend build, version,
+documentation, source, and dependency-license audits pass. The build retains the
+existing Vite warning for a 638.65 kB JavaScript chunk. The tagged Windows
+installer and clean NSIS smoke workflow remain the release gates.
+
 ## 1.9.9 - 2026-09-23
 
 The four reported ELE PDF pages were rendered and visually inspected from the

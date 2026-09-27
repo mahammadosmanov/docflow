@@ -122,3 +122,8 @@
   PDFs. Keep source PDFs read-only, pin hashes and output-page rotations in the
   immutable Plan, and route any file with an uncertain page unchanged to
   `_review`. Apply extracts first and rotates only its private output copy.
+- Follow Up Sync must not compare `Signed By Worley` formula summaries with RFI
+  lifecycle states. The summary cells derive Worley state from the separate
+  exact-remark control table; compare lifecycle only on non-Signed layouts and
+  exclude Signed By copies from lifecycle wrong-section checks. Keep the final
+  Worley-state comparison and formula safety checks intact.

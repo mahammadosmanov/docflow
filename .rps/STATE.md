@@ -2,32 +2,36 @@
 
 Updated: 2026-09-27
 
-## Process Scans sparse drawing orientation fix
+## Follow Up false manual-review fix
 
-- Version: 1.11.3
-- Objective: resolve the supplied low-text drawing page using its standard
-  top-page handwritten RFI header without weakening the conservative body OCR
-  orientation thresholds.
-- Root cause: body OCR combined the RFI header with sideways drawing labels;
-  lower-confidence OSD/body signals disagreed, so a page with a legible
-  repeated header went to `_review`.
-- Fix: when body scoring is inconclusive, require a strong top-one-sixth OCR
-  header winner at both 250 and 350 DPI, same direction, minimum three words,
-  confidence sum 120, ratio 1.8 and 80-point margin. Otherwise retain review.
-  Scan profile advanced to v4 to invalidate prior detector outcomes.
-- Supplied 26-page PDF scanned with native app OCR: header consensus resolves
-  pages 2, 11, and 16 to 0 degrees; operator-selected-page test passes. Pages
-  with unresolved/conflicting signals remain review. No PDF output was written.
-- Tests: 369 Rust library and all enabled integration tests passed; the
-  operator PDF test passed for pages 2, 11, and 16 at expected 0 degrees.
-  Frontend has 23 tool and 54 UI tests passed. Clippy, Cargo check, fmt,
-  version/docs/source and dependency-license audits passed; frontend build
-  passed with the existing >500 kB chunk warning.
-- The entire 26-page PDF was analyzed. Pages whose competing evidence remains
-  ambiguous still go to `_review`; no PDF was changed or produced.
-- macOS source validation only; Windows and packaged Office acceptance remain
-  unverified.
-- Next: commit, push, tag, and publish v1.11.3.
+- Version: 1.11.4
+- Objective: stop correct formula-driven Worley `Signed` summaries from
+  appearing as lifecycle-status manual reviews.
+- Root cause: the full-workbook planner compared every target status to RFI Log
+  lifecycle status before separating Signed By layouts. A formula result such
+  as `Signed` differed from source `Completed`, so a read-only formula cell was
+  incorrectly sent to manual review.
+- Fix: compare lifecycle values only on non-Signed layouts. Keep the separate
+  final Worley comparison and formula safety checks. Exclude Signed By summary
+  copies when checking whether an RFI is already mapped to another lifecycle
+  section.
+- Exact supplied workbook pair was previewed read-only before and after the fix.
+  Manual-review rows fell from 130 to 3. The 127 false positives came from
+  lifecycle-versus-Worley status comparisons and Signed By formula summaries
+  counted as alternate lifecycle mappings. Three multi-row FINAL Worley
+  mappings remain ambiguous; one unique update is ready. Original workbooks
+  were not modified.
+- Regression reproduced the false positive before the fix and passed after it.
+  Full local Rust, Node, UI, frontend build, formatting, Clippy, Cargo check,
+  version, docs, source, and license checks pass. Seven operator-data tests
+  remain ignored. Windows package workflow is pending.
+- Next: commit, push, tag, and publish v1.11.4.
+
+## Previous release baseline: 1.11.3
+
+- Process Scans sparse drawing orientation fix was released as v1.11.3. Its
+  Windows build and clean installer smoke test passed. The Linux quality run
+  failed because the runner exhausted disk space while linking Rust tests.
 
 ## Previous release baseline: 1.11.1
 

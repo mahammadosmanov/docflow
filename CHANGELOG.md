@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.4 - 2026-09-27
+
+### Fixed
+
+- Follow Up Sync no longer compares formula-driven Worley `Signed` status with
+  RFI lifecycle values such as `Completed`. Correctly matched formula summaries
+  no longer create false manual-review entries.
+
 ## 1.11.3 - 2026-09-27
 
 ### Fixed
