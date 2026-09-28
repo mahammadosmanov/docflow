@@ -1,8 +1,20 @@
 # DocFlow project state
 
-Updated: 2026-09-28
+Updated: 2026-09-29
 
-## Fast Cover Scans (1.12.0 candidate)
+## Windows release checksum binding (1.12.1 candidate)
+
+- Post-publication download of immutable `v1.12.0` assets showed its manifest
+  `checksumSha256` (`3811fd2a20831a25b2081fc56bbff525b22deaa2a411d4a3e0754d7862fb0f5e`)
+  differs from the published `.sha256` asset digest
+  (`c11291e37083f572094a93df35fc346c7391a110ec09cffa3a81312581f3d24f`). The
+  sidecar content contains the correct installer SHA-256; the mismatch came
+  from regenerating it with PowerShell after building the manifest.
+- `windows-release.yml` now reuses the package sidecar and checks its exact
+  installer hash. Added a Windows workflow contract regression test. Keep
+  published `v1.12.0` immutable; release a `1.12.1` fix after full checks.
+
+## Fast Cover Scans (1.12.0 released)
 
 - Separate operation: `rfi.process_scans_fast_covers`; normal `rfi.process_scans`
   keeps its existing detector and defaults. Both share the existing immutable
@@ -38,11 +50,17 @@ Updated: 2026-09-28
   and the full Rust suite pass (622 passed, 11 ignored); 23 Node and 55 React
   tests pass; frontend build and version/docs/source/license audits pass.
   Vite reports a non-failing 641.22 kB JavaScript chunk warning.
-- Windows CI/package release and native Windows OCR acceptance remain pending.
-- Two PR Rust CI attempts failed while linking `tauri-macros` (`ld` signal 7 /
-  Bus error). The second run reached the Rust doc-tests before failing in the
-  following check step. CI now clears its disposable Cargo target between test
-  and check to avoid retaining the large test artifacts; rerun is pending.
+- PR #36 quality run `36473292966` passed all checks after CI began clearing
+  Cargo test artifacts before `cargo check`; the first two Rust jobs had failed
+  at `tauri-macros` linking with `ld` signal 7 / Bus error.
+- Windows Release run `36474607152` passed in 28m29s for exact commit
+  `6c70cbb95a0fbb37e2c95c5d35102a39819f3c8a`. The clean NSIS install/startup/
+  package/uninstall smoke passed. Installer is 32,270,304 bytes with SHA-256
+  `9f2ebf195830842ce87d3d1cd6ff6d66b05d78b9991099f7147c35f19cbe430e`;
+  smoke reports 2,862 ms install, 26 ms cold start, and 22,589,440-byte peak
+  working set. Immutable release: https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.0.
+- Physical raster rotations, unsupported cover templates, and processing the
+  operator's real scan corpus on Windows remain separate acceptance checks.
 
 ## Confirmed-cover Process Scans grouping (1.11.9 fix)
 

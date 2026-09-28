@@ -4,7 +4,7 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
-## 1.12.0 - 2026-09-28
+## 1.12.0 - 2026-09-29
 
 Fast Cover Scans adds a separate opt-in operation for multi-page RFI PDFs. On a
 13-PDF CIV/MEC/PRC/ELE corpus (95 original pages), it detected all 13 first-page
@@ -20,9 +20,26 @@ Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, and the full Rust
 suite pass (622 passed, 11 ignored); 23 Node tooling tests and 55 React tests
 pass. The frontend build and version, documentation, source, and dependency
 license audits pass. The frontend build reports a non-failing 641.22 kB
-JavaScript chunk warning. These checks do not certify physically
-rotated raster scans, unsupported cover templates, or Windows OCR behavior;
-the Windows package/CI release gate is pending.
+JavaScript chunk warning. PR #36 quality run `36473292966` passed Node/React,
+Rust format/Clippy, and Rust tests/check after CI began clearing the test target
+before its separate Cargo check. Windows Release run `36474607152` passed in
+28m29s for exact commit `6c70cbb95a0fbb37e2c95c5d35102a39819f3c8a`, including
+installer build, package audit, clean NSIS install/startup/uninstall smoke, and
+publication of [`v1.12.0`](https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.0).
+The 32,270,304-byte installer SHA-256 is
+`9f2ebf195830842ce87d3d1cd6ff6d66b05d78b9991099f7147c35f19cbe430e`. Published
+manifest and smoke evidence bind to the exact commit and installer hash; smoke
+reports package audit and uninstall passed, 2,862 ms install, 26 ms cold start,
+and 22,589,440-byte peak working set. These checks do not certify physically
+rotated raster scans, unsupported cover templates, or processing the operator's
+real scan corpus on Windows.
+
+Post-publication asset verification found that the manifest's `checksumSha256`
+(`3811fd2a20831a25b2081fc56bbff525b22deaa2a411d4a3e0754d7862fb0f5e`) does not
+match the published checksum sidecar asset digest
+(`c11291e37083f572094a93df35fc346c7391a110ec09cffa3a81312581f3d24f`). The
+sidecar still contains the correct installer hash above. The tagged release is
+immutable; the workflow fix is tracked for `v1.12.1`.
 
 ## 1.11.8 - 2026-09-28
 

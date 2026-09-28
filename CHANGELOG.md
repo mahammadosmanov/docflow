@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.1 - 2026-09-29
+
+### Fixed
+
+- Publish the Windows installer checksum sidecar used by its artifact manifest;
+  verify it matches the installer instead of regenerating it with different
+  line endings.
+
 ## 1.12.0 - 2026-09-28
 
 ### Added

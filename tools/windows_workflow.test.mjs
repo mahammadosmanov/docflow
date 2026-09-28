@@ -98,6 +98,22 @@ test("Windows release emits commit-bound install performance and artifact manife
   assert.match(workflow, /bundle\/nsis\/\*\.json/u);
 });
 
+test("Windows tagged release uploads the manifest-bound checksum sidecar unchanged", () => {
+  const workflow = readFileSync(
+    resolve(root, ".github/workflows/windows-release.yml"),
+    "utf8",
+  );
+  const publishStep = workflow.split("      - name: Publish the tagged release", 2)[1];
+
+  assert.ok(publishStep);
+  assert.match(
+    publishStep,
+    /\$checksum = Get-Item -LiteralPath "\$\(\$installer\.FullName\)\.sha256"/u,
+  );
+  assert.match(publishStep, /\$checksumContent -cne "\$installerHash  \$\(\$installer\.Name\)"/u);
+  assert.doesNotMatch(publishStep, /\$checksumPath = Join-Path \$env:RUNNER_TEMP/u);
+});
+
 test("manual Windows runs can deliver only to an exact unpublished draft", () => {
   const source = readFileSync(resolve(root, ".github/workflows/windows-release.yml"), "utf8");
 
