@@ -18,10 +18,20 @@ Updated: 2026-09-28
   passed/7 operator-data tests ignored; 23 Node and 55 frontend tests pass;
   frontend build, Rust 1.97.1 fmt/Clippy/check, version/docs/source/license
   audits pass. No operator PDF was used.
-- Version: 1.11.9 (`fix`). Commit, push, CI, tag, and Windows release remain
-  pending. Native Windows OCR/package acceptance remains separate.
-- Next: review final diff, commit and push to the canonical branch, then wait
-  for hosted CI before publishing the immutable tag and Release.
+- Version: 1.11.9 (`fix`), source commit `d5b0792`. Pushed to
+  `rohtolos/follow-up-unmatched-skip`; PR #34 Node/React and Rust format/Clippy/
+  test jobs passed. Immutable tag `v1.11.9` is pushed.
+- Windows Release run `36416196927` passed build, package audit, clean NSIS
+  install/startup/uninstall smoke, and published `v1.11.9`:
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.11.9. Manifest and
+  smoke evidence bind to exact commit `d5b0792c3a34f963a499e3cc2ad15ad397f89437`.
+  Installer size is 32,218,263 bytes; SHA-256 is
+  `a22f7e33b97dbad20da09195e5fa726266ca3a518b6b11db1ae959204f0dbaf3`.
+- Windows clean install/startup/package/uninstall smoke passed. Native Windows
+  OCR and combined-scan cover detection with operator scans remain a separate
+  acceptance gate; no operator PDF was used in this fix.
+- Next: install v1.11.9 on Windows and confirm a combined scan splits only at
+  confirmed RFI covers, with all intervening pages attached to that RFI.
 
 ## Failed Follow Up Apply Undo (1.11.8 fix)
 
