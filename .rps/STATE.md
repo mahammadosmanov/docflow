@@ -2,7 +2,7 @@
 
 Updated: 2026-09-29
 
-## Windows release checksum binding (1.12.1 candidate)
+## Windows release checksum binding (1.12.1 released)
 
 - Post-publication download of immutable `v1.12.0` assets showed its manifest
   `checksumSha256` (`3811fd2a20831a25b2081fc56bbff525b22deaa2a411d4a3e0754d7862fb0f5e`)
@@ -11,8 +11,19 @@ Updated: 2026-09-29
   sidecar content contains the correct installer SHA-256; the mismatch came
   from regenerating it with PowerShell after building the manifest.
 - `windows-release.yml` now reuses the package sidecar and checks its exact
-  installer hash. Added a Windows workflow contract regression test. Keep
-  published `v1.12.0` immutable; release a `1.12.1` fix after full checks.
+  installer hash. Added a Windows workflow contract regression test.
+- Local checks pass: 24 Node tests, 55 React tests, frontend build, version,
+  documentation, source, and license audits. PR quality run `36479039132` and
+  Windows Release run `36480484218` passed for source commit
+  `52787702a96f2c396b990aaf6324d805a5394f5b`.
+- `v1.12.1` published: installer is 32,273,513 bytes, SHA-256
+  `93ec0a7dc64e59403fac1f52c42861bf5838cccb1afc504e4024d5a388c01875`.
+  Windows install/package/startup/uninstall smoke passed. Eight downloaded
+  evidence checks confirm the manifest checksum field matches the published
+  sidecar file and digest. Release:
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.1.
+- `v1.12.0` and its assets remain immutable; its manifest/sidecar hash
+  discrepancy is documented in `docs/VERIFICATION.md`.
 
 ## Fast Cover Scans (1.12.0 released)
 

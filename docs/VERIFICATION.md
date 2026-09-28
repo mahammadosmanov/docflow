@@ -4,6 +4,29 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.12.1 - 2026-09-29
+
+The Windows tagged-release job now publishes the same checksum sidecar that
+the artifact manifest hashes, and fails if its contents do not match the
+installer. A workflow contract regression protects this path. Local checks
+passed: 24 Node tests, 55 React tests, production frontend build, version,
+documentation, source, and dependency-license audits; the build retains the
+non-failing 641.22 kB chunk warning. PR #36 quality run `36479039132` passed all
+jobs: Node/React (35s), Rust format/Clippy (4m48s), and Rust tests/check
+(11m22s).
+
+Windows Release run `36480484218` passed in 34m14s for exact commit
+`52787702a96f2c396b990aaf6324d805a5394f5b`, including installer build, package
+audit, clean NSIS install/startup/uninstall smoke, and publication of
+[`v1.12.1`](https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.1).
+The installer is 32,273,513 bytes with SHA-256
+`93ec0a7dc64e59403fac1f52c42861bf5838cccb1afc504e4024d5a388c01875`. Eight
+downloaded-evidence checks passed: commit and version, installer asset digest,
+sidecar content and asset digest against `checksumSha256`, smoke result and
+evidence digest, and manifest asset digest. Smoke reports package audit and
+uninstall passed, 4,592 ms install, 42 ms cold start, and 22,941,696-byte peak
+working set.
+
 ## 1.12.0 - 2026-09-29
 
 Fast Cover Scans adds a separate opt-in operation for multi-page RFI PDFs. On a
@@ -39,7 +62,7 @@ Post-publication asset verification found that the manifest's `checksumSha256`
 match the published checksum sidecar asset digest
 (`c11291e37083f572094a93df35fc346c7391a110ec09cffa3a81312581f3d24f`). The
 sidecar still contains the correct installer hash above. The tagged release is
-immutable; the workflow fix is tracked for `v1.12.1`.
+immutable; the workflow fix shipped in `v1.12.1` without changing `v1.12.0`.
 
 ## 1.11.8 - 2026-09-28
 
