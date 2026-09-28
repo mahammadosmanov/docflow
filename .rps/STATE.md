@@ -1,6 +1,30 @@
 # DocFlow project state
 
-Updated: 2026-09-27
+Updated: 2026-09-28
+
+## Failed Follow Up Apply Undo (1.11.8 fix)
+
+- Objective: repair Apply recovery when the original Follow Up workbook has
+  been displaced to a retained-original leaf and the canonical name is absent.
+- Root cause: failed-Apply journals were rejected by normal Undo admission;
+  recovery listed the unresolved record but offered no way to restore the exact
+  original.
+- Fix: Recovery Center and the existing result Undo action now admit a separate
+  failed-Apply restore mode. Rust revalidates journal owner/root authority,
+  file identity, bytes, and security metadata, records restore intent, then
+  performs a same-parent no-clobber rename only to an absent canonical path.
+  Recovery only finalizes an exact completed restore. Collisions and mismatches
+  remain untouched; backup and private output stay retained.
+- The owner restored their workbook before this fix; this task did not read or
+  modify either operator workbook.
+- Local evidence: focused restore, collision, interrupted-restore recovery,
+  and Recovery Center tests pass; 55 frontend tests, frontend build, Node
+  tooling tests, version/docs/source/license audits, Rust 1.97.1 fmt/Clippy,
+  and full Rust tests pass. Seven operator-data tests remain ignored.
+- Version: 1.11.8 (`fix`). Push, PR checks, immutable tag, and release
+  workflow are pending. Windows installer/Office acceptance remains separate.
+- Next: commit this slice, push the existing Follow Up branch, wait for its CI,
+  then publish the exact commit as v1.11.8 and verify the Windows release run.
 
 ## Follow Up false manual-review fix
 

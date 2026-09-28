@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.8 - 2026-09-28
+
+### Fixed
+
+- Failed Follow Up Sync Apply can now restore its exact displaced original
+  through explicit Undo. Recovery never retries the rename; collisions preserve
+  both the current file and retained evidence.
+
 ## 1.11.7 - 2026-09-27
 
 ### Fixed

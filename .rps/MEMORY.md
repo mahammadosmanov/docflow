@@ -1,5 +1,10 @@
 # DocFlow project memory
 
+- A failed Follow Up Apply that displaced the original workbook is recoverable
+  only through an explicit journal-authorized Undo: verify original identity,
+  bytes, and security metadata; require an absent canonical path; then perform
+  a same-parent no-clobber rename. Recovery may finalize an exact completed
+  restore but must never retry the rename or delete the backup/private output.
 - Follow Up Sync groups duplicate source rows only when ITP, item, status, and
   Worley evidence agree. MEC multi-row fan-out requires each existing target
   row to match a distinct exact `(tag, area, inspection location)` source

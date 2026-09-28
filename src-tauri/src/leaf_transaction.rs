@@ -214,6 +214,36 @@ pub(crate) fn reconcile_retained_publication(
     let retained = observe_recorded_path(record, &publication.retained);
     let backup = observe_recorded_path(record, &publication.backup);
     let source = observe_recorded_path(record, &publication.publication_source);
+    if publication.phase == RetainedPublicationPhase::RestoringOriginal {
+        let notice = RecoveryNotice {
+            warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
+            locator: locator.clone(),
+        };
+        let restored = canonical.matches(
+            &publication.expected_canonical_identity,
+            &publication.expected_canonical_sha256,
+            &publication.expected_canonical_security_sha256,
+        ) && matches!(retained, PathObservation::Absent);
+        if restored && sync_recorded_parent(record, &publication.canonical) {
+            transition(
+                journals,
+                record,
+                S5Transition::FinalizeRecovery {
+                    terminal: S5RecoveryTerminal::CompletedRestore,
+                    notice: None,
+                    evidence: Vec::new(),
+                },
+            )?;
+            return Ok(None);
+        }
+        return Ok(Some(RecoveryEntry {
+            journal_id: record.journal_id().to_string(),
+            disposition: RecoveryDisposition::OutcomeUnknown,
+            warning_key: Some(notice.warning_key),
+            locator: Some(notice.locator),
+            restore_original_available: true,
+        }));
+    }
     let backup_exact = backup.matches(
         &publication.expected_backup_identity,
         &publication.expected_backup_sha256,
@@ -295,7 +325,20 @@ pub(crate) fn reconcile_retained_publication(
         disposition: RecoveryDisposition::OutcomeUnknown,
         warning_key: Some(notice.warning_key),
         locator: Some(notice.locator),
+        restore_original_available: false,
     }))
+}
+
+fn sync_recorded_parent(record: &ValidatedS5Record, raw_path: &str) -> bool {
+    let path = std::path::Path::new(raw_path);
+    record.roots().is_some_and(|roots| {
+        roots.roots().iter().any(|root| {
+            root.authorize(path)
+                .ok()
+                .and_then(|authorized| authorized.anchor().ok())
+                .is_some_and(|anchor| anchor.sync_parent().is_ok())
+        })
+    })
 }
 
 enum PathObservation {

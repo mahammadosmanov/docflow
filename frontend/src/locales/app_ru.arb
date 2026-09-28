@@ -680,6 +680,7 @@
   "recovery.noEffect": "Изменений нет — повторный просмотр безопасен",
   "recovery.outcomeUnknown": "Результат неизвестен — без автоматического повтора",
   "recovery.manual": "Требуется ручная проверка",
+  "recovery.restoreOriginal": "Восстановить исходный файл Follow Up",
   "recovery.printQueue": "Неопределённая очередь печати",
   "recovery.empty": "Восстановление не требуется",
   "recovery.empty.help": "Ожидающих журналов и незавершённых очередей печати нет.",

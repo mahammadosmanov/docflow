@@ -22,6 +22,15 @@ locks, symlinks/reparse points, malformed input, exhausted bounds, or ambiguous
 evidence fail closed. Cancellation is checked before effects; partial and unknown
 outcomes stay recoverable rather than being presented as success.
 
+RFI Follow Up sync keeps its local journal, exact backup, and private output.
+If Apply fails after displacing the Follow Up workbook, Result and Recovery
+Center offer an explicit **Restore original Follow Up file** action. Undo checks
+the displaced file's journaled identity, byte hash, and complete security/stream
+hash and requires the canonical name to be empty before a no-clobber restore.
+Recovery can finalize that journaled restore only after observing the exact
+original at the canonical name; it never retries the rename. Any collision or
+mismatch remains untouched for manual review.
+
 Signed-page archive discovery is always recursive and read-only. It processes
 independent directory batches through the bounded Rust analysis pool, merges
 results in deterministic path order, and records worker/directory/entry counts

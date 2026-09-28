@@ -1220,6 +1220,67 @@ describe("DocFlow shell", () => {
     expect(await screen.findByText("Belirsiz yazdırma kuyruğu")).toBeVisible();
   });
 
+  it("offers explicit restore for a failed Follow Up Apply journal", async () => {
+    let restored = false;
+    const call = interceptMockBridge((method, params) => {
+      if (method === "recovery/list") {
+        return {
+          handled: true,
+          value: {
+            journals: restored
+              ? []
+              : [
+                  {
+                    journalId: "failed-follow-up-apply",
+                    disposition: "outcome_unknown",
+                    restoreOriginalAvailable: true,
+                  },
+                ],
+            printQueue: null,
+          },
+        };
+      }
+      if (method === "engine/undo") {
+        restored = true;
+        return {
+          handled: true,
+          value: {
+            applied: 1,
+            failed: 0,
+            journalId: String(params.journalId),
+            errors: [],
+            meta: { effectState: "committed" },
+            cloudSynced: null,
+          },
+        };
+      }
+      return { handled: false };
+    });
+
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen
+        .getByText(
+          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+        )
+        .closest("button")!,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Follow Up dosyasının aslını geri yükle",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("engine/undo", {
+        journalId: "failed-follow-up-apply",
+      }),
+    );
+    expect(await screen.findByText("Kurtarılacak öğe yok")).toBeVisible();
+  });
+
   it("never offers undo for cloud history without a local journal", async () => {
     render(<App />);
     await signIn();

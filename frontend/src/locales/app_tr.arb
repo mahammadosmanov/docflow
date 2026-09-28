@@ -680,6 +680,7 @@
   "recovery.noEffect": "Hiçbir değişiklik olmadı — yeniden önizleme güvenli",
   "recovery.outcomeUnknown": "Sonuç bilinmiyor — otomatik tekrar yok",
   "recovery.manual": "Elle inceleme gerekli",
+  "recovery.restoreOriginal": "Follow Up dosyasının aslını geri yükle",
   "recovery.printQueue": "Belirsiz yazdırma kuyruğu",
   "recovery.empty": "Kurtarılacak öğe yok",
   "recovery.empty.help": "Bekleyen günlük veya yarım kalmış yazdırma kuyruğu bulunamadı.",

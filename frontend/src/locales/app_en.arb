@@ -708,6 +708,7 @@
   "recovery.noEffect": "No change occurred — previewing again is safe",
   "recovery.outcomeUnknown": "Outcome unknown — no automatic retry",
   "recovery.manual": "Manual review required",
+  "recovery.restoreOriginal": "Restore original Follow Up file",
   "recovery.printQueue": "Uncertain print queue",
   "recovery.empty": "Nothing needs recovery",
   "recovery.empty.help": "No pending journal or unfinished print queue was found.",

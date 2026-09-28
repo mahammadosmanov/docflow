@@ -4728,6 +4728,22 @@ function RecoveryScreen({
     }
   };
 
+  const restoreOriginal = async (journalId: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await bridge.call("engine/undo", { journalId });
+      setPayload(await bridge.call("recovery/list"));
+      if (result.failed > 0) {
+        setError(s.t("error.rfi.followUp.recoveryRequired"));
+      }
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openPrintQueue = () => {
     const operation = operations.find(
       (candidate) => candidate.id === "files.batch_print",
@@ -4773,7 +4789,19 @@ function RecoveryScreen({
                   </strong>
                   <small>{entry.journalId}</small>
                 </div>
-                <span className="status-label">{s.t("recovery.manual")}</span>
+                <span className="resume-queue-actions">
+                  <span className="status-label">{s.t("recovery.manual")}</span>
+                  {entry.restoreOriginalAvailable && (
+                    <Button
+                      variant="secondary"
+                      icon={<Undo2 />}
+                      disabled={busy}
+                      onClick={() => void restoreOriginal(entry.journalId)}
+                    >
+                      {s.t("recovery.restoreOriginal")}
+                    </Button>
+                  )}
+                </span>
               </div>
             ))}
             {payload?.printQueue && (

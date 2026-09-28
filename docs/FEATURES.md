@@ -14,6 +14,7 @@
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
+| `rfi.follow_up_sync` | Synchronize uniquely mapped RFI Log statuses into existing Follow Up workbook groups |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
 | `files.replica_publish` | Publish one selected RFI System source to two targets with backup-first verified replacement, Undo, and optional standing authorization |
 
@@ -51,6 +52,9 @@
   Apply/Cancel actions reachable through bounded vertical or table scrolling.
 - Persistent local history, explicit recovery center, guarded undo, and
   recoverable review trash.
+- A failed Follow Up Apply can restore its displaced original through an
+  explicit Undo action when the journal proves exact file identity, content,
+  and security metadata; a collision or mismatch leaves both files untouched.
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
 - Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.

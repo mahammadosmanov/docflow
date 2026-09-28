@@ -6,7 +6,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | Requirement | Primary implementation | Primary evidence |
 |---|---|---|
 | DF-001, DF-002 | `plan_store.rs`, `native.rs`, `fs_ops.rs` | `filesystem_authority.rs`, backend plan tests |
-| DF-003, DF-004 | `cap_fs.rs`, `journal.rs`, `undo.rs`, `leaf_transaction.rs` | filesystem fault/recovery tests |
+| DF-003, DF-004 | `cap_fs.rs`, `journal.rs`, `undo.rs`, `leaf_transaction.rs`, `fs_ops.rs`, Recovery Center | filesystem fault/recovery tests, including exact failed Follow Up Apply restoration and no-clobber collision refusal |
 | DF-005 | `rfi_code.rs`, `ocr.rs`, RFI operations | `process_scans.rs`, `rfi_follow_up_native.rs`, `examples/ocr_corpus_audit.rs` |
 | DF-006 | `ooxml.rs`, `rfi_log.rs`, `rfi_follow_up.rs`, `rfi_system_sync.rs` | `ooxml_fidelity.rs`, `rfi_log_native.rs`, `rfi_system_sync_native.rs` |
 | DF-007 | `operations/stage_signed_pages.rs`, `pdf.rs` | `signed_pages.rs` integration suite |

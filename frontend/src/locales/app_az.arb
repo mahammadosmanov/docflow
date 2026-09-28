@@ -680,6 +680,7 @@
   "recovery.noEffect": "Dəyişiklik olmayıb — yenidən önbaxış təhlükəsizdir",
   "recovery.outcomeUnknown": "Nəticə naməlumdur — avtomatik təkrar yoxdur",
   "recovery.manual": "Əl ilə yoxlama tələb olunur",
+  "recovery.restoreOriginal": "Follow Up faylının orijinalını bərpa et",
   "recovery.printQueue": "Qeyri-müəyyən çap növbəsi",
   "recovery.empty": "Bərpa ediləcək heç nə yoxdur",
   "recovery.empty.help": "Gözləyən jurnal və ya yarımçıq çap növbəsi tapılmadı.",
