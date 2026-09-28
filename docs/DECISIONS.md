@@ -34,7 +34,8 @@ and versioned with the code they govern.
 | Exclude CIV PCS-tagged RFI Log records from Follow Up | Accepted | [`adr/0033-exclude-civ-pcs-rfis-from-follow-up.md`](adr/0033-exclude-civ-pcs-rfis-from-follow-up.md) |
 | Skip supported Follow Up routes with no existing target row | Accepted | [`adr/0027-follow-up-no-match-scope.md`](adr/0027-follow-up-no-match-scope.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
-| Ordered multi-RFI scan separation and discipline folders | Accepted | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
+| Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
+| Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |
 | One-way backup-first three-root publication with revocable standing authorization | Accepted | [`adr/0016-safe-unattended-replica-publication.md`](adr/0016-safe-unattended-replica-publication.md) |
 | Durable fingerprint-scoped hash reuse for replica comparison | Accepted | [`adr/0017-incremental-replica-hashing.md`](adr/0017-incremental-replica-hashing.md) |
 | Local pathless printer evidence in the redacted support bundle | Accepted | [`adr/0018-pathless-printer-diagnostics.md`](adr/0018-pathless-printer-diagnostics.md) |

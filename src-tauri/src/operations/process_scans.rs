@@ -490,22 +490,24 @@ where
                         });
                     }
                     Err(OcrFailure::Document(error)) => {
-                        flush_page_group(&mut active, &mut local_groups);
-                        active = Some(PageGroup {
-                            code: None,
-                            pages: vec![page_index],
-                            confidence: 0.0,
-                            source: String::new(),
-                            reason: format!("unreadable page: {error}"),
-                        });
+                        if let Some(group) = active.as_mut() {
+                            group.pages.push(page_index);
+                        } else {
+                            active = Some(PageGroup {
+                                code: None,
+                                pages: vec![page_index],
+                                confidence: 0.0,
+                                source: String::new(),
+                                reason: format!("unreadable page: {error}"),
+                            });
+                        }
                         continue;
                     }
                 };
-                let exact = read.matched.method == RfiMethod::Strict
-                    && read.matched.confidence >= MIN_CONFIDENCE
-                    && crate::rfi_code::find(&read.matched.code).code == read.matched.code
-                    && crate::rfi_code::find(&read.matched.code).method == RfiMethod::Strict;
-                if exact {
+                // A strict, high-confidence RFI identity is the only group boundary.
+                // Once a cover starts a group, every page stays with it until another
+                // confirmed cover appears, even when continuation OCR is uncertain.
+                if is_confirmed_cover(&read) {
                     let code = read.matched.code.clone();
                     let continues = active
                         .as_ref()
@@ -536,6 +538,12 @@ where
                             reason: String::new(),
                         });
                     }
+                } else if active.as_ref().is_some_and(|group| group.code.is_some()) {
+                    active
+                        .as_mut()
+                        .expect("current RFI group exists")
+                        .pages
+                        .push(page_index);
                 } else if read.matched.method == RfiMethod::Miss
                     && !read.source.starts_with("ocr:ambiguous-or-unconfirmed:")
                 {
@@ -961,6 +969,14 @@ fn flush_page_group(active: &mut Option<PageGroup>, groups: &mut Vec<PageGroup>)
     if let Some(group) = active.take() {
         groups.push(group);
     }
+}
+
+fn is_confirmed_cover(read: &OcrRead) -> bool {
+    let canonical = crate::rfi_code::find(&read.matched.code);
+    read.matched.method == RfiMethod::Strict
+        && read.matched.confidence >= MIN_CONFIDENCE
+        && canonical.code == read.matched.code
+        && canonical.method == RfiMethod::Strict
 }
 
 fn process_scan_targets(

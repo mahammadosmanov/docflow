@@ -359,9 +359,30 @@ impl OcrAdapter for PageFixtureOcr {
             .0
             .get(page_index)
             .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
+        if text == "[unreadable]" {
+            return Err(OcrFailure::Document(
+                "fixture page is unreadable".to_string(),
+            ));
+        }
         Ok(OcrRead {
             matched: if text == "[ambiguous]" {
                 find("")
+            } else if text == "[low-confidence]" {
+                docflow_lib::rfi_code::RfiMatch {
+                    code: "AZE-SUN-INT-QMS-RFI-CIV-0065".to_string(),
+                    discipline: "CIV".to_string(),
+                    number: "0065".to_string(),
+                    method: RfiMethod::Strict,
+                    confidence: 0.79,
+                }
+            } else if text == "[repaired]" {
+                docflow_lib::rfi_code::RfiMatch {
+                    code: "AZE-SUN-INT-QMS-RFI-CIV-0066".to_string(),
+                    discipline: "CIV".to_string(),
+                    number: "0066".to_string(),
+                    method: RfiMethod::Repaired,
+                    confidence: 0.9,
+                }
             } else {
                 find(text)
             },
@@ -552,7 +573,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
 }
 
 #[test]
-fn uncertain_batch_pages_and_their_continuations_go_to_review() {
+fn uncertain_pages_between_confirmed_covers_stay_with_the_current_rfi() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("source");
     let destination = fixture.path().join("destination");
@@ -585,31 +606,106 @@ fn uncertain_batch_pages_and_their_continuations_go_to_review() {
         .iter()
         .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
         .collect::<Vec<_>>();
-    assert_eq!(extracted.len(), 3);
-    let find_pages = |pages: serde_json::Value| {
+    assert_eq!(extracted.len(), 2);
+    assert_eq!(extracted[0].meta["pageIndexes"], json!([0, 1, 2]));
+    assert_eq!(extracted[1].meta["pageIndexes"], json!([3]));
+    assert!(plan.warnings.is_empty());
+    assert!(
         extracted
             .iter()
-            .find(|step| step.meta["pageIndexes"] == pages)
-            .unwrap()
-    };
-    assert!(
-        !find_pages(json!([0]))
-            .dst
-            .as_deref()
-            .unwrap()
-            .contains("_review")
+            .all(|step| !step.dst.as_deref().unwrap().contains("_review"))
     );
-    assert!(
-        find_pages(json!([1, 2]))
-            .dst
-            .as_deref()
-            .unwrap()
-            .contains("_review")
+}
+
+#[test]
+fn long_continuation_run_is_split_only_at_the_next_confirmed_cover() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let combined = source.join("batch.pdf");
+    write_multi_page_pdf(&combined, 25);
+    let mut pages = vec!["AZE-SUN-INT-QMS-RFI-CIV-0064".to_string()];
+    pages.extend((0..22).map(|index| match index % 3 {
+        0 => "[ambiguous]".to_string(),
+        1 => "[low-confidence]".to_string(),
+        _ => "[repaired]".to_string(),
+    }));
+    pages.push("AZE-SUN-INT-QMS-RFI-MEC-0010".to_string());
+    pages.push("[unreadable]".to_string());
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &PageFixtureOcr(pages),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extracted = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    assert_eq!(extracted.len(), 2);
+    assert_eq!(
+        extracted[0].meta["pageIndexes"],
+        json!((0..23).collect::<Vec<_>>())
     );
-    assert!(has_path_component(
-        find_pages(json!([3])).dst.as_deref().unwrap(),
-        "MEC"
-    ));
+    assert_eq!(extracted[1].meta["pageIndexes"], json!([23, 24]));
+    assert!(plan.warnings.is_empty());
+}
+
+#[test]
+fn pages_before_the_first_confirmed_cover_remain_in_review() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    write_multi_page_pdf(&source.join("batch.pdf"), 3);
+
+    let plan = preview(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &PageFixtureOcr(vec![
+            "[ambiguous]".to_string(),
+            String::new(),
+            "AZE-SUN-INT-QMS-RFI-MEC-0010".to_string(),
+        ]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extracted = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    assert_eq!(extracted.len(), 2);
+    let cover = extracted
+        .iter()
+        .find(|step| step.meta["pageIndexes"] == json!([2]))
+        .unwrap();
+    let leading_review = extracted
+        .iter()
+        .find(|step| step.meta["pageIndexes"] == json!([0, 1]))
+        .unwrap();
+    assert!(!cover.dst.as_deref().unwrap().contains("_review"));
+    assert!(leading_review.dst.as_deref().unwrap().contains("_review"));
 }
 
 fn has_path_component(path: &str, expected: &str) -> bool {

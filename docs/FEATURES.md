@@ -92,11 +92,14 @@
 
 ## Intentional limits
 
-- Process Scans discovers top-level PDFs only. It separates sequential RFI
-  batches by page, keeps pages without an RFI candidate with the current RFI,
-  and sends uncertain pages to `_review`. CIV/MEC/ELE/PRC outputs use matching
-  discipline folders. Page orientation correction defaults on and uses the
-  existing bounded detector; uncertain files go unchanged to `_review`.
+- Process Scans discovers top-level PDFs only. In a multi-page batch, only a
+  strict, canonical, high-confidence RFI identity starts a new group. Every
+  page after a confirmed cover stays with that RFI until the next confirmed
+  cover, even if continuation-page RFI-identity OCR is uncertain or unreadable.
+  Pages before the first cover and duplicate RFI starts remain in `_review`.
+  CIV/MEC/ELE/PRC outputs use matching discipline folders. Page orientation
+  correction defaults on and uses the existing bounded detector; uncertain
+  files go unchanged to `_review`.
   Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent. Selected-mail archival creates only a

@@ -174,16 +174,18 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   and requires its own Preview and Apply.
 - **DF-032 — Ordered batch RFI scan separation:** Process Scans may inspect one
   top-level multi-page PDF as a sequential stack. A page with one strict,
-  high-confidence RFI code starts that RFI; a page with no candidate continues
-  the current RFI. Pages before the first identified RFI, uncertain pages, and
-  duplicate RFI starts remain separate Review output. Each output contains only
-  its approved pages, retains existing canonical filenames and duplicate/no-
-  clobber rules, and places CIV/MEC/ELE/PRC results beneath matching discipline
-  folders. Preview pins source hashes and exact page indexes; Apply extracts
-  only those pages, verifies fidelity, journals every output, and moves the
-  combined source to recoverable trash only after all its outputs succeed when
-  Keep original is off. Unsupported or drifted PDFs fail closed to Review or
-  Apply refusal; no page is silently dropped.
+  high-confidence canonical RFI code starts a confirmed cover and the next RFI
+  group. Every page after a confirmed cover belongs to that group until another
+  confirmed cover appears, even when continuation-page OCR is uncertain or
+  unreadable. Pages before the first identified RFI and duplicate RFI starts
+  remain Review output. Each output contains only its approved pages, retains
+  existing canonical filenames and duplicate/no-clobber rules, and places
+  CIV/MEC/ELE/PRC results beneath matching discipline folders. Preview pins
+  source hashes and exact page indexes; Apply extracts only those pages,
+  verifies fidelity, journals every output, and moves the combined source to
+  recoverable trash only after all its outputs succeed when Keep original is
+  off. Unsupported or drifted PDFs fail closed to Review or Apply refusal; no
+  page is silently dropped.
 - **DF-035 — Process Scans orientation:** Process Scans checks every input PDF
   page with the existing bounded orientation detector by default. It applies
   only confident page rotations to the approved output, leaves source PDFs

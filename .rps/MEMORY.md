@@ -127,6 +127,12 @@
   PDFs. Keep source PDFs read-only, pin hashes and output-page rotations in the
   immutable Plan, and route any file with an uncertain page unchanged to
   `_review`. Apply extracts first and rotates only its private output copy.
+- In ordered Process Scans batches, only a strict canonical RFI identity with
+  confidence `>= 0.8` starts a group. After a confirmed cover, uncertain,
+  low-confidence, non-matching, and unreadable page OCR stays with that RFI
+  until the next confirmed cover. Pages before the first cover and duplicate
+  starts remain in Review. Preserve the independent whole-PDF orientation
+  uncertainty policy.
 - Follow Up Sync must not compare `Signed By Worley` formula summaries with RFI
   lifecycle states. The summary cells derive Worley state from the separate
   exact-remark control table; compare lifecycle only on non-Signed layouts and

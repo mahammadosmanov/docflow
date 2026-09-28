@@ -3,6 +3,14 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.11.9 - 2026-09-28
+
+### Fixed
+
+- Process Scans keeps uncertain and unreadable continuation pages with the
+  current RFI. Only a strict, canonical, high-confidence RFI cover starts the
+  next group; leading pages and duplicate RFI starts remain in `_review`.
+
 ## 1.11.8 - 2026-09-28
 
 ### Fixed

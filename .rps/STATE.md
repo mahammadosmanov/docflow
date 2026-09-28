@@ -2,6 +2,27 @@
 
 Updated: 2026-09-28
 
+## Confirmed-cover Process Scans grouping (1.11.9 fix)
+
+- Objective: keep combined-scan continuation pages with their current RFI until
+  the next confirmed cover.
+- Fix: only a strict, canonical RFI identity with confidence `>= 0.8` starts a
+  group. Uncertain, low-confidence, non-matching, and unreadable pages stay in
+  the active group. Pages before the first cover and duplicate starts remain
+  Review.
+- Regression: 23 continuation pages between covers stay in the first RFI;
+  the confirmed cover on page 24 starts the next group. Coverage includes
+  ambiguous, low-confidence, repaired, and unreadable continuation evidence,
+  plus leading-page Review.
+- Local evidence: Process Scans 28 passed/1 ignored; full Rust suite 620
+  passed/7 operator-data tests ignored; 23 Node and 55 frontend tests pass;
+  frontend build, Rust 1.97.1 fmt/Clippy/check, version/docs/source/license
+  audits pass. No operator PDF was used.
+- Version: 1.11.9 (`fix`). Commit, push, CI, tag, and Windows release remain
+  pending. Native Windows OCR/package acceptance remains separate.
+- Next: review final diff, commit and push to the canonical branch, then wait
+  for hosted CI before publishing the immutable tag and Release.
+
 ## Failed Follow Up Apply Undo (1.11.8 fix)
 
 - Objective: repair Apply recovery when the original Follow Up workbook has

@@ -1,6 +1,6 @@
 # ADR-0025: Ordered batch RFI scan separation
 
-- Status: Accepted
+- Status: Superseded by [ADR-0034](0034-confirmed-cover-batch-scan-grouping.md)
 - Date: 2026-09-25
 
 ## Context
@@ -74,3 +74,7 @@ trash. Rollback is a source release rollback; no document migration is needed.
 - `src-tauri/src/contracts.rs`, `pdf.rs`, `operations/process_scans.rs`,
   `fs_ops.rs`, and `native.rs`: page-only extraction, plan pinning, and
   recoverable mutation.
+
+This decision is retained as history. ADR-0034 replaces its uncertain-page
+boundary rule while preserving page-only extraction, duplicate handling,
+orientation handling, and the existing recovery contract.

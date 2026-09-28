@@ -37,6 +37,16 @@ identity or secrets.
   revalidates the source hash; the source is never rotated in place.
 - Operators may disable correction through the Process Scans parameter form.
 
+### Process Scans batch grouping
+
+- In a multi-page PDF, one strict, canonical, high-confidence RFI identity is
+  the only marker that starts a new RFI group.
+- Every page after a confirmed cover belongs to that RFI until another
+  confirmed cover appears. Continuation-page RFI-identity OCR may be uncertain,
+  non-matching, or unreadable; those pages stay in the current group.
+- Pages before the first confirmed cover and duplicate RFI starts remain in
+  `_review`.
+
 ### Incoming file grouping
 
 - `rfi.group_files` inspects only regular, non-hidden files immediately inside
