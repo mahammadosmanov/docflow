@@ -39,6 +39,10 @@ Updated: 2026-09-28
   tests pass; frontend build and version/docs/source/license audits pass.
   Vite reports a non-failing 641.22 kB JavaScript chunk warning.
 - Windows CI/package release and native Windows OCR acceptance remain pending.
+- Two PR Rust CI attempts failed while linking `tauri-macros` (`ld` signal 7 /
+  Bus error). The second run reached the Rust doc-tests before failing in the
+  following check step. CI now clears its disposable Cargo target between test
+  and check to avoid retaining the large test artifacts; rerun is pending.
 
 ## Confirmed-cover Process Scans grouping (1.11.9 fix)
 
