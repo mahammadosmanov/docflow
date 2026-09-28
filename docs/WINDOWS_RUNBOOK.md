@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, twelve-operation registry, OCR,
+Confirm install, normal GUI launch, version, thirteen-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.

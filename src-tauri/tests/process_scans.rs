@@ -3,7 +3,8 @@ use docflow_lib::ocr::NativeOcr;
 #[cfg(target_os = "macos")]
 use docflow_lib::ocr::{image_pdf_from_png, render_first_page_png};
 use docflow_lib::operations::process_scans::{
-    OcrAdapter, OcrFailure, OcrRead, ProcessScansParams, preview,
+    FAST_COVER_OPERATION_ID, OcrAdapter, OcrFailure, OcrRead, ProcessScansParams, preview,
+    preview_fast_covers,
 };
 use docflow_lib::rfi_code::{RfiMethod, canonical, canonical_and_find, find};
 use docflow_lib::{
@@ -180,6 +181,11 @@ fn native_pdf_adapter_never_trusts_searchable_text_without_visible_page_ocr() {
         .expect_err("searchable text alone must not authorize an RFI label");
 
     assert_eq!(error, OcrFailure::EngineMissing);
+    assert_eq!(
+        adapter.read_cover_page(&pdf, 0),
+        Err(OcrFailure::EngineMissing),
+        "fast cover mode must require visible-page OCR too"
+    );
 }
 
 #[cfg(target_os = "macos")]
@@ -396,6 +402,53 @@ impl OcrAdapter for PageFixtureOcr {
 
     fn diagnostics(&self) -> String {
         "page fixture OCR".to_string()
+    }
+}
+
+struct FastCoverFixtureOcr(Vec<&'static str>);
+
+impl OcrAdapter for FastCoverFixtureOcr {
+    fn read(&self, path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, _path: &std::path::Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let text = self
+            .0
+            .get(page_index)
+            .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
+        Ok(OcrRead {
+            matched: find(text),
+            source: "full-page-fixture".to_string(),
+        })
+    }
+
+    fn read_cover_page(
+        &self,
+        _path: &std::path::Path,
+        page_index: usize,
+    ) -> Result<OcrRead, OcrFailure> {
+        let text = self
+            .0
+            .get(page_index)
+            .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
+        let source = match *text {
+            "[continuation]" => "ocr:fast-cover:no-cover-signal",
+            "[uncertain-cover]" => "ocr:fast-cover:uncertain:fixture",
+            _ => "ocr:fast-cover:confirmed:fixture",
+        };
+        Ok(OcrRead {
+            matched: find(text),
+            source: source.to_string(),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "fast-cover fixture OCR".to_string()
     }
 }
 
@@ -706,6 +759,231 @@ fn pages_before_the_first_confirmed_cover_remain_in_review() {
         .unwrap();
     assert!(!cover.dst.as_deref().unwrap().contains("_review"));
     assert!(leading_review.dst.as_deref().unwrap().contains("_review"));
+}
+
+#[test]
+fn fast_cover_operation_keeps_continuations_and_reviews_uncertain_cover_boundaries() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    let trash = fixture.path().join("app-data/trash");
+    let journal = fixture.path().join("journal");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::create_dir_all(&trash).unwrap();
+    let combined = source.join("stack.pdf");
+    write_multi_page_pdf(&combined, 5);
+
+    let normal_plan = preview(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: false,
+            correct_orientation: false,
+            trash_root: Some(trash.clone()),
+        },
+        &FastCoverFixtureOcr(vec![
+            "AZE-SUN-INT-QMS-RFI-CIV-0064",
+            "[continuation]",
+            "[uncertain-cover]",
+            "AZE-SUN-INT-QMS-RFI-MEC-0765",
+            "[continuation]",
+        ]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(normal_plan.op_id, "rfi.process_scans");
+    let normal_groups = normal_plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    assert_eq!(normal_groups.len(), 2);
+    assert!(
+        normal_groups
+            .iter()
+            .all(|step| { !step.dst.as_deref().unwrap_or_default().contains("_review") })
+    );
+    assert!(
+        normal_groups
+            .iter()
+            .any(|step| step.meta["pageIndexes"] == json!([0, 1, 2]))
+    );
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: false,
+            correct_orientation: false,
+            trash_root: Some(trash.clone()),
+        },
+        &FastCoverFixtureOcr(vec![
+            "AZE-SUN-INT-QMS-RFI-CIV-0064",
+            "[continuation]",
+            "[uncertain-cover]",
+            "AZE-SUN-INT-QMS-RFI-MEC-0765",
+            "[continuation]",
+        ]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert_eq!(plan.op_id, FAST_COVER_OPERATION_ID);
+    assert!(combined.is_file(), "Preview must not move the input");
+    let extracted = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    let civil = extracted
+        .iter()
+        .find(|step| step.meta["pageIndexes"] == json!([0, 1]))
+        .expect("continuation stays with first confirmed cover");
+    let uncertain = extracted
+        .iter()
+        .find(|step| step.meta["pageIndexes"] == json!([2]))
+        .expect("uncertain possible cover starts a Review group");
+    let mechanical = extracted
+        .iter()
+        .find(|step| step.meta["pageIndexes"] == json!([3, 4]))
+        .expect("next confirmed cover starts next RFI group");
+    assert!(!civil.dst.as_deref().unwrap().contains("_review"));
+    assert!(uncertain.dst.as_deref().unwrap().contains("_review"));
+    assert!(!mechanical.dst.as_deref().unwrap().contains("_review"));
+    let civil_output = std::path::PathBuf::from(civil.dst.as_deref().unwrap());
+    let review_output = std::path::PathBuf::from(uncertain.dst.as_deref().unwrap());
+    let mechanical_output = std::path::PathBuf::from(mechanical.dst.as_deref().unwrap());
+
+    let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
+    let scope = GrantScope::new(
+        "owner-1",
+        "session-1",
+        "fast-cover",
+        FAST_COVER_OPERATION_ID,
+    );
+    let source_grant = authority
+        .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+        .unwrap();
+    let destination_grant = authority
+        .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let trash_grant = authority
+        .issue_grant(&scope, &trash, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner-1",
+                "session-1",
+                FAST_COVER_OPERATION_ID,
+                vec![
+                    source_grant.grant_id,
+                    destination_grant.grant_id,
+                    trash_grant.grant_id,
+                ],
+            ),
+            plan,
+        )
+        .unwrap();
+    let caller = CallerIdentity::new("owner-1", "session-1");
+    let applied = authority.apply(&cached.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    assert!(!combined.exists());
+    assert_eq!(std::fs::read_dir(&trash).unwrap().count(), 1);
+    assert!(civil_output.is_file());
+    assert!(review_output.is_file());
+    assert!(mechanical_output.is_file());
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert!(combined.is_file());
+    assert!(std::fs::read_dir(&trash).unwrap().next().is_none());
+    assert!(std::fs::read_dir(&destination).unwrap().next().is_none());
+}
+
+#[test]
+#[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to run an end-to-end real-scan Preview"]
+fn fast_cover_preview_groups_the_supplied_real_scan() {
+    let source_pdf = std::path::PathBuf::from(
+        std::env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
+    );
+    let tesseract = std::path::PathBuf::from(
+        std::env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+            .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+    );
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let input = source.join(
+        source_pdf
+            .file_name()
+            .expect("supplied PDF should have a filename"),
+    );
+    std::fs::copy(&source_pdf, &input).expect("copy sample into disposable test workspace");
+
+    let started = std::time::Instant::now();
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &NativeOcr::with_tesseract(tesseract),
+        |_| {},
+        || false,
+    )
+    .expect("real sample Preview should build");
+    let elapsed = started.elapsed();
+    let page_count = docflow_lib::pdf::inspect(&input)
+        .expect("sample should remain intact")
+        .page_count;
+    let extracted = plan
+        .steps
+        .iter()
+        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    eprintln!(
+        "real_scan_preview elapsed_ms={} pages={} groups={} workers={}",
+        elapsed.as_millis(),
+        page_count,
+        extracted.len(),
+        plan.meta
+            .get("workerCount")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0)
+    );
+    assert_eq!(plan.op_id, FAST_COVER_OPERATION_ID);
+    assert_eq!(
+        extracted.len(),
+        1,
+        "sample contains one confirmed RFI cover"
+    );
+    assert_eq!(
+        extracted[0].meta["pageIndexes"],
+        serde_json::json!((0..page_count).collect::<Vec<_>>())
+    );
+    assert!(
+        !extracted[0]
+            .dst
+            .as_deref()
+            .unwrap_or_default()
+            .contains("_review")
+    );
+    assert!(
+        input.is_file(),
+        "Preview must leave the source PDF untouched"
+    );
 }
 
 fn has_path_component(path: &str, expected: &str) -> bool {

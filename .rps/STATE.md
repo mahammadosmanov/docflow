@@ -2,6 +2,44 @@
 
 Updated: 2026-09-28
 
+## Fast Cover Scans (1.12.0 candidate)
+
+- Separate operation: `rfi.process_scans_fast_covers`; normal `rfi.process_scans`
+  keeps its existing detector and defaults. Both share the existing immutable
+  Preview, exact cached Plan, grants, journal, Apply, and Undo.
+- For multi-page PDFs, the production detector renders at 150 DPI and OCRs the
+  upper 34% band in four right-angle directions. It confirms only one strict
+  RFI identity plus `REQUEST FOR INSPECTION` and a known `SUNRISE PROJECT`,
+  `INTEC`, or `LIGHTSOURCEBP` mark. Searchable text alone never confirms a
+  cover. PSM 6/12 retries and one 300-DPI rescue are bounded to promising pages;
+  unresolved heading evidence begins a Review group. Pages without cover cues
+  stay attached to the current confirmed RFI. Single-page PDFs use normal OCR.
+- Fast Cover Scans defaults page orientation correction off, avoiding the
+  separate full-page OSD/OCR pass; users can enable correction for output pages.
+  Normal Process Scans retains its existing orientation default.
+- Corpus check: 13 RFI PDFs (CIV/MEC/PRC/ELE), 95 original pages, plus 39
+  temporary PDF display-rotation variants. All 13/13 first-page covers were
+  detected, with zero false continuation covers and zero continuation pages
+  sent to Review. All 39/39 rotated cover variants were detected. This checks
+  PDF display rotation; physically rotated raster pixels and other templates
+  were not separately measured.
+- OCR-stage comparison on the supplied 4-page scan: standard per-page OCR took
+  184,082 ms; the fast detector took 3,447 ms (about 53x on this sample),
+  excluding orientation correction and full application overhead. The corpus
+  regression ran in 251.28 seconds sequentially; production page analysis uses
+  bounded parallel workers.
+- A five-page synthetic integration test verifies continuation grouping,
+  uncertain-cover Review boundaries, and that normal Process Scans uses its
+  original behavior. Its filesystem Apply/Undo path is journaled and restored
+  in the test workspace. A production-operation Preview of the supplied CIV-1063
+  PDF produced one group containing all four pages in 4,279 ms with 4 workers;
+  the source was copied to a disposable test workspace and remained unchanged.
+- Local 1.12.0 checks: Rust 1.97.1 format, warnings-denied Clippy, Cargo check,
+  and the full Rust suite pass (622 passed, 11 ignored); 23 Node and 55 React
+  tests pass; frontend build and version/docs/source/license audits pass.
+  Vite reports a non-failing 641.22 kB JavaScript chunk warning.
+- Windows CI/package release and native Windows OCR acceptance remain pending.
+
 ## Confirmed-cover Process Scans grouping (1.11.9 fix)
 
 - Objective: keep combined-scan continuation pages with their current RFI until

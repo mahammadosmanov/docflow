@@ -4,6 +4,26 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.12.0 - 2026-09-28
+
+Fast Cover Scans adds a separate opt-in operation for multi-page RFI PDFs. On a
+13-PDF CIV/MEC/PRC/ELE corpus (95 original pages), it detected all 13 first-page
+covers with no continuation false covers or continuation pages routed to Review.
+It detected 39/39 temporary PDF display-rotation variants. A read-only preview
+of the supplied 4-page CIV-1063 sample produced one group in 4,279 ms with four
+workers. The source sample was copied into a disposable test directory and was
+not modified. A synthetic Preview/Apply/Undo regression verifies the exact
+operation-bound journal flow and confirms normal Process Scans still uses its
+existing behavior.
+
+Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, and the full Rust
+suite pass (622 passed, 11 ignored); 23 Node tooling tests and 55 React tests
+pass. The frontend build and version, documentation, source, and dependency
+license audits pass. The frontend build reports a non-failing 641.22 kB
+JavaScript chunk warning. These checks do not certify physically
+rotated raster scans, unsupported cover templates, or Windows OCR behavior;
+the Windows package/CI release gate is pending.
+
 ## 1.11.8 - 2026-09-28
 
 Failed Follow Up Apply can now be explicitly undone when the journal proves the

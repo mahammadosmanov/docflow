@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value, json};
 
 use crate::contracts::{OperationDef, ParamDef, ParamKind, ParamSchema};
+use crate::operations::process_scans::FAST_COVER_OPERATION_ID;
 
 const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
@@ -760,6 +761,21 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let mut fast_cover_schema = process_scans.schema.clone();
+    fast_cover_schema
+        .params
+        .iter_mut()
+        .find(|parameter| parameter.name == "correct_orientation")
+        .expect("Process Scans schema contains correct_orientation")
+        .default = json!(false);
+    let fast_cover_scans = OperationDef {
+        id: FAST_COVER_OPERATION_ID.to_string(),
+        title_key: format!("op.{FAST_COVER_OPERATION_ID}.title"),
+        description_key: format!("op.{FAST_COVER_OPERATION_ID}.desc"),
+        schema: fast_cover_schema,
+        supports_presets: false,
+    };
+
     vec![
         process_scans,
         file_group,
@@ -773,6 +789,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         rfi_system_sync,
         rfi_complete_status_sync,
         replica_publish,
+        fast_cover_scans,
     ]
 }
 
@@ -801,7 +818,41 @@ mod tests {
                 "rfi.system_sync",
                 "rfi.complete_status_sync",
                 "files.replica_publish",
+                "rfi.process_scans_fast_covers",
             ]
+        );
+        assert_eq!(operations.len(), 13);
+        let normal_orientation_default = operations[0]
+            .schema
+            .params
+            .iter()
+            .find(|parameter| parameter.name == "correct_orientation")
+            .expect("normal Process Scans has orientation correction")
+            .default
+            .as_bool();
+        let fast_orientation_default = operations[12]
+            .schema
+            .params
+            .iter()
+            .find(|parameter| parameter.name == "correct_orientation")
+            .expect("Fast Cover Scans has orientation correction")
+            .default
+            .as_bool();
+        assert_eq!(normal_orientation_default, Some(true));
+        assert_eq!(fast_orientation_default, Some(false));
+        assert_eq!(
+            operations[12]
+                .schema
+                .params
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect::<Vec<_>>(),
+            operations[0]
+                .schema
+                .params
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect::<Vec<_>>()
         );
         let follow_up = &operations[3];
         assert_eq!(

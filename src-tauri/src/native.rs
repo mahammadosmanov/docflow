@@ -29,7 +29,10 @@ use crate::{
     operations::pdf_orientation::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
-    operations::process_scans::{ProcessScansParams, preview as preview_process_scans},
+    operations::process_scans::{
+        FAST_COVER_OPERATION_ID, ProcessScansParams, preview as preview_process_scans,
+        preview_fast_covers,
+    },
     operations::replica_publish::{self, ReplicaPublishParams},
     operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
     operations::stage_signed_pages::{
@@ -899,7 +902,7 @@ impl NativeBackend {
     {
         let request: PreviewEnvelope<ProcessScansValues> =
             decode(self.materialize_preview(params)?)?;
-        if request.op_id != "rfi.process_scans" {
+        if request.op_id != "rfi.process_scans" && request.op_id != FAST_COVER_OPERATION_ID {
             return Err(BackendError::validation(
                 "operation is not owned by the Rust Process Scans backend",
             ));
@@ -927,20 +930,20 @@ impl NativeBackend {
                 GrantAccess::ReadWrite,
             )?)
         };
-        let plan = preview_process_scans(
-            &ProcessScansParams {
-                source: request.values.source,
-                destination: request.values.dest,
-                organize_into_rfi_folders: request.values.organize_into_rfi_folders,
-                keep_original: request.values.keep_original,
-                correct_orientation: request.values.correct_orientation,
-                trash_root: (!request.values.keep_original)
-                    .then(|| self.app_data_dir.join("trash")),
-            },
-            &NativeOcr::discover(),
-            &mut progress,
-            || false,
-        )?;
+        let scan_params = ProcessScansParams {
+            source: request.values.source,
+            destination: request.values.dest,
+            organize_into_rfi_folders: request.values.organize_into_rfi_folders,
+            keep_original: request.values.keep_original,
+            correct_orientation: request.values.correct_orientation,
+            trash_root: (!request.values.keep_original).then(|| self.app_data_dir.join("trash")),
+        };
+        let ocr = NativeOcr::discover();
+        let plan = if request.op_id == FAST_COVER_OPERATION_ID {
+            preview_fast_covers(&scan_params, &ocr, &mut progress, || false)?
+        } else {
+            preview_process_scans(&scan_params, &ocr, &mut progress, || false)?
+        };
         encode(
             self.filesystem.cache_plan(
                 BackendOrigin::Rust,

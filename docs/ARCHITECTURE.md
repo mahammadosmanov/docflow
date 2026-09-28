@@ -124,6 +124,12 @@ source hash and exact target rotation into its immutable Plan. Apply extracts
 selected pages and rotates the private output before no-clobber publication;
 uncertain input PDFs go unchanged to `_review`.
 
+Fast Cover Scans is a separate registry operation over the same Process Scans
+Plan and journal path. Only its multi-page OCR strategy changes: it checks the
+cover band in four directions, selectively retries likely covers, and keeps the
+normal operation on its current OCR implementation. Both operation IDs are
+bound to their own path grants and cached Plans.
+
 Every registered operation emits localized progress phases through the existing
 Tauri channel. Long batch phases include bounded completed/total counters and a
 current file, folder, page, workbook, printer, or record subject when available.

@@ -146,6 +146,13 @@ const demoOperation: OperationDef = {
   ],
 };
 
+const demoFastCoverOperation: OperationDef = {
+  ...demoOperation,
+  id: "rfi.process_scans_fast_covers",
+  titleKey: "op.rfi.process_scans_fast_covers.title",
+  descriptionKey: "op.rfi.process_scans_fast_covers.desc",
+};
+
 const demoFileGroupOperation: OperationDef = {
   id: "rfi.group_files",
   titleKey: "op.rfi.group_files.title",
@@ -799,6 +806,7 @@ export class MockBridge implements Bridge {
           prefs: this.prefs,
           operations: [
             demoOperation,
+            demoFastCoverOperation,
             demoFileGroupOperation,
             demoRfiOperation,
             demoOutlookReplyOperation,

@@ -90,6 +90,221 @@ impl NativeOcr {
     }
 }
 
+const FAST_COVER_DPI: i32 = 150;
+const FAST_COVER_RESCUE_DPI: i32 = 300;
+const FAST_COVER_TOP_PERCENT: usize = 34;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CoverSignals {
+    request_heading: bool,
+    template_mark: bool,
+    strict_identity: bool,
+    identity_hint: bool,
+}
+
+fn cover_signals(text: &str) -> CoverSignals {
+    let normalized = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    let request_heading = normalized.contains("REQUEST FOR INSPECTION");
+    let template_mark = [
+        "SUNRISE PROJECT",
+        "INTEC",
+        "LIGHTSOURCEBP",
+        "LIGHTSOURCE BP",
+    ]
+    .iter()
+    .any(|mark| normalized.contains(mark));
+    let codes = exact_codes(&normalized);
+    let matched = find(&normalized);
+    let strict_identity =
+        codes.len() == 1 && matched.method == RfiMethod::Strict && matched.confidence >= 0.8;
+    let identity_hint = !codes.is_empty() || matched.ok();
+    CoverSignals {
+        request_heading,
+        template_mark,
+        strict_identity,
+        identity_hint,
+    }
+}
+
+fn confirmed_cover_read(text: &str, source: &str) -> Option<OcrRead> {
+    let signals = cover_signals(text);
+    if !(signals.request_heading && signals.template_mark && signals.strict_identity) {
+        return None;
+    }
+    let matched = find(text);
+    Some(OcrRead {
+        matched,
+        source: format!("ocr:fast-cover:confirmed:{source}"),
+    })
+}
+
+fn uncertain_cover_read(source: String) -> OcrRead {
+    OcrRead {
+        matched: find(""),
+        source: format!("ocr:fast-cover:uncertain:{source}"),
+    }
+}
+
+fn no_cover_signal_read() -> OcrRead {
+    OcrRead {
+        matched: find(""),
+        source: "ocr:fast-cover:no-cover-signal".to_string(),
+    }
+}
+
+fn cover_top_band(image: &GrayImage) -> Result<GrayImage, String> {
+    let height = image.height.saturating_mul(FAST_COVER_TOP_PERCENT) / 100;
+    let height = height.max(1).min(image.height);
+    let pixel_count = image
+        .width
+        .checked_mul(height)
+        .ok_or_else(|| "cover band is too large".to_string())?;
+    let pixels = image
+        .pixels
+        .get(..pixel_count)
+        .ok_or_else(|| "cover band pixels are incomplete".to_string())?;
+    Ok(GrayImage {
+        width: image.width,
+        height,
+        pixels: pixels.to_vec(),
+    })
+}
+
+fn read_cover_band_text(
+    ocr: &NativeOcr,
+    image: &GrayImage,
+    page_index: usize,
+    direction: i64,
+    attempt: usize,
+    temporary: &Path,
+) -> Result<String, OcrFailure> {
+    let band = cover_top_band(image).map_err(OcrFailure::Document)?;
+    let image_path = temporary.join(format!("cover-{page_index}-{direction}.pgm"));
+    write_pgm(&image_path, &band).map_err(OcrFailure::Document)?;
+    run_tesseract_for_cover(
+        ocr.tesseract
+            .as_deref()
+            .expect("cover OCR engine is validated"),
+        &image_path,
+        temporary,
+        ocr.tessdata.as_deref(),
+        11,
+        attempt,
+    )
+}
+
+fn read_fast_cover_page(
+    ocr: &NativeOcr,
+    source: &Path,
+    page_index: usize,
+) -> Result<OcrRead, OcrFailure> {
+    #[cfg(windows)]
+    if ocr.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
+        return Err(OcrFailure::EngineMissing);
+    }
+    let pdf = PdfOcrSession::open(source)?;
+    let text_layer = pdf.page_text(source, page_index)?;
+    // Searchable text is only a hint. A cover still needs visible-page OCR evidence.
+    let mut possible_cover = cover_signals(&text_layer).request_heading;
+    if ocr.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
+        return Err(OcrFailure::EngineMissing);
+    }
+
+    let temporary = tempfile::tempdir()
+        .map_err(|error| OcrFailure::Document(format!("cover OCR temp directory: {error}")))?;
+    let rendered = temporary.path().join(format!("cover-{page_index}-150.png"));
+    pdf.render_page_png(source, &rendered, FAST_COVER_DPI, page_index)
+        .map_err(OcrFailure::Document)?;
+    let image = read_png_gray(&rendered).map_err(OcrFailure::Document)?;
+    let mut rescue_used = false;
+    let mut attempt = 0;
+
+    for direction in [0_i64, 90, 180, 270] {
+        let oriented = rotate_gray_clockwise(&image, direction).map_err(OcrFailure::Document)?;
+        let mut text = read_cover_band_text(
+            ocr,
+            &oriented,
+            page_index,
+            direction,
+            attempt,
+            temporary.path(),
+        )?;
+        attempt += 1;
+        if let Some(read) = confirmed_cover_read(&text, "150dpi") {
+            return Ok(read);
+        }
+        let mut signals = cover_signals(&text);
+        possible_cover |= signals.request_heading;
+        let promising = u8::from(signals.request_heading)
+            + u8::from(signals.template_mark)
+            + u8::from(signals.identity_hint)
+            >= 2;
+        if promising {
+            for psm in [6_u8, 12] {
+                let band = temporary
+                    .path()
+                    .join(format!("cover-{page_index}-{direction}.pgm"));
+                let retry = run_tesseract_for_cover(
+                    ocr.tesseract
+                        .as_deref()
+                        .expect("cover OCR engine is validated"),
+                    &band,
+                    temporary.path(),
+                    ocr.tessdata.as_deref(),
+                    psm,
+                    attempt,
+                )?;
+                attempt += 1;
+                text.push('\n');
+                text.push_str(&retry);
+                if let Some(read) = confirmed_cover_read(&text, "150dpi-retry") {
+                    return Ok(read);
+                }
+                signals = cover_signals(&text);
+                possible_cover |= signals.request_heading;
+            }
+        }
+
+        if !rescue_used && signals.request_heading && signals.template_mark {
+            rescue_used = true;
+            let rescue = temporary.path().join(format!("cover-{page_index}-300.png"));
+            pdf.render_page_png(source, &rescue, FAST_COVER_RESCUE_DPI, page_index)
+                .map_err(OcrFailure::Document)?;
+            let high_resolution = read_png_gray(&rescue).map_err(OcrFailure::Document)?;
+            let oriented =
+                rotate_gray_clockwise(&high_resolution, direction).map_err(OcrFailure::Document)?;
+            let rescue_text = read_cover_band_text(
+                ocr,
+                &oriented,
+                page_index,
+                direction + 360,
+                attempt,
+                temporary.path(),
+            )?;
+            attempt += 1;
+            if let Some(read) = confirmed_cover_read(&rescue_text, "300dpi-rescue") {
+                return Ok(read);
+            }
+            let rescue_signals = cover_signals(&rescue_text);
+            if rescue_signals.request_heading && rescue_signals.template_mark {
+                return Ok(uncertain_cover_read("300dpi-rescue".to_string()));
+            }
+        }
+    }
+
+    if possible_cover {
+        Ok(uncertain_cover_read(
+            "partial-visible-cover-cues".to_string(),
+        ))
+    } else {
+        Ok(no_cover_signal_read())
+    }
+}
+
 /// Keeps one platform PDF decoder open across all OCR resolutions for a page.
 /// Reopening the same multi-page source for every render was repeated work in
 /// the stacked-scan path.
@@ -373,6 +588,10 @@ impl OcrAdapter for NativeOcr {
                 },
             },
         )
+    }
+
+    fn read_cover_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        read_fast_cover_page(self, path, page_index)
     }
 
     fn diagnostics(&self) -> String {
@@ -1389,6 +1608,37 @@ fn run_tesseract(
     psm: u8,
     attempt: usize,
 ) -> Result<String, OcrFailure> {
+    run_tesseract_with_whitelist(
+        executable,
+        image,
+        temporary,
+        tessdata,
+        psm,
+        attempt,
+        Some("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:."),
+    )
+}
+
+fn run_tesseract_for_cover(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: Option<&Path>,
+    psm: u8,
+    attempt: usize,
+) -> Result<String, OcrFailure> {
+    run_tesseract_with_whitelist(executable, image, temporary, tessdata, psm, attempt, None)
+}
+
+fn run_tesseract_with_whitelist(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: Option<&Path>,
+    psm: u8,
+    attempt: usize,
+    character_whitelist: Option<&str>,
+) -> Result<String, OcrFailure> {
     const MAX_OUTPUT_BYTES: u64 = 1024 * 1024;
     let output_path = temporary.join(format!("tesseract-{attempt}-{psm}.txt"));
     let output = fs::File::create(&output_path)
@@ -1404,11 +1654,14 @@ fn run_tesseract(
         .arg(psm.to_string())
         .arg("-l")
         .arg("eng")
-        .arg("-c")
-        .arg("tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:.")
         .stdin(Stdio::null())
         .stdout(Stdio::from(output))
         .stderr(Stdio::null());
+    if let Some(whitelist) = character_whitelist {
+        command
+            .arg("-c")
+            .arg(format!("tessedit_char_whitelist={whitelist}"));
+    }
     if let Some(tessdata) = tessdata {
         command.env("TESSDATA_PREFIX", tessdata);
     }
@@ -2097,5 +2350,267 @@ mod tests {
     #[test]
     fn tesseract_launch_suppresses_the_windows_console() {
         assert_eq!(tesseract_windows_creation_flags(), 0x0800_0000);
+    }
+}
+
+/// Regression lab for the production fast-cover detector.
+#[cfg(test)]
+mod cover_detection_tests {
+    use super::*;
+    use std::{env, path::PathBuf, time::Instant};
+
+    fn is_confirmed_cover(read: &OcrRead) -> bool {
+        read.source.starts_with("ocr:fast-cover:confirmed:")
+            || read.source.starts_with("ocr:fast-cover:fallback:")
+    }
+
+    #[test]
+    fn fast_cover_requires_heading_template_mark_and_one_strict_identity() {
+        let exact =
+            "SUNRISE PROJECT\nREQUEST FOR INSPECTION (RFI)\nRFI No: AZE-SUN-INT-QMS-RFI-CIV-1348";
+        assert!(confirmed_cover_read(exact, "test").is_some());
+        assert!(
+            confirmed_cover_read(
+                "INTEC ENERGY SOLUTIONS\nREQUEST FOR INSPECTION\nAZE-SUN-INT-QMS-RFI-CIV-1348",
+                "test"
+            )
+            .is_some()
+        );
+        assert!(confirmed_cover_read(
+            "REQUEST FOR INSPECTION\nSUNRISE PROJECT\nAZE-SUN-INT-QMS-RFI-CIV-1348 AZE-SUN-INT-QMS-RFI-CIV-1349",
+            "test"
+        )
+        .is_none());
+        assert!(
+            confirmed_cover_read("AZE-SUN-INT-QMS-ITP-CIV-0006 inspection stage", "test").is_none()
+        );
+        assert!(confirmed_cover_read("REQUEST FOR INSPECTION only", "test").is_none());
+        assert!(
+            confirmed_cover_read(
+                "SUNRISE SOLAR PROJECT INTEC ENERGY SOLUTIONS AZE-SUN-INT-QMS-RFI-CIV-0001",
+                "test"
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    #[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to check a supplied cover page"]
+    fn production_fast_cover_detects_the_supplied_first_page() {
+        let source = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
+        );
+        let tesseract = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+                .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+        );
+        let ocr = NativeOcr::with_tesseract(tesseract);
+        let started = Instant::now();
+        let read = read_fast_cover_page(&ocr, &source, 0)
+            .expect("fast detector should process the supplied cover");
+        eprintln!(
+            "supplied_cover elapsed_ms={} confirmed={} source={}",
+            started.elapsed().as_millis(),
+            is_confirmed_cover(&read),
+            read.source
+        );
+        assert!(
+            is_confirmed_cover(&read),
+            "first page must be confirmed cover"
+        );
+    }
+
+    #[test]
+    #[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to benchmark a supplied scan"]
+    fn benchmark_fast_cover_scan_against_current_page_ocr() {
+        let source = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
+        );
+        let tesseract = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+                .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+        );
+        assert!(tesseract.is_file(), "Tesseract executable is unavailable");
+        let ocr = NativeOcr::with_tesseract(tesseract);
+        let page_count = crate::pdf::inspect(&source)
+            .expect("sample PDF should be inspectable")
+            .page_count;
+        let current_started = Instant::now();
+        let mut current_covers = 0;
+        for page_index in 0..page_count {
+            let started = Instant::now();
+            let read = ocr
+                .read_page(&source, page_index)
+                .expect("current OCR should process the sample page");
+            current_covers += usize::from(
+                read.matched.method == RfiMethod::Strict && read.matched.confidence >= 0.8,
+            );
+            eprintln!(
+                "current page={} elapsed_ms={} exact_identity={}",
+                page_index + 1,
+                started.elapsed().as_millis(),
+                read.matched.method == RfiMethod::Strict && read.matched.confidence >= 0.8
+            );
+        }
+        let current_elapsed = current_started.elapsed();
+
+        let fast_started = Instant::now();
+        let mut fast_covers = 0;
+        for page_index in 0..page_count {
+            let started = Instant::now();
+            let read = read_fast_cover_page(&ocr, &source, page_index)
+                .expect("fast OCR should process the sample page");
+            let confirmed = is_confirmed_cover(&read);
+            fast_covers += usize::from(confirmed);
+            eprintln!(
+                "fast page={} elapsed_ms={} confirmed={confirmed} source={}",
+                page_index + 1,
+                started.elapsed().as_millis(),
+                read.source
+            );
+        }
+        let fast_elapsed = fast_started.elapsed();
+        eprintln!(
+            "pages={page_count} current_ms={} current_exact_pages={current_covers} fast_ms={} fast_cover_candidates={fast_covers}",
+            current_elapsed.as_millis(),
+            fast_elapsed.as_millis()
+        );
+        assert!(
+            page_count > 0,
+            "sample PDF should contain at least one page"
+        );
+        assert_eq!(fast_covers, 1, "sample must have one cover");
+        assert_eq!(current_covers, 1, "current OCR must recognize its cover");
+    }
+
+    #[test]
+    #[ignore = "set DOCFLOW_COVER_LAB_MANIFEST and DOCFLOW_COVER_LAB_TESSERACT to test a local PDF corpus"]
+    fn benchmark_production_fast_cover_scan_corpus_and_rotations() {
+        let manifest = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_MANIFEST")
+                .expect("DOCFLOW_COVER_LAB_MANIFEST is required"),
+        );
+        let tesseract = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+                .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+        );
+        assert!(tesseract.is_file(), "Tesseract executable is unavailable");
+        let sources = fs::read_to_string(&manifest)
+            .expect("cover corpus manifest should be readable")
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        assert!(!sources.is_empty(), "cover corpus should not be empty");
+
+        let ocr = NativeOcr::with_tesseract(tesseract);
+        let temporary = tempfile::tempdir().expect("temporary cover corpus should open");
+        let mut source_hits = 0;
+        let mut continuation_false_covers = 0;
+        let mut continuation_uncertain = 0;
+        let mut rotation_hits = 0;
+        let mut rotation_misses = 0;
+        let mut rotation_variants = 0;
+
+        for (sample_index, source) in sources.iter().enumerate() {
+            assert!(source.is_file(), "cover corpus PDF is unavailable");
+            let facts = crate::pdf::inspect(source).expect("cover corpus PDF should be valid");
+            assert!(facts.page_count > 0, "cover corpus PDF should not be empty");
+            let source_label = source
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("sample.pdf");
+            let source_result = scan_corpus_pages(&ocr, source, 0..facts.page_count);
+            source_hits += usize::from(source_result.0);
+            continuation_false_covers += source_result.1;
+            continuation_uncertain += source_result.2;
+            eprintln!(
+                "corpus file={source_label} pages={} cover={} continuation_false_covers={} continuation_uncertain={}",
+                facts.page_count, source_result.0, source_result.1, source_result.2
+            );
+
+            for angle in [90_i64, 180, 270] {
+                let rotated = temporary
+                    .path()
+                    .join(format!("sample-{sample_index}-{angle}.pdf"));
+                let rotations = facts
+                    .pages
+                    .iter()
+                    .enumerate()
+                    .map(|(page_index, page)| (page_index, (page.rotation + angle).rem_euclid(360)))
+                    .collect::<Vec<_>>();
+                if let Err(error) =
+                    crate::pdf::rotate_pages_incremental(source, &rotated, &rotations)
+                {
+                    eprintln!(
+                        "corpus_rotation=SKIP file={source_label} angle={angle} reason={error}"
+                    );
+                    continue;
+                }
+                rotation_variants += 1;
+                let rotated_facts = crate::pdf::inspect(&rotated)
+                    .expect("rotated test copy should remain inspectable");
+                let cover_pages = [0]
+                    .into_iter()
+                    .chain((facts.page_count >= 20).then_some(facts.page_count - 1))
+                    .collect::<Vec<_>>();
+                let result = scan_corpus_pages(&ocr, &rotated, cover_pages.iter().copied());
+                rotation_hits += usize::from(result.0);
+                rotation_misses += usize::from(!result.0);
+                continuation_false_covers += result.1;
+                continuation_uncertain += result.2;
+                assert_eq!(rotated_facts.page_count, facts.page_count);
+            }
+        }
+
+        eprintln!(
+            "corpus_summary sources={} original_cover_hits={source_hits} continuation_false_covers={continuation_false_covers} continuation_uncertain={continuation_uncertain} rotated_variants={rotation_variants} rotated_cover_hits={rotation_hits} rotated_cover_misses={rotation_misses}",
+            sources.len()
+        );
+        assert_eq!(
+            source_hits,
+            sources.len(),
+            "every source cover must be detected"
+        );
+        assert_eq!(
+            continuation_false_covers, 0,
+            "continuations must not split groups"
+        );
+        assert_eq!(
+            continuation_uncertain, 0,
+            "continuations must not enter Review"
+        );
+        assert_eq!(
+            rotation_hits, rotation_variants,
+            "rotated covers must be detected"
+        );
+        assert_eq!(rotation_misses, 0, "rotated covers must not be missed");
+    }
+
+    fn scan_corpus_pages<I>(ocr: &NativeOcr, source: &Path, pages: I) -> (bool, usize, usize)
+    where
+        I: IntoIterator<Item = usize>,
+    {
+        let mut first_page_cover = false;
+        let mut continuation_false_covers = 0;
+        let mut continuation_uncertain = 0;
+        for page_index in pages {
+            let read = read_fast_cover_page(ocr, source, page_index)
+                .expect("corpus page should render and scan");
+            let confirmed = is_confirmed_cover(&read);
+            if page_index == 0 {
+                first_page_cover = confirmed;
+            } else {
+                continuation_false_covers += usize::from(confirmed);
+                continuation_uncertain +=
+                    usize::from(!confirmed && read.source.starts_with("ocr:fast-cover:uncertain:"));
+            }
+        }
+        (
+            first_page_cover,
+            continuation_false_covers,
+            continuation_uncertain,
+        )
     }
 }

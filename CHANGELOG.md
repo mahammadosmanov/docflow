@@ -3,6 +3,16 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.0 - 2026-09-28
+
+### Added
+
+- Added a separate Fast Cover Scans operation for multi-page RFI PDFs. It checks
+  known cover cues in four directions, keeps continuation pages with the current
+  RFI, and sends unresolved possible covers to `_review`. Normal Process Scans
+  remains unchanged. Page rotation correction defaults off in the fast flow to
+  avoid a second full-page OCR pass.
+
 ## 1.11.9 - 2026-09-28
 
 ### Fixed

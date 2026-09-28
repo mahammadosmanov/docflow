@@ -1,9 +1,11 @@
 # DocFlow
 
-DocFlow 1.11.9 is a Tauri 2 desktop application for twelve high-risk document
+DocFlow 1.12.0 is a Tauri 2 desktop application for thirteen high-risk document
 workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review
+- Fast Cover Scans: separate four-direction cover detection for multi-page RFI
+  PDFs; uncertain cover boundaries start a Review group
 - Group Files by RFI: require matching EML/MSG evidence, then copy each related
   incoming file into exact RFI folders while preserving the source
 - Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe

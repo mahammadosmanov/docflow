@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -18,6 +18,7 @@ use crate::{
 };
 
 const MIN_CONFIDENCE: f64 = 0.8;
+pub const FAST_COVER_OPERATION_ID: &str = "rfi.process_scans_fast_covers";
 const REVIEW_DIR: &str = "_review";
 const MAX_SCAN_PDFS: usize = 10_000;
 const MAX_SCAN_PAGES: usize = 20_000;
@@ -38,6 +39,9 @@ pub struct OcrRead {
 
 pub trait OcrAdapter: Sync {
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure>;
+    fn read_cover_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, page_index)
+    }
     fn supports_page_scan(&self) -> bool {
         false
     }
@@ -165,6 +169,43 @@ impl OcrAdapter for CachedPageOcr {
 pub fn preview<A, P, C>(
     params: &ProcessScansParams,
     ocr: &A,
+    progress: P,
+    cancelled: C,
+) -> Result<Plan, BackendError>
+where
+    A: OcrAdapter,
+    P: FnMut(ProgressEvent),
+    C: FnMut() -> bool,
+{
+    preview_with_cover_mode(params, ocr, "rfi.process_scans", false, progress, cancelled)
+}
+
+pub fn preview_fast_covers<A, P, C>(
+    params: &ProcessScansParams,
+    ocr: &A,
+    progress: P,
+    cancelled: C,
+) -> Result<Plan, BackendError>
+where
+    A: OcrAdapter,
+    P: FnMut(ProgressEvent),
+    C: FnMut() -> bool,
+{
+    preview_with_cover_mode(
+        params,
+        ocr,
+        FAST_COVER_OPERATION_ID,
+        true,
+        progress,
+        cancelled,
+    )
+}
+
+fn preview_with_cover_mode<A, P, C>(
+    params: &ProcessScansParams,
+    ocr: &A,
+    operation_id: &str,
+    fast_cover_mode: bool,
     mut progress: P,
     mut cancelled: C,
 ) -> Result<Plan, BackendError>
@@ -248,6 +289,7 @@ where
             (0, BTreeMap::new())
         };
         let mut tasks = Vec::new();
+        let mut fast_cover_pdfs = BTreeSet::new();
         let mut total_pages = 0_usize;
         for pdf in &pdfs {
             let page_count = inspections
@@ -261,6 +303,9 @@ where
                 )));
             }
             if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
+                if fast_cover_mode && page_count > 1 {
+                    fast_cover_pdfs.insert(pdf.clone());
+                }
                 tasks.extend((0..page_count).map(|page| (pdf.clone(), page)));
             }
         }
@@ -293,7 +338,13 @@ where
         } else {
             bounded_map_stream(
                 &tasks,
-                |(pdf, page)| ocr.read_page(pdf, *page),
+                |(pdf, page)| {
+                    if fast_cover_pdfs.contains(pdf) {
+                        ocr.read_cover_page(pdf, *page)
+                    } else {
+                        ocr.read_page(pdf, *page)
+                    }
+                },
                 |index, _| {
                     completed += 1;
                     let (pdf, page) = &tasks[index];
@@ -318,7 +369,14 @@ where
             diagnostics: ocr.diagnostics(),
             orientations,
         };
-        let mut plan = preview(params, &cached, progress, cancelled)?;
+        let mut plan = preview_with_cover_mode(
+            params,
+            &cached,
+            operation_id,
+            fast_cover_mode,
+            progress,
+            cancelled,
+        )?;
         plan.meta.insert(
             "workerCount".to_string(),
             Value::from(ocr_workers.max(inspection_workers) as u64),
@@ -339,7 +397,7 @@ where
     };
     let requires_existing_rfi_folder =
         params.organize_into_rfi_folders && destination_contains_exact_rfi_folder(&destination);
-    let mut plan = empty_plan();
+    let mut plan = empty_plan(operation_id);
     let mut groups: Vec<(String, Vec<Candidate>)> = Vec::new();
     let mut failures = Vec::<(PathBuf, String)>::new();
     let mut review_pages = Vec::<ReviewPages>::new();
@@ -478,7 +536,12 @@ where
                 if cancelled() {
                     return Err(BackendError::cancelled());
                 }
-                let read = match ocr.read_page(pdf, page_index) {
+                let page_read = if fast_cover_mode {
+                    ocr.read_cover_page(pdf, page_index)
+                } else {
+                    ocr.read_page(pdf, page_index)
+                };
+                let read = match page_read {
                     Ok(read) => read,
                     Err(OcrFailure::EngineMissing) => {
                         return Ok(Plan {
@@ -486,7 +549,7 @@ where
                                 key: "warn.no_ocr".to_string(),
                                 subject: ocr.diagnostics(),
                             }],
-                            ..empty_plan()
+                            ..empty_plan(operation_id)
                         });
                     }
                     Err(OcrFailure::Document(error)) => {
@@ -507,7 +570,16 @@ where
                 // A strict, high-confidence RFI identity is the only group boundary.
                 // Once a cover starts a group, every page stays with it until another
                 // confirmed cover appears, even when continuation OCR is uncertain.
-                if is_confirmed_cover(&read) {
+                if fast_cover_mode && read.source.starts_with("ocr:fast-cover:uncertain") {
+                    flush_page_group(&mut active, &mut local_groups);
+                    active = Some(PageGroup {
+                        code: None,
+                        pages: vec![page_index],
+                        confidence: read.matched.confidence,
+                        source: read.source,
+                        reason: "possible RFI cover could not be confirmed".to_string(),
+                    });
+                } else if is_confirmed_cover(&read) {
                     let code = read.matched.code.clone();
                     let continues = active
                         .as_ref()
@@ -646,7 +718,7 @@ where
                         key: "warn.no_ocr".to_string(),
                         subject: ocr.diagnostics(),
                     }],
-                    ..empty_plan()
+                    ..empty_plan(operation_id)
                 });
             }
             Err(OcrFailure::Document(error)) => {
@@ -722,7 +794,7 @@ where
                 key: "warn.ocr_broken".to_string(),
                 subject: format!("{}  ||  {}", failures[0].1, ocr.diagnostics()),
             }],
-            ..empty_plan()
+            ..empty_plan(operation_id)
         });
     }
 
@@ -1112,10 +1184,10 @@ fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, BackendError
     }
 }
 
-fn empty_plan() -> Plan {
+fn empty_plan(operation_id: &str) -> Plan {
     Plan {
         plan_id: String::new(),
-        op_id: "rfi.process_scans".to_string(),
+        op_id: operation_id.to_string(),
         steps: Vec::new(),
         warnings: Vec::new(),
         meta: JsonObject::new(),

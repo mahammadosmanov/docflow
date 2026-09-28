@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.11.9",
+  "currentVersion": "1.12.0",
   "releases": [
+    {
+      "version": "1.12.0",
+      "date": "2026-09-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.12.0",
+      "summary": "Add a separate fast, template-led RFI cover scanning flow that preserves continuations and routes uncertain covers to Review."
+    },
     {
       "version": "1.11.9",
       "date": "2026-09-28",
       "channel": "stable",
-      "status": "current",
+      "status": "archived",
       "tag": "v1.11.9",
       "summary": "Keep uncertain and unreadable continuation pages with the current RFI until the next confirmed high-confidence cover."
     },

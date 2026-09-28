@@ -7,7 +7,7 @@
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
-5. Bootstrap, the exact twelve-operation registry, settings, real image-only OCR,
+5. Bootstrap, the exact thirteen-operation registry, settings, real image-only OCR,
    apply, journal, and undo are exercised beyond a process-start check.
 6. A release tag equals `v` plus exact canonical `VERSION`.
 7. Existing destinations, source archives, and unrelated workbook package members

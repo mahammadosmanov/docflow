@@ -47,6 +47,24 @@ identity or secrets.
 - Pages before the first confirmed cover and duplicate RFI starts remain in
   `_review`.
 
+### Fast Cover Scans
+
+- `rfi.process_scans_fast_covers` is separate from `rfi.process_scans`; the
+  normal operation retains its existing OCR behavior.
+- Multi-page Fast Cover Scans checks the upper page band in four right-angle
+  directions at low resolution. It confirms a cover only when the OCR yields
+  one strict canonical RFI identity, `REQUEST FOR INSPECTION`, and one known
+  project/client mark (`SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP`).
+- Searchable text cannot confirm a cover. Visible-page OCR gets bounded retries
+  and a targeted higher-resolution read for likely covers. If identity remains
+  uncertain, that page and following pages go to
+  `_review` until the next confirmed cover; they never join the preceding RFI.
+- Page rotation correction defaults off to avoid another full-page OCR pass; it
+  can be enabled when corrected output pages are needed.
+- Pages with no cover cues remain in the current confirmed group. Single-page
+  PDFs retain the normal full-page OCR path. Use normal Process Scans for other
+  cover templates.
+
 ### Incoming file grouping
 
 - `rfi.group_files` inspects only regular, non-hidden files immediately inside
