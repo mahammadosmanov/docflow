@@ -1,8 +1,238 @@
 # DocFlow project state
 
-Updated: 2026-09-25
+Updated: 2026-09-28
 
-## Current candidate
+## Confirmed-cover Process Scans grouping (1.11.9 fix)
+
+- Objective: keep combined-scan continuation pages with their current RFI until
+  the next confirmed cover.
+- Fix: only a strict, canonical RFI identity with confidence `>= 0.8` starts a
+  group. Uncertain, low-confidence, non-matching, and unreadable pages stay in
+  the active group. Pages before the first cover and duplicate starts remain
+  Review.
+- Regression: 23 continuation pages between covers stay in the first RFI;
+  the confirmed cover on page 24 starts the next group. Coverage includes
+  ambiguous, low-confidence, repaired, and unreadable continuation evidence,
+  plus leading-page Review.
+- Local evidence: Process Scans 28 passed/1 ignored; full Rust suite 620
+  passed/7 operator-data tests ignored; 23 Node and 55 frontend tests pass;
+  frontend build, Rust 1.97.1 fmt/Clippy/check, version/docs/source/license
+  audits pass. No operator PDF was used.
+- Version: 1.11.9 (`fix`), source commit `d5b0792`. Pushed to
+  `rohtolos/follow-up-unmatched-skip`; PR #34 Node/React and Rust format/Clippy/
+  test jobs passed. Immutable tag `v1.11.9` is pushed.
+- Windows Release run `36416196927` passed build, package audit, clean NSIS
+  install/startup/uninstall smoke, and published `v1.11.9`:
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.11.9. Manifest and
+  smoke evidence bind to exact commit `d5b0792c3a34f963a499e3cc2ad15ad397f89437`.
+  Installer size is 32,218,263 bytes; SHA-256 is
+  `a22f7e33b97dbad20da09195e5fa726266ca3a518b6b11db1ae959204f0dbaf3`.
+- Windows clean install/startup/package/uninstall smoke passed. Native Windows
+  OCR and combined-scan cover detection with operator scans remain a separate
+  acceptance gate; no operator PDF was used in this fix.
+- Next: install v1.11.9 on Windows and confirm a combined scan splits only at
+  confirmed RFI covers, with all intervening pages attached to that RFI.
+
+## Failed Follow Up Apply Undo (1.11.8 fix)
+
+- Objective: repair Apply recovery when the original Follow Up workbook has
+  been displaced to a retained-original leaf and the canonical name is absent.
+- Root cause: failed-Apply journals were rejected by normal Undo admission;
+  recovery listed the unresolved record but offered no way to restore the exact
+  original.
+- Fix: Recovery Center and the existing result Undo action now admit a separate
+  failed-Apply restore mode. Rust revalidates journal owner/root authority,
+  file identity, bytes, and security metadata, records restore intent, then
+  performs a same-parent no-clobber rename only to an absent canonical path.
+  Recovery only finalizes an exact completed restore. Collisions and mismatches
+  remain untouched; backup and private output stay retained.
+- The owner restored their workbook before this fix; this task did not read or
+  modify either operator workbook.
+- Local evidence: focused restore, collision, interrupted-restore recovery,
+  and Recovery Center tests pass; 55 frontend tests, frontend build, Node
+  tooling tests, version/docs/source/license audits, Rust 1.97.1 fmt/Clippy,
+  and full Rust tests pass. Seven operator-data tests remain ignored.
+- Version: 1.11.8 (`fix`), commit `84632c6b70c6c04f7d1a98e9649312425ec14e92`.
+  Pushed to `rohtolos/follow-up-unmatched-skip`; PR #34 Node/React and Rust
+  format/Clippy/test jobs passed. Immutable tag `v1.11.8` is published.
+- Windows Release run `36408268229` passed build, clean NSIS install/startup/
+  package/uninstall smoke, package audit, and release publication in 34m30s.
+  Manifest and smoke evidence bind to the exact commit. Installer size is
+  32,221,929 bytes; SHA-256 is
+  `17a65109969ba65110ec565fad51a3681ded71cbea829d6fb4e078e1b4bf9d49`.
+- Microsoft Office/Excel acceptance remains separate. The operator's restored
+  workbook was not accessed or modified by this work.
+- Next: install v1.11.8 and validate the explicit restore on an isolated copy;
+  use the published release at
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.11.8.
+
+## Follow Up false manual-review fix
+
+- Version: 1.11.4
+- Objective: stop correct formula-driven Worley `Signed` summaries from
+  appearing as lifecycle-status manual reviews.
+- Root cause: the full-workbook planner compared every target status to RFI Log
+  lifecycle status before separating Signed By layouts. A formula result such
+  as `Signed` differed from source `Completed`, so a read-only formula cell was
+  incorrectly sent to manual review.
+- Fix: compare lifecycle values only on non-Signed layouts. Keep the separate
+  final Worley comparison and formula safety checks. Exclude Signed By summary
+  copies when checking whether an RFI is already mapped to another lifecycle
+  section.
+- Exact supplied workbook pair was previewed read-only before and after the fix.
+  Manual-review rows fell from 130 to 3. The 127 false positives came from
+  lifecycle-versus-Worley status comparisons and Signed By formula summaries
+  counted as alternate lifecycle mappings. Three multi-row FINAL Worley
+  mappings remain ambiguous; one unique update is ready. Original workbooks
+  were not modified.
+- Regression reproduced the false positive before the fix and passed after it.
+  Full local Rust, Node, UI, frontend build, formatting, Clippy, Cargo check,
+  version, docs, source, and license checks pass. Seven operator-data tests
+  remain ignored. Windows release run `36304760149` passed installer build,
+  clean NSIS install/startup/package/uninstall smoke, and asset-manifest checks.
+  Release `v1.11.4` is published. Manual Office/Excel acceptance remains
+  outside this workflow.
+- Next: install v1.11.4 and confirm the three ambiguous FINAL Worley rows remain
+  available for operator review.
+
+## Parallel feature-delivery workflow improvement
+
+- Version: 1.11.5 (`fix`)
+- Local gates passed: version, docs/source audits, 23 Node tooling tests,
+  54 frontend tests, production build, Rust 1.97.1 fmt/Clippy/tests/check, and
+  license audit. Windows packaging has not run.
+- PR CI Node job passed (31–33s); separate Rust format/lint passed in 4m30s.
+  Combined Rust jobs twice hit `rust-lld` Bus error. Splitting them fixed that,
+  then exposed one platform-only native-PDF unit test failing on Linux because
+  Linux intentionally has no page renderer. Its end-to-end test is now gated to
+  macOS/Windows; full macOS Rust suite passes (369 tests). Awaiting final CI.
+- Added `docs/FEATURE_DEVELOPMENT.md` and linked it from the documentation map.
+- Feature issue/PR templates request a first slice, comparable timing evidence,
+  focused-check timing, and applicable platform acceptance.
+- Quality CI runs independent Node/React and Rust jobs concurrently; Rust
+  registry/Git dependencies use a lockfile-keyed cache while build concurrency
+  remains bounded to one.
+- The branch is rebased onto v1.11.4 and the source changes are ready for
+  release validation.
+
+## Previous release baseline: 1.11.3
+
+- Process Scans sparse drawing orientation fix was released as v1.11.3. Its
+  Windows build and clean installer smoke test passed. The Linux quality run
+  failed because the runner exhausted disk space while linking Rust tests.
+
+## Previous release baseline: 1.11.1
+
+- Process Scans orientation regression now normalizes path separators for
+  Windows and Unix. The tagged 1.11.1 release remains immutable.
+
+## Previous release baseline
+
+- Version: 1.10.8
+- Branch: `rohtolos/follow-up-unmatched-skip`
+- Objective: match the supplied RFI Log to exact existing Follow Up contexts,
+  including MEC inspection locations, PCS blocks, and explicit multi-area rows.
+- Release state: all 48 Follow Up native tests pass. Latest supplied-workbook
+  plan has 66 approved cell pairs and 47 ambiguous MEC rows for operator review.
+  A guarded review copy was created; original workbook hashes are unchanged.
+  Full release checks remain pending.
+
+## 1.10.8 slice
+
+- MEC source discovery now accepts the `INSP. LOC./AREA` header variant. This
+  fixed the exact MEC-0791 context match without relaxing target matching.
+- Native regression confirms MEC-0791 maps to its existing Follow Up row.
+- Supplied workbook scan recognizes both `INSPECTION LOCATION` and
+  `INSP. LOC./AREA`; exact PCS routes use block identity, composite PCS tags
+  match explicit area tokens within the uniquely identified CIV zone, and MEC
+  multi-area records map only when each target tuple is distinct.
+- Latest plan: 50 lifecycle and 16 Worley updates; 47 source RFIs have multiple
+  MEC candidates and remain manual. No rows or sections are invented.
+- Review copy: `Inspection Status Follow Up - Detailed Sync - Review Pending
+  v2.xlsm`; manual review list: `Follow Up - Detailed Sync Manual Review v2.csv`.
+  The earlier `Safe Sync` copy and `Ongoing Missing` CSV are superseded.
+- Verification: supplied-workbook guarded plan and 48 native Follow Up tests
+  pass; full Rust suite, 54 frontend tests, frontend build, pinned Rust 1.97.1
+  Clippy, Cargo check, format, version/docs/source/license audits pass. Current
+  Rust 1.98 Clippy reports nine existing `chunks_exact_to_as_chunks` lints in
+  `ocr.rs`, `rfi_file_group.rs`, and `pdf.rs`; pinned release Clippy is clean.
+- Windows Excel acceptance remains pending.
+
+## 1.10.6 carried slice
+
+- Follow Up Sync maps repeated MEC RFIs to separate existing rows when each
+  exact tag, area, and inspection-location tuple is unique.
+- S5 retained files now cap at 256 while the 8 GiB bound remains unchanged.
+- Commit `bc0a15be15c3b2886ab3dc5bd8bcb15499542fbc` is pushed; Windows run
+  `36245298684` passed its recorded gates. Linux CI linker failure and Windows
+  Excel acceptance remain pending.
+
+## Previous current candidate (1.10.6)
+
+- Objective: synchronize exact multi-row CIV/MEC Follow Up mappings and raise
+  the bounded retained S5 file capacity after operator Apply failures.
+- Supplied prior workbook preview produced 28 approved row pairs and no
+  warnings; this is historical evidence and predates the broader workbook scan.
+- Release draft:
+  `https://github.com/mahammadosmanov/docflow/releases/tag/untagged-d7eb46481ca84ed17eb3`.
+
+## 1.10.6 slice
+
+- Repeated MEC records retain every exact `(tag, area, inspection location)`
+  source context only when ITP, item, lifecycle status, and Worley evidence
+  agree. Distinct target tuples map independently; duplicate or incomplete
+  contexts remain manual review. CIV exact distinct-tag fan-out is preserved.
+- S5 retained files now cap at 256, with the 8 GiB bound unchanged. A native
+  Apply test seeds 64 prior files to verify the previous count limit no longer
+  blocks a reservation.
+- Updated current workbook pair preview: 28 approved cell-update rows across
+  CIV (12), MEC (3), PCU (12), and Road (1); 27 lifecycle rows and 1 Worley
+  row; zero warnings. Temporary-copy guarded OOXML delta check passes.
+- Release workflow and Windows installer acceptance remain pending.
+
+## 1.10.5 carried behavior
+
+- Follow Up Sync now previews and applies only RFI number and status cells. It
+  never adds, replaces, or clears Follow Up worksheet Remarks. RFI Log REMARKS
+  remain read-only Worley evidence. Older generated `RFI Status Sync:` text is
+  left untouched. ADR 0028 supersedes ADR 0026. Regression coverage confirms
+  mixed groups still receive aggregate statuses without remark-cell writes.
+- Recognized CIV/MEC routes with zero rows in the current Follow Up template are
+  skipped without an unmapped-record warning, including FINAL routes without a
+  prepared row. Multiple matching rows still go to manual review; unique rows
+  continue through the existing guarded sync.
+- Read-only preview of the supplied workbooks reduced the unmapped warning from
+  173 to 7: 166 no-match routes are skipped, 7 multi-row matches remain manual.
+  The preview also found 361 ready lifecycle updates, 1 ready Worley update, and
+  42 Follow Up entries missing from RFI Log source data. Synthetic regression
+  tests cover standard/FINAL no-match skips and ambiguous-row review. Rust tests,
+  format, Clippy, Cargo check, frontend tests/build, version/docs/source and
+  license audits pass locally; ignored tests still require their operator
+  fixtures. Linux CI linker failures are tracked above.
+
+## Previous candidate
+
+- Version: 1.10.5
+- Objective: remove generated mixed-status Remarks writes from Follow Up Sync.
+- Release state: source branch has PR #34; its latest Linux check failed when
+  `ld` crashed with signal 7 during test linking. Windows 1.10.5 draft build
+  status remains historical and does not verify 1.10.6.
+
+## Previous candidate
+
+- Version: 1.10.4
+- Branch: `rohtolos/follow-up-unmatched-skip`
+- Objective: skip supported source routes absent from the Follow Up template
+  while retaining manual review for non-unique row matches.
+- The read-only supplied-workbook preview reduced the unmapped warning from
+  173 to 7: 166 no-match routes were skipped and 7 multi-row matches stayed in
+  manual review. It found 361 ready lifecycle updates, 1 ready Worley update,
+  and 42 Follow Up RFIs with no source record. Windows draft installer was
+  built from feature commit `c07282d` and passed clean install/startup/uninstall
+  smoke; SHA-256 is
+  `845642ca220ecfa0722f81218a300163482ec4feffc2e3027e4e282fe995455c`.
+
+## Previous candidate
 
 - Version: 1.10.3
 - Branch: `rohtolos/follow-up-mixed-status-remarks`
@@ -10,19 +240,12 @@ Updated: 2026-09-25
   CIV and PCU Follow Up sheets.
 - Release state: source gates pass on Rust 1.97.1; Windows package acceptance,
   PR review, push, tag, and GitHub Release remain pending.
-
-## Current slice
-
-- Mixed groups with at least two RFIs and one `Completed` source status preview
+- This generated-remarks behavior was retired by ADR 0028 in version 1.10.5.
+  Mixed groups with at least two RFIs and one `Completed` source status preview
   every member's mapped status in the row's Remarks cell on CIV and PCU only.
   Existing operator text is retained, generated lines replace themselves on
   later syncs, absent blank cells are pinned and created only inside existing
   rows, and unresolved source statuses go to manual review.
-- Added tests cover CIV and PCU preview values, preservation, missing-cell
-  creation, rejection of missing-row creation, and unresolved-status refusal.
-  Rust unit/integration suites, Node and React tests, frontend build, Clippy,
-  Cargo check, format, version/docs/source/license audits pass. Windows package
-  and operator workbook acceptance remain pending.
 
 ## Previous candidate
 
@@ -240,6 +463,23 @@ Updated: 2026-09-25
 - Rust, Node, React, frontend, version, documentation, source, and license checks
   pass. The Windows x64 cross-build, package audit, checksums, and GUI-subsystem
   checks pass as recorded in `docs/VERIFICATION.md`.
+
+## Feature delivery workflow (1.11.6)
+
+- CI run `36333564684` passed Node/React and Rust format/Clippy but found Linux
+  failures in PDF/OCR integration tests that call platform renderers unavailable
+  on Linux. The Rust core test job did not complete.
+- Added macOS/Windows cfgs to renderer-dependent integration tests. On macOS,
+  `cargo +1.97.1 test --manifest-path src-tauri/Cargo.toml --test
+  rfi_system_sync_native` passes (6 passed, 3 operator-data tests ignored).
+- Classified this CI fix as `fix` and advanced the version to 1.11.6.
+- A Linux run also exposed a signed-page planning test asserting native-rendered
+  image previews. It now exercises the platform-independent plan with previews
+  disabled; the focused planning test passes on macOS.
+- Classified this test correction as `fix` and advanced the version to 1.11.7.
+- Next: rerun all applicable local source gates, push the fix, require green CI,
+  then tag/publish only after the exact commit is validated. Windows Office,
+  OneDrive, OCR, and printer acceptance remains a separate manual gate.
 
 ## External gate
 

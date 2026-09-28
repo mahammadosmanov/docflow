@@ -96,7 +96,7 @@
     }
   },
   "op.rfi.process_scans.title": "Process Scans",
-  "op.rfi.process_scans.desc": "Reads the RFI number on the first page, renames scanned PDFs, and saves them in your chosen layout.",
+  "op.rfi.process_scans.desc": "Reads each page for its RFI number, corrects page orientation, and saves scanned PDFs in your chosen layout.",
   "op.rfi.group_files.title": "Group Files by RFI",
   "op.rfi.group_files.desc": "Finds exact RFI numbers in file names and contents, then copies files into each related RFI folder.",
   "param.rfi.fileGroup.source": "Incoming files folder",
@@ -475,9 +475,6 @@
   "rfi.followUp.column.rfiNo": "RFI number",
   "rfi.followUp.column.sourceStatuses": "RFI Log source value",
   "rfi.followUp.column.currentStatus": "Current Follow Up status",
-  "rfi.followUp.column.currentRemark": "Current remark",
-  "rfi.followUp.column.proposedRemark": "Proposed remark",
-  "rfi.followUp.column.remarkCell": "Remark cell",
   "rfi.followUp.column.proposedRfiNo": "Proposed RFI group",
   "rfi.followUp.column.proposedStatus": "Proposed status",
   "rfi.followUp.column.disposition": "Decision",
@@ -511,8 +508,6 @@
   "warn.rfi.followUp.reason.readyWorleySync": "The FINAL Worley status can be synchronized from the exact Signed by Worley remark line.",
   "warn.rfi.followUp.reason.readyRemove": "Cancelled or Rejected RFI entries will be removed and the remaining shared status recalculated.",
   "warn.rfi.followUp.reason.mappingMissing": "The record belongs to an existing Follow Up section, but no exact target row was found; it was left unchanged.",
-  "warn.rfi.followUp.reason.targetRemarkMissing": "The mixed RFI status remark has no safe existing Remarks cell; this row needs manual review.",
-  "warn.rfi.followUp.reason.targetRemarkUnsafe": "The mixed RFI status remark cell is merged or formula-backed; this row needs manual review.",
   "warn.rfi.followUp.reason.mappingAmbiguous": "More than one target row matches this record; it was left unchanged instead of guessing.",
   "warn.rfi.followUp.reason.readyNotSigned": "No exact Signed by Worley remark was found; Not Signed can be applied.",
   "op.rfi.log_add.desc": "Creates CIV, MEC, ELE and PRC RFI numbers together, schedules them globally, fills lookup fields and prepares separate Excel-native mail tables.",
@@ -713,6 +708,7 @@
   "recovery.noEffect": "No change occurred — previewing again is safe",
   "recovery.outcomeUnknown": "Outcome unknown — no automatic retry",
   "recovery.manual": "Manual review required",
+  "recovery.restoreOriginal": "Restore original Follow Up file",
   "recovery.printQueue": "Uncertain print queue",
   "recovery.empty": "Nothing needs recovery",
   "recovery.empty.help": "No pending journal or unfinished print queue was found.",
@@ -946,5 +942,10 @@
   "prefs.replica.status.running": "Status: Running",
   "prefs.replica.status.waitingForSignIn": "Status: Waiting for sign-in",
   "prefs.replica.status.deferred": "Status: Deferred until another operation finishes",
-  "prefs.replica.status.paused": "Status: Paused for safety"
+  "prefs.replica.status.paused": "Status: Paused for safety",
+  "param.rfi.processScans.correctOrientation": "Correct page orientation while processing",
+  "param.rfi.processScans.correctOrientation.help": "Rotates pages with a confident orientation result. Uncertain PDFs go unchanged to _review.",
+  "warn.rfi.processScansOrientationReview": "Page orientation was uncertain; PDF was sent to _review",
+  "progress.phase.scan_orientation": "Checking PDF page orientation",
+  "rfi.extraction.pages": "Extracted pages"
 }

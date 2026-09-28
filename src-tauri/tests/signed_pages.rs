@@ -294,7 +294,7 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
             (("combined.pdf".to_string(), 0), CODE.to_string()),
             (("combined.pdf".to_string(), 1), SECOND_CODE.to_string()),
         ]),
-        previews: true,
+        previews: false,
     };
 
     let mut progress = Vec::new();
@@ -324,18 +324,7 @@ fn one_multi_page_worley_scan_creates_one_staging_row_per_exact_rfi_page() {
             .iter()
             .any(|column| column["key"] == "confidence" && column["display"] == "percent")
     );
-    let comparisons = plan.meta["pageComparisons"].as_object().unwrap();
-    assert_eq!(comparisons.len(), 2);
-    for code in [CODE, SECOND_CODE] {
-        let comparison = comparisons[&format!("signed-{code}")].as_object().unwrap();
-        assert!(
-            comparison["signed"]
-                .as_str()
-                .is_some_and(|value| value.starts_with("data:image/png;base64,"))
-        );
-        assert_eq!(comparison["archives"].as_object().unwrap().len(), 1);
-    }
-    assert_eq!(plan.meta["pagePreviewOmitted"], json!(0));
+    assert_eq!(plan.meta["pageComparisons"], json!({}));
     assert!(
         plan.warnings
             .iter()

@@ -1,5 +1,16 @@
 # DocFlow project memory
 
+- A failed Follow Up Apply that displaced the original workbook is recoverable
+  only through an explicit journal-authorized Undo: verify original identity,
+  bytes, and security metadata; require an absent canonical path; then perform
+  a same-parent no-clobber rename. Recovery may finalize an exact completed
+  restore but must never retry the rename or delete the backup/private output.
+- Follow Up Sync groups duplicate source rows only when ITP, item, status, and
+  Worley evidence agree. MEC multi-row fan-out requires each existing target
+  row to match a distinct exact `(tag, area, inspection location)` source
+  context; CIV multi-area fan-out requires distinct exact tags. Never infer a
+  cartesian route. S5 retained-file cap is 256 while the 8 GiB bound remains;
+  on quota errors, inspect the exact file and byte counts before cleanup.
 - The authoritative repository is `/Users/rohtolos/Documents/GitHub/docflow`.
 - Print submission is serial. Never automatically resubmit an uncertain job;
   it may already have produced paper.
@@ -34,9 +45,19 @@
   Signed By Worley CIV/MEC input cells. Lifecycle status and exact FINAL
   Signed/Not Signed values may change; report sheets and formulas recalculate
   naturally but are never rewritten.
+- Follow Up Sync never writes worksheet Remarks cells. RFI Log REMARKS are
+  read-only Worley evidence; legacy generated `RFI Status Sync:` lines remain
+  untouched rather than being cleaned automatically.
 - Missing FINAL identifiers may use only one uniquely matched, already-prepared
   literal RFI/status pair. Never append a row, synthesize an absent section,
   replace a formula, or guess an ambiguous location.
+- For the supplied 2026-09-26 workbook pair, 166 supported source routes had no
+  matching current Follow Up row, including absent FINAL sections. These are
+  skipped without warning; 7 true multi-row matches remain manual review. Keep
+  this distinction in Preview and never generate rows to eliminate warnings.
+- GitHub Ubuntu quality runners twice crashed `ld` with signal 7 while linking
+  different Rust integration binaries. Retry with `CARGO_BUILD_JOBS=1` to bound
+  concurrent linkers; local macOS Rust gates passed.
 - The current PCU template has a separate FINAL `Signed by Worley` cell in
   column R keyed by the existing FINAL RFI in column P. Sync it from the exact
   RFI Log REMARKS line, but keep POT test, calculated remarks, and manual
@@ -102,3 +123,18 @@
 - RFI identity OCR may use the bounded raw-grayscale PSM 11 fallback only after
   the adaptive cascade fails. It still needs one conflict-free code across at
   least three DPIs and two exact reads; a single competing code keeps Review.
+- Process Scans can reuse `pdf_orientation::OrientationDetector` for incoming
+  PDFs. Keep source PDFs read-only, pin hashes and output-page rotations in the
+  immutable Plan, and route any file with an uncertain page unchanged to
+  `_review`. Apply extracts first and rotates only its private output copy.
+- In ordered Process Scans batches, only a strict canonical RFI identity with
+  confidence `>= 0.8` starts a group. After a confirmed cover, uncertain,
+  low-confidence, non-matching, and unreadable page OCR stays with that RFI
+  until the next confirmed cover. Pages before the first cover and duplicate
+  starts remain in Review. Preserve the independent whole-PDF orientation
+  uncertainty policy.
+- Follow Up Sync must not compare `Signed By Worley` formula summaries with RFI
+  lifecycle states. The summary cells derive Worley state from the separate
+  exact-remark control table; compare lifecycle only on non-Signed layouts and
+  exclude Signed By copies from lifecycle wrong-section checks. Keep the final
+  Worley-state comparison and formula safety checks intact.

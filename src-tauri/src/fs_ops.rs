@@ -21,7 +21,7 @@ use crate::{
         MAX_S5_RETAINED_FILES, PendingArtifactCreationState, PendingArtifactParent,
         PendingRetainedArtifact, RecoveryNotice, RetainedArtifactEvidence, RetainedArtifactRole,
         RetainedPublication, RetainedPublicationPhase, RetainedPublicationPurpose, S5Transition,
-        ValidatedS5Record,
+        S5UndoMode, ValidatedS5Record,
     },
     leaf_transaction::{
         PublicationCancellation, RetainedPublicationOutcome, execute_retained_publication,
@@ -1694,12 +1694,16 @@ impl FilesystemAuthority {
         let pending = self
             .journals
             .inspect_s5_for_undo(journal_id, caller, permits)?;
+        let undo_mode = pending.mode();
         let roots = self.grants.reopen_recorded_roots(
             pending.recorded_root_accesses(),
             caller,
             rfi_follow_up::OPERATION_ID,
         )?;
         let mut record = self.journals.admit_s5_undo(pending, roots)?;
+        if undo_mode == S5UndoMode::RestoreFailedApply {
+            return self.restore_failed_follow_up_apply(&mut record);
+        }
         let step = record
             .completed_steps()
             .first()
@@ -1925,6 +1929,154 @@ impl FilesystemAuthority {
                 Ok(s5_recovery_result(&record, notice))
             }
         }
+    }
+
+    fn restore_failed_follow_up_apply(
+        &self,
+        record: &mut ValidatedS5Record,
+    ) -> Result<OperationResult, BackendError> {
+        if record.undo_mode() != Some(S5UndoMode::RestoreFailedApply) {
+            return Err(BackendError::journal_invalid(
+                "S5 failed apply restore lease is missing",
+            ));
+        }
+        let publication = record
+            .pending_publication()
+            .cloned()
+            .filter(|publication| publication.purpose == RetainedPublicationPurpose::Apply)
+            .ok_or_else(|| BackendError::journal_invalid("S5 failed apply is not pending"))?;
+        let pending_retained = record
+            .pending_retained_artifact()
+            .cloned()
+            .filter(|pending| {
+                pending.role == RetainedArtifactRole::DisplacedOriginal
+                    && pending.path == publication.retained
+            })
+            .ok_or_else(|| BackendError::journal_invalid("S5 retained original is not pending"))?;
+        if record
+            .retained_evidence_for(RetainedArtifactRole::DisplacedOriginal)
+            .is_some_and(|evidence| {
+                evidence.path != pending_retained.path
+                    || evidence.identity != publication.expected_canonical_identity
+                    || evidence.sha256 != publication.expected_canonical_sha256
+                    || evidence.security_sha256 != publication.expected_canonical_security_sha256
+            })
+        {
+            return Err(BackendError::journal_invalid(
+                "S5 retained original evidence does not match publication authority",
+            ));
+        }
+        let canonical_path = PathBuf::from(&publication.canonical);
+        let retained_path = PathBuf::from(&publication.retained);
+        let canonical = authorize_s5_recorded(record, &canonical_path)?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("S5 Follow Up path cannot be anchored"))?;
+        let retained = authorize_s5_recorded(record, &retained_path)?
+            .anchor()
+            .map_err(|_| BackendError::path_invalid("S5 retained original cannot be anchored"))?;
+
+        transition_s5_backend(
+            &self.journals,
+            record,
+            S5Transition::BeginFailedApplyRestore,
+        )?;
+
+        match canonical.open_read() {
+            Ok(mut current) => {
+                let exact_current = crate::cap_fs::file_identity(&current).ok().as_ref()
+                    == Some(&publication.expected_canonical_identity)
+                    && sha256_open_file(&mut current).ok().as_deref()
+                        == Some(publication.expected_canonical_sha256.as_str())
+                    && FileSecuritySnapshot::capture(&current, None)
+                        .ok()
+                        .is_some_and(|snapshot| {
+                            snapshot.sha256() == publication.expected_canonical_security_sha256
+                        });
+                let retained_absent = matches!(
+                    retained.open_read(),
+                    Err(ref error) if error.kind() == io::ErrorKind::NotFound
+                );
+                if exact_current && retained_absent && canonical.sync_parent().is_ok() {
+                    return self.finalize_failed_follow_up_restore(record);
+                }
+                return Err(BackendError::validation(
+                    "error.rfi.followUp.workbookChanged",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(_) => {
+                return Err(BackendError::validation(
+                    "error.rfi.followUp.workbookChanged",
+                ));
+            }
+        }
+
+        let mut retained_file = retained
+            .open_read()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
+        let retained_exact = crate::cap_fs::file_identity(&retained_file).ok().as_ref()
+            == Some(&publication.expected_canonical_identity)
+            && sha256_open_file(&mut retained_file).ok().as_deref()
+                == Some(publication.expected_canonical_sha256.as_str())
+            && FileSecuritySnapshot::capture(&retained_file, None)
+                .ok()
+                .is_some_and(|snapshot| {
+                    snapshot.sha256() == publication.expected_canonical_security_sha256
+                });
+        if !retained_exact {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.workbookChanged",
+            ));
+        }
+        drop(retained_file);
+
+        retained
+            .restore_original_name_no_clobber(&canonical)
+            .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
+        let mut restored = canonical
+            .open_read()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
+        let restored_exact = crate::cap_fs::file_identity(&restored).ok().as_ref()
+            == Some(&publication.expected_canonical_identity)
+            && sha256_open_file(&mut restored).ok().as_deref()
+                == Some(publication.expected_canonical_sha256.as_str())
+            && FileSecuritySnapshot::capture(&restored, None)
+                .ok()
+                .is_some_and(|snapshot| {
+                    snapshot.sha256() == publication.expected_canonical_security_sha256
+                })
+            && matches!(
+                retained.open_read(),
+                Err(ref error) if error.kind() == io::ErrorKind::NotFound
+            );
+        if !restored_exact {
+            return Err(BackendError::validation(
+                "error.rfi.followUp.recoveryRequired",
+            ));
+        }
+        self.finalize_failed_follow_up_restore(record)
+    }
+
+    fn finalize_failed_follow_up_restore(
+        &self,
+        record: &mut ValidatedS5Record,
+    ) -> Result<OperationResult, BackendError> {
+        transition_s5_backend(
+            &self.journals,
+            record,
+            S5Transition::FinalizeFailedApplyRestore,
+        )?;
+        let mut result = OperationResult {
+            applied: 1,
+            failed: 0,
+            journal_id: record.journal_id().to_string(),
+            errors: Vec::new(),
+            meta: JsonObject::new(),
+            cloud_synced: None,
+        };
+        insert_effect_state(&mut result, "committed");
+        insert_retained_evidence(&mut result, record.retained_evidence());
+        Ok(result)
     }
 
     fn execute_step(
@@ -3134,7 +3286,8 @@ impl FilesystemAuthority {
         let workspace_capability =
             crate::cap_fs::CapabilityRoot::open(workspace.path()).map_err(io_no_effect)?;
         let source_copy = workspace.path().join("batch.pdf");
-        let completed = workspace.path().join("extracted.pdf");
+        let extracted = workspace.path().join("extracted.pdf");
+        let rotated = workspace.path().join("rotated.pdf");
         let source_copy_anchor = workspace_capability
             .authorize(&source_copy)
             .map_err(io_no_effect)?
@@ -3143,8 +3296,39 @@ impl FilesystemAuthority {
         source_copy_anchor
             .copy_no_clobber_from(&source_anchor)
             .map_err(io_no_effect)?;
-        crate::pdf::extract_pages(&source_copy, &page_indexes, &completed)
+        crate::pdf::extract_pages(&source_copy, &page_indexes, &extracted)
             .map_err(|error| StepFailure::NoEffect(error.to_string()))?;
+        let rotations = step
+            .meta
+            .get("rotations")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|rotation| {
+                let page_index = rotation
+                    .get("pageIndex")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved output page is invalid".to_string())
+                    })?;
+                let target = rotation
+                    .get("targetRotation")
+                    .and_then(Value::as_i64)
+                    .filter(|value| matches!(value, 0 | 90 | 180 | 270))
+                    .ok_or_else(|| {
+                        StepFailure::NoEffect("approved output rotation is invalid".to_string())
+                    })?;
+                Ok((page_index, target))
+            })
+            .collect::<Result<Vec<_>, StepFailure>>()?;
+        let completed = if rotations.is_empty() {
+            extracted
+        } else {
+            crate::pdf::rotate_pages_incremental(&extracted, &rotated, &rotations)
+                .map_err(|error| StepFailure::NoEffect(error.to_string()))?;
+            rotated
+        };
         let completed_anchor = workspace_capability
             .authorize(&completed)
             .map_err(io_no_effect)?

@@ -28,6 +28,25 @@ identity or secrets.
 
 ## Scans and signed pages
 
+### Process Scans orientation
+
+- `rfi.process_scans` checks each input PDF page with the existing orientation
+  detector by default. Confident corrections apply only to the new output copy.
+- If any page in a PDF remains uncertain, the complete original PDF goes to
+  `_review` unchanged. Apply rotates only the exact approved output pages and
+  revalidates the source hash; the source is never rotated in place.
+- Operators may disable correction through the Process Scans parameter form.
+
+### Process Scans batch grouping
+
+- In a multi-page PDF, one strict, canonical, high-confidence RFI identity is
+  the only marker that starts a new RFI group.
+- Every page after a confirmed cover belongs to that RFI until another
+  confirmed cover appears. Continuation-page RFI-identity OCR may be uncertain,
+  non-matching, or unreadable; those pages stay in the current group.
+- Pages before the first confirmed cover and duplicate RFI starts remain in
+  `_review`.
+
 ### Incoming file grouping
 
 - `rfi.group_files` inspects only regular, non-hidden files immediately inside
@@ -121,37 +140,48 @@ cell satisfy the required state. `Ongoing` corresponds to `In Progress` where th
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
 their safe headers, not assumed coordinates.
 
-When a shared group on the exact `CIV` or `PCU` sheet has at least two
-resolvable RFIs and at least one source status is `Completed`, Follow Up sync
-also lists every RFI and its mapped individual status in that physical row's
-existing `Remarks` cell (for example, `CIV-1222 Completed, CIV-1223 In
-Progress`). Multiple qualifying groups in one row share one summary. Sync
-preserves other remark text and replaces its own `RFI Status Sync:` line on
-subsequent runs. If an empty target cell is physically absent, Apply may create
-only that cell in the existing row at the unique header-defined Remarks
-column. Formula-backed, merged, or ambiguous remark cells keep the affected
-change in manual review. MEC, Road, and Signed By sheet remarks are outside
-this behavior.
+Follow Up sync changes only the mapped RFI and status cells. It never adds,
+replaces, or clears content in worksheet `Remarks` cells. RFI Log `REMARKS`
+remain read-only source evidence for Worley Signed/Not Signed mapping.
 
 For RFI Log projection, blank means `Pending`, all `Completed` means
 `Completed`, and any `Ongoing` or Completed/Pending mixture means `In Progress`.
 Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
+For supported CIV/MEC routes, including FINAL routes, a source record with no
+matching row in the current Follow Up template is outside its scope and is
+skipped without a warning. If more than one row matches, the record remains in
+manual review, except that CIV and MEC records may map to distinct existing
+rows when each destination is justified by a different exact source context.
+For CIV, each target area tag must be named in the source. For MEC, repeated
+source rows must agree on ITP, item, status, and Worley evidence; a single row
+may enumerate several `Area` values only when `Tag No` and `Inspection Location`
+each contain one value. Every destination must match one exact
+`(Tag No, Area, Inspection Location)` tuple. Target cells such as `N10/N11` may
+match either exact location token; substring matches are not allowed. Any CIV
+RFI Log record whose `Tag No` starts with `PCS-` is outside Follow Up scope,
+regardless of ITP, item, Area, or composite suffix. It is never added and is
+removed from an existing Follow Up group during the next approved sync. This
+rule includes values such as `PCS-19/S1,S2,S3` and takes precedence over the
+older PCU routing behavior. It never creates rows or sections.
+Duplicate contexts, conflicting source values, and other multi-valued contexts
+remain manual review.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
 current PCU FINAL `Signed by Worley` column receive only FINAL behavior and use
-the exact `Signed by Worley` REMARKS line. Existing FINAL rows are recalculated
+the exact `Signed by Worley` REMARKS line, except CIV source RFIs tagged `PCS-`
+which are excluded by the rule above. Existing FINAL rows are recalculated
 as `Signed` or `Not Signed`; a missing FINAL RFI may be added only to one
 uniquely matched, already-prepared literal RFI/status pair. A newly inserted PCU
 FINAL identifier receives its Worley value on the next preview so independently
 deselecting one row cannot leave a half-applied coupled update.
-Formula-bearing, merged, absent, or ambiguous destinations remain manual. `POT test`,
-`STAT`, `Changelog`, MEC calculated remarks/manual overrides, ELE/PRC, and absent
-ITP/item sections are never created or modified by this operation. A source
-record with multiple areas and multiple sections is ambiguous and remains manual
-rather than using a cartesian guess.
+Formula-bearing, merged, or otherwise unsafe matched destinations remain
+manual. `POT test`, `STAT`, `Changelog`, MEC calculated remarks/manual overrides,
+ELE/PRC, and absent ITP/item sections are never created or modified by this
+operation. A source record with multiple areas and multiple sections is
+ambiguous and remains manual rather than using a cartesian guess.
 
 ## PDF page orientation
 

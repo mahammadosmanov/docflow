@@ -1,7 +1,71 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.10.3",
+  "currentVersion": "1.11.9",
   "releases": [
+    {
+      "version": "1.11.9",
+      "date": "2026-09-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.11.9",
+      "summary": "Keep uncertain and unreadable continuation pages with the current RFI until the next confirmed high-confidence cover."
+    },
+    {
+      "version": "1.11.8",
+      "date": "2026-09-28",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.8",
+      "summary": "Allow exact, explicit Undo of a failed Follow Up Sync Apply without blind recovery retries or evidence deletion."
+    },
+    {
+      "version": "1.11.7",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.7",
+      "summary": "Separate signed-page planning assertions from native rendered preview assertions."
+    },
+    {
+      "version": "1.11.6",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.6",
+      "summary": "Run PDF renderer and OCR integration tests only on supported macOS and Windows runners."
+    },
+    {
+      "version": "1.11.5",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.5",
+      "summary": "Standardize feature delivery measurement and verification; parallelize frontend, Rust lint, and Rust test jobs."
+    },
+    {
+      "version": "1.11.4",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.4",
+      "summary": "Stop comparing formula-driven Worley statuses with RFI lifecycle statuses during Follow Up sync."
+    },
+    {
+      "version": "1.11.3",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.3",
+      "summary": "Resolve sparse drawing-page orientation by cross-checking top-page RFI headers at two resolutions."
+    },
+    {
+      "version": "1.11.2",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "archived",
+      "tag": "v1.11.2",
+      "summary": "Exclude CIV PCS-tagged RFIs from Follow Up, remove prior entries, and clear stale group status."
+    },
     {
       "version": "0.1.0",
       "date": "2026-07-26",
@@ -758,9 +822,65 @@
       "version": "1.10.3",
       "date": "2026-09-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.10.3",
       "summary": "Add guarded per-RFI mixed-status remarks to CIV and PCU Follow Up sheets."
+    },
+    {
+      "version": "1.10.4",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.10.4",
+      "summary": "Skip supported RFI Log records that are absent from the current Follow Up template while keeping ambiguous mappings for manual review."
+    },
+    {
+      "version": "1.10.5",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.10.5",
+      "summary": "Remove generated mixed-status remarks from Follow Up Sync while preserving status updates and Worley source mapping."
+    },
+    {
+      "version": "1.10.6",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.10.6",
+      "summary": "Map exact distinct MEC route contexts and raise bounded S5 retained-file capacity to 256."
+    },
+    {
+      "version": "1.10.8",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "supported",
+      "tag": "v1.10.8",
+      "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
+    },
+    {
+      "version": "1.10.7",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.10.7",
+      "summary": "Match exact MEC locations, PCS blocks, and distinct multi-area contexts in Follow Up Sync."
+    },
+    {
+      "version": "1.11.0",
+      "date": "2026-09-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.11.0",
+      "summary": "Add safe page-orientation correction to Process Scans using the existing detector and no-clobber PDF output path."
+    },
+    {
+      "version": "1.11.1",
+      "date": "2026-09-27",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.11.1",
+      "summary": "Fix Windows path matching in Process Scans orientation regression coverage."
     }
   ]
 }

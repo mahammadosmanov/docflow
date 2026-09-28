@@ -3,10 +3,131 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
-## Unreleased
+## 1.11.9 - 2026-09-28
 
-Record user-visible changes here while they are being developed. Move them into
-a dated version section as part of the release commit.
+### Fixed
+
+- Process Scans keeps uncertain and unreadable continuation pages with the
+  current RFI. Only a strict, canonical, high-confidence RFI cover starts the
+  next group; leading pages and duplicate RFI starts remain in `_review`.
+
+## 1.11.8 - 2026-09-28
+
+### Fixed
+
+- Failed Follow Up Sync Apply can now restore its exact displaced original
+  through explicit Undo. Recovery never retries the rename; collisions preserve
+  both the current file and retained evidence.
+
+## 1.11.7 - 2026-09-27
+
+### Fixed
+
+- Keep signed-page preview assertions out of platform-independent planning
+  tests; native rendered previews remain covered by supported platform checks.
+
+## 1.11.6 - 2026-09-27
+
+### Fixed
+
+- Keep PDF renderer and OCR integration tests on supported macOS and Windows
+  runners; Linux continues to run platform-independent Rust tests.
+
+## 1.11.5 - 2026-09-27
+
+### Changed
+
+- Standardized feature work around small slices, comparable performance
+  measurements, fast focused checks, and explicit platform acceptance.
+- Frontend, Rust format/lint, and Rust test jobs now run concurrently; Rust
+  dependency downloads use a lockfile-keyed cache while compilation remains
+  bounded.
+
+## 1.11.4 - 2026-09-27
+
+### Fixed
+
+- Follow Up Sync no longer compares formula-driven Worley `Signed` status with
+  RFI lifecycle values such as `Completed`. Correctly matched formula summaries
+  no longer create false manual-review entries.
+
+## 1.11.3 - 2026-09-27
+
+### Fixed
+
+- Process Scans now cross-checks the top-page RFI header at 250 and 350 DPI
+  when map/drawing text conflicts with OSD. It auto-selects only a strong,
+  agreeing header direction; otherwise the page remains in `_review`.
+
+## 1.11.2 - 2026-09-27
+
+### Fixed
+
+- Follow Up Sync excludes every CIV RFI Log record whose `Tag No` starts with
+  `PCS-`, including composite PCS/area values. It removes these RFIs from
+  existing groups and clears the status when no supported RFIs remain.
+
+## 1.11.1 - 2026-09-27
+
+### Fixed
+
+- Process Scans orientation review regression now normalizes path separators,
+  so the test checks correctly on Windows and Unix.
+
+## 1.11.0 - 2026-09-26
+
+### Added
+
+- Process Scans now corrects confidently detected page rotations by default.
+  Uncertain PDFs go unchanged to `_review`; source files remain unchanged.
+
+## 1.10.8 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync now recognizes the MEC `INSP. LOC./AREA` source header, so
+  exact inspection-location matches such as MEC-0791 can reach their existing
+  target row.
+- Follow Up Sync now treats exact `PCS-` tags as PCU routes, uses explicit
+  block-area suffixes to find the PCU row, and resolves MEC composite target
+  locations and single-row multi-area contexts against distinct existing rows.
+
+## 1.10.7 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync now recognizes the MEC `INSP. LOC./AREA` source header, so
+  exact inspection-location matches such as MEC-0791 can reach their existing
+  target row.
+- Follow Up Sync now treats exact `PCS-` tags as PCU routes, uses explicit
+  block-area suffixes to find the PCU row, and resolves MEC composite target
+  locations and single-row multi-area contexts against distinct existing rows.
+
+## 1.10.6 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync now maps repeated MEC RFIs to separate existing rows when
+  each exact tag, area, and inspection-location tuple is unique. Duplicate or
+  conflicting route contexts remain in manual review.
+- Follow Up Apply now allows up to 256 retained recovery files, while keeping
+  the 8 GiB limit and refusing before mutation when either bound is exceeded.
+
+## 1.10.5 - 2026-09-26
+
+### Fixed
+
+- Follow Up Sync no longer adds generated mixed-status text to worksheet
+  Remarks cells. RFI Log REMARKS remain read-only evidence for Worley status.
+
+## 1.10.4 - 2026-09-26
+
+### Fixed
+
+- Follow Up sync quietly skips supported RFI routes and FINAL items that have
+  no matching row in the current template; multiple matches still require
+  manual review. On the supplied workbook pair this reduces unmapped warnings
+  from 173 to 7.
 
 ## 1.10.3 - 2026-09-25
 

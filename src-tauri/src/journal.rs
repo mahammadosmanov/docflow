@@ -23,7 +23,7 @@ const MAX_JOURNAL_STEPS: usize = 100_000;
 const MAX_CLEANUP_REVIEW_EVIDENCE_PER_JOB: usize = 16;
 pub(crate) const MAX_RETAINED_ARTIFACTS_PER_JOURNAL: usize = 8;
 pub(crate) const MAX_RECOVERY_LOCATOR_SCALARS: usize = 512;
-pub(crate) const MAX_S5_RETAINED_FILES: usize = 64;
+pub(crate) const MAX_S5_RETAINED_FILES: usize = 256;
 pub(crate) const MAX_S5_RETAINED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 pub(crate) const MAX_JOURNAL_ROOT_ENTRIES_SCANNED: usize = 4096;
 pub(crate) const MAX_PENDING_S5_RECORDS: usize = 256;
@@ -93,6 +93,7 @@ pub enum RetainedPublicationPhase {
     WritingCanonical,
     VerifyingCanonical,
     Applied,
+    RestoringOriginal,
     RecoveryRequired,
 }
 
@@ -483,6 +484,8 @@ pub struct RecoveryEntry {
     pub warning_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locator: Option<String>,
+    #[serde(default)]
+    pub restore_original_available: bool,
 }
 
 fn is_zero(value: &u64) -> bool {
@@ -503,6 +506,19 @@ pub(crate) struct S5PermitBundle {
 pub(crate) struct PendingS5Undo {
     record: JournalRecord,
     permits: S5PermitBundle,
+    mode: S5UndoMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum S5UndoMode {
+    CommittedApply,
+    RestoreFailedApply,
+}
+
+impl PendingS5Undo {
+    pub(crate) fn mode(&self) -> S5UndoMode {
+        self.mode
+    }
 }
 
 impl PendingS5Undo {
@@ -516,6 +532,7 @@ enum S5MutationLease {
     Undo {
         _permits: S5PermitBundle,
         roots: ValidatedGrantRootRoster,
+        mode: S5UndoMode,
     },
     Recovery {
         roots: ValidatedGrantRootRoster,
@@ -586,6 +603,8 @@ pub(crate) enum S5Transition {
         completed_step: Step,
         evidence: Vec<RetainedArtifactEvidence>,
     },
+    BeginFailedApplyRestore,
+    FinalizeFailedApplyRestore,
     FinalizeRecovery {
         terminal: S5RecoveryTerminal,
         notice: Option<RecoveryNotice>,
@@ -599,6 +618,7 @@ pub(crate) enum S5Transition {
 pub(crate) enum S5RecoveryTerminal {
     CompletedApply,
     CompletedUndo,
+    CompletedRestore,
     FailedPartial,
     OutcomeUnknown,
 }
@@ -619,6 +639,10 @@ impl ValidatedS5Record {
     ) -> Result<(), BackendError> {
         let apply_lease = matches!(self.lease, S5MutationLease::Apply(_));
         let undo_lease = matches!(self.lease, S5MutationLease::Undo { .. });
+        let undo_mode = match &self.lease {
+            S5MutationLease::Undo { mode, .. } => Some(*mode),
+            _ => None,
+        };
         let recovery_lease = matches!(self.lease, S5MutationLease::Recovery { .. });
         let mut candidate = self.record.clone();
         match transition {
@@ -722,6 +746,11 @@ impl ValidatedS5Record {
                     ));
                 }
                 if publication.purpose == RetainedPublicationPurpose::Undo {
+                    if undo_mode != Some(S5UndoMode::CommittedApply) {
+                        return Err(BackendError::journal_invalid(
+                            "S5 retained undo publication requires committed undo authority",
+                        ));
+                    }
                     let index = candidate.steps.len().checked_sub(1).ok_or_else(|| {
                         BackendError::journal_invalid("S5 undo step authority is missing")
                     })?;
@@ -824,7 +853,7 @@ impl ValidatedS5Record {
                 completed_step,
                 evidence,
             } => {
-                if !undo_lease {
+                if !undo_lease || undo_mode != Some(S5UndoMode::CommittedApply) {
                     return Err(BackendError::journal_invalid(
                         "S5 undo completion requires undo authority",
                     ));
@@ -849,6 +878,117 @@ impl ValidatedS5Record {
                 candidate.follow_up_phase = None;
                 candidate.recovery_notice = None;
                 candidate.pending_undo = None;
+                candidate.state = Some(JournalState::Undone);
+            }
+            S5Transition::BeginFailedApplyRestore => {
+                let first_admission = candidate.state == Some(JournalState::RecoveryRequired)
+                    && candidate.recovery_notice.is_some()
+                    && candidate
+                        .pending_publication
+                        .as_ref()
+                        .is_some_and(|publication| {
+                            publication.phase == RetainedPublicationPhase::RecoveryRequired
+                        });
+                let repeated_admission = candidate.state == Some(JournalState::Applying)
+                    && candidate.recovery_notice.is_none()
+                    && candidate
+                        .pending_publication
+                        .as_ref()
+                        .is_some_and(|publication| {
+                            publication.phase == RetainedPublicationPhase::RestoringOriginal
+                        });
+                let retry_after_unknown = candidate.state == Some(JournalState::RecoveryRequired)
+                    && candidate.recovery_notice.is_some()
+                    && candidate
+                        .pending_publication
+                        .as_ref()
+                        .is_some_and(|publication| {
+                            publication.phase == RetainedPublicationPhase::RestoringOriginal
+                        });
+                let displaced_original_pending = candidate
+                    .pending_publication
+                    .as_ref()
+                    .is_some_and(|publication| {
+                        publication.purpose == RetainedPublicationPurpose::Apply
+                            && matches!(
+                                publication.phase,
+                                RetainedPublicationPhase::RecoveryRequired
+                                    | RetainedPublicationPhase::RestoringOriginal
+                            )
+                            && candidate
+                                .pending_retained_artifact
+                                .as_ref()
+                                .is_some_and(|pending| {
+                                    pending.role == RetainedArtifactRole::DisplacedOriginal
+                                        && pending.path == publication.retained
+                                })
+                    });
+                if undo_mode != Some(S5UndoMode::RestoreFailedApply)
+                    || (!first_admission && !repeated_admission && !retry_after_unknown)
+                    || !displaced_original_pending
+                    || !candidate.steps.is_empty()
+                    || candidate.pending_undo.is_some()
+                    || candidate.pending_step.is_some()
+                    || !candidate.undone_steps.is_empty()
+                {
+                    return Err(BackendError::journal_invalid(
+                        "S5 failed apply restore admission is invalid",
+                    ));
+                }
+                let publication = candidate
+                    .pending_publication
+                    .as_mut()
+                    .filter(|publication| {
+                        publication.purpose == RetainedPublicationPurpose::Apply
+                            && matches!(
+                                publication.phase,
+                                RetainedPublicationPhase::RecoveryRequired
+                                    | RetainedPublicationPhase::RestoringOriginal
+                            )
+                    })
+                    .ok_or_else(|| {
+                        BackendError::journal_invalid(
+                            "S5 failed apply restore publication is invalid",
+                        )
+                    })?;
+                publication.phase = RetainedPublicationPhase::RestoringOriginal;
+                candidate.recovery_notice = None;
+                candidate.state = Some(JournalState::Applying);
+            }
+            S5Transition::FinalizeFailedApplyRestore => {
+                if undo_mode != Some(S5UndoMode::RestoreFailedApply)
+                    || candidate.state != Some(JournalState::Applying)
+                    || !candidate.steps.is_empty()
+                    || candidate.pending_step.is_some()
+                    || candidate.pending_undo.is_some()
+                    || !candidate.undone_steps.is_empty()
+                    || candidate.recovery_notice.is_some()
+                    || candidate
+                        .pending_publication
+                        .as_ref()
+                        .is_none_or(|publication| {
+                            publication.purpose != RetainedPublicationPurpose::Apply
+                                || publication.phase != RetainedPublicationPhase::RestoringOriginal
+                                || candidate.pending_retained_artifact.as_ref().is_none_or(
+                                    |pending| {
+                                        pending.role != RetainedArtifactRole::DisplacedOriginal
+                                            || pending.path != publication.retained
+                                    },
+                                )
+                        })
+                {
+                    return Err(BackendError::journal_invalid(
+                        "S5 failed apply restore completion is invalid",
+                    ));
+                }
+                candidate
+                    .retained_evidence
+                    .retain(|evidence| evidence.role != RetainedArtifactRole::DisplacedOriginal);
+                candidate.pending_publication = None;
+                candidate.pending_artifact_parent = None;
+                candidate.pending_retained_artifact = None;
+                candidate.follow_up_phase = None;
+                candidate.recovery_notice = None;
                 candidate.state = Some(JournalState::Undone);
             }
             S5Transition::FinalizeRecovery {
@@ -897,6 +1037,44 @@ impl ValidatedS5Record {
                         candidate.state = Some(JournalState::Undone);
                         candidate.recovery_notice = None;
                     }
+                    S5RecoveryTerminal::CompletedRestore => {
+                        let publication = publication
+                            .filter(|item| {
+                                item.purpose == RetainedPublicationPurpose::Apply
+                                    && item.phase == RetainedPublicationPhase::RestoringOriginal
+                            })
+                            .ok_or_else(|| {
+                                BackendError::journal_invalid(
+                                    "S5 restored apply publication is missing",
+                                )
+                            })?;
+                        if !candidate.steps.is_empty()
+                            || candidate.pending_step.is_some()
+                            || candidate.pending_undo.is_some()
+                            || !candidate.undone_steps.is_empty()
+                            || !matches!(
+                                (candidate.state, candidate.recovery_notice.is_some()),
+                                (Some(JournalState::Applying), false)
+                                    | (Some(JournalState::RecoveryRequired), true)
+                            )
+                            || candidate
+                                .pending_retained_artifact
+                                .as_ref()
+                                .is_none_or(|pending| {
+                                    pending.role != RetainedArtifactRole::DisplacedOriginal
+                                        || pending.path != publication.retained
+                                })
+                        {
+                            return Err(BackendError::journal_invalid(
+                                "S5 completed restore state is invalid",
+                            ));
+                        }
+                        candidate.retained_evidence.retain(|evidence| {
+                            evidence.role != RetainedArtifactRole::DisplacedOriginal
+                        });
+                        candidate.state = Some(JournalState::Undone);
+                        candidate.recovery_notice = None;
+                    }
                     S5RecoveryTerminal::FailedPartial => {
                         candidate.state = Some(JournalState::PartialCommitted);
                         candidate.recovery_notice = Some(notice.ok_or_else(|| {
@@ -925,7 +1103,14 @@ impl ValidatedS5Record {
                 candidate.state = Some(JournalState::PartialCommitted);
             }
             S5Transition::PrepareOutcomeUnknown(notice) => {
-                if let Some(publication) = candidate.pending_publication.as_mut() {
+                if let Some(publication) =
+                    candidate
+                        .pending_publication
+                        .as_mut()
+                        .filter(|publication| {
+                            publication.phase != RetainedPublicationPhase::RestoringOriginal
+                        })
+                {
                     publication.phase = RetainedPublicationPhase::RecoveryRequired;
                 }
                 candidate.recovery_notice = Some(notice);
@@ -975,6 +1160,13 @@ impl ValidatedS5Record {
             S5MutationLease::Recovery { roots } => Some(roots),
             #[cfg(test)]
             S5MutationLease::Test { .. } => None,
+        }
+    }
+
+    pub(crate) fn undo_mode(&self) -> Option<S5UndoMode> {
+        match &self.lease {
+            S5MutationLease::Undo { mode, .. } => Some(*mode),
+            _ => None,
         }
     }
 
@@ -1377,23 +1569,61 @@ impl JournalStore {
         permits: S5PermitBundle,
     ) -> Result<PendingS5Undo, BackendError> {
         let record = self.read_raw(journal_id)?;
-        if record.op_id != "rfi.follow_up_sync"
-            || record.owner_id.as_deref() != Some(caller.owner_id.as_str())
-            || record.state != Some(JournalState::Committed)
-            || record.steps.len() != 1
-            || record.steps[0].kind != crate::contracts::StepKind::RestoreBackup
-            || !record.undone_steps.is_empty()
-            || record.pending_step.is_some()
-            || record.pending_undo.is_some()
-            || record.pending_publication.is_some()
-            || record.recovery_notice.is_some()
-        {
+        let common = record.op_id == "rfi.follow_up_sync"
+            && record.owner_id.as_deref() == Some(caller.owner_id.as_str())
+            && record.pending_step.is_none()
+            && record.pending_undo.is_none()
+            && record.undone_steps.is_empty();
+        let committed_apply = common
+            && record.state == Some(JournalState::Committed)
+            && record.steps.len() == 1
+            && record.steps[0].kind == crate::contracts::StepKind::RestoreBackup
+            && record.pending_publication.is_none()
+            && record.recovery_notice.is_none();
+        let failed_apply_restore_state = record.steps.is_empty()
+            && ((record.state == Some(JournalState::RecoveryRequired)
+                && record.recovery_notice.is_some())
+                || (record.state == Some(JournalState::Applying)
+                    && record.recovery_notice.is_none()));
+        let restore_failed_apply = common
+            && failed_apply_restore_state
+            && record
+                .pending_publication
+                .as_ref()
+                .is_some_and(|publication| {
+                    publication.purpose == RetainedPublicationPurpose::Apply
+                        && (publication.phase == RetainedPublicationPhase::RecoveryRequired
+                            || publication.phase == RetainedPublicationPhase::RestoringOriginal)
+                        && record
+                            .pending_retained_artifact
+                            .as_ref()
+                            .is_some_and(|pending| {
+                                pending.role == RetainedArtifactRole::DisplacedOriginal
+                                    && pending.path == publication.retained
+                            })
+                        && (publication.phase != RetainedPublicationPhase::RecoveryRequired
+                            || record.state == Some(JournalState::RecoveryRequired))
+                        && (publication.phase != RetainedPublicationPhase::RestoringOriginal
+                            || matches!(
+                                record.state,
+                                Some(JournalState::Applying | JournalState::RecoveryRequired)
+                            ))
+                });
+        if !committed_apply && !restore_failed_apply {
             return Err(BackendError::journal_invalid(
                 "S5 journal is not eligible for exact undo",
             ));
         }
         validate_s5_fields(&record)?;
-        Ok(PendingS5Undo { record, permits })
+        Ok(PendingS5Undo {
+            record,
+            permits,
+            mode: if committed_apply {
+                S5UndoMode::CommittedApply
+            } else {
+                S5UndoMode::RestoreFailedApply
+            },
+        })
     }
 
     pub(crate) fn admit_s5_undo(
@@ -1412,6 +1642,7 @@ impl JournalStore {
             lease: S5MutationLease::Undo {
                 _permits: pending.permits,
                 roots,
+                mode: pending.mode,
             },
         })
     }
@@ -1609,7 +1840,15 @@ impl S5RecoverySession {
 
     pub(crate) fn next_root_accesses(&self) -> Option<&[GrantRootAccessRecord]> {
         match self.entries.front() {
-            Some(PendingS5Entry::Valid(record)) if record.recovery_notice.is_none() => {
+            Some(PendingS5Entry::Valid(record))
+                if record.recovery_notice.is_none()
+                    || record
+                        .pending_publication
+                        .as_ref()
+                        .is_some_and(|publication| {
+                            publication.phase == RetainedPublicationPhase::RestoringOriginal
+                        }) =>
+            {
                 Some(&record.grant_root_accesses)
             }
             Some(PendingS5Entry::Legacy(_)) | None => None,
@@ -1639,7 +1878,15 @@ impl S5RecoverySession {
         if record.owner_id.as_deref() != Some(caller.owner_id.as_str()) {
             return Err(BackendError::journal_owner_mismatch());
         }
-        if let Some(notice) = record.recovery_notice.clone() {
+        let restoring_original = record
+            .pending_publication
+            .as_ref()
+            .is_some_and(|publication| {
+                publication.phase == RetainedPublicationPhase::RestoringOriginal
+            });
+        if let Some(notice) = record.recovery_notice.clone()
+            && !restoring_original
+        {
             return Ok(Some(recovery_entry(&record, notice)));
         }
         let roots = roots.ok_or_else(|| {
@@ -1824,6 +2071,7 @@ fn legacy_recovery_entry(record: &JournalRecord) -> Option<RecoveryEntry> {
         disposition,
         warning_key: None,
         locator: None,
+        restore_original_available: false,
     })
 }
 
@@ -1855,7 +2103,37 @@ fn recovery_entry(record: &JournalRecord, notice: RecoveryNotice) -> RecoveryEnt
         disposition: RecoveryDisposition::OutcomeUnknown,
         warning_key: Some(notice.warning_key),
         locator: Some(notice.locator),
+        restore_original_available: failed_apply_restore_candidate(record),
     }
+}
+
+fn failed_apply_restore_candidate(record: &JournalRecord) -> bool {
+    let Some(publication) = record.pending_publication.as_ref() else {
+        return false;
+    };
+    let state_ready = matches!(
+        (record.state, record.recovery_notice.is_some()),
+        (Some(JournalState::RecoveryRequired), true) | (Some(JournalState::Applying), false)
+    );
+    state_ready
+        && record.op_id == "rfi.follow_up_sync"
+        && record.steps.is_empty()
+        && record.pending_step.is_none()
+        && record.pending_undo.is_none()
+        && record.undone_steps.is_empty()
+        && publication.purpose == RetainedPublicationPurpose::Apply
+        && matches!(
+            publication.phase,
+            RetainedPublicationPhase::RecoveryRequired
+                | RetainedPublicationPhase::RestoringOriginal
+        )
+        && record
+            .pending_retained_artifact
+            .as_ref()
+            .is_some_and(|pending| {
+                pending.role == RetainedArtifactRole::DisplacedOriginal
+                    && pending.path == publication.retained
+            })
 }
 
 fn validate_record(record: &JournalRecord) -> Result<(), BackendError> {
@@ -2321,6 +2599,335 @@ mod tests {
         record
     }
 
+    fn failed_apply_restore_record(root: &Path) -> JournalRecord {
+        let source = root.join("source.xlsx");
+        let target = root.join("target.xlsx");
+        let backup = root.join(".docflow-s5-backup-journal-failed-apply.xlsx");
+        let retained = root.join(".docflow-s5-retained-original-journal-failed-apply.xlsx");
+        let private = root.join(".docflow-backups/.docflow-s5-private-output.xlsx");
+        let locator = "journal:journal-failed-apply;root:0;leaf:.docflow-s5-retained-original-journal-failed-apply.xlsx";
+        let step = Step {
+            kind: crate::contracts::StepKind::WorkbookUpdate,
+            src: Some(target.to_string_lossy().into_owned()),
+            dst: Some(backup.to_string_lossy().into_owned()),
+            note_key: Some("note.rfi.followUp.workbookUpdate".to_string()),
+            meta: serde_json::Map::new(),
+        };
+        let root_text = root.to_string_lossy().into_owned();
+        let mut record = JournalRecord::new(
+            "journal-failed-apply",
+            "rfi.follow_up_sync",
+            "2026-08-29T00-00-00Z",
+            "owner",
+            "session",
+            "a".repeat(64),
+        );
+        record.state = Some(JournalState::RecoveryRequired);
+        record.grant_roots = vec![root_text.clone()];
+        record.grant_root_identities = vec![GrantRootIdentity {
+            root: root_text.clone(),
+            identity: test_identity(1),
+        }];
+        record.grant_root_accesses = vec![GrantRootAccessRecord {
+            root: root_text,
+            identity: test_identity(1),
+            access: PersistedRootAccess::ReadWrite,
+        }];
+        record.s5_authority = Some(S5AuthorityRecord {
+            initial_step: step,
+            source_path: source.to_string_lossy().into_owned(),
+            source_identity: test_identity(2),
+            target_path: target.to_string_lossy().into_owned(),
+            target_identity: test_identity(3),
+            approved_updates_sha256: "b".repeat(64),
+        });
+        record.pending_retained_artifact = Some(PendingRetainedArtifact {
+            role: RetainedArtifactRole::DisplacedOriginal,
+            path: retained.to_string_lossy().into_owned(),
+            locator: locator.to_string(),
+            creation_state: PendingArtifactCreationState::Created(test_identity(3)),
+        });
+        record.pending_publication = Some(RetainedPublication {
+            purpose: RetainedPublicationPurpose::Apply,
+            canonical: target.to_string_lossy().into_owned(),
+            retained: retained.to_string_lossy().into_owned(),
+            backup: backup.to_string_lossy().into_owned(),
+            publication_source: private.to_string_lossy().into_owned(),
+            expected_canonical_identity: test_identity(3),
+            expected_canonical_sha256: "c".repeat(64),
+            expected_backup_identity: test_identity(4),
+            expected_backup_sha256: "c".repeat(64),
+            publication_source_identity: test_identity(5),
+            publication_sha256: "e".repeat(64),
+            expected_canonical_security_sha256: "d".repeat(64),
+            expected_backup_security_sha256: "d".repeat(64),
+            publication_security_sha256: "f".repeat(64),
+            expected_canonical_default_stream_bytes: 1,
+            expected_canonical_auxiliary_charge_bytes: 0,
+            expected_canonical_logical_charge_bytes: 1,
+            destination_access_sha256: "1".repeat(64),
+            destination_auxiliary_sha256: "2".repeat(64),
+            destination_auxiliary_charge_bytes: 0,
+            retained_identity: Some(test_identity(3)),
+            retained_sha256: Some("c".repeat(64)),
+            retained_security_sha256: Some("d".repeat(64)),
+            created_canonical_identity: None,
+            phase: RetainedPublicationPhase::RecoveryRequired,
+        });
+        record.recovery_notice = Some(RecoveryNotice {
+            warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
+            locator: locator.to_string(),
+        });
+        record.follow_up_phase = Some(FollowUpJournalPhase::PublicationActive);
+        record
+    }
+
+    #[test]
+    fn failed_follow_up_apply_with_exact_displaced_original_is_eligible_for_restore_undo() {
+        let fixture = tempfile::tempdir().unwrap();
+        let store = JournalStore::new(fixture.path());
+        let permits = store.bind_s5_permits(
+            crate::progress::GlobalMutationLock::default()
+                .try_acquire()
+                .unwrap(),
+            store.try_acquire_mutation_lock().unwrap(),
+        );
+        let mut token =
+            ValidatedS5Record::for_test(failed_apply_restore_record(fixture.path()), permits)
+                .unwrap();
+        store.write_s5_cas(&mut token, 0).unwrap();
+        drop(token);
+
+        let permits = store.bind_s5_permits(
+            crate::progress::GlobalMutationLock::default()
+                .try_acquire()
+                .unwrap(),
+            store.try_acquire_mutation_lock().unwrap(),
+        );
+        let pending = store
+            .inspect_s5_for_undo(
+                "journal-failed-apply",
+                &crate::paths::CallerIdentity::new("owner", "session"),
+                permits,
+            )
+            .unwrap();
+
+        assert_eq!(pending.mode(), S5UndoMode::RestoreFailedApply);
+    }
+
+    struct FailedApplyRestoreFixture {
+        _directory: tempfile::TempDir,
+        authority: crate::fs_ops::FilesystemAuthority,
+        store: JournalStore,
+        caller: crate::paths::CallerIdentity,
+        target: PathBuf,
+        retained: PathBuf,
+        backup: PathBuf,
+        private: PathBuf,
+        original: Vec<u8>,
+    }
+
+    fn seed_failed_apply_restore_fixture() -> FailedApplyRestoreFixture {
+        use std::time::Duration;
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap();
+        let journal_root = root.join("journals");
+        let source = root.join("source.xlsx");
+        let target = root.join("target.xlsx");
+        let backup = root.join(".docflow-s5-backup-journal-failed-apply.xlsx");
+        let retained = root.join(".docflow-s5-retained-original-journal-failed-apply.xlsx");
+        let private = root.join(".docflow-backups/.docflow-s5-private-output.xlsx");
+        let original = b"original Follow Up workbook bytes".to_vec();
+        let applied = b"approved updated Follow Up bytes";
+        fs::create_dir_all(private.parent().unwrap()).unwrap();
+        fs::write(&source, b"RFI Log workbook bytes").unwrap();
+        fs::write(&target, &original).unwrap();
+        fs::copy(&target, &backup).unwrap();
+        fs::write(&private, applied).unwrap();
+
+        let authority =
+            crate::fs_ops::FilesystemAuthority::new(&journal_root, Duration::from_secs(300));
+        let caller = crate::paths::CallerIdentity::new("owner", "session");
+        authority
+            .issue_grant(
+                &crate::paths::GrantScope::new("owner", "session", "request", "rfi.follow_up_sync"),
+                &root,
+                crate::paths::GrantAccess::ReadWrite,
+            )
+            .unwrap();
+
+        let source_file = File::open(&source).unwrap();
+        let target_file = File::open(&target).unwrap();
+        let backup_file = File::open(&backup).unwrap();
+        let private_file = File::open(&private).unwrap();
+        let source_identity = crate::cap_fs::file_identity(&source_file).unwrap();
+        let target_identity = crate::cap_fs::file_identity(&target_file).unwrap();
+        let backup_identity = crate::cap_fs::file_identity(&backup_file).unwrap();
+        let private_identity = crate::cap_fs::file_identity(&private_file).unwrap();
+        let original_snapshot =
+            crate::cap_fs::FileSecuritySnapshot::capture(&target_file, None).unwrap();
+        let backup_snapshot =
+            crate::cap_fs::FileSecuritySnapshot::capture(&backup_file, None).unwrap();
+        let private_snapshot =
+            crate::cap_fs::FileSecuritySnapshot::capture(&private_file, None).unwrap();
+        let original_hash = format!("{:x}", Sha256::digest(&original));
+        let backup_hash = format!("{:x}", Sha256::digest(fs::read(&backup).unwrap()));
+        let private_hash = format!("{:x}", Sha256::digest(applied));
+        let root_identity = crate::cap_fs::CapabilityRoot::open(&root)
+            .unwrap()
+            .identity()
+            .unwrap();
+        fs::rename(&target, &retained).unwrap();
+
+        let mut record = failed_apply_restore_record(&root);
+        record.grant_root_identities[0].identity = root_identity.clone();
+        record.grant_root_accesses[0].identity = root_identity;
+        record.s5_authority.as_mut().unwrap().source_identity = source_identity;
+        record.s5_authority.as_mut().unwrap().target_identity = target_identity.clone();
+        let publication = record.pending_publication.as_mut().unwrap();
+        publication.expected_canonical_identity = target_identity.clone();
+        publication.expected_canonical_sha256 = original_hash.clone();
+        publication.expected_canonical_security_sha256 = original_snapshot.sha256();
+        publication.expected_backup_identity = backup_identity;
+        publication.expected_backup_sha256 = backup_hash;
+        publication.expected_backup_security_sha256 = backup_snapshot.sha256();
+        publication.publication_source_identity = private_identity;
+        publication.publication_sha256 = private_hash;
+        publication.publication_security_sha256 = private_snapshot.sha256();
+        publication.expected_canonical_default_stream_bytes =
+            u64::try_from(original.len()).unwrap();
+        publication.expected_canonical_auxiliary_charge_bytes =
+            original_snapshot.auxiliary_charge_bytes();
+        publication.expected_canonical_logical_charge_bytes = u64::try_from(original.len())
+            .unwrap()
+            .checked_add(original_snapshot.auxiliary_charge_bytes())
+            .unwrap();
+        publication.destination_access_sha256 = original_snapshot.access_sha256();
+        publication.destination_auxiliary_sha256 = original_snapshot.auxiliary_sha256();
+        publication.destination_auxiliary_charge_bytes = original_snapshot.auxiliary_charge_bytes();
+        publication.retained_identity = Some(target_identity.clone());
+        publication.retained_sha256 = Some(original_hash);
+        publication.retained_security_sha256 = Some(original_snapshot.sha256());
+        let pending = record.pending_retained_artifact.as_mut().unwrap();
+        pending.creation_state = PendingArtifactCreationState::Created(target_identity);
+
+        let store = JournalStore::new(&journal_root);
+        let permits = store.bind_s5_permits(
+            crate::progress::GlobalMutationLock::default()
+                .try_acquire()
+                .unwrap(),
+            store.try_acquire_mutation_lock().unwrap(),
+        );
+        let mut token = ValidatedS5Record::for_test(record, permits).unwrap();
+        store.write_s5_cas(&mut token, 0).unwrap();
+
+        FailedApplyRestoreFixture {
+            _directory: directory,
+            authority,
+            store,
+            caller,
+            target,
+            retained,
+            backup,
+            private,
+            original,
+        }
+    }
+
+    #[test]
+    fn failed_follow_up_apply_undo_restores_the_exact_original_and_keeps_backup() {
+        let fixture = seed_failed_apply_restore_fixture();
+
+        let result = fixture
+            .authority
+            .undo("journal-failed-apply", &fixture.caller, None)
+            .unwrap();
+
+        assert_eq!((result.applied, result.failed), (1, 0));
+        assert_eq!(fs::read(&fixture.target).unwrap(), fixture.original);
+        assert!(!fixture.retained.exists());
+        assert!(fixture.backup.exists());
+        assert!(fixture.private.exists());
+        let record = fixture
+            .store
+            .read_s5_for_test("journal-failed-apply")
+            .unwrap();
+        assert_eq!(record.state, Some(JournalState::Undone));
+        assert!(record.pending_publication.is_none());
+        assert!(
+            record
+                .retained_evidence
+                .iter()
+                .all(|evidence| { evidence.role != RetainedArtifactRole::DisplacedOriginal })
+        );
+        assert!(
+            fixture
+                .authority
+                .recover_pending(&fixture.caller)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn recovery_finalizes_an_exact_user_initiated_restore_without_moving_files() {
+        let fixture = seed_failed_apply_restore_fixture();
+        fs::rename(&fixture.retained, &fixture.target).unwrap();
+
+        let mut record = fixture
+            .store
+            .read_s5_for_test("journal-failed-apply")
+            .unwrap();
+        record.state = Some(JournalState::Applying);
+        record.recovery_notice = None;
+        record.pending_publication.as_mut().unwrap().phase =
+            RetainedPublicationPhase::RestoringOriginal;
+        let permits = fixture.store.bind_s5_permits(
+            crate::progress::GlobalMutationLock::default()
+                .try_acquire()
+                .unwrap(),
+            fixture.store.try_acquire_mutation_lock().unwrap(),
+        );
+        let mut token = ValidatedS5Record::for_test(record, permits).unwrap();
+        let revision = token.revision();
+        fixture.store.write_s5_cas(&mut token, revision).unwrap();
+        drop(token);
+
+        let entries = fixture.authority.recover_pending(&fixture.caller).unwrap();
+        assert!(entries.is_empty(), "{entries:?}");
+
+        assert_eq!(fs::read(&fixture.target).unwrap(), fixture.original);
+        assert!(!fixture.retained.exists());
+        assert!(fixture.backup.exists());
+        assert!(fixture.private.exists());
+        let recovered = fixture
+            .store
+            .read_s5_for_test("journal-failed-apply")
+            .unwrap();
+        assert_eq!(recovered.state, Some(JournalState::Undone));
+        assert!(recovered.pending_publication.is_none());
+    }
+
+    #[test]
+    fn failed_follow_up_apply_restore_never_clobbers_a_new_canonical_file() {
+        let fixture = seed_failed_apply_restore_fixture();
+        fs::write(&fixture.target, b"a later user file").unwrap();
+
+        assert!(
+            fixture
+                .authority
+                .undo("journal-failed-apply", &fixture.caller, None)
+                .is_err()
+        );
+
+        assert_eq!(fs::read(&fixture.target).unwrap(), b"a later user file");
+        assert_eq!(fs::read(&fixture.retained).unwrap(), fixture.original);
+        let entries = fixture.authority.recover_pending(&fixture.caller).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].restore_original_available);
+    }
+
     #[cfg(windows)]
     #[test]
     fn journal_replace_retries_transient_windows_access_denied() {
@@ -2436,6 +3043,7 @@ mod tests {
             disposition: RecoveryDisposition::OutcomeUnknown,
             warning_key: Some("error.rfi.followUp.recoveryRequired".to_string()),
             locator: Some("journal:journal-s5;root:0;leaf:evidence.xlsx".to_string()),
+            restore_original_available: false,
         };
 
         assert_eq!(
@@ -2444,7 +3052,8 @@ mod tests {
                 "journalId": "journal-s5",
                 "disposition": "outcome_unknown",
                 "warningKey": "error.rfi.followUp.recoveryRequired",
-                "locator": "journal:journal-s5;root:0;leaf:evidence.xlsx"
+                "locator": "journal:journal-s5;root:0;leaf:evidence.xlsx",
+                "restoreOriginalAvailable": false
             })
         );
     }

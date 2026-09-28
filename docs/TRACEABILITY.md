@@ -6,7 +6,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | Requirement | Primary implementation | Primary evidence |
 |---|---|---|
 | DF-001, DF-002 | `plan_store.rs`, `native.rs`, `fs_ops.rs` | `filesystem_authority.rs`, backend plan tests |
-| DF-003, DF-004 | `cap_fs.rs`, `journal.rs`, `undo.rs`, `leaf_transaction.rs` | filesystem fault/recovery tests |
+| DF-003, DF-004 | `cap_fs.rs`, `journal.rs`, `undo.rs`, `leaf_transaction.rs`, `fs_ops.rs`, Recovery Center | filesystem fault/recovery tests, including exact failed Follow Up Apply restoration and no-clobber collision refusal |
 | DF-005 | `rfi_code.rs`, `ocr.rs`, RFI operations | `process_scans.rs`, `rfi_follow_up_native.rs`, `examples/ocr_corpus_audit.rs` |
 | DF-006 | `ooxml.rs`, `rfi_log.rs`, `rfi_follow_up.rs`, `rfi_system_sync.rs` | `ooxml_fidelity.rs`, `rfi_log_native.rs`, `rfi_system_sync_native.rs` |
 | DF-007 | `operations/stage_signed_pages.rs`, `pdf.rs` | `signed_pages.rs` integration suite |
@@ -18,7 +18,8 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-013 | docs, Windows workflow, package audit | `windows_workflow.test.mjs`, release records |
 | DF-014 | `version_manager.mjs`, manifests, release catalog | `version_manager.test.mjs`, package audit/smoke |
 | DF-015 | `operations/pdf_orientation.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs` | OCR cascade/consensus/direction-score unit tests, `pdf_orientation.rs` including opt-in operator page/directory regressions, `signed_pages.rs`, registry and localization tests |
-| DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` prepared FINAL Signed/Not Signed, PCU FINAL Worley, protected-sheet, exact-cell, and formula fail-closed tests; `rfi_follow_up_current.rs`; `ooxml_fidelity.rs` |
+| DF-016 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` no-match skips, CIV `PCS-` exclusion and existing-group removal, exact distinct-area CIV fan-out, exact MEC multi-area fan-out, composite MEC target-location matching, duplicate-context manual review, eligible FINAL status, protected-sheet, exact-cell, and formula fail-closed tests; `rfi_follow_up_current.rs`; `ooxml_fidelity.rs` |
+| DF-034 | `journal.rs`, `cap_fs.rs`, `fs_ops.rs` | retained-storage reservations and bounded no-follow S5 artifact scans fail before workbook mutation |
 | DF-017 | `print_queue.rs`, `platform/excel.rs`, `platform/mod.rs`, `platform/windows/printing.rs`, `registry.rs`, generic `App.tsx` form | Excel envelope/platform-decoder delegation tests, `batch_print.rs` accepted-unconfirmed continuation test, Windows transient-status/title/query-race policy tests, `native.rs` settings tests, locale equality, `App.test.tsx` explicit-restore test |
 | DF-018 | `scan_index.rs`, `operations/pdf_orientation.rs`, `rfi_system_sync.rs`, generic `App.tsx` summary | scan-index unit tests, `pdf_orientation.rs`, `rfi_system_sync_native.rs`, `App.test.tsx` |
 | DF-019 | OCR operation metadata, `native.rs` review DTO, generic `App.tsx` percent renderer and responsive CSS | `process_scans.rs`, `signed_pages.rs`, `App.test.tsx`, small-viewport Playwright evidence |
@@ -34,8 +35,9 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-029 | `outlook_reply_draft.rs`, `platform/windows/outlook.rs`, `native.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | fake Outlook archive authority tests, generated-write Apply/Undo test, registry fixture, locale parity, Windows test-target compile |
 | DF-030 | `rfi_system_sync.rs`, `scan_index.rs` | `rfi_system_sync_native.rs` exact-filename, synthetic OTHERS, cache-profile, and operator-supplied signed/unsigned PDF tests |
 | DF-031 | `rfi_log.rs`, `outlook_reply_draft.rs`, `native.rs`, `backend.rs`, generic `App.tsx` result flow | `rfi_log_native.rs`, `outlook_reply_draft.rs`, backend command roster, locale parity, and `App.test.tsx` guarded handoff test |
-| DF-032 | `operations/process_scans.rs`, `pdf.rs`, `fs_ops.rs`, `native.rs` | `process_scans.rs` page grouping, discipline paths, extraction fidelity, collision, source drift, apply/undo, and Windows compile checks |
-| DF-033 | `rfi_follow_up.rs`, `ooxml.rs`, `fs_ops.rs` | `rfi_follow_up_native.rs` mixed CIV/PCU per-RFI status remarks, preservation, idempotent replacement, exact remark-cell preview/apply/undo, and unsafe-target review |
+| DF-032 | `operations/process_scans.rs`, `pdf.rs`, `fs_ops.rs`, `native.rs` | `process_scans.rs` confirmed-cover grouping, uncertain/unreadable continuation pages, leading-page and duplicate review, discipline paths, extraction fidelity, collision, source drift, apply/undo, and Windows compile checks |
+| DF-035 | `operations/process_scans.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | Process Scans orientation decisions, uncertainty routing, rotation fidelity, source drift, no-clobber Apply/Undo, registry snapshot, and four-locale parity |
+| DF-033 | Retired by ADR 0028 | `rfi_follow_up_native.rs` confirms mixed-status groups update lifecycle status without adding Follow Up Remarks fields or guarded Remarks cell writes |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
 repository root as context requires. When an owner or acceptance path moves,

@@ -1202,6 +1202,37 @@ impl AnchoredPath {
             .map_err(CapabilityEffectError::outcome_unknown)
     }
 
+    pub(crate) fn restore_original_name_no_clobber(
+        &self,
+        canonical: &AnchoredPath,
+    ) -> Result<(), CapabilityEffectError> {
+        self.require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        canonical
+            .require_write()
+            .map_err(CapabilityEffectError::no_effect)?;
+        let retained_parent = self
+            .parent
+            .identity()
+            .map_err(CapabilityEffectError::no_effect)?;
+        let canonical_parent = canonical
+            .parent
+            .identity()
+            .map_err(CapabilityEffectError::no_effect)?;
+        if retained_parent != canonical_parent {
+            return Err(CapabilityEffectError::no_effect(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "original restoration must remain in the canonical parent",
+            )));
+        }
+        self.parent
+            .rename(&self.name, &canonical.parent, &canonical.name, false)
+            .map_err(CapabilityEffectError::no_effect)?;
+        self.parent
+            .sync_all()
+            .map_err(CapabilityEffectError::outcome_unknown)
+    }
+
     pub(crate) fn sync_parent(&self) -> io::Result<()> {
         self.require_write()?;
         self.parent.sync_all()
@@ -2284,6 +2315,41 @@ mod tests {
         std::fs::write(&canonical_path, b"racer").unwrap();
         let error = canonical
             .retain_current_name_no_clobber(&retained)
+            .unwrap_err();
+        assert!(!error.is_outcome_unknown());
+        assert_eq!(std::fs::read(&canonical_path).unwrap(), b"racer");
+        assert_eq!(std::fs::read(&retained_path).unwrap(), b"original");
+    }
+
+    #[test]
+    fn failed_apply_restore_moves_only_the_same_parent_retained_original_without_clobber() {
+        let fixture = tempdir().unwrap();
+        let root = CapabilityRoot::open(fixture.path()).unwrap();
+        let canonical_path = fixture.path().join("Follow Up.xlsx");
+        let retained_path = fixture
+            .path()
+            .join(".docflow-s5-retained-original-test.xlsx");
+        std::fs::write(&canonical_path, b"original").unwrap();
+        let canonical = root.authorize(&canonical_path).unwrap().anchor().unwrap();
+        let retained = root.authorize(&retained_path).unwrap().anchor().unwrap();
+        let original_identity = file_identity(&canonical.open_read().unwrap()).unwrap();
+
+        canonical.retain_current_name_no_clobber(&retained).unwrap();
+        retained
+            .restore_original_name_no_clobber(&canonical)
+            .unwrap();
+
+        assert_eq!(
+            file_identity(&canonical.open_read().unwrap()).unwrap(),
+            original_identity
+        );
+        assert_eq!(std::fs::read(&canonical_path).unwrap(), b"original");
+        assert!(!retained_path.exists());
+
+        canonical.retain_current_name_no_clobber(&retained).unwrap();
+        std::fs::write(&canonical_path, b"racer").unwrap();
+        let error = retained
+            .restore_original_name_no_clobber(&canonical)
             .unwrap_err();
         assert!(!error.is_outcome_unknown());
         assert_eq!(std::fs::read(&canonical_path).unwrap(), b"racer");

@@ -43,9 +43,26 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   high-confidence PDF decisions may create no-clobber corrected copies under a
   separate review root; the source tree remains read-only.
 - **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
-  receive only uniquely mapped RFI Log records. Shared-cell status is derived
-  from every remaining RFI; Cancelled/Rejected entries are removed; FINAL
-  Worley state follows the exact REMARKS marker; excluded sheets never change.
+  receive uniquely mapped RFI Log records. A supported route with no matching
+  Follow Up row, including a FINAL item with no prepared target row, is outside
+  the current template scope and is silently skipped. Multiple distinct exact
+  CIV area tags may map to their respective distinct existing rows, except any
+  CIV source RFI with a `Tag No` beginning `PCS-`: those RFIs are outside Follow
+  Up scope, are never added, and are removed from existing groups. This includes
+  composite tags such as `PCS-19/S1,S2,S3`. Repeated MEC records may map to
+  multiple existing rows only when each row has a unique
+  exact `(Tag No, Area, Inspection Location)` context from same-status,
+  same-item source records. MEC may split a target cell's slash/comma-delimited location values and
+  may fan one source row across distinct explicit Area values only when Tag No
+  and Inspection Location are each single-valued. Duplicate contexts and all
+  other non-unique matches remain manual review. No rows or sections are
+  created. Shared-cell status is derived from every remaining RFI;
+  Cancelled/Rejected entries are removed; FINAL Worley state follows the exact
+  REMARKS marker; excluded sheets never change.
+- **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
+  limited to 256 files and 8 GiB of logical charge across the workbook parent
+  and `.docflow-backups`. Apply and Undo refuse before mutation when the
+  projected bound would be exceeded.
 - **DF-017 — Resilient print handoff:** a complete Windows spool submission is
   not failed merely because a driver immediately releases its job record.
   A native-app request accepted by Windows but not exposed as an identifiable
@@ -157,25 +174,26 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   and requires its own Preview and Apply.
 - **DF-032 — Ordered batch RFI scan separation:** Process Scans may inspect one
   top-level multi-page PDF as a sequential stack. A page with one strict,
-  high-confidence RFI code starts that RFI; a page with no candidate continues
-  the current RFI. Pages before the first identified RFI, uncertain pages, and
-  duplicate RFI starts remain separate Review output. Each output contains only
-  its approved pages, retains existing canonical filenames and duplicate/no-
-  clobber rules, and places CIV/MEC/ELE/PRC results beneath matching discipline
-  folders. Preview pins source hashes and exact page indexes; Apply extracts
-  only those pages, verifies fidelity, journals every output, and moves the
-  combined source to recoverable trash only after all its outputs succeed when
-  Keep original is off. Unsupported or drifted PDFs fail closed to Review or
-  Apply refusal; no page is silently dropped.
-- **DF-033 — Mixed Follow Up status remarks:** `rfi.follow_up_sync` writes the
-  individual mapped status of every RFI in a shared group to the existing row
-  Remarks cell on CIV and PCU only when at least two RFIs resolve and one is
-  Completed. Existing remarks are preserved; one generated status line is
-  replaced on later syncs. The remark cell is included in the exact approved
-  Plan and guarded Apply. Unsafe or missing remark targets leave the affected
-  update in manual review. A physically absent blank target may be created only
-  in the existing row and header-defined Remarks column. MEC, Road, and Signed
-  By remarks never change.
+  high-confidence canonical RFI code starts a confirmed cover and the next RFI
+  group. Every page after a confirmed cover belongs to that group until another
+  confirmed cover appears, even when continuation-page OCR is uncertain or
+  unreadable. Pages before the first identified RFI and duplicate RFI starts
+  remain Review output. Each output contains only its approved pages, retains
+  existing canonical filenames and duplicate/no-clobber rules, and places
+  CIV/MEC/ELE/PRC results beneath matching discipline folders. Preview pins
+  source hashes and exact page indexes; Apply extracts only those pages,
+  verifies fidelity, journals every output, and moves the combined source to
+  recoverable trash only after all its outputs succeed when Keep original is
+  off. Unsupported or drifted PDFs fail closed to Review or Apply refusal; no
+  page is silently dropped.
+- **DF-035 — Process Scans orientation:** Process Scans checks every input PDF
+  page with the existing bounded orientation detector by default. It applies
+  only confident page rotations to the approved output, leaves source PDFs
+  unchanged, and sends any PDF with uncertain orientation to `_review` intact.
+  Operators may disable orientation correction in the schema-driven form.
+- **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
+  `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
+  remain read-only source evidence for Worley Signed/Not Signed status.
 
 ## Scope
 

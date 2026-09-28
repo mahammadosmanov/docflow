@@ -7,13 +7,14 @@
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
-| `rfi.follow_up_sync` | Add/update mapped CIV/MEC Follow Up groups, remove Cancelled/Rejected entries, add per-RFI status remarks for mixed completed groups on CIV/PCU, and synchronize FINAL Worley state in Signed By sheets plus the current PCU FINAL Worley column |
+| `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state; never change worksheet Remarks; leave ambiguous matches in manual review |
 | `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
 | `rfi.outlook_archive_selected` | Revalidate one selected Outlook message and create a guarded Unicode MSG staging copy |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
+| `rfi.follow_up_sync` | Synchronize uniquely mapped RFI Log statuses into existing Follow Up workbook groups |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
 | `files.replica_publish` | Publish one selected RFI System source to two targets with backup-first verified replacement, Undo, and optional standing authorization |
 
@@ -51,6 +52,9 @@
   Apply/Cancel actions reachable through bounded vertical or table scrolling.
 - Persistent local history, explicit recovery center, guarded undo, and
   recoverable review trash.
+- A failed Follow Up Apply can restore its displaced original through an
+  explicit Undo action when the journal proves exact file identity, content,
+  and security metadata; a collision or mismatch leaves both files untouched.
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
 - Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
@@ -88,10 +92,15 @@
 
 ## Intentional limits
 
-- Process Scans discovers top-level PDFs only. It separates sequential RFI
-  batches by page, keeps pages without an RFI candidate with the current RFI,
-  and sends uncertain pages to `_review`. CIV/MEC/ELE/PRC outputs use matching
-  discipline folders. Signed-page input recursion defaults
+- Process Scans discovers top-level PDFs only. In a multi-page batch, only a
+  strict, canonical, high-confidence RFI identity starts a new group. Every
+  page after a confirmed cover stays with that RFI until the next confirmed
+  cover, even if continuation-page RFI-identity OCR is uncertain or unreadable.
+  Pages before the first cover and duplicate RFI starts remain in `_review`.
+  CIV/MEC/ELE/PRC outputs use matching discipline folders. Page orientation
+  correction defaults on and uses the existing bounded detector; uncertain
+  files go unchanged to `_review`.
+  Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent. Selected-mail archival creates only a
   local MSG copy; it never changes, moves, deletes, or sends mailbox content.

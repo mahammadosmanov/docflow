@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.10.3**. `VERSION` is authoritative.
+Current product version: **1.11.9**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -75,11 +75,11 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Exact high-confidence RFI starts; blank pages continue the current RFI; uncertain pages go to `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; no-overwrite and recoverable source handling |
+| Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Strict high-confidence covers delimit RFIs; all pages up to the next confirmed cover stay with the current RFI, including continuations with uncertain or unreadable RFI-identity OCR; pages before the first cover remain in `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; no-overwrite and recoverable source handling |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into exact per-RFI folders | Top-level source is read-only; exact ASCII identifiers only; multi-RFI fan-out is previewed; collisions do not overwrite; unmatched/unreadable files go to `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
-| RFI Follow Up sync | Project RFI Log statuses into existing Follow Up groups and Worley tables; explain mixed completed groups in CIV/PCU row remarks | Per-RFI mapped status remark only for multi-RFI groups containing a Completed RFI; exact existing Remarks cell, preserved operator text, immutable Plan, guarded Apply, backup, and undo |
+| RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; match remaining exact ITP/item, area, and inspection-location contexts; skip unsupported template scope; ambiguous matches remain manual review; never create rows or sections or change worksheet Remarks; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |
 | RFI completion-status sync | Detect exact completed RFI PDFs at every nesting depth and mark approved RFI Log rows Completed | Read-only bounded parallel discovery; exact filenames and rows; conflicting/formula/merged targets fail closed; backup, closed OOXML delta verification, journal, and undo |
 | RFI System replica publication | Publish CIV/MEC/ELE/PRC and selected root files from one chosen source to two targets manually or under a standing authorization | Complete no-symlink scans, durable fingerprint-scoped incremental hashing, retained version backup before replacement, serial fail-fast Apply, live hash verification, journal, Undo, no automatic deletion |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
