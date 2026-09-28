@@ -21,10 +21,19 @@ Updated: 2026-09-28
   and Recovery Center tests pass; 55 frontend tests, frontend build, Node
   tooling tests, version/docs/source/license audits, Rust 1.97.1 fmt/Clippy,
   and full Rust tests pass. Seven operator-data tests remain ignored.
-- Version: 1.11.8 (`fix`). Push, PR checks, immutable tag, and release
-  workflow are pending. Windows installer/Office acceptance remains separate.
-- Next: commit this slice, push the existing Follow Up branch, wait for its CI,
-  then publish the exact commit as v1.11.8 and verify the Windows release run.
+- Version: 1.11.8 (`fix`), commit `84632c6b70c6c04f7d1a98e9649312425ec14e92`.
+  Pushed to `rohtolos/follow-up-unmatched-skip`; PR #34 Node/React and Rust
+  format/Clippy/test jobs passed. Immutable tag `v1.11.8` is published.
+- Windows Release run `36408268229` passed build, clean NSIS install/startup/
+  package/uninstall smoke, package audit, and release publication in 34m30s.
+  Manifest and smoke evidence bind to the exact commit. Installer size is
+  32,221,929 bytes; SHA-256 is
+  `17a65109969ba65110ec565fad51a3681ded71cbea829d6fb4e078e1b4bf9d49`.
+- Microsoft Office/Excel acceptance remains separate. The operator's restored
+  workbook was not accessed or modified by this work.
+- Next: install v1.11.8 and validate the explicit restore on an isolated copy;
+  use the published release at
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.11.8.
 
 ## Follow Up false manual-review fix
 

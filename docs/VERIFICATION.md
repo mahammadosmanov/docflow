@@ -4,6 +4,34 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.11.8 - 2026-09-28
+
+Failed Follow Up Apply can now be explicitly undone when the journal proves the
+original workbook was displaced. Restore checks the original file identity,
+bytes, and security metadata, and uses a same-parent no-clobber rename only when
+the canonical path is absent. Recovery only finalizes an exact completed
+restore. A collision or mismatch preserves both current files and all retained
+backup/private-output evidence. The operator had restored their workbook before
+this fix; the supplied workbook files were not accessed or changed.
+
+Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, 374 unit tests, and
+all enabled integration tests pass; seven operator-data tests remain ignored.
+All 23 Node tooling tests and 55 React tests pass. The frontend build, version,
+documentation, source, and dependency-license audits pass. The build keeps the
+existing non-failing Vite warning for a 639.40 kB JavaScript chunk.
+
+PR #34 checks passed for Node/React and Rust format/Clippy/tests. Windows Release
+run `36408268229` passed in 34m30s for exact commit
+`84632c6b70c6c04f7d1a98e9649312425ec14e92`, including installer build, package
+audit, clean NSIS install/startup/uninstall smoke, and publication of
+[`v1.11.8`](https://github.com/mahammadosmanov/docflow/releases/tag/v1.11.8).
+The 32,221,929-byte installer SHA-256 is
+`17a65109969ba65110ec565fad51a3681ded71cbea829d6fb4e078e1b4bf9d49`. The
+published manifest and smoke evidence bind that hash to the exact commit;
+smoke reports package audit and uninstall passed, 4,613 ms install, 43 ms cold
+start, and 22,532,096-byte peak working set. Microsoft Office/Excel acceptance
+remains outside this workflow.
+
 ## 1.11.4 - 2026-09-27
 
 A read-only Preview on the supplied RFI Log and Follow Up workbooks reduced the
