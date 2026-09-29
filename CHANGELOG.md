@@ -3,6 +3,33 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.2 - 2026-09-29
+
+### Fixed
+
+- Fast Cover Scans creates missing per-RFI folders even when the destination
+  already contains other RFI folders. Page extraction preserves self-contained
+  XML metadata and safely omits only empty outline trees, so the supplied scan
+  can be split without sending the entire PDF to `_review`.
+
+## 1.12.1 - 2026-09-29
+
+### Fixed
+
+- Publish the Windows installer checksum sidecar used by its artifact manifest;
+  verify it matches the installer instead of regenerating it with different
+  line endings.
+
+## 1.12.0 - 2026-09-28
+
+### Added
+
+- Added a separate Fast Cover Scans operation for multi-page RFI PDFs. It checks
+  known cover cues in four directions, keeps continuation pages with the current
+  RFI, and sends unresolved possible covers to `_review`. Normal Process Scans
+  remains unchanged. Page rotation correction defaults off in the fast flow to
+  avoid a second full-page OCR pass.
+
 ## 1.11.9 - 2026-09-28
 
 ### Fixed

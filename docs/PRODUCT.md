@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.11.9**. `VERSION` is authoritative.
+Current product version: **1.12.2**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -75,7 +75,8 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Strict high-confidence covers delimit RFIs; all pages up to the next confirmed cover stay with the current RFI, including continuations with uncertain or unreadable RFI-identity OCR; pages before the first cover remain in `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; no-overwrite and recoverable source handling |
+| Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Strict high-confidence covers delimit RFIs; all pages up to the next confirmed cover stay with the current RFI, including continuations with uncertain or unreadable RFI-identity OCR; pages before the first cover remain in `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; self-contained XML metadata is preserved and only empty outline trees are omitted; no-overwrite and recoverable source handling |
+| Fast Cover Scans | Use a separate high-speed, known-template cover detector on top-level multi-page RFI PDFs | Requires visible OCR agreement on exact RFI identity, request heading, and known project/client mark; continuation pages stay attached; missing per-RFI folders are created under the matching discipline even when other RFI folders already exist; unresolved possible covers start a Review group; page rotation correction defaults off; normal Process Scans remains unchanged |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into exact per-RFI folders | Top-level source is read-only; exact ASCII identifiers only; multi-RFI fan-out is previewed; collisions do not overwrite; unmatched/unreadable files go to `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |

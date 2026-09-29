@@ -4,6 +4,90 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.12.2 - 2026-09-29 (source candidate)
+
+The supplied 83-page scan was readable by the cover OCR, but page separation
+rejected its catalog because it had a self-contained XML Metadata stream and an
+empty `/Outlines` tree (`/Count 0`, with no `/First` or `/Last`). The planner
+therefore returned no groups and a generic unreadable warning. Extraction now
+preserves that XML stream, omits only explicitly empty outlines, and continues
+to reject active outline trees and unsupported catalog features. Fast Cover
+Scans also creates exact missing per-RFI folders when the selected destination
+already contains other RFI folders.
+
+On the supplied file's disposable copy, Preview grouped all 83 pages under one
+confirmed RFI in 51,766 ms with four workers, with zero unreadable warnings or
+Review groups. First-page cover OCR completed in 1,467 ms. The source PDF stayed
+unchanged. Focused filesystem Apply/Undo verifies that the new RFI folder and
+renamed PDF are created while pre-existing RFI folders survive Undo.
+
+Local source evidence passed: Rust 1.97.1 formatting, warnings-denied Clippy,
+Cargo check and full tests; Process Scans integration tests (32 passed, 2
+operator-data tests ignored); 24 Node and 55 React tests; TypeScript/Vite build;
+version, documentation, package-source, and license audits. The frontend build
+retained its non-failing 641.22 kB chunk warning. Pull request quality and native
+Windows installer/release gates remain pending for the final commit.
+
+## 1.12.1 - 2026-09-29
+
+The Windows tagged-release job now publishes the same checksum sidecar that
+the artifact manifest hashes, and fails if its contents do not match the
+installer. A workflow contract regression protects this path. Local checks
+passed: 24 Node tests, 55 React tests, production frontend build, version,
+documentation, source, and dependency-license audits; the build retains the
+non-failing 641.22 kB chunk warning. PR #36 quality run `36479039132` passed all
+jobs: Node/React (35s), Rust format/Clippy (4m48s), and Rust tests/check
+(11m22s).
+
+Windows Release run `36480484218` passed in 34m14s for exact commit
+`52787702a96f2c396b990aaf6324d805a5394f5b`, including installer build, package
+audit, clean NSIS install/startup/uninstall smoke, and publication of
+[`v1.12.1`](https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.1).
+The installer is 32,273,513 bytes with SHA-256
+`93ec0a7dc64e59403fac1f52c42861bf5838cccb1afc504e4024d5a388c01875`. Eight
+downloaded-evidence checks passed: commit and version, installer asset digest,
+sidecar content and asset digest against `checksumSha256`, smoke result and
+evidence digest, and manifest asset digest. Smoke reports package audit and
+uninstall passed, 4,592 ms install, 42 ms cold start, and 22,941,696-byte peak
+working set.
+
+## 1.12.0 - 2026-09-29
+
+Fast Cover Scans adds a separate opt-in operation for multi-page RFI PDFs. On a
+13-PDF CIV/MEC/PRC/ELE corpus (95 original pages), it detected all 13 first-page
+covers with no continuation false covers or continuation pages routed to Review.
+It detected 39/39 temporary PDF display-rotation variants. A read-only preview
+of the supplied 4-page CIV-1063 sample produced one group in 4,279 ms with four
+workers. The source sample was copied into a disposable test directory and was
+not modified. A synthetic Preview/Apply/Undo regression verifies the exact
+operation-bound journal flow and confirms normal Process Scans still uses its
+existing behavior.
+
+Rust 1.97.1 formatting, warnings-denied Clippy, Cargo check, and the full Rust
+suite pass (622 passed, 11 ignored); 23 Node tooling tests and 55 React tests
+pass. The frontend build and version, documentation, source, and dependency
+license audits pass. The frontend build reports a non-failing 641.22 kB
+JavaScript chunk warning. PR #36 quality run `36473292966` passed Node/React,
+Rust format/Clippy, and Rust tests/check after CI began clearing the test target
+before its separate Cargo check. Windows Release run `36474607152` passed in
+28m29s for exact commit `6c70cbb95a0fbb37e2c95c5d35102a39819f3c8a`, including
+installer build, package audit, clean NSIS install/startup/uninstall smoke, and
+publication of [`v1.12.0`](https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.0).
+The 32,270,304-byte installer SHA-256 is
+`9f2ebf195830842ce87d3d1cd6ff6d66b05d78b9991099f7147c35f19cbe430e`. Published
+manifest and smoke evidence bind to the exact commit and installer hash; smoke
+reports package audit and uninstall passed, 2,862 ms install, 26 ms cold start,
+and 22,589,440-byte peak working set. These checks do not certify physically
+rotated raster scans, unsupported cover templates, or processing the operator's
+real scan corpus on Windows.
+
+Post-publication asset verification found that the manifest's `checksumSha256`
+(`3811fd2a20831a25b2081fc56bbff525b22deaa2a411d4a3e0754d7862fb0f5e`) does not
+match the published checksum sidecar asset digest
+(`c11291e37083f572094a93df35fc346c7391a110ec09cffa3a81312581f3d24f`). The
+sidecar still contains the correct installer hash above. The tagged release is
+immutable; the workflow fix shipped in `v1.12.1` without changing `v1.12.0`.
+
 ## 1.11.8 - 2026-09-28
 
 Failed Follow Up Apply can now be explicitly undone when the journal proves the

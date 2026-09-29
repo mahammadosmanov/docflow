@@ -179,7 +179,7 @@ describe("DocFlow shell", () => {
 
     render(<App />);
     await signIn();
-    fireEvent.click(screen.getByRole("button", { name: /Taramaları İşle/ }));
+    fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
     await screen.findByRole("heading", { name: "Ayarlar" });
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
@@ -1156,7 +1156,7 @@ describe("DocFlow shell", () => {
     expect(
       await screen.findByRole("heading", { name: "İşlemler" }),
     ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: /Taramaları İşle/ }));
+    fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
 
     expect(
       await screen.findByRole("heading", { name: "Ayarlar" }),

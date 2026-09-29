@@ -47,7 +47,7 @@ export function auditDocumentation(root = REPOSITORY_ROOT) {
 
   const registry = readFileSync(join(root, "src-tauri/src/registry.rs"), "utf8");
   const registered = new Set(
-    [...registry.matchAll(/^\s{8}"((?:rfi|files)\.[a-z0-9_]+)",$/gmu)].map(
+    [...registry.matchAll(/^\s*"((?:rfi|files)\.[a-z0-9_]+)",$/gmu)].map(
       (match) => match[1],
     ),
   );
@@ -63,8 +63,8 @@ export function auditDocumentation(root = REPOSITORY_ROOT) {
   for (const id of documented) {
     if (!registered.has(id)) failures.push(`documented operation is not registered: ${id}`);
   }
-  if (registered.size !== 12) {
-    failures.push(`expected exactly 12 registered operations, found ${registered.size}`);
+  if (registered.size !== 13) {
+    failures.push(`expected exactly 13 registered operations, found ${registered.size}`);
   }
 
   const prd = readFileSync(join(root, "docs/PRD.md"), "utf8");

@@ -5,6 +5,7 @@
 | Operation | Operator outcome |
 |---|---|
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
+| `rfi.process_scans_fast_covers` | Process top-level multi-page RFI PDFs with separate template-led cover detection and create missing discipline/RFI folders; normal Process Scans remains unchanged |
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state; never change worksheet Remarks; leave ambiguous matches in manual review |
@@ -100,6 +101,18 @@
   CIV/MEC/ELE/PRC outputs use matching discipline folders. Page orientation
   correction defaults on and uses the existing bounded detector; uncertain
   files go unchanged to `_review`.
+  Fast Cover Scans is a separate opt-in operation. For multi-page PDFs it uses
+  four-direction, low-resolution OCR on the upper page band and confirms only
+  one strict RFI identity paired with `REQUEST FOR INSPECTION` and a known
+  `SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP` mark. Confirmed groups create
+  missing per-RFI folders under the matching discipline. Single-page PDFs use the
+  normal OCR path. An unresolved request-heading signal starts a Review group; no page
+  is dropped or attached to the preceding RFI. Page orientation correction
+  defaults off in this operation to avoid a second full-page OCR pass; users can
+  enable it when corrected output pages are needed. It shares destination layout,
+  immutable Preview, journaled Apply, and Undo with Process Scans. Other cover
+  templates remain unsupported by this fast detector; use
+  normal Process Scans for them.
   Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Outlook drafts are never auto-sent. Selected-mail archival creates only a

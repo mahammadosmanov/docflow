@@ -191,13 +191,25 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   only confident page rotations to the approved output, leaves source PDFs
   unchanged, and sends any PDF with uncertain orientation to `_review` intact.
   Operators may disable orientation correction in the schema-driven form.
+- **DF-036 — Separate fast cover scans:** `rfi.process_scans_fast_covers` is a
+  separate opt-in operation for known Sunrise/Intec/LightSourceBP cover layouts.
+  It confirms a group boundary only when one strict RFI identity, the request
+  heading, and a known template mark agree. Ordinary Process Scans keeps its
+  existing OCR path. Uncertain possible covers start a Review group; later
+  pages stay with that group until another confirmed cover appears. Page
+  rotation correction defaults off only in this fast operation to avoid a
+  second full-page OCR pass. A confirmed RFI creates its missing discipline/RFI
+  folder even when the destination already contains other RFI folders. Page
+  extraction preserves self-contained XML metadata and omits an outline tree
+  only when it is explicitly empty; active outlines and other unsupported
+  catalog features remain Review cases.
 - **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
   `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
   remain read-only source evidence for Worley Signed/Not Signed status.
 
 ## Scope
 
-The twelve registered operations and application-level history, recovery, review,
+The thirteen registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

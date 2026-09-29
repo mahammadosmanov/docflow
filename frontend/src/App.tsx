@@ -4612,7 +4612,9 @@ function HistoryScreen({
                     {s.t(
                       row.opId === "rfi.review"
                         ? "review.title"
-                        : "op.rfi.process_scans.title",
+                        : row.opId === "rfi.process_scans_fast_covers"
+                          ? "op.rfi.process_scans_fast_covers.title"
+                          : "op.rfi.process_scans.title",
                     )}
                   </strong>
                   <small>

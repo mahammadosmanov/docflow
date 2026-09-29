@@ -69,6 +69,8 @@
   "plan.exact.help": "Tam kaynak ve hedef yollarını incelemek için aç",
   "op.rfi.process_scans.title": "Taramaları İşle",
   "op.rfi.process_scans.desc": "Her sayfadaki RFI numarasını okur, sayfa yönlerini düzeltir ve taranmış PDF’leri seçtiğiniz düzende kaydeder.",
+  "op.rfi.process_scans_fast_covers.title": "Hızlı RFI Kapak Taraması",
+  "op.rfi.process_scans_fast_covers.desc": "Çok sayfalı PDF’lerde bilinen kapakları dört yönde tarar. Belirsiz olası kapaklar _review’a gider. Hız için sayfa yönünü düzeltme varsayılan olarak kapalıdır; normal Taramaları İşle akışı değişmez.",
   "op.rfi.group_files.title": "RFI Dosyalarını Grupla",
   "op.rfi.group_files.desc": "Dosya adı ve içerikteki kesin RFI numaralarını bulur; dosyaları ilgili RFI klasörlerine kopyalar.",
   "param.rfi.fileGroup.source": "Gelen dosyalar klasörü",

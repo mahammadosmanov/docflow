@@ -314,9 +314,11 @@ jobs:
           $notes = Join-Path $env:RUNNER_TEMP "docflow-$version-notes.md"
           node tools/version_manager.mjs notes $version | Out-File -FilePath $notes -Encoding utf8
           $installerHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $checksumPath = Join-Path $env:RUNNER_TEMP "$($installer.Name).sha256"
-          "$installerHash  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
-          $checksum = Get-Item -LiteralPath $checksumPath
+          $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
+          $checksumContent = (Get-Content -LiteralPath $checksum.FullName -Raw).Trim()
+          if ($checksumContent -cne "$installerHash  $($installer.Name)") {
+            throw "The packaged checksum sidecar does not match the installer."
+          }
           $smokeEvidence = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-smoke.json")
           $manifest = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-manifest.json")
           $releaseFlags = @()

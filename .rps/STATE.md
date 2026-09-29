@@ -1,6 +1,101 @@
 # DocFlow project state
 
-Updated: 2026-09-28
+Updated: 2026-09-29
+
+## Fast Cover Scans read and output fix (1.12.2 source candidate)
+
+- The supplied 83-page scan's first-page cover is recognized. Earlier Preview
+  produced no groups because page separation rejected a self-contained XML
+  `/Metadata` stream and an empty `/Outlines` tree (`/Count 0`, no `/First` or
+  `/Last`) as unsupported catalog features.
+- Page extraction now preserves only self-contained XML metadata and drops an
+  outline root only when it is explicitly empty. Active outlines, referenced
+  metadata dictionaries, and other unsupported catalog features still fail
+  closed. Preview of the disposable sample copy grouped all 83 pages under one
+  confirmed RFI in 51,766 ms with four workers; it had zero Review groups and
+  zero unreadable warnings. First-page OCR took 1,467 ms. The user PDF stayed
+  unchanged.
+- Fast Cover Scans now creates a missing exact CIV/MEC/ELE/PRC RFI folder even
+  when the destination already contains other exact RFI folders. Existing
+  files remain no-clobber; normal Process Scans keeps its previous archive
+  guard. Focused Apply/Undo preserves a pre-existing RFI folder and removes
+  only the new empty folder and its created output.
+- Local Rust 1.97.1 format, Clippy, Cargo check, and full Cargo tests pass;
+  Process Scans passes 32 tests with 2 operator-data tests ignored. 24 Node,
+  55 React tests, frontend build, version/docs/source/package/license audits
+  also pass. The Vite chunk-size advisory remains non-failing. PR quality and
+  Windows installer gates remain pending for the final source commit.
+
+## Windows release checksum binding (1.12.1 released)
+
+- Post-publication download of immutable `v1.12.0` assets showed its manifest
+  `checksumSha256` (`3811fd2a20831a25b2081fc56bbff525b22deaa2a411d4a3e0754d7862fb0f5e`)
+  differs from the published `.sha256` asset digest
+  (`c11291e37083f572094a93df35fc346c7391a110ec09cffa3a81312581f3d24f`). The
+  sidecar content contains the correct installer SHA-256; the mismatch came
+  from regenerating it with PowerShell after building the manifest.
+- `windows-release.yml` now reuses the package sidecar and checks its exact
+  installer hash. Added a Windows workflow contract regression test.
+- Local checks pass: 24 Node tests, 55 React tests, frontend build, version,
+  documentation, source, and license audits. PR quality run `36479039132` and
+  Windows Release run `36480484218` passed for source commit
+  `52787702a96f2c396b990aaf6324d805a5394f5b`.
+- `v1.12.1` published: installer is 32,273,513 bytes, SHA-256
+  `93ec0a7dc64e59403fac1f52c42861bf5838cccb1afc504e4024d5a388c01875`.
+  Windows install/package/startup/uninstall smoke passed. Eight downloaded
+  evidence checks confirm the manifest checksum field matches the published
+  sidecar file and digest. Release:
+  https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.1.
+- `v1.12.0` and its assets remain immutable; its manifest/sidecar hash
+  discrepancy is documented in `docs/VERIFICATION.md`.
+
+## Fast Cover Scans (1.12.0 released)
+
+- Separate operation: `rfi.process_scans_fast_covers`; normal `rfi.process_scans`
+  keeps its existing detector and defaults. Both share the existing immutable
+  Preview, exact cached Plan, grants, journal, Apply, and Undo.
+- For multi-page PDFs, the production detector renders at 150 DPI and OCRs the
+  upper 34% band in four right-angle directions. It confirms only one strict
+  RFI identity plus `REQUEST FOR INSPECTION` and a known `SUNRISE PROJECT`,
+  `INTEC`, or `LIGHTSOURCEBP` mark. Searchable text alone never confirms a
+  cover. PSM 6/12 retries and one 300-DPI rescue are bounded to promising pages;
+  unresolved heading evidence begins a Review group. Pages without cover cues
+  stay attached to the current confirmed RFI. Single-page PDFs use normal OCR.
+- Fast Cover Scans defaults page orientation correction off, avoiding the
+  separate full-page OSD/OCR pass; users can enable correction for output pages.
+  Normal Process Scans retains its existing orientation default.
+- Corpus check: 13 RFI PDFs (CIV/MEC/PRC/ELE), 95 original pages, plus 39
+  temporary PDF display-rotation variants. All 13/13 first-page covers were
+  detected, with zero false continuation covers and zero continuation pages
+  sent to Review. All 39/39 rotated cover variants were detected. This checks
+  PDF display rotation; physically rotated raster pixels and other templates
+  were not separately measured.
+- OCR-stage comparison on the supplied 4-page scan: standard per-page OCR took
+  184,082 ms; the fast detector took 3,447 ms (about 53x on this sample),
+  excluding orientation correction and full application overhead. The corpus
+  regression ran in 251.28 seconds sequentially; production page analysis uses
+  bounded parallel workers.
+- A five-page synthetic integration test verifies continuation grouping,
+  uncertain-cover Review boundaries, and that normal Process Scans uses its
+  original behavior. Its filesystem Apply/Undo path is journaled and restored
+  in the test workspace. A production-operation Preview of the supplied CIV-1063
+  PDF produced one group containing all four pages in 4,279 ms with 4 workers;
+  the source was copied to a disposable test workspace and remained unchanged.
+- Local 1.12.0 checks: Rust 1.97.1 format, warnings-denied Clippy, Cargo check,
+  and the full Rust suite pass (622 passed, 11 ignored); 23 Node and 55 React
+  tests pass; frontend build and version/docs/source/license audits pass.
+  Vite reports a non-failing 641.22 kB JavaScript chunk warning.
+- PR #36 quality run `36473292966` passed all checks after CI began clearing
+  Cargo test artifacts before `cargo check`; the first two Rust jobs had failed
+  at `tauri-macros` linking with `ld` signal 7 / Bus error.
+- Windows Release run `36474607152` passed in 28m29s for exact commit
+  `6c70cbb95a0fbb37e2c95c5d35102a39819f3c8a`. The clean NSIS install/startup/
+  package/uninstall smoke passed. Installer is 32,270,304 bytes with SHA-256
+  `9f2ebf195830842ce87d3d1cd6ff6d66b05d78b9991099f7147c35f19cbe430e`;
+  smoke reports 2,862 ms install, 26 ms cold start, and 22,589,440-byte peak
+  working set. Immutable release: https://github.com/mahammadosmanov/docflow/releases/tag/v1.12.0.
+- Physical raster rotations, unsupported cover templates, and processing the
+  operator's real scan corpus on Windows remain separate acceptance checks.
 
 ## Confirmed-cover Process Scans grouping (1.11.9 fix)
 
@@ -362,9 +457,10 @@ Updated: 2026-09-28
 - Consensus rejects any competing code such as 4286, requires support across
   three DPIs with at least two exact reads, and reports image OCR at 95% rather
   than a misleading 100%.
-- When the selected destination already contains exact RFI folders, an OCR code
-  without an existing folder is routed to Review and cannot create a new
-  folder. Empty/new destinations retain the established folder-creation flow.
+- Normal Process Scans retains the conservative existing-folder rule: an OCR
+  code without a matching folder goes to Review when the destination already
+  contains exact RFI folders. Fast Cover Scans now creates the exact missing
+  discipline/RFI folder for each confirmed cover.
 
 - A focused regression reproduces the former Apply failure by clearing a
   literal Follow Up cell through the production guarded writer and closed

@@ -629,13 +629,15 @@ impl FilesystemAuthority {
             cloud_synced: None,
         };
         let fail_fast = claim.claimed.plan.op_id == replica_publish::OPERATION_ID
-            || (claim.claimed.plan.op_id == "rfi.process_scans"
-                && claim
-                    .claimed
-                    .plan
-                    .steps
-                    .iter()
-                    .any(|step| step.kind == StepKind::PdfPagesExtract));
+            || (matches!(
+                claim.claimed.plan.op_id.as_str(),
+                "rfi.process_scans" | "rfi.process_scans_fast_covers"
+            ) && claim
+                .claimed
+                .plan
+                .steps
+                .iter()
+                .any(|step| step.kind == StepKind::PdfPagesExtract));
         if fail_fast {
             self.preflight_replica_steps(&claim.claimed.plan.steps, binding, caller)?;
         }
@@ -3210,7 +3212,10 @@ impl FilesystemAuthority {
         token: &CancellationToken,
         record: &mut JournalRecord,
     ) -> Result<u64, StepFailure> {
-        if binding.operation_id != "rfi.process_scans" {
+        if !matches!(
+            binding.operation_id.as_str(),
+            "rfi.process_scans" | "rfi.process_scans_fast_covers"
+        ) {
             return Err(StepFailure::NoEffect(
                 "PDF page extraction is not authorized for this operation".to_string(),
             ));

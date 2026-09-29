@@ -37,6 +37,7 @@ evidence matrix is in `RELEASE_SAFETY.md` and `PARITY_CLOSURE.md`.
 | DF-031 | `rfi_log.rs`, `outlook_reply_draft.rs`, `native.rs`, `backend.rs`, generic `App.tsx` result flow | `rfi_log_native.rs`, `outlook_reply_draft.rs`, backend command roster, locale parity, and `App.test.tsx` guarded handoff test |
 | DF-032 | `operations/process_scans.rs`, `pdf.rs`, `fs_ops.rs`, `native.rs` | `process_scans.rs` confirmed-cover grouping, uncertain/unreadable continuation pages, leading-page and duplicate review, discipline paths, extraction fidelity, collision, source drift, apply/undo, and Windows compile checks |
 | DF-035 | `operations/process_scans.rs`, `ocr.rs`, `pdf.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | Process Scans orientation decisions, uncertainty routing, rotation fidelity, source drift, no-clobber Apply/Undo, registry snapshot, and four-locale parity |
+| DF-036 | `operations/process_scans.rs`, `ocr.rs`, `native.rs`, `fs_ops.rs`, `registry.rs`, generic schema UI | Fast-cover classifier, template and ambiguous-page routing, read-only PDF corpus and rotation regressions, separate Plan operation ID, normal Process Scans regression, registry snapshot, and four-locale parity |
 | DF-033 | Retired by ADR 0028 | `rfi_follow_up_native.rs` confirms mixed-status groups update lifecycle status without adding Follow Up Remarks fields or guarded Remarks cell writes |
 
 Paths in the table are relative to `src-tauri/src/`, `src-tauri/tests/`, or the
