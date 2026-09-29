@@ -1284,12 +1284,9 @@ fn scan_signed_directory(
         if file_type.is_symlink() {
             continue;
         }
-        let metadata = entry
-            .metadata()
-            .map_err(|_| BackendError::path_invalid("signed scan metadata could not be read"))?;
         let name = entry.file_name();
         let hidden = name.to_str().is_some_and(|name| name.starts_with('.'));
-        if metadata.is_file()
+        if file_type.is_file()
             && !hidden
             && entry
                 .path()
@@ -1298,7 +1295,7 @@ fn scan_signed_directory(
                 .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
         {
             batch.files.push(entry.path());
-        } else if recursive && metadata.is_dir() {
+        } else if recursive && file_type.is_dir() {
             batch.directories.push(entry.path());
         }
     }
@@ -1418,14 +1415,14 @@ fn scan_archive_directory(
                 "archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry limit"
             )));
         }
-        let metadata = entry
-            .metadata()
+        let file_type = entry
+            .file_type()
             .map_err(|_| BackendError::path_invalid("archive metadata could not be read"))?;
-        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        if file_type.is_dir() && !file_type.is_symlink() {
             batch.directories.push(entry.path());
             continue;
         }
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
+        if !file_type.is_file() || file_type.is_symlink() {
             continue;
         }
         let Some(name) = entry.file_name().to_str().map(str::to_ascii_lowercase) else {

@@ -1,5 +1,17 @@
 # DocFlow project memory
 
+- Laya 0.3.20's cached English checkpoint failed a bounded RFI page-triage
+  screen: 5/12 synthetic labels and 8/24 local corpus labels matched. It
+  suggested `cover` for 3 continuations and all 5 OCR-uncertain corpus pages;
+  uncertain recall was 0/4 synthetic and 0/5 corpus. It also warns that
+  checkpoint temperatures are invalid. Do not use these outputs or confidence
+  values in scan operations. This was not a human-reviewed representative
+  acceptance study; other Laya checkpoints were not tested.
+- Jev `jev-1.13.0` matched 12/12 generic synthetic RFI page-triage examples and
+  all 6 unique OCR-signal profiles representing 24 locally sampled pages. Only
+  redacted synthetic strings and derived flags were sent. This verifies
+  structured rule following, not reading scan OCR or images; app use needs a
+  separately accepted Rust network boundary and must stay advisory.
 - A failed Follow Up Apply that displaced the original workbook is recoverable
   only through an explicit journal-authorized Undo: verify original identity,
   bytes, and security metadata; require an absent canonical path; then perform

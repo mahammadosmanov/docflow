@@ -2,6 +2,53 @@
 
 Updated: 2026-09-29
 
+## Core process speedup trial (branch: codex/speed-up-try)
+
+- Objective: maximize process throughput across all DocFlow features with zero-regression safety.
+- Concurrency: replaced per-invocation Rayon thread pool construction/destruction in `parallel.rs` with lazy-static persistent worker pools (`LazyLock`).
+- OCR latency: reduced child-process polling sleep from 20ms to 1ms in Tesseract orientation, direction, and whitelist execution, cutting process-wait overhead by up to 20x while keeping periodic size limits.
+- Cascade short-circuiting: added early consensus break in `ocr.rs::read_page` after attempt 3 (3 distinct DPIs), skipping redundant attempt 4 when consensus is already satisfied.
+- Fast cover blank screen: added top-34% band text cue filter to bypass PGM disk write and Tesseract execution on empty bands.
+- Archive discovery: eliminated redundant `stat` syscalls in `stage_signed_pages.rs` by reading `entry.file_type()` directly from `DirEntry`.
+- Workbook ingestion & matching: added `read_workbook_and_discovery` in `ooxml.rs` to parse discovery and sheets in a single pass; pre-indexed slot candidate lookups by `(sheet, column)` and `canonical_rfi` in `rfi_follow_up.rs` to replace $O(N \times M)$ scans with $O(1)$ lookups.
+- Verification: full Cargo test suite passed in 42.31s (down from 53.06s, >20% wall-time reduction); 24 Node tests, 55 Vitest frontend tests, source and license audits passed cleanly.
+
+## Laya review-triage feasibility pilot
+
+- Ran Laya 0.3.20's cached English checkpoint with Hugging Face and Transformers
+  offline mode forced. On 12 synthetic OCR examples, top-choice agreement was
+  5/12; it suggested `cover` for 7 non-cover examples, including all 4
+  uncertain examples.
+- A second offline pass sampled the first two pages from 12 canonical RFI PDFs,
+  selected at the first/middle/last code in CIV/MEC/PRC/ELE. OCR was filtered to
+  relevant page terms and exact RFI codes, email addresses, and phone numbers
+  were redacted before inference. The source PDFs were read-only; OCR text was
+  not persisted.
+- Expected labels used page position plus visible OCR evidence: one request
+  heading, a known client/project mark, and one RFI identity for `cover`; pages
+  without a confirmed cover signal were `continuation` or `uncertain`. The 24
+  page sample had 7 confirmed covers, 12 continuations, and 5 uncertain pages.
+  Agreement was 8/24. The model suggested `cover` for 3 continuations and all 5
+  uncertain pages; only 1/12 continuations was labelled correctly.
+- Both runs emitted Laya's invalid-temperature warning; confidence values were
+  ignored. This bounded screen rejects the cached English checkpoint for the
+  proposed scan-review suggestion. The sample is not a human-reviewed,
+  representative acceptance corpus, and other Laya checkpoints were not tested.
+  Do not integrate this checkpoint into Process Scans or Fast Cover Scans.
+
+## Jev review-triage second-signal pilot
+
+- `jev_decide` model `jev-1.13.0` matched all 12 generic synthetic cover,
+  continuation, and uncertain examples.
+- It also matched the expected class for all 6 unique OCR-signal patterns from
+  the 24-page local sample, representing all 24 pages. Only page role, visible
+  request-heading/known-mark booleans, and distinct RFI-ID counts were sent;
+  no raw OCR, images, exact identifiers, or paths were sent.
+- These checks show Jev followed an explicit rule over text examples and
+  pre-extracted flags. They do not measure OCR cue extraction or cover
+  recognition from real scan content. Any app integration would need a separate
+  bounded Rust network design review; React/webview cannot call the service.
+
 ## Fast Cover Scans read and output fix (1.12.2 source candidate)
 
 - The supplied 83-page scan's first-page cover is recognized. Earlier Preview

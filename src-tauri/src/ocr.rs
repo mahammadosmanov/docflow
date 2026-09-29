@@ -173,6 +173,17 @@ fn cover_top_band(image: &GrayImage) -> Result<GrayImage, String> {
         pixels: pixels.to_vec(),
     })
 }
+fn band_has_text_cues(band: &GrayImage) -> bool {
+    // A cover header at 150 DPI contains several lines of black text on white background:
+    // "SUNRISE PROJECT", "REQUEST FOR INSPECTION", and the RFI code.
+    // If there are fewer than 100 dark pixels in the entire top band, it's effectively blank.
+    band.pixels
+        .iter()
+        .filter(|&&pixel| pixel < 180)
+        .take(100)
+        .count()
+        >= 100
+}
 
 fn read_cover_band_text(
     ocr: &NativeOcr,
@@ -183,6 +194,9 @@ fn read_cover_band_text(
     temporary: &Path,
 ) -> Result<String, OcrFailure> {
     let band = cover_top_band(image).map_err(OcrFailure::Document)?;
+    if !band_has_text_cues(&band) {
+        return Ok(String::new());
+    }
     let image_path = temporary.join(format!("cover-{page_index}-{direction}.pgm"));
     write_pgm(&image_path, &band).map_err(OcrFailure::Document)?;
     run_tesseract_for_cover(
@@ -536,6 +550,9 @@ impl OcrAdapter for NativeOcr {
                     .into_iter()
                     .map(|matched| (attempt.dpi, matched)),
             );
+            if index >= 2 && select_rfi_consensus(&observations, text_layer.as_ref()).is_some() {
+                break;
+            }
         }
         if let Some((matched, votes, dpi_count)) =
             select_rfi_consensus(&observations, text_layer.as_ref())
@@ -867,18 +884,22 @@ fn run_orientation_tesseract(
         .spawn()
         .map_err(|error| format!("orientation detector could not start: {error}"))?;
     let started = Instant::now();
+    let mut poll_count = 0_usize;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
-                let output_size = fs::metadata(&stdout_path).map_or(0, |value| value.len())
-                    + fs::metadata(&stderr_path).map_or(0, |value| value.len());
-                if output_size > MAX_OUTPUT_BYTES {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err("orientation detector output exceeded the limit".to_string());
+                poll_count = poll_count.wrapping_add(1);
+                if poll_count % 32 == 0 {
+                    let output_size = fs::metadata(&stdout_path).map_or(0, |value| value.len())
+                        + fs::metadata(&stderr_path).map_or(0, |value| value.len());
+                    if output_size > MAX_OUTPUT_BYTES {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err("orientation detector output exceeded the limit".to_string());
+                    }
                 }
-                thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(1));
             }
             Ok(None) => {
                 let _ = child.kill();
@@ -1199,18 +1220,22 @@ fn run_direction_tesseract(
         .spawn()
         .map_err(|error| format!("orientation fallback could not start: {error}"))?;
     let started = Instant::now();
+    let mut poll_count = 0_usize;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
-                let output_size = fs::metadata(&output_path).map_or(0, |value| value.len())
-                    + fs::metadata(&error_path).map_or(0, |value| value.len());
-                if output_size > MAX_OUTPUT_BYTES {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err("orientation fallback output exceeded the limit".to_string());
+                poll_count = poll_count.wrapping_add(1);
+                if poll_count % 32 == 0 {
+                    let output_size = fs::metadata(&output_path).map_or(0, |value| value.len())
+                        + fs::metadata(&error_path).map_or(0, |value| value.len());
+                    if output_size > MAX_OUTPUT_BYTES {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err("orientation fallback output exceeded the limit".to_string());
+                    }
                 }
-                thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(1));
             }
             Ok(None) => {
                 let _ = child.kill();
@@ -1667,12 +1692,15 @@ fn run_tesseract_with_whitelist(
     }
     let mut child = command.spawn().map_err(|_| OcrFailure::EngineMissing)?;
     let started = Instant::now();
+    let mut poll_count = 0_usize;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
-                if fs::metadata(&output_path)
-                    .is_ok_and(|metadata| metadata.len() > MAX_OUTPUT_BYTES)
+                poll_count = poll_count.wrapping_add(1);
+                if poll_count % 32 == 0
+                    && fs::metadata(&output_path)
+                        .is_ok_and(|metadata| metadata.len() > MAX_OUTPUT_BYTES)
                 {
                     let _ = child.kill();
                     let _ = child.wait();
@@ -1680,7 +1708,7 @@ fn run_tesseract_with_whitelist(
                         "Tesseract output exceeded the size limit".to_string(),
                     ));
                 }
-                thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(1));
             }
             Ok(None) => {
                 let _ = child.kill();

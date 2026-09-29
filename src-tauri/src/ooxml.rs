@@ -366,8 +366,8 @@ pub fn patch_workbook_sheets(
     }
 
     let mut input = File::open(source)?;
-    let sheet_infos = project_sheet_infos(ordered_workbook_discovery(&mut input)?);
-    input.seek(SeekFrom::Start(0))?;
+    let discovery = ordered_workbook_discovery(&mut input)?;
+    let sheet_infos = project_sheet_infos(&discovery);
     let mut archive = open_archive(input)?;
     let mut patched = BTreeMap::<String, Vec<u8>>::new();
     let mut replaced_by_sheet = Vec::<(u32, BTreeSet<String>)>::new();
@@ -445,7 +445,7 @@ where
     if discovery.safety.has_workbook_protection {
         return Err(OoxmlError::invalid("guarded workbook is protected"));
     }
-    let sheet_infos = project_sheet_infos(discovery);
+    let sheet_infos = project_sheet_infos(&discovery);
     source.seek(SeekFrom::Start(0))?;
     if package_has_signature(source)? {
         return Err(OoxmlError::invalid("guarded workbook is signed"));
@@ -516,7 +516,7 @@ where
     validate_guarded_update_set(updates_by_sheet, status_values_only)?;
     source.seek(SeekFrom::Start(0))?;
     let source_discovery = ordered_workbook_discovery(source)?;
-    let source_infos = project_sheet_infos(source_discovery);
+    let source_infos = project_sheet_infos(&source_discovery);
     let target_parts = updates_by_sheet
         .keys()
         .map(|name| {
@@ -703,18 +703,18 @@ pub fn sheet_infos_from_path(source: &Path) -> Result<BTreeMap<String, SheetInfo
     validate_source(source)?;
     let mut input = File::open(source)?;
     let discovery = ordered_workbook_discovery(&mut input)?;
-    Ok(project_sheet_infos(discovery))
+    Ok(project_sheet_infos(&discovery))
 }
 
-fn project_sheet_infos(discovery: OrderedWorkbookDiscovery) -> BTreeMap<String, SheetInfo> {
+fn project_sheet_infos(discovery: &OrderedWorkbookDiscovery) -> BTreeMap<String, SheetInfo> {
     discovery
         .worksheets
-        .into_iter()
+        .iter()
         .map(|worksheet| {
             (
-                worksheet.name,
+                worksheet.name.clone(),
                 SheetInfo {
-                    path: worksheet.part_path,
+                    path: worksheet.part_path.clone(),
                     sheet_id: worksheet.sheet_id,
                 },
             )
@@ -891,10 +891,11 @@ pub fn read_workbook(source: &Path) -> Result<WorkbookData, OoxmlError> {
     read_workbook_from_reader(&mut input)
 }
 
-pub fn read_workbook_from_reader<R: Read + Seek>(
+pub fn read_workbook_and_discovery<R: Read + Seek>(
     source: &mut R,
-) -> Result<WorkbookData, OoxmlError> {
-    let infos = project_sheet_infos(ordered_workbook_discovery(source)?);
+) -> Result<(OrderedWorkbookDiscovery, WorkbookData), OoxmlError> {
+    let discovery = ordered_workbook_discovery(source)?;
+    let infos = project_sheet_infos(&discovery);
     source.seek(SeekFrom::Start(0))?;
     let mut archive = open_archive(source)?;
     let workbook_parts = authenticated_workbook_parts(&mut archive)?;
@@ -916,11 +917,20 @@ pub fn read_workbook_from_reader<R: Read + Seek>(
             worksheet_data(&raw, &shared_strings, &mut merge_budget)?,
         );
     }
-    Ok(WorkbookData {
-        sheets,
-        merge_validation_comparisons: merge_budget.consumed,
-        merge_validation_complete: true,
-    })
+    Ok((
+        discovery,
+        WorkbookData {
+            sheets,
+            merge_validation_comparisons: merge_budget.consumed,
+            merge_validation_complete: true,
+        },
+    ))
+}
+
+pub fn read_workbook_from_reader<R: Read + Seek>(
+    source: &mut R,
+) -> Result<WorkbookData, OoxmlError> {
+    read_workbook_and_discovery(source).map(|(_, data)| data)
 }
 
 pub fn package_has_signature<R: Read + Seek>(source: &mut R) -> Result<bool, OoxmlError> {

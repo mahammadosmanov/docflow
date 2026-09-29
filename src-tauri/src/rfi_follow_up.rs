@@ -27,9 +27,8 @@ use crate::{
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
         OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
-        WorksheetVisibility, ordered_workbook_discovery, package_has_signature,
-        patch_workbook_sheets_guarded_text, read_workbook_from_reader,
-        verify_guarded_workbook_delta_text,
+        WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text,
+        read_workbook_and_discovery, verify_guarded_workbook_delta_text,
     },
     rfi_log::status_columns,
 };
@@ -1367,6 +1366,26 @@ fn classify_workbooks_full(
         }
     }
 
+    let mut eligible_slots_by_sheet_col =
+        BTreeMap::<(String, u32), Vec<(String, u32, u32, u32)>>::new();
+    let mut existing_slot_keys_by_code = BTreeMap::<String, Vec<(String, u32, u32, u32)>>::new();
+    for (key, slot) in &slots {
+        if !is_signed_layout(&slot.layout) {
+            for code in &slot.codes {
+                existing_slot_keys_by_code
+                    .entry(code.clone())
+                    .or_default()
+                    .push(key.clone());
+            }
+            if slot.unsafe_reason.is_none() {
+                eligible_slots_by_sheet_col
+                    .entry((key.0.clone(), key.2))
+                    .or_default()
+                    .push(key.clone());
+            }
+        }
+    }
+
     let mut unmapped_count = 0usize;
     for record in records.values().filter(|record| {
         !record.excluded_civ_pcs && record.state.is_some_and(|state| state != LogState::Remove)
@@ -1392,15 +1411,13 @@ fn classify_workbooks_full(
         } else {
             (sheet_name, rfi_column)
         };
-        let candidates = slots
+        let empty_eligible = Vec::new();
+        let eligible = eligible_slots_by_sheet_col
+            .get(&(sheet_name.to_string(), rfi_column))
+            .unwrap_or(&empty_eligible);
+        let candidates = eligible
             .iter()
-            .filter(|((sheet, _, column, _), slot)| {
-                sheet == sheet_name
-                    && *column == rfi_column
-                    && !is_signed_layout(&slot.layout)
-                    && slot.unsafe_reason.is_none()
-            })
-            .filter(|((_, row, _, _), _)| {
+            .filter(|(_, row, _, _)| {
                 row_matches(
                     sheet_name,
                     target_workbook.sheet(sheet_name).unwrap(),
@@ -1409,7 +1426,7 @@ fn classify_workbooks_full(
                     target_workbook,
                 )
             })
-            .map(|(key, _)| key.clone())
+            .cloned()
             .collect::<Vec<_>>();
         let mut candidates = candidates;
         if candidates.is_empty() && sheet_name == "CIV" {
@@ -1421,15 +1438,9 @@ fn classify_workbooks_full(
             if source_tags.iter().any(|tag| {
                 tag.starts_with("PCS-") && unique_zone_for_pcs(target_workbook, tag).is_some()
             }) {
-                candidates = slots
+                candidates = eligible
                     .iter()
-                    .filter(|((sheet, _, column, _), slot)| {
-                        sheet == "CIV"
-                            && *column == rfi_column
-                            && !is_signed_layout(&slot.layout)
-                            && slot.unsafe_reason.is_none()
-                    })
-                    .filter(|((_, row, _, _), _)| {
+                    .filter(|(_, row, _, _)| {
                         row_matches(
                             "CIV",
                             target_workbook.sheet("CIV").unwrap(),
@@ -1438,19 +1449,16 @@ fn classify_workbooks_full(
                             target_workbook,
                         )
                     })
-                    .map(|(key, _)| key.clone())
+                    .cloned()
                     .collect();
             }
         }
         let candidate_count = candidates.len();
         // Signed By rows repeat RFIs as Worley summaries, not lifecycle placements.
-        let existing_slots = slots
-            .iter()
-            .filter(|(_, slot)| {
-                !is_signed_layout(&slot.layout) && slot.codes.contains(&record.canonical_rfi)
-            })
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
+        let existing_slots = existing_slot_keys_by_code
+            .get(record.canonical_rfi.as_str())
+            .cloned()
+            .unwrap_or_default();
         if candidate_count == 0 {
             // A recognized source route with no corresponding Follow Up row is
             // outside this workbook's current scope. Keep it out of the review
@@ -2018,14 +2026,8 @@ pub fn preview_from_open_files(
             "error.rfi.followUp.workbookInvalid: RFI Log seek failed: {e}"
         ))
     })?;
-    let source_discovery =
-        ordered_workbook_discovery(rfi_log).map_err(map_follow_up_ooxml_error)?;
-    rfi_log.seek(SeekFrom::Start(0)).map_err(|e| {
-        BackendError::validation(format!(
-            "error.rfi.followUp.workbookInvalid: RFI Log seek failed: {e}"
-        ))
-    })?;
-    let source_workbook = read_workbook_from_reader(rfi_log).map_err(map_follow_up_ooxml_error)?;
+    let (source_discovery, source_workbook) =
+        read_workbook_and_discovery(rfi_log).map_err(map_follow_up_ooxml_error)?;
 
     follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
         BackendError::validation(format!(
@@ -2039,15 +2041,8 @@ pub fn preview_from_open_files(
             "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
         ))
     })?;
-    let target_discovery =
-        ordered_workbook_discovery(follow_up).map_err(map_follow_up_ooxml_error)?;
-    follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
-        BackendError::validation(format!(
-            "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
-        ))
-    })?;
-    let target_workbook =
-        read_workbook_from_reader(follow_up).map_err(map_follow_up_ooxml_error)?;
+    let (target_discovery, target_workbook) =
+        read_workbook_and_discovery(follow_up).map_err(map_follow_up_ooxml_error)?;
     let classification = classify_workbooks(
         &source_discovery,
         &source_workbook,
