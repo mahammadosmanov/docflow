@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.12.1",
+  "currentVersion": "1.12.2",
   "releases": [
+    {
+      "version": "1.12.2",
+      "date": "2026-09-29",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.12.2",
+      "summary": "Create missing RFI folders in Fast Cover Scans and safely split scans with self-contained XML metadata and empty outlines."
+    },
     {
       "version": "1.12.1",
       "date": "2026-09-29",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.12.1",
       "summary": "Bind published Windows checksum sidecars to the exact hash recorded in the artifact manifest."
     },

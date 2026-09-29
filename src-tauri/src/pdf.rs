@@ -77,6 +77,18 @@ impl PdfObject {
     }
 }
 
+fn contains_reference(object: &PdfObject) -> bool {
+    match object {
+        PdfObject::Reference(_) => true,
+        PdfObject::Array(values) => values.iter().any(contains_reference),
+        PdfObject::Dictionary(values)
+        | PdfObject::Stream {
+            dictionary: values, ..
+        } => values.values().any(contains_reference),
+        _ => false,
+    }
+}
+
 #[derive(Clone, Debug)]
 enum XrefEntry {
     Offset { offset: usize, generation: u16 },
@@ -111,6 +123,8 @@ pub struct PdfInspection {
     pub page_count: usize,
     pub pages: Vec<PdfPageInspection>,
     pub catalog_entry_hashes: BTreeMap<String, String>,
+    pub metadata_xml_self_contained: bool,
+    pub empty_outline_tree: bool,
     pub info_hash: Option<String>,
     pub embedded_file_hashes: BTreeMap<String, String>,
     pub incremental_revisions: usize,
@@ -284,18 +298,19 @@ pub(crate) fn extraction_supported(facts: &PdfInspection) -> bool {
     !facts.encrypted
         && !facts.signed
         && facts.embedded_file_hashes.is_empty()
+        && (!facts.catalog_entry_hashes.contains_key("Metadata")
+            || facts.metadata_xml_self_contained)
+        && (!facts.catalog_entry_hashes.contains_key("Outlines") || facts.empty_outline_tree)
         && ![
             "StructTreeRoot",
             "OCProperties",
             "AcroForm",
             "Names",
-            "Outlines",
             "PageLabels",
             "OpenAction",
             "ViewerPreferences",
             "Dests",
             "OutputIntents",
-            "Metadata",
         ]
         .iter()
         .any(|key| facts.catalog_entry_hashes.contains_key(*key))
@@ -353,6 +368,13 @@ fn build_extracted_pdf(source: &ParsedPdf, selected: &[ObjectId]) -> Result<Vec<
         .cloned()
         .map(|info| importer.import_object(info, 0))
         .transpose()?;
+    let metadata = source
+        .get_object(source.root_id()?)?
+        .as_dictionary()
+        .and_then(|catalog| catalog.get(b"Metadata".as_slice()))
+        .cloned()
+        .map(|metadata| importer.import_object(metadata, 0))
+        .transpose()?;
     writes.extend(importer.objects);
     let kids = selected
         .iter()
@@ -369,6 +391,9 @@ fn build_extracted_pdf(source: &ParsedPdf, selected: &[ObjectId]) -> Result<Vec<
     let mut catalog = Dictionary::new();
     catalog.insert(b"Type".to_vec(), PdfObject::Name(b"Catalog".to_vec()));
     catalog.insert(b"Pages".to_vec(), PdfObject::Reference((2, 0)));
+    if let Some(metadata) = metadata {
+        catalog.insert(b"Metadata".to_vec(), metadata);
+    }
     writes.insert((1, 0), PdfObject::Dictionary(catalog));
     if writes.len() > MAX_OBJECTS {
         return Err(PdfError::new("extracted PDF object graph is too large"));
@@ -408,12 +433,14 @@ fn validate_extracted_pdf(
     source: &ParsedPdf,
     selected: &[ObjectId],
 ) -> Result<(), PdfError> {
+    let before = source.inspect()?;
     let expected = selected
         .iter()
         .map(|id| source.inspect_page(*id))
         .collect::<Result<Vec<_>, _>>()?;
     let after = ParsedPdf::load(path)?.inspect()?;
     if after.page_count != expected.len()
+        || after.catalog_entry_hashes.get("Metadata") != before.catalog_entry_hashes.get("Metadata")
         || after.pages.iter().zip(expected).any(|(actual, expected)| {
             actual.content_hash != expected.content_hash
                 || actual.media_box != expected.media_box
@@ -1161,6 +1188,8 @@ impl ParsedPdf {
                 page_count: 0,
                 pages: Vec::new(),
                 catalog_entry_hashes: BTreeMap::new(),
+                metadata_xml_self_contained: false,
+                empty_outline_tree: false,
                 info_hash: None,
                 embedded_file_hashes: BTreeMap::new(),
                 incremental_revisions: self.revisions,
@@ -1179,6 +1208,8 @@ impl ParsedPdf {
         let catalog = root
             .as_dictionary()
             .ok_or_else(|| PdfError::new("PDF catalog is not a dictionary"))?;
+        let metadata_xml_self_contained = self.metadata_xml_self_contained(catalog)?;
+        let empty_outline_tree = self.empty_outline_tree(catalog)?;
         let mut catalog_entry_hashes = BTreeMap::new();
         for key in [
             b"Metadata".as_slice(),
@@ -1194,10 +1225,15 @@ impl ParsedPdf {
             b"OutputIntents",
         ] {
             if let Some(value) = catalog.get(key) {
-                catalog_entry_hashes.insert(
-                    String::from_utf8_lossy(key).into_owned(),
-                    self.graph_hash(value)?,
-                );
+                let hash = if key == b"Metadata" && metadata_xml_self_contained {
+                    let PdfObject::Reference(id) = value else {
+                        return Err(PdfError::new("PDF metadata stream is not indirect"));
+                    };
+                    self.graph_hash(&self.get_object(*id)?)?
+                } else {
+                    self.graph_hash(value)?
+                };
+                catalog_entry_hashes.insert(String::from_utf8_lossy(key).into_owned(), hash);
             }
         }
         let info_hash = self
@@ -1210,6 +1246,8 @@ impl ParsedPdf {
             page_count: pages.len(),
             pages,
             catalog_entry_hashes,
+            metadata_xml_self_contained,
+            empty_outline_tree,
             info_hash,
             embedded_file_hashes: self.embedded_files(catalog)?,
             incremental_revisions: self.revisions,
@@ -1217,6 +1255,48 @@ impl ParsedPdf {
             encrypted,
             signed,
         })
+    }
+
+    fn metadata_xml_self_contained(&self, catalog: &Dictionary) -> Result<bool, PdfError> {
+        let Some(PdfObject::Reference(id)) = catalog.get(b"Metadata".as_slice()) else {
+            return Ok(false);
+        };
+        let object = self.get_object(*id)?;
+        let PdfObject::Stream { dictionary, .. } = object else {
+            return Ok(false);
+        };
+        let is_xml_metadata = dictionary
+            .get(b"Type".as_slice())
+            .and_then(PdfObject::as_name)
+            == Some(b"Metadata")
+            && dictionary
+                .get(b"Subtype".as_slice())
+                .and_then(PdfObject::as_name)
+                == Some(b"XML");
+        Ok(is_xml_metadata && !dictionary.values().any(contains_reference))
+    }
+
+    fn empty_outline_tree(&self, catalog: &Dictionary) -> Result<bool, PdfError> {
+        let Some(value) = catalog.get(b"Outlines".as_slice()) else {
+            return Ok(true);
+        };
+        let Some(id) = value.as_reference() else {
+            return Ok(false);
+        };
+        let object = self.get_object(id)?;
+        let Some(dictionary) = object.as_dictionary() else {
+            return Ok(false);
+        };
+        Ok(dictionary
+            .get(b"Type".as_slice())
+            .and_then(PdfObject::as_name)
+            == Some(b"Outlines")
+            && dictionary
+                .get(b"Count".as_slice())
+                .and_then(PdfObject::as_i64)
+                == Some(0)
+            && !dictionary.contains_key(b"First".as_slice())
+            && !dictionary.contains_key(b"Last".as_slice()))
     }
 
     fn inspect_page(&self, id: ObjectId) -> Result<PdfPageInspection, PdfError> {

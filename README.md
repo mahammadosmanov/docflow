@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.12.1 is a Tauri 2 desktop application for thirteen high-risk document
+DocFlow 1.12.2 is a Tauri 2 desktop application for thirteen high-risk document
 workflows:
 
 - Process Scans: OCR, rename, organize into optional RFI folders, and review

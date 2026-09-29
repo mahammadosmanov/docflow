@@ -395,8 +395,9 @@ where
     } else {
         StepKind::Move
     };
-    let requires_existing_rfi_folder =
-        params.organize_into_rfi_folders && destination_contains_exact_rfi_folder(&destination);
+    let requires_existing_rfi_folder = !fast_cover_mode
+        && params.organize_into_rfi_folders
+        && destination_contains_exact_rfi_folder(&destination);
     let mut plan = empty_plan(operation_id);
     let mut groups: Vec<(String, Vec<Candidate>)> = Vec::new();
     let mut failures = Vec::<(PathBuf, String)>::new();

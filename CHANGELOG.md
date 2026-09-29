@@ -3,6 +3,15 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.2 - 2026-09-29
+
+### Fixed
+
+- Fast Cover Scans creates missing per-RFI folders even when the destination
+  already contains other RFI folders. Page extraction preserves self-contained
+  XML metadata and safely omits only empty outline trees, so the supplied scan
+  can be split without sending the entire PDF to `_review`.
+
 ## 1.12.1 - 2026-09-29
 
 ### Fixed

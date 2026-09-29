@@ -4,6 +4,30 @@ This ledger records what was actually exercised for each release increment.
 Passing source or cross-build gates never implies native Windows, Office,
 OneDrive, Outlook, physical-printer, signing, or notarization acceptance.
 
+## 1.12.2 - 2026-09-29 (source candidate)
+
+The supplied 83-page scan was readable by the cover OCR, but page separation
+rejected its catalog because it had a self-contained XML Metadata stream and an
+empty `/Outlines` tree (`/Count 0`, with no `/First` or `/Last`). The planner
+therefore returned no groups and a generic unreadable warning. Extraction now
+preserves that XML stream, omits only explicitly empty outlines, and continues
+to reject active outline trees and unsupported catalog features. Fast Cover
+Scans also creates exact missing per-RFI folders when the selected destination
+already contains other RFI folders.
+
+On the supplied file's disposable copy, Preview grouped all 83 pages under one
+confirmed RFI in 51,766 ms with four workers, with zero unreadable warnings or
+Review groups. First-page cover OCR completed in 1,467 ms. The source PDF stayed
+unchanged. Focused filesystem Apply/Undo verifies that the new RFI folder and
+renamed PDF are created while pre-existing RFI folders survive Undo.
+
+Local source evidence passed: Rust 1.97.1 formatting, warnings-denied Clippy,
+Cargo check and full tests; Process Scans integration tests (32 passed, 2
+operator-data tests ignored); 24 Node and 55 React tests; TypeScript/Vite build;
+version, documentation, package-source, and license audits. The frontend build
+retained its non-failing 641.22 kB chunk warning. Pull request quality and native
+Windows installer/release gates remain pending for the final commit.
+
 ## 1.12.1 - 2026-09-29
 
 The Windows tagged-release job now publishes the same checksum sidecar that

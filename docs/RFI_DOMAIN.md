@@ -46,6 +46,10 @@ identity or secrets.
   non-matching, or unreadable; those pages stay in the current group.
 - Pages before the first confirmed cover and duplicate RFI starts remain in
   `_review`.
+- Page separation preserves self-contained XML metadata. It omits an outline
+  tree only when `/Count` is exactly zero and `/First` and `/Last` are absent;
+  active outline trees and other unsupported catalog structures remain
+  review-only.
 
 ### Fast Cover Scans
 
@@ -61,6 +65,9 @@ identity or secrets.
   `_review` until the next confirmed cover; they never join the preceding RFI.
 - Page rotation correction defaults off to avoid another full-page OCR pass; it
   can be enabled when corrected output pages are needed.
+- A confirmed RFI uses its CIV/MEC/ELE/PRC discipline folder and creates the
+  exact RFI folder when missing, even if the destination already contains other
+  RFI folders. Existing output files remain no-clobber.
 - Pages with no cover cues remain in the current confirmed group. Single-page
   PDFs retain the normal full-page OCR path. Use normal Process Scans for other
   cover templates.

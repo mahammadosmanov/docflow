@@ -198,7 +198,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   existing OCR path. Uncertain possible covers start a Review group; later
   pages stay with that group until another confirmed cover appears. Page
   rotation correction defaults off only in this fast operation to avoid a
-  second full-page OCR pass.
+  second full-page OCR pass. A confirmed RFI creates its missing discipline/RFI
+  folder even when the destination already contains other RFI folders. Page
+  extraction preserves self-contained XML metadata and omits an outline tree
+  only when it is explicitly empty; active outlines and other unsupported
+  catalog features remain Review cases.
 - **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
   `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
   remain read-only source evidence for Worley Signed/Not Signed status.

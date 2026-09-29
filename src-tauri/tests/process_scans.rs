@@ -453,8 +453,38 @@ impl OcrAdapter for FastCoverFixtureOcr {
 }
 
 fn write_multi_page_pdf(path: &std::path::Path, page_count: usize) {
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, None);
+}
+
+fn write_multi_page_pdf_with_metadata_and_empty_outlines(
+    path: &std::path::Path,
+    page_count: usize,
+) {
+    write_multi_page_pdf_with_catalog_features(path, page_count, true, Some(0));
+}
+
+fn write_multi_page_pdf_with_nonempty_outlines(path: &std::path::Path, page_count: usize) {
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, Some(1));
+}
+
+fn write_multi_page_pdf_with_catalog_features(
+    path: &std::path::Path,
+    page_count: usize,
+    metadata: bool,
+    outline_count: Option<usize>,
+) {
+    let mut catalog = "<< /Type /Catalog /Pages 2 0 R".to_string();
+    let metadata_id = page_count * 2 + 4;
+    let outlines_id = metadata_id + usize::from(metadata);
+    if metadata {
+        catalog.push_str(&format!(" /Metadata {metadata_id} 0 R"));
+    }
+    if outline_count.is_some() {
+        catalog.push_str(&format!(" /Outlines {outlines_id} 0 R"));
+    }
+    catalog.push_str(" >>");
     let mut objects = vec![
-        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        catalog,
         format!(
             "<< /Type /Pages /Kids [{}] /Count {page_count} >>",
             (0..page_count)
@@ -477,6 +507,26 @@ fn write_multi_page_pdf(path: &std::path::Path, page_count: usize) {
             "<< /Length {} >>\nstream\n{stream}endstream",
             stream.len()
         ));
+    }
+    if metadata {
+        let metadata = "<x:xmpmeta><rdf:RDF/></x:xmpmeta>";
+        objects.push(format!(
+            "<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{metadata}\nendstream",
+            metadata.len()
+        ));
+    }
+    if let Some(outline_count) = outline_count {
+        if outline_count == 0 {
+            objects.push("<< /Type /Outlines /Count 0 >>".to_string());
+        } else {
+            let item_id = outlines_id + 1;
+            objects.push(format!(
+                "<< /Type /Outlines /Count {outline_count} /First {item_id} 0 R /Last {item_id} 0 R >>"
+            ));
+            objects.push(format!(
+                "<< /Title (Bookmark) /Parent {outlines_id} 0 R /Dest [3 0 R /Fit] >>"
+            ));
+        }
     }
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
@@ -908,6 +958,138 @@ fn fast_cover_operation_keeps_continuations_and_reviews_uncertain_cover_boundari
 }
 
 #[test]
+fn fast_cover_creates_missing_rfi_folder_when_destination_has_other_rfi_folders() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    let journal = fixture.path().join("journal");
+    std::fs::create_dir_all(&source).unwrap();
+    let existing_folder = destination.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-1286");
+    std::fs::create_dir_all(&existing_folder).unwrap();
+    let combined = source.join("stack.pdf");
+    write_multi_page_pdf(&combined, 2);
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &FastCoverFixtureOcr(vec!["AZE-SUN-INT-QMS-RFI-CIV-0064", "[continuation]"]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    let expected_destination = std::fs::canonicalize(&destination).unwrap();
+    let folder = expected_destination.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-0064");
+    let target = target_for(
+        &expected_destination.join("CIV"),
+        "AZE-SUN-INT-QMS-RFI-CIV-0064",
+    );
+    assert!(plan.steps.iter().any(|step| {
+        step.kind == docflow_lib::contracts::StepKind::Mkdir
+            && step.dst.as_deref() == Some(folder.to_string_lossy().as_ref())
+    }));
+    assert!(plan.steps.iter().any(|step| {
+        step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract
+            && step.dst.as_deref() == Some(target.to_string_lossy().as_ref())
+    }));
+    assert!(
+        !plan
+            .warnings
+            .iter()
+            .any(|warning| warning.key == "warn.unknown_rfi_folder")
+    );
+
+    let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
+    let scope = GrantScope::new(
+        "owner-1",
+        "session-1",
+        "fast-cover-folder",
+        FAST_COVER_OPERATION_ID,
+    );
+    let source_grant = authority
+        .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+        .unwrap();
+    let destination_grant = authority
+        .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner-1",
+                "session-1",
+                FAST_COVER_OPERATION_ID,
+                vec![source_grant.grant_id, destination_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let caller = CallerIdentity::new("owner-1", "session-1");
+    let applied = authority.apply(&cached.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    assert!(target.is_file());
+    assert_eq!(docflow_lib::pdf::inspect(&target).unwrap().page_count, 2);
+    assert!(existing_folder.is_dir());
+    assert!(combined.is_file());
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert!(
+        existing_folder.is_dir(),
+        "pre-existing RFI folder survives Undo"
+    );
+    assert!(
+        !folder.exists(),
+        "Undo removes only the new empty RFI folder"
+    );
+    assert!(!target.exists());
+    assert!(combined.is_file());
+}
+
+#[test]
+fn page_extraction_preserves_xmp_and_drops_only_empty_outlines() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("metadata-scan.pdf");
+    let output = fixture.path().join("single-page.pdf");
+    write_multi_page_pdf_with_metadata_and_empty_outlines(&source, 2);
+
+    let before = docflow_lib::pdf::inspect(&source).unwrap();
+    assert!(before.catalog_entry_hashes.contains_key("Metadata"));
+    assert!(before.catalog_entry_hashes.contains_key("Outlines"));
+    docflow_lib::pdf::extract_pages(&source, &[0], &output).unwrap();
+    let after = docflow_lib::pdf::inspect(&output).unwrap();
+
+    assert_eq!(after.page_count, 1);
+    assert_eq!(
+        after.catalog_entry_hashes.get("Metadata"),
+        before.catalog_entry_hashes.get("Metadata")
+    );
+    assert!(!after.catalog_entry_hashes.contains_key("Outlines"));
+}
+
+#[test]
+fn page_extraction_keeps_nonempty_outline_pdfs_in_review_scope() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("bookmarked-scan.pdf");
+    let output = fixture.path().join("single-page.pdf");
+    write_multi_page_pdf_with_nonempty_outlines(&source, 2);
+
+    let error = docflow_lib::pdf::extract_pages(&source, &[0], &output).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "PDF contains features that cannot be safely separated"
+    );
+    assert!(!output.exists());
+}
+
+#[test]
 #[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to run an end-to-end real-scan Preview"]
 fn fast_cover_preview_groups_the_supplied_real_scan() {
     let source_pdf = std::path::PathBuf::from(
@@ -953,32 +1135,61 @@ fn fast_cover_preview_groups_the_supplied_real_scan() {
         .iter()
         .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
         .collect::<Vec<_>>();
+    let named_groups = extracted
+        .iter()
+        .filter(|step| {
+            step.meta
+                .get("code")
+                .is_some_and(serde_json::Value::is_string)
+        })
+        .count();
+    let review_groups = extracted
+        .iter()
+        .filter(|step| step.dst.as_deref().unwrap_or_default().contains("_review"))
+        .count();
+    let covered_pages = extracted
+        .iter()
+        .filter_map(|step| {
+            step.meta
+                .get("pageIndexes")
+                .and_then(serde_json::Value::as_array)
+        })
+        .flatten()
+        .filter_map(serde_json::Value::as_u64)
+        .collect::<Vec<_>>();
     eprintln!(
-        "real_scan_preview elapsed_ms={} pages={} groups={} workers={}",
+        "real_scan_preview elapsed_ms={} pages={} named_groups={} review_groups={} workers={} unreadable_warnings={}",
         elapsed.as_millis(),
         page_count,
-        extracted.len(),
+        named_groups,
+        review_groups,
         plan.meta
             .get("workerCount")
             .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0)
+            .unwrap_or(0),
+        plan.warnings
+            .iter()
+            .filter(|warning| warning.key == "warn.unreadable")
+            .count()
     );
     assert_eq!(plan.op_id, FAST_COVER_OPERATION_ID);
-    assert_eq!(
-        extracted.len(),
-        1,
-        "sample contains one confirmed RFI cover"
+    assert!(
+        named_groups > 0,
+        "sample must contain a confirmed RFI cover"
     );
+    let mut covered_pages = covered_pages;
+    covered_pages.sort_unstable();
     assert_eq!(
-        extracted[0].meta["pageIndexes"],
-        serde_json::json!((0..page_count).collect::<Vec<_>>())
+        covered_pages,
+        (0..page_count as u64).collect::<Vec<_>>(),
+        "each source page must be included in exactly one output group"
     );
     assert!(
-        !extracted[0]
-            .dst
-            .as_deref()
-            .unwrap_or_default()
-            .contains("_review")
+        !plan
+            .warnings
+            .iter()
+            .any(|warning| warning.key == "warn.unreadable"),
+        "supported sample must not be moved to Review as unreadable"
     );
     assert!(
         input.is_file(),

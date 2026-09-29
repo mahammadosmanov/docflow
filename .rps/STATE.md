@@ -2,6 +2,30 @@
 
 Updated: 2026-09-29
 
+## Fast Cover Scans read and output fix (1.12.2 source candidate)
+
+- The supplied 83-page scan's first-page cover is recognized. Earlier Preview
+  produced no groups because page separation rejected a self-contained XML
+  `/Metadata` stream and an empty `/Outlines` tree (`/Count 0`, no `/First` or
+  `/Last`) as unsupported catalog features.
+- Page extraction now preserves only self-contained XML metadata and drops an
+  outline root only when it is explicitly empty. Active outlines, referenced
+  metadata dictionaries, and other unsupported catalog features still fail
+  closed. Preview of the disposable sample copy grouped all 83 pages under one
+  confirmed RFI in 51,766 ms with four workers; it had zero Review groups and
+  zero unreadable warnings. First-page OCR took 1,467 ms. The user PDF stayed
+  unchanged.
+- Fast Cover Scans now creates a missing exact CIV/MEC/ELE/PRC RFI folder even
+  when the destination already contains other exact RFI folders. Existing
+  files remain no-clobber; normal Process Scans keeps its previous archive
+  guard. Focused Apply/Undo preserves a pre-existing RFI folder and removes
+  only the new empty folder and its created output.
+- Local Rust 1.97.1 format, Clippy, Cargo check, and full Cargo tests pass;
+  Process Scans passes 32 tests with 2 operator-data tests ignored. 24 Node,
+  55 React tests, frontend build, version/docs/source/package/license audits
+  also pass. The Vite chunk-size advisory remains non-failing. PR quality and
+  Windows installer gates remain pending for the final source commit.
+
 ## Windows release checksum binding (1.12.1 released)
 
 - Post-publication download of immutable `v1.12.0` assets showed its manifest
@@ -433,9 +457,10 @@ Updated: 2026-09-29
 - Consensus rejects any competing code such as 4286, requires support across
   three DPIs with at least two exact reads, and reports image OCR at 95% rather
   than a misleading 100%.
-- When the selected destination already contains exact RFI folders, an OCR code
-  without an existing folder is routed to Review and cannot create a new
-  folder. Empty/new destinations retain the established folder-creation flow.
+- Normal Process Scans retains the conservative existing-folder rule: an OCR
+  code without a matching folder goes to Review when the destination already
+  contains exact RFI folders. Fast Cover Scans now creates the exact missing
+  discipline/RFI folder for each confirmed cover.
 
 - A focused regression reproduces the former Apply failure by clearing a
   literal Follow Up cell through the production guarded writer and closed
