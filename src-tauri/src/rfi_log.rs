@@ -21,10 +21,11 @@ use crate::{
     errors::BackendError,
     fs_ops::file_sha256,
     gemini::{GeminiClient, GeminiRequest},
-    ooxml::{CellUpdate, WorkbookData, WorksheetData, read_workbook},
+    ooxml::{CellUpdate, WorkbookData, WorksheetData, read_workbook_selective},
 };
 
 const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
+const REQUIRED_SHEETS: [&str; 5] = ["CIV", "MEC", "ELE", "PRC", "Sheet1"];
 const DAY_START_MINUTES: u32 = 9 * 60;
 const DAY_END_MINUTES: u32 = 17 * 60 + 30;
 const SLOT_MINUTES: u32 = 30;
@@ -306,7 +307,8 @@ where
         .copied()
         .collect::<Vec<_>>();
     progress_event(&mut progress, "workbook_reading", 0, 1);
-    let workbook = read_workbook(&workbook_path).map_err(document_error)?;
+    let workbook =
+        read_workbook_selective(&workbook_path, &REQUIRED_SHEETS).map_err(document_error)?;
     checkpoint(&cancelled)?;
     let mut sources = BTreeMap::new();
     for discipline in &requested {
@@ -901,7 +903,7 @@ pub(crate) fn workbook_record_count(step: &Step) -> Result<u64, BackendError> {
 }
 
 pub(crate) fn verify_workbook_step(step: &Step, path: &Path) -> Result<(), BackendError> {
-    let workbook = read_workbook(path).map_err(document_error)?;
+    let workbook = read_workbook_selective(path, &REQUIRED_SHEETS).map_err(document_error)?;
     for batch in decode_batches(step)? {
         let layout = layout(&batch.discipline)
             .ok_or_else(|| BackendError::validation("gecersiz sheet plani"))?;
@@ -1578,7 +1580,8 @@ fn copy_data(plan: &Plan, selected_sheet: Option<&str>) -> Result<CopyData, Back
         .iter()
         .map(|field| field_width(field))
         .collect::<Vec<_>>();
-    let Ok(workbook) = read_workbook(Path::new(&source.workbook)) else {
+    let Ok(workbook) = read_workbook_selective(Path::new(&source.workbook), &REQUIRED_SHEETS)
+    else {
         return Ok((
             source.fields,
             source.headers,

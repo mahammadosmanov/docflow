@@ -184,6 +184,14 @@ fn band_has_text_cues(band: &GrayImage) -> bool {
         .count()
         >= 100
 }
+fn has_upright_continuation_words(text: &str) -> bool {
+    text.split_whitespace()
+        .filter(|word| word.chars().all(|c| c.is_alphabetic()) && word.len() >= 4)
+        .take(4)
+        .count()
+        >= 4
+}
+
 
 fn read_cover_band_text(
     ocr: &NativeOcr,
@@ -307,6 +315,14 @@ fn read_fast_cover_page(
             if rescue_signals.request_heading && rescue_signals.template_mark {
                 return Ok(uncertain_cover_read("300dpi-rescue".to_string()));
             }
+        }
+        if direction == 0
+            && !signals.request_heading
+            && !signals.template_mark
+            && !signals.identity_hint
+            && has_upright_continuation_words(&text)
+        {
+            break;
         }
     }
 

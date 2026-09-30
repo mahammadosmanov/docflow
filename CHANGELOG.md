@@ -3,6 +3,13 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.4 - 2026-09-30
+
+### Changed
+
+- Short-circuit Fast Cover Scans continuation page evaluation: when direction 0 shows clear upright non-cover words, bypass redundant 90°, 180°, and 270° rotations.
+- Optimize RFI Log workbook reading by parsing only requested discipline and lookup worksheets (`CIV`, `MEC`, `ELE`, `PRC`, `Sheet1`), skipping unused calculation and summary sheets.
+
 ## 1.12.3 - 2026-09-30
 
 ### Changed

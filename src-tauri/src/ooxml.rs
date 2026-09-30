@@ -932,6 +932,53 @@ pub fn read_workbook_from_reader<R: Read + Seek>(
 ) -> Result<WorkbookData, OoxmlError> {
     read_workbook_and_discovery(source).map(|(_, data)| data)
 }
+pub fn read_workbook_selective(
+    source: &Path,
+    wanted_sheets: &[&str],
+) -> Result<WorkbookData, OoxmlError> {
+    validate_source(source)?;
+    let mut input = File::open(source)?;
+    read_workbook_selective_from_reader(&mut input, wanted_sheets)
+}
+
+pub fn read_workbook_selective_from_reader<R: Read + Seek>(
+    source: &mut R,
+    wanted_sheets: &[&str],
+) -> Result<WorkbookData, OoxmlError> {
+    let discovery = ordered_workbook_discovery(source)?;
+    let infos = project_sheet_infos(&discovery);
+    source.seek(SeekFrom::Start(0))?;
+    let mut archive = open_archive(source)?;
+    let workbook_parts = authenticated_workbook_parts(&mut archive)?;
+    let relationships = parse_document(&read_entry(&mut archive, &workbook_parts.relationships)?)?;
+    let shared_strings = match internal_relationship_target_for_class(
+        &relationships,
+        &workbook_parts.workbook,
+        "sharedStrings",
+    )? {
+        Some(part_path) => shared_strings(&read_entry(&mut archive, &part_path)?)?,
+        None => Vec::new(),
+    };
+    let mut sheets = BTreeMap::new();
+    let mut merge_budget = MergeComparisonBudget::for_validation();
+    for (name, info) in infos {
+        if wanted_sheets
+            .iter()
+            .any(|wanted| wanted.eq_ignore_ascii_case(&name))
+        {
+            let raw = read_entry(&mut archive, &info.path)?;
+            sheets.insert(
+                name,
+                worksheet_data(&raw, &shared_strings, &mut merge_budget)?,
+            );
+        }
+    }
+    Ok(WorkbookData {
+        sheets,
+        merge_validation_comparisons: merge_budget.consumed,
+        merge_validation_complete: true,
+    })
+}
 
 pub fn package_has_signature<R: Read + Seek>(source: &mut R) -> Result<bool, OoxmlError> {
     const TRANSITIONAL_SIGNATURE_ORIGIN: &str =
