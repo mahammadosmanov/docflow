@@ -298,18 +298,7 @@ export function App() {
           s={s}
           onBack={() => setRoute({ name: "home" })}
           onReview={(destination) => setRoute({ name: "review", destination })}
-          onPrepareRfiReply={(preparedPlan) => {
-            const operation = bootstrap.operations.find(
-              (candidate) => candidate.id === "rfi.outlook_reply_draft",
-            );
-            if (operation) {
-              setRoute({
-                name: "operation",
-                operation,
-                initialPlan: preparedPlan,
-              });
-            }
-          }}
+          onPrepareRfiReply={() => {}}
         />
       );
     case "review":
@@ -625,6 +614,57 @@ function PendingScreen({
     </div>
   );
 }
+type OperationCategory = "all" | "scans" | "excel" | "mail" | "system";
+
+function getOperationCategory(id: string): OperationCategory {
+  if (
+    id === "rfi.process_scans" ||
+    id === "rfi.process_scans_fast_covers" ||
+    id === "rfi.normalize_pdf_orientation" ||
+    id === "rfi.stage_signed_first_pages"
+  ) {
+    return "scans";
+  }
+  if (
+    id === "rfi.log_add" ||
+    id === "rfi.follow_up_sync" ||
+    id === "rfi.complete_status_sync" ||
+    id === "rfi.system_sync"
+  ) {
+    return "excel";
+  }
+  if (id === "rfi.group_files") {
+    return "mail";
+  }
+  return "system";
+}
+
+function getOperationIcon(id: string) {
+  switch (id) {
+    case "files.batch_print":
+      return <Printer />;
+    case "rfi.group_files":
+      return <FolderOpen />;
+    case "rfi.log_add":
+      return <TableProperties />;
+    case "rfi.follow_up_sync":
+      return <RefreshCw />;
+    case "rfi.complete_status_sync":
+      return <CheckCircle2 />;
+    case "rfi.stage_signed_first_pages":
+      return <BadgeCheck />;
+    case "rfi.system_sync":
+      return <Shield />;
+    case "rfi.normalize_pdf_orientation":
+      return <RotateCcw />;
+    case "rfi.process_scans_fast_covers":
+      return <FileCheck2 />;
+    case "rfi.process_scans":
+    default:
+      return <FileSearch />;
+  }
+}
+
 
 function HomeScreen({
   bridge,
@@ -646,6 +686,28 @@ function HomeScreen({
   const [reviewBusy, setReviewBusy] = useState(false);
   const [shortcutError, setShortcutError] = useState("");
   const signOut = async () => onAuth(await bridge.call("auth/signOut"));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] =
+    useState<OperationCategory>("all");
+
+  const filteredOperations = useMemo(() => {
+    return bootstrap.operations.filter((op) => {
+      if (
+        activeCategory !== "all" &&
+        getOperationCategory(op.id) !== activeCategory
+      ) {
+        return false;
+      }
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.trim().toLowerCase();
+      const title = s.t(op.titleKey).toLowerCase();
+      const desc = s.t(op.descriptionKey).toLowerCase();
+      return (
+        title.includes(q) || desc.includes(q) || op.id.toLowerCase().includes(q)
+      );
+    });
+  }, [bootstrap.operations, activeCategory, searchQuery, s]);
+
 
   const latestTheme = useRef(bootstrap.prefs.theme);
   latestTheme.current = bootstrap.prefs.theme;
@@ -765,27 +827,95 @@ function HomeScreen({
                 <p>{s.t("ops.subheading")}</p>
               </div>
               <span className="section-count">
-                {bootstrap.operations.length}
+                {filteredOperations.length} / {bootstrap.operations.length}
               </span>
             </div>
-            <div className="operation-list">
-              {bootstrap.operations.map((operation) => (
+            <div className="operation-search-bar">
+              <FileSearch className="search-icon" />
+              <input
+                type="text"
+                className="operation-search-input"
+                placeholder={s.t("ops.search.placeholder")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
                 <button
-                  className="operation-card"
-                  key={operation.id}
-                  onClick={() => navigate({ name: "operation", operation })}
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setSearchQuery("")}
+                  aria-label={s.t("action.cancel")}
                 >
-                  <span className="operation-icon">
-                    <FileSearch />
-                  </span>
-                  <span className="operation-copy">
-                    <strong>{s.t(operation.titleKey)}</strong>
-                    <small>{s.t(operation.descriptionKey)}</small>
-                  </span>
-                  <ChevronRight />
+                  <X />
                 </button>
-              ))}
+              )}
             </div>
+            <div className="category-filter-chips">
+              {(["all", "scans", "excel", "mail", "system"] as const).map(
+                (cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`category-chip ${activeCategory === cat ? "active" : ""}`}
+                    onClick={() => setActiveCategory(cat)}
+                  >
+                    {s.t(`ops.category.${cat}`)}
+                    <span className="chip-count">
+                      {cat === "all"
+                        ? bootstrap.operations.length
+                        : bootstrap.operations.filter(
+                            (o) => getOperationCategory(o.id) === cat,
+                          ).length}
+                    </span>
+                  </button>
+                ),
+              )}
+            </div>
+            {filteredOperations.length === 0 ? (
+              <div className="empty-search-state">
+                <CircleAlert />
+                <p>
+                  {s.t("ops.emptySearch", {
+                    query: searchQuery,
+                  })}
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setActiveCategory("all");
+                  }}
+                >
+                  {s.t("action.cancel")}
+                </Button>
+              </div>
+            ) : (
+              <div className="operation-list">
+                {filteredOperations.map((operation) => (
+                  <button
+                    className="operation-card"
+                    key={operation.id}
+                    onClick={() => navigate({ name: "operation", operation })}
+                  >
+                    <span className="operation-icon">
+                      {getOperationIcon(operation.id)}
+                    </span>
+                    <span className="operation-copy">
+                      <div className="operation-header-row">
+                        <strong>{s.t(operation.titleKey)}</strong>
+                        <span className="category-tag">
+                          {s.t(
+                            `ops.category.${getOperationCategory(operation.id)}`,
+                          )}
+                        </span>
+                      </div>
+                      <small>{s.t(operation.descriptionKey)}</small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
           <section className="dashboard-section">
             <div className="section-heading">
@@ -1497,6 +1627,20 @@ function OperationScreen({
               result.meta?.resumeAvailable !== true
                 ? () => void prepareRfiReply()
                 : undefined
+            }
+            onOpenDestination={
+              (() => {
+                const dest =
+                  (isPathSelection(values.destination) && values.destination) ||
+                  (isPathSelection(values.dest) && values.dest) ||
+                  (isPathSelection(values.target) && values.target) ||
+                  (isPathSelection(values.output_directory) &&
+                    values.output_directory) ||
+                  (isPathSelection(values.rfi_system) && values.rfi_system);
+                return dest
+                  ? () => void revealPath(bridge, dest.selectionId)
+                  : undefined;
+              })()
             }
           />
         )}
@@ -4199,6 +4343,7 @@ function ResultView({
   onCopy,
   onResumePrint,
   onPrepareRfiReply,
+  onOpenDestination,
 }: {
   result: OperationResult;
   s: Strings;
@@ -4211,6 +4356,7 @@ function ResultView({
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
   onPrepareRfiReply?: () => void;
+  onOpenDestination?: () => void;
 }) {
   const effectState =
     typeof result.meta?.effectState === "string"
@@ -4311,6 +4457,15 @@ function ResultView({
             onClick={onResumePrint}
           >
             {s.t("print.resume.review")}
+          </Button>
+        )}
+        {onOpenDestination && (
+          <Button
+            variant="secondary"
+            icon={<FolderOpen />}
+            onClick={onOpenDestination}
+          >
+            {s.t("action.openDestination")}
           </Button>
         )}
         <Button
@@ -4436,6 +4591,9 @@ function ReviewScreen({
             error={error}
             onDone={onBack}
             onUndo={() => void undo()}
+            onOpenDestination={() =>
+              void revealPath(bridge, destination.selectionId)
+            }
           />
         ) : plan ? (
           <PlanView
@@ -4464,7 +4622,55 @@ function ReviewScreen({
                 </Button>
               </div>
               {items.length ? (
-                <div className="review-list">
+                <>
+                  <div className="review-batch-bar">
+                    <span className="batch-label">{s.t("review.help")}</span>
+                    <div className="batch-actions">
+                      <Button
+                        variant="secondary"
+                        icon={<RotateCcw />}
+                        onClick={() => {
+                          setActions(
+                            Object.fromEntries(
+                              items.map((it) => [it.selectionId, "keep"]),
+                            ),
+                          );
+                        }}
+                      >
+                        {s.t("review.selectAllKeep")}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        icon={<ArrowRight />}
+                        onClick={() => {
+                          setActions(
+                            Object.fromEntries(
+                              items.map((it) => [
+                                it.selectionId,
+                                it.code.trim() ? "put" : "keep",
+                              ]),
+                            ),
+                          );
+                        }}
+                      >
+                        {s.t("review.selectAllPut")}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        icon={<Trash2 />}
+                        onClick={() => {
+                          setActions(
+                            Object.fromEntries(
+                              items.map((it) => [it.selectionId, "delete"]),
+                            ),
+                          );
+                        }}
+                      >
+                        {s.t("review.selectAllTrash")}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="review-list">
                   {items.map((item) => (
                     <div className="review-row" key={item.selectionId}>
                       <button
@@ -4519,6 +4725,7 @@ function ReviewScreen({
                     </div>
                   ))}
                 </div>
+                </>
               ) : (
                 <EmptyState
                   icon={<FileCheck2 />}

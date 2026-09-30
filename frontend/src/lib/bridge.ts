@@ -809,14 +809,12 @@ export class MockBridge implements Bridge {
             demoFastCoverOperation,
             demoFileGroupOperation,
             demoRfiOperation,
-            demoOutlookReplyOperation,
             demoRfiFollowUpOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
             demoPdfOrientationOperation,
             demoRfiSystemSyncOperation,
             demoRfiCompleteStatusOperation,
-            demoReplicaPublishOperation,
           ],
         } satisfies Bootstrap;
         break;

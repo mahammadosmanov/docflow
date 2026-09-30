@@ -63,8 +63,8 @@ export function auditDocumentation(root = REPOSITORY_ROOT) {
   for (const id of documented) {
     if (!registered.has(id)) failures.push(`documented operation is not registered: ${id}`);
   }
-  if (registered.size !== 13) {
-    failures.push(`expected exactly 13 registered operations, found ${registered.size}`);
+  if (registered.size !== 10) {
+    failures.push(`expected exactly 10 registered operations, found ${registered.size}`);
   }
 
   const prd = readFileSync(join(root, "docs/PRD.md"), "utf8");

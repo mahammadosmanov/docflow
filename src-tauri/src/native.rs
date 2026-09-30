@@ -370,7 +370,7 @@ impl NativeBackend {
             },
         );
     }
-
+    #[allow(dead_code)]
     pub(crate) fn automatic_replica_tick(&self) {
         if !self.settings.preferences().replica_sync_enabled {
             return;
@@ -469,7 +469,7 @@ impl NativeBackend {
             Err(error) => self.pause_replica_automation(error.message.as_str()),
         }
     }
-
+    #[allow(dead_code)]
     fn pause_replica_automation(&self, error_code: &str) {
         if let Some(mut section) = self.settings.section("replicaAutomation") {
             section.insert("status".to_string(), Value::String("paused".to_string()));
@@ -1436,7 +1436,7 @@ impl NativeBackend {
         provisional.commit();
         encode(cached)
     }
-
+    #[allow(dead_code)]
     pub(crate) fn preview_outlook_reply_draft<F>(
         &self,
         params: Value,
@@ -1468,7 +1468,7 @@ impl NativeBackend {
         });
         encode(plan)
     }
-
+    #[allow(dead_code)]
     pub(crate) fn preview_outlook_archive<F>(
         &self,
         params: Value,
@@ -1679,7 +1679,7 @@ impl NativeBackend {
                 .preview(&self.caller_identity()?, request.values, progress)?,
         )
     }
-
+    #[allow(dead_code)]
     pub(crate) fn preview_replica_publish<F>(
         &self,
         params: Value,
@@ -1698,7 +1698,7 @@ impl NativeBackend {
         let caller = self.caller_identity()?;
         encode(self.cache_replica_plan(request.values, &caller, false, progress)?)
     }
-
+    #[allow(dead_code)]
     fn cache_replica_plan<F>(
         &self,
         values: ReplicaPublishParams,
@@ -2517,12 +2517,14 @@ struct RfiCompleteStatusPreviewValues {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 #[serde(deny_unknown_fields)]
 struct OutlookReplyDraftValues {
     reply_text: String,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 #[serde(deny_unknown_fields)]
 struct OutlookArchiveValues {
     destination: PathBuf,

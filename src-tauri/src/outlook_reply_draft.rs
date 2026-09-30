@@ -194,6 +194,7 @@ struct OutlookArchiveAuthority {
     fingerprint: String,
 }
 
+#[allow(dead_code)]
 pub(crate) struct PreparedArchive {
     pub plan: Plan,
     authority: OutlookArchiveAuthority,
@@ -227,6 +228,7 @@ impl OutlookDraftService {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn prepare_archive(
         &self,
         caller: &CallerIdentity,
@@ -275,6 +277,7 @@ impl OutlookDraftService {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn bind_archive(&self, plan_id: &str, prepared: PreparedArchive) {
         lock_archive_authorities(&self.archive_authorities)
             .insert(plan_id.to_string(), prepared.authority);

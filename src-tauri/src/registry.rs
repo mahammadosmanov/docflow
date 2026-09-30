@@ -365,167 +365,6 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
-    let replica_publish = operation(
-        "files.replica_publish",
-        vec![
-            parameter(
-                "root_a",
-                ParamKind::Folder,
-                "param.replica.rootA",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.rootA.help"),
-            ),
-            parameter(
-                "root_b",
-                ParamKind::Folder,
-                "param.replica.rootB",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.rootB.help"),
-            ),
-            parameter(
-                "root_c",
-                ParamKind::Folder,
-                "param.replica.rootC",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.rootC.help"),
-            ),
-            parameter(
-                "source_root",
-                ParamKind::Choice,
-                "param.replica.sourceRoot",
-                json!("a"),
-                true,
-                strings(&["a", "b", "c"]),
-                labels(&[
-                    ("a", "choice.replica.source.a"),
-                    ("b", "choice.replica.source.b"),
-                    ("c", "choice.replica.source.c"),
-                ]),
-                Map::new(),
-                Some("param.replica.sourceRoot.help"),
-            ),
-            parameter(
-                "backup_root",
-                ParamKind::Folder,
-                "param.replica.backupRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.backupRoot.help"),
-            ),
-            parameter(
-                "root_files",
-                ParamKind::Text,
-                "param.replica.rootFiles",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.rootFiles.help"),
-            ),
-            parameter(
-                "unattended",
-                ParamKind::Bool,
-                "param.replica.unattended",
-                json!(false),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.unattended.help"),
-            ),
-            parameter(
-                "interval_minutes",
-                ParamKind::Int,
-                "param.replica.intervalMinutes",
-                json!(15),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.intervalMinutes.help"),
-            ),
-            parameter(
-                "settle_seconds",
-                ParamKind::Int,
-                "param.replica.settleSeconds",
-                json!(30),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.settleSeconds.help"),
-            ),
-            parameter(
-                "max_changed_files",
-                ParamKind::Int,
-                "param.replica.maxChangedFiles",
-                json!(250),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.maxChangedFiles.help"),
-            ),
-            parameter(
-                "max_changed_mib",
-                ParamKind::Int,
-                "param.replica.maxChangedMib",
-                json!(2048),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.replica.maxChangedMib.help"),
-            ),
-        ],
-    );
-
-    let outlook_reply_draft = operation(
-        "rfi.outlook_reply_draft",
-        vec![parameter(
-            "reply_text",
-            ParamKind::LongText,
-            "param.rfi.outlookReplyDraft.replyText",
-            json!(""),
-            true,
-            Vec::new(),
-            BTreeMap::new(),
-            Map::new(),
-            Some("param.rfi.outlookReplyDraft.replyText.help"),
-        )],
-    );
-
-    let outlook_archive = operation(
-        "rfi.outlook_archive_selected",
-        vec![parameter(
-            "destination",
-            ParamKind::Folder,
-            "param.rfi.outlookArchive.destination",
-            Value::Null,
-            true,
-            Vec::new(),
-            BTreeMap::new(),
-            Map::new(),
-            Some("param.rfi.outlookArchive.destination.help"),
-        )],
-    );
-
     let default_printer = facts
         .default_printer
         .or_else(|| facts.printers.first().cloned())
@@ -781,14 +620,11 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         file_group,
         rfi_log,
         rfi_follow_up,
-        outlook_reply_draft,
-        outlook_archive,
         batch_print,
         stage_signed_pages,
         normalize_pdf_orientation,
         rfi_system_sync,
         rfi_complete_status_sync,
-        replica_publish,
         fast_cover_scans,
     ]
 }
@@ -810,18 +646,15 @@ mod tests {
                 "rfi.group_files",
                 "rfi.log_add",
                 "rfi.follow_up_sync",
-                "rfi.outlook_reply_draft",
-                "rfi.outlook_archive_selected",
                 "files.batch_print",
                 "rfi.stage_signed_first_pages",
                 "rfi.normalize_pdf_orientation",
                 "rfi.system_sync",
                 "rfi.complete_status_sync",
-                "files.replica_publish",
                 "rfi.process_scans_fast_covers",
             ]
         );
-        assert_eq!(operations.len(), 13);
+        assert_eq!(operations.len(), 10);
         let normal_orientation_default = operations[0]
             .schema
             .params
@@ -830,7 +663,7 @@ mod tests {
             .expect("normal Process Scans has orientation correction")
             .default
             .as_bool();
-        let fast_orientation_default = operations[12]
+        let fast_orientation_default = operations[9]
             .schema
             .params
             .iter()
@@ -841,7 +674,7 @@ mod tests {
         assert_eq!(normal_orientation_default, Some(true));
         assert_eq!(fast_orientation_default, Some(false));
         assert_eq!(
-            operations[12]
+            operations[9]
                 .schema
                 .params
                 .iter()
@@ -862,7 +695,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[9];
+        let system_sync = &operations[7];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -871,32 +704,13 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let complete_status = &operations[10];
+        let complete_status = &operations[8];
         assert_eq!(
             complete_status.schema.validate(&Map::new()),
             vec![
                 "error.param.required.rfi_system_root".to_string(),
                 "error.param.required.rfi_log_workbook".to_string(),
             ]
-        );
-        let replica = &operations[11];
-        assert_eq!(
-            replica.schema.validate(&Map::new()),
-            vec![
-                "error.param.required.root_a".to_string(),
-                "error.param.required.root_b".to_string(),
-                "error.param.required.root_c".to_string(),
-                "error.param.required.source_root".to_string(),
-                "error.param.required.backup_root".to_string(),
-                "error.param.required.interval_minutes".to_string(),
-                "error.param.required.settle_seconds".to_string(),
-                "error.param.required.max_changed_files".to_string(),
-                "error.param.required.max_changed_mib".to_string(),
-            ]
-        );
-        assert_eq!(
-            operations[4].schema.validate(&Map::new()),
-            vec!["error.param.required.reply_text".to_string()]
         );
 
         let actual = serde_json::to_value(operations).expect("registry should serialize");

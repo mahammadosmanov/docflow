@@ -3,6 +3,15 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.13.0 - 2026-09-30
+
+### Removed
+
+- Retired three document operations to streamline DocFlow into ten high-speed local document workflows:
+  - `rfi.outlook_reply_draft` (Prepare Outlook Reply All draft)
+  - `rfi.outlook_archive_selected` (Archive selected Outlook email)
+  - `files.replica_publish` (Publish RFI Systems)
+
 ## 1.12.5 - 2026-09-30
 
 ### Added

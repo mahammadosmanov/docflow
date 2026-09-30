@@ -9,23 +9,17 @@
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state; never change worksheet Remarks; leave ambiguous matches in manual review |
-| `rfi.outlook_reply_draft` | Display one verified unsent Reply All draft from the selected message |
-| `rfi.outlook_archive_selected` | Revalidate one selected Outlook message and create a guarded Unicode MSG staging copy |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
 | `rfi.follow_up_sync` | Synchronize uniquely mapped RFI Log statuses into existing Follow Up workbook groups |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
-| `files.replica_publish` | Publish one selected RFI System source to two targets with backup-first verified replacement, Undo, and optional standing authorization |
 
 ## Application features
 
 - Generic schema-driven forms, remembered safe values, typed presets, compact
   multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
-- A successful RFI Log Apply can continue directly into a separate, reviewable
-  Outlook Reply All Plan containing the exact approved tables for every affected
-  discipline. It opens an unsent draft only; it never sends or invents message text.
 - Batch Print always starts without old files or silently restored settings. One
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.
@@ -59,13 +53,7 @@
 - Optional Supabase sign-in/approval/admin and metadata-only shared history.
 - Copy-only redacted diagnostics.
 - Turkish, English, Russian, and Azerbaijani UI with light/dark monochrome themes.
-- Optional per-user Windows startup. Replica publication can run at a selected
-  interval, down to one minute, while DocFlow is open after one explicit profile approval. Settings
-  can pause or resume that stored profile, shows its live state, and reflects an
-  automatic safety pause; any unsafe failure pauses it.
-- Automatic replica publication waits for recently changed source files to
-  settle. Per-profile maximum file effects and total MiB act as mass-change
-  circuit breakers; exceeding either pauses automation before Apply.
+- Optional per-user Windows startup.
 - Bounded multi-core Rust analysis for Process Scans, combined signed-page OCR,
   RFI file-name/content grouping,
   recursive signed-input and archive discovery, PDF orientation discovery and
@@ -115,10 +103,6 @@
   normal Process Scans for them.
   Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
-- Outlook drafts are never auto-sent. Selected-mail archival creates only a
-  local MSG copy; it never changes, moves, deletes, or sends mailbox content.
-- Replica publication never propagates target-only files back to the source and
-  never deletes them automatically. It is one-way publication, not bidirectional merge.
 - Native Office and printer behavior is accepted only on a real Windows host.
 - PDF orientation classification requires bundled Tesseract OSD and English
   data. It uses multi-resolution OSD first, then a conservative four-direction

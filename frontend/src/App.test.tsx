@@ -180,7 +180,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
     fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
-    await screen.findByRole("heading", { name: "Ayarlar" });
+    await screen.findByRole("heading", { name: "Yapılandır" });
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
     ).toHaveLength(0);
@@ -1159,7 +1159,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Ayarlar" }),
+      await screen.findByRole("heading", { name: "Yapılandır" }),
     ).toBeVisible();
     expect(screen.getByText("Kaynak klasör")).toBeVisible();
     expect(screen.getByText("Hedef klasör")).toBeVisible();
@@ -1171,26 +1171,26 @@ describe("DocFlow shell", () => {
 
     expect(screen.getByText("Diğer özellikler")).toBeVisible();
     expect(
-      screen.getByText("Bekleyen dosyaları tek tek kontrol et ve yerleştir."),
+      screen.getByText("Bekleyen dosyaları tek tek kontrol edin ve güvenle yerleştirin."),
     ).toBeVisible();
     expect(
-      screen.getByText("Yapılan işlemleri gör ve güvenle geri al."),
+      screen.getByText("Yapılan işlemleri görün ve güvenle geri alın."),
     ).toBeVisible();
     expect(
-      screen.getByText("Dil, görünüm, yazı ve hesap tercihlerini yönet."),
+      screen.getByText("Dil, görünüm, yazı ve hesap tercihlerinizi yönetin."),
     ).toBeVisible();
     expect(
-      screen.getByText("Kullanıcı erişimlerini ve yönetici yetkilerini yönet."),
+      screen.getByText("Kullanıcı erişimlerini ve yönetici yetkilerini yönetin."),
     ).toBeVisible();
     expect(
       screen.getByText(
-        "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+        "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
       ),
     ).toBeVisible();
 
     fireEvent.click(
       screen
-        .getByText("Yapılan işlemleri gör ve güvenle geri al.")
+        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
         .closest("button")!,
     );
     const historyHeadings = await screen.findAllByRole("heading", {
@@ -1206,7 +1206,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen
         .getByText(
-          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
         )
         .closest("button")!,
     );
@@ -1262,7 +1262,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen
         .getByText(
-          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle incele.",
+          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
         )
         .closest("button")!,
     );
@@ -1287,7 +1287,7 @@ describe("DocFlow shell", () => {
 
     fireEvent.click(
       screen
-        .getByText("Yapılan işlemleri gör ve güvenle geri al.")
+        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
         .closest("button")!,
     );
 
@@ -1305,7 +1305,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     expect(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
@@ -1317,7 +1317,7 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     expect(await screen.findByText("RFI Log Excel dosyası")).toBeVisible();
     expect(screen.getByText(/\.xlsm.*\.xlsx/)).toBeVisible();
@@ -1335,42 +1335,6 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
   });
 
-  it("continues a successful RFI Log apply into a guarded Outlook reply preview", async () => {
-    let handoff: Record<string, unknown> | null = null;
-    interceptMockBridge((method, params) => {
-      if (method === "engine/rfiReplyPreview") handoff = params;
-      return { handled: false };
-    });
-    render(<App />);
-    await signIn();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
-    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
-    await screen.findByText("RFI kayıtlarını kontrol et ve düzenle");
-    fireEvent.click(screen.getByRole("button", { name: "Uygula" }));
-
-    const next = await screen.findByRole("button", {
-      name: "Outlook yanıtını hazırla",
-    });
-    fireEvent.click(next);
-
-    expect(
-      await screen.findByRole("heading", {
-        name: "Gönderilmemiş Outlook yanıtı önizlemesi",
-      }),
-    ).toBeVisible();
-    expect(
-      screen.getAllByText(/AZE-SUN-INT-QMS-RFI-CIV-0008/),
-    ).toHaveLength(2);
-    expect(handoff).toEqual({
-      planId: "demo-rfi-plan",
-      journalId: "demo-journal",
-    });
-    expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
-  });
 
   it("renders the signed first-page staging form from its schema", async () => {
     render(<App />);
@@ -1396,7 +1360,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
@@ -1914,7 +1878,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
@@ -1949,7 +1913,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
 
@@ -2014,7 +1978,7 @@ describe("DocFlow shell", () => {
     await signIn();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Çoklu sheet RFI Log kaydı ekle/ }),
+      screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     const browseBtn = await screen.findByRole("button", { name: "Gözat" });
     fireEvent.click(browseBtn);
@@ -2032,5 +1996,39 @@ describe("DocFlow shell", () => {
         screen.queryByRole("button", { name: "Temizle" }),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("filters operations by search text and category pills on home screen", async () => {
+    render(<App />);
+    await signIn();
+
+    const searchInput = screen.getByPlaceholderText("İşlem ara…");
+    expect(searchInput).toBeVisible();
+
+    fireEvent.change(searchInput, { target: { value: "Yazdır" } });
+    expect(
+      screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /^Taramaları İşle/ }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "" } });
+    expect(
+      screen.getByRole("button", { name: /^Taramaları İşle/ }),
+    ).toBeVisible();
+
+    const chipsContainer = document.querySelector(".category-filter-chips")!;
+    const scansChip = within(chipsContainer as HTMLElement).getByRole("button", {
+      name: /Taramalar ve PDF/,
+    });
+    fireEvent.click(scansChip);
+    expect(scansChip).toHaveClass("active");
+    expect(
+      screen.getByRole("button", { name: /^Taramaları İşle/ }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Birden fazla dosya yazdır/ }),
+    ).not.toBeInTheDocument();
   });
 });

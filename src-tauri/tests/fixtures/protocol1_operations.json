@@ -215,44 +215,6 @@
     "titleKey": "op.rfi.follow_up_sync.title"
   },
   {
-    "descriptionKey": "op.rfi.outlook_reply_draft.desc",
-    "id": "rfi.outlook_reply_draft",
-    "schema": [
-      {
-        "choiceLabels": {},
-        "choices": [],
-        "default": "",
-        "helpKey": "param.rfi.outlookReplyDraft.replyText.help",
-        "kind": "longText",
-        "labelKey": "param.rfi.outlookReplyDraft.replyText",
-        "name": "reply_text",
-        "required": true,
-        "visibleWhen": {}
-      }
-    ],
-    "supportsPresets": false,
-    "titleKey": "op.rfi.outlook_reply_draft.title"
-  },
-  {
-    "descriptionKey": "op.rfi.outlook_archive_selected.desc",
-    "id": "rfi.outlook_archive_selected",
-    "schema": [
-      {
-        "choiceLabels": {},
-        "choices": [],
-        "default": null,
-        "helpKey": "param.rfi.outlookArchive.destination.help",
-        "kind": "folder",
-        "labelKey": "param.rfi.outlookArchive.destination",
-        "name": "destination",
-        "required": true,
-        "visibleWhen": {}
-      }
-    ],
-    "supportsPresets": false,
-    "titleKey": "op.rfi.outlook_archive_selected.title"
-  },
-  {
     "descriptionKey": "op.files.batch_print.desc",
     "id": "files.batch_print",
     "schema": [
@@ -623,85 +585,6 @@
     ],
     "supportsPresets": false,
     "titleKey": "op.rfi.complete_status_sync.title"
-  },
-  {
-    "descriptionKey": "op.files.replica_publish.desc",
-    "id": "files.replica_publish",
-    "schema": [
-      {
-        "choiceLabels": {}, "choices": [], "default": null,
-        "helpKey": "param.replica.rootA.help", "kind": "folder",
-        "labelKey": "param.replica.rootA", "name": "root_a",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": null,
-        "helpKey": "param.replica.rootB.help", "kind": "folder",
-        "labelKey": "param.replica.rootB", "name": "root_b",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": null,
-        "helpKey": "param.replica.rootC.help", "kind": "folder",
-        "labelKey": "param.replica.rootC", "name": "root_c",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {
-          "a": "choice.replica.source.a",
-          "b": "choice.replica.source.b",
-          "c": "choice.replica.source.c"
-        },
-        "choices": ["a", "b", "c"], "default": "a",
-        "helpKey": "param.replica.sourceRoot.help", "kind": "choice",
-        "labelKey": "param.replica.sourceRoot", "name": "source_root",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": null,
-        "helpKey": "param.replica.backupRoot.help", "kind": "folder",
-        "labelKey": "param.replica.backupRoot", "name": "backup_root",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": "",
-        "helpKey": "param.replica.rootFiles.help", "kind": "text",
-        "labelKey": "param.replica.rootFiles", "name": "root_files",
-        "required": false, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": false,
-        "helpKey": "param.replica.unattended.help", "kind": "bool",
-        "labelKey": "param.replica.unattended", "name": "unattended",
-        "required": false, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": 15,
-        "helpKey": "param.replica.intervalMinutes.help", "kind": "int",
-        "labelKey": "param.replica.intervalMinutes", "name": "interval_minutes",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": 30,
-        "helpKey": "param.replica.settleSeconds.help", "kind": "int",
-        "labelKey": "param.replica.settleSeconds", "name": "settle_seconds",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": 250,
-        "helpKey": "param.replica.maxChangedFiles.help", "kind": "int",
-        "labelKey": "param.replica.maxChangedFiles", "name": "max_changed_files",
-        "required": true, "visibleWhen": {}
-      },
-      {
-        "choiceLabels": {}, "choices": [], "default": 2048,
-        "helpKey": "param.replica.maxChangedMib.help", "kind": "int",
-        "labelKey": "param.replica.maxChangedMib", "name": "max_changed_mib",
-        "required": true, "visibleWhen": {}
-      }
-    ],
-    "supportsPresets": false,
-    "titleKey": "op.files.replica_publish.title"
   },
   {
     "descriptionKey": "op.rfi.process_scans_fast_covers.desc",
