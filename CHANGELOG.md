@@ -3,6 +3,19 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.3 - 2026-09-30
+
+### Changed
+
+- Maximize process speeds across OCR, workbook operations, archive discovery, and concurrency:
+  - Cache persistent Rayon worker pools with `LazyLock` in `parallel.rs`.
+  - Accelerate Tesseract process polling from 20ms to 1ms with periodic output bounds checking.
+  - Short-circuit the Process Scans OCR cascade after 3 distinct DPI passes when consensus is reached.
+  - Screen blank/empty top bands in Fast Cover Scans to bypass redundant PGM writes and OCR.
+  - Use `entry.file_type()` in archive and signed scans traversal to avoid redundant `stat` syscalls.
+  - Parse OOXML discovery and worksheets in a single pass via `read_workbook_and_discovery`.
+  - Pre-index Follow Up candidate slots by `(sheet, column)` and `canonical_rfi` for $O(1)$ lookups.
+
 ## 1.12.2 - 2026-09-29
 
 ### Fixed
