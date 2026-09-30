@@ -1080,6 +1080,18 @@ function OperationScreen({
       setStage("form");
     }
   };
+  const cancelPreview = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      await bridge.call("engine/cancel", { opId: operation.id });
+    } catch {
+      // Ignored if preview already completed or errored
+    } finally {
+      setCancelling(false);
+      setStage("form");
+    }
+  };
   const resumePrintQueue = async (queueId: string) => {
     setError("");
     setStage("previewing");
@@ -1215,7 +1227,10 @@ function OperationScreen({
           void apply();
         }
       } else if (event.key === "Escape") {
-        if (stage === "preview" || stage === "result") {
+        if (stage === "previewing") {
+          event.preventDefault();
+          void cancelPreview();
+        } else if (stage === "preview" || stage === "result") {
           event.preventDefault();
           setStage("form");
         } else if (stage === "form") {
@@ -1226,7 +1241,7 @@ function OperationScreen({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [stage, cancelling, preview, apply, onBack]);
+  }, [stage, cancelling, preview, apply, cancelPreview, onBack]);
 
   const currentStep =
     stage === "form"
@@ -1389,12 +1404,27 @@ function OperationScreen({
           </div>
         )}
         {stage === "previewing" && (
-          <BusyState
-            label={s.t("action.preview")}
-            progress={progress}
-            progressTrail={progressTrail}
-            s={s}
-          />
+          <div className="flow-layout">
+            <BusyState
+              label={s.t("action.preview")}
+              progress={progress}
+              progressTrail={progressTrail}
+              s={s}
+            />
+            <ActionBar
+              left={
+                <Button
+                  variant="danger"
+                  icon={cancelling ? <LoaderCircle className="spin" /> : <X />}
+                  disabled={cancelling}
+                  onClick={() => void cancelPreview()}
+                >
+                  {s.t(cancelling ? "operation.cancelling" : "action.cancel")}
+                </Button>
+              }
+              right={null}
+            />
+          </div>
         )}
         {stage === "preview" && plan && (
           <PlanView

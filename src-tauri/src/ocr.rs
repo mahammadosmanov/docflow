@@ -192,7 +192,6 @@ fn has_upright_continuation_words(text: &str) -> bool {
         >= 4
 }
 
-
 fn read_cover_band_text(
     ocr: &NativeOcr,
     image: &GrayImage,

@@ -348,17 +348,25 @@ impl BackendRouter {
         let object = params
             .as_object()
             .ok_or_else(BackendError::invalid_params)?;
-        if object.keys().any(|key| key != "planId") {
-            return Err(BackendError::invalid_params());
-        }
-        let plan_id = object
+        if let Some(plan_id) = object
             .get("planId")
             .and_then(Value::as_str)
             .filter(|plan_id| !plan_id.is_empty())
-            .ok_or_else(BackendError::invalid_params)?;
-        Ok(serde_json::json!({
-            "accepted": self.native.cancel_native_plan(plan_id)
-        }))
+        {
+            return Ok(serde_json::json!({
+                "accepted": self.native.cancel_native_plan(plan_id)
+            }));
+        }
+        if let Some(op_id) = object
+            .get("opId")
+            .and_then(Value::as_str)
+            .filter(|op_id| !op_id.is_empty())
+        {
+            return Ok(serde_json::json!({
+                "accepted": self.native.cancel_native_operation(op_id)
+            }));
+        }
+        Err(BackendError::invalid_params())
     }
 
     async fn undo(&self, params: Value) -> Result<Value, BackendError> {

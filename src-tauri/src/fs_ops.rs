@@ -329,10 +329,24 @@ impl FilesystemAuthority {
             .replace_bound_available(plan_id, caller, expected_digest, replacement)
     }
 
-    pub fn cancel(&self, plan_id: &str) -> bool {
-        self.cancellations.cancel(plan_id)
+    pub fn cancel(&self, request_id: &str) -> bool {
+        self.cancellations.cancel(request_id)
     }
 
+    pub(crate) fn register_cancellation<'a>(
+        &'a self,
+        request_id: &'a str,
+    ) -> (
+        crate::progress::CancellationToken,
+        CancellationRegistration<'a>,
+    ) {
+        let token = self.cancellations.register(request_id);
+        let registration = CancellationRegistration {
+            registry: &self.cancellations,
+            request_id,
+        };
+        (token, registration)
+    }
     pub fn revoke(&self, caller: &CallerIdentity) {
         self.plans.revoke(caller);
         self.grants.revoke(caller);
@@ -3838,7 +3852,7 @@ fn operation_result_for_generated_cancelled(record: &JournalRecord) -> Operation
     result
 }
 
-struct CancellationRegistration<'a> {
+pub(crate) struct CancellationRegistration<'a> {
     registry: &'a CancellationRegistry,
     request_id: &'a str,
 }

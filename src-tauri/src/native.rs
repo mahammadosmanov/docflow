@@ -939,10 +939,15 @@ impl NativeBackend {
             trash_root: (!request.values.keep_original).then(|| self.app_data_dir.join("trash")),
         };
         let ocr = NativeOcr::discover();
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = if request.op_id == FAST_COVER_OPERATION_ID {
-            preview_fast_covers(&scan_params, &ocr, &mut progress, || false)?
+            preview_fast_covers(&scan_params, &ocr, &mut progress, || {
+                cancellation.is_cancelled()
+            })?
         } else {
-            preview_process_scans(&scan_params, &ocr, &mut progress, || false)?
+            preview_process_scans(&scan_params, &ocr, &mut progress, || {
+                cancellation.is_cancelled()
+            })?
         };
         encode(
             self.filesystem.cache_plan(
@@ -994,6 +999,7 @@ impl NativeBackend {
                 (request.values.destination.clone(), GrantAccess::ReadWrite),
             ],
         )?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = preview_rfi_file_group(
             &GroupRfiFilesParams {
                 source: request.values.source,
@@ -1001,7 +1007,7 @@ impl NativeBackend {
             },
             &NativeOcr::discover(),
             progress,
-            || false,
+            || cancellation.is_cancelled(),
         )?;
         let grant_ids = provisional
             .grants()
@@ -1057,12 +1063,13 @@ impl NativeBackend {
         let grant = self
             .filesystem
             .issue_grant(&scope, root, GrantAccess::ReadWrite)?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = rfi_log::preview(
             &request.values,
             chrono::Local::now().date_naive(),
             Some(&self.gemini),
             progress,
-            || false,
+            || cancellation.is_cancelled(),
         )?;
         encode(self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -1399,12 +1406,13 @@ impl NativeBackend {
         let mut workbook = workbook_anchor
             .open_mutable()
             .map_err(|_| BackendError::validation("error.rfi.completeStatus.workbookLocked"))?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let mut plan = rfi_system_sync::preview_complete_status_sync(
             &system_root,
             &workbook_path,
             &mut workbook,
             progress,
-            || false,
+            || cancellation.is_cancelled(),
         )?;
         drop(workbook);
         let reservation = self.filesystem.reserve_plan_id();
@@ -1416,7 +1424,12 @@ impl NativeBackend {
             .collect();
         let cached = self.filesystem.cache_reserved_plan(
             BackendOrigin::Rust,
-            PlanBinding::new(caller.owner_id, caller.session_id, request.op_id, grant_ids),
+            PlanBinding::new(
+                caller.owner_id,
+                caller.session_id,
+                request.op_id.clone(),
+                grant_ids,
+            ),
             reservation,
             plan,
         )?;
@@ -1549,6 +1562,7 @@ impl NativeBackend {
             &request.values.review_root,
             GrantAccess::ReadWrite,
         )?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = preview_stage_signed_pages(
             &StageSignedPagesParams {
                 signed_scans: request.values.signed_scans,
@@ -1558,7 +1572,7 @@ impl NativeBackend {
             },
             &NativeOcr::discover(),
             progress,
-            || false,
+            || cancellation.is_cancelled(),
         )?;
         encode(self.filesystem.cache_plan(
             BackendOrigin::Rust,
@@ -1608,6 +1622,7 @@ impl NativeBackend {
             &request.values.review_root,
             GrantAccess::ReadWrite,
         )?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = preview_pdf_orientation(
             &PdfOrientationParams {
                 rfi_system_root: request.values.rfi_system_root.clone(),
@@ -1615,7 +1630,7 @@ impl NativeBackend {
             },
             &NativeOcr::discover(),
             progress,
-            || false,
+            || cancellation.is_cancelled(),
             Some(&self.scan_index),
             &caller.owner_id,
             request.values.force_rescan,
@@ -1991,6 +2006,10 @@ impl NativeBackend {
         self.outlook.cancel(plan_id)
             || self.print.cancel(plan_id)
             || self.filesystem.cancel(plan_id)
+    }
+
+    pub(crate) fn cancel_native_operation(&self, op_id: &str) -> bool {
+        self.filesystem.cancel(op_id)
     }
 
     fn review_scan(&self, params: Value) -> Result<Value, BackendError> {

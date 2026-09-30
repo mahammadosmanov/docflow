@@ -79,7 +79,10 @@ export interface FrontendCommandMap {
     { opId: string; planId: string },
     OperationResult
   >;
-  "engine/cancel": CommandSpec<{ planId: string }, { accepted: boolean }>;
+  "engine/cancel": CommandSpec<
+    { planId?: string; opId?: string },
+    { accepted: boolean }
+  >;
   "engine/printQueueLatest": CommandSpec<NoParams, PrintQueueSummary | null>;
   "engine/printQueueDiscard": CommandSpec<
     { queueId: string },

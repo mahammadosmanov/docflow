@@ -3,6 +3,16 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.12.5 - 2026-09-30
+
+### Added
+
+- Add real-time cancellation support during operation preview across all document features:
+  - Wire cancellation tokens into `preview_process_scans`, `preview_rfi_file_group`, `preview_rfi_log`, `preview_rfi_complete_status_sync`, `preview_stage_signed_pages`, and `preview_pdf_orientation`.
+  - Enable operation ID cancellation dispatch in `BackendRouter::cancel` (`engine/cancel` accepts `{ opId }`).
+  - Add dedicated Cancel button in `BusyState` during the `previewing` stage in the frontend.
+  - Support `Escape` shortcut to cancel long-running previews immediately.
+
 ## 1.12.4 - 2026-09-30
 
 ### Changed
