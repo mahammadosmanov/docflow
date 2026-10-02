@@ -3169,3 +3169,76 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
     assert_eq!(rows[1]["proposedRfiNo"], "MEC-0001");
     assert_eq!(rows[1]["proposedStatus"], "Signed");
 }
+#[test]
+fn rfis_of_different_items_or_itps_are_strictly_isolated_and_never_merge_into_same_slot() {
+    let tracker_rfi = "AZE-SUN-INT-QMS-RFI-MEC-0370";
+    let module_rfi = "AZE-SUN-INT-QMS-RFI-MEC-0530";
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet(
+            [
+                full_schema_mec_header(),
+                row(
+                    10,
+                    [
+                        inline("A10", tracker_rfi),
+                        inline("D10", "AZE-SUN-INT-QMS-ITP-MEC-0003"),
+                        inline("E10", "MEC-3.3.1"),
+                        inline("F10", "PCS-02"),
+                        inline("G10", "S1"),
+                        inline("T10", "Completed"),
+                        inline("V10", "Signed by Worley"),
+                    ],
+                ),
+                row(
+                    11,
+                    [
+                        inline("A11", module_rfi),
+                        inline("D11", "AZE-SUN-INT-QMS-ITP-MEC-0004"),
+                        inline("E11", "MEC-4.3.2"),
+                        inline("F11", "PCS-02"),
+                        inline("G11", "S1"),
+                        inline("T11", "Completed"),
+                        inline("V11", "Signed by Worley"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    );
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [
+                    row(4, [
+                        inline("C4", "Block #"),
+                        inline("D4", "Section"),
+                        inline("P4", "RFI No."),
+                        inline("Q4", "STATUS"),
+                        inline("R4", "RFI No."),
+                        inline("S4", "STATUS"),
+                    ]),
+                    row(5, [
+                        inline("C5", "PCS-02"),
+                        inline("D5", "S1"),
+                        inline("P5", "MEC-0370"),
+                        inline("Q5", "Completed"),
+                        inline("R5", "MEC-0530"),
+                        inline("S5", "Completed"),
+                    ]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+    let classification = classify(source, target).unwrap();
+    let rows = classification["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 0);
+}

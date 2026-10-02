@@ -4,6 +4,14 @@ All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
 
+## 1.13.2 - 2026-10-02
+
+### Fixed
+
+- Strict Follow Up milestone and item clause cell isolation:
+  - Enforce identical ITP and item clause contract before appending or merging RFIs into existing cells (`slot.codes.push`), preventing cross-milestone combinations (e.g. tracker `MEC-0370/0565` and module `MEC-0530` are strictly quarantined into their respective columns).
+  - Add regression coverage ensuring distinct item clauses remain isolated and never merge into the same cell.
+
 ## 1.13.1 - 2026-10-02
 
 ### Fixed

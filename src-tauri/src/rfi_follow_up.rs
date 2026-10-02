@@ -1567,6 +1567,19 @@ fn classify_workbooks_full(
         for key in candidates {
             let slot = slots.get_mut(&key).ok_or_else(workbook_invalid)?;
             if !slot.codes.contains(&record.canonical_rfi) {
+                let compatible = slot
+                    .codes
+                    .iter()
+                    .filter(|code| !is_placeholder_rfi(code))
+                    .all(|code| {
+                        records.get(code).is_some_and(|existing| {
+                            existing.itp == record.itp
+                                && item_clause(&existing.item) == item_clause(&record.item)
+                        })
+                    });
+                if !compatible {
+                    continue;
+                }
                 slot.codes.push(record.canonical_rfi.clone());
                 slot.changed_rfis.insert(record.canonical_rfi.clone());
             }
@@ -1740,6 +1753,19 @@ fn classify_workbooks_full(
                     continue;
                 }
                 if !slot.codes.contains(&record.canonical_rfi) {
+                    let compatible = slot
+                        .codes
+                        .iter()
+                        .filter(|code| !is_placeholder_rfi(code))
+                        .all(|code| {
+                            records.get(code).is_some_and(|existing| {
+                                existing.itp == record.itp
+                                    && item_clause(&existing.item) == item_clause(&record.item)
+                            })
+                        });
+                    if !compatible {
+                        continue;
+                    }
                     slot.codes.push(record.canonical_rfi.clone());
                     slot.changed_rfis.insert(record.canonical_rfi.clone());
                 }

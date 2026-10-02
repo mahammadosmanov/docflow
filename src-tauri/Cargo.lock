@@ -845,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "docflow"
-version = "1.13.1"
+version = "1.13.2"
 dependencies = [
  "cc",
  "chrono",
