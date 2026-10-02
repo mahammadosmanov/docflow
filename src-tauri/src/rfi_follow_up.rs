@@ -5,7 +5,7 @@ use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
-    sync::OnceLock,
+    sync::{LazyLock, OnceLock},
     time::UNIX_EPOCH,
 };
 
@@ -349,23 +349,21 @@ pub fn canonical_rfi(value: &str) -> Option<String> {
 }
 
 pub fn canonical_follow_up_rfi(value: &str) -> Option<(String, String)> {
-    static SHORT_RFI: OnceLock<Regex> = OnceLock::new();
+    static SHORT_RFI: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\A(CIV|MEC|ELE|PRC)[-_]?([0-9]{4})\z")
+            .expect("short Follow Up RFI regex is valid")
+    });
     let normalized = normalize_status(value).to_uppercase();
     let short = if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {
         short.to_string()
     } else {
         normalized
     };
-    if !SHORT_RFI
-        .get_or_init(|| {
-            Regex::new(r"\A(?:CIV|MEC|ELE|PRC)-[0-9]{4}\z")
-                .expect("short Follow Up RFI regex is valid")
-        })
-        .is_match(&short)
-    {
-        return None;
-    }
-    Some((format!("{FULL_RFI_PREFIX}{short}"), short))
+    let captures = SHORT_RFI.captures(&short)?;
+    let disc = &captures[1];
+    let num = captures[2].parse::<u32>().ok()?;
+    let canonical_short = format!("{disc}-{num:04}");
+    Some((format!("{FULL_RFI_PREFIX}{canonical_short}"), canonical_short))
 }
 
 pub fn is_placeholder_rfi(code: &str) -> bool {
@@ -478,22 +476,21 @@ fn split_values(value: &str) -> Vec<String> {
 }
 
 fn parse_rfi_group(value: &str) -> Option<Vec<String>> {
-    static PART: OnceLock<Regex> = OnceLock::new();
+    static PART: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)[-_]?)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z").unwrap()
+    });
     let mut normalized = normalize_status(value).to_uppercase().replace(',', "/");
     if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {
         normalized = short.to_string();
     }
     let mut discipline: Option<String> = None;
     let mut numbers = Vec::new();
-    let part_regex = PART.get_or_init(|| {
-        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)-)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z").unwrap()
-    });
     for raw_part in normalized.split('/') {
         let raw_part = raw_part.trim();
         if raw_part.is_empty() {
             return None;
         }
-        let captures = part_regex.captures(raw_part)?;
+        let captures = PART.captures(raw_part)?;
         if let Some(found) = captures.get(1) {
             match discipline.as_deref() {
                 Some(existing) if existing != found.as_str() => return None,
@@ -1664,6 +1661,9 @@ fn classify_workbooks_full(
     }) {
         let (sheet_name, rfi_column, status_column, match_layout) =
             signed_route_key(record).expect("filtered final record has a signed route");
+        if sheet_name == "Signed By Worley MEC" && !record.worley_signed {
+            continue;
+        }
         if present_signed_targets.contains(&(
             sheet_name.to_string(),
             rfi_column,
