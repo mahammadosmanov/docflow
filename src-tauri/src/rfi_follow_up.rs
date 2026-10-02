@@ -368,6 +368,14 @@ pub fn canonical_follow_up_rfi(value: &str) -> Option<(String, String)> {
     Some((format!("{FULL_RFI_PREFIX}{short}"), short))
 }
 
+pub fn is_placeholder_rfi(code: &str) -> bool {
+    let digits = code
+        .rsplit_once('-')
+        .map(|(_, num)| num)
+        .unwrap_or(code);
+    digits.parse::<u32>().ok().is_some_and(|n| n >= 2000)
+}
+
 pub fn mapped_follow_up_status(remark: &str) -> &'static str {
     if remark
         .lines()
@@ -922,23 +930,16 @@ fn row_matches(
             .any(|context| pcu_row_matches(sheet, row, context)),
         "Road" => record.contexts.iter().any(|context| {
             normalized_location(&context.tag) == cell(2)
-                && (context.area.is_empty()
-                    || normalized_location(&context.area).contains(&cell(1)))
         }),
         "MEC" => record.contexts.iter().any(|context| {
             let sections = split_values(&context.area);
-            let locations = split_values(&context.location);
             let tags = normalized_parts(&context.tag);
             !sections.is_empty()
-                && locations.len() == 1
-                && tags.len() == 1
-                && normalized_parts(&cell(3)).contains(&tags[0])
+                && !tags.is_empty()
+                && tags.iter().any(|tag| normalized_parts(&cell(3)).contains(tag))
                 && sections
                     .iter()
                     .any(|value| normalized_parts(&cell(4)).contains(&normalized_location(value)))
-                && locations
-                    .iter()
-                    .any(|value| normalized_parts(&cell(2)).contains(&normalized_location(value)))
         }),
         _ => false,
     }
@@ -1029,54 +1030,53 @@ fn distinct_civ_zone_area_rows(
 
 fn distinct_mec_context_rows(
     target_workbook: &WorkbookData,
+    sheet_name: &str,
     candidates: &[(String, u32, u32, u32)],
     record: &SourceRecord,
 ) -> bool {
     if candidates.len() < 2 {
         return false;
     }
-    let Some(sheet) = target_workbook.sheet("MEC") else {
+    let Some(sheet) = target_workbook.sheet(sheet_name) else {
         return false;
     };
-    let mut source_contexts = BTreeSet::new();
+    let mut source_sections = BTreeSet::new();
+    let mut source_blocks = BTreeSet::new();
     for context in &record.contexts {
         let tags = normalized_parts(&context.tag);
         let areas = normalized_parts(&context.area);
-        let locations = normalized_parts(&context.location);
-        if tags.len() != 1 || areas.is_empty() || locations.len() != 1 {
+        for tag in tags {
+            if tag.starts_with("PCS-") {
+                source_blocks.insert(tag);
+            }
+        }
+        for area in areas {
+            if area.starts_with('S') {
+                source_sections.insert(area);
+            }
+        }
+    }
+    if source_blocks.len() != 1 || source_sections.is_empty() {
+        return false;
+    }
+    let mut matched_sections = BTreeSet::new();
+    for (_, row, _, _) in candidates {
+        let row_pcs = sheet
+            .cell(*row, 3)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default();
+        let row_sec = sheet
+            .cell(*row, 4)
+            .map(|cell| normalized_location(&cell.value))
+            .unwrap_or_default();
+        if !source_blocks.contains(&row_pcs) || !source_sections.contains(&row_sec) {
             return false;
         }
-        source_contexts.extend(
-            areas
-                .into_iter()
-                .map(|area| (tags[0].clone(), area, locations[0].clone())),
-        );
+        if !matched_sections.insert(row_sec) {
+            return false;
+        }
     }
-    let mut matched_contexts = BTreeSet::new();
-    candidates.iter().all(|(_, row, _, _)| {
-        let tags = sheet
-            .cell(*row, 3)
-            .map(|cell| normalized_parts(&cell.value))
-            .unwrap_or_default();
-        let areas = sheet
-            .cell(*row, 4)
-            .map(|cell| normalized_parts(&cell.value))
-            .unwrap_or_default();
-        let locations = sheet
-            .cell(*row, 2)
-            .map(|cell| normalized_parts(&cell.value))
-            .unwrap_or_default();
-        let matches = source_contexts
-            .iter()
-            .filter(|context| {
-                tags.contains(&context.0)
-                    && areas.contains(&context.1)
-                    && locations.contains(&context.2)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        matches.len() == 1 && matched_contexts.insert(matches[0].clone())
-    })
+    matched_sections.len() == candidates.len()
 }
 
 #[derive(Clone)]
@@ -1147,9 +1147,16 @@ fn main_status_for_codes(
     codes: &[String],
     records: &BTreeMap<String, SourceRecord>,
 ) -> Option<String> {
-    let states = codes
+    let real_codes = codes
         .iter()
-        .map(|code| records.get(code)?.state)
+        .filter(|code| !is_placeholder_rfi(code))
+        .collect::<Vec<_>>();
+    if real_codes.is_empty() {
+        return None;
+    }
+    let states = real_codes
+        .iter()
+        .map(|code| records.get(*code)?.state)
         .collect::<Option<Vec<_>>>()?;
     aggregate_status(states)
 }
@@ -1167,18 +1174,26 @@ fn row_from_slot(
         if slot.codes.is_empty() {
             String::new()
         } else {
-            let states = slot
+            let real_codes = slot
                 .codes
                 .iter()
-                .map(|code| records.get(code))
-                .collect::<Option<Vec<_>>>()?;
-            if states.is_empty() {
-                return None;
-            }
-            if states.iter().all(|record| record.worley_signed) {
-                "Signed".to_string()
+                .filter(|code| !is_placeholder_rfi(code))
+                .collect::<Vec<_>>();
+            if real_codes.is_empty() {
+                slot.current_status.clone()
             } else {
-                "Not Signed".to_string()
+                let states = real_codes
+                    .iter()
+                    .map(|code| records.get(*code))
+                    .collect::<Option<Vec<_>>>()?;
+                if states.is_empty() {
+                    return None;
+                }
+                if states.iter().all(|record| record.worley_signed) {
+                    "Signed".to_string()
+                } else {
+                    "Not Signed".to_string()
+                }
             }
         }
     } else if slot.codes.is_empty() {
@@ -1339,9 +1354,10 @@ fn classify_workbooks_full(
             .codes
             .iter()
             .filter(|code| {
-                records.get(*code).is_some_and(|record| {
-                    record.excluded_civ_pcs || record.state == Some(LogState::Remove)
-                })
+                !is_placeholder_rfi(code)
+                    && records.get(*code).is_some_and(|record| {
+                        record.excluded_civ_pcs || record.state == Some(LogState::Remove)
+                    })
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -1354,6 +1370,7 @@ fn classify_workbooks_full(
             && slot
                 .codes
                 .iter()
+                .filter(|code| !is_placeholder_rfi(code))
                 .any(|code| records.get(code).and_then(|record| record.state).is_some())
         {
             let next = main_status_for_codes(&slot.codes, &records);
@@ -1473,7 +1490,7 @@ fn classify_workbooks_full(
                 && (distinct_civ_area_rows(target_workbook, &candidates, record)
                     || distinct_civ_zone_area_rows(target_workbook, &candidates, record)))
                 || (sheet_name == "MEC"
-                    && distinct_mec_context_rows(target_workbook, &candidates, record)));
+                    && distinct_mec_context_rows(target_workbook, sheet_name, &candidates, record)));
         if candidate_count > 1 && !exact_multi_area {
             if !existing_slots.is_empty() {
                 continue;
@@ -1565,21 +1582,29 @@ fn classify_workbooks_full(
         .filter(|slot| !is_signed_layout(&slot.layout))
         .cloned()
     {
-        let source_issue = slot.codes.iter().find_map(|code| {
-            if !records.contains_key(code) {
-                Some("sourceMissing")
-            } else if records
-                .get(code)
-                .is_some_and(|record| record.state.is_none())
-            {
-                Some("sourceStatusUnknown")
-            } else {
-                None
-            }
-        });
+        let source_issue = slot
+            .codes
+            .iter()
+            .filter(|code| !is_placeholder_rfi(code))
+            .find_map(|code| {
+                if !records.contains_key(code) {
+                    Some("sourceMissing")
+                } else if records
+                    .get(code)
+                    .is_some_and(|record| record.state.is_none())
+                {
+                    Some("sourceStatusUnknown")
+                } else {
+                    None
+                }
+            });
         if slot.unsafe_reason.is_none()
             && let Some(reason) = source_issue
-            && let Some(record) = slot.codes.iter().find_map(|code| records.get(code))
+            && let Some(record) = slot
+                .codes
+                .iter()
+                .filter(|code| !is_placeholder_rfi(code))
+                .find_map(|code| records.get(code))
         {
             manual_rows.push(FollowUpRow {
                 row_id: format!(
@@ -1659,57 +1684,72 @@ fn classify_workbooks_full(
                 row_matches(match_layout, matching_sheet, *row, record, target_workbook)
             })
             .collect::<Vec<_>>();
-        let candidate_count = candidates.len();
+        let candidate_keys = candidates
+            .iter()
+            .map(|(key, _)| (*key).clone())
+            .collect::<Vec<_>>();
+        let candidate_count = candidate_keys.len();
         if candidate_count == 0 {
             // No prepared row means this FINAL item is absent from the current
             // Follow Up template. Do not treat absence as a failed sync.
-            drop(candidates);
             continue;
         }
-        if candidate_count == 1 {
-            let (_, slot) = candidates.into_iter().next().expect("one candidate");
-            if sheet_name == "PCU" && slot.codes.is_empty() {
-                continue;
-            }
-            if let Some(reason) = slot.unsafe_reason {
-                unmapped_count += 1;
-                manual_rows.push(FollowUpRow {
-                    row_id: format!("rfi-follow-up-signed-unsafe:{}", record.canonical_rfi),
-                    sheet: sheet_name.to_string(),
-                    row: slot.row,
-                    rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![if record.worley_signed {
-                        "Signed".to_string()
-                    } else {
-                        "Not Signed".to_string()
-                    }],
-                    current_status: slot.current_status.clone(),
-                    proposed_status: None,
-                    proposed_rfi_no: None,
-                    disposition: FollowUpDisposition::ManualReview,
-                    reason_key: format!("warn.rfi.followUp.reason.{reason}"),
-                    selectable: false,
-                    enabled: false,
-                    target: FollowUpReviewTarget {
-                        worksheet: slot.layout.worksheet.clone(),
+        let exact_multi_signed = candidate_count > 1
+            && ((sheet_name == "CIV"
+                && (distinct_civ_area_rows(target_workbook, &candidate_keys, record)
+                    || distinct_civ_zone_area_rows(target_workbook, &candidate_keys, record)))
+                || (sheet_name == "Signed By Worley MEC"
+                    && distinct_mec_context_rows(target_workbook, sheet_name, &candidate_keys, record)));
+        if candidate_count == 1 || exact_multi_signed {
+            for (_, slot) in candidates {
+                if sheet_name == "PCU" && slot.codes.is_empty() {
+                    continue;
+                }
+                if let Some(reason) = slot.unsafe_reason {
+                    unmapped_count += 1;
+                    manual_rows.push(FollowUpRow {
+                        row_id: format!(
+                            "rfi-follow-up-signed-unsafe:{}:{}:{}",
+                            record.canonical_rfi, slot.row, slot.layout.rfi_column
+                        ),
+                        sheet: sheet_name.to_string(),
                         row: slot.row,
-                        rfi_column: slot.layout.rfi_column,
-                        status_column: slot.layout.status_column,
-                        rfi_cell: Some(slot.rfi_cell.clone()),
-                        status_cell: Some(slot.status_cell.clone()),
-                    },
-                    source_evidence: record.evidence.clone(),
-                });
-                continue;
+                        rfi_no: record.short_rfi.clone(),
+                        source_statuses: vec![if record.worley_signed {
+                            "Signed".to_string()
+                        } else {
+                            "Not Signed".to_string()
+                        }],
+                        current_status: slot.current_status.clone(),
+                        proposed_status: None,
+                        proposed_rfi_no: None,
+                        disposition: FollowUpDisposition::ManualReview,
+                        reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+                        selectable: false,
+                        enabled: false,
+                        target: FollowUpReviewTarget {
+                            worksheet: slot.layout.worksheet.clone(),
+                            row: slot.row,
+                            rfi_column: slot.layout.rfi_column,
+                            status_column: slot.layout.status_column,
+                            rfi_cell: Some(slot.rfi_cell.clone()),
+                            status_cell: Some(slot.status_cell.clone()),
+                        },
+                        source_evidence: record.evidence.clone(),
+                    });
+                    continue;
+                }
+                if !slot.codes.contains(&record.canonical_rfi) {
+                    slot.codes.push(record.canonical_rfi.clone());
+                    slot.changed_rfis.insert(record.canonical_rfi.clone());
+                }
+                present_signed_targets.insert((
+                    sheet_name.to_string(),
+                    rfi_column,
+                    status_column,
+                    record.canonical_rfi.clone(),
+                ));
             }
-            slot.codes.push(record.canonical_rfi.clone());
-            slot.changed_rfis.insert(record.canonical_rfi.clone());
-            present_signed_targets.insert((
-                sheet_name.to_string(),
-                rfi_column,
-                status_column,
-                record.canonical_rfi.clone(),
-            ));
             continue;
         }
         unmapped_count += 1;
@@ -1764,6 +1804,9 @@ fn classify_workbooks_full(
     {
         let original = slot.codes.clone();
         slot.codes.retain(|code| {
+            if is_placeholder_rfi(code) {
+                return true;
+            }
             !records
                 .get(code)
                 .is_some_and(|record| record.state == Some(LogState::Remove))

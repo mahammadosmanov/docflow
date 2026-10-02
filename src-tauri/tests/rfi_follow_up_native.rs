@@ -3033,3 +3033,139 @@ fn multi_sheet_follow_up_prioritizes_signed_by_sheets_over_arbitrary_sheets() {
     assert_eq!(rows[0]["rfiNo"], civ_rfi);
     assert_eq!(rows[0]["proposedStatus"], "Signed");
 }
+#[test]
+fn placeholder_2000_series_rfis_are_preserved_without_sourcemissing_warnings() {
+    assert!(docflow_lib::rfi_follow_up::is_placeholder_rfi("CIV-2007"));
+    assert!(docflow_lib::rfi_follow_up::is_placeholder_rfi("MEC-2183"));
+    assert!(!docflow_lib::rfi_follow_up::is_placeholder_rfi("CIV-0170"));
+    assert!(!docflow_lib::rfi_follow_up::is_placeholder_rfi("MEC-0330"));
+}
+
+#[test]
+fn road_name_matches_by_exact_tag_without_requiring_zone_match() {
+    let source_full = full_schema_source([full_schema_record_with_status(
+        10,
+        "0001",
+        "AZE-SUN-INT-QMS-ITP-CIV-0004",
+        "CIV-4.2.4",
+        "Road 14 (Part 1)",
+        "Ongoing",
+        "",
+    )]);
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet([row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])], &[]),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(
+                [
+                    row(4, [
+                        inline("B4", "ROAD No."),
+                        inline("K4", "RFI No."),
+                        inline("L4", "STATUS"),
+                    ]),
+                    row(5, [
+                        inline("A5", "South"),
+                        inline("B5", "Road 14 (Part 1)"),
+                        inline("K5", ""),
+                        inline("L5", ""),
+                    ]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+    let classification = classify(source_full, target).unwrap();
+    let rows = classification["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["_sheet"], "Road");
+    assert_eq!(rows[0]["_row"], 5);
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-0001");
+    assert_eq!(rows[0]["proposedStatus"], "In Progress");
+}
+#[test]
+fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
+    let mec_row = row(
+        10,
+        [
+            inline("A10", "AZE-SUN-INT-QMS-RFI-MEC-0001"),
+            inline("D10", "AZE-SUN-INT-QMS-ITP-MEC-0003"),
+            inline("E10", "MEC-3.3.1"),
+            inline("F10", "PCS-10"),
+            inline("G10", "S1, S3"),
+            inline("T10", "Completed"),
+            inline("V10", "Signed by Worley"),
+        ],
+    );
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet([full_schema_mec_header(), mec_row], &[]),
+    );
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet([row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])], &[]),
+        ),
+        (
+            "Signed By Worley MEC",
+            None,
+            worksheet(
+                [
+                    row(4, [
+                        inline("C4", "Block #"),
+                        inline("D4", "Section"),
+                        inline("J4", "RFI No."),
+                        inline("K4", "STATUS"),
+                    ]),
+                    row(5, [
+                        inline("C5", "PCS-10"),
+                        inline("D5", "S1"),
+                        inline("J5", ""),
+                        inline("K5", ""),
+                    ]),
+                    row(6, [
+                        inline("C6", "PCS-10"),
+                        inline("D6", "S2"),
+                        inline("J6", "MEC-0558"),
+                        inline("K6", "Signed"),
+                    ]),
+                    row(7, [
+                        inline("C7", "PCS-10"),
+                        inline("D7", "S3"),
+                        inline("J7", ""),
+                        inline("K7", ""),
+                    ]),
+                ],
+                &[],
+            ),
+        ),
+    ]);
+    let classification = classify(source, target).unwrap();
+    let warnings = classification["warnings"].as_array().unwrap();
+    assert!(warnings.is_empty(), "expected 0 warnings, got {:?}", warnings);
+    let rows = classification["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["_sheet"], "Signed By Worley MEC");
+    assert_eq!(rows[0]["_row"], 5);
+    assert_eq!(rows[0]["proposedRfiNo"], "MEC-0001");
+    assert_eq!(rows[0]["proposedStatus"], "Signed");
+    assert_eq!(rows[1]["_sheet"], "Signed By Worley MEC");
+    assert_eq!(rows[1]["_row"], 7);
+    assert_eq!(rows[1]["proposedRfiNo"], "MEC-0001");
+    assert_eq!(rows[1]["proposedStatus"], "Signed");
+}
