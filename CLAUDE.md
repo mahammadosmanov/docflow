@@ -4,6 +4,9 @@ Read `AGENTS.md` first and follow it for every repository change. Then read
 `docs/README.md` in its declared order. `VERSION` is current-version authority;
 Rust in `src-tauri/src/` is the sole application/mutation authority.
 
+MANDATORY VERSION BUMP: Every single feature, fix, or improvement MUST ALWAYS
+increment the version number across all manifests (`node tools/version_manager.mjs set <next-version>`).
+Never commit, deliver, or build changes under an existing version number.
 Never bypass preview -> authorization -> apply -> journal -> undo. The only
 standing authorization is the exact `files.replica_publish` profile after its
 first explicit Apply; changing that profile requires a new explicit Apply. Never overwrite

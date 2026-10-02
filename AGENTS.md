@@ -30,30 +30,32 @@ change before moving authority.
 
 ## Non-negotiable rules
 
-1. Every mutation is preview → explicit user approval → apply → journal → undo.
+1. **MANDATORY VERSION BUMP ON EVERY CHANGE (FOR ALL AI MODELS - GEMINI, CLAUDE, ETC.):**
+   Every new modification, fix, feature, or release MUST ALWAYS bump the version number across all manifests (`node tools/version_manager.mjs set <next-version>`), update `releases.json` and `CHANGELOG.md`, and verify with `node tools/version_manager.mjs check`. Never deliver a build, commit, or claim completion under an existing version number. Gemini, Claude, and any other AI model working on this codebase must read this rule and bump the version.
+2. Every mutation is preview → explicit user approval → apply → journal → undo.
    The sole exception is an enabled `files.replica_publish` profile: its first
    exact profile Plan requires explicit Apply, which grants standing authority
    for later identical-profile runs. Each run still builds an immutable Plan,
    revalidates hashes, backs up replacements, journals effects, and pauses on
    ambiguity or failure.
-2. Apply executes only the approved cached `Plan`; it never recalculates.
-3. Never overwrite an existing destination.
-4. Undo reverses successful steps and removes only empty directories created by the operation.
-5. Cloud history is audit metadata only. Only a validated local journal may authorize undo.
-6. The webview never receives Supabase tokens or arbitrary filesystem, network, shell, or process authority.
-7. All user-visible text exists in `tr`, `en`, `ru`, and `az`.
-8. Forms are generated from `ParamSchema`; never add an operation-specific form.
-9. OCR candidates may be normalized to NFC and uppercase once. Persisted RFI
+3. Apply executes only the approved cached `Plan`; it never recalculates.
+4. Never overwrite an existing destination.
+5. Undo reverses successful steps and removes only empty directories created by the operation.
+6. Cloud history is audit metadata only. Only a validated local journal may authorize undo.
+7. The webview never receives Supabase tokens or arbitrary filesystem, network, shell, or process authority.
+8. All user-visible text exists in `tr`, `en`, `ru`, and `az`.
+9. Forms are generated from `ParamSchema`; never add an operation-specific form.
+10. OCR candidates may be normalized to NFC and uppercase once. Persisted RFI
    codes must already match exact uppercase ASCII; never silently repair them.
-10. Keep the strict `-RFI-` anchor. A miss is recoverable; a false label is silent corruption.
-11. The UI is monochrome. Meaning comes from controls, text, icons, and border weight.
-12. OCR, filesystem, network, Office, and printer work stays outside the webview.
-13. Never expose a Supabase service-role or secret key in a desktop client.
-14. Windows and macOS remain supported.
-15. Preserve existing non-secret settings, journal, trash, queue, DTO, and cloud formats unless an accepted decision explicitly changes one.
-16. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible. After applicable checks pass, push that commit to the canonical GitHub branch and publish its immutable version tag and GitHub Release; this repository has standing owner authorization for those backup actions. Never include secrets, operator documents, generated caches, or unverified package claims.
-17. Classify every completed slice with `node tools/version_manager.mjs next`: `fix` increments PATCH, `feature` increments MINOR, and `breaking` increments MAJOR. Do not extend a prerelease train unless an explicit release-candidate plan is active.
-18. Multi-core execution is allowed for independent read-only discovery or
+11. Keep the strict `-RFI-` anchor. A miss is recoverable; a false label is silent corruption.
+12. The UI is monochrome. Meaning comes from controls, text, icons, and border weight.
+13. OCR, filesystem, network, Office, and printer work stays outside the webview.
+14. Never expose a Supabase service-role or secret key in a desktop client.
+15. Windows and macOS remain supported.
+16. Preserve existing non-secret settings, journal, trash, queue, DTO, and cloud formats unless an accepted decision explicitly changes one.
+17. Every completed feature or improvement slice must increment the project version across all manifests (`node tools/version_manager.mjs set <next-version>`) and finish with a dedicated git commit describing the change, so history is granular, traceable, and reversible. After applicable checks pass, push that commit to the canonical GitHub branch and publish its immutable version tag and GitHub Release; this repository has standing owner authorization for those backup actions. Never include secrets, operator documents, generated caches, or unverified package claims.
+18. Classify every completed slice with `node tools/version_manager.mjs next`: `fix` increments PATCH, `feature` increments MINOR, and `breaking` increments MAJOR. Do not extend a prerelease train unless an explicit release-candidate plan is active.
+19. Multi-core execution is allowed for independent read-only discovery or
     analysis. Apply, publication, journal order, and Undo remain deterministic;
     never parallelize effects that could collide or become uncertain.
 

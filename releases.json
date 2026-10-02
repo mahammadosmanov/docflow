@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.13.0",
+  "currentVersion": "1.13.1",
   "releases": [
+    {
+      "version": "1.13.1",
+      "date": "2026-10-02",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.13.1",
+      "summary": "Follow Up sync exact projection: flexible hyphenless RFI parsing, Signed By Worley MEC unsigned record exclusion, and exact Road name placement."
+    },
     {
       "version": "1.13.0",
       "date": "2026-09-30",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.13.0",
       "summary": "Retire Prepare Outlook Reply All, Archive Selected Outlook Mail, and Publish RFI System Replicas operations, focusing DocFlow on ten high-speed local document workflows."
     },

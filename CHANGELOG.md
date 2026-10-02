@@ -3,6 +3,16 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+
+## 1.13.1 - 2026-10-02
+
+### Fixed
+
+- Follow Up synchronization accuracy and placement:
+  - Support flexible hyphenless and underscore RFI code parsing in Follow Up (e.g. `MEC0267` correctly parsed to `MEC-0267` without clobbering survey cells).
+  - Restrict `Signed By Worley MEC` candidate placement strictly to records signed by Worley, preventing 16 false "Not Signed" row additions.
+  - Support exact Road name tag matching without spurious Zone text conflict, automatically populating empty milestone cells for Road 14.
+  - Protect 2000-series placeholder RFIs from false `sourceMissing` warnings.
 ## 1.13.0 - 2026-09-30
 
 ### Removed
