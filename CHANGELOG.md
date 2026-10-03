@@ -4,6 +4,14 @@ All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
 
+## 1.13.3 - 2026-10-02
+
+### Fixed
+
+- Follow Up sync multi-row RFI status recognition:
+  - Reorder duplicate vs `alreadySynced` checks in legacy row classification so already synchronized multi-row RFIs are never marked as `Manual review only`.
+  - Add flexible case-insensitive and whitespace-trimmed worksheet discovery in `supports_full_sync_schema`.
+
 ## 1.13.2 - 2026-10-02
 
 ### Fixed

@@ -1905,14 +1905,27 @@ fn classify_workbooks_full(
     Ok(projection)
 }
 
+fn find_sheet_flexible<'a>(workbook: &'a WorkbookData, target: &str) -> Option<&'a WorksheetData> {
+    workbook.sheet(target).or_else(|| {
+        let norm = target.trim().to_uppercase();
+        workbook.sheets.iter().find_map(|(name, sheet)| {
+            if name.trim().to_uppercase() == norm {
+                Some(sheet)
+            } else {
+                None
+            }
+        })
+    })
+}
+
 fn supports_full_sync_schema(workbook: &WorkbookData) -> bool {
     ["CIV", "MEC"].iter().all(|name| {
-        workbook.sheet(name).is_some_and(|sheet| {
-            find_header_column(sheet, &["RFI NO.", "RFI NO"]).is_some()
+        find_sheet_flexible(workbook, name).is_some_and(|sheet| {
+            find_header_column(sheet, &["RFI NO.", "RFI NO", "RFI #"]).is_some()
                 && find_header_column(sheet, &["ITP NO:", "ITP NO.", "ITP NO"]).is_some()
-                && find_header_column(sheet, &["ITEM NO.", "ITEM NO"]).is_some()
-                && find_header_column(sheet, &["INSPECTION STATUS"]).is_some()
-                && find_header_column(sheet, &["REMARKS"]).is_some()
+                && find_header_column(sheet, &["ITEM NO.", "ITEM NO", "ITEM #"]).is_some()
+                && find_header_column(sheet, &["INSPECTION STATUS", "STATUS"]).is_some()
+                && find_header_column(sheet, &["REMARKS", "REMARK"]).is_some()
         })
     })
 }
@@ -1928,7 +1941,7 @@ pub fn classify_workbooks(
         && target_workbook
             .sheets
             .keys()
-            .any(|name| approved_sheet(name))
+            .any(|name| approved_sheet(name.trim()))
     {
         classify_workbooks_full(
             source_discovery,
@@ -2891,6 +2904,11 @@ fn classify_borrowed_row<'a>(
         manual("blankRfi")
     } else if pending.canonical_rfi.is_none() {
         manual("invalidRfi")
+    } else if analysis.proposed_status.as_deref() == Some(pending.current_status.as_str()) {
+        (
+            FollowUpDisposition::AlreadySynced,
+            "warn.rfi.followUp.reason.alreadySynced".to_string(),
+        )
     } else if duplicate {
         manual("targetDuplicate")
     } else if evidence.is_empty() {
@@ -2908,11 +2926,6 @@ fn classify_borrowed_row<'a>(
         && pending.current_status != "Not Signed"
     {
         manual("targetStatusUnknown")
-    } else if analysis.proposed_status.as_deref() == Some(pending.current_status.as_str()) {
-        (
-            FollowUpDisposition::AlreadySynced,
-            "warn.rfi.followUp.reason.alreadySynced".to_string(),
-        )
     } else {
         let reason = if analysis.proposed_status.as_deref() == Some("Signed") {
             "warn.rfi.followUp.reason.readySigned"
