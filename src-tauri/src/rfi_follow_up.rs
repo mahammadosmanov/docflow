@@ -87,6 +87,8 @@ pub(crate) struct FollowUpLayout {
     header_row: u32,
     rfi_column: u32,
     status_column: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) clause: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -667,10 +669,37 @@ fn scan_source_records(
 }
 
 fn approved_sheet(name: &str) -> bool {
+    let norm = name.trim().to_uppercase();
     matches!(
-        name,
-        "CIV" | "MEC" | "PCU" | "Road" | "Signed By Worley CIV" | "Signed By Worley MEC"
+        norm.as_str(),
+        "CIV" | "MEC" | "PCU" | "ROAD" | "SIGNED BY WORLEY CIV" | "SIGNED BY WORLEY MEC"
     )
+}
+
+fn extract_header_clause(sheet: &WorksheetData, max_row: u32, column: u32) -> Option<String> {
+    static CLAUSE_PARENS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\((\d+\.\d+(?:\s*,\s*\d+\.\d+)*)\)").unwrap()
+    });
+    static CLAUSE_WORD: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b(\d+\.\d+)\b").unwrap()
+    });
+    for r in (1..max_row).rev() {
+        if let Some(cell) = sheet.cell(r, column) {
+            let text = &cell.value;
+            if let Some(caps) = CLAUSE_PARENS.captures(text) {
+                if let Some(m) = caps.get(1) {
+                    let last = m.as_str().split(',').last().unwrap_or(m.as_str()).trim();
+                    return Some(last.to_string());
+                }
+            }
+            if let Some(caps) = CLAUSE_WORD.captures(text) {
+                if let Some(m) = caps.get(1) {
+                    return Some(m.as_str().trim().to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn discover_approved_layouts(
@@ -702,6 +731,9 @@ fn discover_approved_layouts(
         validate_cell_text(sheet)?;
         for row in 1..=sheet.max_row.min(10) {
             for rfi_column in 1..sheet.max_column.min(MAX_HEADER_COLUMNS) {
+                if descriptor.name.trim().to_uppercase().contains("SIGNED BY WORLEY MEC") && rfi_column > 14 {
+                    continue;
+                }
                 let rfi_header = sheet
                     .cell(row, rfi_column)
                     .map(|cell| normalize_header(&cell.value));
@@ -716,11 +748,13 @@ fn discover_approved_layouts(
                     && !merge_budget.contains(sheet, row, rfi_column)?
                     && !merge_budget.contains(sheet, row, rfi_column + 1)?
                 {
+                    let clause = extract_header_clause(sheet, row, rfi_column);
                     layouts.push(FollowUpLayout {
                         worksheet: descriptor.clone(),
                         header_row: row,
                         rfi_column,
                         status_column: rfi_column + 1,
+                        clause,
                     });
                 }
             }
@@ -743,6 +777,7 @@ fn discover_approved_layouts(
                 header_row: 4,
                 rfi_column: 16,
                 status_column: 18,
+                clause: Some("3.6".to_string()),
             });
         }
     }
@@ -752,7 +787,7 @@ fn discover_approved_layouts(
     Ok(layouts)
 }
 
-fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
+fn route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str)> {
     let (discipline, itp) = itp_identity(&record.itp)?;
     let clause = item_clause(&record.item)?;
     let pcu_tag = record.contexts.iter().any(|context| {
@@ -761,61 +796,111 @@ fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
             || normalize_header(&context.tag).starts_with("PCU-")
     });
     match (discipline.as_str(), itp.as_str(), clause.as_str()) {
-        ("CIV", "0002", "1.5") => Some(("CIV", 3)),
-        ("CIV", "0002", "1.8") => Some((
-            if pcu_tag { "PCU" } else { "CIV" },
-            if pcu_tag { 4 } else { 5 },
-        )),
-        ("CIV", "0002", "2.1") | ("CIV", "0002", "2.2") => Some(("CIV", 7)),
-        ("CIV", "0002", "2.4") => Some((
-            if pcu_tag { "PCU" } else { "CIV" },
-            if pcu_tag { 6 } else { 9 },
-        )),
-        ("CIV", "0002", "2.5") => Some((
-            if pcu_tag { "PCU" } else { "CIV" },
-            if pcu_tag { 8 } else { 11 },
-        )),
-        ("CIV", "0002", "3.1") => Some(("CIV", 13)),
-        ("CIV", "0004", "1.7") => Some(("Road", 3)),
-        ("CIV", "0004", "2.1") => Some(("Road", 5)),
-        ("CIV", "0004", "2.2") => Some(("Road", 7)),
-        ("CIV", "0004", "2.3") => Some(("Road", 9)),
-        ("CIV", "0004", "2.4") => Some(("Road", 11)),
-        ("CIV", "0004", "2.5") => Some(("Road", 13)),
-        ("CIV", "0004", "2.6") => Some(("Road", 15)),
-        ("CIV", "0004", "2.7") => Some(("Road", 17)),
-        ("CIV", "0004", "2.9") => Some(("Road", 19)),
-        ("CIV", "0004", "3.2") => Some(("Road", 23)),
-        ("CIV", "0005", "2.1") => Some(("PCU", 10)),
-        ("CIV", "0005", "2.2") => Some(("PCU", 12)),
-        ("CIV", "0005", "2.3") => Some(("PCU", 14)),
-        ("CIV", "0005", "3.6") => Some(("PCU", 16)),
-        ("MEC", "0001", "1.6") => Some(("MEC", 8)),
+        ("CIV", "0002", "1.5") => Some(("CIV", "1.5")),
+        ("CIV", "0002", "1.8") => Some((if pcu_tag { "PCU" } else { "CIV" }, "1.8")),
+        ("CIV", "0002", "2.1") | ("CIV", "0002", "2.2") => Some(("CIV", "2.1")),
+        ("CIV", "0002", "2.4") => Some((if pcu_tag { "PCU" } else { "CIV" }, "2.4")),
+        ("CIV", "0002", "2.5") => Some((if pcu_tag { "PCU" } else { "CIV" }, "2.5")),
+        ("CIV", "0002", "3.1") => Some(("CIV", "3.1")),
+        ("CIV", "0004", "1.7") => Some(("Road", "1.7")),
+        ("CIV", "0004", "2.1") => Some(("Road", "2.1")),
+        ("CIV", "0004", "2.2") => Some(("Road", "2.2")),
+        ("CIV", "0004", "2.3") => Some(("Road", "2.3")),
+        ("CIV", "0004", "2.4") => Some(("Road", "2.4")),
+        ("CIV", "0004", "2.5") => Some(("Road", "2.5")),
+        ("CIV", "0004", "2.6") => Some(("Road", "2.6")),
+        ("CIV", "0004", "2.7") => Some(("Road", "2.7")),
+        ("CIV", "0004", "2.9") => Some(("Road", "2.9")),
+        ("CIV", "0004", "3.2") => Some(("Road", "3.2")),
+        ("CIV", "0005", "2.1") => Some(("PCU", "2.1")),
+        ("CIV", "0005", "2.2") => Some(("PCU", "2.2")),
+        ("CIV", "0005", "2.3") => Some(("PCU", "2.3")),
+        ("CIV", "0005", "3.6") => Some(("PCU", "3.6")),
+        ("MEC", "0001", "1.6") => Some(("MEC", "1.6")),
         ("MEC", "0001", "2.1") | ("MEC", "0001", "2.2") | ("MEC", "0001", "2.3") => {
-            Some(("MEC", 10))
+            Some(("MEC", "2.3"))
         }
-        ("MEC", "0001", "3.3") | ("MEC", "0001", "3.4") => Some(("MEC", 12)),
-        ("MEC", "0001", "3.5") => Some(("MEC", 14)),
-        ("MEC", "0003", "3.1") => Some(("MEC", 16)),
-        ("MEC", "0004", "3.2") => Some(("MEC", 18)),
+        ("MEC", "0001", "3.3") | ("MEC", "0001", "3.4") => Some(("MEC", "3.4")),
+        ("MEC", "0001", "3.5") => Some(("MEC", "3.5")),
+        ("MEC", "0003", "3.1") => Some(("MEC", "3.1")),
+        ("MEC", "0004", "3.2") => Some(("MEC", "3.2")),
         _ => None,
     }
 }
 
-fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, u32, &'static str)> {
-    match route_key(record)? {
-        ("CIV", 13) => Some(("Signed By Worley CIV", 3, 4, "CIV")),
-        ("PCU", 16) => Some(("PCU", 16, 18, "PCU")),
-        ("MEC", 14) => Some(("Signed By Worley MEC", 8, 9, "MEC")),
-        ("MEC", 16) => Some(("Signed By Worley MEC", 10, 11, "MEC")),
-        ("MEC", 18) => Some(("Signed By Worley MEC", 12, 13, "MEC")),
+fn signed_route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str, &'static str)> {
+    match route_clause(record)? {
+        ("CIV", "3.1") => Some(("Signed By Worley CIV", "3.1", "CIV")),
+        ("PCU", "3.6") => Some(("PCU", "3.6", "PCU")),
+        ("MEC", "3.5") => Some(("Signed By Worley MEC", "3.5", "MEC")),
+        ("MEC", "3.1") => Some(("Signed By Worley MEC", "3.1", "MEC")),
+        ("MEC", "3.2") => Some(("Signed By Worley MEC", "3.2", "MEC")),
         _ => None,
     }
+}
+
+fn default_route_col(sheet: &str, clause: &str) -> u32 {
+    match (sheet, clause) {
+        ("CIV", "1.5") => 3,
+        ("CIV", "1.8") => 5,
+        ("CIV", "2.1") => 7,
+        ("CIV", "2.4") => 9,
+        ("CIV", "2.5") => 11,
+        ("CIV", "3.1") => 13,
+        ("PCU", "1.8") => 4,
+        ("PCU", "2.4") => 6,
+        ("PCU", "2.5") => 8,
+        ("PCU", "2.1") => 10,
+        ("PCU", "2.2") => 12,
+        ("PCU", "2.3") => 14,
+        ("PCU", "3.6") => 16,
+        ("Road", "1.7") => 3,
+        ("Road", "2.1") => 5,
+        ("Road", "2.2") => 7,
+        ("Road", "2.3") => 9,
+        ("Road", "2.4") => 11,
+        ("Road", "2.5") => 13,
+        ("Road", "2.6") => 15,
+        ("Road", "2.7") => 17,
+        ("Road", "2.9") => 19,
+        ("Road", "3.2") => 23,
+        ("MEC", "1.6") => 8,
+        ("MEC", "2.3") => 10,
+        ("MEC", "3.4") => 12,
+        ("MEC", "3.5") => 14,
+        ("MEC", "3.1") => 16,
+        ("MEC", "3.2") => 18,
+        _ => 3,
+    }
+}
+
+fn default_signed_col(sheet: &str, clause: &str) -> (u32, u32) {
+    match (sheet, clause) {
+        ("Signed By Worley CIV", "3.1") => (3, 4),
+        ("PCU", "3.6") => (16, 18),
+        ("Signed By Worley MEC", "3.5") => (8, 9),
+        ("Signed By Worley MEC", "3.1") => (10, 11),
+        ("Signed By Worley MEC", "3.2") => (12, 13),
+        _ => (3, 4),
+    }
+}
+
+#[allow(dead_code)]
+fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
+    let (sheet, clause) = route_clause(record)?;
+    Some((sheet, default_route_col(sheet, clause)))
+}
+
+#[allow(dead_code)]
+fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, u32, &'static str)> {
+    let (sheet, clause, match_layout) = signed_route_clause(record)?;
+    let (rfi, st) = default_signed_col(sheet, clause);
+    Some((sheet, rfi, st, match_layout))
 }
 
 fn is_signed_layout(layout: &FollowUpLayout) -> bool {
-    layout.worksheet.name.starts_with("Signed By Worley")
-        || (layout.worksheet.name == "PCU" && layout.rfi_column == 16 && layout.status_column == 18)
+    layout.worksheet.name.trim().to_uppercase().contains("SIGNED BY WORLEY")
+        || (layout.worksheet.name.trim().to_uppercase().contains("PCU") && layout.status_column == 18)
 }
 
 fn normalized_location(value: &str) -> String {
@@ -1404,27 +1489,35 @@ fn classify_workbooks_full(
     for record in records.values().filter(|record| {
         !record.excluded_civ_pcs && record.state.is_some_and(|state| state != LogState::Remove)
     }) {
-        let Some((sheet_name, rfi_column)) = route_key(record) else {
+        let Some((target_sheet, target_clause)) = route_clause(record) else {
             continue;
         };
         let composite_pcs_route = record.contexts.iter().any(|context| {
             let tags = normalized_parts(&context.tag);
             tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
         });
-        let (sheet_name, rfi_column) = if composite_pcs_route {
+        let (target_sheet, target_clause) = if composite_pcs_route {
             (
                 "CIV",
-                if rfi_column == 4 {
-                    5
-                } else if rfi_column == 6 {
-                    9
-                } else {
-                    11
+                match target_clause {
+                    "1.8" => "1.8",
+                    "2.4" => "2.4",
+                    _ => "2.5",
                 },
             )
         } else {
-            (sheet_name, rfi_column)
+            (target_sheet, target_clause)
         };
+        let matching_layout = layouts.iter().find(|l| {
+            l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
+                && (l.clause.as_deref() == Some(target_clause)
+                    || (l.clause.is_none() && l.rfi_column == default_route_col(target_sheet, target_clause)))
+        });
+        let Some(layout) = matching_layout else {
+            continue;
+        };
+        let sheet_name = layout.worksheet.name.as_str();
+        let rfi_column = layout.rfi_column;
         let empty_eligible = Vec::new();
         let eligible = eligible_slots_by_sheet_col
             .get(&(sheet_name.to_string(), rfi_column))
@@ -1670,13 +1763,25 @@ fn classify_workbooks_full(
     for record in records.values().filter(|record| {
         !record.excluded_civ_pcs
             && record.state.is_some_and(|state| state != LogState::Remove)
-            && signed_route_key(record).is_some()
+            && signed_route_clause(record).is_some()
     }) {
-        let (sheet_name, rfi_column, status_column, match_layout) =
-            signed_route_key(record).expect("filtered final record has a signed route");
-        if sheet_name == "Signed By Worley MEC" && !record.worley_signed {
+        let (target_sheet, target_clause, match_layout) =
+            signed_route_clause(record).expect("filtered final record has a signed route");
+        if target_sheet.trim().to_uppercase().contains("SIGNED BY WORLEY MEC") && !record.worley_signed {
             continue;
         }
+        let matching_layout = layouts.iter().find(|l| {
+            l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
+                && (l.clause.as_deref() == Some(target_clause)
+                    || (target_sheet.trim().to_uppercase().contains("PCU") && l.status_column == 18)
+                    || (l.clause.is_none() && l.rfi_column == default_signed_col(target_sheet, target_clause).0))
+        });
+        let Some(layout) = matching_layout else {
+            continue;
+        };
+        let sheet_name = layout.worksheet.name.as_str();
+        let rfi_column = layout.rfi_column;
+        let status_column = layout.status_column;
         if present_signed_targets.contains(&(
             sheet_name.to_string(),
             rfi_column,
@@ -1685,7 +1790,10 @@ fn classify_workbooks_full(
         )) {
             continue;
         }
-        let Some(matching_sheet) = target_workbook.sheet(sheet_name) else {
+        let Some(matching_sheet) = target_workbook
+            .sheet(sheet_name)
+            .or_else(|| find_sheet_flexible(target_workbook, sheet_name))
+        else {
             continue;
         };
         let candidates = slots
@@ -2780,6 +2888,7 @@ fn discover_layouts(
                     header_row: row,
                     rfi_column: rfi_columns[0].0,
                     status_column: status_columns[0].0,
+                    clause: None,
                 });
             }
         }

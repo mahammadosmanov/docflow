@@ -4,6 +4,15 @@ All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
 
+## 1.13.5 - 2026-10-02
+
+### Fixed
+
+- Dynamic header clause discovery for Follow Up synchronization:
+  - Detect milestone clause numbers dynamically from worksheet header rows (e.g. `(1.6)`, `(2.1, 2.2, 2.3)`, `(3.4)`, `(3.5)`, `(3.1)`, `(3.2)`) instead of relying on brittle hardcoded column indices.
+  - Automatically adapt to inserted columns (e.g. quantity columns shifting `MEC` and `Signed By Worley MEC` columns right by +2), eliminating manual review errors.
+  - Exclude hidden side-table control columns (`rfi_column > 14`) in `Signed By Worley MEC` from candidate layout targets.
+
 ## 1.13.4 - 2026-10-02
 
 ### Fixed
