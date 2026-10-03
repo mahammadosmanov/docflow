@@ -4,6 +4,14 @@ All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
 
+## 1.13.4 - 2026-10-02
+
+### Fixed
+
+- Large workbook stability and limits:
+  - Increase OOXML `MAX_ENTRY_BYTES` from 64MB to 128MB to safely support large workbooks with 180,000+ changelog entries without triggering false `limitExceeded` errors.
+  - End-to-end verified lifecycle status synchronization for updated RFIs across full workbook schemas.
+
 ## 1.13.3 - 2026-10-02
 
 ### Fixed
