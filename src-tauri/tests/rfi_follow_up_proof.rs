@@ -9,10 +9,17 @@ use std::{
 fn mac_live_proof_runs_follow_up_sync_losslessly() {
     let log_path = PathBuf::from("/tmp/docflow_mac_proof/RFI Log.xlsm");
     let follow_up_path = PathBuf::from("/tmp/docflow_mac_proof/Inspection Status Follow Up.xlsm");
-    let output_path = PathBuf::from("/tmp/docflow_mac_proof/Inspection Status Follow Up - Synced.xlsm");
+    let output_path =
+        PathBuf::from("/tmp/docflow_mac_proof/Inspection Status Follow Up - Synced.xlsm");
 
-    assert!(log_path.exists(), "RFI Log must exist in /tmp/docflow_mac_proof");
-    assert!(follow_up_path.exists(), "Follow Up must exist in /tmp/docflow_mac_proof");
+    assert!(
+        log_path.exists(),
+        "RFI Log must exist in /tmp/docflow_mac_proof"
+    );
+    assert!(
+        follow_up_path.exists(),
+        "Follow Up must exist in /tmp/docflow_mac_proof"
+    );
 
     let mut log_file = File::open(&log_path).expect("open RFI Log read-only");
     let mut follow_up_file = File::open(&follow_up_path).expect("open Follow Up read-only");
@@ -26,16 +33,26 @@ fn mac_live_proof_runs_follow_up_sync_losslessly() {
     )
     .expect("preview_from_open_files must succeed");
 
-    println!("==> Plan generated: op_id={}, warnings={:?}", plan.op_id, plan.warnings);
+    println!(
+        "==> Plan generated: op_id={}, warnings={:?}",
+        plan.op_id, plan.warnings
+    );
     assert_eq!(plan.op_id, "rfi.follow_up_sync");
-    assert!(plan.warnings.is_empty(), "Expected 0 warnings, got {:?}", plan.warnings);
+    assert!(
+        plan.warnings.is_empty(),
+        "Expected 0 warnings, got {:?}",
+        plan.warnings
+    );
 
     let submitted = plan.meta["editor"]["rows"]
         .as_array()
         .expect("editor rows")
         .clone();
 
-    println!("==> STEP 2: Inspecting all preview rows (count={}):", submitted.len());
+    println!(
+        "==> STEP 2: Inspecting all preview rows (count={}):",
+        submitted.len()
+    );
     for (idx, row) in submitted.iter().enumerate() {
         println!(
             "  [{}] Sheet={:<20} Row={:<3} RFI={:<10} CurrentStatus={:<12} ProposedStatus={:<12} ProposedRfi={:<10} Reason={}",
@@ -87,23 +104,17 @@ fn mac_live_proof_runs_follow_up_sync_losslessly() {
         .open(&output_path)
         .expect("create synced output file");
 
-    docflow_lib::ooxml::patch_workbook_sheets_guarded_text(
-        &mut original,
-        &mut output,
-        &updates,
-    )
-    .expect("patch_workbook_sheets_guarded_text must succeed");
+    docflow_lib::ooxml::patch_workbook_sheets_guarded_text(&mut original, &mut output, &updates)
+        .expect("patch_workbook_sheets_guarded_text must succeed");
 
-    println!("==> STEP 6: Verifying OOXML package delta with verify_guarded_workbook_delta_text...");
+    println!(
+        "==> STEP 6: Verifying OOXML package delta with verify_guarded_workbook_delta_text..."
+    );
     original.seek(SeekFrom::Start(0)).expect("rewind original");
     output.seek(SeekFrom::Start(0)).expect("rewind output");
 
-    docflow_lib::ooxml::verify_guarded_workbook_delta_text(
-        &mut original,
-        &mut output,
-        &updates,
-    )
-    .expect("OOXML package delta verification must pass with zero defects");
+    docflow_lib::ooxml::verify_guarded_workbook_delta_text(&mut original, &mut output, &updates)
+        .expect("OOXML package delta verification must pass with zero defects");
 
     println!("==> PROOF COMPLETE: All 6 steps passed with 100% mathematical fidelity!");
 }

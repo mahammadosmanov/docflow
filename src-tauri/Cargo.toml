@@ -1,9 +1,15 @@
 [package]
 name = "docflow"
-version = "1.13.5"
+version = "1.13.7"
 description = "Safe desktop document automation"
 authors = ["DocFlow"]
 edition = "2024"
+
+[profile.dev]
+incremental = false
+
+[profile.test]
+incremental = false
 
 [lib]
 name = "docflow_lib"

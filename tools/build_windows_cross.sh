@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
 TARGET_DIR="$PROJECT_ROOT/artifacts/windows-$VERSION"
-WINDOWS_TESSERACT_SOURCE="$PROJECT_ROOT/artifacts/windows-0.6.0-stage-signed-fix/extracted/resources/tesseract"
+WINDOWS_TESSERACT_SOURCE="$PROJECT_ROOT/src-tauri/resources/windows-tesseract"
 RESOURCES_TESSERACT="$PROJECT_ROOT/src-tauri/resources/tesseract"
 
 echo "==> DocFlow Windows x64 Cross-Compilation for v$VERSION"

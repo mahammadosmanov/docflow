@@ -3056,29 +3056,41 @@ fn road_name_matches_by_exact_tag_without_requiring_zone_match() {
         (
             "CIV",
             None,
-            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
         ),
         (
             "MEC",
             None,
-            worksheet([row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])], &[]),
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
         ),
         (
             "Road",
             None,
             worksheet(
                 [
-                    row(4, [
-                        inline("B4", "ROAD No."),
-                        inline("K4", "RFI No."),
-                        inline("L4", "STATUS"),
-                    ]),
-                    row(5, [
-                        inline("A5", "South"),
-                        inline("B5", "Road 14 (Part 1)"),
-                        inline("K5", ""),
-                        inline("L5", ""),
-                    ]),
+                    row(
+                        4,
+                        [
+                            inline("B4", "ROAD No."),
+                            inline("K4", "RFI No."),
+                            inline("L4", "STATUS"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("A5", "South"),
+                            inline("B5", "Road 14 (Part 1)"),
+                            inline("K5", ""),
+                            inline("L5", ""),
+                        ],
+                    ),
                 ],
                 &[],
             ),
@@ -3114,42 +3126,60 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
         (
             "CIV",
             None,
-            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
         ),
         (
             "MEC",
             None,
-            worksheet([row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])], &[]),
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
         ),
         (
             "Signed By Worley MEC",
             None,
             worksheet(
                 [
-                    row(4, [
-                        inline("C4", "Block #"),
-                        inline("D4", "Section"),
-                        inline("J4", "RFI No."),
-                        inline("K4", "STATUS"),
-                    ]),
-                    row(5, [
-                        inline("C5", "PCS-10"),
-                        inline("D5", "S1"),
-                        inline("J5", ""),
-                        inline("K5", ""),
-                    ]),
-                    row(6, [
-                        inline("C6", "PCS-10"),
-                        inline("D6", "S2"),
-                        inline("J6", "MEC-0558"),
-                        inline("K6", "Signed"),
-                    ]),
-                    row(7, [
-                        inline("C7", "PCS-10"),
-                        inline("D7", "S3"),
-                        inline("J7", ""),
-                        inline("K7", ""),
-                    ]),
+                    row(
+                        4,
+                        [
+                            inline("C4", "Block #"),
+                            inline("D4", "Section"),
+                            inline("J4", "RFI No."),
+                            inline("K4", "STATUS"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("C5", "PCS-10"),
+                            inline("D5", "S1"),
+                            inline("J5", ""),
+                            inline("K5", ""),
+                        ],
+                    ),
+                    row(
+                        6,
+                        [
+                            inline("C6", "PCS-10"),
+                            inline("D6", "S2"),
+                            inline("J6", "MEC-0558"),
+                            inline("K6", "Signed"),
+                        ],
+                    ),
+                    row(
+                        7,
+                        [
+                            inline("C7", "PCS-10"),
+                            inline("D7", "S3"),
+                            inline("J7", ""),
+                            inline("K7", ""),
+                        ],
+                    ),
                 ],
                 &[],
             ),
@@ -3157,7 +3187,11 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
     ]);
     let classification = classify(source, target).unwrap();
     let warnings = classification["warnings"].as_array().unwrap();
-    assert!(warnings.is_empty(), "expected 0 warnings, got {:?}", warnings);
+    assert!(
+        warnings.is_empty(),
+        "expected 0 warnings, got {:?}",
+        warnings
+    );
     let rows = classification["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0]["_sheet"], "Signed By Worley MEC");
@@ -3210,29 +3244,38 @@ fn rfis_of_different_items_or_itps_are_strictly_isolated_and_never_merge_into_sa
         (
             "CIV",
             None,
-            worksheet([row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])], &[]),
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
         ),
         (
             "MEC",
             None,
             worksheet(
                 [
-                    row(4, [
-                        inline("C4", "Block #"),
-                        inline("D4", "Section"),
-                        inline("P4", "RFI No."),
-                        inline("Q4", "STATUS"),
-                        inline("R4", "RFI No."),
-                        inline("S4", "STATUS"),
-                    ]),
-                    row(5, [
-                        inline("C5", "PCS-02"),
-                        inline("D5", "S1"),
-                        inline("P5", "MEC-0370"),
-                        inline("Q5", "Completed"),
-                        inline("R5", "MEC-0530"),
-                        inline("S5", "Completed"),
-                    ]),
+                    row(
+                        4,
+                        [
+                            inline("C4", "Block #"),
+                            inline("D4", "Section"),
+                            inline("P4", "RFI No."),
+                            inline("Q4", "STATUS"),
+                            inline("R4", "RFI No."),
+                            inline("S4", "STATUS"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("C5", "PCS-02"),
+                            inline("D5", "S1"),
+                            inline("P5", "MEC-0370"),
+                            inline("Q5", "Completed"),
+                            inline("R5", "MEC-0530"),
+                            inline("S5", "Completed"),
+                        ],
+                    ),
                 ],
                 &[],
             ),

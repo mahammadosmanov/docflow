@@ -905,7 +905,7 @@ fn run_orientation_tesseract(
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
                 poll_count = poll_count.wrapping_add(1);
-                if poll_count % 32 == 0 {
+                if poll_count.is_multiple_of(32) {
                     let output_size = fs::metadata(&stdout_path).map_or(0, |value| value.len())
                         + fs::metadata(&stderr_path).map_or(0, |value| value.len());
                     if output_size > MAX_OUTPUT_BYTES {
@@ -1241,7 +1241,7 @@ fn run_direction_tesseract(
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
                 poll_count = poll_count.wrapping_add(1);
-                if poll_count % 32 == 0 {
+                if poll_count.is_multiple_of(32) {
                     let output_size = fs::metadata(&output_path).map_or(0, |value| value.len())
                         + fs::metadata(&error_path).map_or(0, |value| value.len());
                     if output_size > MAX_OUTPUT_BYTES {
@@ -1713,7 +1713,7 @@ fn run_tesseract_with_whitelist(
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < Duration::from_secs(30) => {
                 poll_count = poll_count.wrapping_add(1);
-                if poll_count % 32 == 0
+                if poll_count.is_multiple_of(32)
                     && fs::metadata(&output_path)
                         .is_ok_and(|metadata| metadata.len() > MAX_OUTPUT_BYTES)
                 {

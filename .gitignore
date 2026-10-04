@@ -20,6 +20,7 @@ frontend/dist/
 src-tauri/target/
 src-tauri/resources/tesseract/*
 !src-tauri/resources/tesseract/.gitkeep
+src-tauri/resources/windows-tesseract/
 
 # Retired implementations and local document corpus
 legacy/

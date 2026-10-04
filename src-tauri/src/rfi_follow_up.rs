@@ -365,14 +365,14 @@ pub fn canonical_follow_up_rfi(value: &str) -> Option<(String, String)> {
     let disc = &captures[1];
     let num = captures[2].parse::<u32>().ok()?;
     let canonical_short = format!("{disc}-{num:04}");
-    Some((format!("{FULL_RFI_PREFIX}{canonical_short}"), canonical_short))
+    Some((
+        format!("{FULL_RFI_PREFIX}{canonical_short}"),
+        canonical_short,
+    ))
 }
 
 pub fn is_placeholder_rfi(code: &str) -> bool {
-    let digits = code
-        .rsplit_once('-')
-        .map(|(_, num)| num)
-        .unwrap_or(code);
+    let digits = code.rsplit_once('-').map(|(_, num)| num).unwrap_or(code);
     digits.parse::<u32>().ok().is_some_and(|n| n >= 2000)
 }
 
@@ -677,25 +677,27 @@ fn approved_sheet(name: &str) -> bool {
 }
 
 fn extract_header_clause(sheet: &WorksheetData, max_row: u32, column: u32) -> Option<String> {
-    static CLAUSE_PARENS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\((\d+\.\d+(?:\s*,\s*\d+\.\d+)*)\)").unwrap()
-    });
-    static CLAUSE_WORD: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\b(\d+\.\d+)\b").unwrap()
-    });
+    static CLAUSE_PARENS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\((\d+\.\d+(?:\s*,\s*\d+\.\d+)*)\)").unwrap());
+    static CLAUSE_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(\d+\.\d+)\b").unwrap());
     for r in (1..max_row).rev() {
         if let Some(cell) = sheet.cell(r, column) {
             let text = &cell.value;
-            if let Some(caps) = CLAUSE_PARENS.captures(text) {
-                if let Some(m) = caps.get(1) {
-                    let last = m.as_str().split(',').last().unwrap_or(m.as_str()).trim();
-                    return Some(last.to_string());
-                }
+            if let Some(caps) = CLAUSE_PARENS.captures(text)
+                && let Some(m) = caps.get(1)
+            {
+                let last = m
+                    .as_str()
+                    .split(',')
+                    .next_back()
+                    .unwrap_or(m.as_str())
+                    .trim();
+                return Some(last.to_string());
             }
-            if let Some(caps) = CLAUSE_WORD.captures(text) {
-                if let Some(m) = caps.get(1) {
-                    return Some(m.as_str().trim().to_string());
-                }
+            if let Some(caps) = CLAUSE_WORD.captures(text)
+                && let Some(m) = caps.get(1)
+            {
+                return Some(m.as_str().trim().to_string());
             }
         }
     }
@@ -731,7 +733,13 @@ fn discover_approved_layouts(
         validate_cell_text(sheet)?;
         for row in 1..=sheet.max_row.min(10) {
             for rfi_column in 1..sheet.max_column.min(MAX_HEADER_COLUMNS) {
-                if descriptor.name.trim().to_uppercase().contains("SIGNED BY WORLEY MEC") && rfi_column > 14 {
+                if descriptor
+                    .name
+                    .trim()
+                    .to_uppercase()
+                    .contains("SIGNED BY WORLEY MEC")
+                    && rfi_column > 14
+                {
                     continue;
                 }
                 let rfi_header = sheet
@@ -828,7 +836,9 @@ fn route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str)> {
     }
 }
 
-fn signed_route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str, &'static str)> {
+fn signed_route_clause(
+    record: &SourceRecord,
+) -> Option<(&'static str, &'static str, &'static str)> {
     match route_clause(record)? {
         ("CIV", "3.1") => Some(("Signed By Worley CIV", "3.1", "CIV")),
         ("PCU", "3.6") => Some(("PCU", "3.6", "PCU")),
@@ -899,8 +909,14 @@ fn signed_route_key(record: &SourceRecord) -> Option<(&'static str, u32, u32, &'
 }
 
 fn is_signed_layout(layout: &FollowUpLayout) -> bool {
-    layout.worksheet.name.trim().to_uppercase().contains("SIGNED BY WORLEY")
-        || (layout.worksheet.name.trim().to_uppercase().contains("PCU") && layout.status_column == 18)
+    layout
+        .worksheet
+        .name
+        .trim()
+        .to_uppercase()
+        .contains("SIGNED BY WORLEY")
+        || (layout.worksheet.name.trim().to_uppercase().contains("PCU")
+            && layout.status_column == 18)
 }
 
 fn normalized_location(value: &str) -> String {
@@ -1010,15 +1026,18 @@ fn row_matches(
             .contexts
             .iter()
             .any(|context| pcu_row_matches(sheet, row, context)),
-        "Road" => record.contexts.iter().any(|context| {
-            normalized_location(&context.tag) == cell(2)
-        }),
+        "Road" => record
+            .contexts
+            .iter()
+            .any(|context| normalized_location(&context.tag) == cell(2)),
         "MEC" => record.contexts.iter().any(|context| {
             let sections = split_values(&context.area);
             let tags = normalized_parts(&context.tag);
             !sections.is_empty()
                 && !tags.is_empty()
-                && tags.iter().any(|tag| normalized_parts(&cell(3)).contains(tag))
+                && tags
+                    .iter()
+                    .any(|tag| normalized_parts(&cell(3)).contains(tag))
                 && sections
                     .iter()
                     .any(|value| normalized_parts(&cell(4)).contains(&normalized_location(value)))
@@ -1511,7 +1530,8 @@ fn classify_workbooks_full(
         let matching_layout = layouts.iter().find(|l| {
             l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
                 && (l.clause.as_deref() == Some(target_clause)
-                    || (l.clause.is_none() && l.rfi_column == default_route_col(target_sheet, target_clause)))
+                    || (l.clause.is_none()
+                        && l.rfi_column == default_route_col(target_sheet, target_clause)))
         });
         let Some(layout) = matching_layout else {
             continue;
@@ -1580,7 +1600,12 @@ fn classify_workbooks_full(
                 && (distinct_civ_area_rows(target_workbook, &candidates, record)
                     || distinct_civ_zone_area_rows(target_workbook, &candidates, record)))
                 || (sheet_name == "MEC"
-                    && distinct_mec_context_rows(target_workbook, sheet_name, &candidates, record)));
+                    && distinct_mec_context_rows(
+                        target_workbook,
+                        sheet_name,
+                        &candidates,
+                        record,
+                    )));
         if candidate_count > 1 && !exact_multi_area {
             if !existing_slots.is_empty() {
                 continue;
@@ -1767,14 +1792,21 @@ fn classify_workbooks_full(
     }) {
         let (target_sheet, target_clause, match_layout) =
             signed_route_clause(record).expect("filtered final record has a signed route");
-        if target_sheet.trim().to_uppercase().contains("SIGNED BY WORLEY MEC") && !record.worley_signed {
+        if target_sheet
+            .trim()
+            .to_uppercase()
+            .contains("SIGNED BY WORLEY MEC")
+            && !record.worley_signed
+        {
             continue;
         }
         let matching_layout = layouts.iter().find(|l| {
             l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
                 && (l.clause.as_deref() == Some(target_clause)
-                    || (target_sheet.trim().to_uppercase().contains("PCU") && l.status_column == 18)
-                    || (l.clause.is_none() && l.rfi_column == default_signed_col(target_sheet, target_clause).0))
+                    || (target_sheet.trim().to_uppercase().contains("PCU")
+                        && l.status_column == 18)
+                    || (l.clause.is_none()
+                        && l.rfi_column == default_signed_col(target_sheet, target_clause).0))
         });
         let Some(layout) = matching_layout else {
             continue;
@@ -1820,7 +1852,12 @@ fn classify_workbooks_full(
                 && (distinct_civ_area_rows(target_workbook, &candidate_keys, record)
                     || distinct_civ_zone_area_rows(target_workbook, &candidate_keys, record)))
                 || (sheet_name == "Signed By Worley MEC"
-                    && distinct_mec_context_rows(target_workbook, sheet_name, &candidate_keys, record)));
+                    && distinct_mec_context_rows(
+                        target_workbook,
+                        sheet_name,
+                        &candidate_keys,
+                        record,
+                    )));
         if candidate_count == 1 || exact_multi_signed {
             for (_, slot) in candidates {
                 if sheet_name == "PCU" && slot.codes.is_empty() {
@@ -3648,6 +3685,7 @@ mod tests {
                 header_row: 1,
                 rfi_column: 1,
                 status_column: 2,
+                clause: None,
             },
             layouts: Vec::new(),
             updates,
@@ -3708,6 +3746,7 @@ mod tests {
             header_row: 1,
             rfi_column: 1,
             status_column: 2,
+            clause: None,
         };
         let update = approved_update();
         let row = FollowUpRow {

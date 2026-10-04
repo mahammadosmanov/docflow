@@ -2,6 +2,17 @@
 
 Updated: 2026-09-29
 
+## Local build storage cleanup and Rust quality gate fixes (1.13.7)
+
+- Removed `src-tauri/target/` with `cargo clean`; Cargo reported 49,247 files and 33.5 GiB removed. Available filesystem space increased from 23 GiB to 46 GiB.
+- Removed ignored `artifacts/` packages and verification records (about 1.2 GB).
+- Preserved the 86 MB Windows Tesseract runtime source under ignored `src-tauri/resources/windows-tesseract/`; updated `tools/build_windows_cross.sh` to use it.
+- Disabled Cargo incremental compilation for `dev` and `test` profiles to prevent stale incremental caches from accumulating.
+- Added the missing `clause` fields to Follow Up Sync fixtures and fixed Clippy lints in OCR polling and header-clause extraction.
+- Node suite (24), frontend suite (55), frontend build, 378 Rust unit tests, applicable Rust integration tests, Rust 1.97.1 format/Clippy/check, and version/docs/source/license audits pass.
+- Operator-data-dependent Rust tests remain ignored as designed. Windows package install/smoke and external certification remain pending.
+- Next: commit the 1.13.7 gate fixes, push the reviewed branch for exact-source CI, then complete platform release gates before publishing.
+
 ## Core process speedup trial (branch: codex/speed-up-try)
 
 - Objective: maximize process throughput across all DocFlow features with zero-regression safety.

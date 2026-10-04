@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.13.5",
+  "currentVersion": "1.13.7",
   "releases": [
+    {
+      "version": "1.13.7",
+      "date": "2026-10-04",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.13.7",
+      "summary": "Limit Rust cache growth and local artifacts; restore test compilation and satisfy current Rust quality gates."
+    },
     {
       "version": "1.13.5",
       "date": "2026-10-02",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.13.5",
       "summary": "Dynamic header clause discovery for Follow Up synchronization: automatically adapt column mappings to inserted columns (e.g. quantity columns shifting MEC columns by +2), eliminating manual review errors."
     },

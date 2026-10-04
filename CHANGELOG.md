@@ -3,6 +3,13 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.13.7 - 2026-10-04
+
+### Improved
+
+- Limit local Rust cache growth, remove generated local artifacts, and preserve Windows OCR build inputs.
+- Restore Rust test compilation for Follow Up Sync fixtures and satisfy current Clippy lints.
+- Apply Rust 1.97.1 formatting to affected Rust sources.
 
 ## 1.13.5 - 2026-10-02
 
