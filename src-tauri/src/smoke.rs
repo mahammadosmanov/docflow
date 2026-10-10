@@ -12,7 +12,9 @@ use crate::{
     contracts::{AppPrefs, AuthState, Bootstrap},
     fs_ops::FilesystemAuthority,
     ocr::{NativeOcr, image_pdf_from_png, render_first_page_png},
-    operations::process_scans::{OcrAdapter, ProcessScansParams, preview_fast_covers},
+    operations::process_scans::{
+        FAST_COVER_OPERATION_ID, OcrAdapter, ProcessScansParams, preview_fast_covers,
+    },
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
     registry::{RegistryFacts, operation_registry},
@@ -160,7 +162,6 @@ fn run_ocr_operation_fixture(
 ) -> Result<(), String> {
     let source = root.join("source");
     let destination = root.join("destination");
-    let journal = root.join("journal");
     fs::create_dir_all(&source).map_err(|error| error.to_string())?;
     fs::create_dir_all(&destination).map_err(|error| error.to_string())?;
     let searchable = root.join("searchable.pdf");
@@ -185,6 +186,18 @@ fn run_ocr_operation_fixture(
     report.ocr_code = Some(read.matched.code);
     report.ocr_source = Some(read.source);
 
+    run_scan_operation_fixture(root, report, &ocr)
+}
+
+fn run_scan_operation_fixture(
+    root: &Path,
+    report: &mut PackageSmokeReport,
+    ocr: &impl OcrAdapter,
+) -> Result<(), String> {
+    let source = root.join("source");
+    let destination = root.join("destination");
+    let journal = root.join("journal");
+    let scan = source.join("scan.pdf");
     let operation_started = Instant::now();
     let plan = preview_fast_covers(
         &ProcessScansParams {
@@ -195,7 +208,7 @@ fn run_ocr_operation_fixture(
             correct_orientation: false,
             trash_root: None,
         },
-        &ocr,
+        ocr,
         |_| {},
         || false,
     )
@@ -206,7 +219,7 @@ fn run_ocr_operation_fixture(
         &caller.owner_id,
         &caller.session_id,
         "package-smoke-request",
-        "rfi.process_scans",
+        FAST_COVER_OPERATION_ID,
     );
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
@@ -220,7 +233,7 @@ fn run_ocr_operation_fixture(
             PlanBinding::new(
                 &caller.owner_id,
                 &caller.session_id,
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![source_grant.grant_id, destination_grant.grant_id],
             ),
             plan,
@@ -243,6 +256,30 @@ fn run_ocr_operation_fixture(
     report.applied_steps = Some(applied.applied);
     report.undone_steps = Some(undone.applied);
     Ok(())
+}
+
+#[cfg(test)]
+#[derive(Clone)]
+struct SmokeFixtureOcr;
+
+#[cfg(test)]
+impl OcrAdapter for SmokeFixtureOcr {
+    fn read(
+        &self,
+        _path: &Path,
+    ) -> Result<
+        crate::operations::process_scans::OcrRead,
+        crate::operations::process_scans::OcrFailure,
+    > {
+        Ok(crate::operations::process_scans::OcrRead {
+            matched: crate::rfi_code::find(CODE),
+            source: "smoke-fixture".to_string(),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "smoke fixture OCR".to_string()
+    }
 }
 
 fn backend_error(context: &str, error: crate::errors::BackendError) -> String {
@@ -310,5 +347,32 @@ mod tests {
         assert_eq!(bootstrap.version, env!("CARGO_PKG_VERSION"));
         assert_eq!(bootstrap.operations.len(), 9);
         assert_eq!(bootstrap.prefs.locale.as_deref(), Some("az"));
+    }
+    #[test]
+    fn package_smoke_fast_scan_apply_and_undo() {
+        let fixture = tempfile::tempdir().unwrap();
+        let source = fixture.path().join("source");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(fixture.path().join("destination")).unwrap();
+        write_text_pdf(&source.join("scan.pdf"), &format!("{CODE} smoke fixture")).unwrap();
+        let mut report = PackageSmokeReport {
+            ok: true,
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            operation_count: 9,
+            bootstrap_millis: 0,
+            settings_millis: 0,
+            first_ocr_millis: None,
+            operation_millis: None,
+            ocr_code: None,
+            ocr_source: None,
+            applied_steps: None,
+            undone_steps: None,
+        };
+
+        run_scan_operation_fixture(fixture.path(), &mut report, &SmokeFixtureOcr).unwrap();
+
+        assert_eq!(report.operation_count, 9);
+        assert!(report.applied_steps.unwrap() > 0);
+        assert!(report.undone_steps.unwrap() > 0);
     }
 }
