@@ -95,66 +95,6 @@ fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
 }
 
 pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
-    let process_scans = operation(
-        "rfi.process_scans",
-        vec![
-            parameter(
-                "source",
-                ParamKind::Folder,
-                "param.source",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.source.help"),
-            ),
-            parameter(
-                "dest",
-                ParamKind::Folder,
-                "param.dest",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.dest.help"),
-            ),
-            parameter(
-                "organize_into_rfi_folders",
-                ParamKind::Bool,
-                "param.organize_into_rfi_folders",
-                json!(true),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.organize_into_rfi_folders.help"),
-            ),
-            parameter(
-                "keep_original",
-                ParamKind::Bool,
-                "param.keep_original",
-                json!(false),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                None,
-            ),
-            parameter(
-                "correct_orientation",
-                ParamKind::Bool,
-                "param.rfi.processScans.correctOrientation",
-                json!(true),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.processScans.correctOrientation.help"),
-            ),
-        ],
-    );
     let file_group = operation(
         "rfi.group_files",
         vec![
@@ -600,23 +540,68 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
-    let mut fast_cover_schema = process_scans.schema.clone();
-    fast_cover_schema
-        .params
-        .iter_mut()
-        .find(|parameter| parameter.name == "correct_orientation")
-        .expect("Process Scans schema contains correct_orientation")
-        .default = json!(false);
-    let fast_cover_scans = OperationDef {
-        id: FAST_COVER_OPERATION_ID.to_string(),
-        title_key: format!("op.{FAST_COVER_OPERATION_ID}.title"),
-        description_key: format!("op.{FAST_COVER_OPERATION_ID}.desc"),
-        schema: fast_cover_schema,
-        supports_presets: false,
-    };
+    let fast_cover_scans = operation(
+        FAST_COVER_OPERATION_ID,
+        vec![
+            parameter(
+                "source",
+                ParamKind::Folder,
+                "param.source",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.source.help"),
+            ),
+            parameter(
+                "dest",
+                ParamKind::Folder,
+                "param.dest",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.dest.help"),
+            ),
+            parameter(
+                "organize_into_rfi_folders",
+                ParamKind::Bool,
+                "param.organize_into_rfi_folders",
+                json!(true),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.organize_into_rfi_folders.help"),
+            ),
+            parameter(
+                "keep_original",
+                ParamKind::Bool,
+                "param.keep_original",
+                json!(false),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "correct_orientation",
+                ParamKind::Bool,
+                "param.rfi.processScans.correctOrientation",
+                json!(false),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.processScans.correctOrientation.help"),
+            ),
+        ],
+    );
 
     vec![
-        process_scans,
         file_group,
         rfi_log,
         rfi_follow_up,
@@ -634,6 +619,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn registry_exposes_only_fast_rfi_scan() {
+        let operations = operation_registry(RegistryFacts::default());
+        let scan_operations = operations
+            .iter()
+            .filter(|operation| operation.id.starts_with("rfi.process_scans"))
+            .map(|operation| operation.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(scan_operations, vec!["rfi.process_scans_fast_covers"]);
+    }
+
+    #[test]
     fn canonical_registry_matches_protocol_one_snapshot() {
         let operations = operation_registry(RegistryFacts::default());
         assert_eq!(
@@ -642,7 +638,6 @@ mod tests {
                 .map(|operation| operation.id.as_str())
                 .collect::<Vec<_>>(),
             vec![
-                "rfi.process_scans",
                 "rfi.group_files",
                 "rfi.log_add",
                 "rfi.follow_up_sync",
@@ -654,16 +649,8 @@ mod tests {
                 "rfi.process_scans_fast_covers",
             ]
         );
-        assert_eq!(operations.len(), 10);
-        let normal_orientation_default = operations[0]
-            .schema
-            .params
-            .iter()
-            .find(|parameter| parameter.name == "correct_orientation")
-            .expect("normal Process Scans has orientation correction")
-            .default
-            .as_bool();
-        let fast_orientation_default = operations[9]
+        assert_eq!(operations.len(), 9);
+        let fast_orientation_default = operations[8]
             .schema
             .params
             .iter()
@@ -671,23 +658,23 @@ mod tests {
             .expect("Fast Cover Scans has orientation correction")
             .default
             .as_bool();
-        assert_eq!(normal_orientation_default, Some(true));
         assert_eq!(fast_orientation_default, Some(false));
         assert_eq!(
-            operations[9]
+            operations[8]
                 .schema
                 .params
                 .iter()
                 .map(|parameter| parameter.name.as_str())
                 .collect::<Vec<_>>(),
-            operations[0]
-                .schema
-                .params
-                .iter()
-                .map(|parameter| parameter.name.as_str())
-                .collect::<Vec<_>>()
+            vec![
+                "source",
+                "dest",
+                "organize_into_rfi_folders",
+                "keep_original",
+                "correct_orientation"
+            ]
         );
-        let follow_up = &operations[3];
+        let follow_up = &operations[2];
         assert_eq!(
             follow_up.schema.validate(&Map::new()),
             vec![
@@ -695,7 +682,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let system_sync = &operations[7];
+        let system_sync = &operations[6];
         assert_eq!(
             system_sync.schema.validate(&Map::new()),
             vec![
@@ -704,7 +691,7 @@ mod tests {
                 "error.param.required.follow_up_workbook".to_string(),
             ]
         );
-        let complete_status = &operations[8];
+        let complete_status = &operations[7];
         assert_eq!(
             complete_status.schema.validate(&Map::new()),
             vec![
@@ -724,16 +711,7 @@ mod tests {
     #[test]
     fn param_schema_validation_matches_frozen_required_value_rules() {
         let operations = operation_registry(RegistryFacts::default());
-        let process_scans = &operations[0];
-        assert_eq!(
-            process_scans.schema.validate(&Map::new()),
-            vec![
-                "error.param.required.source".to_string(),
-                "error.param.required.dest".to_string()
-            ]
-        );
-
-        let rfi_log = &operations[2];
+        let rfi_log = &operations[1];
         let values = serde_json::from_value(json!({
             "workbook": "/tmp/RFI Log.xlsx",
             "email_provider": "offline",
