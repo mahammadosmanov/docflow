@@ -3040,12 +3040,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(operation_id, rfi_file_group::OPERATION_ID);
-        let copied = destination
-            .join("AZE-SUN-INT-QMS-RFI-CIV-1263")
-            .join(source_file.file_name().unwrap());
-        let copied_mail = destination
-            .join("AZE-SUN-INT-QMS-RFI-CIV-1263")
-            .join(source_mail.file_name().unwrap());
+        let copied_directory = destination
+            .join("CIV")
+            .join("AZE-SUN-INT-QMS-RFI-CIV-1263");
+        let copied = copied_directory.join(source_file.file_name().unwrap());
+        let copied_mail = copied_directory.join(source_mail.file_name().unwrap());
         assert_eq!(fs::read(&source_file).unwrap(), b"source stays unchanged");
         assert_eq!(fs::read(&copied).unwrap(), b"source stays unchanged");
         assert_eq!(fs::read(&copied_mail).unwrap(), b"Subject: RFI package");
@@ -3058,7 +3057,7 @@ mod tests {
         assert!(source_mail.exists());
         assert!(!copied.exists());
         assert!(!copied_mail.exists());
-        assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-1263").exists());
+        assert!(!copied_directory.exists());
     }
 
     #[test]
