@@ -3,7 +3,7 @@ use docflow_lib::ocr::NativeOcr;
 #[cfg(target_os = "macos")]
 use docflow_lib::ocr::{image_pdf_from_png, render_first_page_png};
 use docflow_lib::operations::process_scans::{
-    FAST_COVER_OPERATION_ID, OcrAdapter, OcrFailure, OcrRead, ProcessScansParams, preview,
+    FAST_COVER_OPERATION_ID, OcrAdapter, OcrFailure, OcrRead, ProcessScansParams,
     preview_fast_covers,
 };
 use docflow_lib::rfi_code::{RfiMethod, canonical, canonical_and_find, find};
@@ -598,7 +598,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
         "AZE-SUN-INT-QMS-RFI-ELE-0080",
         "AZE-SUN-INT-QMS-RFI-PRC-0091",
     ];
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -718,7 +718,7 @@ fn uncertain_pages_between_confirmed_covers_stay_with_the_current_rfi() {
         String::new(),
         "AZE-SUN-INT-QMS-RFI-MEC-0010".to_string(),
     ]);
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination: destination.clone(),
@@ -766,7 +766,7 @@ fn long_continuation_run_is_split_only_at_the_next_confirmed_cover() {
     pages.push("AZE-SUN-INT-QMS-RFI-MEC-0010".to_string());
     pages.push("[unreadable]".to_string());
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -803,7 +803,7 @@ fn pages_before_the_first_confirmed_cover_remain_in_review() {
     std::fs::create_dir_all(&destination).unwrap();
     write_multi_page_pdf(&source.join("batch.pdf"), 3);
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -852,7 +852,7 @@ fn fast_cover_operation_keeps_continuations_and_reviews_uncertain_cover_boundari
     let combined = source.join("stack.pdf");
     write_multi_page_pdf(&combined, 5);
 
-    let normal_plan = preview(
+    let normal_plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -1335,7 +1335,7 @@ fn process_scans_adds_confident_orientation_to_cached_plan() {
     std::fs::create_dir_all(&destination).unwrap();
     write_multi_page_pdf(&source.join("batch.pdf"), 1);
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -1371,7 +1371,7 @@ fn process_scans_routes_uncertain_orientation_to_review_unchanged() {
     write_multi_page_pdf(&pdf, 1);
     let before = std::fs::read(&pdf).unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination: destination.clone(),
@@ -1410,7 +1410,7 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
     std::fs::write(source.join("second.pdf"), b"fixture").unwrap();
 
     let mut progress = Vec::new();
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -1506,7 +1506,7 @@ fn existing_rfi_archive_never_creates_an_ocr_invented_folder() {
     std::fs::create_dir_all(destination.join("AZE-SUN-INT-QMS-RFI-CIV-1286")).unwrap();
     std::fs::write(source.join("scan.pdf"), b"PDF").unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination: destination.clone(),
@@ -1537,7 +1537,7 @@ fn keep_original_copies_low_confidence_files_into_review() {
     std::fs::create_dir_all(&destination).unwrap();
     std::fs::write(source.join("low-confidence.pdf"), b"PDF").unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -1568,7 +1568,7 @@ fn keep_original_copies_ocr_document_errors_into_review() {
     std::fs::create_dir_all(&destination).unwrap();
     std::fs::write(source.join("broken.pdf"), b"PDF").unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,
@@ -1601,7 +1601,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
     std::fs::write(source.join("newest.pdf"), b"NEWEST").unwrap();
     std::fs::write(source.join("broken.pdf"), b"BROKEN").unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -1789,7 +1789,7 @@ fn missing_ocr_engine_returns_one_diagnostic_and_a_zero_step_plan() {
     std::fs::write(source.join("a.pdf"), b"%PDF stub").unwrap();
     std::fs::write(source.join("b.PDF"), b"%PDF stub").unwrap();
 
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -1832,13 +1832,13 @@ fn a_broken_ocr_install_fails_closed_and_preview_cancellation_is_inert() {
         trash_root: None,
     };
 
-    let broken = preview(&params, &BrokenOcr, |_| {}, || false).unwrap();
+    let broken = preview_fast_covers(&params, &BrokenOcr, |_| {}, || false).unwrap();
     assert!(broken.steps.is_empty());
     assert_eq!(broken.warnings[0].key, "warn.ocr_broken");
     assert!(broken.warnings[0].subject.contains("eng.traineddata"));
     assert!(broken.warnings[0].subject.contains("fixture-broken"));
 
-    let cancelled = preview(&params, &FixtureOcr, |_| {}, || true).unwrap_err();
+    let cancelled = preview_fast_covers(&params, &FixtureOcr, |_| {}, || true).unwrap_err();
     assert_eq!(cancelled.code, "operation_cancelled");
     assert_eq!(std::fs::read_dir(&source).unwrap().count(), 3);
     assert!(std::fs::read_dir(&destination).unwrap().next().is_none());
@@ -1853,7 +1853,7 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
     std::fs::create_dir_all(&source).unwrap();
     std::fs::create_dir_all(&destination).unwrap();
     std::fs::write(source.join("scan.pdf"), b"PDF").unwrap();
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -1921,7 +1921,7 @@ fn process_scans_apply_cancellation_is_observed_before_the_first_mutation() {
     std::fs::create_dir_all(&source).unwrap();
     std::fs::create_dir_all(&destination).unwrap();
     std::fs::write(source.join("scan.pdf"), b"SOURCE").unwrap();
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -1985,7 +1985,7 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
     std::fs::create_dir_all(&source).unwrap();
     std::fs::create_dir_all(&destination).unwrap();
     std::fs::write(source.join("scan.pdf"), b"SOURCE").unwrap();
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -2072,7 +2072,7 @@ fn process_scans_rejects_an_unbounded_source_before_ocr() {
         std::fs::write(source.join(format!("{index:05}.pdf")), b"").unwrap();
     }
 
-    let error = preview(
+    let error = preview_fast_covers(
         &ProcessScansParams {
             source,
             destination,

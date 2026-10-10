@@ -166,20 +166,6 @@ impl OcrAdapter for CachedPageOcr {
     }
 }
 
-pub fn preview<A, P, C>(
-    params: &ProcessScansParams,
-    ocr: &A,
-    progress: P,
-    cancelled: C,
-) -> Result<Plan, BackendError>
-where
-    A: OcrAdapter,
-    P: FnMut(ProgressEvent),
-    C: FnMut() -> bool,
-{
-    preview_with_cover_mode(params, ocr, "rfi.process_scans", false, progress, cancelled)
-}
-
 pub fn preview_fast_covers<A, P, C>(
     params: &ProcessScansParams,
     ocr: &A,
