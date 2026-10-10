@@ -215,7 +215,8 @@ where
             if !mail_codes.contains(&detection.code) {
                 continue;
             }
-            let directory = destination.join(&detection.code);
+            let discipline = detection.code.split('-').nth(5).unwrap();
+            let directory = destination.join(discipline).join(&detection.code);
             let target = directory.join(file_name);
             if unsafe_existing_directory(&directory) {
                 plan.warnings.push(Warning {
