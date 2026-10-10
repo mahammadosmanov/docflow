@@ -4,13 +4,9 @@ These are not silently waived by passing local tests.
 
 ## External acceptance still required
 
-- Replica publication and Windows startup require native Windows acceptance on
-  isolated non-sensitive copies of the actual SharePoint/OneDrive,
-  GlobalProtect/network, and local roots. Verify long paths, locks, offline and
-  reconnect states, interruption, startup enable/disable, retained backups,
-  target-only warnings, one-minute cadence, timestamp/settle behavior,
-  file/size circuit breakers, profile pause/resume, Apply, restart, and Undo.
-  macOS tests and Windows cross-compile do not certify these external systems.
+- Replica publication is not exposed as an active operation; its internal implementation is unavailable to operators. The accepted design documents do not mean the feature is shipped. If it is enabled in a future release, require native Windows acceptance on isolated non-sensitive copies of the actual SharePoint/OneDrive, GlobalProtect/network, and local roots. Verify long paths, locks, offline/reconnect states, interruption, retained backups, target-only warnings, cadence, settle behavior, circuit breakers, Apply, restart, and Undo. macOS tests and Windows cross-compile do not certify these external systems.
+
+- Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy
   of the current RFI Log and the real nested RFI System. Verify traversal speed,

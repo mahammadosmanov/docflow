@@ -298,8 +298,8 @@ pub(crate) fn extraction_supported(facts: &PdfInspection) -> bool {
     !facts.encrypted
         && !facts.signed
         && facts.embedded_file_hashes.is_empty()
-        && (!facts.catalog_entry_hashes.contains_key("Metadata")
-            || facts.metadata_xml_self_contained)
+        // Metadata is copied through the bounded importer; stream lengths are
+        // recomputed from the preserved stream bytes during serialization.
         && (!facts.catalog_entry_hashes.contains_key("Outlines") || facts.empty_outline_tree)
         && ![
             "StructTreeRoot",
@@ -439,18 +439,18 @@ fn validate_extracted_pdf(
         .map(|id| source.inspect_page(*id))
         .collect::<Result<Vec<_>, _>>()?;
     let after = ParsedPdf::load(path)?.inspect()?;
-    if after.page_count != expected.len()
-        || after.catalog_entry_hashes.get("Metadata") != before.catalog_entry_hashes.get("Metadata")
-        || after.pages.iter().zip(expected).any(|(actual, expected)| {
-            actual.content_hash != expected.content_hash
-                || actual.media_box != expected.media_box
-                || actual.crop_box != expected.crop_box
-                || actual.rotation != expected.rotation
-                || actual.annotations != expected.annotations
-                || actual.links != expected.links
-                || actual.widgets != expected.widgets
-        })
-    {
+    let metadata_matches =
+        after.catalog_entry_hashes.get("Metadata") == before.catalog_entry_hashes.get("Metadata");
+    let pages_match = after.pages.iter().zip(expected).all(|(actual, expected)| {
+        actual.content_hash == expected.content_hash
+            && actual.media_box == expected.media_box
+            && actual.crop_box == expected.crop_box
+            && actual.rotation == expected.rotation
+            && actual.annotations == expected.annotations
+            && actual.links == expected.links
+            && actual.widgets == expected.widgets
+    });
+    if after.page_count != selected.len() || !metadata_matches || !pages_match {
         return Err(PdfError::new(
             "extracted PDF failed page-fidelity validation",
         ));
@@ -898,6 +898,7 @@ impl Importer<'_> {
             PdfObject::Stream { dictionary, data } => PdfObject::Stream {
                 dictionary: dictionary
                     .into_iter()
+                    .filter(|(key, _)| key.as_slice() != b"Length")
                     .map(|(key, value)| Ok((key, self.import_object(value, depth + 1)?)))
                     .collect::<Result<_, PdfError>>()?,
                 data,
@@ -1225,11 +1226,12 @@ impl ParsedPdf {
             b"OutputIntents",
         ] {
             if let Some(value) = catalog.get(key) {
-                let hash = if key == b"Metadata" && metadata_xml_self_contained {
-                    let PdfObject::Reference(id) = value else {
-                        return Err(PdfError::new("PDF metadata stream is not indirect"));
-                    };
-                    self.graph_hash(&self.get_object(*id)?)?
+                let hash = if key == b"Metadata" {
+                    if let PdfObject::Reference(id) = value {
+                        self.metadata_graph_hash(&self.get_object(*id)?)?
+                    } else {
+                        self.metadata_graph_hash(value)?
+                    }
                 } else {
                     self.graph_hash(value)?
                 };
@@ -1394,6 +1396,68 @@ impl ParsedPdf {
         let mut seen = BTreeSet::new();
         self.hash_graph(object, &mut digest, &mut seen, 0)?;
         Ok(format!("{:x}", digest.finalize()))
+    }
+
+    fn metadata_graph_hash(&self, object: &PdfObject) -> Result<String, PdfError> {
+        let mut digest = Sha256::new();
+        self.hash_metadata_graph(object, &mut digest, &mut BTreeSet::new(), 0)?;
+        Ok(format!("{:x}", digest.finalize()))
+    }
+
+    fn hash_metadata_graph(
+        &self,
+        object: &PdfObject,
+        digest: &mut Sha256,
+        seen: &mut BTreeSet<ObjectId>,
+        depth: usize,
+    ) -> Result<(), PdfError> {
+        if depth > MAX_DEPTH {
+            return Err(PdfError::new("PDF metadata graph is too deeply nested"));
+        }
+        match object {
+            PdfObject::Reference(id) => {
+                digest.update(b"reference");
+                if seen.insert(*id) {
+                    self.hash_metadata_graph(&self.get_object(*id)?, digest, seen, depth + 1)?;
+                } else {
+                    digest.update(b"already-visited");
+                }
+            }
+            PdfObject::Array(values) => {
+                digest.update(b"array");
+                for value in values {
+                    self.hash_metadata_graph(value, digest, seen, depth + 1)?;
+                }
+            }
+            PdfObject::Dictionary(values) => {
+                digest.update(b"dictionary");
+                for (key, value) in values {
+                    digest.update((key.len() as u64).to_be_bytes());
+                    digest.update(key);
+                    self.hash_metadata_graph(value, digest, seen, depth + 1)?;
+                }
+            }
+            PdfObject::Stream { dictionary, data } => {
+                digest.update(b"stream");
+                digest.update((data.len() as u64).to_be_bytes());
+                digest.update(data);
+                for (key, value) in dictionary {
+                    if key.as_slice() == b"Length" {
+                        continue;
+                    }
+                    digest.update((key.len() as u64).to_be_bytes());
+                    digest.update(key);
+                    self.hash_metadata_graph(value, digest, seen, depth + 1)?;
+                }
+            }
+            scalar => {
+                let mut bytes = Vec::new();
+                serialize_object(scalar, &mut bytes, depth)?;
+                digest.update((bytes.len() as u64).to_be_bytes());
+                digest.update(bytes);
+            }
+        }
+        Ok(())
     }
 
     fn hash_graph(

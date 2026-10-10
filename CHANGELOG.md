@@ -3,6 +3,26 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.13.10 - 2026-10-08
+
+### Documentation
+
+- Clarify that RFI System replica publication is not exposed in the active application; retain its requirements and design records as non-shipped intent.
+
+
+## 1.13.9 - 2026-10-08
+
+### Documentation
+
+- Correct the registered-operation catalog to list `rfi.follow_up_sync` once and describe its status synchronization behavior.
+
+
+## 1.13.8 - 2026-10-08
+
+### Fixed
+
+- Allow safe page separation of Epson Scan PDFs whose XMP metadata stream uses an indirect `/Length`; metadata remains copied and validated, while encrypted, signed, embedded-file, and other unsupported PDF features remain rejected.
+
 ## 1.13.7 - 2026-10-04
 
 ### Improved
@@ -10,7 +30,6 @@ Versioning; `releases.json` is the machine-readable release catalog.
 - Limit local Rust cache growth, remove generated local artifacts, and preserve Windows OCR build inputs.
 - Restore Rust test compilation for Follow Up Sync fixtures and satisfy current Clippy lints.
 - Apply Rust 1.97.1 formatting to affected Rust sources.
-
 ## 1.13.5 - 2026-10-02
 
 ### Fixed

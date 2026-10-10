@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.13.7**. `VERSION` is authoritative.
+Current product version: **1.13.10**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -82,7 +82,6 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; match remaining exact ITP/item, area, and inspection-location contexts; skip unsupported template scope; ambiguous matches remain manual review; never create rows or sections or change worksheet Remarks; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |
 | RFI completion-status sync | Detect exact completed RFI PDFs at every nesting depth and mark approved RFI Log rows Completed | Read-only bounded parallel discovery; exact filenames and rows; conflicting/formula/merged targets fail closed; backup, closed OOXML delta verification, journal, and undo |
-| RFI System replica publication | Publish CIV/MEC/ELE/PRC and selected root files from one chosen source to two targets manually or under a standing authorization | Complete no-symlink scans, durable fingerprint-scoped incremental hashing, retained version backup before replacement, serial fail-fast Apply, live hash verification, journal, Undo, no automatic deletion |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, and opt-in recall of safe settings without old files |
 | Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | Bounded multi-core archive discovery uses exact filenames; exact page index and candidate are pinned; thumbnails are inert and bounded; archive and source scan stay read-only; unreadable, duplicate, ambiguous, and unsupported pages are rejected |

@@ -8,12 +8,11 @@
 | `rfi.process_scans_fast_covers` | Process top-level multi-page RFI PDFs with separate template-led cover detection and create missing discipline/RFI folders; normal Process Scans remains unchanged |
 | `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
-| `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state; never change worksheet Remarks; leave ambiguous matches in manual review |
+| `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state and uniquely mapped RFI Log statuses; never change worksheet Remarks; leave ambiguous matches in manual review |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans, search every RFI System subfolder with bounded multi-core discovery, and create review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Inspect every PDF page below CIV/MEC/ELE/PRC in parallel and create fidelity-checked corrected review copies |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
-| `rfi.follow_up_sync` | Synchronize uniquely mapped RFI Log statuses into existing Follow Up workbook groups |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
 
 ## Application features
@@ -66,10 +65,6 @@
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
   explicit task-local option.
-- Replica publication also checkpoints SHA-256 work per source and target root.
-  Later runs reuse only exact unchanged file fingerprints, show reused/fresh
-  counts in Preview, and resume from completed hash checkpoints after interruption.
-  Cached values only reduce comparison work; Apply still validates live hashes.
 - Completion Status Sync uses bounded multi-core, read-only filename discovery
   at every depth. It shows the exact PDF evidence and workbook-cell changes,
   permits row/all selection, leaves conflicting status values for review, and
@@ -81,6 +76,7 @@
 
 ## Intentional limits
 
+- RFI System replica publication has internal implementation code but is not exposed as an active operation in the application.
 - Process Scans discovers top-level PDFs only. In a multi-page batch, only a
   strict, canonical, high-confidence RFI identity starts a new group. Every
   page after a confirmed cover stays with that RFI until the next confirmed
@@ -95,12 +91,13 @@
   `SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP` mark. Confirmed groups create
   missing per-RFI folders under the matching discipline. Single-page PDFs use the
   normal OCR path. An unresolved request-heading signal starts a Review group; no page
-  is dropped or attached to the preceding RFI. Page orientation correction
-  defaults off in this operation to avoid a second full-page OCR pass; users can
-  enable it when corrected output pages are needed. It shares destination layout,
-  immutable Preview, journaled Apply, and Undo with Process Scans. Other cover
-  templates remain unsupported by this fast detector; use
-  normal Process Scans for them.
+  is dropped or attached to the preceding RFI. Both Process Scans modes preserve
+  safe XMP metadata, including streams with indirect `/Length` values, when
+  separating pages. Page orientation correction defaults off in this operation
+  to avoid a second full-page OCR pass; users can enable it when corrected output
+  pages are needed. It shares destination layout, immutable Preview, journaled
+  Apply, and Undo with Process Scans. Other cover templates remain unsupported
+  by this fast detector; use normal Process Scans for them.
   Signed-page input recursion defaults
   on but can be deliberately disabled; RFI System archive lookup is always recursive.
 - Native Office and printer behavior is accepted only on a real Windows host.

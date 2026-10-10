@@ -1,12 +1,36 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.13.7",
+  "currentVersion": "1.13.10",
   "releases": [
+    {
+      "version": "1.13.10",
+      "date": "2026-10-08",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.13.10",
+      "summary": "Clarify that RFI System replica publishing is not exposed in the active app."
+    },
+    {
+      "version": "1.13.9",
+      "date": "2026-10-08",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.13.9",
+      "summary": "Correct the registered-operation catalog and clarify Follow Up status synchronization."
+    },
+    {
+      "version": "1.13.8",
+      "date": "2026-10-08",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.13.8",
+      "summary": "Safely split Epson Scan multi-page PDFs with indirect XMP stream lengths, preserving metadata in Fast RFI Cover and Process Scans."
+    },
     {
       "version": "1.13.7",
       "date": "2026-10-04",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.13.7",
       "summary": "Limit Rust cache growth and local artifacts; restore test compilation and satisfy current Rust quality gates."
     },

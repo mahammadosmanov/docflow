@@ -453,18 +453,18 @@ impl OcrAdapter for FastCoverFixtureOcr {
 }
 
 fn write_multi_page_pdf(path: &std::path::Path, page_count: usize) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, false, None);
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, None, false);
 }
 
 fn write_multi_page_pdf_with_metadata_and_empty_outlines(
     path: &std::path::Path,
     page_count: usize,
 ) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, true, Some(0));
+    write_multi_page_pdf_with_catalog_features(path, page_count, true, Some(0), false);
 }
 
 fn write_multi_page_pdf_with_nonempty_outlines(path: &std::path::Path, page_count: usize) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, false, Some(1));
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, Some(1), false);
 }
 
 fn write_multi_page_pdf_with_catalog_features(
@@ -472,6 +472,7 @@ fn write_multi_page_pdf_with_catalog_features(
     page_count: usize,
     metadata: bool,
     outline_count: Option<usize>,
+    indirect_metadata_length: bool,
 ) {
     let mut catalog = "<< /Type /Catalog /Pages 2 0 R".to_string();
     let metadata_id = page_count * 2 + 4;
@@ -510,10 +511,17 @@ fn write_multi_page_pdf_with_catalog_features(
     }
     if metadata {
         let metadata = "<x:xmpmeta><rdf:RDF/></x:xmpmeta>";
+        let length = if indirect_metadata_length {
+            format!("{} 0 R", objects.len() + 2)
+        } else {
+            metadata.len().to_string()
+        };
         objects.push(format!(
-            "<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{metadata}\nendstream",
-            metadata.len()
+            "<< /Type /Metadata /Subtype /XML /Length {length} >>\nstream\n{metadata}\nendstream"
         ));
+        if indirect_metadata_length {
+            objects.push(metadata.len().to_string());
+        }
     }
     if let Some(outline_count) = outline_count {
         if outline_count == 0 {
@@ -1071,6 +1079,24 @@ fn page_extraction_preserves_xmp_and_drops_only_empty_outlines() {
         before.catalog_entry_hashes.get("Metadata")
     );
     assert!(!after.catalog_entry_hashes.contains_key("Outlines"));
+}
+#[test]
+fn page_extraction_preserves_metadata_with_indirect_stream_length() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("indirect-metadata-scan.pdf");
+    let output = fixture.path().join("single-page.pdf");
+    write_multi_page_pdf_with_catalog_features(&source, 2, true, None, true);
+
+    let before = docflow_lib::pdf::inspect(&source).unwrap();
+    assert!(!before.metadata_xml_self_contained);
+    docflow_lib::pdf::extract_pages(&source, &[0], &output).unwrap();
+    let after = docflow_lib::pdf::inspect(&output).unwrap();
+
+    assert_eq!(after.page_count, 1);
+    assert_eq!(
+        after.catalog_entry_hashes.get("Metadata"),
+        before.catalog_entry_hashes.get("Metadata")
+    );
 }
 
 #[test]
