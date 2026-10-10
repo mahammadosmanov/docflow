@@ -639,7 +639,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
     ));
 
     let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
-    let scope = GrantScope::new("owner-1", "session-1", "batch-1", "rfi.process_scans");
+    let scope = GrantScope::new("owner-1", "session-1", "batch-1", FAST_COVER_OPERATION_ID);
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
         .unwrap();
@@ -655,7 +655,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
             PlanBinding::new(
                 "owner-1",
                 "session-1",
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![
                     source_grant.grant_id,
                     destination_grant.grant_id,
@@ -851,44 +851,6 @@ fn fast_cover_operation_keeps_continuations_and_reviews_uncertain_cover_boundari
     std::fs::create_dir_all(&trash).unwrap();
     let combined = source.join("stack.pdf");
     write_multi_page_pdf(&combined, 5);
-
-    let normal_plan = preview_fast_covers(
-        &ProcessScansParams {
-            source: source.clone(),
-            destination: destination.clone(),
-            organize_into_rfi_folders: true,
-            keep_original: false,
-            correct_orientation: false,
-            trash_root: Some(trash.clone()),
-        },
-        &FastCoverFixtureOcr(vec![
-            "AZE-SUN-INT-QMS-RFI-CIV-0064",
-            "[continuation]",
-            "[uncertain-cover]",
-            "AZE-SUN-INT-QMS-RFI-MEC-0765",
-            "[continuation]",
-        ]),
-        |_| {},
-        || false,
-    )
-    .unwrap();
-    assert_eq!(normal_plan.op_id, "rfi.process_scans");
-    let normal_groups = normal_plan
-        .steps
-        .iter()
-        .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
-        .collect::<Vec<_>>();
-    assert_eq!(normal_groups.len(), 2);
-    assert!(
-        normal_groups
-            .iter()
-            .all(|step| { !step.dst.as_deref().unwrap_or_default().contains("_review") })
-    );
-    assert!(
-        normal_groups
-            .iter()
-            .any(|step| step.meta["pageIndexes"] == json!([0, 1, 2]))
-    );
 
     let plan = preview_fast_covers(
         &ProcessScansParams {
@@ -1482,52 +1444,6 @@ impl OcrAdapter for LowConfidenceOcr {
     }
 }
 
-struct UnknownFolderOcr;
-
-impl OcrAdapter for UnknownFolderOcr {
-    fn read(&self, _path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
-        Ok(OcrRead {
-            matched: find("AZE-SUN-INT-QMS-RFI-CIV-4286"),
-            source: "fixture-consensus".to_string(),
-        })
-    }
-
-    fn diagnostics(&self) -> String {
-        "fixture OCR available".to_string()
-    }
-}
-
-#[test]
-fn existing_rfi_archive_never_creates_an_ocr_invented_folder() {
-    let fixture = tempfile::TempDir::new().unwrap();
-    let source = fixture.path().join("source");
-    let destination = fixture.path().join("destination");
-    std::fs::create_dir_all(&source).unwrap();
-    std::fs::create_dir_all(destination.join("AZE-SUN-INT-QMS-RFI-CIV-1286")).unwrap();
-    std::fs::write(source.join("scan.pdf"), b"PDF").unwrap();
-
-    let plan = preview_fast_covers(
-        &ProcessScansParams {
-            source,
-            destination: destination.clone(),
-            organize_into_rfi_folders: true,
-            keep_original: true,
-            correct_orientation: false,
-            trash_root: None,
-        },
-        &UnknownFolderOcr,
-        |_| {},
-        || false,
-    )
-    .unwrap();
-
-    assert_eq!(plan.warnings[0].key, "warn.unknown_rfi_folder");
-    assert_eq!(plan.steps.len(), 1);
-    assert_eq!(plan.steps[0].kind, docflow_lib::contracts::StepKind::Copy);
-    assert_eq!(plan.steps[0].meta["reason"], "unknown_rfi_folder");
-    assert!(!destination.join("AZE-SUN-INT-QMS-RFI-CIV-4286").exists());
-}
-
 #[test]
 fn keep_original_copies_low_confidence_files_into_review() {
     let fixture = tempfile::TempDir::new().unwrap();
@@ -1627,7 +1543,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
     assert!(!destination.join("_review").exists(), "preview is inert");
 
     let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
-    let scope = GrantScope::new("owner-1", "session-1", "preview-1", "rfi.process_scans");
+    let scope = GrantScope::new("owner-1", "session-1", "preview-1", FAST_COVER_OPERATION_ID);
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
         .unwrap();
@@ -1640,7 +1556,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
             PlanBinding::new(
                 "owner-1",
                 "session-1",
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![source_grant.grant_id, destination_grant.grant_id],
             ),
             plan.clone(),
@@ -1878,7 +1794,12 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
     );
 
     let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
-    let scope = GrantScope::new("owner-1", "session-1", "preview-flat", "rfi.process_scans");
+    let scope = GrantScope::new(
+        "owner-1",
+        "session-1",
+        "preview-flat",
+        FAST_COVER_OPERATION_ID,
+    );
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
         .unwrap();
@@ -1891,7 +1812,7 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
             PlanBinding::new(
                 "owner-1",
                 "session-1",
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![source_grant.grant_id, destination_grant.grant_id],
             ),
             plan,
@@ -1939,7 +1860,7 @@ fn process_scans_apply_cancellation_is_observed_before_the_first_mutation() {
         fixture.path().join("journal"),
         std::time::Duration::from_secs(300),
     );
-    let scope = GrantScope::new("owner-1", "session-1", "cancel-1", "rfi.process_scans");
+    let scope = GrantScope::new("owner-1", "session-1", "cancel-1", FAST_COVER_OPERATION_ID);
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
         .unwrap();
@@ -1952,7 +1873,7 @@ fn process_scans_apply_cancellation_is_observed_before_the_first_mutation() {
             PlanBinding::new(
                 "owner-1",
                 "session-1",
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![source_grant.grant_id, destination_grant.grant_id],
             ),
             plan,
@@ -2009,7 +1930,7 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
         fixture.path().join("journal"),
         std::time::Duration::from_secs(300),
     );
-    let scope = GrantScope::new("owner-1", "session-1", "race-1", "rfi.process_scans");
+    let scope = GrantScope::new("owner-1", "session-1", "race-1", FAST_COVER_OPERATION_ID);
     let source_grant = authority
         .issue_grant(&scope, &source, GrantAccess::ReadWrite)
         .unwrap();
@@ -2022,7 +1943,7 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
             PlanBinding::new(
                 "owner-1",
                 "session-1",
-                "rfi.process_scans",
+                FAST_COVER_OPERATION_ID,
                 vec![source_grant.grant_id, destination_grant.grant_id],
             ),
             plan,

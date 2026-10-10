@@ -12,7 +12,7 @@ use crate::{
     contracts::{AppPrefs, AuthState, Bootstrap},
     fs_ops::FilesystemAuthority,
     ocr::{NativeOcr, image_pdf_from_png, render_first_page_png},
-    operations::process_scans::{OcrAdapter, ProcessScansParams, preview},
+    operations::process_scans::{OcrAdapter, ProcessScansParams, preview_fast_covers},
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
     registry::{RegistryFacts, operation_registry},
@@ -186,7 +186,7 @@ fn run_ocr_operation_fixture(
     report.ocr_source = Some(read.source);
 
     let operation_started = Instant::now();
-    let plan = preview(
+    let plan = preview_fast_covers(
         &ProcessScansParams {
             source: source.clone(),
             destination: destination.clone(),
@@ -199,7 +199,7 @@ fn run_ocr_operation_fixture(
         |_| {},
         || false,
     )
-    .map_err(|error| backend_error("process-scans preview", error))?;
+    .map_err(|error| backend_error("fast-cover scan preview", error))?;
     let authority = FilesystemAuthority::new(&journal, Duration::from_secs(300));
     let caller = CallerIdentity::new("package-smoke", "isolated-session");
     let scope = GrantScope::new(
