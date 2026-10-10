@@ -3040,9 +3040,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(operation_id, rfi_file_group::OPERATION_ID);
-        let copied_directory = destination
-            .join("CIV")
-            .join("AZE-SUN-INT-QMS-RFI-CIV-1263");
+        let copied_directory = destination.join("CIV").join("AZE-SUN-INT-QMS-RFI-CIV-1263");
         let copied = copied_directory.join(source_file.file_name().unwrap());
         let copied_mail = copied_directory.join(source_mail.file_name().unwrap());
         assert_eq!(fs::read(&source_file).unwrap(), b"source stays unchanged");

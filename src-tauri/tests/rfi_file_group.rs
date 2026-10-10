@@ -235,47 +235,144 @@ fn group_files_routes_supported_disciplines_into_discipline_and_code_folders() {
         fs::write(source.join(format!("{code}.eml")), "Subject: RFI").unwrap();
         fs::write(source.join(format!("{code}.docx")), b"document").unwrap();
     }
-    let mut source_entries = fs::read_dir(&source).unwrap().map(|entry| entry.unwrap().file_name()).collect::<Vec<_>>();
+    let mut source_entries = fs::read_dir(&source)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
     source_entries.sort();
 
     let plan = preview(
-        &GroupRfiFilesParams { source: source.clone(), destination: destination.clone() },
+        &GroupRfiFilesParams {
+            source: source.clone(),
+            destination: destination.clone(),
+        },
         &NoOcr,
         |_| {},
         || false,
-    ).unwrap();
+    )
+    .unwrap();
 
     let canonical_destination = fs::canonicalize(&destination).unwrap();
-    for (discipline, code) in [("CIV", codes[0]), ("MEC", codes[1]), ("ELE", codes[2]), ("PRC", codes[3])] {
+    for (discipline, code) in [
+        ("CIV", codes[0]),
+        ("MEC", codes[1]),
+        ("ELE", codes[2]),
+        ("PRC", codes[3]),
+    ] {
         let folder = canonical_destination.join(discipline).join(code);
-        assert!(plan.steps.iter().any(|step| step.dst.as_deref() == Some(folder.to_str().unwrap())));
-        assert!(plan.steps.iter().any(|step| step.dst.as_deref() == Some(folder.join(format!("{code}.docx")).to_str().unwrap())));
-        assert!(plan.steps.iter().any(|step| step.dst.as_deref() == Some(folder.join(format!("{code}.eml")).to_str().unwrap())));
+        assert!(
+            plan.steps
+                .iter()
+                .any(|step| step.dst.as_deref() == Some(folder.to_str().unwrap()))
+        );
+        assert!(plan.steps.iter().any(|step| step.dst.as_deref()
+            == Some(folder.join(format!("{code}.docx")).to_str().unwrap())));
+        assert!(plan.steps.iter().any(|step| step.dst.as_deref()
+            == Some(folder.join(format!("{code}.eml")).to_str().unwrap())));
     }
     assert_eq!(plan.steps.len(), 12);
-    let mut current_source_entries = fs::read_dir(&source).unwrap().map(|entry| entry.unwrap().file_name()).collect::<Vec<_>>();
+    let mut current_source_entries = fs::read_dir(&source)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
     current_source_entries.sort();
     assert_eq!(current_source_entries, source_entries);
     let rows = plan.meta["editor"]["rows"].as_array().unwrap();
-    let revised_rows = rows.iter().cloned().map(|mut row| {
-        if row["rfiCode"] == codes[1] { row["enabled"] = json!(false); }
-        row
-    }).collect::<Vec<_>>();
+    let revised_rows = rows
+        .iter()
+        .cloned()
+        .map(|mut row| {
+            if row["rfiCode"] == codes[1] {
+                row["enabled"] = json!(false);
+            }
+            row
+        })
+        .collect::<Vec<_>>();
     let revised = revise(&plan, &json!({"rows": revised_rows})).unwrap();
-    assert!(!revised.steps.iter().any(|step| step.dst.as_deref().is_some_and(|path| path.contains(codes[1]))));
-    assert!(revised.steps.iter().any(|step| step.dst.as_deref().is_some_and(|path| path.contains(codes[0]))));
+    assert!(!revised.steps.iter().any(|step| {
+        step.dst
+            .as_deref()
+            .is_some_and(|path| path.contains(codes[1]))
+    }));
+    assert!(revised.steps.iter().any(|step| {
+        step.dst
+            .as_deref()
+            .is_some_and(|path| path.contains(codes[0]))
+    }));
 
     let occupied = destination.join("CIV").join(codes[0]);
     fs::create_dir_all(&occupied).unwrap();
     fs::write(occupied.join(format!("{}.docx", codes[0])), b"keep").unwrap();
     let collision = preview(
-        &GroupRfiFilesParams { source, destination },
+        &GroupRfiFilesParams {
+            source,
+            destination,
+        },
         &NoOcr,
         |_| {},
         || false,
-    ).unwrap();
-    assert_eq!(fs::read(occupied.join(format!("{}.docx", codes[0]))).unwrap(), b"keep");
-    assert!(collision.warnings.iter().any(|warning| warning.key == "warn.rfi.fileGroup.exists" && warning.subject.contains(codes[0])));
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(occupied.join(format!("{}.docx", codes[0]))).unwrap(),
+        b"keep"
+    );
+    assert!(
+        collision
+            .warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.fileGroup.exists"
+                && warning.subject.contains(codes[0]))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn preview_rejects_a_symlinked_intermediate_discipline_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("incoming");
+    let destination = temporary.path().join("grouped");
+    let external = temporary.path().join("external");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::create_dir(&external).unwrap();
+    symlink(&external, destination.join("CIV")).unwrap();
+
+    let code = "AZE-SUN-INT-QMS-RFI-CIV-1263";
+    fs::write(source.join(format!("{code}.pdf")), b"document").unwrap();
+    fs::write(
+        source.join(format!("{code}.eml")),
+        format!("Subject: {code}"),
+    )
+    .unwrap();
+
+    let plan = preview(
+        &GroupRfiFilesParams {
+            source,
+            destination,
+        },
+        &NoOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.fileGroup.exists"
+                && warning.subject.contains(code)),
+        "preview must surface an unsafe intermediate directory"
+    );
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| !step.dst.as_deref().is_some_and(|path| path.contains(code))),
+        "preview must not offer writes through the symlink"
+    );
+    assert_eq!(fs::read_dir(external).unwrap().count(), 0);
 }
 
 #[test]

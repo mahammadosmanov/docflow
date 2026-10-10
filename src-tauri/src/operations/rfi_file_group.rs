@@ -782,6 +782,14 @@ fn overlaps(first: &Path, second: &Path) -> bool {
 }
 
 fn unsafe_existing_directory(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .is_ok_and(|metadata| metadata.file_type().is_symlink() || !metadata.is_dir())
+    let mut candidate = Some(path);
+    while let Some(current) = candidate {
+        if fs::symlink_metadata(current)
+            .is_ok_and(|metadata| metadata.file_type().is_symlink() || !metadata.is_dir())
+        {
+            return true;
+        }
+        candidate = current.parent();
+    }
+    false
 }

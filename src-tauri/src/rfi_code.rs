@@ -191,7 +191,6 @@ fn to_digit(character: char) -> char {
     }
 }
 
-
 fn levenshtein(left: &str, right: &str) -> usize {
     let right = right.chars().collect::<Vec<_>>();
     let mut previous = (0..=right.len()).collect::<Vec<_>>();
