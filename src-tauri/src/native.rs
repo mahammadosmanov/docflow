@@ -29,10 +29,7 @@ use crate::{
     operations::pdf_orientation::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
-    operations::process_scans::{
-        FAST_COVER_OPERATION_ID, ProcessScansParams, preview as preview_process_scans,
-        preview_fast_covers,
-    },
+    operations::process_scans::{FAST_COVER_OPERATION_ID, ProcessScansParams, preview_fast_covers},
     operations::replica_publish::{self, ReplicaPublishParams},
     operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
     operations::stage_signed_pages::{
@@ -902,10 +899,8 @@ impl NativeBackend {
     {
         let request: PreviewEnvelope<ProcessScansValues> =
             decode(self.materialize_preview(params)?)?;
-        if request.op_id != "rfi.process_scans" && request.op_id != FAST_COVER_OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust Process Scans backend",
-            ));
+        if request.op_id != FAST_COVER_OPERATION_ID {
+            return Err(BackendError::validation("unknown operation ID"));
         }
         let caller = self.caller_identity()?;
         let scope = GrantScope::new(
@@ -940,15 +935,9 @@ impl NativeBackend {
         };
         let ocr = NativeOcr::discover();
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
-        let plan = if request.op_id == FAST_COVER_OPERATION_ID {
-            preview_fast_covers(&scan_params, &ocr, &mut progress, || {
-                cancellation.is_cancelled()
-            })?
-        } else {
-            preview_process_scans(&scan_params, &ocr, &mut progress, || {
-                cancellation.is_cancelled()
-            })?
-        };
+        let plan = preview_fast_covers(&scan_params, &ocr, &mut progress, || {
+            cancellation.is_cancelled()
+        })?;
         encode(
             self.filesystem.cache_plan(
                 BackendOrigin::Rust,
@@ -2869,6 +2858,25 @@ mod tests {
             .chain(auth_responses("owner"))
             .collect();
         test_backend_with_responses(temporary, responses)
+    }
+
+    #[test]
+    fn retired_process_scans_rejects_new_preview() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+
+        let result = backend.preview_process_scans(
+            json!({
+                "opId": "rfi.process_scans",
+                "values": {}
+            }),
+            |_| {},
+        );
+
+        assert!(
+            result.is_err(),
+            "retired operation unexpectedly created a plan"
+        );
     }
 
     #[test]

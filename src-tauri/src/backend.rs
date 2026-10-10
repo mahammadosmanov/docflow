@@ -493,9 +493,7 @@ impl BackendRouter {
                 let _ = progress_channel.send(event);
             };
             match operation_id.as_str() {
-                "rfi.process_scans" | "rfi.process_scans_fast_covers" => {
-                    native.preview_process_scans(params, send)
-                }
+                "rfi.process_scans_fast_covers" => native.preview_process_scans(params, send),
                 "rfi.group_files" => native.preview_rfi_file_group(params, send),
                 "rfi.log_add" => native.preview_rfi_log(params, send),
                 "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),

@@ -718,7 +718,7 @@ fn undo_rejects_a_replacement_directory_at_the_original_grant_root_path() {
 }
 
 #[test]
-fn genuine_legacy_local_journal_migrates_only_when_undo_begins_and_undoes_safely() {
+fn legacy_process_scans_journal_still_supports_guarded_undo() {
     let fixture = TempDir::new().expect("temporary fixture");
     let root = fixture.path().join("documents");
     let journal_dir = fixture.path().join("journal");
