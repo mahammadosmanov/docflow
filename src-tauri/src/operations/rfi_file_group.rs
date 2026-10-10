@@ -677,7 +677,7 @@ fn exact_codes(value: &str) -> BTreeSet<String> {
             .chars()
             .next()
             .is_some_and(char::is_alphanumeric);
-        if before_invalid || after_invalid {
+        if before_invalid || after_invalid || !codes.contains(matched.as_str()) {
             continue;
         }
         let discipline = &captures[1];

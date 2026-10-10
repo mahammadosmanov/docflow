@@ -37,14 +37,34 @@ fn rfi_matching_preserves_nfc_uppercase_and_the_strict_anchor() {
         assert_eq!(repaired.method, RfiMethod::Repaired);
     }
     let recovered_discipline = find("AZE-SUN-INT-QMS-RFI-CV-0064");
-    assert_eq!(recovered_discipline.code, "AZE-SUN-INT-QMS-RFI-CIV-0064");
-    assert_eq!(recovered_discipline.confidence, 0.9);
+    assert_eq!(
+        recovered_discipline.method,
+        RfiMethod::Miss,
+        "two-letter CV must not be corrected"
+    );
+    assert!(!recovered_discipline.ok());
     let fuzzy = find("AZE-SUN-INT-QMX-RFI-MEC-0107");
     assert_eq!(fuzzy.method, RfiMethod::Fuzzy);
     assert_eq!(fuzzy.confidence, 0.9);
     assert!(!find("AZE-SUN-INT-QMS-ITP-MEC-0001").ok());
     assert!(!find("AZE-SUN-INT-ENG-STR-DRG-0901 S-205").ok());
     assert_eq!(canonical("I\u{0307}NT"), "İNT");
+}
+
+#[test]
+fn canonical_parser_accepts_only_supported_disciplines_and_does_not_fuzzy_repair_discipline() {
+    use docflow_lib::rfi_code::exact_codes;
+
+    for discipline in ["CIV", "MEC", "ELE", "PRC"] {
+        let code = format!("AZE-SUN-INT-QMS-RFI-{discipline}-1234");
+        assert_eq!(find(&code).method, RfiMethod::Strict, "{code}");
+        assert!(exact_codes(&code).contains(&code));
+    }
+    for discipline in ["ARC", "INS", "PIP", "STR", "TEL", "CV", "CLV"] {
+        let code = format!("AZE-SUN-INT-QMS-RFI-{discipline}-1234");
+        assert_eq!(find(&code).method, RfiMethod::Miss, "{code}");
+        assert!(exact_codes(&code).is_empty(), "{code}");
+    }
 }
 
 #[test]

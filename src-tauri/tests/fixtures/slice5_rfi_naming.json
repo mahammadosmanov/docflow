@@ -37,13 +37,13 @@
       "confidence": 0.8
     },
     {
-      "name": "missing discipline letter recovery",
+      "name": "unsupported two-letter discipline is rejected",
       "input": "AZE-SUN-INT-QMS-RFI-CV-0064",
-      "code": "AZE-SUN-INT-QMS-RFI-CIV-0064",
-      "discipline": "CIV",
-      "number": "0064",
-      "method": "repaired",
-      "confidence": 0.9
+      "code": "",
+      "discipline": "",
+      "number": "",
+      "method": "miss",
+      "confidence": 0.0
     },
     {
       "name": "bounded prefix fuzzy recovery",

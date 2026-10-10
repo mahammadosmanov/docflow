@@ -56,6 +56,47 @@ fn write_docx_xml(path: &Path, xml: &str) {
 }
 
 #[test]
+fn unsupported_exact_discipline_creates_no_grouped_output() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("incoming");
+    let destination = temporary.path().join("grouped");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-ARC-1263.pdf"),
+        b"unsupported discipline",
+    )
+    .unwrap();
+    fs::write(
+        source.join("AZE-SUN-INT-QMS-RFI-ARC-1263.eml"),
+        b"Subject: AZE-SUN-INT-QMS-RFI-ARC-1263",
+    )
+    .unwrap();
+
+    let plan = preview(
+        &GroupRfiFilesParams {
+            source,
+            destination: destination.clone(),
+        },
+        &NoOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(plan.meta["editor"]["rows"].as_array().unwrap().is_empty());
+    assert!(
+        plan.steps.iter().all(|step| step
+            .meta
+            .get("warningReview")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)),
+        "unsupported identifiers may only result in _review handling"
+    );
+    assert_eq!(fs::read_dir(destination).unwrap().count(), 0);
+}
+
+#[test]
 fn preview_groups_exact_filename_office_email_and_utf16_codes_without_mutating_sources() {
     let temporary = tempfile::tempdir().unwrap();
     let source = temporary.path().join("incoming");

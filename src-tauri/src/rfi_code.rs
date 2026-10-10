@@ -5,7 +5,7 @@ use unicode_normalization::UnicodeNormalization;
 
 pub const PREFIX: &str = "AZE-SUN-INT-QMS-RFI";
 const PREFIX_HEAD: &str = "AZE-SUN-INT-QMS";
-const DISCIPLINES: [&str; 8] = ["ARC", "CIV", "ELE", "INS", "MEC", "PIP", "STR", "TEL"];
+const DISCIPLINES: [&str; 4] = ["CIV", "ELE", "MEC", "PRC"];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RfiMethod {
@@ -50,7 +50,8 @@ pub fn exact_codes(value: &str) -> BTreeSet<String> {
         .captures_iter(&text)
         .filter(|captures| {
             let matched = captures.get(0).expect("exact RFI match exists");
-            line_break_count(matched.as_str()) <= 2
+            DISCIPLINES.contains(&captures.get(1).expect("discipline capture exists").as_str())
+                && line_break_count(matched.as_str()) <= 2
                 && !text[..matched.start()]
                     .chars()
                     .next_back()
@@ -66,13 +67,19 @@ pub fn exact_codes(value: &str) -> BTreeSet<String> {
 
 fn find_canonical(text: &str) -> RfiMatch {
     for captures in strict().captures_iter(text) {
-        if !followed_by_numeric(text, captures.get(0).expect("strict match exists").end()) {
+        let matched = captures.get(0).expect("strict match exists");
+        if DISCIPLINES.contains(&captures.get(1).expect("discipline capture exists").as_str())
+            && !followed_by_numeric(text, matched.end())
+        {
             return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
         }
     }
     for captures in exact_wrapped().captures_iter(text) {
         let matched = captures.get(0).expect("wrapped match exists");
-        if line_break_count(matched.as_str()) <= 2 && !followed_by_numeric(text, matched.end()) {
+        if DISCIPLINES.contains(&captures.get(1).expect("discipline capture exists").as_str())
+            && line_break_count(matched.as_str()) <= 2
+            && !followed_by_numeric(text, matched.end())
+        {
             return build(&captures[1], &captures[2], RfiMethod::Strict, 1.0);
         }
     }
@@ -84,7 +91,9 @@ fn find_canonical(text: &str) -> RfiMatch {
         let token = candidate.as_str();
         let fixed = repair(token);
         if let Some(captures) = strict().captures(&fixed) {
-            return build(&captures[1], &captures[2], RfiMethod::Repaired, 0.8);
+            if DISCIPLINES.contains(&captures.get(1).expect("discipline capture exists").as_str()) {
+                return build(&captures[1], &captures[2], RfiMethod::Repaired, 0.8);
+            }
         }
         let segments = fixed.split('-').collect::<Vec<_>>();
         if segments.len() != 7 || segments[4] != "RFI" {
@@ -94,29 +103,13 @@ fn find_canonical(text: &str) -> RfiMatch {
         if number.len() != 4 || !number.bytes().all(|byte| byte.is_ascii_digit()) {
             continue;
         }
-        let raw_discipline = segments[5];
-        let discipline = recover_discipline(raw_discipline);
-        if discipline.len() != 3
-            || !discipline.bytes().all(|byte| byte.is_ascii_uppercase())
-            || !DISCIPLINES.contains(&discipline)
-        {
+        let discipline = segments[5];
+        if !DISCIPLINES.contains(&discipline) {
             continue;
         }
         let distance = levenshtein(&segments[..4].join("-"), PREFIX_HEAD);
         if distance > 2 {
             continue;
-        }
-        if discipline != raw_discipline {
-            return build(
-                discipline,
-                number,
-                RfiMethod::Repaired,
-                if distance == 0 {
-                    0.9
-                } else {
-                    0.85 - distance as f64 / 10.0
-                },
-            );
         }
         return build(
             discipline,
@@ -198,29 +191,6 @@ fn to_digit(character: char) -> char {
     }
 }
 
-fn recover_discipline(raw: &str) -> &str {
-    if DISCIPLINES.contains(&raw) {
-        return raw;
-    }
-    let mut best = raw;
-    let mut best_distance = usize::MAX;
-    let mut ties = 0;
-    for candidate in DISCIPLINES {
-        let distance = levenshtein(raw, candidate);
-        if distance < best_distance {
-            best = candidate;
-            best_distance = distance;
-            ties = 1;
-        } else if distance == best_distance {
-            ties += 1;
-        }
-    }
-    if best_distance <= 1 && ties == 1 {
-        best
-    } else {
-        raw
-    }
-}
 
 fn levenshtein(left: &str, right: &str) -> usize {
     let right = right.chars().collect::<Vec<_>>();
