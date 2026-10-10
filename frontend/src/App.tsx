@@ -315,6 +315,7 @@ export function App() {
         <HistoryScreen
           bridge={bridge}
           s={s}
+          operations={bootstrap.operations}
           onBack={() => setRoute({ name: "home" })}
         />
       );
@@ -618,7 +619,6 @@ type OperationCategory = "all" | "scans" | "excel" | "mail" | "system";
 
 function getOperationCategory(id: string): OperationCategory {
   if (
-    id === "rfi.process_scans" ||
     id === "rfi.process_scans_fast_covers" ||
     id === "rfi.normalize_pdf_orientation" ||
     id === "rfi.stage_signed_first_pages"
@@ -659,7 +659,6 @@ function getOperationIcon(id: string) {
       return <RotateCcw />;
     case "rfi.process_scans_fast_covers":
       return <FileCheck2 />;
-    case "rfi.process_scans":
     default:
       return <FileSearch />;
   }
@@ -4765,10 +4764,12 @@ function ReviewScreen({
 function HistoryScreen({
   bridge,
   s,
+  operations,
   onBack,
 }: {
   bridge: Bridge;
   s: Strings;
+  operations: OperationDef[];
   onBack: () => void;
 }) {
   const [payload, setPayload] = useState<HistoryPayload | null>(null);
@@ -4849,9 +4850,11 @@ function HistoryScreen({
                     {s.t(
                       row.opId === "rfi.review"
                         ? "review.title"
-                        : row.opId === "rfi.process_scans_fast_covers"
-                          ? "op.rfi.process_scans_fast_covers.title"
-                          : "op.rfi.process_scans.title",
+                        : row.opId === "rfi.process_scans"
+                          ? "op.rfi.process_scans.title"
+                          : (operations.find(
+                                (operation) => operation.id === row.opId,
+                              )?.titleKey ?? "history.unknownOperation"),
                     )}
                   </strong>
                   <small>

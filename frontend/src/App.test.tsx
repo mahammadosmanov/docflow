@@ -179,7 +179,9 @@ describe("DocFlow shell", () => {
 
     render(<App />);
     await signIn();
-    fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
+    fireEvent.click(
+      screen.getByText("Hızlı RFI Kapak Taraması", { selector: "strong" }),
+    );
     await screen.findByRole("heading", { name: "Yapılandır" });
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
@@ -1156,13 +1158,76 @@ describe("DocFlow shell", () => {
     expect(
       await screen.findByRole("heading", { name: "İşlemler" }),
     ).toBeVisible();
-    fireEvent.click(screen.getByText("Taramaları İşle", { selector: "strong" }));
+    expect(
+      screen.queryByText("Taramaları İşle", { selector: "strong" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByText("Hızlı RFI Kapak Taraması", { selector: "strong" }),
+    );
 
     expect(
       await screen.findByRole("heading", { name: "Yapılandır" }),
     ).toBeVisible();
     expect(screen.getByText("Kaynak klasör")).toBeVisible();
     expect(screen.getByText("Hedef klasör")).toBeVisible();
+  });
+
+  it("renders retired Process Scans history separately from unknown operation IDs", async () => {
+    interceptMockBridge((method) =>
+      method === "history/list"
+        ? {
+            handled: true,
+            value: {
+              online: true,
+              rows: [
+                {
+                  when: "2026-08-24T00:00:00Z",
+                  opId: "rfi.process_scans",
+                  moves: 1,
+                  failed: 0,
+                  journalId: "legacy-scan",
+                  steps: null,
+                  cloudId: "legacy-scan",
+                  undone: true,
+                  undoAvailable: false,
+                  fromCloud: true,
+                },
+                {
+                  when: "2026-08-23T00:00:00Z",
+                  opId: "future.unknown_operation",
+                  moves: 1,
+                  failed: 0,
+                  journalId: "unknown-operation",
+                  steps: null,
+                  cloudId: "unknown-operation",
+                  undone: true,
+                  undoAvailable: false,
+                  fromCloud: true,
+                },
+              ],
+            },
+          }
+        : { handled: false },
+    );
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen
+        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
+        .closest("button")!,
+    );
+
+    expect(await screen.findAllByText("Taramaları İşle")).toHaveLength(1);
+    expect(screen.getByText("Bilinmeyen işlem")).toBeVisible();
+  });
+
+  it.each([
+    ["en", "Unknown operation"],
+    ["tr", "Bilinmeyen işlem"],
+    ["ru", "Неизвестная операция"],
+    ["az", "Naməlum əməliyyat"],
+  ] as const)("translates unknown history labels in %s", (locale, expected) => {
+    expect(makeStrings(locale).t("history.unknownOperation")).toBe(expected);
   });
 
   it("exposes every preserved feature from the workspace", async () => {
@@ -2010,12 +2075,12 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: /^Taramaları İşle/ }),
+      screen.queryByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
     ).not.toBeInTheDocument();
 
     fireEvent.change(searchInput, { target: { value: "" } });
     expect(
-      screen.getByRole("button", { name: /^Taramaları İşle/ }),
+      screen.getByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
     ).toBeVisible();
 
     const chipsContainer = document.querySelector(".category-filter-chips")!;
@@ -2025,7 +2090,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(scansChip);
     expect(scansChip).toHaveClass("active");
     expect(
-      screen.getByRole("button", { name: /^Taramaları İşle/ }),
+      screen.getByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: /Birden fazla dosya yazdır/ }),

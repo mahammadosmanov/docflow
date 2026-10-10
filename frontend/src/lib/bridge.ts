@@ -93,10 +93,10 @@ export class TauriBridge implements Bridge {
   }
 }
 
-const demoOperation: OperationDef = {
-  id: "rfi.process_scans",
-  titleKey: "op.rfi.process_scans.title",
-  descriptionKey: "op.rfi.process_scans.desc",
+const demoFastCoverOperation: OperationDef = {
+  id: "rfi.process_scans_fast_covers",
+  titleKey: "op.rfi.process_scans_fast_covers.title",
+  descriptionKey: "op.rfi.process_scans_fast_covers.desc",
   supportsPresets: false,
   schema: [
     {
@@ -146,12 +146,6 @@ const demoOperation: OperationDef = {
   ],
 };
 
-const demoFastCoverOperation: OperationDef = {
-  ...demoOperation,
-  id: "rfi.process_scans_fast_covers",
-  titleKey: "op.rfi.process_scans_fast_covers.title",
-  descriptionKey: "op.rfi.process_scans_fast_covers.desc",
-};
 
 const demoFileGroupOperation: OperationDef = {
   id: "rfi.group_files",
@@ -805,7 +799,6 @@ export class MockBridge implements Bridge {
           auth: this.auth,
           prefs: this.prefs,
           operations: [
-            demoOperation,
             demoFastCoverOperation,
             demoFileGroupOperation,
             demoRfiOperation,
@@ -1480,7 +1473,7 @@ export class MockBridge implements Bridge {
           rows: [
             {
               when: "2026-08-24T00:00:00Z",
-              opId: demoOperation.id,
+              opId: demoFastCoverOperation.id,
               moves: 4,
               failed: 0,
               journalId: "local-1",
@@ -1493,7 +1486,7 @@ export class MockBridge implements Bridge {
             },
             {
               when: "2026-08-23T00:00:00Z",
-              opId: demoOperation.id,
+              opId: demoFastCoverOperation.id,
               moves: 1,
               failed: 0,
               journalId: "remote-only",

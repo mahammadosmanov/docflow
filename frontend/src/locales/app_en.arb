@@ -37,6 +37,7 @@
   "note.displaced": "Replaced — moved to trash",
   "action.history": "History",
   "history.title": "History",
+  "history.unknownOperation": "Unknown operation",
   "history.empty": "No history yet",
   "history.moves": "{count} files",
   "@history.moves": {
@@ -96,7 +97,6 @@
     }
   },
   "op.rfi.process_scans.title": "Process Scans",
-  "op.rfi.process_scans.desc": "Reads each page for its RFI number, corrects page orientation, and saves scanned PDFs in your chosen layout.",
   "op.rfi.process_scans_fast_covers.title": "Fast RFI Cover Scan",
   "op.rfi.process_scans_fast_covers.desc": "Scans known covers in four directions in multi-page PDFs. Uncertain possible covers go to _review. Page rotation correction is off by default for speed; normal Process Scans stays unchanged.",
   "op.rfi.group_files.title": "Group Files by RFI",
