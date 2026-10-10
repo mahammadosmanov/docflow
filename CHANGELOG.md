@@ -3,6 +3,17 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## 1.14.0 - 2026-10-10
+
+### Changed
+
+- Group Files now accepts only CIV, MEC, ELE, and PRC RFIs and files approved
+  copies under `<destination>/<discipline>/<full-code>/<source filename>`.
+  Sources remain read-only; Preview, explicit Apply, journaled creation,
+  guarded Undo, per-RFI mail eligibility, multi-RFI fan-out, `_review`, and
+  no-overwrite behavior are preserved.
+
+
 ## 1.13.10 - 2026-10-08
 
 ### Documentation

@@ -105,14 +105,15 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   progress; mutation, print submission, publication, journal, and Undo effects
   remain ordered and single-writer.
 - **DF-023 — Safe multi-RFI file grouping:** top-level incoming files are
-  matched only to exact canonical RFI identifiers found in their names or
-  bounded content inspection, including an exact code split by at most two line
-  breaks around its hyphens. An RFI is eligible only when a readable EML or MSG
-  file also identifies it; otherwise no folder or related copy is planned and a
-  missing-email warning names the affected RFI and files. Each eligible source
-  is copied into every related RFI folder beneath a separate destination; the
-  source is never changed, collisions never overwrite, and unmatched or
-  unreadable files are copied to `_review` for manual handling.
+  matched only to exact canonical CIV/MEC/ELE/PRC identifiers found in their
+  names or bounded content inspection, including an exact code split by at most
+  two line breaks around its hyphens. An RFI is eligible only when a readable
+  EML or MSG file also identifies it; otherwise no folder or related copy is
+  planned and a missing-email warning names the affected RFI and files. Each
+  eligible source is copied to
+  `<destination>/<discipline>/<full-code>/<source filename>` for every related
+  RFI; sources remain read-only, collisions never overwrite, and unmatched or
+  unreadable files are copied to destination-root `_review` for manual handling.
 - **DF-024 — Exact completion-status synchronization:** a separate operation
   recursively scans the selected read-only RFI System for exact canonical
   `RFI No. <RFI>.pdf` filenames and previews every matched PDF, RFI Log row,

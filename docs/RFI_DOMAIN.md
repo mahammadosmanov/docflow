@@ -95,9 +95,17 @@ identity or secrets.
 - A mail or document matched to several exact RFIs is copied once into each
   selected canonical folder. Compact mail-name continuations such as
   `...-1260_1261,1262` inherit only the already explicit discipline.
-- Source files are read-only. Preview proposes only no-clobber copies beneath a
-  separate destination. Unmatched or unreadable files are copied to `_review`;
-  symlinks, overlapping roots, unsafe identifiers, and occupied targets fail closed.
+- Persisted Group Files RFIs are limited to CIV, MEC, ELE, and PRC. OCR-only
+  recognition may map the exact OCR alias `CLV` to `CIV`; filenames, imported
+  text, and manual identifiers do not receive that alias.
+- Every approved normal copy targets
+  `<destination>/<discipline>/<full-code>/<source filename>`. The discipline
+  and full code are derived by Rust from its validated identifier, never from a
+  client-authored path. `_review` stays at the destination root.
+- Source files are read-only. Preview is pure; explicit Apply executes only the
+  approved Plan, journals created outputs/directories, and guarded Undo removes
+  only unchanged creations. Existing targets never overwrite. Symlinks,
+  overlapping roots, unsafe identifiers, and occupied targets fail closed.
 
 - INTEC processing normally handles one complete RFI scan.
 - Worley processing may receive one PDF containing many signed first pages.

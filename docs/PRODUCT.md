@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.13.10**. `VERSION` is authoritative.
+Current product version: **1.14.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -53,9 +53,11 @@ workbook behavior, print batches kept in order, and every change recoverable.
 17. Independent bulk discovery and analysis use bounded multi-core workers;
     every operation reports localized stages and item progress while all effects
     that can collide or become uncertain remain ordered.
-18. Incoming top-level files can be grouped by exact RFI identity from filenames
-    or bounded content inspection; multi-RFI mail is copied to every matching
-    folder while source files remain untouched.
+18. Incoming top-level files can be grouped by exact CIV, MEC, ELE, or PRC RFI
+    identity from filenames or bounded content inspection; eligible approved
+    copies go under `<destination>/<discipline>/<full-code>/<source filename>`.
+    Multi-RFI mail fans out to every eligible matching folder while source files
+    remain read-only; collisions never overwrite.
 19. Exact completed-RFI PDF filenames anywhere below the read-only RFI System
     can drive an explicit, reviewable RFI Log `Inspection Status = Completed`
     update without touching Follow Up or Worley data.
@@ -77,7 +79,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 |---|---|---|
 | Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Strict high-confidence covers delimit RFIs; all pages up to the next confirmed cover stay with the current RFI, including continuations with uncertain or unreadable RFI-identity OCR; pages before the first cover remain in `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; self-contained XML metadata is preserved and only empty outline trees are omitted; no-overwrite and recoverable source handling |
 | Fast Cover Scans | Use a separate high-speed, known-template cover detector on top-level multi-page RFI PDFs | Requires visible OCR agreement on exact RFI identity, request heading, and known project/client mark; continuation pages stay attached; missing per-RFI folders are created under the matching discipline even when other RFI folders already exist; unresolved possible covers start a Review group; page rotation correction defaults off; normal Process Scans remains unchanged |
-| RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into exact per-RFI folders | Top-level source is read-only; exact ASCII identifiers only; multi-RFI fan-out is previewed; collisions do not overwrite; unmatched/unreadable files go to `_review` |
+| RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into `<destination>/<discipline>/<full-code>/<source filename>` | Only CIV/MEC/ELE/PRC; top-level source is read-only; readable EML/MSG evidence is required per RFI; exact multi-RFI fan-out is previewed; no overwrite; unmatched/unreadable files go to root `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; match remaining exact ITP/item, area, and inspection-location contexts; skip unsupported template scope; ambiguous matches remain manual review; never create rows or sections or change worksheet Remarks; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |

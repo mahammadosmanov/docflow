@@ -6,7 +6,7 @@
 |---|---|
 | `rfi.process_scans` | OCR, name, and file top-level RFI PDFs or route exceptions to review |
 | `rfi.process_scans_fast_covers` | Process top-level multi-page RFI PDFs with separate template-led cover detection and create missing discipline/RFI folders; normal Process Scans remains unchanged |
-| `rfi.group_files` | Detect exact RFIs in top-level filenames and content; copy a related set only when that RFI also has matching EML/MSG evidence |
+| `rfi.group_files` | Detect exact CIV/MEC/ELE/PRC RFIs in top-level filenames and content; after EML/MSG evidence eligibility, Preview and copy approved files to `<destination>/<discipline>/<full-code>/<source filename>` |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Add/update exact CIV multi-area rows and MEC rows with distinct exact route contexts; exclude CIV RFIs whose Tag No starts `PCS-`, including removing them from existing groups; split exact MEC composite location values; skip supported records absent from the current template; remove Cancelled/Rejected entries; synchronize eligible FINAL Worley state and uniquely mapped RFI Log statuses; never change worksheet Remarks; leave ambiguous matches in manual review |
 | `files.batch_print` | Run and recover a strictly ordered mixed-file print queue; tolerate transient EPSON status/title/query behavior without duplicate submission, and optionally restore previous safe settings |

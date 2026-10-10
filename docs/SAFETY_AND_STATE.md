@@ -61,9 +61,12 @@ recovery-required. Undo hash-checks and removes only the unchanged created MSG.
 
 Incoming RFI grouping never uses the incoming folder as output. Preview scans
 only its top-level regular files and pins exact copy targets beneath a separate
-destination. Apply reuses the cached Plan, copies serially without overwrite,
-and journals every created file and directory for guarded Undo. Unmatched or
-unreadable sources are preserved and copied to destination `_review`.
+destination. Eligible CIV/MEC/ELE/PRC targets are
+`<destination>/<discipline>/<full-code>/<source filename>`; Rust derives both
+path components from the validated RFI identity. `_review` remains at the
+destination root. Apply reuses the cached Plan, copies serially without
+overwrite, and journals every created file and directory for guarded Undo.
+Sources remain unchanged, and Undo removes only unchanged creations.
 
 Completion Status Sync recursively discovers exact completed-RFI PDF filenames
 without opening or changing them. The approved Plan pins only existing safe RFI
