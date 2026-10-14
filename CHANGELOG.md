@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.19.0 - 2026-10-14
+
+### Improved
+
+- Route each exact CIV `Tag No` token to its distinct prepared Follow Up row.
+  Partial tag coverage syncs eligible rows and shows an unselectable diagnostic
+  naming matched and unmatched tags; duplicate targets remain Manual Review.
+  Preserve CIV `PCS-` exclusions and never create target rows.
+
+
 ## 1.18.0 - 2026-10-14
 
 ### Improved

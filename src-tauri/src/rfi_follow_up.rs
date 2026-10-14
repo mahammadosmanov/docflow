@@ -459,20 +459,38 @@ fn mapping_details(
             )
         }
     };
-    let source_contexts = if ignore_inspection_location {
+    let split_civ_tags =
+        route.is_some_and(|(sheet, _)| matches!(sheet, "CIV" | "Signed By Worley CIV"));
+    let source_contexts = if ignore_inspection_location || split_civ_tags {
         record
             .contexts
             .iter()
             .flat_map(|context| {
-                let areas = normalized_parts(&context.area);
-                if areas.is_empty() {
+                let values = if ignore_inspection_location {
+                    normalized_parts(&context.area)
+                } else {
+                    normalized_parts(&context.tag)
+                        .into_iter()
+                        .filter(|tag| !tag.starts_with("PCS-"))
+                        .collect()
+                };
+                if values.is_empty() {
                     vec![context.clone()]
                 } else {
-                    areas
+                    values
                         .into_iter()
-                        .map(|area| SourceRouteContext {
-                            area,
-                            ..context.clone()
+                        .map(|value| {
+                            if ignore_inspection_location {
+                                SourceRouteContext {
+                                    area: value,
+                                    ..context.clone()
+                                }
+                            } else {
+                                SourceRouteContext {
+                                    tag: value,
+                                    ..context.clone()
+                                }
+                            }
                         })
                         .collect()
                 }
@@ -1451,6 +1469,37 @@ fn signed_destination_coverage(
         missing_contexts: false,
     }
 }
+fn civ_tag_coverage(
+    target_workbook: &WorkbookData,
+    candidates: &[(String, u32, u32, u32)],
+    record: &SourceRecord,
+) -> Option<bool> {
+    let source_tags = record
+        .contexts
+        .iter()
+        .flat_map(|context| normalized_parts(&context.tag))
+        .filter(|tag| !tag.starts_with("PCS-"))
+        .collect::<BTreeSet<_>>();
+    if candidates.is_empty() || source_tags.len() < 2 {
+        return None;
+    }
+    let sheet = target_workbook.sheet("CIV")?;
+    let mut matched_tags = BTreeSet::new();
+    for (_, row, _, _) in candidates {
+        let tags = sheet
+            .cell(*row, 2)
+            .map(|cell| normalized_parts(&cell.value))
+            .unwrap_or_default();
+        if tags.len() != 1
+            || !source_tags.contains(&tags[0])
+            || !matched_tags.insert(tags[0].clone())
+        {
+            return None;
+        }
+    }
+    Some(matched_tags.len() == source_tags.len())
+}
+
 fn distinct_civ_area_rows(
     target_workbook: &WorkbookData,
     candidates: &[(String, u32, u32, u32)],
@@ -2122,6 +2171,9 @@ fn classify_workbooks_full(
             }
         }
         let candidate_count = candidates.len();
+        let civ_tag_coverage = (sheet_name == "CIV")
+            .then(|| civ_tag_coverage(target_workbook, &candidates, record))
+            .flatten();
         let mec_context_coverage = (sheet_name == "MEC")
             .then(|| mec_context_coverage(target_workbook, sheet_name, &candidates, record))
             .flatten();
@@ -2133,14 +2185,18 @@ fn classify_workbooks_full(
         if scope_candidates.is_empty() {
             continue;
         }
-        if candidate_count == 1 && !existing_slots.is_empty() && mec_context_coverage != Some(false)
+        if candidate_count == 1
+            && !existing_slots.is_empty()
+            && mec_context_coverage != Some(false)
+            && civ_tag_coverage != Some(false)
         {
             continue;
         }
         let exact_multi_area = candidate_count > 1
             && ((sheet_name == "CIV"
                 && (distinct_civ_area_rows(target_workbook, &candidates, record)
-                    || distinct_civ_zone_area_rows(target_workbook, &candidates, record)))
+                    || distinct_civ_zone_area_rows(target_workbook, &candidates, record)
+                    || civ_tag_coverage == Some(true)))
                 || (sheet_name == "MEC" && mec_context_coverage.is_some()));
         if (candidate_count == 0 || candidate_count > 1 && !exact_multi_area)
             && (candidate_count == 0 || existing_slots.is_empty())
@@ -2235,7 +2291,7 @@ fn classify_workbooks_full(
             });
             continue;
         }
-        if mec_context_coverage == Some(false) {
+        if mec_context_coverage == Some(false) || civ_tag_coverage == Some(false) {
             unmapped_count += 1;
             let layout = slots
                 .get(&candidates[0])

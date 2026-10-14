@@ -63,6 +63,7 @@ identity or secrets.
   folder when needed, and never overwrite an existing destination.
 - Other cover templates remain unsupported by this detector and go to review.
 
+
 ### Incoming file grouping
 
 - `rfi.group_files` inspects only regular, non-hidden files immediately inside
@@ -199,9 +200,15 @@ visible for manual review; the warning identifies matched contexts and target
 rows, then lists unmatched contexts and the source-log fields relevant to that
 destination. DocFlow never corrects the source log. No row or section is
 synthesized.
-For CIV, each target area tag must be named in the source. For MEC, repeated
-source rows must agree on ITP, item, and lifecycle status. Signature evidence is
-cumulative: an unsigned duplicate cannot revoke a signed finding. MEC and
+For CIV, split the source `Tag No` list into exact individual tag contexts. Each
+tag may map to its own distinct, uniquely matching prepared CIV area row; no
+target row is created or guessed. When only some tags have unique prepared rows,
+sync the eligible rows and show an unselectable Manual Review diagnostic naming
+matched tags/rows and unmatched tags. Duplicate or ambiguous target rows remain
+manual review. The accepted details are recorded in
+[ADR 0038](adr/0038-civ-follow-up-tag-token-coverage.md). For MEC, repeated
+source rows must agree on ITP, item, and lifecycle status. Signature evidence
+is cumulative: an unsigned duplicate cannot revoke a signed finding. MEC and
 `Signed By Worley MEC` map `Tag No` to target `Block` and each comma-separated
 `Area` value to a distinct target `Section`. Each exact `(Block, Section)` pair
 must match an existing prepared row; source and target `Inspection Location`
@@ -213,7 +220,8 @@ Up group during the next approved sync. This rule includes values such as
 `PCS-19/S1,S2,S3` and takes precedence over the older PCU routing behavior. It
 never creates rows or sections.
 Duplicate contexts, conflicting source values, and other multi-valued contexts
-remain manual review.
+remain manual review unless specifically covered by the exact CIV Tag No or
+MEC Area fan-out rules above.
 RFI Log record whose `Tag No` starts with `PCS-` is outside Follow Up scope,
 regardless of ITP, item, Area, or composite suffix. It is never added and is
 removed from an existing Follow Up group during the next approved sync. This
@@ -239,8 +247,9 @@ are deliberately outside Follow Up; they are not missing mappings to add.
 The zero/partial-match scope is recorded in
 [ADR 0036](adr/0036-follow-up-context-scope-and-diagnostics.md); MEC
 Section/Block matching is defined by
-[ADR 0037](adr/0037-mec-follow-up-section-block-matching.md). Treat any other
-unmapped ITP/item combination as undecided until an operator explicitly
+[ADR 0037](adr/0037-mec-follow-up-section-block-matching.md), and CIV Tag No
+coverage diagnostics by [ADR 0038](adr/0038-civ-follow-up-tag-token-coverage.md).
+Treat any other unmapped ITP/item combination as undecided until an operator
 approves its inclusion or exclusion. Record that decision here and in an
 accepted ADR before changing route behavior.
 

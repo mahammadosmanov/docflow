@@ -57,11 +57,14 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   no source context matching any prepared destination is outside the active
   template scope: omit it from Manual Review and leave existing workbook cells
   unchanged. Partial matches remain visible for review, and only independently
-  confirmed eligible rows may synchronize. Multiple distinct exact CIV area
-  tags may map to their respective distinct existing rows. Any CIV RFI with a
-  `Tag No` beginning `PCS-` is outside Follow Up scope, is never added, and is
-  removed from existing groups; this includes composite tags such as
-  `PCS-19/S1,S2,S3`. For regular MEC and `Signed By Worley MEC`, map source
+  confirmed eligible rows may synchronize. Split CIV `Tag No` lists such as
+  `S14,S15` into individual exact tag contexts; independently map each to its
+  uniquely matching existing prepared row, and show unselectable diagnostics
+  naming unmatched tags when coverage is partial. Duplicate or ambiguous target
+  rows remain manual review. Any CIV RFI with a `Tag No` beginning `PCS-` is
+  outside Follow Up scope, is never added, and is removed from existing groups;
+  this includes composite tags such as `PCS-19/S1,S2,S3`.
+  For regular MEC and `Signed By Worley MEC`, map source
   `Tag No` to target `Block` and each distinct comma-separated `Area` value
   to its target `Section`; ignore `Inspection Location` on both workbooks.
   Each exact `(Block, Section)` pair maps only to its existing prepared row.

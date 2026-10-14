@@ -950,7 +950,7 @@ fn full_sync_fans_out_a_record_only_across_distinct_exact_civ_area_tags() {
         "0041",
         "AZE-SUN-INT-QMS-ITP-CIV-0002",
         "CIV-2.1.5",
-        "N2, N6",
+        "S14,S15",
         "Completed",
         "",
     )]);
@@ -960,8 +960,8 @@ fn full_sync_fans_out_a_record_only_across_distinct_exact_civ_area_tags() {
         worksheet(
             [
                 row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
-                row(2, [inline("B2", "N2"), blank("C2"), blank("D2")]),
-                row(3, [inline("B3", "N6"), blank("C3"), blank("D3")]),
+                row(2, [inline("B2", "S14"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "S15"), blank("C3"), blank("D3")]),
             ],
             &[],
         ),
@@ -979,13 +979,13 @@ fn full_sync_fans_out_a_record_only_across_distinct_exact_civ_area_tags() {
 }
 
 #[test]
-fn full_sync_does_not_fan_out_across_duplicate_civ_area_rows() {
+fn full_sync_reports_unmatched_civ_tag_when_only_some_tag_rows_are_prepared() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
         "0041",
         "AZE-SUN-INT-QMS-ITP-CIV-0002",
         "CIV-2.1.5",
-        "N2, N6",
+        "S14,S15",
         "Completed",
         "",
     )]);
@@ -995,9 +995,59 @@ fn full_sync_does_not_fan_out_across_duplicate_civ_area_rows() {
         worksheet(
             [
                 row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
-                row(2, [inline("B2", "N2"), blank("C2"), blank("D2")]),
-                row(3, [inline("B3", "N2"), blank("C3"), blank("D3")]),
-                row(4, [inline("B4", "N6"), blank("C4"), blank("D4")]),
+                row(2, [inline("B2", "S14"), blank("C2"), blank("D2")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{review}");
+    let ready = rows
+        .iter()
+        .find(|row| row["disposition"] == "rfi.followUp.disposition.ready")
+        .expect("prepared S14 context remains syncable");
+    assert_eq!(ready["_row"], 2);
+    assert_eq!(ready["rfiNo"], "CIV-0041");
+    assert_eq!(ready["proposedStatus"], "Completed");
+
+    let review_row = rows
+        .iter()
+        .find(|row| row["reasonKey"] == "warn.rfi.followUp.reason.partialContext")
+        .expect("missing S15 context remains visible");
+    assert_eq!(review_row["_row"], 0);
+    assert_eq!(review_row["rfiNo"], "CIV-0041");
+    assert_eq!(
+        review_row["disposition"],
+        "rfi.followUp.disposition.manualReview"
+    );
+    assert_eq!(review_row["selectable"], false);
+    let details = review_row["mappingDetails"].as_str().unwrap();
+    assert!(details.contains("matched source context: tag=S14"));
+    assert!(details.contains("unmatched source context: tag=S15"));
+}
+
+#[test]
+fn full_sync_does_not_fan_out_across_duplicate_civ_area_rows() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0041",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.1.5",
+        "S14,S15",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "S14"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "S14"), blank("C3"), blank("D3")]),
+                row(4, [inline("B4", "S15"), blank("C4"), blank("D4")]),
             ],
             &[],
         ),
