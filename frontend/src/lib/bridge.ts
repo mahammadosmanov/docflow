@@ -322,6 +322,33 @@ const demoRfiFollowUpOperation: OperationDef = {
   ],
 };
 
+const demoConcreteDocumentsOperation: OperationDef = {
+  id: "rfi.generate_concrete_documents",
+  titleKey: "op.rfi.generate_concrete_documents.title",
+  descriptionKey: "op.rfi.generate_concrete_documents.desc",
+  supportsPresets: false,
+  schema: [
+    ["rfi_log_workbook", "file", "param.rfi.documents.rfiLog", true, "param.rfi.documents.rfiLog.help"],
+    ["follow_up_workbook", "file", "param.rfi.documents.followUp", false, "param.rfi.documents.followUp.help"],
+    ["template_010", "file", "param.rfi.documents.template010", false, null],
+    ["template_011", "file", "param.rfi.documents.template011", false, null],
+    ["template_013", "file", "param.rfi.documents.template013", false, null],
+    ["template_014", "file", "param.rfi.documents.template014", false, null],
+    ["output_directory", "folder", "param.rfi.documents.output", true, "param.rfi.documents.output.help"],
+    ...(["010", "011", "013", "014"] as const).map((kind) => [
+      `rfis_${kind}`, "longText", `param.rfi.documents.rfis${kind}`, false, "param.rfi.documents.rfis.help",
+    ]),
+    ["water_cement_ratios", "longText", "param.rfi.documents.waterRatios", false, "param.rfi.documents.waterRatios.help"],
+    ["ambient_groups", "longText", "param.rfi.documents.ambientGroups", false, "param.rfi.documents.ambientGroups.help"],
+    ["ambient_min", "int", "param.rfi.documents.ambientMin", false, null],
+    ["ambient_max", "int", "param.rfi.documents.ambientMax", false, null],
+  ].map(([name, kind, labelKey, required, helpKey]) => ({
+    name: String(name), kind: kind as ParamDef["kind"],
+    labelKey: String(labelKey), default: name === "ambient_min" ? 19 : name === "ambient_max" ? 24 : kind === "longText" ? "" : null,
+    required: Boolean(required), choices: [], choiceLabels: {}, visibleWhen: {},
+    helpKey: helpKey ? String(helpKey) : null,
+  })),
+};
 const demoRfiSystemSyncOperation: OperationDef = {
   id: "rfi.system_sync",
   titleKey: "op.rfi.system_sync.title",
@@ -889,6 +916,7 @@ export class MockBridge implements Bridge {
             demoFileGroupOperation,
             demoRfiOperation,
             demoRfiFollowUpOperation,
+            demoConcreteDocumentsOperation,
             demoPrintOperation,
             demoSignedPagesOperation,
             demoPdfOrientationOperation,

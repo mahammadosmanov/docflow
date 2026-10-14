@@ -847,6 +847,7 @@ dependencies = [
 name = "docflow"
 version = "1.16.7"
 dependencies = [
+ "base64 0.22.1",
  "cc",
  "chrono",
  "flate2",

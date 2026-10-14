@@ -225,8 +225,15 @@ fn path_dialog_filter(
         ("rfi.log_add", "workbook")
         | ("rfi.follow_up_sync", "rfi_log_workbook" | "follow_up_workbook")
         | ("rfi.system_sync", "rfi_log_workbook" | "follow_up_workbook")
-        | ("rfi.complete_status_sync", "rfi_log_workbook") => {
+        | ("rfi.complete_status_sync", "rfi_log_workbook")
+        | ("rfi.generate_concrete_documents", "rfi_log_workbook" | "follow_up_workbook") => {
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
+        }
+        ("rfi.generate_concrete_documents", "template_010" | "template_013") => {
+            Some(("Excel (.xlsx)", &["xlsx"]))
+        }
+        ("rfi.generate_concrete_documents", "template_011" | "template_014") => {
+            Some(("Word (.docx)", &["docx"]))
         }
         _ => None,
     }
@@ -507,6 +514,9 @@ impl BackendRouter {
                 "rfi.group_files" => native.preview_rfi_file_group(params, send),
                 "rfi.log_add" => native.preview_rfi_log(params, send),
                 "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
+                "rfi.generate_concrete_documents" => {
+                    native.preview_concrete_documents(params, send)
+                }
                 "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
                 "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),

@@ -13,6 +13,8 @@
 | `rfi.normalize_pdf_orientation` | Searchable standalone normalization uses rendered-content OSD and directional OCR, plus unique exact canonical header-ID evidence only when the same ID and direction agree at both 250/350 DPI. Source hashes bind analysis/cache and Apply; unresolved files remain unchanged for review-copy handling. |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
+| `rfi.generate_concrete_documents` | Batch-generate CON-CIV-010/011/013/014 from RFI Log data; require Concrete Specimen Test Follow-Up only when Civil Forms includes CON-CIV-010, with configurable template values and no-overwrite safeguards |
+
 
 ## Application features
 
@@ -97,6 +99,7 @@
   Apply copies each affected input PDF once to `_review` with the relative input
   folder layout preserved; it never overwrites, mutates the signed input, or
   repeats a combined source PDF for each warned page.
+- Concrete document generation batches selected CON-CIV-010/011/013/014 RFIs from the Civil RFI Log and supplied templates. CON-CIV-010 maps concrete-pour fields from Concrete Specimen Test Follow-Up, calculates ambient temperature from plant temperature, and accepts optional water/cement ratios; CON-CIV-011 uses a configurable ambient-temperature range; 013/014 update only report number and location. Missing Follow-Up rows for 010 are warned by RFI and skipped without blocking available documents. Existing outputs are never overwritten.
 
 ## RFI print integration smoke
 

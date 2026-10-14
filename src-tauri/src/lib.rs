@@ -3,6 +3,8 @@ mod backend;
 mod cap_fs;
 pub mod clipboard;
 pub mod cloud;
+mod concrete_document_sources;
+mod concrete_documents;
 pub mod contracts;
 pub mod credentials;
 pub mod diagnostics;

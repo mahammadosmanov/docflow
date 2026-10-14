@@ -142,6 +142,26 @@ pub(crate) enum GeneratedWriteFailure {
 
 const OUTLOOK_MSG_HEADER: &[u8; 8] = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1";
 const MAX_OUTLOOK_MSG_BYTES: usize = 100 * 1024 * 1024;
+const CONCRETE_DOCUMENT_OPERATION: &str = "rfi.generate_concrete_documents";
+const CONCRETE_DOCUMENT_NOTE: &str = "step.rfi.generatedConcreteDocument";
+
+fn decode_concrete_document_base64(value: &str) -> Result<Vec<u8>, GeneratedWriteFailure> {
+    let max_bytes = usize::try_from(crate::ooxml::MAX_PACKAGE_BYTES).unwrap_or(usize::MAX);
+    let max_encoded = max_bytes.div_ceil(3) * 4;
+    if value.len() > max_encoded {
+        return Err(GeneratedWriteFailure::NoEffect(
+            "error.rfi.documents.invalidOutput",
+        ));
+    }
+    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, value)
+        .map_err(|_| GeneratedWriteFailure::NoEffect("error.rfi.documents.invalidOutput"))?;
+    if bytes.len() > max_bytes {
+        return Err(GeneratedWriteFailure::NoEffect(
+            "error.rfi.documents.invalidOutput",
+        ));
+    }
+    Ok(bytes)
+}
 
 impl FilesystemAuthority {
     pub fn new(journal_dir: impl AsRef<Path>, ttl: Duration) -> Self {
@@ -374,15 +394,18 @@ impl FilesystemAuthority {
         P: FnOnce() -> Result<Vec<u8>, GeneratedWriteFailure>,
     {
         let inspected = self.plans.resolve_bound(plan_id, caller)?;
-        if inspected.plan.op_id != expected_operation
+        let step = inspected.plan.steps.first();
+        let is_outlook = expected_operation == "rfi.outlook_archive_selected";
+        let valid_generated_step = step.is_some_and(|step| {
+            step.kind == StepKind::Write
+                && !step.meta.contains_key("content")
+                && !step.meta.contains_key("contentBase64")
+                && step.meta.get("generatedBy").and_then(Value::as_str) == Some("outlook_msg")
+        });
+        if !is_outlook
+            || inspected.plan.op_id != expected_operation
             || inspected.plan.steps.len() != 1
-            || inspected.plan.steps[0].kind != StepKind::Write
-            || inspected.plan.steps[0]
-                .meta
-                .get("generatedBy")
-                .and_then(Value::as_str)
-                != Some("outlook_msg")
-            || inspected.plan.steps[0].meta.contains_key("content")
+            || !valid_generated_step
         {
             return Err(BackendError::validation("generated write plan is invalid"));
         }
@@ -501,7 +524,7 @@ impl FilesystemAuthority {
         let mut actual = approved;
         actual.src = None;
         actual.meta.remove("generatedBy");
-        record.pending_step = Some(actual.clone());
+        actual.meta.remove("contentBase64");
         self.journals.write(&record)?;
         if let Err(error) = destination.write_no_clobber(&bytes) {
             if error.kind() != io::ErrorKind::AlreadyExists && destination.open_read().is_ok() {
@@ -573,6 +596,29 @@ impl FilesystemAuthority {
         F: FnMut(ProgressEvent),
     {
         let inspected = self.plans.resolve_bound(plan_id, caller)?;
+        if inspected
+            .plan
+            .steps
+            .iter()
+            .any(|step| step.meta.contains_key("contentBase64"))
+            && (inspected
+                .binding
+                .as_ref()
+                .map(|binding| binding.operation_id.as_str())
+                != Some(CONCRETE_DOCUMENT_OPERATION)
+                || inspected.plan.op_id != CONCRETE_DOCUMENT_OPERATION
+                || inspected.plan.steps.iter().any(|step| {
+                    step.meta.contains_key("contentBase64")
+                        && (step.kind != StepKind::Write
+                            || step.note_key.as_deref() != Some(CONCRETE_DOCUMENT_NOTE)
+                            || step.meta.contains_key("content")
+                            || !step.meta.get("contentBase64").is_some_and(Value::is_string))
+                }))
+        {
+            return Err(BackendError::validation(
+                "encoded generated payload is not authorized for this operation",
+            ));
+        }
         if inspected.plan.op_id == rfi_follow_up::OPERATION_ID {
             if inspected.plan.steps.is_empty() {
                 return Err(BackendError::validation(
@@ -2426,6 +2472,17 @@ impl FilesystemAuthority {
         token: &CancellationToken,
         record: &mut JournalRecord,
     ) -> Result<(), StepFailure> {
+        if step.meta.contains_key("contentBase64")
+            && (binding.operation_id != CONCRETE_DOCUMENT_OPERATION
+                || step.kind != StepKind::Write
+                || step.note_key.as_deref() != Some(CONCRETE_DOCUMENT_NOTE)
+                || step.meta.contains_key("content")
+                || !step.meta.get("contentBase64").is_some_and(Value::is_string))
+        {
+            return Err(StepFailure::NoEffect(
+                "encoded generated payload is not authorized".to_string(),
+            ));
+        }
         let destination = required_path(step.dst.as_deref(), "step destination")?;
         let destination = self
             .grants
@@ -2474,6 +2531,7 @@ impl FilesystemAuthority {
             .map(|path| path.to_string_lossy().into_owned());
         actual.dst = Some(destination.to_string_lossy().into_owned());
         actual.meta.remove("content");
+        actual.meta.remove("contentBase64");
         let source_anchor = source
             .as_deref()
             .map(|source| {
@@ -2540,14 +2598,26 @@ impl FilesystemAuthority {
                 .expect("move source")
                 .move_no_clobber_to(&destination_anchor),
             StepKind::Write => {
-                let Some(contents) = step.meta.get("content").and_then(Value::as_str) else {
+                if let Some(encoded) = step.meta.get("contentBase64").and_then(Value::as_str) {
+                    let bytes = match decode_concrete_document_base64(encoded) {
+                        Ok(bytes) => bytes,
+                        Err(GeneratedWriteFailure::NoEffect(key))
+                        | Err(GeneratedWriteFailure::OutcomeUnknown(key)) => {
+                            record.pending_step = None;
+                            self.journals.write(record).map_err(step_unknown)?;
+                            return Err(StepFailure::NoEffect(key.to_string()));
+                        }
+                    };
+                    destination_anchor.write_no_clobber(&bytes)
+                } else if let Some(contents) = step.meta.get("content").and_then(Value::as_str) {
+                    destination_anchor.write_no_clobber(contents.as_bytes())
+                } else {
                     record.pending_step = None;
                     self.journals.write(record).map_err(step_unknown)?;
                     return Err(StepFailure::NoEffect(
                         "write action has no string content".to_string(),
                     ));
-                };
-                destination_anchor.write_no_clobber(contents.as_bytes())
+                }
             }
             _ => unreachable!("file effect kind checked by caller"),
         };
@@ -4814,5 +4884,119 @@ mod tests {
 
         assert_eq!(fs::read(target.absolute()).unwrap(), b"new");
         assert!(!staged.absolute().exists());
+    }
+
+    #[test]
+    fn generated_concrete_documents_apply_batch_binary_and_undo() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("output");
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let destinations = [root.join("one.docx"), root.join("two.docx")];
+        let payloads = [
+            b"first OOXML \0\xff".to_vec(),
+            b"second OOXML \xfe\xfd".to_vec(),
+        ];
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new("owner", "session", "request", CONCRETE_DOCUMENT_OPERATION),
+                &root,
+                GrantAccess::Write,
+            )
+            .unwrap();
+        let steps = destinations.iter().zip(payloads.iter()).map(|(destination, bytes)| Step {
+            kind: StepKind::Write,
+            src: None,
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: Some(CONCRETE_DOCUMENT_NOTE.to_string()),
+            meta: serde_json::json!({
+                "contentBase64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes)
+            }).as_object().unwrap().clone(),
+        }).collect();
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    "owner",
+                    "session",
+                    CONCRETE_DOCUMENT_OPERATION,
+                    vec![grant.grant_id],
+                ),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: CONCRETE_DOCUMENT_OPERATION.to_string(),
+                    steps,
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let caller = CallerIdentity::new("owner", "session");
+        let result = authority.apply(&cached.plan_id, &caller).unwrap();
+        assert_eq!(result.applied, 2);
+        for (destination, expected) in destinations.iter().zip(payloads.iter()) {
+            assert_eq!(&fs::read(destination).unwrap(), expected);
+        }
+        let journal = authority.journals().read(&result.journal_id).unwrap();
+        assert_eq!(journal.steps.len(), 2);
+        assert!(
+            journal
+                .steps
+                .iter()
+                .all(|step| !step.meta.contains_key("contentBase64"))
+        );
+        assert_eq!(
+            authority
+                .undo(&result.journal_id, &caller, None)
+                .unwrap()
+                .applied,
+            2
+        );
+        assert!(destinations.iter().all(|destination| !destination.exists()));
+    }
+
+    #[test]
+    fn generated_base64_is_rejected_for_non_concrete_operations() {
+        let fixture = tempfile::TempDir::new().unwrap();
+        let root = fixture.path().join("output");
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let authority =
+            FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+        let operation = "rfi.log_add";
+        let grant = authority
+            .issue_grant(
+                &GrantScope::new("owner", "session", "request", operation),
+                &root,
+                GrantAccess::Write,
+            )
+            .unwrap();
+        let cached = authority
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new("owner", "session", operation, vec![grant.grant_id]),
+                Plan {
+                    plan_id: String::new(),
+                    op_id: operation.to_string(),
+                    steps: vec![Step {
+                        kind: StepKind::Write,
+                        src: None,
+                        dst: Some(root.join("output.docx").to_string_lossy().into_owned()),
+                        note_key: Some(CONCRETE_DOCUMENT_NOTE.to_string()),
+                        meta: serde_json::json!({"contentBase64": "UEsDBA=="})
+                            .as_object()
+                            .unwrap()
+                            .clone(),
+                    }],
+                    warnings: Vec::new(),
+                    meta: JsonObject::new(),
+                },
+            )
+            .unwrap();
+        let result = authority.apply(&cached.plan_id, &CallerIdentity::new("owner", "session"));
+        assert!(result.is_err());
+        assert!(!root.join("output.docx").exists());
     }
 }

@@ -230,6 +230,176 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             ),
         ],
     );
+    let concrete_documents = operation(
+        "rfi.generate_concrete_documents",
+        vec![
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.documents.rfiLog",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.rfiLog.help"),
+            ),
+            parameter(
+                "follow_up_workbook",
+                ParamKind::File,
+                "param.rfi.documents.followUp",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.followUp.help"),
+            ),
+            parameter(
+                "template_010",
+                ParamKind::File,
+                "param.rfi.documents.template010",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "template_011",
+                ParamKind::File,
+                "param.rfi.documents.template011",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "template_013",
+                ParamKind::File,
+                "param.rfi.documents.template013",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "template_014",
+                ParamKind::File,
+                "param.rfi.documents.template014",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "output_directory",
+                ParamKind::Folder,
+                "param.rfi.documents.output",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.output.help"),
+            ),
+            parameter(
+                "rfis_010",
+                ParamKind::LongText,
+                "param.rfi.documents.rfis010",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.rfis.help"),
+            ),
+            parameter(
+                "rfis_011",
+                ParamKind::LongText,
+                "param.rfi.documents.rfis011",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.rfis.help"),
+            ),
+            parameter(
+                "rfis_013",
+                ParamKind::LongText,
+                "param.rfi.documents.rfis013",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.rfis.help"),
+            ),
+            parameter(
+                "rfis_014",
+                ParamKind::LongText,
+                "param.rfi.documents.rfis014",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.rfis.help"),
+            ),
+            parameter(
+                "water_cement_ratios",
+                ParamKind::LongText,
+                "param.rfi.documents.waterRatios",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.waterRatios.help"),
+            ),
+            parameter(
+                "ambient_min",
+                ParamKind::Int,
+                "param.rfi.documents.ambientMin",
+                json!(19),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            parameter(
+                "ambient_groups",
+                ParamKind::LongText,
+                "param.rfi.documents.ambientGroups",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.documents.ambientGroups.help"),
+            ),
+            parameter(
+                "ambient_max",
+                ParamKind::Int,
+                "param.rfi.documents.ambientMax",
+                json!(24),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+        ],
+    );
 
     let rfi_system_sync = operation(
         "rfi.system_sync",
@@ -647,6 +817,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         file_group,
         rfi_log,
         rfi_follow_up,
+        concrete_documents,
         batch_print,
         stage_signed_pages,
         normalize_pdf_orientation,
@@ -714,5 +885,28 @@ mod tests {
             rfi_log.schema.validate(&values),
             vec!["error.param.required.sheet_counts".to_string()]
         );
+    }
+    #[test]
+    fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
+        let operations = operation_registry(RegistryFacts::default());
+        assert_eq!(operations.len(), 10);
+        let operation = operations
+            .iter()
+            .find(|operation| operation.id == "rfi.generate_concrete_documents")
+            .expect("concrete document generator is registered");
+        assert_eq!(
+            operation.schema.validate(&Map::new()),
+            vec![
+                "error.param.required.rfi_log_workbook".to_string(),
+                "error.param.required.output_directory".to_string(),
+            ]
+        );
+        let follow_up = operation
+            .schema
+            .params
+            .iter()
+            .find(|parameter| parameter.name == "follow_up_workbook")
+            .expect("optional Follow-Up source is registered");
+        assert!(!follow_up.required);
     }
 }

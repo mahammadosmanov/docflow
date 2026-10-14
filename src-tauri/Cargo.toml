@@ -20,6 +20,7 @@ cc = "1"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 flate2 = "1.1.9"
 libc = "0.2"

@@ -241,7 +241,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 
 ## Scope
 
-The nine registered operations and application-level history, recovery, review,
+The ten registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

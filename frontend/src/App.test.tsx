@@ -1042,6 +1042,23 @@ describe("DocFlow shell", () => {
     }
   });
 
+  it("explains missing concrete follow-up rows and names the skipped RFI", () => {
+    const code = "AZE-SUN-INT-QMS-RFI-CIV-0124";
+    render(
+      <PlanWarnings
+        warnings={[{ key: "warn.rfi.documents.followUpMissing", subject: code }]}
+        focusableCodes={[]}
+        s={makeStrings("en")}
+      />,
+    );
+
+    expect(screen.getByText(code)).toBeVisible();
+    expect(
+      screen.getByText(/No Concrete Specimen Test Follow-Up row was found/),
+    ).toBeVisible();
+    expect(screen.getByText(/Apply creates available documents only/)).toBeVisible();
+  });
+
   it("filters large warning sets and focuses only an exact related RFI", () => {
     const firstCode = "AZE-SUN-INT-QMS-RFI-MEC-0249";
     const secondCode = "AZE-SUN-INT-QMS-RFI-MEC-0250";

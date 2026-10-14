@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+### Added
+
+- Batch generation of CON-CIV-010/011/013/014 from RFI Log and Follow Up
+  workbooks, with configurable temperature intervals and optional water/cement
+  ratios. Only RFIs whose Civil Forms field includes CON-CIV-010 require Follow
+  Up data; ineligible forms and missing rows warn per RFI. Existing outputs are
+  never overwritten, and applicable documents remain available.
+
 ## 1.16.7 - 2026-10-14
 
 ### Improved
