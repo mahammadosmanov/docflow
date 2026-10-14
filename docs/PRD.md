@@ -52,29 +52,29 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   detection, verifies it afterward, and requires matching hash plus cache
   profile v5 for reuse. Apply revalidates the planned hash and creates only
   no-clobber corrected copies under a separate review root.
-- **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
-  receive uniquely mapped RFI Log records. Records without a matching prepared
-  target row, including FINAL items without a prepared row, remain visible in
-  manual review and are not silently discarded or automatically synchronized.
-  Multiple distinct exact CIV area tags may map to their respective distinct
-  existing rows. Any CIV RFI with a `Tag No` beginning `PCS-` is outside Follow
-  Up scope, is never added, and is removed from existing groups. This includes
-  composite tags such as `PCS-19/S1,S2,S3`. Repeated MEC records may map to
-  multiple existing rows only when each row has a unique exact `(Tag No, Area,
-  Inspection Location)` context from same-status, same-item source records. MEC
-  may fan one source row across distinct explicit Area values only when Tag No
-  and Inspection Location are each single-valued. Duplicate contexts and all
-  other non-unique matches remain manual review. FINAL destinations are
-  reconciled independently by exact prepared row identity: an existing RFI in
-  one destination does not suppress another, and missing prepared contexts
-  remain visible for manual review. No rows or sections are created. Ambiguous,
-  conflicting, or unrelated source placements cannot authorize shared-cell
-  status changes. A cached formula status is a no-op only when the RFI is
-  already present and that value already matches the projected status.
-  Shared-cell status changes only when every represented RFI has an
-  unambiguous source state and exact prepared route. Cancelled/Rejected entries
-  are removed; FINAL Worley state follows the exact REMARKS marker; excluded
-  sheets never change.
+- **DF-016 — Exact Follow Up projection:** supported CIV/MEC source records
+  map only to existing prepared destinations. A supported-route record with
+  no source context matching any prepared destination is outside the active
+  template scope: omit it from Manual Review and leave existing workbook cells
+  unchanged. Partial matches remain visible for review, and only independently
+  confirmed eligible rows may synchronize. Multiple distinct exact CIV area
+  tags may map to their respective distinct existing rows. Any CIV RFI with a
+  `Tag No` beginning `PCS-` is outside Follow Up scope, is never added, and is
+  removed from existing groups; this includes composite tags such as
+  `PCS-19/S1,S2,S3`. For regular MEC and `Signed By Worley MEC`, map source
+  `Tag No` to target `Block` and each distinct comma-separated `Area` value
+  to its target `Section`; ignore `Inspection Location` on both workbooks.
+  Each exact `(Block, Section)` pair maps only to its existing prepared row.
+  No rows or sections are created. Duplicate pairs, ambiguous mappings,
+  conflicting source values, or unrelated placements cannot authorize
+  shared-cell status changes. FINAL destinations are reconciled independently
+  by exact prepared row identity: an existing RFI in one destination does not
+  suppress another, and partial coverage remains visible for manual review.
+  A cached formula status is a no-op only when the RFI is already present and
+  that value already matches the projected status. Shared-cell status changes
+  only when every represented RFI has an unambiguous source state and exact
+  prepared route. Cancelled/Rejected entries are removed; FINAL Worley state
+  follows the exact REMARKS marker; excluded sheets never change.
 - **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
   limited to 256 files and 8 GiB of logical charge across the workbook parent
   and `.docflow-backups`. Apply and Undo refuse before mutation when the

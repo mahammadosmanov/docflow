@@ -2,6 +2,10 @@
 
 - Date: 2026-09-26
 - Status: Accepted
+
+> Superseded for MEC destination-key fields and Inspection Location matching by
+> [ADR 0037](0037-mec-follow-up-section-block-matching.md). The distinct-pair,
+> no-row-creation, conflict, and safety boundaries remain in force.
 - Extends: [ADR 0008](0008-exact-rfi-log-follow-up-projection.md) and
   [ADR 0029](0029-exact-civ-multi-area-follow-up.md)
 

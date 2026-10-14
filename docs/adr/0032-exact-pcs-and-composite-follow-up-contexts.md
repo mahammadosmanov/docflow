@@ -6,6 +6,10 @@
   [ADR 0029](0029-exact-civ-multi-area-follow-up.md), and
   [ADR 0031](0031-exact-mec-context-follow-up.md)
 
+> Superseded for MEC destination-key fields, Inspection Location matching, and
+> MEC Area fan-out by [ADR 0037](0037-mec-follow-up-section-block-matching.md).
+> CIV/PCU scope and composite-tag rules remain in force.
+
 ## Context
 
 The current RFI Log uses `PCS-` tags for some PCU records, while older route

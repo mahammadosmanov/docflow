@@ -2,6 +2,25 @@
 
 Updated: 2026-10-14
 
+## MEC Follow Up Section/Block mapping (1.18.0)
+
+- MEC and Signed By Worley MEC now match source `Tag No` to target `Block`
+  and split source `Area` values into distinct target `Section` contexts.
+  `Inspection Location` is ignored. Each distinct existing pair maps once;
+  ambiguous duplicate pairs stay in Manual Review, and partial warnings name
+  matched/unmatched Tag No and Area values. No Follow Up rows are created.
+- Accepted decision: `docs/adr/0037-mec-follow-up-section-block-matching.md`;
+  canonical rules are in `docs/RFI_DOMAIN.md`.
+- Verification: all 690 Rust tests passed (20 ignored), 24 Node tests,
+  73 frontend tests, Clippy, formatting, Cargo check, docs/version/source and
+  license audits passed. Windows x64 cross-build package audit and checksums
+  passed; host Tesseract checksum remained unchanged.
+- Installer:
+  `artifacts/windows-1.18.0/DocFlow_1.18.0_x64-setup.exe`
+  (SHA-256 `4698b8609151d838d565c3045ba75fbf4b3a2986ef5be0c978b07a6078b4eeb2`).
+  Native Windows install, startup, and user workbook acceptance are not
+  verified from this macOS cross-build.
+
 ## Main integration and Windows cross-build (1.17.0)
 
 - Integrated the current main-line workspace navigation update as DocFlow

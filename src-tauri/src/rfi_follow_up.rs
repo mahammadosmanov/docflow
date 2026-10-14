@@ -445,16 +445,43 @@ fn mapping_details(
         compact_detail(&record.itp),
         compact_detail(&record.item)
     );
+    let ignore_inspection_location =
+        route.is_some_and(|(sheet, _)| matches!(sheet, "MEC" | "Signed By Worley MEC"));
     let context_label = |context: &SourceRouteContext| {
-        format!(
-            "tag={}; area={}; location={}",
-            compact_detail(&context.tag),
-            compact_detail(&context.area),
-            compact_detail(&context.location)
-        )
+        let tag = compact_detail(&context.tag);
+        let area = compact_detail(&context.area);
+        if ignore_inspection_location {
+            format!("tag={tag}; area={area}")
+        } else {
+            format!(
+                "tag={tag}; area={area}; location={}",
+                compact_detail(&context.location)
+            )
+        }
     };
-    let contexts = record
-        .contexts
+    let source_contexts = if ignore_inspection_location {
+        record
+            .contexts
+            .iter()
+            .flat_map(|context| {
+                let areas = normalized_parts(&context.area);
+                if areas.is_empty() {
+                    vec![context.clone()]
+                } else {
+                    areas
+                        .into_iter()
+                        .map(|area| SourceRouteContext {
+                            area,
+                            ..context.clone()
+                        })
+                        .collect()
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        record.contexts.clone()
+    };
+    let contexts = source_contexts
         .iter()
         .map(context_label)
         .collect::<BTreeSet<_>>();
@@ -482,6 +509,11 @@ fn mapping_details(
     if candidates.is_empty() {
         details.push_str("; matching prepared target rows: none");
     } else {
+        let target_columns: &[u32] = if ignore_inspection_location {
+            &[3, 4]
+        } else {
+            &[1, 2, 3, 4]
+        };
         let targets = candidates
             .iter()
             .take(5)
@@ -489,7 +521,11 @@ fn mapping_details(
                 let context = target_workbook
                     .sheet(sheet_name)
                     .into_iter()
-                    .flat_map(|sheet| (1..=4).filter_map(move |column| sheet.cell(*row, column)))
+                    .flat_map(|sheet| {
+                        target_columns
+                            .iter()
+                            .filter_map(move |column| sheet.cell(*row, *column))
+                    })
                     .map(|cell| compact_detail(&cell.value))
                     .filter(|value| !value.is_empty())
                     .collect::<Vec<_>>()
@@ -511,7 +547,7 @@ fn mapping_details(
         };
         let mut matched_contexts = BTreeMap::<String, BTreeSet<u32>>::new();
         let mut unmatched_contexts = BTreeSet::new();
-        for context in &record.contexts {
+        for context in &source_contexts {
             let label = context_label(context);
             let rows = candidates
                 .iter()
@@ -1253,20 +1289,14 @@ fn row_matches_context(
         "MEC" => {
             let target_sections = normalized_parts(&cell(4));
             let target_tags = normalized_parts(&cell(3));
-            let target_locations = normalized_parts(&cell(2));
             let sections = normalized_parts(&context.area);
             let tags = normalized_parts(&context.tag);
-            let locations = normalized_parts(&context.location);
             !sections.is_empty()
                 && !tags.is_empty()
-                && !locations.is_empty()
                 && tags.iter().any(|tag| target_tags.contains(tag))
                 && sections
                     .iter()
                     .any(|value| target_sections.contains(&normalized_location(value)))
-                && locations
-                    .iter()
-                    .any(|value| target_locations.contains(&normalized_location(value)))
         }
         _ => false,
     }
@@ -1354,7 +1384,7 @@ fn signed_destination_coverage(
         };
     }
     if sheet_name == "Signed By Worley MEC" {
-        let mut source_tuples = BTreeSet::new();
+        let mut source_pairs = BTreeSet::new();
         for context in &record.contexts {
             let tags = normalized_parts(&context.tag);
             let blocks = tags
@@ -1363,29 +1393,24 @@ fn signed_destination_coverage(
                 .cloned()
                 .collect::<Vec<_>>();
             let areas = normalized_parts(&context.area);
-            let locations = normalized_parts(&context.location);
-            if tags.len() != 1 || blocks.len() != 1 || areas.is_empty() || locations.len() != 1 {
+            if tags.len() != 1 || blocks.len() != 1 || areas.is_empty() {
                 return SignedDestinationCoverage {
                     valid: false,
                     missing_contexts: false,
                 };
             }
             for area in areas {
-                source_tuples.insert((blocks[0].clone(), area, locations[0].clone()));
+                source_pairs.insert((blocks[0].clone(), area));
             }
         }
-        if source_tuples.is_empty() {
+        if source_pairs.is_empty() {
             return SignedDestinationCoverage {
                 valid: false,
                 missing_contexts: false,
             };
         }
-        let mut matched_tuples = BTreeSet::new();
+        let mut matched_pairs = BTreeSet::new();
         for (_, row, _, _) in candidates {
-            let locations = sheet
-                .cell(*row, 2)
-                .map(|cell| normalized_parts(&cell.value))
-                .unwrap_or_default();
             let blocks = sheet
                 .cell(*row, 3)
                 .map(|cell| normalized_parts(&cell.value))
@@ -1400,16 +1425,16 @@ fn signed_destination_coverage(
                     missing_contexts: false,
                 };
             }
-            let mut matching_tuples = source_tuples.iter().filter(|(block, area, location)| {
-                blocks.contains(block) && areas.contains(area) && locations.contains(location)
-            });
-            let Some(matched_tuple) = matching_tuples.next() else {
+            let mut matching_pairs = source_pairs
+                .iter()
+                .filter(|(block, area)| blocks.contains(block) && areas.contains(area));
+            let Some(matched_pair) = matching_pairs.next() else {
                 return SignedDestinationCoverage {
                     valid: false,
                     missing_contexts: false,
                 };
             };
-            if matching_tuples.next().is_some() || !matched_tuples.insert(matched_tuple) {
+            if matching_pairs.next().is_some() || !matched_pairs.insert(matched_pair) {
                 return SignedDestinationCoverage {
                     valid: false,
                     missing_contexts: false,
@@ -1418,7 +1443,7 @@ fn signed_destination_coverage(
         }
         return SignedDestinationCoverage {
             valid: true,
-            missing_contexts: matched_tuples.len() < source_tuples.len(),
+            missing_contexts: matched_pairs.len() < source_pairs.len(),
         };
     }
     SignedDestinationCoverage {
@@ -1531,14 +1556,13 @@ fn mec_context_coverage(
             .into_iter()
             .filter(|area| area.starts_with('S'))
             .collect::<Vec<_>>();
-        let locations = normalized_parts(&context.location);
-        if blocks.len() != 1 || areas.is_empty() || locations.len() != 1 {
+        if blocks.len() != 1 || areas.is_empty() {
             return None;
         }
         source_blocks.insert(blocks[0].clone());
         for area in areas {
             source_sections.insert(area.clone());
-            source_contexts.insert((blocks[0].clone(), area, locations[0].clone()));
+            source_contexts.insert((blocks[0].clone(), area));
         }
     }
     if source_blocks.len() != 1 || source_sections.is_empty() || source_contexts.len() < 2 {
@@ -1546,10 +1570,6 @@ fn mec_context_coverage(
     }
     let mut matched_contexts = BTreeSet::new();
     for (_, row, _, _) in candidates {
-        let locations = sheet
-            .cell(*row, 2)
-            .map(|cell| normalized_parts(&cell.value))
-            .unwrap_or_default();
         let blocks = sheet
             .cell(*row, 3)
             .map(|cell| normalized_parts(&cell.value))
@@ -1558,10 +1578,10 @@ fn mec_context_coverage(
             .cell(*row, 4)
             .map(|cell| normalized_parts(&cell.value))
             .unwrap_or_default();
-        if blocks.len() != 1 || areas.len() != 1 || locations.len() != 1 {
+        if blocks.len() != 1 || areas.len() != 1 {
             return None;
         }
-        let context = (blocks[0].clone(), areas[0].clone(), locations[0].clone());
+        let context = (blocks[0].clone(), areas[0].clone());
         if !source_blocks.contains(&context.0)
             || !source_sections.contains(&context.1)
             || !source_contexts.contains(&context)

@@ -642,7 +642,7 @@ fn full_sync_excludes_every_civ_pcs_tagged_rfi_from_follow_up() {
 }
 
 #[test]
-fn full_sync_maps_mec_multiarea_rfi_to_distinct_rows_and_split_target_location() {
+fn full_sync_maps_mec_multiarea_rfi_to_distinct_rows_without_inspection_location() {
     let source = source_package(
         worksheet([full_schema_mec_header()], &[]),
         worksheet(
@@ -655,7 +655,7 @@ fn full_sync_maps_mec_multiarea_rfi_to_distinct_rows_and_split_target_location()
                         "MEC-3.3.1",
                         "PCS-21",
                         "S1,S2,S4",
-                        "S2",
+                        "N99",
                         "Ongoing",
                     ),
                 ),
@@ -1082,10 +1082,15 @@ fn full_sync_updates_prepared_mec_context_and_reviews_unprepared_context() {
     let source = source_package(
         worksheet([full_schema_mec_header()], &[]),
         worksheet(
-            std::iter::once(full_schema_mec_header()).chain([
-                full_schema_mec_record(10, "0121", "MEC-1.3.5", "PCS-06", "S1", "N2", "Completed"),
-                full_schema_mec_record(11, "0121", "MEC-1.3.5", "PCS-06", "S2", "N2", "Completed"),
-            ]),
+            std::iter::once(full_schema_mec_header()).chain([full_schema_mec_record(
+                10,
+                "0121",
+                "MEC-1.3.5",
+                "PCS-06",
+                "S1,S2",
+                "N2",
+                "Completed",
+            )]),
             &[],
         ),
     );
@@ -1136,9 +1141,9 @@ fn full_sync_updates_prepared_mec_context_and_reviews_unprepared_context() {
         "rfi.followUp.disposition.manualReview"
     );
     let details = missing_rows[0]["mappingDetails"].as_str().unwrap();
-    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2; location=N2"));
-    assert!(details.contains("matched source context: tag=PCS-06; area=S1; location=N2"));
-    assert!(details.contains("row 2: N2 / PCS-06 / S1"));
+    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2"));
+    assert!(details.contains("matched source context: tag=PCS-06; area=S1"));
+    assert!(details.contains("row 2: PCS-06 / S1"));
     assert!(rows.iter().all(|row| row["_row"] != 3));
 }
 
@@ -1194,13 +1199,13 @@ fn full_sync_explains_unmatched_mec_final_context_for_rfi_log_correction() {
         warning["reasonKey"],
         "warn.rfi.followUp.reason.partialContext"
     );
-    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2; location=N3"));
-    assert!(details.contains("matched source context: tag=PCS-06; area=S1; location=N2"));
-    assert!(details.contains("row 5: N2 / PCS-06 / S1"));
+    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2"));
+    assert!(details.contains("matched source context: tag=PCS-06; area=S1"));
+    assert!(details.contains("row 5: PCS-06 / S1"));
 }
 
 #[test]
-fn full_sync_matches_mec_contexts_by_exact_inspection_location() {
+fn full_sync_does_not_use_inspection_location_to_distinguish_mec_contexts() {
     let source = source_package(
         worksheet([full_schema_mec_header()], &[]),
         worksheet(
@@ -1244,21 +1249,20 @@ fn full_sync_matches_mec_contexts_by_exact_inspection_location() {
 
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
-    let ready_rows = rows
-        .iter()
-        .filter(|row| row["disposition"] == "rfi.followUp.disposition.ready")
-        .collect::<Vec<_>>();
-    assert_eq!(ready_rows.len(), 2, "{review}");
-    assert!(ready_rows.iter().any(|row| {
-        row["_row"] == 2 && row["rfiNo"] == "MEC-0122" && row["proposedStatus"] == "Completed"
-    }));
-    assert!(ready_rows.iter().any(|row| {
-        row["_row"] == 3 && row["rfiNo"] == "MEC-0122" && row["proposedStatus"] == "Completed"
-    }));
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(
+        rows[0]["disposition"],
+        "rfi.followUp.disposition.manualReview"
+    );
+    assert_eq!(
+        rows[0]["reasonKey"],
+        "warn.rfi.followUp.reason.mappingAmbiguous"
+    );
     assert!(
-        rows.iter()
-            .all(|row| row["reasonKey"] != "warn.rfi.followUp.reason.mappingAmbiguous"),
-        "{review}"
+        rows[0]["mappingDetails"]
+            .as_str()
+            .unwrap()
+            .contains("candidate target rows: row 2: PCS-06 / S1 | row 3: PCS-06 / S1")
     );
 }
 
@@ -4208,7 +4212,7 @@ fn road_name_matches_by_exact_tag_without_requiring_zone_match() {
     assert_eq!(rows[0]["proposedStatus"], "In Progress");
 }
 #[test]
-fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
+fn multi_section_mec_signed_rfi_uses_section_and_block_without_location() {
     let mec_row = row(
         10,
         [
@@ -4217,7 +4221,7 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
             inline("E10", "MEC-3.3.1"),
             inline("F10", "PCS-10"),
             inline("G10", "S1, S3"),
-            inline("N10", "N1"),
+            inline("N10", "N99"),
             inline("T10", "Completed"),
             inline("V10", "Signed by Worley"),
         ],
@@ -4311,7 +4315,7 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
 }
 
 #[test]
-fn full_sync_omits_signed_mec_without_a_matching_prepared_location() {
+fn full_sync_maps_signed_mec_without_inspection_location_columns() {
     let mec_row = row(
         10,
         [
@@ -4328,57 +4332,67 @@ fn full_sync_omits_signed_mec_without_a_matching_prepared_location() {
         worksheet([full_schema_mec_header()], &[]),
         worksheet([full_schema_mec_header(), mec_row], &[]),
     );
-    let target = package(&[(
-        "Signed By Worley MEC",
-        None,
-        worksheet(
-            [
-                row(
-                    4,
-                    [
-                        inline("C4", "Block #"),
-                        inline("D4", "Section"),
-                        inline("J4", "RFI No."),
-                        inline("K4", "STATUS"),
-                    ],
-                ),
-                row(
-                    5,
-                    [
-                        inline("C5", "PCS-10"),
-                        inline("D5", "S1"),
-                        inline("J5", ""),
-                        inline("K5", ""),
-                    ],
-                ),
-                row(
-                    6,
-                    [
-                        inline("C6", "PCS-10"),
-                        inline("D6", "S3"),
-                        inline("J6", ""),
-                        inline("K6", ""),
-                    ],
-                ),
-            ],
-            &[],
+    let target = package(&[
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
         ),
-    )]);
+        (
+            "Signed By Worley MEC",
+            None,
+            worksheet(
+                [
+                    row(
+                        4,
+                        [
+                            inline("C4", "Block #"),
+                            inline("D4", "Section"),
+                            inline("J4", "RFI No."),
+                            inline("K4", "STATUS"),
+                        ],
+                    ),
+                    row(
+                        5,
+                        [
+                            inline("C5", "PCS-10"),
+                            inline("D5", "S1"),
+                            inline("J5", ""),
+                            inline("K5", ""),
+                        ],
+                    ),
+                    row(
+                        6,
+                        [
+                            inline("C6", "PCS-10"),
+                            inline("D6", "S3"),
+                            inline("J6", ""),
+                            inline("K6", ""),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+    ]);
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
-
-    assert!(
-        !rows.iter().any(|row| row["rfiNo"] == "MEC-0001"),
-        "{review}"
-    );
-    assert!(
-        !review["warnings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
-        "{review}"
-    );
+    assert_eq!(rows.len(), 2, "{review}");
+    assert!(rows.iter().any(|row| {
+        row["_sheet"] == "Signed By Worley MEC"
+            && row["_row"] == 5
+            && row["rfiNo"] == "MEC-0001"
+            && row["proposedStatus"] == "Signed"
+    }));
+    assert!(rows.iter().any(|row| {
+        row["_sheet"] == "Signed By Worley MEC"
+            && row["_row"] == 6
+            && row["rfiNo"] == "MEC-0001"
+            && row["proposedStatus"] == "Signed"
+    }));
 }
 #[test]
 fn rfis_of_different_items_or_itps_are_strictly_isolated_and_never_merge_into_same_slot() {

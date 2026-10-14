@@ -196,16 +196,24 @@ Finding the same RFI in one Signed By row does not satisfy another source
 context. If some source contexts have prepared destinations while others do
 not, eligible rows may synchronize while each unmatched context remains
 visible for manual review; the warning identifies matched contexts and target
-rows, then lists unmatched contexts and asks the operator to verify `Tag No`,
-`Area`, and `Inspection Location` in the read-only source RFI Log. DocFlow never
-corrects the source log. No row or section is synthesized.
+rows, then lists unmatched contexts and the source-log fields relevant to that
+destination. DocFlow never corrects the source log. No row or section is
+synthesized.
 For CIV, each target area tag must be named in the source. For MEC, repeated
 source rows must agree on ITP, item, and lifecycle status. Signature evidence is
-cumulative: an unsigned duplicate cannot revoke a signed finding. A single row may
-enumerate several `Area` values only when `Tag No` and `Inspection Location`
-each contain one value. Every destination must match one exact
-`(Tag No, Area, Inspection Location)` tuple. Target cells such as `N10/N11` may
-match either exact location token; substring matches are not allowed. Any CIV
+cumulative: an unsigned duplicate cannot revoke a signed finding. MEC and
+`Signed By Worley MEC` map `Tag No` to target `Block` and each comma-separated
+`Area` value to a distinct target `Section`. Each exact `(Block, Section)` pair
+must match an existing prepared row; source and target `Inspection Location`
+are ignored. Distinct section pairs may fan out from one RFI, but duplicate or
+ambiguous pairs remain manual review. Any CIV RFI Log record whose `Tag No`
+starts with `PCS-` is outside Follow Up scope, regardless of ITP, item, Area,
+or composite suffix. It is never added and is removed from an existing Follow
+Up group during the next approved sync. This rule includes values such as
+`PCS-19/S1,S2,S3` and takes precedence over the older PCU routing behavior. It
+never creates rows or sections.
+Duplicate contexts, conflicting source values, and other multi-valued contexts
+remain manual review.
 RFI Log record whose `Tag No` starts with `PCS-` is outside Follow Up scope,
 regardless of ITP, item, Area, or composite suffix. It is never added and is
 removed from an existing Follow Up group during the next approved sync. This
@@ -228,9 +236,11 @@ Follow Up sync.
 Scope decisions take precedence over missing-route diagnostics. The confirmed
 exclusions in [ADR 0035](adr/0035-intentional-follow-up-scope-exclusions.md)
 are deliberately outside Follow Up; they are not missing mappings to add.
-The exact-context scope and warning behavior are recorded in
-[ADR 0036](adr/0036-follow-up-context-scope-and-diagnostics.md). Treat any
-other unmapped ITP/item combination as undecided until an operator explicitly
+The zero/partial-match scope is recorded in
+[ADR 0036](adr/0036-follow-up-context-scope-and-diagnostics.md); MEC
+Section/Block matching is defined by
+[ADR 0037](adr/0037-mec-follow-up-section-block-matching.md). Treat any other
+unmapped ITP/item combination as undecided until an operator explicitly
 approves its inclusion or exclusion. Record that decision here and in an
 accepted ADR before changing route behavior.
 

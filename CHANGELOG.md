@@ -5,6 +5,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.18.0 - 2026-10-14
+
+### Improved
+
+- Match regular and Worley-signed MEC Follow Up records by exact Block/Section
+  pairs, ignore Inspection Location, and fan each distinct Area section from
+  one RFI out to its corresponding existing row. No rows or sections are
+  created; ambiguous pairs remain in Manual Review.
+
 ## 1.17.0 - 2026-10-14
 
 ### Improved

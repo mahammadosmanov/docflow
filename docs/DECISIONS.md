@@ -29,12 +29,13 @@ and versioned with the code they govern.
 | Keep Follow Up Sync away from worksheet Remarks cells | Accepted | [`adr/0028-remove-follow-up-status-remarks.md`](adr/0028-remove-follow-up-status-remarks.md) |
 | Exact multi-area CIV Follow Up fan-out | Accepted | [`adr/0029-exact-civ-multi-area-follow-up.md`](adr/0029-exact-civ-multi-area-follow-up.md) |
 | Larger bounded S5 retained-file capacity | Accepted | [`adr/0030-bounded-s5-retained-file-capacity.md`](adr/0030-bounded-s5-retained-file-capacity.md) |
-| Exact route-context MEC Follow Up fan-out | Accepted | [`adr/0031-exact-mec-context-follow-up.md`](adr/0031-exact-mec-context-follow-up.md) |
-| Exact PCS and composite Follow Up context matching | Superseded | [`adr/0032-exact-pcs-and-composite-follow-up-contexts.md`](adr/0032-exact-pcs-and-composite-follow-up-contexts.md) |
+| Distinct-context MEC Follow Up fan-out (matching key superseded) | Partially superseded | [`adr/0031-exact-mec-context-follow-up.md`](adr/0031-exact-mec-context-follow-up.md) |
+| Exact PCS and composite Follow Up context matching | Partially superseded | [`adr/0032-exact-pcs-and-composite-follow-up-contexts.md`](adr/0032-exact-pcs-and-composite-follow-up-contexts.md) |
 | Exclude CIV PCS-tagged RFI Log records from Follow Up | Accepted | [`adr/0033-exclude-civ-pcs-rfis-from-follow-up.md`](adr/0033-exclude-civ-pcs-rfis-from-follow-up.md) |
 | Skip supported Follow Up routes with no existing target row | Superseded | [`adr/0027-follow-up-no-match-scope.md`](adr/0027-follow-up-no-match-scope.md) |
 | Confirmed ITP/item pairs intentionally excluded from Follow Up | Accepted | [`adr/0035-intentional-follow-up-scope-exclusions.md`](adr/0035-intentional-follow-up-scope-exclusions.md) |
 | Follow Up context-scope filtering and actionable partial-match diagnostics | Accepted | [`adr/0036-follow-up-context-scope-and-diagnostics.md`](adr/0036-follow-up-context-scope-and-diagnostics.md) |
+| MEC Follow Up Section/Block matching and multi-section fan-out | Accepted | [`adr/0037-mec-follow-up-section-block-matching.md`](adr/0037-mec-follow-up-section-block-matching.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |
