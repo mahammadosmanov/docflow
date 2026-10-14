@@ -50,14 +50,16 @@ These are not silently waived by passing local tests.
   OneDrive files, an exact missing-PDF case, and signatures placed only outside
   OTHERS. Source regression evidence is fail-closed but cannot certify every
   physical form or scanner variation.
-- OCR score labels and responsive plan scrolling still require native Windows
-  acceptance at the operator's actual display scaling and representative small
-  window sizes. Browser viewport evidence cannot certify WebView2 behavior.
+- OCR score labels still require native Windows acceptance at the operator's
+  actual display scaling. Responsive workspace layout and adjustment passed a
+  browser MockBridge UI smoke, but native Windows acceptance at representative
+  small window sizes remains outstanding; browser viewport evidence cannot
+  certify WebView2 behavior.
 - Signed-page recursive multi-core archive discovery still requires native
   Windows acceptance on the operator's actual OneDrive/network-backed RFI System,
   including deep nesting, an unreadable folder, cancellation, duplicate exact
   filenames, and a representative large entry count.
-- Signed-page 0.26.0 progress stages, sticky preview navigation, enlarged
+- Signed-page 0.26.0 progress stages, in-flow preview navigation, enlarged
   comparisons, and hash-pinned warning copies still require native Windows/
   WebView2 acceptance with representative OneDrive input and Review roots.
 - Version 0.27.0 bounded RFI System/signature analysis, parallel recursive
@@ -73,9 +75,10 @@ These are not silently waived by passing local tests.
 
 ## Current local limitations
 
-- Process Scans intentionally discovers only top-level source PDFs. Multi-page
-  batch PDFs are split in scanned order; unsupported PDF features and ambiguous
-  page identities remain in `_review` for manual handling.
+- Fast RFI Scan discovers only top-level PDFs. Multi-RFI requires the known
+  cover template and sends ambiguous or structurally unsupported input to
+  `_review`; Single-RFI reads page one only and preserves the whole PDF. A
+  single-RFI scan must not be used for a combined multi-RFI document.
 - Signed-page preview thumbnails are capped at 20 accepted rows and 12 MiB of
   encoded preview data; open the PDFs manually beyond either bound.
 - The frontend production bundle currently emits a non-failing size advisory;
@@ -84,9 +87,10 @@ These are not silently waived by passing local tests.
 - macOS DMG creation can fail on hosts where `hdiutil` reports `Device not configured`.
 - The current macOS visual launch gate requires an unlocked desktop session; a
   package smoke or process sample does not replace that inspection.
-- Multi-resolution OSD and four-direction OCR still cannot safely infer a
-  reading direction from truly sparse or drawing-only pages; the whole PDF is
-  intentionally withheld for manual review in that case.
+- Multi-resolution OSD, four-direction OCR, and strict two-resolution RFI-header
+  consensus still fail closed on sparse or drawing-only pages without one exact
+  canonical ID/direction or when evidence conflicts. The affected PDF remains
+  unchanged for manual review.
 
 Resolved defects belong in `CHANGELOG.md`, not here. Never list unverified
 operator data, secrets, private paths, or raw workbook contents.

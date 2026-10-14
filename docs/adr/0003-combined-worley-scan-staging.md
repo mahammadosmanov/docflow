@@ -17,10 +17,11 @@ approved preview and executed result to diverge.
 ## Decision
 
 Signed-page staging analyzes every page of a combined input PDF independently,
-up to a fixed 20,000-page total. Exact canonical RFI recognition and the existing
-confidence threshold still apply. Preview stores the selected zero-based page
-index together with the whole source fingerprint, archive fingerprint, exact
-archive candidate, and review destination in the immutable Plan.
+up to a fixed 20,000-page total. Only high-confidence, consensus-confirmed Strict
+or approved OcrAlias RFI identities are accepted; repaired, fuzzy, and
+conflicting identities remain review-only. Preview stores the selected zero-based
+page index together with the whole source fingerprint, archive fingerprint,
+exact archive candidate, and review destination in the immutable Plan.
 
 Apply revalidates the fingerprints, copies the signed scan and archive PDF into
 private operation storage, and imports only the approved source page as page one
@@ -29,10 +30,13 @@ modified. Existing review outputs are never overwritten.
 
 The selected archive is a read-only RFI System root, not one expected leaf
 folder. Preview walks every descendant directory in bounded multi-core breadth
-batches, exact-matches only the canonical RFI PDF filename, sorts results before
-planning, and records worker/directory/entry evidence. New signed-scan input
-recursion defaults on, while the existing control remains available for an
-intentional top-level-only input run. Archive recursion cannot be disabled.
+batches and matches only the exact case-insensitive `RFI No. <RFI>.pdf` basename.
+Its numeric suffix may contain one to four ASCII digits and is canonicalized
+before matching. Short and four-digit basenames that resolve to the same RFI are
+ambiguous rather than selected arbitrarily. Results are sorted before planning,
+and worker/directory/entry evidence is recorded. New signed-scan input recursion
+defaults on, while the existing control remains available for an intentional
+top-level-only input run. Archive recursion cannot be disabled.
 
 Pages that are unreadable, low-confidence, duplicated for one RFI, contain an
 unsupported form widget, or map to a missing or ambiguous archive file remain

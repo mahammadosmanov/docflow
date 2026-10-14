@@ -620,3 +620,145 @@ fn email_requirement_is_enforced_independently_for_each_rfi() {
             .is_some_and(|destination| destination.contains("MEC-0766"))
     }));
 }
+
+#[test]
+#[ignore = "set DOCFLOW_VENTOY_GROUP_SOURCE, DOCFLOW_VENTOY_GROUP_OCR_SOURCE, and DOCFLOW_VENTOY_GROUP_TESSERACT to private copies"]
+fn operator_ventoy_group_files_routes_real_documents_and_ocr_scans() {
+    let cases = [
+        (
+            std::path::PathBuf::from(
+                std::env::var_os("DOCFLOW_VENTOY_GROUP_SOURCE")
+                    .expect("DOCFLOW_VENTOY_GROUP_SOURCE is required"),
+            ),
+            "all-disciplines",
+            &[
+                "AZE-SUN-INT-QMS-RFI-CIV-1316",
+                "AZE-SUN-INT-QMS-RFI-MEC-0767",
+                "AZE-SUN-INT-QMS-RFI-ELE-0032",
+                "AZE-SUN-INT-QMS-RFI-PRC-0074",
+                "AZE-SUN-INT-QMS-RFI-PRC-0075",
+            ][..],
+        ),
+        (
+            std::path::PathBuf::from(
+                std::env::var_os("DOCFLOW_VENTOY_GROUP_OCR_SOURCE")
+                    .expect("DOCFLOW_VENTOY_GROUP_OCR_SOURCE is required"),
+            ),
+            "pdf-content-ocr",
+            &["AZE-SUN-INT-QMS-RFI-CIV-1316"][..],
+        ),
+    ];
+    let tesseract = std::path::PathBuf::from(
+        std::env::var_os("DOCFLOW_VENTOY_GROUP_TESSERACT")
+            .expect("DOCFLOW_VENTOY_GROUP_TESSERACT is required"),
+    );
+    let temporary = tempfile::tempdir().unwrap();
+
+    for (source, label, expected_codes) in cases {
+        let destination = temporary.path().join(label);
+        fs::create_dir(&destination).unwrap();
+        let plan = preview(
+            &GroupRfiFilesParams {
+                source: source.clone(),
+                destination: destination.clone(),
+            },
+            &docflow_lib::ocr::NativeOcr::with_tesseract(tesseract.clone()),
+            |_| {},
+            || false,
+        )
+        .unwrap();
+        let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+        let codes = rows
+            .iter()
+            .filter_map(|row| row["rfiCode"].as_str())
+            .collect::<Vec<_>>();
+        eprintln!(
+            "Ventoy Group Files case={label} rows={} codes={codes:?} warnings={:?}",
+            rows.len(),
+            plan.warnings
+        );
+
+        for code in expected_codes {
+            assert!(
+                codes.contains(code),
+                "{label} should recognize {code}; rows={rows:#?}"
+            );
+            let discipline = code
+                .split("-RFI-")
+                .nth(1)
+                .and_then(|suffix| suffix.split('-').next())
+                .expect("canonical code discipline");
+            let target_fragment = format!("/{discipline}/{code}/");
+            assert!(
+                plan.steps.iter().any(|step| {
+                    step.dst
+                        .as_deref()
+                        .is_some_and(|path| path.replace('\\', "/").contains(&target_fragment))
+                }),
+                "{label} should derive target {target_fragment}; steps={:#?}",
+                plan.steps
+            );
+        }
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+        let expected_steps = plan.steps.clone();
+        let authority = docflow_lib::fs_ops::FilesystemAuthority::new(
+            temporary.path().join(format!("journal-{label}")),
+            std::time::Duration::from_secs(300),
+        );
+        let caller = docflow_lib::paths::CallerIdentity::new(format!("ventoy-{label}"), "isolated");
+        let scope = docflow_lib::paths::GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            label,
+            "rfi.group_files",
+        );
+        let source_grant = authority
+            .issue_grant(&scope, &source, docflow_lib::paths::GrantAccess::Read)
+            .unwrap();
+        let destination_grant = authority
+            .issue_grant(
+                &scope,
+                &destination,
+                docflow_lib::paths::GrantAccess::ReadWrite,
+            )
+            .unwrap();
+        let cached = authority
+            .cache_plan(
+                docflow_lib::plan_store::BackendOrigin::Rust,
+                docflow_lib::plan_store::PlanBinding::new(
+                    &caller.owner_id,
+                    &caller.session_id,
+                    "rfi.group_files",
+                    vec![source_grant.grant_id, destination_grant.grant_id],
+                ),
+                plan,
+            )
+            .unwrap();
+        let result = authority.apply(&cached.plan_id, &caller).unwrap();
+        assert_eq!(result.failed, 0, "{:?}", result.errors);
+        assert!(result.applied > 0);
+        for step in expected_steps
+            .iter()
+            .filter(|step| step.kind == docflow_lib::contracts::StepKind::Copy)
+        {
+            let source_file = Path::new(step.src.as_deref().unwrap());
+            let destination_file = Path::new(step.dst.as_deref().unwrap());
+            assert_eq!(
+                fs::read(source_file).unwrap(),
+                fs::read(destination_file).unwrap()
+            );
+        }
+        for code in expected_codes {
+            let discipline = code
+                .split("-RFI-")
+                .nth(1)
+                .and_then(|suffix| suffix.split('-').next())
+                .expect("canonical code discipline");
+            assert!(destination.join(discipline).join(code).is_dir());
+        }
+        let undone = authority.undo(&result.journal_id, &caller, None).unwrap();
+        assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+        assert!(undone.applied > 0);
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+    }
+}

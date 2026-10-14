@@ -4,14 +4,17 @@ use std::{
     io::{BufReader, BufWriter, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::LazyLock,
     thread,
     time::{Duration, Instant},
 };
 
+use regex::Regex;
+
 use crate::{
     operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
-    rfi_code::{RfiMatch, RfiMethod, exact_codes, find},
+    rfi_code::{PREFIX, RfiMatch, RfiMethod, canonical, exact_codes, find},
 };
 
 const TEXT_LAYER_MIN_CHARS: usize = 50;
@@ -102,7 +105,42 @@ struct CoverSignals {
     identity_hint: bool,
 }
 
-fn cover_signals(text: &str) -> CoverSignals {
+fn clv_alias_regex() -> &'static Regex {
+    static CLV_ALIAS: LazyLock<Regex> = LazyLock::new(|| {
+        let separator = r"[\t ]*(?:\r?\n[\t ]*){0,2}-[\t ]*(?:\r?\n[\t ]*){0,2}";
+        Regex::new(&format!(
+            "AZE{separator}SUN{separator}INT{separator}QMS{separator}RFI{separator}CLV{separator}([0-9]{{1,4}})"
+        ))
+        .expect("the OCR-only CLV alias pattern is valid")
+    });
+    &CLV_ALIAS
+}
+
+fn ocr_alias_matches(text: &str) -> Vec<RfiMatch> {
+    let normalized = canonical(text);
+    clv_alias_regex()
+        .captures_iter(&normalized)
+        .filter_map(|captures| {
+            let whole = captures.get(0)?;
+            if normalized[..whole.start()]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_alphanumeric)
+                || normalized[whole.end()..]
+                    .chars()
+                    .next()
+                    .is_some_and(char::is_alphanumeric)
+            {
+                return None;
+            }
+            let mut matched = find(&format!("{PREFIX}-CIV-{}", &captures[1]));
+            matched.method = RfiMethod::OcrAlias;
+            Some(matched)
+        })
+        .collect()
+}
+
+fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
     let normalized = text
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -117,10 +155,17 @@ fn cover_signals(text: &str) -> CoverSignals {
     ]
     .iter()
     .any(|mark| normalized.contains(mark));
-    let codes = exact_codes(&normalized);
+    let aliases = if allow_ocr_alias {
+        ocr_alias_matches(&normalized)
+    } else {
+        Vec::new()
+    };
+    let mut codes = exact_codes(&normalized);
+    codes.extend(aliases.iter().map(|matched| matched.code.clone()));
     let matched = find(&normalized);
-    let strict_identity =
-        codes.len() == 1 && matched.method == RfiMethod::Strict && matched.confidence >= 0.8;
+    let strict_identity = codes.len() == 1
+        && ((matched.method == RfiMethod::Strict && matched.confidence >= 0.8)
+            || aliases.iter().any(|alias| codes.contains(&alias.code)));
     let identity_hint = !codes.is_empty() || matched.ok();
     CoverSignals {
         request_heading,
@@ -131,14 +176,22 @@ fn cover_signals(text: &str) -> CoverSignals {
 }
 
 fn confirmed_cover_read(text: &str, source: &str) -> Option<OcrRead> {
-    let signals = cover_signals(text);
+    let signals = cover_signals(text, true);
     if !(signals.request_heading && signals.template_mark && signals.strict_identity) {
         return None;
     }
-    let matched = find(text);
+    let matched = ocr_alias_matches(text)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| find(text));
+    let alias_evidence = if matched.method == RfiMethod::OcrAlias {
+        ":alias:CLV->CIV"
+    } else {
+        ""
+    };
     Some(OcrRead {
         matched,
-        source: format!("ocr:fast-cover:confirmed:{source}"),
+        source: format!("ocr:fast-cover:confirmed:{source}{alias_evidence}"),
     })
 }
 
@@ -184,13 +237,6 @@ fn band_has_text_cues(band: &GrayImage) -> bool {
         .count()
         >= 100
 }
-fn has_upright_continuation_words(text: &str) -> bool {
-    text.split_whitespace()
-        .filter(|word| word.chars().all(|c| c.is_alphabetic()) && word.len() >= 4)
-        .take(4)
-        .count()
-        >= 4
-}
 
 fn read_cover_band_text(
     ocr: &NativeOcr,
@@ -230,7 +276,7 @@ fn read_fast_cover_page(
     let pdf = PdfOcrSession::open(source)?;
     let text_layer = pdf.page_text(source, page_index)?;
     // Searchable text is only a hint. A cover still needs visible-page OCR evidence.
-    let mut possible_cover = cover_signals(&text_layer).request_heading;
+    let mut possible_cover = cover_signals(&text_layer, false).request_heading;
     if ocr.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
         return Err(OcrFailure::EngineMissing);
     }
@@ -258,7 +304,7 @@ fn read_fast_cover_page(
         if let Some(read) = confirmed_cover_read(&text, "150dpi") {
             return Ok(read);
         }
-        let mut signals = cover_signals(&text);
+        let mut signals = cover_signals(&text, true);
         possible_cover |= signals.request_heading;
         let promising = u8::from(signals.request_heading)
             + u8::from(signals.template_mark)
@@ -285,7 +331,7 @@ fn read_fast_cover_page(
                 if let Some(read) = confirmed_cover_read(&text, "150dpi-retry") {
                     return Ok(read);
                 }
-                signals = cover_signals(&text);
+                signals = cover_signals(&text, true);
                 possible_cover |= signals.request_heading;
             }
         }
@@ -310,18 +356,10 @@ fn read_fast_cover_page(
             if let Some(read) = confirmed_cover_read(&rescue_text, "300dpi-rescue") {
                 return Ok(read);
             }
-            let rescue_signals = cover_signals(&rescue_text);
+            let rescue_signals = cover_signals(&rescue_text, true);
             if rescue_signals.request_heading && rescue_signals.template_mark {
                 return Ok(uncertain_cover_read("300dpi-rescue".to_string()));
             }
-        }
-        if direction == 0
-            && !signals.request_heading
-            && !signals.template_mark
-            && !signals.identity_hint
-            && has_upright_continuation_words(&text)
-        {
-            break;
         }
     }
 
@@ -614,10 +652,18 @@ impl OcrAdapter for NativeOcr {
                 Some((matched, votes, dpi_count)) => {
                     consensus_read(matched, votes, dpi_count, text_layer.as_ref(), true)
                 }
-                None => OcrRead {
-                    matched: find(""),
-                    source: unconfirmed_page_source(&observations, text_layer.as_ref()),
-                },
+                None => {
+                    let unresolved = OcrRead {
+                        matched: find(""),
+                        source: unconfirmed_page_source(&observations, text_layer.as_ref()),
+                    };
+                    read_fast_cover_page(self, path, page_index)
+                        .ok()
+                        .and_then(|cover| {
+                            cover_recovery_read(cover, &observations, text_layer.as_ref())
+                        })
+                        .unwrap_or(unresolved)
+                }
             },
         )
     }
@@ -637,6 +683,57 @@ impl OcrAdapter for NativeOcr {
     }
 }
 
+fn cover_recovery_read(
+    cover: OcrRead,
+    observations: &[(i32, RfiMatch)],
+    text_layer: Option<&BTreeSet<String>>,
+) -> Option<OcrRead> {
+    let matched = cover.matched;
+    if !matches!(matched.method, RfiMethod::Strict | RfiMethod::OcrAlias)
+        || matched.confidence < 0.8
+    {
+        return None;
+    }
+    if text_layer.is_some_and(|codes| {
+        !codes.is_empty() && (codes.len() != 1 || !codes.contains(&matched.code))
+    }) {
+        return None;
+    }
+
+    let mut identities = BTreeMap::<&str, (usize, BTreeSet<i32>)>::new();
+    for (dpi, observed) in observations
+        .iter()
+        .filter(|(_, observed)| matches!(observed.method, RfiMethod::Strict | RfiMethod::OcrAlias))
+    {
+        let entry = identities
+            .entry(observed.code.as_str())
+            .or_insert_with(|| (0, BTreeSet::new()));
+        entry.0 += 1;
+        entry.1.insert(*dpi);
+    }
+    let repeated = identities
+        .iter()
+        .filter(|(_, (votes, dpis))| *votes >= 2 && dpis.len() >= 2)
+        .map(|(code, _)| *code)
+        .collect::<Vec<_>>();
+    if repeated.len() > 1
+        || repeated
+            .first()
+            .is_some_and(|code| *code != matched.code.as_str())
+    {
+        return None;
+    }
+
+    let source = if matched.method == RfiMethod::OcrAlias {
+        "ocr:cover-recovery:confirmed:alias:CLV->CIV"
+    } else {
+        "ocr:cover-recovery:confirmed"
+    };
+    Some(OcrRead {
+        matched,
+        source: source.to_string(),
+    })
+}
 fn consensus_read(
     matched: RfiMatch,
     votes: usize,
@@ -644,23 +741,36 @@ fn consensus_read(
     text_layer: Option<&BTreeSet<String>>,
     used_fallback: bool,
 ) -> OcrRead {
-    OcrRead {
-        source: format!(
+    let source = if matched.method == RfiMethod::OcrAlias {
+        format!(
+            "ocr:consensus{}:{votes}votes:{dpi_count}dpi:alias:CLV->CIV:{}",
+            if used_fallback { "-fallback" } else { "" },
+            text_layer_evidence(text_layer, &matched.code)
+        )
+    } else {
+        format!(
             "ocr:consensus{}:{votes}votes:{dpi_count}dpi:{}",
             if used_fallback { "-fallback" } else { "" },
             text_layer_evidence(text_layer, &matched.code)
-        ),
-        matched,
-    }
+        )
+    };
+    OcrRead { matched, source }
 }
 
 fn rfi_matches(text: &str) -> Vec<RfiMatch> {
-    let codes = exact_codes(text);
-    if codes.is_empty() {
-        vec![find(text)]
-    } else {
-        codes.into_iter().map(|code| find(&code)).collect()
+    let mut matches = exact_codes(text)
+        .into_iter()
+        .map(|code| find(&code))
+        .collect::<Vec<_>>();
+    for alias in ocr_alias_matches(text) {
+        if !matches.iter().any(|matched| matched.code == alias.code) {
+            matches.push(alias);
+        }
     }
+    if matches.is_empty() {
+        matches.push(find(text));
+    }
+    matches
 }
 
 fn text_layer_evidence(text_layer: Option<&BTreeSet<String>>, code: &str) -> &'static str {
@@ -724,7 +834,7 @@ fn select_rfi_consensus(
     observations: &[(i32, RfiMatch)],
     text_layer: Option<&BTreeSet<String>>,
 ) -> Option<(RfiMatch, usize, usize)> {
-    const MIN_STRICT_VOTES: usize = 2;
+    const MIN_IDENTITY_VOTES: usize = 2;
     const MIN_DISTINCT_DPI: usize = 3;
     const CONSENSUS_CONFIDENCE: f64 = 0.95;
 
@@ -743,21 +853,29 @@ fn select_rfi_consensus(
     {
         return None;
     }
-    let mut strict = observations.iter().filter_map(|(_, matched)| {
-        (matched.method == RfiMethod::Strict && matched.code == code).then_some(matched)
+    let mut identity = observations.iter().filter_map(|(_, matched)| {
+        ((matched.method == RfiMethod::Strict || matched.method == RfiMethod::OcrAlias)
+            && matched.code == code)
+            .then_some(matched)
     });
-    let mut matched = strict.next()?.clone();
-    let strict_votes = 1 + strict.count();
+    let mut matched = identity.next()?.clone();
+    let identity_votes = 1 + identity.count();
+    if observations
+        .iter()
+        .any(|(_, observed)| observed.code == code && observed.method == RfiMethod::OcrAlias)
+    {
+        matched.method = RfiMethod::OcrAlias;
+    }
     let dpis = observations
         .iter()
         .filter(|(_, matched)| matched.ok() && matched.code == code)
         .map(|(dpi, _)| *dpi)
         .collect::<BTreeSet<_>>();
-    if strict_votes < MIN_STRICT_VOTES || dpis.len() < MIN_DISTINCT_DPI {
+    if identity_votes < MIN_IDENTITY_VOTES || dpis.len() < MIN_DISTINCT_DPI {
         return None;
     }
     matched.confidence = CONSENSUS_CONFIDENCE;
-    Some((matched, strict_votes, dpis.len()))
+    Some((matched, identity_votes, dpis.len()))
 }
 
 impl OrientationDetector for NativeOcr {
@@ -831,11 +949,22 @@ impl OrientationDetector for NativeOcr {
             tessdata,
             SECONDARY_DPI,
         )?;
-        second
-            .or_else(|| {
-                select_correlated_header_score(&first_scores, &second_scores)
-            })
-            .or_else(|| {
+        let header = select_correlated_header_score_checked(&first_scores, &second_scores);
+        let header_conflict = header.is_err();
+        let header = header.ok().flatten();
+        let second_conflict = header.as_ref().is_some_and(|header| {
+            second
+                .as_ref()
+                .is_some_and(|direction| direction.rotate_clockwise != header.rotate_clockwise)
+        });
+        let detection = if header_conflict || second_conflict {
+            None
+        } else {
+            let detection = match (second, header) {
+                (Some(direction), _) => Some(direction),
+                (None, header) => header,
+            };
+            detection.or_else(|| {
                 select_correlated_direction_score(
                     &first_scores,
                     &second_scores,
@@ -843,7 +972,8 @@ impl OrientationDetector for NativeOcr {
                     secondary_detection.as_ref(),
                 )
             })
-            .ok_or_else(|| {
+        };
+        detection.ok_or_else(|| {
             format!(
                 "orientation uncertain after 250/350-DPI OSD and four-direction OCR; OSD 250dpi {}, 350dpi {}; OCR 250dpi [{}], 350dpi [{}]",
                 osd_summary(primary_detection.as_ref()),
@@ -1017,9 +1147,11 @@ struct DirectionScore {
     confidence_sum: f64,
     header_word_count: usize,
     header_confidence_sum: f64,
+    header_rfi_codes: BTreeMap<String, f64>,
 }
 
 impl DirectionScore {
+    #[cfg(test)]
     fn new(rotate_clockwise: i64, word_count: usize, confidence_sum: f64) -> Self {
         Self {
             rotate_clockwise,
@@ -1027,9 +1159,11 @@ impl DirectionScore {
             confidence_sum,
             header_word_count: 0,
             header_confidence_sum: 0.0,
+            header_rfi_codes: BTreeMap::new(),
         }
     }
 
+    #[cfg(test)]
     fn with_header(mut self, word_count: usize, confidence_sum: f64) -> Self {
         self.header_word_count = word_count;
         self.header_confidence_sum = confidence_sum;
@@ -1274,10 +1408,24 @@ fn run_direction_tesseract(
     }
     let output = fs::read_to_string(output_path)
         .map_err(|error| format!("orientation fallback output decode: {error}"))?;
+    Ok(parse_direction_score_tsv(
+        &output,
+        rotate_clockwise,
+        image_height,
+    ))
+}
+
+fn parse_direction_score_tsv(
+    output: &str,
+    rotate_clockwise: i64,
+    image_height: usize,
+) -> DirectionScore {
+    const MIN_RFI_HEADER_CONFIDENCE: f64 = 60.0;
     let mut word_count = 0_usize;
     let mut confidence_sum = 0.0_f64;
     let mut header_word_count = 0_usize;
     let mut header_confidence_sum = 0.0_f64;
+    let mut header_rfi_codes = BTreeMap::<String, f64>::new();
     for line in output.lines().skip(1) {
         let columns = line.splitn(12, '\t').collect::<Vec<_>>();
         if columns.len() != 12
@@ -1290,24 +1438,98 @@ fn run_direction_tesseract(
         let Ok(confidence) = columns[10].parse::<f64>() else {
             continue;
         };
-        if confidence >= 30.0 && confidence.is_finite() {
+        if !confidence.is_finite() {
+            continue;
+        }
+        let top = columns[7].parse::<usize>().unwrap_or(image_height);
+        let height = columns[9].parse::<usize>().unwrap_or(0);
+        let in_header = top.saturating_add(height / 2) <= image_height / 6;
+        if in_header && confidence >= MIN_RFI_HEADER_CONFIDENCE {
+            for code in exact_codes(columns[11]) {
+                header_rfi_codes
+                    .entry(code)
+                    .and_modify(|best| *best = best.max(confidence))
+                    .or_insert(confidence);
+            }
+        }
+        if confidence >= 30.0 {
             word_count += 1;
             confidence_sum += confidence;
-            let top = columns[7].parse::<usize>().unwrap_or(image_height);
-            let height = columns[9].parse::<usize>().unwrap_or(0);
-            if top.saturating_add(height / 2) <= image_height / 6 {
+            if in_header {
                 header_word_count += 1;
                 header_confidence_sum += confidence;
             }
         }
     }
-    Ok(
-        DirectionScore::new(rotate_clockwise, word_count, confidence_sum)
-            .with_header(header_word_count, header_confidence_sum),
-    )
+    DirectionScore {
+        rotate_clockwise,
+        word_count,
+        confidence_sum,
+        header_word_count,
+        header_confidence_sum,
+        header_rfi_codes,
+    }
 }
 
+fn select_correlated_rfi_header_score(
+    primary: &[DirectionScore],
+    secondary: &[DirectionScore],
+) -> Result<Option<OrientationDetection>, ()> {
+    fn unique_candidate(scores: &[DirectionScore]) -> Result<Option<(&DirectionScore, &str)>, ()> {
+        const MIN_CODE_CONFIDENCE: f64 = 60.0;
+        if scores.iter().any(|score| score.header_rfi_codes.len() > 1) {
+            return Err(());
+        }
+        let mut candidates = scores.iter().filter_map(|score| {
+            let (code, confidence) = score.header_rfi_codes.iter().next()?;
+            (*confidence >= MIN_CODE_CONFIDENCE).then_some((score, code.as_str()))
+        });
+        let candidate = candidates.next();
+        if candidates.next().is_some() {
+            return Err(());
+        }
+        Ok(candidate)
+    }
+
+    match (unique_candidate(primary)?, unique_candidate(secondary)?) {
+        (None, None) => Ok(None),
+        (Some((first, first_code)), Some((second, second_code)))
+            if first.rotate_clockwise == second.rotate_clockwise && first_code == second_code =>
+        {
+            Ok(Some(OrientationDetection {
+                rotate_clockwise: first.rotate_clockwise,
+                confidence: 10.0,
+                method: "tesseract-rfi-header-consensus:250+350dpi".to_string(),
+            }))
+        }
+        _ => Err(()),
+    }
+}
+
+#[cfg(test)]
 fn select_correlated_header_score(
+    primary: &[DirectionScore],
+    secondary: &[DirectionScore],
+) -> Option<OrientationDetection> {
+    select_correlated_header_score_checked(primary, secondary)
+        .ok()
+        .flatten()
+}
+
+fn select_correlated_header_score_checked(
+    primary: &[DirectionScore],
+    secondary: &[DirectionScore],
+) -> Result<Option<OrientationDetection>, ()> {
+    let rfi_header = select_correlated_rfi_header_score(primary, secondary)?;
+    let text_header = select_correlated_text_header_score(primary, secondary);
+    match (rfi_header, text_header) {
+        (Some(code), Some(text)) if code.rotate_clockwise != text.rotate_clockwise => Err(()),
+        (Some(code), _) => Ok(Some(code)),
+        (None, text) => Ok(text),
+    }
+}
+
+fn select_correlated_text_header_score(
     primary: &[DirectionScore],
     secondary: &[DirectionScore],
 ) -> Option<OrientationDetection> {
@@ -1496,17 +1718,17 @@ pub(crate) fn read_png_gray(path: &Path) -> Result<GrayImage, String> {
     match info.color_type {
         png::ColorType::Grayscale => pixels.extend_from_slice(input),
         png::ColorType::GrayscaleAlpha => {
-            for sample in input.chunks_exact(2) {
+            for sample in input.as_chunks::<2>().0 {
                 pixels.push(composite_white(sample[0], sample[1]));
             }
         }
         png::ColorType::Rgb => {
-            for sample in input.chunks_exact(3) {
+            for sample in input.as_chunks::<3>().0 {
                 pixels.push(rgb_to_gray(sample[0], sample[1], sample[2]));
             }
         }
         png::ColorType::Rgba => {
-            for sample in input.chunks_exact(4) {
+            for sample in input.as_chunks::<4>().0 {
                 pixels.push(composite_white(
                     rgb_to_gray(sample[0], sample[1], sample[2]),
                     sample[3],
@@ -1944,6 +2166,159 @@ mod orientation_tests {
     }
 
     #[test]
+    fn strict_rfi_header_identity_resolves_single_token_native_orientation() {
+        const TSV_HEADER: &str = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n";
+        let primary_code = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t70.969269\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+            ),
+            270,
+            1_838,
+        );
+        let secondary_code = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t1228\t252\t1456\t99\t88.430008\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+            ),
+            270,
+            2_476,
+        );
+        assert_eq!(
+            primary_code
+                .header_rfi_codes
+                .get("AZE-SUN-INT-QMS-RFI-CIV-1158"),
+            Some(&70.969269)
+        );
+        assert_eq!(
+            secondary_code
+                .header_rfi_codes
+                .get("AZE-SUN-INT-QMS-RFI-CIV-1158"),
+            Some(&88.430008)
+        );
+
+        let primary = [
+            DirectionScore::new(0, 28, 1_811.0),
+            DirectionScore::new(90, 0, 0.0),
+            DirectionScore::new(180, 0, 0.0),
+            primary_code,
+        ];
+        let secondary = [
+            DirectionScore::new(0, 55, 2_678.0),
+            DirectionScore::new(90, 0, 0.0),
+            DirectionScore::new(180, 52, 2_423.0),
+            secondary_code,
+        ];
+        assert_eq!(
+            select_correlated_header_score(&primary, &secondary)
+                .expect("one strict RFI identity at the same header angle on both DPI")
+                .rotate_clockwise,
+            270
+        );
+
+        let different_angle = [
+            DirectionScore::new(0, 0, 0.0),
+            parse_direction_score_tsv(
+                &format!(
+                    "{TSV_HEADER}5\t1\t1\t1\t1\t1\t1228\t252\t1456\t99\t88.430008\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+                ),
+                90,
+                2_476,
+            ),
+            DirectionScore::new(180, 0, 0.0),
+            DirectionScore::new(270, 0, 0.0),
+        ];
+        assert!(
+            select_correlated_header_score(&primary, &different_angle).is_none(),
+            "cross-resolution direction conflict must remain uncertain"
+        );
+
+        let competing_code = [
+            DirectionScore::new(0, 0, 0.0),
+            parse_direction_score_tsv(
+                &format!(
+                    "{TSV_HEADER}5\t1\t1\t1\t1\t1\t1228\t252\t1456\t99\t88.430008\tAZE-SUN-INT-QMS-RFI-MEC-0772\n"
+                ),
+                90,
+                2_476,
+            ),
+            DirectionScore::new(180, 0, 0.0),
+            secondary[3].clone(),
+        ];
+        assert!(
+            select_correlated_header_score(&primary, &competing_code).is_none(),
+            "a second exact RFI code at another direction must veto correction"
+        );
+
+        let outside_header = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t400\t1082\t74\t70.969269\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+            ),
+            270,
+            1_838,
+        );
+        assert!(outside_header.header_rfi_codes.is_empty());
+        let low_confidence = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t59.999\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+            ),
+            270,
+            1_838,
+        );
+        assert!(low_confidence.header_rfi_codes.is_empty());
+    }
+
+    #[test]
+    fn rfi_header_identity_rejects_noncanonical_and_competing_codes() {
+        const TSV_HEADER: &str = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n";
+        let invalid_suffix = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t90.0\tAZE-SUN-INT-QMS-RFI-CIV-1158A\n"
+            ),
+            270,
+            1_838,
+        );
+        assert!(invalid_suffix.header_rfi_codes.is_empty());
+
+        let competing = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t90.0\tAZE-SUN-INT-QMS-RFI-CIV-1158\n5\t1\t1\t1\t1\t1\t1200\t186\t500\t74\t90.0\tAZE-SUN-INT-QMS-RFI-MEC-0772\n"
+            ),
+            270,
+            1_838,
+        );
+        assert_eq!(competing.header_rfi_codes.len(), 2);
+        let one_code = parse_direction_score_tsv(
+            &format!(
+                "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t90.0\tAZE-SUN-INT-QMS-RFI-CIV-1158\n"
+            ),
+            270,
+            2_476,
+        );
+        let primary = [
+            DirectionScore::new(0, 0, 0.0),
+            DirectionScore::new(90, 0, 0.0),
+            DirectionScore::new(180, 0, 0.0),
+            competing,
+        ];
+        let secondary = [
+            DirectionScore::new(0, 0, 0.0),
+            DirectionScore::new(90, 0, 0.0),
+            DirectionScore::new(180, 0, 0.0),
+            one_code,
+        ];
+        let generic_header_only = [
+            DirectionScore::new(0, 14, 767.0).with_header(5, 218.0),
+            DirectionScore::new(90, 0, 0.0),
+            DirectionScore::new(180, 0, 0.0),
+            DirectionScore::new(270, 0, 0.0),
+        ];
+        assert!(
+            select_correlated_header_score(&generic_header_only, &secondary).is_none(),
+            "one-DPI exact identity evidence must not fall back to generic text"
+        );
+        assert!(select_correlated_header_score(&primary, &secondary).is_none());
+    }
+
+    #[test]
     fn weak_cover_needs_matching_osd_and_ocr_at_both_resolutions() {
         let primary = [
             DirectionScore::new(0, 21, 1_287.0),
@@ -2270,6 +2645,40 @@ mod tests {
     }
 
     #[test]
+    fn short_and_zero_padded_reads_are_one_identity_but_distinct_codes_conflict() {
+        let equivalent = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-9")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-0009")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-0009")),
+        ];
+        assert_eq!(
+            select_rfi_consensus(&equivalent, None).unwrap().0.code,
+            "AZE-SUN-INT-QMS-RFI-CIV-0009"
+        );
+
+        let conflict = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-901")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-0902")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-0902")),
+        ];
+        assert!(select_rfi_consensus(&conflict, None).is_none());
+    }
+
+    #[test]
+    fn malformed_alphanumeric_suffixes_cannot_become_ocr_consensus_identity() {
+        for suffix in ["901A", "901А", "09010"] {
+            let text = format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}");
+            let matched = rfi_matches(&text).remove(0);
+            let observations = [300, 250, 200].map(|dpi| (dpi, matched.clone()));
+            assert!(
+                observations.iter().all(|(_, matched)| !matched.ok()),
+                "{suffix} produced an OCR identity"
+            );
+            assert!(select_rfi_consensus(&observations, None).is_none());
+        }
+    }
+
+    #[test]
     fn rfi_consensus_rejects_a_conflicting_searchable_text_layer() {
         let observations = [
             (300, find("AZE-SUN-INT-QMS-RFI-CIV-1286")),
@@ -2389,6 +2798,65 @@ mod tests {
         assert_eq!(base64_encode(b"foo"), "Zm9v");
     }
 
+    #[test]
+    fn confirmed_cover_resolves_a_single_noisy_digit_read_without_lowering_consensus() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (350, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (400, find("AZE-SUN-INT-QMS-RFI-CIV-1206")),
+        ];
+        let cover = confirmed_cover_read(
+            "REQUEST FOR INSPECTION INTEC AZE-SUN-INT-QMS-RFI-CIV-1296",
+            "test",
+        )
+        .unwrap();
+
+        assert!(select_rfi_consensus(&observations, None).is_none());
+        let recovered = cover_recovery_read(cover, &observations, None).unwrap();
+        assert_eq!(recovered.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1296");
+    }
+
+    #[test]
+    fn confirmed_cover_does_not_override_stable_or_searchable_conflicts() {
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1206")),
+            (350, find("AZE-SUN-INT-QMS-RFI-CIV-1206")),
+        ];
+        let cover = confirmed_cover_read(
+            "REQUEST FOR INSPECTION INTEC AZE-SUN-INT-QMS-RFI-CIV-1296",
+            "test",
+        )
+        .unwrap();
+
+        assert!(cover_recovery_read(cover, &observations, None).is_none());
+
+        let observations = [
+            (300, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (250, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+            (200, find("AZE-SUN-INT-QMS-RFI-CIV-1296")),
+        ];
+        let cover = confirmed_cover_read(
+            "REQUEST FOR INSPECTION INTEC AZE-SUN-INT-QMS-RFI-CIV-1296",
+            "test",
+        )
+        .unwrap();
+        let searchable_conflict = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-1206".to_string()]);
+        assert!(cover_recovery_read(cover, &observations, Some(&searchable_conflict)).is_none());
+    }
+
+    #[test]
+    fn unconfirmed_cover_identity_cannot_recover_an_unresolved_page() {
+        let unresolved = OcrRead {
+            matched: find(""),
+            source: "ocr:fast-cover:uncertain:test".to_string(),
+        };
+        assert!(cover_recovery_read(unresolved, &[], None).is_none());
+    }
+
     #[cfg(windows)]
     #[test]
     fn tesseract_launch_suppresses_the_windows_console() {
@@ -2438,6 +2906,67 @@ mod cover_detection_tests {
     }
 
     #[test]
+    fn fast_cover_recognizes_ocr_clv_as_civ_with_alias_evidence() {
+        let text = concat!(
+            "SUNRISE PROJECT\n",
+            "REQUEST FOR INSPECTION (RFI)\n",
+            "RFI No: AZE-SUN-INT-QMS-RFI-CLV-1348"
+        );
+        assert!(exact_codes(text).is_empty());
+        assert!(!find(text).ok());
+
+        let read = confirmed_cover_read(text, "test").expect("OCR CLV is an exact alias");
+        assert_eq!(read.matched.method, RfiMethod::OcrAlias);
+        assert!(
+            rfi_matches(text)
+                .iter()
+                .any(|matched| matched.method == RfiMethod::OcrAlias)
+        );
+        assert!(
+            !cover_signals(text, false).strict_identity,
+            "searchable text must not use the OCR-only alias"
+        );
+        assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1348");
+        assert!(read.source.contains("CLV->CIV"), "{}", read.source);
+        let alias_match = rfi_matches(text)
+            .into_iter()
+            .find(|matched| matched.method == RfiMethod::OcrAlias)
+            .expect("OCR candidate carries alias provenance");
+        let observations = [
+            (150, alias_match.clone()),
+            (200, alias_match.clone()),
+            (250, alias_match),
+        ];
+        let (matched, votes, dpis) = select_rfi_consensus(&observations, None)
+            .expect("three distinct OCR resolutions confirm the alias");
+        let consensus = consensus_read(matched, votes, dpis, None, false);
+        assert_eq!(consensus.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1348");
+        assert_eq!(consensus.matched.method, RfiMethod::OcrAlias);
+        assert!(consensus.source.contains("alias:CLV->CIV"));
+        let mixed_identity =
+            rfi_matches("AZE-SUN-INT-QMS-RFI-CLV-1348 AZE-SUN-INT-QMS-RFI-CIV-1348");
+        assert_eq!(mixed_identity.len(), 1);
+        assert_eq!(mixed_identity[0].method, RfiMethod::Strict);
+        for unsupported in ["CLX", "CIL", "CVV", "ARC"] {
+            let text = format!(
+                "SUNRISE PROJECT\nREQUEST FOR INSPECTION\nAZE-SUN-INT-QMS-RFI-{unsupported}-1348"
+            );
+            assert!(
+                confirmed_cover_read(&text, "test").is_none(),
+                "unsupported OCR discipline {unsupported} must not be repaired"
+            );
+        }
+        assert!(
+            confirmed_cover_read(
+                "SUNRISE PROJECT\nREQUEST FOR INSPECTION\nAZE-SUN-INT-QMS-RFI-CLV-13481",
+                "test"
+            )
+            .is_none(),
+            "alias must not match a five-digit suffix"
+        );
+    }
+
+    #[test]
     #[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to check a supplied cover page"]
     fn production_fast_cover_detects_the_supplied_first_page() {
         let source = PathBuf::from(
@@ -2461,6 +2990,24 @@ mod cover_detection_tests {
             is_confirmed_cover(&read),
             "first page must be confirmed cover"
         );
+    }
+
+    #[test]
+    #[ignore = "set DOCFLOW_BAKED_180_COVER_PDF and DOCFLOW_COVER_LAB_TESSERACT to check the pixel-rotated CIV-1158 cover"]
+    fn production_fast_cover_scans_past_wordy_direction_zero_noise() {
+        let source = PathBuf::from(
+            env::var_os("DOCFLOW_BAKED_180_COVER_PDF")
+                .expect("DOCFLOW_BAKED_180_COVER_PDF is required"),
+        );
+        let tesseract = PathBuf::from(
+            env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+                .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+        );
+        let ocr = NativeOcr::with_tesseract(tesseract);
+        let read =
+            read_fast_cover_page(&ocr, &source, 0).expect("fast OCR should process the cover");
+        assert!(is_confirmed_cover(&read), "{}", read.source);
+        assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1158");
     }
 
     #[test]

@@ -3,6 +3,140 @@
 All notable DocFlow changes are recorded here. The project follows Semantic
 Versioning; `releases.json` is the machine-readable release catalog.
 
+## Unreleased
+
+## 1.16.7 - 2026-10-14
+
+### Improved
+
+- Distinguish unsupported ITP/item routes from supported routes missing a
+  prepared exact-context Follow Up row. Manual-review details now show the
+  source route/context and any candidate destination rows without enabling
+  guessed workbook updates.
+- Record confirmed ITP/item exclusions as intentional Follow Up scope, not
+  mappings to add. Future route changes require an approved domain decision.
+
+## 1.16.6 - 2026-10-13
+
+### Fixed
+
+- Remove the artificial 500-cell cap from guarded workbook updates so Follow Up
+  Sync can apply complete legitimate batches; existing workbook-size,
+  worksheet-coordinate, exact-cell, protection, and merge safeguards remain.
+
+
+## 1.16.5 - 2026-10-13
+
+### Fixed
+
+- Route regular MEC Follow Up updates by exact tag, area, and inspection
+  location, including distinct destinations that share an area. Sync only
+  prepared exact contexts and surface uncovered source contexts for manual
+  review; never create rows or authorize duplicate/ambiguous destinations.
+
+
+## 1.16.4 - 2026-10-13
+
+### Fixed
+
+- Route Worley FINAL updates to each distinct prepared exact-context destination
+  instead of treating an existing RFI at one destination as proof that all
+  destinations are complete. Missing prepared contexts remain visible for
+  manual review; no rows or sections are created.
+- Keep ambiguous, conflicting, or unrelated existing placements from authorizing
+  shared-cell status changes. An already-present RFI with a cached formula
+  status is a no-op only when that status already matches the projected value.
+
+
+## 1.16.3 - 2026-10-13
+
+### Fixed
+
+- Prevent generic OCR words in direction zero from ending Fast RFI Scan's
+  search for a confirmed cover in the remaining cardinal directions. Eligible
+  pixel-baked CIV-1158 covers at 0°, 90°, 180°, and 270° now reach the same
+  RFI identity and rotation target in Fast RFI Scan and standalone orientation;
+  uncertain/no-code Fast Scan pages retain the unchanged-copy review path.
+- Pin source SHA-256 before parallel Multi-RFI orientation/OCR analysis and
+  recheck it afterward. A source replaced during analysis is rejected before
+  an actionable Plan can be created.
+
+
+## 1.16.2 - 2026-10-13
+
+### Fixed
+
+- Align standalone PDF orientation and Fast RFI Scan on one canonical rotation
+  policy: normalize existing cardinal `/Rotate` metadata before applying
+  render-relative corrections; already-upright pages remain idempotent, while
+  non-cardinal metadata is never corrected. Unresolved standalone PDFs receive
+  a manual-review warning and no output; Fast RFI Scan routes an unchanged copy
+  to `_review`. Single-RFI mode keeps the complete PDF intact without rotation.
+- Bind orientation analysis and cached decisions to source content: pin the
+  source hash before inspection/detection, verify it afterward and on cache
+  reuse, and advance the cache profile so older decisions are not reused.
+- Permit a narrow orientation fallback when one exact canonical RFI identifier
+  appears in the page header at both 250 and 350 DPI with the same direction.
+  Competing, noncanonical, or conflicting evidence remains uncertain for review.
+
+### Improved
+
+- Give schema-generated switches accessible names, including the page-rotation
+  control. Make the standalone rotation operation discoverable with explicit
+  localized rotation wording.
+
+
+## 1.16.0 - 2026-10-12
+
+### Improved
+
+- Rework the shared workspace for available window width and height so workflow
+  content and primary actions remain reachable across narrow and short views.
+  Forms and paths wrap for reading; wide tables keep readable minimum widths and
+  their own horizontal scrolling rather than compressing columns.
+- Add pointer and keyboard adjustment for data-region heights and table columns,
+  with Fit and Reset controls. These transient presentation adjustments do not
+  change application preferences, document data, or native authority.
+- Fit keeps stage summaries in normal flow rather than overlaying stage data.
+- Escape closes an open adjustment dialog without discarding its pending
+  presentation changes; with no dialog open, the existing Escape-to-Configure
+  behavior is preserved.
+
+
+## 1.15.1 - 2026-10-12
+
+### Fixed
+
+- Normalize one-to-four-digit numeric suffixes only within anchored supported
+  RFI identifiers, padding canonical output to four digits without truncating
+  longer values or rewriting unrelated stored data.
+- Fast RFI Scan accepts only consensus-confirmed Strict or approved OCR-alias
+  identities; its narrow independent cover rescue does not override a stable
+  text-layer identity or conflicting RFI.
+- Signed-page staging accepts high-confidence consensus-confirmed Strict or
+  approved OcrAlias identities, and resolves archives only by the exact RFI PDF
+  basename. Equivalent short/four-digit archive names remain ambiguous;
+  Sketch/DOCX and other filename-only evidence do not count, and existing
+  destinations are never overwritten.
+
+## 1.15.0 - 2026-10-11
+
+### Added
+
+- Batch Print can find exact First Page `.docx` and Sketch `.pdf` documents
+  recursively in the selected RFI System using canonical RFI codes,
+  discipline-number inputs, or four-digit numbers. Missing types and multiple
+  versions are shown; ambiguous bare numbers require explicit selection, and
+  only enabled choices enter the existing Batch Print preview and queue.
+
+### Fixed
+
+- RFI System Sync now treats insufficient signature evidence as unsigned
+  without promoting the status to `Signed`; safe existing control statuses may
+  be set to `Not Signed`, but an existing `Signed` status is never downgraded.
+- Follow Up records without a matching prepared target row remain visible for
+  operator review and are never silently discarded or automatically synced.
+
 ## 1.14.0 - 2026-10-10
 
 ### Changed
@@ -12,6 +146,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
   Sources remain read-only; Preview, explicit Apply, journaled creation,
   guarded Undo, per-RFI mail eligibility, multi-RFI fan-out, `_review`, and
   no-overwrite behavior are preserved.
+- Retire Process Scans from the active operation list; Fast RFI Scan now offers
+  Multi-RFI separation and a Single-RFI mode that OCRs only page one while
+  keeping the complete PDF intact.
+- Normalize only exact OCR `CLV` reads to `CIV`, expose alias evidence, and let
+  operators correct canonical CIV/MEC/ELE/PRC codes in Preview. Rust derives
+  the new destination; invalid, duplicate, or existing targets cannot be
+  applied.
+- Localize the scan mode and correction workflow in EN/TR/RU/AZ. A changed
+  scan preview must be updated and reviewed before the separate Apply action.
 
 
 ## 1.13.10 - 2026-10-08

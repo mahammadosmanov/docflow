@@ -587,3 +587,47 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
     assert_eq!(file_sha256(&workbook).unwrap(), changed_hash);
     assert_eq!(file_sha256(&applied_backup).unwrap(), original_hash);
 }
+
+#[test]
+#[ignore = "set DOCFLOW_VENTOY_CURRENT_RFI_LOG to a private copy of the Ventoy RFI Log workbook"]
+fn operator_current_rfi_log_add_apply_and_undo_is_lossless() {
+    let source = PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_CURRENT_RFI_LOG")
+            .expect("DOCFLOW_VENTOY_CURRENT_RFI_LOG is required"),
+    );
+    let fixture = TempDir::new().unwrap();
+    let root = fixture.path().join("documents");
+    fs::create_dir_all(&root).unwrap();
+    let workbook = root.join("RFI Log.xlsm");
+    fs::copy(source, &workbook).expect("copy current workbook into private fixture");
+    let original_hash = file_sha256(&workbook).unwrap();
+    let mut params = values(&workbook);
+    params.insert("email_text".to_string(), json!(""));
+    params.insert(
+        "sheet_counts".to_string(),
+        json!({"CIV": 1, "MEC": 0, "ELE": 0, "PRC": 0}),
+    );
+    let plan = preview(
+        &params,
+        chrono::Local::now().date_naive(),
+        None,
+        |_| {},
+        || false,
+    )
+    .expect("current workbook should produce a safe preview");
+    assert_eq!(plan.op_id, "rfi.log_add");
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 1);
+
+    let authority =
+        FilesystemAuthority::new(fixture.path().join("journal"), Duration::from_secs(300));
+    let cached = cache(&authority, &root, plan);
+    let result = authority.apply(&cached.plan_id, &caller()).unwrap();
+    assert!(result.applied > 0);
+    assert_eq!(result.failed, 0, "{:?}", result.errors);
+    assert_eq!(result.meta["effectState"], "committed");
+    assert_ne!(file_sha256(&workbook).unwrap(), original_hash);
+
+    let undone = authority.undo(&result.journal_id, &caller(), None).unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert_eq!(file_sha256(&workbook).unwrap(), original_hash);
+}

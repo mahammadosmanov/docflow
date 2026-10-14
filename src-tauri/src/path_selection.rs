@@ -164,6 +164,15 @@ impl PathSelectionStore {
     pub(crate) fn revoke(&self, caller: &CallerIdentity) {
         lock(&self.selections).retain(|_, selection| selection.caller != *caller);
     }
+    pub(crate) fn revoke_selection(&self, selection_id: &str, caller: &CallerIdentity) {
+        let mut selections = lock(&self.selections);
+        if selections
+            .get(selection_id)
+            .is_some_and(|selection| selection.caller == *caller)
+        {
+            selections.remove(selection_id);
+        }
+    }
 
     fn resolve_stored(
         &self,

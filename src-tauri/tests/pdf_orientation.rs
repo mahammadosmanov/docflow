@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     fs,
     path::Path,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -14,12 +14,12 @@ use docflow_lib::{
     fs_ops::{FilesystemAuthority, file_sha256},
     ocr::NativeOcr,
     operations::pdf_orientation::{
-        OPERATION_ID, OrientationDetection, OrientationDetector, PdfOrientationParams, preview,
-        preview_indexed,
+        OPERATION_ID, OrientationDetection, OrientationDetector, PdfOrientationParams,
+        orientation_target_rotation, preview, preview_indexed,
     },
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
-    scan_index::ScanIndex,
+    scan_index::{FileFingerprint, ScanIndex},
 };
 use support::pdf_fixture::write_rich_archive;
 
@@ -54,6 +54,40 @@ impl OrientationDetector for FakeDetector {
 
     fn diagnostics(&self) -> String {
         "fake orientation detector".to_string()
+    }
+}
+
+fn replace_pdf_text_preserving_fingerprint(path: &Path) -> Result<(), String> {
+    let modified = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .map_err(|error| error.to_string())?;
+    let mut bytes = fs::read(path).map_err(|error| error.to_string())?;
+    let before = b"ARCHIVE OLD FIRST PAGE";
+    let after = b"ARCHIVE NEW FIRST PAGE";
+    let start = bytes
+        .windows(before.len())
+        .position(|window| window == before)
+        .ok_or_else(|| "replacement sentinel is missing".to_string())?;
+    bytes[start..start + before.len()].copy_from_slice(after);
+    fs::write(path, bytes).map_err(|error| error.to_string())?;
+    fs::File::open(path)
+        .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(modified)))
+        .map_err(|error| error.to_string())
+}
+struct SameFingerprintReplacementDetector {
+    replaced: AtomicBool,
+}
+
+impl OrientationDetector for SameFingerprintReplacementDetector {
+    fn detect_page(&self, path: &Path, _page_index: usize) -> Result<OrientationDetection, String> {
+        if !self.replaced.swap(true, Ordering::SeqCst) {
+            replace_pdf_text_preserving_fingerprint(path)?;
+        }
+        Ok(detection(90, 18.0))
+    }
+
+    fn diagnostics(&self) -> String {
+        "same-fingerprint replacement fixture".to_string()
     }
 }
 
@@ -122,6 +156,49 @@ fn operator_orientation_directory_preview_reaches_expected_pdf() {
     );
 }
 
+#[test]
+#[ignore = "requires an operator-supplied RFI tree with a visually verified uncertain page"]
+fn operator_uncertain_orientation_page_is_reported_without_rotating() {
+    let root = std::env::var_os("DOCFLOW_OPERATOR_ORIENTATION_ROOT")
+        .map(std::path::PathBuf::from)
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_ROOT is required");
+    let fragment = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT")
+        .expect("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT is required");
+    let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
+        .map(NativeOcr::with_tesseract)
+        .unwrap_or_else(NativeOcr::discover);
+    let review = tempfile::tempdir().unwrap();
+    let plan = preview(
+        &PdfOrientationParams {
+            rfi_system_root: root,
+            review_root: review.path().to_path_buf(),
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert!(
+        plan.warnings.iter().any(|warning| {
+            warning.key == "warn.rfi.orientationNeedsReview"
+                && warning.subject.contains(&fragment)
+                && warning.subject.contains("page 2 orientation uncertain")
+        }),
+        "expected a page-2 review warning for {fragment}; warnings={:?}",
+        plan.warnings
+    );
+    assert!(
+        !plan.steps.iter().any(|step| {
+            step.kind == StepKind::PdfPageRotate
+                && step
+                    .src
+                    .as_deref()
+                    .is_some_and(|path| path.contains(&fragment))
+        }),
+        "an uncertain file must not be rotated automatically"
+    );
+}
+
 fn detection(rotate_clockwise: i64, confidence: f64) -> OrientationDetection {
     OrientationDetection {
         rotate_clockwise,
@@ -130,6 +207,65 @@ fn detection(rotate_clockwise: i64, confidence: f64) -> OrientationDetection {
     }
 }
 
+#[test]
+fn orientation_targets_canonicalize_metadata_and_reject_unsafe_inputs() {
+    for (current, correction, expected) in [
+        (-90, 90, Some(0)),
+        (0, 0, None),
+        (0, 90, Some(90)),
+        (0, 180, Some(180)),
+        (0, 270, Some(270)),
+        (450, 270, Some(0)),
+        (810, 270, Some(0)),
+        (90, 90, Some(180)),
+        (90, 270, Some(0)),
+        (270, 90, Some(0)),
+        (180, 90, Some(270)),
+    ] {
+        assert_eq!(
+            orientation_target_rotation(current, &detection(correction, 10.0)),
+            Ok(expected)
+        );
+    }
+    assert_eq!(
+        orientation_target_rotation(450, &detection(0, 10.0)),
+        Ok(None)
+    );
+    assert!(orientation_target_rotation(45, &detection(90, 20.0)).is_err());
+    assert!(orientation_target_rotation(0, &detection(45, 20.0)).is_err());
+    assert!(orientation_target_rotation(0, &detection(90, 9.9)).is_err());
+    assert!(orientation_target_rotation(0, &detection(90, f64::NAN)).is_err());
+}
+
+#[test]
+fn preview_rejects_same_fingerprint_content_change_during_detection() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("system");
+    let review = fixture.path().join("review");
+    let pdf = source.join("CIV/RFI-0001/document.pdf");
+    fs::create_dir_all(pdf.parent().unwrap()).unwrap();
+    fs::create_dir_all(&review).unwrap();
+    write_rich_archive(&pdf);
+    let original_fingerprint = FileFingerprint::read(&pdf).unwrap();
+    let original_hash = file_sha256(&pdf).unwrap();
+
+    let result = preview(
+        &PdfOrientationParams {
+            rfi_system_root: source,
+            review_root: review,
+        },
+        &SameFingerprintReplacementDetector {
+            replaced: AtomicBool::new(false),
+        },
+        |_| {},
+        || false,
+    );
+
+    assert!(result.is_err());
+    assert_eq!(FileFingerprint::read(&pdf).unwrap(), original_fingerprint);
+    assert_ne!(file_sha256(&pdf).unwrap(), original_hash);
+    assert_eq!(docflow_lib::pdf::inspect(&pdf).unwrap().page_count, 3);
+}
 #[test]
 fn preview_scans_only_discipline_trees_and_proposes_confident_rotations() {
     let fixture = tempfile::tempdir().unwrap();
@@ -264,6 +400,24 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
             <= 2
     );
     assert_eq!(first.steps, second.steps);
+    let original_fingerprint = FileFingerprint::read(&pdf).unwrap();
+    let original_hash = file_sha256(&pdf).unwrap();
+    replace_pdf_text_preserving_fingerprint(&pdf).unwrap();
+    assert_eq!(FileFingerprint::read(&pdf).unwrap(), original_fingerprint);
+    assert_ne!(file_sha256(&pdf).unwrap(), original_hash);
+    let after_replacement = preview_indexed(
+        &params,
+        &detector,
+        |_| {},
+        || false,
+        Some(&scan_index),
+        "owner",
+        false,
+    )
+    .unwrap();
+    assert_eq!(after_replacement.meta["scanIndex"]["reused"], 1);
+    assert_eq!(after_replacement.meta["scanIndex"]["analyzed"], 1);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 9);
 
     let forced = preview_indexed(
         &params,
@@ -277,7 +431,7 @@ fn unchanged_orientation_pdf_is_reused_from_durable_index() {
     .unwrap();
     assert_eq!(forced.meta["scanIndex"]["reused"], 0);
     assert_eq!(forced.meta["scanIndex"]["analyzed"], 2);
-    assert_eq!(detector.calls.load(Ordering::SeqCst), 12);
+    assert_eq!(detector.calls.load(Ordering::SeqCst), 15);
 }
 
 #[test]

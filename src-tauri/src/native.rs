@@ -16,7 +16,7 @@ use crate::{
     cloud::CloudHistory,
     contracts::{
         AppPrefs, Bootstrap, JsonObject, OperationDef, ParamKind, PrintQueueSummary, ProgressEvent,
-        StepKind,
+        RfiPrintCandidate, RfiPrintFindRequest, RfiPrintFindResult, RfiPrintResolution, StepKind,
     },
     credentials::OsCredentialStore,
     diagnostics::PrinterDiagnostic,
@@ -29,9 +29,12 @@ use crate::{
     operations::pdf_orientation::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
-    operations::process_scans::{FAST_COVER_OPERATION_ID, ProcessScansParams, preview_fast_covers},
+    operations::process_scans::{
+        FAST_COVER_OPERATION_ID, ProcessScansParams, ScanMode, preview_fast_covers,
+    },
     operations::replica_publish::{self, ReplicaPublishParams},
     operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
+    operations::rfi_print_find::{self, DocumentType as RfiPrintDocumentType, IncludeTypes},
     operations::stage_signed_pages::{
         StageSignedPagesParams, preview as preview_stage_signed_pages,
         revise as revise_stage_signed_pages,
@@ -328,6 +331,7 @@ impl NativeBackend {
                 )
             }
             BackendMethod::EngineReviewScan => self.review_scan(params),
+            BackendMethod::RfiPrintFind => self.find_rfi_print_files(params),
             BackendMethod::EngineReviewPreview => self.review_preview(params),
             BackendMethod::HistoryList => {
                 let request: HistoryParams = decode(params)?;
@@ -928,6 +932,7 @@ impl NativeBackend {
         let scan_params = ProcessScansParams {
             source: request.values.source,
             destination: request.values.dest,
+            scan_mode: request.values.scan_mode,
             organize_into_rfi_folders: request.values.organize_into_rfi_folders,
             keep_original: request.values.keep_original,
             correct_orientation: request.values.correct_orientation,
@@ -1648,6 +1653,89 @@ impl NativeBackend {
             plan,
         )?)
     }
+    pub(crate) fn find_rfi_print_files(&self, params: Value) -> Result<Value, BackendError> {
+        let request: RfiPrintFindRequest = decode(params)?;
+        let caller = self.caller_identity()?;
+        let root = self.selections.resolve(
+            &request.root,
+            &caller,
+            "files.batch_print",
+            "rfi_system_root",
+            SelectionKind::Folder,
+        )?;
+        let canonical_root = fs::canonicalize(root)
+            .map_err(|_| BackendError::validation("error.print.rfi.changed"))?;
+        let discovery = rfi_print_find::discover(
+            &canonical_root,
+            &request.numbers,
+            IncludeTypes {
+                first_page: request.first_page,
+                sketch: request.sketch,
+            },
+        )
+        .map_err(|_| BackendError::validation("error.print.rfi.invalidRequest"))?;
+        let mut candidates = Vec::with_capacity(discovery.candidates.len());
+        for candidate in discovery.candidates {
+            let mut selection = self
+                .selections
+                .issue(
+                    &caller,
+                    "files.batch_print",
+                    "files",
+                    &candidate.path,
+                    SelectionKind::File,
+                )
+                .map_err(|_| BackendError::validation("error.print.rfi.changed"))?;
+            let issued_path = resolve_scoped_rfi_print_file(
+                &self.selections,
+                &selection,
+                &caller,
+                &canonical_root,
+            )?;
+            let resolution = discovery
+                .resolutions
+                .iter()
+                .find(|resolution| resolution.requested == candidate.requested)
+                .ok_or_else(BackendError::invalid_params)?;
+            let selected =
+                !discovery.truncated && rfi_print_find::initially_selected(resolution, &candidate);
+            let display_path = issued_path
+                .strip_prefix(&canonical_root)
+                .unwrap_or(&issued_path)
+                .to_string_lossy()
+                .into_owned();
+            selection.display_path = display_path.clone();
+            candidates.push(RfiPrintCandidate {
+                requested: candidate.requested,
+                rfi_code: candidate.rfi_code,
+                document_type: match candidate.document_type {
+                    RfiPrintDocumentType::FirstPage => "firstPage",
+                    RfiPrintDocumentType::Sketch => "sketch",
+                }
+                .to_string(),
+                display_path,
+                selection,
+                selected,
+            });
+        }
+        let resolutions = discovery
+            .resolutions
+            .into_iter()
+            .map(|resolution| RfiPrintResolution {
+                requested: resolution.requested,
+                rfi_codes: resolution.rfi_codes,
+                missing_first_page: resolution.missing_first_page,
+                missing_sketch: resolution.missing_sketch,
+                ambiguous: resolution.ambiguous,
+            })
+            .collect::<Vec<_>>();
+        encode(RfiPrintFindResult {
+            candidates,
+            resolutions,
+            visited: discovery.visited,
+            truncated: discovery.truncated,
+        })
+    }
 
     pub(crate) fn preview_batch_print<F>(
         &self,
@@ -1822,6 +1910,9 @@ impl NativeBackend {
         let revised = match claimed.plan.op_id.as_str() {
             "rfi.log_add" => rfi_log::revise(&claimed.plan, &payload)?,
             rfi_file_group::OPERATION_ID => rfi_file_group::revise(&claimed.plan, &payload)?,
+            FAST_COVER_OPERATION_ID => {
+                crate::operations::process_scans::revise(&claimed.plan, &payload)?
+            }
             rfi_system_sync::OPERATION_ID => rfi_system_sync::revise(
                 &claimed.plan,
                 payload["rows"]
@@ -2272,6 +2363,32 @@ impl NativeBackend {
         encode(self.settings.preferences())
     }
 }
+fn resolve_scoped_rfi_print_file(
+    selections: &PathSelectionStore,
+    selection: &PathSelection,
+    caller: &CallerIdentity,
+    canonical_root: &Path,
+) -> Result<PathBuf, BackendError> {
+    let issued_path = selections.resolve(
+        selection,
+        caller,
+        "files.batch_print",
+        "files",
+        SelectionKind::File,
+    )?;
+    let canonical_path = match fs::canonicalize(&issued_path) {
+        Ok(path) => path,
+        Err(_) => {
+            selections.revoke_selection(&selection.selection_id, caller);
+            return Err(BackendError::validation("error.print.rfi.changed"));
+        }
+    };
+    if canonical_path != issued_path || !canonical_path.starts_with(canonical_root) {
+        selections.revoke_selection(&selection.selection_id, caller);
+        return Err(BackendError::validation("error.print.rfi.rootEscape"));
+    }
+    Ok(canonical_path)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PathSelectionMode {
@@ -2459,6 +2576,8 @@ struct PreviewEnvelope<T> {
 struct ProcessScansValues {
     source: std::path::PathBuf,
     dest: std::path::PathBuf,
+    #[serde(default)]
+    scan_mode: ScanMode,
     #[serde(default = "default_true")]
     organize_into_rfi_folders: bool,
     #[serde(default)]
@@ -2764,6 +2883,120 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn existing_fast_scan_settings_default_to_multi_rfi() {
+        let values: ProcessScansValues = serde_json::from_value(json!({
+            "source": "/tmp/source",
+            "dest": "/tmp/destination",
+            "organize_into_rfi_folders": true,
+            "keep_original": false,
+            "correct_orientation": false
+        }))
+        .unwrap();
+
+        assert_eq!(values.scan_mode, ScanMode::MultiRfi);
+    }
+    #[test]
+    fn fast_scan_plan_revision_routes_through_trusted_scan_editor() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let source = temporary.path().join("source");
+        let destination = temporary.path().join("destination");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&destination).unwrap();
+        let source_file = source.join("scan.pdf");
+        fs::write(&source_file, b"source PDF").unwrap();
+        let destination = fs::canonicalize(destination).unwrap();
+        let original_code = "AZE-SUN-INT-QMS-RFI-CIV-0064";
+        let original_target = crate::naming::target_for(&destination.join("CIV"), original_code);
+        let step_meta = json!({
+            "code": original_code,
+            "confidence": 1.0,
+            "intoFolder": true,
+            "folderCreated": true,
+            "source": "ocr:fixture",
+            "scanEditRowId": "scan-output-0"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let rows = json!([{
+            "_rowId": "scan-output-0",
+            "sourceFile": "scan.pdf",
+            "evidenceKey": "rfi.fastScan.evidence.confirmed",
+            "detectedCode": original_code,
+            "code": original_code,
+            "target": original_target.to_string_lossy(),
+        }]);
+        let plan = crate::contracts::Plan {
+            plan_id: String::new(),
+            op_id: FAST_COVER_OPERATION_ID.to_string(),
+            steps: vec![crate::contracts::Step {
+                kind: StepKind::Copy,
+                src: Some(source_file.to_string_lossy().into_owned()),
+                dst: Some(original_target.to_string_lossy().into_owned()),
+                note_key: Some("note.renamed".to_string()),
+                meta: step_meta,
+            }],
+            warnings: Vec::new(),
+            meta: json!({
+                "editor": {"rows": rows},
+                "scanEdit": {
+                    "destinationRoot": destination.to_string_lossy(),
+                    "organizeIntoRfiFolders": true
+                }
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        };
+        let caller = backend.caller_identity().unwrap();
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            "fast-scan-revision",
+            FAST_COVER_OPERATION_ID,
+        );
+        let source_grant = backend
+            .filesystem
+            .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+            .unwrap();
+        let destination_grant = backend
+            .filesystem
+            .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+            .unwrap();
+        let cached = backend
+            .filesystem
+            .cache_plan(
+                BackendOrigin::Rust,
+                PlanBinding::new(
+                    &caller.owner_id,
+                    &caller.session_id,
+                    FAST_COVER_OPERATION_ID,
+                    vec![source_grant.grant_id, destination_grant.grant_id],
+                ),
+                plan,
+            )
+            .unwrap();
+        let mut rows = rows.as_array().unwrap().clone();
+        rows[0]["code"] = json!("AZE-SUN-INT-QMS-RFI-MEC-0192");
+        let revised = backend
+            .revise_native_plan(json!({"planId": cached.plan_id, "rows": rows}))
+            .expect("Fast RFI Scan revisions are registered");
+        let output = revised["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["noteKey"] == "note.renamed")
+            .unwrap();
+        assert_eq!(
+            output["dst"],
+            crate::naming::target_for(&destination.join("MEC"), "AZE-SUN-INT-QMS-RFI-MEC-0192")
+                .to_string_lossy()
+                .as_ref()
+        );
+    }
 
     static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -3649,6 +3882,7 @@ mod tests {
         fs::create_dir(&dest_dir).unwrap();
 
         let params: Map<String, Value> = serde_json::from_value(json!({
+            "scan_mode": "multi_rfi",
             "source": source_dir.to_str().unwrap(),
             "dest": dest_dir.to_str().unwrap(),
             "organize_into_rfi_folders": false,
@@ -3658,7 +3892,7 @@ mod tests {
         }))
         .unwrap();
 
-        let filtered = filter_saved_operation_params("rfi.process_scans", params)
+        let filtered = filter_saved_operation_params("rfi.process_scans_fast_covers", params)
             .expect("known operation should filter saved params");
         assert_eq!(
             filtered.get("source"),
@@ -3678,10 +3912,12 @@ mod tests {
 
         backend
             .settings
-            .save_params("rfi.process_scans", filtered)
+            .save_params("rfi.process_scans_fast_covers", filtered)
             .unwrap();
 
-        let restored = backend.selected_params("rfi.process_scans").unwrap();
+        let restored = backend
+            .selected_params("rfi.process_scans_fast_covers")
+            .unwrap();
         let source_selection: PathSelection =
             serde_json::from_value(restored.get("source").unwrap().clone()).unwrap();
         let dest_selection: PathSelection =
@@ -3705,7 +3941,7 @@ mod tests {
         backend
             .settings
             .save_params(
-                "rfi.process_scans",
+                "rfi.process_scans_fast_covers",
                 serde_json::from_value(json!({
                     "source": "/non/existent/path/never/created",
                     "dest": dest_dir.to_str().unwrap(),
@@ -3714,7 +3950,9 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        let restored2 = backend.selected_params("rfi.process_scans").unwrap();
+        let restored2 = backend
+            .selected_params("rfi.process_scans_fast_covers")
+            .unwrap();
         assert!(!restored2.contains_key("source"));
         assert!(restored2.contains_key("dest"));
         assert_eq!(restored2.get("keep_original"), Some(&json!(true)));
@@ -3942,5 +4180,182 @@ mod tests {
             .expect("undo must succeed");
         assert_eq!(undo_result.applied, 4);
         assert_eq!(undo_result.failed, 0);
+    }
+
+    #[test]
+    fn rfi_print_finder_issues_exact_batch_print_file_selections() {
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let root = temporary.path().join("RFI System");
+        let code = "AZE-SUN-INT-QMS-RFI-CIV-1319";
+        let duplicate = root.join("CIV/old").join(format!("{code}.docx"));
+        let first = root.join("CIV").join(format!("{code}.docx"));
+        let sketch = root.join("CIV").join(format!("{code} Sketch.pdf"));
+        for path in [&duplicate, &first, &sketch] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"").unwrap();
+        }
+        let caller = backend.caller_identity().unwrap();
+        let root_selection = backend
+            .selections
+            .issue(
+                &caller,
+                "files.batch_print",
+                "rfi_system_root",
+                &root,
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let result = backend
+            .find_rfi_print_files(json!({
+                "root": root_selection,
+                "numbers": ["CIV-1319"],
+                "firstPage": true,
+                "sketch": true,
+            }))
+            .unwrap();
+        let candidates = result["candidates"].as_array().unwrap();
+        assert_eq!(candidates.len(), 3);
+        let first_pages = candidates
+            .iter()
+            .filter(|candidate| candidate["documentType"] == "firstPage")
+            .collect::<Vec<_>>();
+        let sketches = candidates
+            .iter()
+            .filter(|candidate| candidate["documentType"] == "sketch")
+            .collect::<Vec<_>>();
+        assert_eq!(first_pages.len(), 2);
+        assert!(
+            first_pages
+                .iter()
+                .all(|candidate| candidate["selected"] == false)
+        );
+        assert_eq!(sketches.len(), 1);
+        assert_eq!(sketches[0]["selected"], true);
+        for candidate in candidates {
+            let selection: PathSelection =
+                serde_json::from_value(candidate["selection"].clone()).unwrap();
+            let path = backend
+                .selections
+                .resolve(
+                    &selection,
+                    &caller,
+                    "files.batch_print",
+                    "files",
+                    SelectionKind::File,
+                )
+                .unwrap();
+            assert!(path.starts_with(fs::canonicalize(&root).unwrap()));
+        }
+    }
+
+    #[test]
+    fn finder_revokes_an_issued_selection_outside_the_selected_root() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().join("selected-root");
+        fs::create_dir(&root).unwrap();
+        let outside = temporary.path().join("outside.pdf");
+        fs::write(&outside, b"outside").unwrap();
+        let caller = CallerIdentity::new("owner", "session");
+        let selections = PathSelectionStore::new(Duration::from_secs(60));
+        let selection = selections
+            .issue(
+                &caller,
+                "files.batch_print",
+                "files",
+                &outside,
+                SelectionKind::File,
+            )
+            .unwrap();
+
+        let error = resolve_scoped_rfi_print_file(
+            &selections,
+            &selection,
+            &caller,
+            &fs::canonicalize(root).unwrap(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "validation");
+        assert_eq!(error.message, "error.print.rfi.rootEscape");
+        assert!(
+            selections
+                .resolve(
+                    &selection,
+                    &caller,
+                    "files.batch_print",
+                    "files",
+                    SelectionKind::File,
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    #[ignore = "set DOCFLOW_VENTOY_RFI_PRINT_FIND_ROOT to a private Ventoy RFI System copy"]
+    fn operator_ventoy_rfi_print_finder_hands_off_scoped_files_without_source_changes() {
+        let root = PathBuf::from(
+            std::env::var_os("DOCFLOW_VENTOY_RFI_PRINT_FIND_ROOT")
+                .expect("DOCFLOW_VENTOY_RFI_PRINT_FIND_ROOT is required"),
+        );
+        let number = std::env::var("DOCFLOW_VENTOY_RFI_PRINT_FIND_NUMBER")
+            .unwrap_or_else(|_| "CIV-1316".to_string());
+        let temporary = tempfile::tempdir().unwrap();
+        let backend = test_backend(&temporary);
+        let caller = backend.caller_identity().unwrap();
+        let canonical_root = fs::canonicalize(&root).expect("private RFI System copy");
+        let root_selection = backend
+            .selections
+            .issue(
+                &caller,
+                "files.batch_print",
+                "rfi_system_root",
+                &root,
+                SelectionKind::Folder,
+            )
+            .unwrap();
+        let result = backend
+            .find_rfi_print_files(json!({
+                "root": root_selection,
+                "numbers": [number],
+                "firstPage": true,
+                "sketch": true,
+            }))
+            .expect("native finder should discover real Ventoy files");
+        let candidates = result["candidates"].as_array().unwrap();
+        assert!(
+            !candidates.is_empty(),
+            "selected private copy must contain the requested RFI"
+        );
+        let mut source_hashes = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let selection: PathSelection =
+                serde_json::from_value(candidate["selection"].clone()).unwrap();
+            let path = backend
+                .selections
+                .resolve(
+                    &selection,
+                    &caller,
+                    "files.batch_print",
+                    "files",
+                    SelectionKind::File,
+                )
+                .unwrap();
+            assert_eq!(
+                path,
+                resolve_scoped_rfi_print_file(
+                    &backend.selections,
+                    &selection,
+                    &caller,
+                    &canonical_root,
+                )
+                .unwrap(),
+            );
+            assert!(path.starts_with(&canonical_root));
+            source_hashes.push((path.clone(), crate::fs_ops::file_sha256(&path).unwrap()));
+        }
+        for (path, hash) in source_hashes {
+            assert_eq!(crate::fs_ops::file_sha256(&path).unwrap(), hash);
+        }
     }
 }

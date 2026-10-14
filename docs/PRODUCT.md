@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.14.0**. `VERSION` is authoritative.
+Current product version: **1.16.7**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -31,7 +31,8 @@ workbook behavior, print batches kept in order, and every change recoverable.
 4. A missed OCR match is reviewable; a guessed label is forbidden.
 5. The archive used by signed-page staging is read-only.
 6. The webview never receives Supabase tokens or arbitrary filesystem/network authority.
-7. All user-visible strings exist in Turkish, English, Russian, and Azerbaijani.
+7. All user-visible strings exist in Turkish, English, Russian, and Azerbaijani;
+   schema-generated switches expose localized accessible names.
 8. The UI is monochrome; meaning is conveyed by words, icons, controls, and border weight.
 9. Cloud history is audit metadata only; only a validated local journal can authorize undo.
 10. Every preview presents a shared, localized count of its approved effect types before Apply;
@@ -43,13 +44,17 @@ workbook behavior, print batches kept in order, and every change recoverable.
 13. A machine-checked documentation map, stable requirement IDs, traceability
     owners, known limitations, and Windows runbook keep human and AI handoffs
     aligned with the registered Rust operation roster.
-14. PDF orientation is inferred from rendered content, never page dimensions;
-    the RFI system remains read-only and only complete high-confidence decisions
-    may create separately reviewed copies.
+14. PDF orientation comes from rendered content, not page dimensions. OSD and
+    directional OCR remain fail-closed; a narrow fallback accepts only the
+    same exact canonical RFI header ID and direction at both 250/350 DPI.
+    Ambiguous or conflicting evidence stays for review, and source PDFs remain
+    read-only; only approved copies enter the separate review tree.
 15. Incoming RFI grouping requires readable EML/MSG evidence for each exact RFI;
     missing mail blocks that RFI's folder and all related copies.
 16. Large repeated RFI scans checkpoint each completed PDF in a local,
     owner-scoped index; reuse is visible and never substitutes for Apply guards.
+    Orientation decisions pin source SHA-256 before inspection/detection, recheck
+    after analysis and cache reuse, and use a versioned cache profile.
 17. Independent bulk discovery and analysis use bounded multi-core workers;
     every operation reports localized stages and item progress while all effects
     that can collide or become uncertain remain ordered.
@@ -77,17 +82,16 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| Process Scans | Identify, split ordered multi-RFI scan PDFs, rename, organize, and review RFI pages | Strict high-confidence covers delimit RFIs; all pages up to the next confirmed cover stay with the current RFI, including continuations with uncertain or unreadable RFI-identity OCR; pages before the first cover remain in `_review`; outputs contain only approved pages; CIV/MEC/ELE/PRC results use matching discipline folders; self-contained XML metadata is preserved and only empty outline trees are omitted; no-overwrite and recoverable source handling |
-| Fast Cover Scans | Use a separate high-speed, known-template cover detector on top-level multi-page RFI PDFs | Requires visible OCR agreement on exact RFI identity, request heading, and known project/client mark; continuation pages stay attached; missing per-RFI folders are created under the matching discipline even when other RFI folders already exist; unresolved possible covers start a Review group; page rotation correction defaults off; normal Process Scans remains unchanged |
+| Fast RFI Scan | Identify known RFI covers, split confirmed multi-RFI scans, or read only page one for a single RFI while preserving its complete PDF | Multi-RFI requires high-confidence consensus on a Strict or approved OCR-alias identity plus visible cover evidence; a narrow independent rescue may resolve an otherwise unresolved strong-vote candidate but never overrides a stable text-layer identity or conflict. Exact OCR-only `CLV` normalizes to `CIV`. Preview accepts supported full-code candidates with one-to-four ASCII digits and pads the suffix to four; ITP, dates, and other numbers are not normalized. With optional page rotation on, direction-zero generic OCR words alone do not stop later cardinal cover searches; unresolved/no-code pages retain unchanged-copy review handling. That path pins each source SHA-256 before parallel OCR/orientation analysis and rejects source changes before Plan creation. Rust rederives target paths; source/page selections stay fixed and Apply never overwrites |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into `<destination>/<discipline>/<full-code>/<source filename>` | Only CIV/MEC/ELE/PRC; top-level source is read-only; readable EML/MSG evidence is required per RFI; exact multi-RFI fan-out is previewed; no overwrite; unmatched/unreadable files go to root `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
-| RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; match remaining exact ITP/item, area, and inspection-location contexts; skip unsupported template scope; ambiguous matches remain manual review; never create rows or sections or change worksheet Remarks; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |
+| RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; match remaining exact ITP/item, area, and inspection-location contexts; records without matching prepared rows remain visible for manual review and are not automatically synchronized; never create rows or sections or change worksheet Remarks; ambiguous matches remain manual review; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |
 | RFI completion-status sync | Detect exact completed RFI PDFs at every nesting depth and mark approved RFI Log rows Completed | Read-only bounded parallel discovery; exact filenames and rows; conflicting/formula/merged targets fail closed; backup, closed OOXML delta verification, journal, and undo |
 | Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
-| Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, and opt-in recall of safe settings without old files |
-| Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | Bounded multi-core archive discovery uses exact filenames; exact page index and candidate are pinned; thumbnails are inert and bounded; archive and source scan stay read-only; unreadable, duplicate, ambiguous, and unsupported pages are rejected |
-| PDF orientation normalization | Make every confidently classifiable PDF page under CIV/MEC/ELE/PRC readable without manual rotation | Durable per-PDF checkpoints; bounded multi-core preview; exact page rotations and source hashes; separate no-clobber review tree; structural fidelity verification; uncertain whole PDFs stay unapplied |
+| Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release; optionally find exact First Page `.docx` and Sketch `.pdf` documents in the selected RFI System by canonical code, discipline-number input, or four-digit number | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, opt-in recall of safe settings without old files; finder is read-only, presents missing types/multiple versions, and requires explicit choice where bare numbers span disciplines |
+| Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | High-confidence consensus-confirmed Strict or approved OcrAlias identities only; repaired, fuzzy, conflicting, and filename-only identities remain review-only. Archive matching requires the exact case-insensitive RFI PDF basename; one-to-four-digit suffixes canonicalize to four digits, while Sketch/DOCX and folder/other-name matches do not count. Equivalent short/canonical duplicate PDFs remain ambiguous; archive and signed scan stay read-only, and existing review destinations never overwrite |
+| PDF orientation normalization | Make every confidently classifiable PDF page under CIV/MEC/ELE/PRC readable without manual rotation | Shares the canonical `/Rotate` and correction policy with Fast RFI Scan; the exact-header-ID fallback requires one canonical ID and direction at both 250/350 DPI. Source SHA-256 is pinned before analysis and checked after analysis and cache reuse; durable per-PDF checkpoints, bounded multi-core preview, separate no-clobber review tree, structural fidelity verification, and whole-file review for unresolved cases |
 | Review manager | Keep, place, or recoverably delete exceptions | Delete is a move to application trash |
 | History and undo | Audit and reverse completed work | Local journal is authoritative; cloud is optional |
 | Access control | Sign in, approve users, administer access | Supabase RLS is the server-side authority |

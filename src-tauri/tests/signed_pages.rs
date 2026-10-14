@@ -17,7 +17,7 @@ use docflow_lib::{
         rotate_pages_incremental,
     },
     plan_store::{BackendOrigin, PlanBinding},
-    rfi_code::find,
+    rfi_code::{RfiMethod, find, normalize_candidate_number},
 };
 use serde_json::{Value, json};
 use support::pdf_fixture::{
@@ -105,6 +105,42 @@ impl OcrAdapter for PageFixtureOcr {
 
     fn diagnostics(&self) -> String {
         "fixture page OCR".to_string()
+    }
+}
+
+struct AliasFixtureOcr {
+    code: String,
+}
+
+impl OcrAdapter for AliasFixtureOcr {
+    fn read(&self, _path: &Path) -> Result<OcrRead, OcrFailure> {
+        let mut matched = find(&self.code);
+        matched.method = RfiMethod::OcrAlias;
+        Ok(OcrRead {
+            matched,
+            source: "fixture-consensus-alias".to_string(),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "fixture alias OCR".to_string()
+    }
+}
+
+struct RepairedFixtureOcr;
+
+impl OcrAdapter for RepairedFixtureOcr {
+    fn read(&self, _path: &Path) -> Result<OcrRead, OcrFailure> {
+        let mut matched = find(CODE);
+        matched.method = RfiMethod::Repaired;
+        Ok(OcrRead {
+            matched,
+            source: "fixture-repaired".to_string(),
+        })
+    }
+
+    fn diagnostics(&self) -> String {
+        "fixture repaired OCR".to_string()
     }
 }
 
@@ -728,6 +764,12 @@ fn archive_lookup_ignores_nonstandard_names_even_when_the_path_contains_the_rfi_
             .join(format!("Archived {CODE} approved copy.pdf")),
     );
     write_rich_archive(&archive_root.join(CODE).join("approved.pdf"));
+    write_rich_archive(&archive_root.join(CODE).join("Sketch.pdf"));
+    fs::write(
+        archive_root.join(filename_for(CODE)).with_extension("docx"),
+        b"not an archive PDF",
+    )
+    .unwrap();
 
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
@@ -744,8 +786,80 @@ fn archive_lookup_ignores_nonstandard_names_even_when_the_path_contains_the_rfi_
     );
     assert_eq!(plan.warnings.len(), 1);
     assert_eq!(plan.warnings[0].key, "warn.rfi.archiveMissing");
+    assert_eq!(
+        plan.meta["warningReviewItems"][0]["reasons"][0]["code"],
+        json!(CODE)
+    );
 }
 
+#[test]
+fn approved_ocr_alias_is_accepted_and_short_archive_numbers_match_canonically() {
+    assert_eq!(normalize_candidate_number("64").as_deref(), Some("0064"));
+    assert_eq!(normalize_candidate_number("0064").as_deref(), Some("0064"));
+    assert_eq!(normalize_candidate_number("10064"), None);
+    for archive_number in ["64", "0064"] {
+        let fixture = tempfile::tempdir().unwrap();
+        let (signed_root, archive_root, review_root) = roots(&fixture);
+        write_signed(&signed_root.join("signed.pdf"), false);
+        let archive = archive_root.join("Package/Civil").join(format!(
+            "RFI No. AZE-SUN-INT-QMS-RFI-CIV-{archive_number}.pdf"
+        ));
+        write_rich_archive(&archive);
+
+        let plan = preview(
+            &params(&signed_root, &archive_root, &review_root, false),
+            &AliasFixtureOcr {
+                code: CODE.to_string(),
+            },
+            |_| {},
+            || false,
+        )
+        .unwrap();
+
+        assert!(
+            plan.steps
+                .iter()
+                .any(|step| step.kind == StepKind::PdfFirstPageReplace),
+            "archive number {archive_number} should resolve the canonical RFI"
+        );
+        assert_eq!(
+            plan.meta["editor"]["rows"][0]["code"],
+            json!(CODE),
+            "persisted plan code must be canonical"
+        );
+    }
+}
+
+#[test]
+fn repaired_rfi_identity_remains_review_only() {
+    let fixture = tempfile::tempdir().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("signed.pdf"), false);
+    write_rich_archive(&archive_root.join("Package/Civil").join(filename_for(CODE)));
+
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &RepairedFixtureOcr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != StepKind::PdfFirstPageReplace)
+    );
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.no_code")
+    );
+    assert_eq!(
+        plan.meta["warningReviewItems"][0]["reasons"][0]["key"],
+        json!("warn.no_code")
+    );
+}
 #[test]
 fn archive_ambiguity_requires_an_allowlisted_rfi_no_pdf_selection() {
     let fixture = tempfile::TempDir::new().unwrap();
@@ -1281,6 +1395,7 @@ fn same_bytes_in_an_unrelated_temp_copy_never_authorize_deletion() {
     write_signed(&signed, false);
     write_rich_archive(&archive);
     write_rich_archive(&output);
+    let output_bytes = fs::read(&output).unwrap();
     let unrelated = output.with_file_name(format!(
         ".{}.docflow-unrelated.tmp",
         output.file_name().unwrap().to_string_lossy()
@@ -1289,7 +1404,9 @@ fn same_bytes_in_an_unrelated_temp_copy_never_authorize_deletion() {
 
     let plan = preview(
         &params(&signed_root, &archive_root, &review_root, false),
-        &FixtureOcr::one(&["signed.pdf"]),
+        &AliasFixtureOcr {
+            code: CODE.to_string(),
+        },
         |_| {},
         || false,
     )
@@ -1301,6 +1418,7 @@ fn same_bytes_in_an_unrelated_temp_copy_never_authorize_deletion() {
             .all(|step| step.kind != StepKind::PdfFirstPageReplace)
     );
     assert_eq!(plan.warnings[0].key, "warn.rfi.reviewExists");
+    assert_eq!(fs::read(&output).unwrap(), output_bytes);
     assert!(unrelated.is_file());
 }
 
@@ -1493,4 +1611,100 @@ fn review_root_overlap_is_rejected_without_any_plan_authority() {
     .unwrap();
     assert!(plan.steps.is_empty());
     assert_eq!(plan.warnings[0].key, "error.rfi.reviewRootMustBeSeparate");
+}
+
+#[test]
+#[ignore = "set DOCFLOW_VENTOY_SIGNED_SCAN_ROOT, DOCFLOW_VENTOY_SIGNED_ARCHIVE_ROOT, and DOCFLOW_VENTOY_TESSERACT to private copies; archive root may be empty"]
+fn operator_ventoy_signed_pages_preview_matches_nine_real_rfi_files() {
+    let signed_root = std::path::PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_SIGNED_SCAN_ROOT")
+            .expect("DOCFLOW_VENTOY_SIGNED_SCAN_ROOT is required"),
+    );
+    let archive_root = std::path::PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_SIGNED_ARCHIVE_ROOT")
+            .expect("DOCFLOW_VENTOY_SIGNED_ARCHIVE_ROOT is required"),
+    );
+    let tesseract = std::path::PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_TESSERACT").expect("DOCFLOW_VENTOY_TESSERACT is required"),
+    );
+    let review = tempfile::tempdir().unwrap();
+    let source_files = [
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0901.pdf", "0901"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1131.pdf", "1131"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1199.pdf", "1199"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1261.pdf", "1261"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1296.pdf", "1296"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1067.pdf", "1067"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1132.pdf", "1132"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1252.pdf", "1252"),
+        ("RFI No. AZE-SUN-INT-QMS-RFI-CIV-1253.pdf", "1253"),
+    ];
+    let source_hashes = source_files.map(|(source_name, _)| {
+        let source = signed_root.join(source_name);
+        assert!(
+            source.is_file(),
+            "missing private signed scan {source_name}"
+        );
+        (source_name, file_sha256(&source).unwrap())
+    });
+    let plan = preview(
+        &params(&signed_root, &archive_root, review.path(), false),
+        &docflow_lib::ocr::NativeOcr::with_tesseract(tesseract),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    let warning_items = plan.meta["warningReviewItems"].as_array().unwrap();
+    let recognized = rows
+        .iter()
+        .filter_map(|row| row["code"].as_str())
+        .chain(
+            warning_items
+                .iter()
+                .flat_map(|item| item["reasons"].as_array().into_iter().flatten())
+                .filter_map(|reason| reason["code"].as_str()),
+        )
+        .collect::<std::collections::BTreeSet<_>>();
+    for (_, number) in source_files {
+        let code = format!("AZE-SUN-INT-QMS-RFI-CIV-{number}");
+        assert!(
+            recognized.contains(code.as_str()),
+            "missing {code}; rows={rows:#?}, review={warning_items:#?}"
+        );
+    }
+    assert!(
+        recognized.contains("AZE-SUN-INT-QMS-RFI-CIV-0901"),
+        "short RFI number 901 must be normalized to 0901"
+    );
+    assert!(
+        recognized.contains("AZE-SUN-INT-QMS-RFI-CIV-1296"),
+        "independently confirmed 1296 must be recognized"
+    );
+    for item in warning_items {
+        for reason in item["reasons"].as_array().into_iter().flatten() {
+            if reason["key"] == "warn.rfi.archiveMissing" {
+                assert!(
+                    reason["code"]
+                        .as_str()
+                        .is_some_and(|code| recognized.contains(code)),
+                    "archive-missing warning must retain the canonical per-page code"
+                );
+            }
+        }
+    }
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.archiveMissing"),
+        "private archive copy should retain warning coverage for genuine missing originals"
+    );
+    for (source_name, expected_hash) in source_hashes {
+        assert_eq!(
+            file_sha256(&signed_root.join(source_name)).unwrap(),
+            expected_hash,
+            "preview must not change source scans"
+        );
+    }
+    assert_eq!(fs::read_dir(review.path()).unwrap().count(), 0);
 }

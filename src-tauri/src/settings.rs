@@ -757,7 +757,7 @@ mod tests {
             vec!["Alpha", "bravo", "zulu"]
         );
         assert!(matches!(
-            store.delete_preset(&operation("rfi.process_scans"), &alpha.id),
+            store.delete_preset(&operation("rfi.process_scans_fast_covers"), &alpha.id),
             Err(PresetStoreError::Missing)
         ));
         assert!(matches!(
@@ -994,8 +994,9 @@ mod tests {
         let store = SettingsStore::new(path.clone()).unwrap();
         store
             .save_params(
-                "rfi.process_scans",
+                "rfi.process_scans_fast_covers",
                 serde_json::from_value(json!({
+                    "scan_mode": "multi_rfi",
                     "source": "/in",
                     "dest": "/out",
                     "keep_original": true,
@@ -1009,8 +1010,9 @@ mod tests {
 
         let restored = SettingsStore::new(path.clone()).unwrap();
         assert_eq!(
-            restored.params_for("rfi.process_scans"),
+            restored.params_for("rfi.process_scans_fast_covers"),
             serde_json::from_value(json!({
+                "scan_mode": "multi_rfi",
                 "source": "/in",
                 "dest": "/out",
                 "keep_original": true,

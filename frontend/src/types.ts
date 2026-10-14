@@ -175,6 +175,30 @@ export interface PathSelection {
   name: string;
 }
 
+export interface RfiPrintCandidate {
+  requested: string;
+  rfiCode: string;
+  documentType: "firstPage" | "sketch";
+  displayPath: string;
+  selection: PathSelection;
+  selected: boolean;
+}
+
+export interface RfiPrintResolution {
+  requested: string;
+  rfiCodes: string[];
+  missingFirstPage: boolean;
+  missingSketch: boolean;
+  ambiguous: boolean;
+}
+
+export interface RfiPrintFindResult {
+  candidates: RfiPrintCandidate[];
+  resolutions: RfiPrintResolution[];
+  visited: number;
+  truncated: boolean;
+}
+
 export interface ReviewItem {
   selectionId: string;
   path: string;

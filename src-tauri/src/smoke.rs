@@ -122,15 +122,21 @@ fn bootstrap_settings(root: &Path) -> Result<(Bootstrap, u128), String> {
         .map_err(|error| format!("settings save: {error}"))?;
     let mut values = Map::new();
     values.insert("keep_original".to_string(), Value::Bool(true));
+    values.insert(
+        "scan_mode".to_string(),
+        Value::String("multi_rfi".to_string()),
+    );
+    values.insert("organize_into_rfi_folders".to_string(), Value::Bool(false));
+    values.insert("correct_orientation".to_string(), Value::Bool(false));
     values.insert("nested".to_string(), json!({"mustNotPersist": true}));
     settings
-        .save_params("rfi.process_scans", values)
+        .save_params(FAST_COVER_OPERATION_ID, values)
         .map_err(|error| format!("operation settings save: {error}"))?;
     if settings.preferences() != preferences {
         return Err("settings round trip changed preferences".to_string());
     }
     if settings
-        .params_for("rfi.process_scans")
+        .params_for(FAST_COVER_OPERATION_ID)
         .contains_key("nested")
     {
         return Err("settings persisted a non-scalar operation value".to_string());
@@ -205,6 +211,7 @@ fn run_scan_operation_fixture(
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -241,16 +248,16 @@ fn run_scan_operation_fixture(
         .map_err(|error| backend_error("plan cache", error))?;
     let applied = authority
         .apply(&cached.plan_id, &caller)
-        .map_err(|error| backend_error("process-scans apply", error))?;
+        .map_err(|error| backend_error("fast-scan apply", error))?;
     let undone = undo_journal(authority.journals(), &applied.journal_id, &caller, None)
-        .map_err(|error| backend_error("process-scans undo", error))?;
+        .map_err(|error| backend_error("fast-scan undo", error))?;
     if !scan.is_file()
         || fs::read_dir(&destination)
             .map_err(|error| error.to_string())?
             .next()
             .is_some()
     {
-        return Err("process-scans apply/undo did not restore the isolated tree".to_string());
+        return Err("fast-scan apply/undo did not restore the isolated tree".to_string());
     }
     report.operation_millis = Some(operation_started.elapsed().as_millis());
     report.applied_steps = Some(applied.applied);

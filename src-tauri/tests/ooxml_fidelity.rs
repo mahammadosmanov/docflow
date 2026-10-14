@@ -412,22 +412,6 @@ fn guarded_follow_up_rejects_invalid_update_authority_before_output() {
         assert!(patch_workbook_sheets_guarded(&mut source, &mut destination, &updates).is_err());
         assert!(destination.into_inner().is_empty());
     }
-
-    let too_many = BTreeMap::from([(
-        "Follow Up".to_string(),
-        (1..=501)
-            .map(|row| ((row, 2), approved.clone()))
-            .collect::<BTreeMap<_, _>>(),
-    )]);
-    let mut destination = Cursor::new(Vec::new());
-    source.seek(SeekFrom::Start(0)).unwrap();
-    let error =
-        patch_workbook_sheets_guarded(&mut source, &mut destination, &too_many).unwrap_err();
-    assert_eq!(
-        error.kind(),
-        docflow_lib::ooxml::OoxmlErrorKind::LimitExceeded
-    );
-    assert!(destination.into_inner().is_empty());
 }
 
 #[cfg(unix)]

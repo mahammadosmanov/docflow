@@ -1,11 +1,11 @@
 # DocFlow
 
-DocFlow 1.14.0 is a Tauri 2 desktop application for ten high-risk document
+DocFlow 1.16.7 is a Tauri 2 desktop application with nine registered document
 workflows:
 
-- Process Scans: OCR, rename, organize into optional RFI folders, and review
-- Fast Cover Scans: separate four-direction cover detection for multi-page RFI
-  PDFs; uncertain cover boundaries start a Review group
+- Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for
+  a single RFI while keeping the complete PDF; review and correct canonical
+  RFI numbers before Apply.
 - Group Files by RFI: require matching EML/MSG evidence, then copy each related
   incoming file into exact RFI folders while preserving the source
 - Add RFI Log entries: multi-sheet Excel scheduling, editable preview, safe
@@ -23,7 +23,10 @@ workflows:
 - Synchronize RFI Follow Up: add/update uniquely mapped CIV/MEC groups, remove
   Cancelled/Rejected entries, and project FINAL Worley evidence, including the
   current PCU FINAL `Signed by Worley` column
-- Analyze RFI System: detect Worley signatures and guard RFI Log/Follow Up updates
+- Analyze RFI System: detect Worley signatures and guard RFI Log/Follow Up updates.
+  Insufficient signature evidence remains unsigned; it cannot promote status to
+  `Signed`, may set a safe existing status to `Not Signed`, and never downgrades
+  an existing `Signed` value.
 - Mark completed RFIs: recursively find exact completed RFI PDFs and preview
   guarded RFI Log Inspection Status updates to Completed
 
@@ -115,7 +118,7 @@ path/to/docflow --package-smoke artifacts/package-smoke.json
 ```
 
 It round-trips bootstrap/settings, performs real image-only OCR, and applies then
-undoes a representative Process Scans fixture in a temporary directory.
+undoes a representative Fast RFI Scan fixture in a temporary directory.
 
 ## Windows installer
 

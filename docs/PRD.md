@@ -15,7 +15,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 - **DF-004 — Durable recovery:** effects are write-ahead journaled; interruption,
   uncertainty, undo, and retained artifacts remain operator-visible.
 - **DF-005 — Exact RFI identity:** persisted RFI codes are exact uppercase ASCII
-  `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}` values. Ambiguity fails closed.
+  `AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{4}` values. Every processing feature
+  accepting an RFI candidate normalizes one-to-four ASCII digits only after
+  supported RFI context is established, pads to four digits, and rejects longer
+  values rather than truncating them. Unrelated stored data is unchanged.
+  Ambiguity fails closed.
 - **DF-006 — Workbook fidelity:** only approved literal cells may change;
   formulas, macros, relationships, styles, package members, and unrelated cells
   remain intact or the operation is rejected.
@@ -38,27 +42,39 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   Windows, Office, OneDrive, printer, live-service, signing, or notarization acceptance.
 - **DF-014 — Release identity:** `VERSION`, manifests, operator/AI documentation,
   changelog, release catalog, package, checksum, and tag must describe one version.
-- **DF-015 — Safe page orientation:** every page below the RFI system's CIV,
-  MEC, ELE, and PRC trees is classified from rendered content. Only complete,
-  high-confidence PDF decisions may create no-clobber corrected copies under a
-  separate review root; the source tree remains read-only.
+- **DF-015 — Safe page orientation:** PDFs under the CIV, MEC, ELE, and PRC
+  trees are classified from rendered content, never page dimensions. The
+  standalone normalizer and Fast RFI Scan share canonical `/Rotate`
+  normalization and render-relative target selection. A strict exact RFI ID in
+  the top-sixth header may resolve otherwise-uncertain direction only when the
+  same code and angle agree at 250 and 350 DPI; competing or conflicting
+  evidence remains review-only. Preview pins source SHA-256 before inspect or
+  detection, verifies it afterward, and requires matching hash plus cache
+  profile v5 for reuse. Apply revalidates the planned hash and creates only
+  no-clobber corrected copies under a separate review root.
 - **DF-016 — Exact Follow Up projection:** existing CIV/MEC Follow Up sections
-  receive uniquely mapped RFI Log records. A supported route with no matching
-  Follow Up row, including a FINAL item with no prepared target row, is outside
-  the current template scope and is silently skipped. Multiple distinct exact
-  CIV area tags may map to their respective distinct existing rows, except any
-  CIV source RFI with a `Tag No` beginning `PCS-`: those RFIs are outside Follow
-  Up scope, are never added, and are removed from existing groups. This includes
+  receive uniquely mapped RFI Log records. Records without a matching prepared
+  target row, including FINAL items without a prepared row, remain visible in
+  manual review and are not silently discarded or automatically synchronized.
+  Multiple distinct exact CIV area tags may map to their respective distinct
+  existing rows. Any CIV RFI with a `Tag No` beginning `PCS-` is outside Follow
+  Up scope, is never added, and is removed from existing groups. This includes
   composite tags such as `PCS-19/S1,S2,S3`. Repeated MEC records may map to
-  multiple existing rows only when each row has a unique
-  exact `(Tag No, Area, Inspection Location)` context from same-status,
-  same-item source records. MEC may split a target cell's slash/comma-delimited location values and
+  multiple existing rows only when each row has a unique exact `(Tag No, Area,
+  Inspection Location)` context from same-status, same-item source records. MEC
   may fan one source row across distinct explicit Area values only when Tag No
   and Inspection Location are each single-valued. Duplicate contexts and all
-  other non-unique matches remain manual review. No rows or sections are
-  created. Shared-cell status is derived from every remaining RFI;
-  Cancelled/Rejected entries are removed; FINAL Worley state follows the exact
-  REMARKS marker; excluded sheets never change.
+  other non-unique matches remain manual review. FINAL destinations are
+  reconciled independently by exact prepared row identity: an existing RFI in
+  one destination does not suppress another, and missing prepared contexts
+  remain visible for manual review. No rows or sections are created. Ambiguous,
+  conflicting, or unrelated source placements cannot authorize shared-cell
+  status changes. A cached formula status is a no-op only when the RFI is
+  already present and that value already matches the projected status.
+  Shared-cell status changes only when every represented RFI has an
+  unambiguous source state and exact prepared route. Cancelled/Rejected entries
+  are removed; FINAL Worley state follows the exact REMARKS marker; excluded
+  sheets never change.
 - **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
   limited to 256 files and 8 GiB of logical charge across the workbook parent
   and `.docflow-backups`. Apply and Undo refuse before mutation when the
@@ -87,10 +103,16 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   reachable by scrolling at supported small viewport and display-scale bounds.
 - **DF-020 — Complete parallel signed-page discovery:** signed-page staging
   searches every depth under the selected read-only RFI System root with a
-  bounded multi-core directory walk, matches only exact canonical RFI PDF
-  filenames, preserves deterministic results, and records scan evidence in the
-  immutable Plan. New signed-scan input recursion defaults on. Symlinks,
-  ambiguity, unsupported PDFs, collisions, and unreadable directories fail closed.
+  bounded multi-core directory walk. It accepts only high-confidence
+  consensus-confirmed Strict or approved OcrAlias RFI identities; repaired,
+  fuzzy, conflicting, or filename-only identity is not authority. Archive
+  lookup requires the exact `RFI No. <full RFI>.pdf` basename (case-insensitive)
+  with a one-to-four-digit suffix canonicalized to four digits. A Sketch PDF,
+  DOCX, code-bearing folder/other filename, or duplicate canonical-equivalent
+  archive candidates cannot authorize replacement. Results and scan evidence
+  remain deterministic in the immutable Plan. New signed-scan input recursion
+  defaults on. Symlinks, ambiguity, unsupported PDFs, collisions, and
+  unreadable directories fail closed.
 - **DF-021 — Actionable signed-page review:** signed-page Preview exposes live,
   ordered discovery/OCR/archive/comparison stages; keeps approved rows, page
   comparisons, warning files, and warnings directly reachable; and identifies
@@ -173,44 +195,53 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   a separate unsent Outlook Reply All Plan. The handoff preserves escaped table
   formatting, never recalculates RFI numbers, adds no recipients, sends no mail,
   and requires its own Preview and Apply.
-- **DF-032 — Ordered batch RFI scan separation:** Process Scans may inspect one
-  top-level multi-page PDF as a sequential stack. A page with one strict,
-  high-confidence canonical RFI code starts a confirmed cover and the next RFI
-  group. Every page after a confirmed cover belongs to that group until another
-  confirmed cover appears, even when continuation-page OCR is uncertain or
-  unreadable. Pages before the first identified RFI and duplicate RFI starts
-  remain Review output. Each output contains only its approved pages, retains
-  existing canonical filenames and duplicate/no-clobber rules, and places
-  CIV/MEC/ELE/PRC results beneath matching discipline folders. Preview pins
-  source hashes and exact page indexes; Apply extracts only those pages,
-  verifies fidelity, journals every output, and moves the combined source to
-  recoverable trash only after all its outputs succeed when Keep original is
-  off. Unsupported or drifted PDFs fail closed to Review or Apply refusal; no
-  page is silently dropped.
-- **DF-035 — Process Scans orientation:** Process Scans checks every input PDF
-  page with the existing bounded orientation detector by default. It applies
-  only confident page rotations to the approved output, leaves source PDFs
-  unchanged, and sends any PDF with uncertain orientation to `_review` intact.
-  Operators may disable orientation correction in the schema-driven form.
-- **DF-036 — Separate fast cover scans:** `rfi.process_scans_fast_covers` is a
-  separate opt-in operation for known Sunrise/Intec/LightSourceBP cover layouts.
-  It confirms a group boundary only when one strict RFI identity, the request
-  heading, and a known template mark agree. Ordinary Process Scans keeps its
-  existing OCR path. Uncertain possible covers start a Review group; later
-  pages stay with that group until another confirmed cover appears. Page
-  rotation correction defaults off only in this fast operation to avoid a
-  second full-page OCR pass. A confirmed RFI creates its missing discipline/RFI
-  folder even when the destination already contains other RFI folders. Page
-  extraction preserves self-contained XML metadata and omits an outline tree
-  only when it is explicitly empty; active outlines and other unsupported
-  catalog features remain Review cases.
+- **DF-032 — Ordered batch RFI scan separation:** Fast RFI Scan in Multi-RFI
+  mode may inspect one top-level multi-page PDF as a sequential stack. A page
+  with one strict, high-confidence canonical RFI code starts a confirmed cover
+  and the next RFI group. Every page after a confirmed cover belongs to that
+  group until another confirmed cover appears, even when continuation-page OCR
+  is uncertain or unreadable. Pages before the first identified RFI and
+  duplicate RFI starts remain Review output. Each output contains only its
+  approved pages, retains existing canonical filenames and duplicate/no-clobber
+  rules, and places CIV/MEC/ELE/PRC results beneath matching discipline folders.
+  Preview pins source hashes and exact page indexes; Apply extracts only those
+  pages, verifies fidelity, journals every output, and moves the combined source
+  to recoverable trash only after all outputs succeed when Keep original is off.
+  Unsupported or drifted PDFs fail closed to Review or Apply refusal; no page is
+  silently dropped.
+- **DF-035 — Fast RFI Scan orientation:** Multi-RFI orientation correction
+  defaults off and uses the same canonical `/Rotate` normalization and
+  render-relative correction policy as standalone PDF orientation. Only
+  confident right-angle decisions enter the approved output; already-upright
+  pages are idempotent, source bytes are never rewritten in place, and
+  non-cardinal or uncertain files remain intact in `_review`. If ordinary
+  direction evidence remains unresolved, one exact canonical RFI ID in the
+  page header can resolve it only when the same ID and direction agree at both
+  250 and 350 DPI without conflicting evidence. Analysis and cache reuse are
+  bound to source SHA-256; cache profile changes invalidate prior decisions.
+  Optional Fast RFI Scan rotation pins source SHA-256 before parallel analysis
+  and verifies it afterward, rejecting changed sources before Plan creation.
+  Single-RFI reads only page one, keeps the complete PDF, and never splits or
+  rotates it.
+- **DF-036 — Fast RFI Scan cover recognition and correction:** The active
+  `rfi.process_scans_fast_covers` operation confirms a group boundary only when
+  one strict RFI identity, the request heading, and a known template mark agree.
+  If direction-zero generic OCR words do not confirm a cover, the detector
+  continues its remaining cardinal searches; no-code or ambiguous boundaries
+  remain in Review. OCR alone may normalize the exact alias `CLV` to `CIV`;
+  filenames, searchable text, and manual input do not receive that repair.
+  Preview permits only complete canonical CIV/MEC/ELE/PRC code edits; Rust
+  rederives targets from trusted settings and rejects invalid, duplicate, or
+  existing targets before Apply. Missing discipline/RFI folders are created
+  safely. Page extraction preserves XMP metadata; unsupported catalog features
+  remain Review cases.
 - **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
   `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
   remain read-only source evidence for Worley Signed/Not Signed status.
 
 ## Scope
 
-The thirteen registered operations and application-level history, recovery, review,
+The nine registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

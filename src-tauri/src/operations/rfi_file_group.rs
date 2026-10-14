@@ -18,7 +18,7 @@ use crate::{
     operations::process_scans::{OcrAdapter, OcrFailure},
     parallel::bounded_map_stream,
     pdf,
-    rfi_code::{RfiMethod, exact_codes as shared_exact_codes},
+    rfi_code::{RfiMethod, exact_codes as shared_exact_codes, normalize_candidate_number},
 };
 
 pub const OPERATION_ID: &str = "rfi.group_files";
@@ -648,12 +648,16 @@ fn raw_codes(path: &Path) -> Result<BTreeSet<String>, String> {
             continue;
         }
         let little = bytes[offset..]
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
             .collect::<Vec<_>>();
         let big = bytes[offset..]
-            .chunks_exact(2)
-            .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_be_bytes(*pair))
             .collect::<Vec<_>>();
         codes.extend(exact_codes(&String::from_utf16_lossy(&little)));
         codes.extend(exact_codes(&String::from_utf16_lossy(&big)));
@@ -665,7 +669,8 @@ fn exact_codes(value: &str) -> BTreeSet<String> {
     static RFI: OnceLock<Regex> = OnceLock::new();
     let text = value.nfc().collect::<String>().to_uppercase();
     let regex = RFI.get_or_init(|| {
-        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{4})").expect("exact RFI regex is valid")
+        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{1,4})")
+            .expect("exact RFI regex is valid")
     });
     let mut codes = shared_exact_codes(&text);
     for captures in regex.captures_iter(&text) {
@@ -678,11 +683,15 @@ fn exact_codes(value: &str) -> BTreeSet<String> {
             .chars()
             .next()
             .is_some_and(char::is_alphanumeric);
-        if before_invalid || after_invalid || !codes.contains(matched.as_str()) {
+        let Some(number) = normalize_candidate_number(&captures[2]) else {
+            continue;
+        };
+        let canonical = format!("AZE-SUN-INT-QMS-RFI-{}-{number}", &captures[1]);
+        if before_invalid || after_invalid || !codes.contains(&canonical) {
             continue;
         }
         let discipline = &captures[1];
-        codes.insert(matched.as_str().to_string());
+        codes.insert(canonical);
         let bytes = text.as_bytes();
         let mut cursor = matched.end();
         loop {
@@ -699,20 +708,24 @@ fn exact_codes(value: &str) -> BTreeSet<String> {
             while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
                 cursor += 1;
             }
-            let Some(number) = bytes.get(cursor..cursor.saturating_add(4)) else {
+            let start = cursor;
+            while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
+                cursor += 1;
+            }
+            let Some(raw_number) = text.get(start..cursor) else {
                 break;
             };
-            if !number.iter().all(u8::is_ascii_digit)
-                || text[cursor + 4..]
-                    .chars()
-                    .next()
-                    .is_some_and(char::is_alphanumeric)
+            let Some(number) = normalize_candidate_number(raw_number) else {
+                break;
+            };
+            if text[cursor..]
+                .chars()
+                .next()
+                .is_some_and(char::is_alphanumeric)
             {
                 break;
             }
-            let number = std::str::from_utf8(number).expect("ASCII digits are UTF-8");
             codes.insert(format!("AZE-SUN-INT-QMS-RFI-{discipline}-{number}"));
-            cursor += 4;
         }
     }
     codes
@@ -792,4 +805,24 @@ fn unsafe_existing_directory(path: &Path) -> bool {
         candidate = current.parent();
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_group_identifies_short_rfi_suffixes_but_not_other_numbers() {
+        assert_eq!(
+            exact_codes("AZE-SUN-INT-QMS-RFI-CIV-901"),
+            BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-0901".to_string()])
+        );
+        assert_eq!(
+            exact_codes("AZE-SUN-INT-QMS-RFI-CIV-0901"),
+            exact_codes("AZE-SUN-INT-QMS-RFI-CIV-901")
+        );
+        assert!(exact_codes("ITP-CIV-901").is_empty());
+        assert!(exact_codes("2026-09-01").is_empty());
+        assert!(exact_codes("AZE-SUN-INT-QMS-RFI-CIV-09010").is_empty());
+    }
 }

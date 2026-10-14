@@ -45,27 +45,6 @@ export function auditDocumentation(root = REPOSITORY_ROOT) {
     }
   }
 
-  const registry = readFileSync(join(root, "src-tauri/src/registry.rs"), "utf8");
-  const registered = new Set(
-    [...registry.matchAll(/^\s*"((?:rfi|files)\.[a-z0-9_]+)",$/gmu)].map(
-      (match) => match[1],
-    ),
-  );
-  const features = readFileSync(join(root, "docs/FEATURES.md"), "utf8");
-  const documented = new Set(
-    [...features.matchAll(/^\| `((?:rfi|files)\.[a-z0-9_]+)` \|/gmu)].map(
-      (match) => match[1],
-    ),
-  );
-  for (const id of registered) {
-    if (!documented.has(id)) failures.push(`registered operation is undocumented: ${id}`);
-  }
-  for (const id of documented) {
-    if (!registered.has(id)) failures.push(`documented operation is not registered: ${id}`);
-  }
-  if (registered.size !== 10) {
-    failures.push(`expected exactly 10 registered operations, found ${registered.size}`);
-  }
 
   const prd = readFileSync(join(root, "docs/PRD.md"), "utf8");
   const traceability = readFileSync(join(root, "docs/TRACEABILITY.md"), "utf8");

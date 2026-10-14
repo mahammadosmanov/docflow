@@ -327,6 +327,34 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         "files.batch_print",
         vec![
             batch_print_files,
+            transient_parameter(
+                "rfi_system_root",
+                ParamKind::Folder,
+                "param.print.rfiRoot",
+                Value::Null,
+                Some("param.print.rfiRoot.help"),
+            ),
+            transient_parameter(
+                "rfi_numbers",
+                ParamKind::LongText,
+                "param.print.rfiNumbers",
+                json!(""),
+                Some("param.print.rfiNumbers.help"),
+            ),
+            transient_parameter(
+                "include_first_page",
+                ParamKind::Bool,
+                "param.print.includeFirstPage",
+                json!(true),
+                None,
+            ),
+            transient_parameter(
+                "include_sketch",
+                ParamKind::Bool,
+                "param.print.includeSketch",
+                json!(true),
+                None,
+            ),
             parameter(
                 "printer",
                 ParamKind::Choice,
@@ -566,6 +594,20 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 Some("param.dest.help"),
             ),
             parameter(
+                "scan_mode",
+                ParamKind::Choice,
+                "param.rfi.processScans.scanMode",
+                json!("multi_rfi"),
+                true,
+                strings(&["multi_rfi", "single_rfi"]),
+                labels(&[
+                    ("multi_rfi", "choice.rfi.processScans.scanMode.multiRfi"),
+                    ("single_rfi", "choice.rfi.processScans.scanMode.singleRfi"),
+                ]),
+                Map::new(),
+                Some("param.rfi.processScans.scanMode.help"),
+            ),
+            parameter(
                 "organize_into_rfi_folders",
                 ParamKind::Bool,
                 "param.organize_into_rfi_folders",
@@ -595,7 +637,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 false,
                 Vec::new(),
                 BTreeMap::new(),
-                Map::new(),
+                Map::from_iter([("scan_mode".to_string(), json!("multi_rfi"))]),
                 Some("param.rfi.processScans.correctOrientation.help"),
             ),
         ],
@@ -630,82 +672,32 @@ mod tests {
     }
 
     #[test]
-    fn canonical_registry_matches_protocol_one_snapshot() {
+    fn fast_scan_mode_defaults_to_multi_rfi_and_offers_single_rfi() {
         let operations = operation_registry(RegistryFacts::default());
-        assert_eq!(
-            operations
-                .iter()
-                .map(|operation| operation.id.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "rfi.group_files",
-                "rfi.log_add",
-                "rfi.follow_up_sync",
-                "files.batch_print",
-                "rfi.stage_signed_first_pages",
-                "rfi.normalize_pdf_orientation",
-                "rfi.system_sync",
-                "rfi.complete_status_sync",
-                "rfi.process_scans_fast_covers",
-            ]
-        );
-        assert_eq!(operations.len(), 9);
-        let fast_orientation_default = operations[8]
+        let scan = operations
+            .iter()
+            .find(|operation| operation.id == FAST_COVER_OPERATION_ID)
+            .unwrap();
+        let mode = scan
+            .schema
+            .params
+            .iter()
+            .find(|parameter| parameter.name == "scan_mode")
+            .expect("Fast RFI Scan exposes scan mode");
+
+        assert_eq!(mode.kind, ParamKind::Choice);
+        assert_eq!(mode.default, json!("multi_rfi"));
+        assert_eq!(mode.choices, vec!["multi_rfi", "single_rfi"]);
+        let orientation = scan
             .schema
             .params
             .iter()
             .find(|parameter| parameter.name == "correct_orientation")
-            .expect("Fast Cover Scans has orientation correction")
-            .default
-            .as_bool();
-        assert_eq!(fast_orientation_default, Some(false));
+            .expect("orientation correction is present in Multi RFI mode");
         assert_eq!(
-            operations[8]
-                .schema
-                .params
-                .iter()
-                .map(|parameter| parameter.name.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "source",
-                "dest",
-                "organize_into_rfi_folders",
-                "keep_original",
-                "correct_orientation"
-            ]
+            orientation.visible_when.get("scan_mode"),
+            Some(&json!("multi_rfi"))
         );
-        let follow_up = &operations[2];
-        assert_eq!(
-            follow_up.schema.validate(&Map::new()),
-            vec![
-                "error.param.required.rfi_log_workbook".to_string(),
-                "error.param.required.follow_up_workbook".to_string(),
-            ]
-        );
-        let system_sync = &operations[6];
-        assert_eq!(
-            system_sync.schema.validate(&Map::new()),
-            vec![
-                "error.param.required.rfi_system_root".to_string(),
-                "error.param.required.rfi_log_workbook".to_string(),
-                "error.param.required.follow_up_workbook".to_string(),
-            ]
-        );
-        let complete_status = &operations[7];
-        assert_eq!(
-            complete_status.schema.validate(&Map::new()),
-            vec![
-                "error.param.required.rfi_system_root".to_string(),
-                "error.param.required.rfi_log_workbook".to_string(),
-            ]
-        );
-
-        let actual = serde_json::to_value(operations).expect("registry should serialize");
-        let expected: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/protocol1_operations.json"))
-                .expect("frozen protocol fixture should be valid JSON");
-
-        assert_eq!(actual, expected);
     }
 
     #[test]

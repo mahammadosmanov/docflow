@@ -1,12 +1,84 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.14.0",
+  "currentVersion": "1.16.7",
   "releases": [
+    {
+      "version": "1.16.7",
+      "date": "2026-10-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.16.7",
+      "summary": "Clarify Follow Up mapping diagnostics and record intentional ITP/item scope exclusions."
+    },
+    {
+      "version": "1.16.6",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.6",
+      "summary": "Allow complete legitimate Follow Up sync batches beyond the former 500-cell cap while preserving workbook safeguards."
+    },
+    {
+      "version": "1.16.5",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.5",
+      "summary": "Route regular MEC Follow Up by exact full tuples and surface missing prepared contexts for manual review."
+    },
+    {
+      "version": "1.16.4",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.4",
+      "summary": "Route distinct prepared Follow Up destinations independently while preserving manual review and shared-cell conflict safeguards."
+    },
+    {
+      "version": "1.16.3",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.3",
+      "summary": "Finish cardinal Fast RFI Scan cover search and pin parallel analysis to source hashes."
+    },
+    {
+      "version": "1.16.2",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.2",
+      "summary": "Align PDF orientation, cache integrity, strict RFI-ID evidence, and accessible controls."
+    },
+    {
+      "version": "1.16.0",
+      "date": "2026-10-12",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.16.0",
+      "summary": "Make workflow layouts responsive and data regions adjustable across window sizes."
+    },
+    {
+      "version": "1.15.1",
+      "date": "2026-10-12",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.15.1",
+      "summary": "Canonicalize anchored short RFI numbers and safely recognize consensus-confirmed signed-page aliases."
+    },
+    {
+      "version": "1.15.0",
+      "date": "2026-10-11",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.15.0",
+      "summary": "Add Batch Print RFI finder and preserve unsigned sync review safeguards."
+    },
     {
       "version": "1.14.0",
       "date": "2026-10-10",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.14.0",
       "summary": "Route approved Group Files copies into discipline and full-RFI-code folders."
     },

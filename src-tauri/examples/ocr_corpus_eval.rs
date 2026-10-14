@@ -26,6 +26,7 @@ fn method_name(method: RfiMethod) -> &'static str {
     match method {
         RfiMethod::Strict => "strict",
         RfiMethod::Repaired => "repaired",
+        RfiMethod::OcrAlias => "ocr_alias",
         RfiMethod::Fuzzy => "fuzzy",
         RfiMethod::Miss => "miss",
     }

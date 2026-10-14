@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
+import { useEffect } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -149,16 +150,19 @@ export function Switch({
   checked,
   onChange,
   disabled,
+  ariaLabel,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       className={`switch ${checked ? "on" : ""}`}
       onClick={() => onChange(!checked)}
@@ -321,6 +325,16 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [onClose]);
   return (
     <div
       className="modal-backdrop"

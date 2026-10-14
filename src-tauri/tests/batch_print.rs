@@ -2722,3 +2722,35 @@ fn active_queue_is_not_recovered_or_discarded_while_submission_is_running() {
     drop(state);
     assert_eq!(applying.join().unwrap().unwrap().applied, 1);
 }
+
+#[test]
+#[ignore = "set DOCFLOW_VENTOY_PRINT_PDF to a private Ventoy PDF copy; submission uses only the fake printer"]
+fn operator_ventoy_pdf_print_preview_and_fake_submit_preserve_source() {
+    let source = PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_PRINT_PDF").expect("DOCFLOW_VENTOY_PRINT_PDF is required"),
+    );
+    let original = std::fs::read(&source).unwrap();
+    let page_count = docflow_lib::pdf::inspect(&source).unwrap().page_count;
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("ventoy-sample.pdf");
+    std::fs::copy(&source, &file).unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.set_pdf_page_count(u32::try_from(page_count).unwrap());
+    let service = print_service(&root, adapter.clone());
+    let plan = service
+        .preview(&caller(), params(vec![file.clone()]), |_| {})
+        .unwrap();
+    assert_eq!(plan.meta["fileCount"], 1);
+    assert_eq!(plan.meta["jobCount"], 1);
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+    assert_eq!((result.applied, result.failed), (1, 0));
+    assert_eq!(result.meta["status"], "completed");
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
+    assert_eq!(std::fs::read(&source).unwrap(), original);
+    assert_eq!(std::fs::read(&file).unwrap(), original);
+}

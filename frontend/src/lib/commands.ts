@@ -14,6 +14,7 @@ import type {
   ReplicaAutomationStatus,
   ReviewDecision,
   ReviewItem,
+  RfiPrintFindResult,
   SupportBundlePreview,
 } from "../types";
 
@@ -124,6 +125,15 @@ export interface FrontendCommandMap {
   >;
   "paths/reveal": CommandSpec<{ selectionId: string }, Ok>;
   "recovery/list": CommandSpec<NoParams, RecoveryPayload>;
+  "rfi/printFind": CommandSpec<
+    {
+      root: PathSelection;
+      numbers: string[];
+      firstPage: boolean;
+      sketch: boolean;
+    },
+    RfiPrintFindResult
+  >;
 }
 
 // BEGIN RUST-VERIFIED FRONTEND METHODS
@@ -162,6 +172,7 @@ export const FRONTEND_METHODS = [
   "history/list",
   "paths/select",
   "paths/reveal",
+  "rfi/printFind",
   "recovery/list",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS

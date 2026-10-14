@@ -1,4 +1,9 @@
 import {
+  AdjustableDataRegion,
+  clampColumnWidth,
+  ColumnResizeHandle,
+} from "./components/AdjustableDataRegion";
+import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -48,6 +53,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -97,6 +103,8 @@ import type {
   ReviewAction,
   ReviewDecision,
   ReviewItem,
+  RfiPrintCandidate,
+  RfiPrintResolution,
   Step,
   SupportBundlePreview,
   ThemePreference,
@@ -127,6 +135,11 @@ function isPathSelection(value: unknown): value is PathSelection {
     "displayPath" in value &&
     typeof value.displayPath === "string",
   );
+}
+
+function parseRfiInputs(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  return [...new Set(value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))];
 }
 
 export function humanError(error: unknown, s: Strings): string {
@@ -1044,6 +1057,26 @@ function OperationScreen({
   const [error, setError] = useState("");
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [rfiPrintCandidates, setRfiPrintCandidates] = useState<RfiPrintCandidate[]>([]);
+  const [rfiPrintResolutions, setRfiPrintResolutions] = useState<RfiPrintResolution[]>([]);
+  const [rfiFinderBusy, setRfiFinderBusy] = useState(false);
+  const [rfiFinderError, setRfiFinderError] = useState("");
+  const [excludedRfiInputs, setExcludedRfiInputs] = useState<string[]>([]);
+  const [rfiFinderWasRun, setRfiFinderWasRun] = useState(false);
+  const rfiSearchRevision = useRef(0);
+  const [rfiSearchTruncated, setRfiSearchTruncated] = useState(false);
+  const invalidateRfiFinder = () => {
+    rfiSearchRevision.current += 1;
+    setRfiFinderBusy(false);
+    setRfiFinderError("");
+    setRfiFinderWasRun(false);
+    setRfiSearchTruncated(false);
+    setRfiPrintCandidates([]);
+    setRfiPrintResolutions([]);
+  };
+  const rfiInputs = operation.id === "files.batch_print" ? parseRfiInputs(values.rfi_numbers) : [];
+  const [isUpdatingScanPreview, setIsUpdatingScanPreview] = useState(false);
+  const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
   const [latestPrintQueue, setLatestPrintQueue] =
     useState<PrintQueueSummary | null>(null);
@@ -1170,7 +1203,61 @@ function OperationScreen({
         : [];
     setEditorRows(rows.map((row) => ({ ...row })));
     setEditorDirty(false);
+    setScanPreviewUpdated(false);
     setStage("preview");
+  };
+
+  const searchRfiDocuments = async () => {
+    setRfiFinderError("");
+    setRfiFinderWasRun(false);
+    setRfiPrintCandidates([]);
+    setRfiPrintResolutions([]);
+    setRfiSearchTruncated(false);
+    const root = values.rfi_system_root;
+    const requestRevision = ++rfiSearchRevision.current;
+    if (!isPathSelection(root)) {
+      setRfiFinderError(s.t("print.rfi.rootRequired"));
+      return;
+    }
+    const numbers = rfiInputs.filter((input) => !excludedRfiInputs.includes(input));
+    if (numbers.length === 0) {
+      setRfiFinderError(s.t("print.rfi.inputRequired"));
+      return;
+    }
+    if (values.include_first_page !== true && values.include_sketch !== true) {
+      setRfiFinderError(s.t("print.rfi.typesRequired"));
+      return;
+    }
+    setRfiFinderBusy(true);
+    try {
+      const result = await bridge.call("rfi/printFind", {
+        root,
+        numbers,
+        firstPage: values.include_first_page === true,
+        sketch: values.include_sketch === true,
+      });
+      if (requestRevision !== rfiSearchRevision.current) return;
+      setRfiPrintCandidates(result.candidates);
+      setRfiPrintResolutions(result.resolutions);
+      setRfiFinderWasRun(true);
+      setRfiSearchTruncated(result.truncated);
+    } catch (reason) {
+      if (requestRevision === rfiSearchRevision.current) {
+        setRfiFinderError(humanError(reason, s));
+      }
+    } finally {
+      if (requestRevision === rfiSearchRevision.current) setRfiFinderBusy(false);
+    }
+  };
+  const setRfiCandidateGroup = (
+    predicate: (candidate: RfiPrintCandidate) => boolean,
+    selected: boolean,
+  ) => {
+    setRfiPrintCandidates((current) =>
+      current.map((candidate) =>
+        predicate(candidate) ? { ...candidate, selected } : candidate,
+      ),
+    );
   };
 
   const preview = async () => {
@@ -1198,9 +1285,21 @@ function OperationScreen({
       if (operation.supportsPresets && Object.keys(sanitized).length > 0) {
         setPreviousValues(sanitized);
       }
+      const previewValues = { ...values };
+      if (operation.id === "files.batch_print") {
+        delete previewValues.rfi_system_root;
+        delete previewValues.rfi_numbers;
+        delete previewValues.include_first_page;
+        delete previewValues.include_sketch;
+        if (rfiFinderWasRun) {
+          previewValues.files = rfiPrintCandidates
+            .filter((candidate) => candidate.selected)
+            .map((candidate) => candidate.selection);
+        }
+      }
       const next = await bridge.call(
         "engine/preview",
-        { opId: operation.id, values },
+        { opId: operation.id, values: previewValues },
         receiveProgress,
       );
       installPlan(next);
@@ -1249,7 +1348,35 @@ function OperationScreen({
       setError(humanError(reason, s));
     }
   };
+  const updateScanPreview = async () => {
+    if (
+      !plan ||
+      plan.opId !== "rfi.process_scans_fast_covers" ||
+      !editorDirty ||
+      isUpdatingScanPreview
+    ) {
+      return;
+    }
+    setIsUpdatingScanPreview(true);
+    setError("");
+    try {
+      const revised = await bridge.call("engine/revise", {
+        planId: plan.planId,
+        rows: editorRows,
+      });
+      installPlan(revised);
+      setScanPreviewUpdated(true);
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setIsUpdatingScanPreview(false);
+    }
+  };
   const apply = async () => {
+    if (editorDirty && plan?.opId === "rfi.process_scans_fast_covers") {
+      await updateScanPreview();
+      return;
+    }
     if (!plan) return;
     setError("");
     const applying = { phase: "apply", done: 0, total: 0 };
@@ -1444,7 +1571,7 @@ function OperationScreen({
                     </Button>
                   </div>
                 )}
-                <div className="form-stack">
+                <div className="form-stack schema-form">
                   {operation.schema
                     .filter((param) =>
                       Object.entries(param.visibleWhen ?? {}).every(
@@ -1466,10 +1593,176 @@ function OperationScreen({
                             ...current,
                             [param.name]: value,
                           }));
+                          if (
+                            operation.id === "files.batch_print" &&
+                            ["rfi_system_root", "rfi_numbers", "include_first_page", "include_sketch"].includes(param.name)
+                          ) {
+                            invalidateRfiFinder();
+                          }
+                          if (param.name === "rfi_numbers") setExcludedRfiInputs([]);
                         }}
                       />
                     ))}
                 </div>
+                {operation.id === "files.batch_print" && (
+                  <section className="rfi-print-finder" aria-labelledby="rfi-print-title">
+                    <h3 id="rfi-print-title">{s.t("print.rfi.title")}</h3>
+                    {rfiInputs.length > 0 && (
+                      <fieldset className="rfi-print-inputs">
+                        <legend>{s.t("print.rfi.inputs")}</legend>
+                        <div className="rfi-print-actions">
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              invalidateRfiFinder();
+                              setExcludedRfiInputs([]);
+                            }}
+                          >
+                            {s.t("action.selectAll")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              invalidateRfiFinder();
+                              setExcludedRfiInputs(rfiInputs);
+                            }}
+                          >
+                            {s.t("action.selectNone")}
+                          </Button>
+                        </div>
+                        {rfiInputs.map((input) => (
+                          <label className="rfi-print-row" key={input}>
+                            <input
+                              type="checkbox"
+                              checked={!excludedRfiInputs.includes(input)}
+                              onChange={(event) => {
+                                invalidateRfiFinder();
+                                setExcludedRfiInputs((current) =>
+                                  event.target.checked
+                                    ? current.filter((value) => value !== input)
+                                    : [...current, input],
+                                );
+                              }}
+                            />
+                            <span>{input}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    <Button
+                      variant="secondary"
+                      disabled={rfiFinderBusy || !rfiInputs.length}
+                      onClick={() => void searchRfiDocuments()}
+                    >
+                      {s.t(rfiFinderBusy ? "print.rfi.searching" : "print.rfi.search")}
+                    </Button>
+                    {rfiFinderError && <Notice kind="error">{rfiFinderError}</Notice>}
+                    {rfiPrintResolutions.length > 0 && (
+                      <div className="rfi-print-results">
+                        <p>{s.t("print.rfi.found", { count: rfiPrintCandidates.length })}</p>
+                        {rfiSearchTruncated && <Notice kind="warning">{s.t("print.rfi.truncated")}</Notice>}
+                        {rfiPrintResolutions.map((resolution, index) => (
+                          <div className="rfi-print-resolution" key={`${resolution.requested}-${index}`}>
+                            <strong>{resolution.requested}</strong>
+                            {resolution.ambiguous && (
+                              <p role="status">
+                                {s.t("print.rfi.ambiguous")}
+                                {resolution.rfiCodes.length > 0 && ` — ${resolution.rfiCodes.join(", ")}`}
+                              </p>
+                            )}
+                            {resolution.missingFirstPage && <p>{s.t("print.rfi.missingFirstPage")}</p>}
+                            {resolution.missingSketch && <p>{s.t("print.rfi.missingSketch")}</p>}
+                            <Button
+                              variant="ghost"
+                              onClick={() =>
+                                setRfiCandidateGroup(
+                                  (candidate) => candidate.requested === resolution.requested,
+                                  !rfiPrintCandidates
+                                    .filter((candidate) => candidate.requested === resolution.requested)
+                                    .every((candidate) => candidate.selected),
+                                )
+                              }
+                            >
+                              {s.t("print.rfi.toggleRequest")}
+                            </Button>
+                          </div>
+                        ))}
+                        {rfiFinderWasRun && (
+                          <>
+                            <div className="rfi-print-actions">
+                              <Button variant="ghost" onClick={() => setRfiCandidateGroup(() => true, true)}>
+                                {s.t("action.selectAll")}
+                              </Button>
+                              <Button variant="ghost" onClick={() => setRfiCandidateGroup(() => true, false)}>
+                                {s.t("action.selectNone")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "firstPage", true)}
+                              >
+                                {s.t("print.rfi.selectTypeFirstPage")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "sketch", true)}
+                              >
+                                {s.t("print.rfi.selectTypeSketch")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "firstPage", false)}
+                              >
+                                {s.t("print.rfi.clearTypeFirstPage")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "sketch", false)}
+                              >
+                                {s.t("print.rfi.clearTypeSketch")}
+                              </Button>
+                            </div>
+                            {[...new Set(rfiPrintCandidates.map((candidate) => candidate.rfiCode.match(/-RFI-([A-Z0-9]+)-/)?.[1]).filter((discipline): discipline is string => Boolean(discipline)))].map((discipline) => (
+                              <Button
+                                key={discipline}
+                                variant="ghost"
+                                onClick={() => setRfiCandidateGroup((candidate) => candidate.rfiCode.includes(`-RFI-${discipline}-`), true)}
+                              >
+                                {s.t("print.rfi.selectDiscipline", { discipline })}
+                              </Button>
+                            ))}
+                          </>
+                        )}
+                        {rfiPrintCandidates.map((candidate) => (
+                          <label
+                            className="rfi-print-row"
+                            key={`${candidate.requested}|${candidate.rfiCode}|${candidate.documentType}|${candidate.displayPath}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={candidate.selected}
+                              aria-label={`${candidate.rfiCode} ${s.t(`print.rfi.type.${candidate.documentType}`)} ${candidate.displayPath}`}
+                              onChange={(event) =>
+                                setRfiCandidateGroup(
+                                  (row) =>
+                                    row.requested === candidate.requested &&
+                                    row.rfiCode === candidate.rfiCode &&
+                                    row.documentType === candidate.documentType &&
+                                    row.displayPath === candidate.displayPath,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            <span>
+                              <strong>{candidate.rfiCode}</strong> — {s.t(`print.rfi.type.${candidate.documentType}`)}
+                              <small>{candidate.displayPath}</small>
+                            </span>
+                          </label>
+                        ))}
+                        {rfiPrintCandidates.length === 0 && <p>{s.t("print.rfi.noMatches")}</p>}
+                      </div>
+                    )}
+                  </section>
+                )}
                 {latestPrintQueue && (
                   <div className="resume-queue-card">
                     <div>
@@ -1567,6 +1860,10 @@ function OperationScreen({
               setEditorRows(rows);
               setEditorDirty(true);
             }}
+            editorDirty={editorDirty}
+            onUpdatePreview={() => void updateScanPreview()}
+            isUpdatingPreview={isUpdatingScanPreview}
+            scanPreviewUpdated={scanPreviewUpdated}
           />
         )}
         {stage === "applying" && (
@@ -1665,9 +1962,10 @@ function presetCapableValues(
     operation.schema
       .filter(
         (param) =>
-          param.kind === "bool" ||
-          param.kind === "choice" ||
-          param.kind === "int",
+          param.remember !== false &&
+          (param.kind === "bool" ||
+            param.kind === "choice" ||
+            param.kind === "int"),
       )
       .map((param) => param.name),
   );
@@ -1899,7 +2197,11 @@ function SchemaField({
           <strong>{s.t(param.labelKey)}</strong>
           {param.helpKey && <small>{s.t(param.helpKey)}</small>}
         </span>
-        <Switch checked={Boolean(value)} onChange={onChange} />
+        <Switch
+          checked={Boolean(value)}
+          onChange={onChange}
+          ariaLabel={s.t(param.labelKey)}
+        />
       </label>
     );
   }
@@ -2078,6 +2380,7 @@ function SchemaField({
       <label className="field">
         <span>{s.t(param.labelKey)}</span>
         <textarea
+          aria-label={s.t(param.labelKey)}
           rows={8}
           value={String(value ?? "")}
           onChange={(event) => onChange(event.target.value)}
@@ -2391,6 +2694,28 @@ function CompactDateInput({
   );
 }
 
+function editorColumnDefaultWidth(column: EditorColumn) {
+  return column.width ??
+    (column.kind === "bool"
+      ? 50
+      : column.key === "sourceStatuses" || column.key === "disposition"
+        ? 220
+        : column.key === "reasonKey"
+          ? 180
+          : column.key === "currentStatus" || column.key === "proposedStatus"
+            ? 130
+            : column.key === "rfiNo"
+              ? 120
+              : column.key === "_sheet"
+                ? 60
+                : column.key === "_row"
+                  ? 50
+                  : 180);
+}
+function editorColumnMinWidth(column: EditorColumn) {
+  return column.kind === "compactDate" ? 136 : 48;
+}
+
 function EditablePlanTable({
   editor,
   rows,
@@ -2405,6 +2730,15 @@ function EditablePlanTable({
   const columns = Array.isArray(editor.columns)
     ? (editor.columns as EditorColumn[])
     : [];
+  const headerId = useId();
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const widthScope = String(editor.titleKey ?? editor.kind ?? "plan-editor");
+  const columnWidth = (column: EditorColumn) =>
+    clampColumnWidth(
+      columnWidths[`${widthScope}:${column.key}`] ??
+        editorColumnDefaultWidth(column),
+      editorColumnMinWidth(column),
+    );
   const groupField = String(editor.groupField ?? "rfiNo");
   const directChoices =
     editor.choices && typeof editor.choices === "object"
@@ -2439,6 +2773,12 @@ function EditablePlanTable({
   const visibleColumns = columns.filter(
     (column) => !column.detail || detailsVisible,
   );
+  const hasRowActions =
+    editor.reorderable === true || editor.duplicateEnabled === true;
+  const tableWidth =
+    (editor.selectionEnabled === true ? 52 : 0) +
+    visibleColumns.reduce((total, column) => total + columnWidth(column), 0) +
+    (hasRowActions ? 132 : 0);
   const selectedRows = rows.filter((row, index) =>
     selectedIds.has(rowId(row, index)),
   );
@@ -2839,8 +3179,26 @@ function EditablePlanTable({
           </div>
         </div>
       )}
-      <div className="editor-scroll">
-        <table className="editor-table">
+      <AdjustableDataRegion
+        s={s}
+        className="editor-scroll"
+        label={s.t(String(editor.titleKey ?? "rfi.editor.title"))}
+      >
+        <table
+          className="editor-table"
+          style={{ tableLayout: "fixed", width: `${tableWidth}px`, minWidth: 0 }}
+        >
+          <colgroup>
+            {editor.selectionEnabled === true && (
+              <col className="selection-column" style={{ width: 52 }} />
+            )}
+            {visibleColumns.map((column) => (
+              <col key={column.key} style={{ width: columnWidth(column) }} />
+            ))}
+            {(editor.reorderable === true || editor.duplicateEnabled === true) && (
+              <col className="editor-actions-column" style={{ width: 132 }} />
+            )}
+          </colgroup>
           <thead>
             <tr>
               {editor.selectionEnabled === true && (
@@ -2861,48 +3219,30 @@ function EditablePlanTable({
                 </th>
               )}
               {visibleColumns.map((column) => {
-                const defaultWidth =
-                  column.kind === "bool"
-                    ? 50
-                    : column.key === "sourceStatuses" ||
-                        column.key === "disposition"
-                      ? 220
-                      : column.key === "reasonKey"
-                        ? 180
-                        : column.key === "currentStatus" ||
-                            column.key === "proposedStatus"
-                          ? 130
-                          : column.key === "rfiNo"
-                            ? 120
-                            : column.key === "_sheet"
-                              ? 60
-                              : column.key === "_row"
-                                ? 50
-                                : 120;
-                const colWidth = column.width ?? defaultWidth;
-                const isFixedNarrow =
-                  column.kind === "bool" ||
-                  column.key === "_sheet" ||
-                  column.key === "_row" ||
-                  colWidth <= 65;
+                const label = s.t(column.labelKey);
+                const width = columnWidth(column);
                 return (
                   <th
                     key={column.key}
-                    style={
-                      editor.layout === "compact"
-                        ? isFixedNarrow
-                          ? {
-                              width: colWidth,
-                              minWidth: colWidth,
-                              maxWidth: colWidth,
-                            }
-                          : {
-                              minWidth: colWidth,
-                            }
-                        : { minWidth: colWidth }
-                    }
+                    className="adjustable-column-header"
+                    scope="col"
+                    aria-labelledby={`${headerId}-${column.key}`}
+                    style={{ width }}
+                    title={label}
                   >
-                    {s.t(column.labelKey)}
+                    <span id={`${headerId}-${column.key}`}>{label}</span>
+                    <ColumnResizeHandle
+                      width={width}
+                      label={label}
+                      minWidth={editorColumnMinWidth(column)}
+                      s={s}
+                      onWidthChange={(nextWidth) =>
+                        setColumnWidths((current) => ({
+                          ...current,
+                          [`${widthScope}:${column.key}`]: nextWidth,
+                        }))
+                      }
+                    />
                   </th>
                 );
               })}
@@ -2990,6 +3330,21 @@ function EditablePlanTable({
                       ? (autocomplete[column.key] as unknown[]).map(String)
                       : [];
                     const listId = `editor-${rowIndex}-${column.key}`;
+                    const isScanCode =
+                      editor.kind === "rfiScan" && column.key === "code";
+                    const duplicateScanCode =
+                      isScanCode &&
+                      rows.some(
+                        (other, index) =>
+                          index !== rowIndex && other.code === row.code,
+                      );
+                    const scanCodeErrorKey = isScanCode
+                      ? !isRfiCodeCandidate(row.code)
+                        ? "error.rfi.fastScan.codeInvalid"
+                        : duplicateScanCode
+                          ? "error.rfi.fastScan.targetExists"
+                          : undefined
+                      : undefined;
                     return (
                       <td
                         key={column.key}
@@ -3053,7 +3408,18 @@ function EditablePlanTable({
                         ) : (
                           <>
                             <input
+                              aria-label={s.t(column.labelKey)}
+                              aria-invalid={
+                                scanCodeErrorKey ? true : undefined
+                              }
+                              aria-describedby={
+                                scanCodeErrorKey ? `${listId}-error` : undefined
+                              }
                               type={column.kind === "int" ? "number" : "text"}
+                              name={`${column.key}-${rowIndex}`}
+                              autoComplete={isScanCode ? "off" : undefined}
+                              spellCheck={isScanCode ? false : undefined}
+                              translate={isScanCode ? "no" : undefined}
                               value={text}
                               list={suggestions.length ? listId : undefined}
                               onChange={(event) =>
@@ -3066,6 +3432,15 @@ function EditablePlanTable({
                                   <option key={suggestion} value={suggestion} />
                                 ))}
                               </datalist>
+                            )}
+                            {scanCodeErrorKey && (
+                              <small
+                                id={`${listId}-error`}
+                                className="editor-field-error"
+                                role="alert"
+                              >
+                                {s.t(scanCodeErrorKey)}
+                              </small>
                             )}
                           </>
                         )}
@@ -3124,7 +3499,11 @@ function EditablePlanTable({
             {filteredRowIndices.length === 0 && (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + 2}
+                  colSpan={
+                    visibleColumns.length +
+                    Number(editor.selectionEnabled === true) +
+                    Number(editor.reorderable === true || editor.duplicateEnabled === true)
+                  }
                   className="empty-filter-cell"
                 >
                   {s.t("plan.empty")}
@@ -3133,8 +3512,25 @@ function EditablePlanTable({
             )}
           </tbody>
         </table>
-      </div>
+      </AdjustableDataRegion>
     </section>
+  );
+}
+
+function isCanonicalRfiCode(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^AZE-SUN-INT-QMS-RFI-(?:CIV|MEC|ELE|PRC)-\d{4}$/.test(value)
+  );
+}
+
+function isRfiCodeCandidate(value: unknown): value is string {
+  return (
+    isCanonicalRfiCode(value) ||
+    (typeof value === "string" &&
+      /^AZE-SUN-INT-QMS-RFI-(?:CIV|MEC|ELE|PRC)-[0-9]{1,3}(?![\s\S])/.test(
+        value,
+      ))
   );
 }
 
@@ -3147,7 +3543,7 @@ export function isPlanEditorReady(
         (field): field is string => typeof field === "string",
       )
     : [];
-  return rows.every(
+  const requiredValuesReady = rows.every(
     (row) =>
       row.enabled === false ||
       requiredFields.every((field) => {
@@ -3156,6 +3552,12 @@ export function isPlanEditorReady(
           ? value.trim().length > 0
           : value !== null && value !== undefined;
       }),
+  );
+  if (!requiredValuesReady) return false;
+  if (editor.kind !== "rfiScan") return true;
+  const codes = rows.map((row) => row.code);
+  return (
+    codes.every(isRfiCodeCandidate) && new Set(codes).size === codes.length
   );
 }
 
@@ -3167,6 +3569,10 @@ export function PlanView({
   onApply,
   editorRows,
   onEditorRowsChange,
+  editorDirty = false,
+  onUpdatePreview,
+  isUpdatingPreview = false,
+  scanPreviewUpdated = false,
 }: {
   plan: Plan;
   s: Strings;
@@ -3175,6 +3581,10 @@ export function PlanView({
   onApply: () => void;
   editorRows?: Record<string, unknown>[];
   onEditorRowsChange?: (rows: Record<string, unknown>[]) => void;
+  editorDirty?: boolean;
+  onUpdatePreview?: () => void;
+  isUpdatingPreview?: boolean;
+  scanPreviewUpdated?: boolean;
 }) {
   const [warningFocusCode, setWarningFocusCode] = useState("");
   const moves = plan.steps.filter((step) => step.kind !== "mkdir").length;
@@ -3192,6 +3602,8 @@ export function PlanView({
   );
   const canApply =
     editorReady && (plan.steps.length > 0 || editorCanMaterializeStep);
+  const isScanEditor = editor?.kind === "rfiScan";
+  const shouldUpdatePreview = isScanEditor && editorDirty;
   const replyPreview = outlookReplyPreview(plan.meta?.replyPreview);
   const focusableWarningCodes =
     plan.opId === "rfi.stage_signed_first_pages"
@@ -3204,6 +3616,13 @@ export function PlanView({
     <div className="flow-layout">
       <div className="flow-scroll plan-flow-scroll">
         <PlanImpactSummary plan={plan} s={s} />
+        {scanPreviewUpdated && !editorDirty && (
+          <div role="status" aria-live="polite">
+            <Notice kind="info">
+              {s.t("rfi.fastScan.editor.previewUpdated")}
+            </Notice>
+          </div>
+        )}
         <ScanIndexSummary plan={plan} s={s} />
         {editor && editorRows && onEditorRowsChange ? (
           <>
@@ -3327,13 +3746,25 @@ export function PlanView({
       </div>
       <ActionBar
         left={
-          <Button variant="ghost" onClick={onCancel}>
+          <Button
+            variant="ghost"
+            disabled={isUpdatingPreview}
+            onClick={onCancel}
+          >
             {s.t("action.cancel")}
           </Button>
         }
         right={
-          <Button icon={<Play />} disabled={!canApply} onClick={onApply}>
-            {s.t("action.apply")}
+          <Button
+            icon={shouldUpdatePreview ? <RefreshCw /> : <Play />}
+            disabled={!canApply || isUpdatingPreview}
+            onClick={shouldUpdatePreview ? (onUpdatePreview ?? onApply) : onApply}
+          >
+            {isUpdatingPreview
+              ? s.t("rfi.fastScan.editor.updatingPreview")
+              : shouldUpdatePreview
+                ? s.t("rfi.fastScan.editor.updatePreview")
+                : s.t("action.apply")}
           </Button>
         }
       />
@@ -3643,6 +4074,17 @@ export function summarizeWorkbookCellChanges(plan: Plan): WorkbookCellChange[] {
 
 function WorkbookChangePreview({ plan, s }: { plan: Plan; s: Strings }) {
   const changes = summarizeWorkbookCellChanges(plan);
+  const headerId = useId();
+  const [widths, setWidths] = useState([170, 150, 220, 260, 260]);
+  const columns = [
+    "plan.workbookChanges.workbook",
+    "plan.workbookChanges.sheetCell",
+    "plan.workbookChanges.rfi",
+    "plan.workbookChanges.before",
+    "plan.workbookChanges.after",
+  ];
+  const labels = columns.map((key) => s.t(key));
+  const tableWidth = widths.reduce((total, width) => total + width, 0);
   if (changes.length === 0) return null;
   return (
     <details className="workbook-change-preview">
@@ -3656,15 +4098,45 @@ function WorkbookChangePreview({ plan, s }: { plan: Plan; s: Strings }) {
         </small>
       </summary>
       <p>{s.t("plan.workbookChanges.help")}</p>
-      <div className="workbook-change-table-wrap">
-        <table>
+      <AdjustableDataRegion
+        s={s}
+        className="workbook-change-table-wrap"
+        label={s.t("plan.workbookChanges.title")}
+      >
+        <table
+          style={{ tableLayout: "fixed", width: `${tableWidth}px`, minWidth: 0 }}
+        >
+          <colgroup>
+            {widths.map((width, index) => (
+              <col key={columns[index]} style={{ width }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>{s.t("plan.workbookChanges.workbook")}</th>
-              <th>{s.t("plan.workbookChanges.sheetCell")}</th>
-              <th>{s.t("plan.workbookChanges.rfi")}</th>
-              <th>{s.t("plan.workbookChanges.before")}</th>
-              <th>{s.t("plan.workbookChanges.after")}</th>
+              {labels.map((label, index) => (
+                <th
+                  key={columns[index]}
+                  className="adjustable-column-header"
+                  scope="col"
+                  aria-labelledby={`${headerId}-${index}`}
+                  style={{ width: widths[index] }}
+                  title={label}
+                >
+                  <span id={`${headerId}-${index}`}>{label}</span>
+                  <ColumnResizeHandle
+                    width={widths[index]}
+                    label={label}
+                    s={s}
+                    onWidthChange={(width) =>
+                      setWidths((current) =>
+                        current.map((existing, columnIndex) =>
+                          columnIndex === index ? width : existing,
+                        ),
+                      )
+                    }
+                  />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -3685,7 +4157,7 @@ function WorkbookChangePreview({ plan, s }: { plan: Plan; s: Strings }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </AdjustableDataRegion>
       {changes.length === MAX_WORKBOOK_CELL_PREVIEWS && (
         <small className="workbook-change-limit">
           {s.t("plan.workbookChanges.limit", {

@@ -87,6 +87,8 @@ pub(crate) enum BackendMethod {
     PathsReveal,
     #[serde(rename = "recovery/list")]
     RecoveryList,
+    #[serde(rename = "rfi/printFind")]
+    RfiPrintFind,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,7 +97,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 35] = [
+    pub(crate) const ALL: [Self; 36] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -131,6 +133,7 @@ impl BackendMethod {
         Self::PathsSelect,
         Self::PathsReveal,
         Self::RecoveryList,
+        Self::RfiPrintFind,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -173,6 +176,7 @@ impl BackendMethod {
             Self::HistoryList => "history/list",
             Self::PathsSelect => "paths/select",
             Self::PathsReveal => "paths/reveal",
+            Self::RfiPrintFind => "rfi/printFind",
             Self::RecoveryList => "recovery/list",
         }
     }
@@ -267,6 +271,12 @@ impl BackendRouter {
             BackendMethod::EngineUndo => self.undo(params).await,
             BackendMethod::PathsSelect => self.select_paths(params).await,
             BackendMethod::PathsReveal => self.reveal_path(params).await,
+            BackendMethod::RfiPrintFind => {
+                let native = Arc::clone(&self.native);
+                tauri::async_runtime::spawn_blocking(move || native.find_rfi_print_files(params))
+                    .await
+                    .map_err(|_| BackendError::request_failed("RFI document discovery failed"))?
+            }
             _ => {
                 let native = Arc::clone(&self.native);
                 tauri::async_runtime::spawn_blocking(move || native.dispatch(method, params))

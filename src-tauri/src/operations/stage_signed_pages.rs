@@ -10,13 +10,12 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
-    naming::filename_for,
     ocr::render_page_thumbnail_data_url,
     operations::process_scans::{OcrAdapter, OcrFailure},
     parallel::{bounded_map, bounded_map_stream},
     pdf::{PdfInspection, inspect},
     pdf_publish::{same_file_identity, temporary_pdf_name_matches},
-    rfi_code::RfiMethod,
+    rfi_code::{PREFIX, RfiMatch, RfiMethod, normalize_candidate_number, normalize_full_code},
 };
 
 const OPERATION_ID: &str = "rfi.stage_signed_first_pages";
@@ -309,7 +308,7 @@ where
                     continue;
                 }
             };
-            if read.matched.method != RfiMethod::Strict {
+            let Some(code) = canonical_stage_code(&read.matched) else {
                 push_warning_review(
                     &mut plan,
                     &mut warning_reviews,
@@ -321,7 +320,7 @@ where
                     "No conflict-free exact canonical RFI code was recognized",
                 );
                 continue;
-            }
+            };
             if read.matched.confidence < MIN_CONFIDENCE {
                 let detail = format!(
                     "OCR score {:.0}% is below the 80% threshold",
@@ -334,20 +333,17 @@ where
                     "warn.low_confidence",
                     pdf,
                     Some(page_index),
-                    Some(&read.matched.code),
+                    Some(&code),
                     &detail,
                 );
                 continue;
             }
-            groups
-                .entry(read.matched.code)
-                .or_default()
-                .push(Candidate {
-                    path: pdf.clone(),
-                    page_index,
-                    confidence: read.matched.confidence,
-                    method: read.source,
-                });
+            groups.entry(code).or_default().push(Candidate {
+                path: pdf.clone(),
+                page_index,
+                confidence: read.matched.confidence,
+                method: read.source,
+            });
         }
     }
 
@@ -1315,6 +1311,46 @@ struct ArchiveDirectoryBatch {
     entries_scanned: usize,
 }
 
+fn canonical_stage_code(matched: &RfiMatch) -> Option<String> {
+    if !matches!(matched.method, RfiMethod::Strict | RfiMethod::OcrAlias) {
+        return None;
+    }
+    normalize_full_code(&matched.code)
+}
+
+fn canonical_archive_filename_code(filename: &str) -> Option<String> {
+    let body = strip_ascii_prefix_case_insensitive(filename, "RFI No. ")?;
+    let body = strip_ascii_suffix_case_insensitive(body, ".pdf")?;
+    let rfi = strip_ascii_prefix_case_insensitive(body, "AZE-SUN-INT-QMS-RFI-")?;
+    let (discipline, number) = rfi.split_once('-')?;
+    if !["CIV", "MEC", "ELE", "PRC"]
+        .iter()
+        .any(|supported| discipline.eq_ignore_ascii_case(supported))
+    {
+        return None;
+    }
+    let number = normalize_candidate_number(number)?;
+    Some(format!(
+        "{PREFIX}-{}-{number}",
+        discipline.to_ascii_uppercase()
+    ))
+}
+
+fn strip_ascii_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    value
+        .get(..prefix.len())?
+        .eq_ignore_ascii_case(prefix)
+        .then(|| &value[prefix.len()..])
+}
+
+fn strip_ascii_suffix_case_insensitive<'a>(value: &'a str, suffix: &str) -> Option<&'a str> {
+    let start = value.len().checked_sub(suffix.len())?;
+    value
+        .get(start..)?
+        .eq_ignore_ascii_case(suffix)
+        .then(|| &value[..start])
+}
+
 fn archive_index<P, C>(
     root: &Path,
     codes: BTreeSet<String>,
@@ -1327,7 +1363,8 @@ where
 {
     let wanted = codes
         .iter()
-        .map(|code| (filename_for(code).to_ascii_lowercase(), code.clone()))
+        .cloned()
+        .map(|code| (code.clone(), code))
         .collect::<BTreeMap<_, _>>();
     let mut matches = codes
         .into_iter()
@@ -1425,10 +1462,12 @@ fn scan_archive_directory(
         if !file_type.is_file() || file_type.is_symlink() {
             continue;
         }
-        let Some(name) = entry.file_name().to_str().map(str::to_ascii_lowercase) else {
+        let filename = entry.file_name();
+        let Some(name) = filename.to_str() else {
             continue;
         };
-        let Some(code) = wanted.get(&name) else {
+        let Some(code) = canonical_archive_filename_code(name).and_then(|code| wanted.get(&code))
+        else {
             continue;
         };
         let entry_path = entry.path();

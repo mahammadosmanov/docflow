@@ -22,6 +22,7 @@ use crate::{
     fs_ops::file_sha256,
     gemini::{GeminiClient, GeminiRequest},
     ooxml::{CellUpdate, WorkbookData, WorksheetData, read_workbook_selective},
+    rfi_code::normalize_candidate_number,
 };
 
 const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
@@ -2041,7 +2042,9 @@ fn rfi_parts(value: &str) -> Option<(String, u32)> {
     let captures = rfi_pattern().captures(value)?;
     Some((
         captures.get(1)?.as_str().to_ascii_uppercase(),
-        captures.get(2)?.as_str().parse().ok()?,
+        normalize_candidate_number(captures.get(2)?.as_str())?
+            .parse()
+            .ok()?,
     ))
 }
 
@@ -2249,7 +2252,7 @@ fn document_error(error: impl std::fmt::Display) -> BackendError {
 
 fn rfi_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)-RFI-(CIV|MEC|ELE|PRC)-(\d+)$").unwrap())
+    VALUE.get_or_init(|| Regex::new(r"(?i)-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})$").unwrap())
 }
 
 fn item_pattern() -> &'static Regex {
@@ -2285,4 +2288,24 @@ fn north_pattern() -> &'static Regex {
 fn south_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
     VALUE.get_or_init(|| Regex::new(r"(?i)(?:^|[^A-Z0-9])S\d{1,3}(?:[^A-Z0-9]|$)").unwrap())
+}
+
+#[cfg(test)]
+mod rfi_identity_tests {
+    use super::*;
+
+    #[test]
+    fn rfi_log_identity_pads_only_rfi_anchored_serials() {
+        assert_eq!(
+            rfi_parts("AZE-SUN-INT-QMS-RFI-CIV-9"),
+            Some(("CIV".to_string(), 9))
+        );
+        assert_eq!(
+            rfi_parts("AZE-SUN-INT-QMS-RFI-CIV-901"),
+            Some(("CIV".to_string(), 901))
+        );
+        assert!(rfi_parts("ITP-CIV-901").is_none());
+        assert!(rfi_parts("2026-09-01").is_none());
+        assert!(rfi_parts("AZE-SUN-INT-QMS-RFI-CIV-09010").is_none());
+    }
 }

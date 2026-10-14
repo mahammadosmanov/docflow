@@ -156,8 +156,10 @@ algorithm profile, relative path, file identity, size, and modification time.
 New or changed files miss the index. The task-local Force full rescan switch is
 never remembered. Paths and analysis outcomes stay local; Supabase is not a
 cache authority and receives no scan paths, PDF content, or cached decisions.
-For an actionable cached orientation result, Apply still hashes the live source
-and rejects any difference from the exact hash recorded in the approved Plan.
+PDF orientation uses cache profile v5 and pins a source SHA-256 before inspect
+or detection; it hashes again after analysis and rejects a mismatch before
+checkpointing. Cache hits must match both fingerprint and source hash, and
+Apply still rechecks the exact hash recorded in the approved Plan.
 A cached positive Worley signature is reused only after its stored full-file
 hash matches the live PDF; metadata alone cannot authorize workbook updates.
 The current Worley detector profile accepts only the matching canonical RFI PDF
@@ -190,8 +192,15 @@ private incremental PDF, then publishes it no-clobber beneath the separate revie
 root. The journal records the final copy hash so Undo removes it only while it is
 still the exact file DocFlow created.
 
-Process Scans uses the same detector for incoming files. Its Plan pins the
-source hash, selected page indexes, and target rotations. Apply extracts the
-approved pages, applies those rotations in private storage, verifies the PDF,
-then publishes through the existing no-clobber journal path. An uncertain page
-sends its entire source PDF unchanged to `_review`.
+Fast RFI Scan Multi-RFI pins source hashes and selected page indexes. When
+optional rotation is enabled, it pins each SHA-256 before parallel
+orientation/OCR analysis and verifies the hash afterward; a source changed
+during analysis is rejected before Plan creation. Generic direction-zero words
+alone cannot end cardinal cover search when no cover is confirmed. Apply
+extracts only approved pages, verifies the PDF, and publishes through the
+existing no-clobber journal path. Unsupported PDF structures and uncertain
+boundaries send the complete affected source to `_review`. Single-RFI reads
+page one and publishes the complete source PDF without separation or rotation.
+Preview revision accepts only the canonical RFI code field; Rust rederives the
+target from trusted settings and rejects duplicates, occupied targets, and any
+attempt to alter source paths or page selections.

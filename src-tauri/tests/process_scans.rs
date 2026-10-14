@@ -14,6 +14,8 @@ use docflow_lib::{
     review::{ReviewAction, ReviewDecision, preview as review_preview, scan as review_scan},
 };
 use serde_json::json;
+use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
 fn rfi_matching_preserves_nfc_uppercase_and_the_strict_anchor() {
@@ -162,6 +164,7 @@ fn slice5_shared_rfi_and_naming_fixture_matches_the_frozen_compatibility_oracle(
         let method = match matched.method {
             RfiMethod::Strict => "strict",
             RfiMethod::Repaired => "repaired",
+            RfiMethod::OcrAlias => "ocr_alias",
             RfiMethod::Fuzzy => "fuzzy",
             RfiMethod::Miss => "miss",
         };
@@ -472,19 +475,84 @@ impl OcrAdapter for FastCoverFixtureOcr {
     }
 }
 
+struct CountingPageOcr {
+    page_reads: [AtomicUsize; 3],
+    orientation_reads: [AtomicUsize; 3],
+    ocr_alias: bool,
+}
+
+impl OcrAdapter for CountingPageOcr {
+    fn read(&self, path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, 0)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn supports_orientation(&self) -> bool {
+        true
+    }
+
+    fn detect_orientation(
+        &self,
+        _path: &std::path::Path,
+        page_index: usize,
+    ) -> Result<docflow_lib::operations::pdf_orientation::OrientationDetection, String> {
+        let count = self
+            .orientation_reads
+            .get(page_index)
+            .ok_or_else(|| "fixture orientation index out of range".to_string())?;
+        count.fetch_add(1, Ordering::Relaxed);
+        Ok(
+            docflow_lib::operations::pdf_orientation::OrientationDetection {
+                rotate_clockwise: 0,
+                confidence: 1.0,
+                method: "fixture".to_string(),
+            },
+        )
+    }
+
+    fn read_page(&self, _path: &std::path::Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        let count = self
+            .page_reads
+            .get(page_index)
+            .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
+        count.fetch_add(1, Ordering::Relaxed);
+        let mut matched = if page_index == 0 {
+            find("AZE-SUN-INT-QMS-RFI-CIV-0064")
+        } else {
+            find("")
+        };
+        if page_index == 0 && self.ocr_alias {
+            matched.method = docflow_lib::rfi_code::RfiMethod::OcrAlias;
+        }
+        let source = if page_index == 0 && self.ocr_alias {
+            format!("ocr:fixture-page-{}:alias:CLV->CIV", page_index + 1)
+        } else {
+            format!("ocr:fixture-page-{}", page_index + 1)
+        };
+        Ok(OcrRead { matched, source })
+    }
+
+    fn diagnostics(&self) -> String {
+        "counting page OCR".to_string()
+    }
+}
+
 fn write_multi_page_pdf(path: &std::path::Path, page_count: usize) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, false, None, false);
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, None, false, None);
 }
 
 fn write_multi_page_pdf_with_metadata_and_empty_outlines(
     path: &std::path::Path,
     page_count: usize,
 ) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, true, Some(0), false);
+    write_multi_page_pdf_with_catalog_features(path, page_count, true, Some(0), false, None);
 }
 
 fn write_multi_page_pdf_with_nonempty_outlines(path: &std::path::Path, page_count: usize) {
-    write_multi_page_pdf_with_catalog_features(path, page_count, false, Some(1), false);
+    write_multi_page_pdf_with_catalog_features(path, page_count, false, Some(1), false, None);
 }
 
 fn write_multi_page_pdf_with_catalog_features(
@@ -493,6 +561,7 @@ fn write_multi_page_pdf_with_catalog_features(
     metadata: bool,
     outline_count: Option<usize>,
     indirect_metadata_length: bool,
+    inherited_rotation: Option<i64>,
 ) {
     let mut catalog = "<< /Type /Catalog /Pages 2 0 R".to_string();
     let metadata_id = page_count * 2 + 4;
@@ -507,11 +576,14 @@ fn write_multi_page_pdf_with_catalog_features(
     let mut objects = vec![
         catalog,
         format!(
-            "<< /Type /Pages /Kids [{}] /Count {page_count} >>",
+            "<< /Type /Pages /Kids [{}] /Count {page_count}{} >>",
             (0..page_count)
                 .map(|index| format!("{} 0 R", index + 3))
                 .collect::<Vec<_>>()
-                .join(" ")
+                .join(" "),
+            inherited_rotation
+                .map(|rotation| format!(" /Rotate {rotation}"))
+                .unwrap_or_default()
         ),
     ];
     for page in 0..page_count {
@@ -604,6 +676,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: Some(trash.clone()),
         },
@@ -724,6 +797,7 @@ fn uncertain_pages_between_confirmed_covers_stay_with_the_current_rfi() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -772,6 +846,7 @@ fn long_continuation_run_is_split_only_at_the_next_confirmed_cover() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -809,6 +884,7 @@ fn pages_before_the_first_confirmed_cover_remain_in_review() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -858,6 +934,7 @@ fn fast_cover_operation_keeps_continuations_and_reviews_uncertain_cover_boundari
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: Some(trash.clone()),
         },
@@ -965,6 +1042,7 @@ fn fast_cover_creates_missing_rfi_folder_when_destination_has_other_rfi_folders(
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1043,6 +1121,275 @@ fn fast_cover_creates_missing_rfi_folder_when_destination_has_other_rfi_folders(
 }
 
 #[test]
+fn single_rfi_mode_ocr_reads_only_page_zero_and_preserves_complete_pdf_bytes() {
+    const CODE: &str = "AZE-SUN-INT-QMS-RFI-CIV-0064";
+    for organize_into_rfi_folders in [false, true] {
+        for keep_original in [false, true] {
+            let fixture = tempfile::tempdir().unwrap();
+            let source = fixture.path().join("source");
+            let destination = fixture.path().join("destination");
+            let trash = fixture.path().join("trash");
+            let journal = fixture.path().join("journal");
+            std::fs::create_dir_all(&source).unwrap();
+            std::fs::create_dir_all(&destination).unwrap();
+            std::fs::create_dir_all(&trash).unwrap();
+            let input = source.join("one-rfi.pdf");
+            write_multi_page_pdf(&input, 3);
+            let input_hash = format!("{:x}", Sha256::digest(std::fs::read(&input).unwrap()));
+            let ocr = CountingPageOcr {
+                page_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+                orientation_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+                ocr_alias: true,
+            };
+
+            let plan = preview_fast_covers(
+                &ProcessScansParams {
+                    source: source.clone(),
+                    destination: destination.clone(),
+                    organize_into_rfi_folders,
+                    keep_original,
+                    scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+                    correct_orientation: true,
+                    trash_root: Some(trash),
+                },
+                &ocr,
+                |_| {},
+                || false,
+            )
+            .unwrap();
+            assert_eq!(
+                plan.meta["editor"]["rows"][0]["evidenceKey"],
+                "rfi.fastScan.evidence.clvToCiv"
+            );
+
+            assert_eq!(
+                ocr.page_reads
+                    .iter()
+                    .map(|count| count.load(Ordering::Relaxed))
+                    .collect::<Vec<_>>(),
+                vec![1, 0, 0],
+                "single-RFI mode OCRs only the first page"
+            );
+            assert_eq!(
+                ocr.orientation_reads
+                    .iter()
+                    .map(|count| count.load(Ordering::Relaxed))
+                    .collect::<Vec<_>>(),
+                vec![0, 0, 0],
+                "single-RFI mode does not request page rotation"
+            );
+            assert!(
+                plan.steps
+                    .iter()
+                    .all(|step| step.kind != docflow_lib::contracts::StepKind::PdfPagesExtract),
+                "single-RFI mode never extracts or splits pages"
+            );
+            let transfer_kind = if keep_original {
+                docflow_lib::contracts::StepKind::Copy
+            } else {
+                docflow_lib::contracts::StepKind::Move
+            };
+            let output = plan
+                .steps
+                .iter()
+                .find(|step| step.kind == transfer_kind)
+                .expect("one complete-PDF transfer is planned");
+            let target = std::path::PathBuf::from(output.dst.as_deref().unwrap());
+            let expected_target = if organize_into_rfi_folders {
+                target_for(&destination.join("CIV"), CODE)
+            } else {
+                flat_target_for(&destination.join("CIV"), CODE)
+            };
+            assert_eq!(
+                target
+                    .strip_prefix(destination.canonicalize().unwrap())
+                    .unwrap(),
+                expected_target.strip_prefix(&destination).unwrap()
+            );
+
+            let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
+            let caller = CallerIdentity::new("single-rfi-test", "isolated-session");
+            let scope = GrantScope::new(
+                &caller.owner_id,
+                &caller.session_id,
+                "single-rfi-preview",
+                FAST_COVER_OPERATION_ID,
+            );
+            let source_grant = authority
+                .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+                .unwrap();
+            let destination_grant = authority
+                .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+                .unwrap();
+            let cached = authority
+                .cache_plan(
+                    BackendOrigin::Rust,
+                    PlanBinding::new(
+                        &caller.owner_id,
+                        &caller.session_id,
+                        FAST_COVER_OPERATION_ID,
+                        vec![source_grant.grant_id, destination_grant.grant_id],
+                    ),
+                    plan,
+                )
+                .unwrap();
+            let applied = authority.apply(&cached.plan_id, &caller).unwrap();
+            assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+            assert!(target.is_file());
+            assert_eq!(
+                format!("{:x}", Sha256::digest(std::fs::read(&target).unwrap())),
+                input_hash
+            );
+            assert_eq!(input.is_file(), keep_original);
+
+            let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+            assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+            assert!(input.is_file());
+            assert_eq!(
+                format!("{:x}", Sha256::digest(std::fs::read(&input).unwrap())),
+                input_hash
+            );
+            assert!(!target.exists());
+        }
+    }
+}
+
+#[test]
+fn fast_scan_preview_revision_rederives_target_from_valid_code() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    let trash = fixture.path().join("trash");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::create_dir_all(&trash).unwrap();
+    let input = source.join("scan.pdf");
+    write_multi_page_pdf(&input, 2);
+    let ocr = CountingPageOcr {
+        page_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        orientation_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        ocr_alias: true,
+    };
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+            correct_orientation: false,
+            trash_root: Some(trash),
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let original = plan
+        .steps
+        .iter()
+        .find(|step| step.note_key.as_deref() == Some("note.renamed"))
+        .expect("confirmed scan output is planned");
+    let original_source = original.src.clone();
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["code"] = json!("AZE-SUN-INT-QMS-RFI-MEC-0192");
+
+    let revised = docflow_lib::operations::process_scans::revise(&plan, &json!({"rows": rows}))
+        .expect("a canonical code edit is valid");
+
+    let output = revised
+        .steps
+        .iter()
+        .find(|step| step.note_key.as_deref() == Some("note.renamed"))
+        .expect("revised scan output remains planned");
+    let expected_target = target_for(
+        &destination.canonicalize().unwrap().join("MEC"),
+        "AZE-SUN-INT-QMS-RFI-MEC-0192",
+    );
+    assert_eq!(
+        std::path::Path::new(output.dst.as_deref().unwrap())
+            .strip_prefix(destination.canonicalize().unwrap())
+            .unwrap(),
+        expected_target
+            .strip_prefix(destination.canonicalize().unwrap())
+            .unwrap()
+    );
+    assert_eq!(output.src, original_source);
+    assert_eq!(output.meta["code"], "AZE-SUN-INT-QMS-RFI-MEC-0192");
+    assert_eq!(
+        revised.meta["editor"]["rows"][0]["target"]
+            .as_str()
+            .unwrap(),
+        output.dst.as_deref().unwrap()
+    );
+}
+#[test]
+fn fast_scan_revision_rejects_invalid_codes_paths_and_target_collisions() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    let trash = fixture.path().join("trash");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::create_dir_all(&trash).unwrap();
+    let input = source.join("scan.pdf");
+    write_multi_page_pdf(&input, 2);
+    let ocr = CountingPageOcr {
+        page_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        orientation_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        ocr_alias: true,
+    };
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+            correct_orientation: false,
+            trash_root: Some(trash),
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let original_rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+
+    let mut invalid_rows = original_rows.clone();
+    invalid_rows[0]["code"] = json!("AZE-SUN-INT-QMS-RFI-CLV-0192");
+    let invalid =
+        docflow_lib::operations::process_scans::revise(&plan, &json!({"rows": invalid_rows}))
+            .unwrap_err();
+    assert_eq!(invalid.message, "error.rfi.fastScan.codeInvalid");
+
+    let mut path_tampering_rows = original_rows.clone();
+    path_tampering_rows[0]["target"] = json!("/outside/attacker.pdf");
+    let path_tampering = docflow_lib::operations::process_scans::revise(
+        &plan,
+        &json!({"rows": path_tampering_rows}),
+    )
+    .unwrap_err();
+    assert_eq!(path_tampering.message, "error.rfi.fastScan.revisionInvalid");
+
+    let code = "AZE-SUN-INT-QMS-RFI-MEC-0192";
+    let occupied_target = target_for(&destination.canonicalize().unwrap().join("MEC"), code);
+    std::fs::create_dir_all(occupied_target.parent().unwrap()).unwrap();
+    std::fs::write(&occupied_target, b"pre-existing user file").unwrap();
+    let mut colliding_rows = original_rows;
+    colliding_rows[0]["code"] = json!(code);
+    let collision =
+        docflow_lib::operations::process_scans::revise(&plan, &json!({"rows": colliding_rows}))
+            .unwrap_err();
+    assert_eq!(collision.message, "error.rfi.fastScan.targetExists");
+    assert_eq!(
+        std::fs::read(&occupied_target).unwrap(),
+        b"pre-existing user file"
+    );
+    assert!(input.is_file());
+}
+
+#[test]
 fn page_extraction_preserves_xmp_and_drops_only_empty_outlines() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("metadata-scan.pdf");
@@ -1067,7 +1414,7 @@ fn page_extraction_preserves_metadata_with_indirect_stream_length() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("indirect-metadata-scan.pdf");
     let output = fixture.path().join("single-page.pdf");
-    write_multi_page_pdf_with_catalog_features(&source, 2, true, None, true);
+    write_multi_page_pdf_with_catalog_features(&source, 2, true, None, true, None);
 
     let before = docflow_lib::pdf::inspect(&source).unwrap();
     assert!(!before.metadata_xml_self_contained);
@@ -1098,7 +1445,7 @@ fn page_extraction_keeps_nonempty_outline_pdfs_in_review_scope() {
 }
 
 #[test]
-#[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to run an end-to-end real-scan Preview"]
+#[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to run real-scan Preview/Apply/Undo acceptance"]
 fn fast_cover_preview_groups_the_supplied_real_scan() {
     let source_pdf = std::path::PathBuf::from(
         std::env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
@@ -1118,18 +1465,20 @@ fn fast_cover_preview_groups_the_supplied_real_scan() {
             .expect("supplied PDF should have a filename"),
     );
     std::fs::copy(&source_pdf, &input).expect("copy sample into disposable test workspace");
+    let input_hash = format!("{:x}", Sha256::digest(std::fs::read(&input).unwrap()));
 
     let started = std::time::Instant::now();
     let plan = preview_fast_covers(
         &ProcessScansParams {
-            source,
-            destination,
+            source: source.clone(),
+            destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
-        &NativeOcr::with_tesseract(tesseract),
+        &NativeOcr::with_tesseract(tesseract.clone()),
         |_| {},
         || false,
     )
@@ -1142,6 +1491,15 @@ fn fast_cover_preview_groups_the_supplied_real_scan() {
         .steps
         .iter()
         .filter(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .collect::<Vec<_>>();
+    let multi_outputs = extracted
+        .iter()
+        .map(|step| {
+            (
+                std::path::PathBuf::from(step.dst.as_deref().unwrap()),
+                step.meta["pageIndexes"].as_array().unwrap().len(),
+            )
+        })
         .collect::<Vec<_>>();
     let named_groups = extracted
         .iter()
@@ -1192,6 +1550,7 @@ fn fast_cover_preview_groups_the_supplied_real_scan() {
         (0..page_count as u64).collect::<Vec<_>>(),
         "each source page must be included in exactly one output group"
     );
+    drop(extracted);
     assert!(
         !plan
             .warnings
@@ -1202,6 +1561,196 @@ fn fast_cover_preview_groups_the_supplied_real_scan() {
     assert!(
         input.is_file(),
         "Preview must leave the source PDF untouched"
+    );
+    let multi_authority = FilesystemAuthority::new(
+        fixture.path().join("multi-journal"),
+        std::time::Duration::from_secs(300),
+    );
+    let multi_caller = CallerIdentity::new("ventoy-multi", "isolated");
+    let multi_scope = GrantScope::new(
+        &multi_caller.owner_id,
+        &multi_caller.session_id,
+        "multi-preview",
+        FAST_COVER_OPERATION_ID,
+    );
+    let source_grant = multi_authority
+        .issue_grant(&multi_scope, &source, GrantAccess::ReadWrite)
+        .unwrap();
+    let destination_grant = multi_authority
+        .issue_grant(&multi_scope, &destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = multi_authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &multi_caller.owner_id,
+                &multi_caller.session_id,
+                FAST_COVER_OPERATION_ID,
+                vec![source_grant.grant_id, destination_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = multi_authority
+        .apply(&cached.plan_id, &multi_caller)
+        .unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    assert_eq!(
+        format!("{:x}", Sha256::digest(std::fs::read(&input).unwrap())),
+        input_hash
+    );
+    assert!(!multi_outputs.is_empty());
+    for (output, expected_pages) in &multi_outputs {
+        assert!(output.is_file(), "missing extracted output {output:?}");
+        assert_eq!(
+            docflow_lib::pdf::inspect(output).unwrap().page_count,
+            *expected_pages
+        );
+    }
+    let undone = multi_authority
+        .undo(&applied.journal_id, &multi_caller, None)
+        .unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert!(
+        multi_outputs.iter().all(|(output, _)| !output.exists()),
+        "Undo removes only extracted outputs"
+    );
+    let single_source = fixture.path().join("single-source");
+    let single_destination = fixture.path().join("single-destination");
+    std::fs::create_dir_all(&single_source).unwrap();
+    std::fs::create_dir_all(&single_destination).unwrap();
+    let single_input = single_source.join(
+        source_pdf
+            .file_name()
+            .expect("supplied PDF should have a filename"),
+    );
+    std::fs::copy(&source_pdf, &single_input)
+        .expect("copy sample into isolated single-RFI test workspace");
+    let single_plan = preview_fast_covers(
+        &ProcessScansParams {
+            source: single_source.clone(),
+            destination: single_destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &NativeOcr::with_tesseract(tesseract),
+        |_| {},
+        || false,
+    )
+    .expect("single-RFI Preview should accept the complete sample PDF");
+    let single_rows = single_plan.meta["editor"]["rows"]
+        .as_array()
+        .expect("single-RFI preview rows");
+    assert_eq!(single_rows.len(), 1);
+    let expected_single_code = std::env::var("DOCFLOW_COVER_LAB_EXPECTED_SINGLE_CODE")
+        .unwrap_or_else(|_| "AZE-SUN-INT-QMS-RFI-PRC-0086".to_string());
+    assert_eq!(
+        single_rows[0]["code"].as_str(),
+        Some(expected_single_code.as_str()),
+        "single-RFI mode must use the visually confirmed first-page RFI"
+    );
+    assert!(
+        single_plan.steps.iter().all(|step| !matches!(
+            step.kind,
+            docflow_lib::contracts::StepKind::PdfPagesExtract
+                | docflow_lib::contracts::StepKind::PdfPageRotate
+        )),
+        "single-RFI mode must not split or rotate the complete PDF"
+    );
+    assert_eq!(
+        single_plan
+            .steps
+            .iter()
+            .filter(|step| step.kind == docflow_lib::contracts::StepKind::Copy)
+            .count(),
+        1,
+        "single-RFI mode must plan one whole-file copy"
+    );
+    assert_eq!(
+        docflow_lib::pdf::inspect(&single_input)
+            .expect("single-RFI source remains a valid PDF")
+            .page_count,
+        page_count,
+        "single-RFI mode must preserve all attachment pages"
+    );
+    assert!(
+        single_input.is_file(),
+        "Preview must leave the source intact"
+    );
+    let single_target = std::path::PathBuf::from(
+        single_plan
+            .steps
+            .iter()
+            .find(|step| step.kind == docflow_lib::contracts::StepKind::Copy)
+            .and_then(|step| step.dst.as_deref())
+            .unwrap(),
+    );
+    let single_authority = FilesystemAuthority::new(
+        fixture.path().join("single-journal"),
+        std::time::Duration::from_secs(300),
+    );
+    let single_caller = CallerIdentity::new("ventoy-single", "isolated");
+    let single_scope = GrantScope::new(
+        &single_caller.owner_id,
+        &single_caller.session_id,
+        "single-preview",
+        FAST_COVER_OPERATION_ID,
+    );
+    let single_source_grant = single_authority
+        .issue_grant(&single_scope, &single_source, GrantAccess::ReadWrite)
+        .unwrap();
+    let single_destination_grant = single_authority
+        .issue_grant(&single_scope, &single_destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached_single = single_authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &single_caller.owner_id,
+                &single_caller.session_id,
+                FAST_COVER_OPERATION_ID,
+                vec![
+                    single_source_grant.grant_id,
+                    single_destination_grant.grant_id,
+                ],
+            ),
+            single_plan,
+        )
+        .unwrap();
+    let applied_single = single_authority
+        .apply(&cached_single.plan_id, &single_caller)
+        .unwrap();
+    assert_eq!(applied_single.failed, 0, "{:?}", applied_single.errors);
+    assert!(single_target.is_file());
+    assert_eq!(
+        format!(
+            "{:x}",
+            Sha256::digest(std::fs::read(&single_target).unwrap())
+        ),
+        input_hash,
+        "single-RFI mode copies the complete PDF byte-for-byte"
+    );
+    assert_eq!(
+        docflow_lib::pdf::inspect(&single_target)
+            .unwrap()
+            .page_count,
+        page_count
+    );
+    let undone_single = single_authority
+        .undo(&applied_single.journal_id, &single_caller, None)
+        .unwrap();
+    assert_eq!(undone_single.failed, 0, "{:?}", undone_single.errors);
+    assert!(!single_target.exists());
+    assert!(single_input.is_file());
+    assert_eq!(
+        format!(
+            "{:x}",
+            Sha256::digest(std::fs::read(&single_input).unwrap())
+        ),
+        input_hash
     );
 }
 
@@ -1237,6 +1786,8 @@ impl OcrAdapter for ParallelFixtureOcr {
 
 struct OrientationFixtureOcr {
     uncertain: bool,
+    rotations: Vec<i64>,
+    cover_page: usize,
 }
 
 impl OcrAdapter for OrientationFixtureOcr {
@@ -1249,6 +1800,85 @@ impl OcrAdapter for OrientationFixtureOcr {
 
     fn supports_page_scan(&self) -> bool {
         true
+    }
+    fn read_page(&self, path: &std::path::Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        if page_index == self.cover_page {
+            self.read(path)
+        } else {
+            Ok(OcrRead {
+                matched: find(""),
+                source: "orientation-fixture-continuation".to_string(),
+            })
+        }
+    }
+
+    fn inspect_pdf(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<Result<docflow_lib::pdf::PdfInspection, String>> {
+        Some(docflow_lib::pdf::inspect(path).map_err(|error| error.to_string()))
+    }
+
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
+    fn supports_orientation(&self) -> bool {
+        true
+    }
+
+    fn detect_orientation(
+        &self,
+        _path: &std::path::Path,
+        page_index: usize,
+    ) -> Result<docflow_lib::operations::pdf_orientation::OrientationDetection, String> {
+        if self.uncertain {
+            return Err("fixture orientation is uncertain".to_string());
+        }
+        Ok(
+            docflow_lib::operations::pdf_orientation::OrientationDetection {
+                rotate_clockwise: self.rotations.get(page_index).copied().unwrap_or(90),
+                confidence: 15.0,
+                method: "fixture".to_string(),
+            },
+        )
+    }
+
+    fn diagnostics(&self) -> String {
+        "orientation fixture OCR".to_string()
+    }
+}
+
+struct ReplacingOrientationOcr {
+    replacement_pdf: std::path::PathBuf,
+    replaced: AtomicUsize,
+}
+
+impl OcrAdapter for ReplacingOrientationOcr {
+    fn read(&self, _path: &std::path::Path) -> Result<OcrRead, OcrFailure> {
+        Ok(OcrRead {
+            matched: find("AZE-SUN-INT-QMS-RFI-CIV-0064"),
+            source: "replacement-fixture".to_string(),
+        })
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, path: &std::path::Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        if page_index == 0 {
+            let read = self.read(path)?;
+            if self.replaced.fetch_add(1, Ordering::SeqCst) == 0 {
+                std::fs::copy(&self.replacement_pdf, path).unwrap();
+            }
+            Ok(read)
+        } else {
+            Ok(OcrRead {
+                matched: find(""),
+                source: "replacement-fixture-continuation".to_string(),
+            })
+        }
     }
 
     fn inspect_pdf(
@@ -1271,12 +1901,9 @@ impl OcrAdapter for OrientationFixtureOcr {
         _path: &std::path::Path,
         _page_index: usize,
     ) -> Result<docflow_lib::operations::pdf_orientation::OrientationDetection, String> {
-        if self.uncertain {
-            return Err("fixture orientation is uncertain".to_string());
-        }
         Ok(
             docflow_lib::operations::pdf_orientation::OrientationDetection {
-                rotate_clockwise: 90,
+                rotate_clockwise: 180,
                 confidence: 15.0,
                 method: "fixture".to_string(),
             },
@@ -1284,8 +1911,49 @@ impl OcrAdapter for OrientationFixtureOcr {
     }
 
     fn diagnostics(&self) -> String {
-        "orientation fixture OCR".to_string()
+        "source replacement fixture OCR".to_string()
     }
+}
+
+#[test]
+fn process_scans_rejects_source_replaced_during_parallel_ocr_analysis() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf(&pdf, 2);
+    let original_hash = format!("{:x}", Sha256::digest(std::fs::read(&pdf).unwrap()));
+    let replacement_pdf = fixture.path().join("replacement.pdf");
+    write_multi_page_pdf_with_catalog_features(&replacement_pdf, 2, true, None, false, None);
+
+    let result = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &ReplacingOrientationOcr {
+            replacement_pdf,
+            replaced: AtomicUsize::new(0),
+        },
+        |_| {},
+        || false,
+    );
+
+    let error = result.expect_err("changed bytes cannot produce an actionable preview plan");
+    assert_eq!(error.code, "path_invalid");
+    assert_ne!(
+        format!("{:x}", Sha256::digest(std::fs::read(&pdf).unwrap())),
+        original_hash,
+        "the deterministic OCR fixture must have replaced source bytes"
+    );
+    assert_eq!(docflow_lib::pdf::inspect(&pdf).unwrap().page_count, 2);
 }
 
 #[test]
@@ -1303,10 +1971,15 @@ fn process_scans_adds_confident_orientation_to_cached_plan() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: true,
             trash_root: None,
         },
-        &OrientationFixtureOcr { uncertain: false },
+        &OrientationFixtureOcr {
+            uncertain: false,
+            rotations: vec![90],
+            cover_page: 0,
+        },
         |_| {},
         || false,
     )
@@ -1339,10 +2012,15 @@ fn process_scans_routes_uncertain_orientation_to_review_unchanged() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: true,
             trash_root: None,
         },
-        &OrientationFixtureOcr { uncertain: true },
+        &OrientationFixtureOcr {
+            uncertain: true,
+            rotations: vec![90],
+            cover_page: 0,
+        },
         |_| {},
         || false,
     )
@@ -1362,6 +2040,234 @@ fn process_scans_routes_uncertain_orientation_to_review_unchanged() {
 }
 
 #[test]
+fn process_scans_normalizes_inherited_negative_rotation_and_keeps_page_indices() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf_with_catalog_features(&pdf, 2, false, None, false, Some(-90));
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr {
+            uncertain: false,
+            rotations: vec![90, 270],
+            cover_page: 0,
+        },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extraction = plan
+        .steps
+        .iter()
+        .find(|step| step.kind == docflow_lib::contracts::StepKind::PdfPagesExtract)
+        .expect("confident inherited rotations must use cached PDF extraction");
+    let rotations = extraction.meta["rotations"].as_array().unwrap();
+    assert_eq!(rotations.len(), 2);
+    assert_eq!(rotations[0]["pageIndex"], json!(0));
+    assert_eq!(rotations[0]["targetRotation"], json!(0));
+    assert_eq!(rotations[1]["pageIndex"], json!(1));
+    assert_eq!(rotations[1]["targetRotation"], json!(180));
+}
+
+#[test]
+fn process_scans_treats_overflow_rotation_as_canonical_and_idempotent() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf_with_catalog_features(&pdf, 1, false, None, false, Some(450));
+    let original_bytes = std::fs::read(&pdf).unwrap();
+    let pdf_path = pdf.canonicalize().unwrap().to_string_lossy().into_owned();
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr {
+            uncertain: false,
+            rotations: vec![0],
+            cover_page: 0,
+        },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(&pdf).unwrap(), original_bytes);
+    assert!(
+        plan.steps.iter().any(|step| {
+            matches!(
+                step.kind,
+                docflow_lib::contracts::StepKind::Copy | docflow_lib::contracts::StepKind::Move
+            ) && step.src.as_deref() == Some(pdf_path.as_str())
+        }),
+        "expected unchanged-source transfer; steps={:#?}; warnings={:#?}",
+        plan.steps,
+        plan.warnings
+    );
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != docflow_lib::contracts::StepKind::PdfPagesExtract)
+    );
+    assert!(plan.steps.iter().all(|step| {
+        !step.meta.get("rotations").is_some_and(|value| {
+            value
+                .as_array()
+                .is_some_and(|rotations| !rotations.is_empty())
+        })
+    }));
+}
+
+#[test]
+fn process_scans_routes_noncardinal_metadata_to_review() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf_with_catalog_features(&pdf, 1, false, None, false, Some(45));
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr {
+            uncertain: false,
+            rotations: vec![0],
+            cover_page: 0,
+        },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert!(plan.steps.iter().any(|step| {
+        step.kind == docflow_lib::contracts::StepKind::Copy
+            && step
+                .dst
+                .as_deref()
+                .is_some_and(|path| path.replace('\\', "/").ends_with("_review/batch.pdf"))
+    }));
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| step.kind != docflow_lib::contracts::StepKind::PdfPagesExtract)
+    );
+}
+
+#[test]
+fn process_scans_remaps_source_rotation_to_extracted_page_index() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let pdf = source.join("batch.pdf");
+    write_multi_page_pdf(&pdf, 5);
+    let original_hash = format!("{:x}", Sha256::digest(std::fs::read(&pdf).unwrap()));
+
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source: source.clone(),
+            destination: destination.clone(),
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: true,
+            trash_root: None,
+        },
+        &OrientationFixtureOcr {
+            uncertain: false,
+            rotations: vec![0, 0, 0, 90, 0],
+            cover_page: 3,
+        },
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let extraction = plan
+        .steps
+        .iter()
+        .find(|step| step.meta.get("pageIndexes") == Some(&json!([3, 4])))
+        .unwrap_or_else(|| {
+            panic!(
+                "expected grouped extraction for source pages 3 and 4; steps={:#?}; warnings={:#?}",
+                plan.steps, plan.warnings
+            )
+        });
+    assert_eq!(extraction.meta["rotations"][0]["pageIndex"], json!(0));
+    assert_eq!(extraction.meta["rotations"][0]["targetRotation"], json!(90));
+    let output = std::path::PathBuf::from(extraction.dst.as_deref().unwrap());
+    let journal = fixture.path().join("journal");
+    let authority = FilesystemAuthority::new(&journal, std::time::Duration::from_secs(300));
+    let caller = CallerIdentity::new("rotation-owner", "rotation-session");
+    let scope = GrantScope::new(
+        &caller.owner_id,
+        &caller.session_id,
+        "rotation-preview",
+        FAST_COVER_OPERATION_ID,
+    );
+    let source_grant = authority
+        .issue_grant(&scope, &source, GrantAccess::ReadWrite)
+        .unwrap();
+    let destination_grant = authority
+        .issue_grant(&scope, &destination, GrantAccess::ReadWrite)
+        .unwrap();
+    let cached = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                FAST_COVER_OPERATION_ID,
+                vec![source_grant.grant_id, destination_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&cached.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    assert_eq!(
+        format!("{:x}", Sha256::digest(std::fs::read(&pdf).unwrap())),
+        original_hash
+    );
+    let output_facts = docflow_lib::pdf::inspect(&output).unwrap();
+    assert_eq!(output_facts.page_count, 2);
+    assert_eq!(output_facts.pages[0].rotation, 90);
+    assert_eq!(output_facts.pages[1].rotation, 0);
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0, "{:?}", undone.errors);
+    assert!(!output.exists());
+    assert!(pdf.is_file());
+}
+
+#[test]
 fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("source");
@@ -1378,6 +2284,7 @@ fn process_scan_preview_uses_bounded_parallel_analysis_when_supported() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1459,6 +2366,7 @@ fn keep_original_copies_low_confidence_files_into_review() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1490,6 +2398,7 @@ fn keep_original_copies_ocr_document_errors_into_review() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1523,6 +2432,7 @@ fn process_scans_preview_apply_journal_and_undo_preserve_duplicates_and_failures
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1711,6 +2621,7 @@ fn missing_ocr_engine_returns_one_diagnostic_and_a_zero_step_plan() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1744,6 +2655,7 @@ fn a_broken_ocr_install_fails_closed_and_preview_cancellation_is_inert() {
         destination: destination.clone(),
         organize_into_rfi_folders: true,
         keep_original: false,
+        scan_mode: Default::default(),
         correct_orientation: false,
         trash_root: None,
     };
@@ -1775,6 +2687,7 @@ fn flat_copy_mode_preserves_the_source_and_uses_the_exact_legacy_filename() {
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: true,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1848,6 +2761,7 @@ fn process_scans_apply_cancellation_is_observed_before_the_first_mutation() {
             destination: destination.clone(),
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1912,6 +2826,7 @@ fn process_scans_apply_never_clobbers_a_destination_created_after_preview() {
             destination: destination.clone(),
             organize_into_rfi_folders: false,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },
@@ -1999,6 +2914,7 @@ fn process_scans_rejects_an_unbounded_source_before_ocr() {
             destination,
             organize_into_rfi_folders: true,
             keep_original: false,
+            scan_mode: Default::default(),
             correct_orientation: false,
             trash_root: None,
         },

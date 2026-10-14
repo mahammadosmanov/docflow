@@ -82,17 +82,23 @@ same token used by Plan revision. Missing support or exhausted bounds require
 manual PDF review and never expand or alter Apply authority.
 
 PDF orientation normalization is a separate Rust operation. Discovery is
-restricted to CIV/MEC/ELE/PRC directory trees. Uncached PDF structure inspection
-and cached fingerprint lookups run in ordered two-file batches so large PDF
-memory use remains bounded. A separate bounded Rayon pool renders and
-classifies independent pages with a 250/350-DPI bundled-Tesseract OSD cascade.
-Only unresolved pages enter a four-direction English OCR comparison, whose
-minimum word count, average score, and winner margin fail closed; no filesystem
-mutation occurs in that phase. The immutable Plan contains exact rotations and hashes.
-Cached page replay coalesces progress events without skipping a cached decision.
-Apply stays single-threaded to preserve journal order, appends only page
-dictionary revisions in private storage, validates structural fidelity, and
-publishes review copies with capability-relative no-clobber writes.
+restricted to CIV/MEC/ELE/PRC directory trees. Before inspection or detection,
+the scan pins each source SHA-256; it rechecks content after analysis and before
+checkpointing or planning. Cache reuse requires the matching hash and the
+versioned v5 detector profile. Uncached PDF structure inspection and cached
+fingerprint lookups run in ordered two-file batches so large PDF memory use
+remains bounded. A separate bounded Rayon pool renders and classifies pages
+with multi-resolution OSD and four-direction English OCR. For unresolved
+direction, a unique exact canonical RFI ID in the top page header may resolve a
+page only when the same ID and angle agree at both 250 and 350 DPI. Conflicting,
+competing, or noncanonical evidence remains uncertain. Fast RFI Scan and the
+standalone operation share the canonical `/Rotate` plus render-relative
+correction policy; already-upright pages are idempotent and non-cardinal
+metadata fails closed. The immutable Plan contains exact rotations and hashes.
+Cached page replay coalesces progress events without skipping a cached
+decision. Apply stays single-threaded to preserve journal order, appends only
+page dictionary revisions in private storage, validates structural fidelity,
+and publishes review copies with capability-relative no-clobber writes.
 
 ## Durable incremental analysis
 
@@ -109,26 +115,27 @@ overwrite a destination, update a workbook, or replace Plan hash/identity
 checks. Supabase remains metadata history only; large-system paths and cached
 document analysis are local-only.
 
-The same bounded analysis pool is used by native Process Scans OCR, incoming
-RFI file name/content inspection, combined
-Worley page recognition, signed-input and archive discovery, RFI System
-discovery and first-page signature detection, PDF-orientation discovery and
-page analysis. Completed indexed PDF analyses
+The same bounded analysis pool is used by Fast RFI Scan OCR, incoming RFI file
+name/content inspection, combined Worley page recognition, signed-input and
+archive discovery, RFI System discovery and first-page signature detection,
+PDF-orientation discovery, and page analysis. Completed indexed PDF analyses
 return to one coordinator, which writes each SQLite checkpoint immediately.
 The pool preserves deterministic input/result order and is never used for
 Office automation, print submission, publication, journals, or Undo, where
 parallel effects could create collisions or unknowable outcomes.
 
-Process Scans orientation reuses the PDF orientation detector. Preview pins each
-source hash and exact target rotation into its immutable Plan. Apply extracts
-selected pages and rotates the private output before no-clobber publication;
-uncertain input PDFs go unchanged to `_review`.
-
-Fast Cover Scans is a separate registry operation over the same Process Scans
-Plan and journal path. Only its multi-page OCR strategy changes: it checks the
-cover band in four directions, selectively retries likely covers, and keeps the
-normal operation on its current OCR implementation. Both operation IDs are
-bound to their own path grants and cached Plans.
+Fast RFI Scan is the only registered scan-separation operation. The Rust
+implementation remains in `operations/process_scans.rs`; `scan_mode` selects
+Multi-RFI or Single-RFI behavior. Multi-RFI confirms page-group boundaries
+using the known cover template. If direction-zero generic words do not confirm
+a cover, Fast RFI Scan continues the remaining cardinal cover searches. When
+optional rotation is enabled, each source SHA-256 is pinned before parallel
+orientation/OCR analysis and rechecked afterward; a changed source rejects
+Preview before it creates an actionable Plan. Unsupported page structures and
+uncertain boundaries go to `_review` unchanged. Single-RFI reads only page one
+and emits the complete source PDF without page separation or orientation
+correction. Both modes use the same path grants, no-clobber Apply, journal, and
+Undo path.
 
 Every registered operation emits localized progress phases through the existing
 Tauri channel. Long batch phases include bounded completed/total counters and a
@@ -209,7 +216,7 @@ Signed-page Preview streams separate discovery, inspection, OCR, classification,
 archive-scan, comparison-preparation, and ready phases. React retains a bounded
 ordered phase trail rather than replacing the whole progress display with only
 the latest event. The signed-page Plan view puts approved rows first, keeps a
-sticky navigator to comparisons/review copies/warnings, and renders structured
+in-flow navigator to comparisons/review copies/warnings, and renders structured
 warning-copy metadata already present in the immutable Plan.
 
 Guarded RFI System and Follow Up workbook steps already carry the expected and

@@ -8,11 +8,16 @@ The only persisted full RFI identifier is:
 AZE-SUN-INT-QMS-RFI-<DISCIPLINE>-<FOUR DIGITS>
 ```
 
-It must already match exact uppercase ASCII. Current RFI Log disciplines are
-`CIV`, `MEC`, `ELE`, and `PRC`. OCR may normalize one time to Unicode NFC and
-uppercase while recognizing evidence, but the `-RFI-` anchor is never fuzzy and
-decorated text, `Â`, lookalike separators, extra symbols, or lowercase values
-cannot become persisted identifiers silently.
+It must already match exact uppercase ASCII when persisted. Current RFI Log
+disciplines are `CIV`, `MEC`, `ELE`, and `PRC`. Across processing features,
+whenever a numeric value is accepted as an RFI candidate, normalize one to four
+ASCII digits to a four-digit suffix only after anchoring it to a supported RFI
+discipline/code context. Pad with leading zeroes; reject longer values rather
+than truncating them. ITP revisions, dates, unrelated numbers, and persisted
+records are not rewritten. OCR may also normalize one time to Unicode NFC and
+uppercase while recognizing evidence; the `-RFI-` anchor is never fuzzy and
+decorated text, `Â`, lookalike separators, or extra symbols cannot become
+persisted identifiers.
 
 ITP revisions such as `_A` are official workbook values and remain unchanged.
 RFI Log can contain consecutive physical rows for one RFI; do not impose global
@@ -28,49 +33,35 @@ identity or secrets.
 
 ## Scans and signed pages
 
-### Process Scans orientation
+### Fast RFI Scan
 
-- `rfi.process_scans` checks each input PDF page with the existing orientation
-  detector by default. Confident corrections apply only to the new output copy.
-- If any page in a PDF remains uncertain, the complete original PDF goes to
-  `_review` unchanged. Apply rotates only the exact approved output pages and
-  revalidates the source hash; the source is never rotated in place.
-- Operators may disable correction through the Process Scans parameter form.
-
-### Process Scans batch grouping
-
-- In a multi-page PDF, one strict, canonical, high-confidence RFI identity is
-  the only marker that starts a new RFI group.
-- Every page after a confirmed cover belongs to that RFI until another
-  confirmed cover appears. Continuation-page RFI-identity OCR may be uncertain,
-  non-matching, or unreadable; those pages stay in the current group.
-- Pages before the first confirmed cover and duplicate RFI starts remain in
-  `_review`.
-- Page separation preserves self-contained XML metadata. It omits an outline
-  tree only when `/Count` is exactly zero and `/First` and `/Last` are absent;
-  active outline trees and other unsupported catalog structures remain
-  review-only.
-
-### Fast Cover Scans
-
-- `rfi.process_scans_fast_covers` is separate from `rfi.process_scans`; the
-  normal operation retains its existing OCR behavior.
-- Multi-page Fast Cover Scans checks the upper page band in four right-angle
-  directions at low resolution. It confirms a cover only when the OCR yields
-  one strict canonical RFI identity, `REQUEST FOR INSPECTION`, and one known
-  project/client mark (`SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP`).
-- Searchable text cannot confirm a cover. Visible-page OCR gets bounded retries
-  and a targeted higher-resolution read for likely covers. If identity remains
-  uncertain, that page and following pages go to
-  `_review` until the next confirmed cover; they never join the preceding RFI.
-- Page rotation correction defaults off to avoid another full-page OCR pass; it
-  can be enabled when corrected output pages are needed.
-- A confirmed RFI uses its CIV/MEC/ELE/PRC discipline folder and creates the
-  exact RFI folder when missing, even if the destination already contains other
-  RFI folders. Existing output files remain no-clobber.
-- Pages with no cover cues remain in the current confirmed group. Single-page
-  PDFs retain the normal full-page OCR path. Use normal Process Scans for other
-  cover templates.
+- `rfi.process_scans_fast_covers` is the only active RFI scan-separation
+  operation. It scans top-level PDFs and supports two explicit modes.
+- Multi-RFI checks the upper page band in four right-angle directions at low
+  resolution. A group starts only when one high-confidence, consensus-confirmed
+  strict identity or approved OCR alias, `REQUEST FOR INSPECTION`, and a known
+  project/client mark (`SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP`) agree.
+  Searchable text alone cannot confirm a cover. The independent cover-confirmed
+  rescue is limited to unresolved strong-vote candidates; it does not override a
+  stable text-layer identity or competing RFI. Uncertain boundaries send the
+  affected pages to `_review` without attaching them to an earlier RFI.
+- When safe PDF page extraction is unsupported, the complete source PDF goes to
+  `_review` unchanged with an unreadable warning. Page separation preserves
+  supported XMP metadata, including indirect stream lengths.
+- Single-RFI reads only the first page and keeps the complete source PDF intact.
+  It does not split pages or apply orientation corrections, even when that
+  option is enabled. Use it only when the PDF contains one RFI.
+- The approved OCR alias `CLV` is normalized to `CIV`. Filenames, searchable
+  PDF text, and manual corrections never use this alias.
+- Preview name correction accepts a complete supported RFI code with a
+  one-to-four-digit suffix and canonicalizes that suffix to four digits. Rust
+  derives the destination from the approved root and folder setting; source
+  paths and page selections are immutable. Duplicate or existing targets fail
+  closed before Apply.
+- Page rotation correction defaults off to avoid another full-page OCR pass.
+  Confirmed outputs use the matching discipline folder, create a missing RFI
+  folder when needed, and never overwrite an existing destination.
+- Other cover templates remain unsupported by this detector and go to review.
 
 ### Incoming file grouping
 
@@ -109,14 +100,20 @@ identity or secrets.
 
 - INTEC processing normally handles one complete RFI scan.
 - Worley processing may receive one PDF containing many signed first pages.
-- Every accepted page is linked to exactly one canonical RFI and exact page index.
+- Every accepted page has a high-confidence, consensus-confirmed Strict or
+  approved OcrAlias identity and an exact page index. Repaired, fuzzy,
+  conflicting, and filename-only identities remain review-only.
 - Missing, duplicate, low-confidence, unsupported, or ambiguous evidence creates
   a warning/review outcome, never an output.
 - The archive and signed source scan remain read-only. Page replacement happens
   only in no-clobber copies under the operator-selected review root.
 - The selected RFI System archive root is searched at every subfolder depth with
-  a bounded multi-core directory walk. Only the exact canonical RFI PDF filename
-  may match; a code appearing only in a folder or unrelated filename is not authority.
+  a bounded multi-core directory walk. Archive lookup requires the exact
+  case-insensitive `RFI No. <RFI>.pdf` basename; its numeric suffix may contain
+  one to four ASCII digits and is canonicalized before matching. Sketch PDFs,
+  DOCX files, and code appearing only in a folder or another filename are not
+  archive identity. Short and four-digit basenames for the same RFI are duplicate
+  candidates and remain ambiguous rather than selecting one.
 - New signed-scan input recursion defaults on. Both recursive walks reject
   symlinks and stop the whole preview if the archive cannot be scanned completely.
 - Every warning tied to a signed input records its relative PDF path, page number
@@ -127,7 +124,7 @@ identity or secrets.
   closed. The source is never split, moved, renamed, or modified.
 
 Accepted OCR candidates retain the recognizer's bounded confidence value in the
-approved Plan. The UI displays it as a score out of 100 for Process Scans,
+approved Plan. The UI displays it as a score out of 100 for Fast RFI Scan,
 signed-page rows, and Review. Orientation uses Tesseract's OSD score, normalized
 to the same visible 0–100 range. These are detector scores for operator review,
 not calibrated probabilities and never a substitute for preview approval.
@@ -164,9 +161,11 @@ falls back to another PDF. On page one, only handwriting or a signature inside
 the inner name/signature area of the bottom-right `OTHERS` cell is evidence.
 Printed table borders are removed from the measurement; contractor/subcontractor
 signatures, dates, general notes, and every other page region are ignored.
-Missing, unreadable, empty, or weak evidence is unsigned and cannot authorize a
-workbook update. Changing this detector requires a new scan-index algorithm
-profile so no earlier classification survives the change.
+Missing, unreadable, empty, or weak evidence is unsigned. It cannot promote a
+status to `Signed`; an unsigned result may set a safe existing control status to
+`Not Signed` but never downgrades a status already `Signed`. Changing this
+detector requires a new scan-index algorithm profile so no earlier classification
+survives the change.
 
 A shared Follow Up status cell changes only when all RFIs represented by that
 cell satisfy the required state. `Ongoing` corresponds to `In Progress` where the
@@ -182,14 +181,23 @@ For RFI Log projection, blank means `Pending`, all `Completed` means
 Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
-For supported CIV/MEC routes, including FINAL routes, a source record with no
-matching row in the current Follow Up template is outside its scope and is
-skipped without a warning. If more than one row matches, the record remains in
-manual review, except that CIV and MEC records may map to distinct existing
-rows when each destination is justified by a different exact source context.
+For supported CIV/MEC routes, including FINAL routes, records synchronize only
+into uniquely matching prepared rows and exact source contexts. A record without
+a matching row or required route-specific layout remains visible in manual
+review and warns the operator; it is never silently discarded or automatically
+synchronized. The operation does not create rows or sections. Multiple matches
+remain manual review except when CIV or MEC records map to distinct existing
+rows justified by different exact source contexts.
+
+FINAL destinations are reconciled independently by exact prepared row identity.
+Finding the same RFI in one Signed By row does not satisfy another source
+context. If only some source contexts have prepared destinations, eligible rows
+may synchronize while each missing context remains visible for manual review;
+no row or section is synthesized.
 For CIV, each target area tag must be named in the source. For MEC, repeated
-source rows must agree on ITP, item, status, and Worley evidence; a single row
-may enumerate several `Area` values only when `Tag No` and `Inspection Location`
+source rows must agree on ITP, item, and lifecycle status. Signature evidence is
+cumulative: an unsigned duplicate cannot revoke a signed finding. A single row may
+enumerate several `Area` values only when `Tag No` and `Inspection Location`
 each contain one value. Every destination must match one exact
 `(Tag No, Area, Inspection Location)` tuple. Target cells such as `N10/N11` may
 match either exact location token; substring matches are not allowed. Any CIV
@@ -201,6 +209,25 @@ older PCU routing behavior. It never creates rows or sections.
 Duplicate contexts, conflicting source values, and other multi-valued contexts
 remain manual review.
 
+The preview distinguishes ITP/item combinations with no configured Follow Up
+route from supported routes that lack a prepared exact-context row. Its
+Mapping details column shows the source ITP, item, tag, area, and location,
+the expected destination, and any candidate target rows. These entries remain
+unselectable; no destination row is created or guessed.
+
+Scope decisions take precedence over missing-route diagnostics. The confirmed
+exclusions in [ADR 0035](adr/0035-intentional-follow-up-scope-exclusions.md)
+are deliberately outside Follow Up; they are not missing mappings to add.
+Treat any other unmapped ITP/item combination as undecided until an operator
+explicitly approves its inclusion or exclusion. Record that decision in this
+domain section and an accepted ADR before changing route behavior.
+
+
+An unrelated existing placement is never moved or deleted and cannot satisfy a
+different context. Ambiguous contexts or conflicting source status cannot
+authorize a shared-cell status write for that RFI or any other RFI represented
+by the same cell.
+
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
 current PCU FINAL `Signed by Worley` column receive only FINAL behavior and use
@@ -210,11 +237,18 @@ as `Signed` or `Not Signed`; a missing FINAL RFI may be added only to one
 uniquely matched, already-prepared literal RFI/status pair. A newly inserted PCU
 FINAL identifier receives its Worley value on the next preview so independently
 deselecting one row cannot leave a half-applied coupled update.
-Formula-bearing, merged, or otherwise unsafe matched destinations remain
-manual. `POT test`, `STAT`, `Changelog`, MEC calculated remarks/manual overrides,
-ELE/PRC, and absent ITP/item sections are never created or modified by this
-operation. A source record with multiple areas and multiple sections is
-ambiguous and remains manual rather than using a cartesian guess.
+A target status formula is read-only: an already-present RFI is treated as
+satisfied only when the cached status already equals its projected status;
+otherwise the required change remains manual review. Other formula-bearing,
+merged, or unsafe matched destinations remain manual. `POT test`, `STAT`,
+`Changelog`, MEC calculated remarks/manual overrides, ELE/PRC, and absent
+ITP/item sections are never created or modified by this operation. A source
+record with multiple areas and multiple sections is ambiguous and remains
+manual rather than using a cartesian guess. Missing RFI-System signature-control
+rows are not appended: the scanner does not prove the destination
+category/context or a same-table row style contract. Such cases remain explicit
+manual review, and unsigned scans update existing safe control statuses to
+`Not Signed` without downgrading an existing `Signed` value.
 
 ## PDF page orientation
 

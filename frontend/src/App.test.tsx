@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { useState } from "react";
 import {
   App,
   canonicalRfiInText,
@@ -24,6 +25,10 @@ import {
 import { makeStrings } from "./i18n";
 import { MockBridge, resetBridgeForTests } from "./lib/bridge";
 import type { Plan } from "./types";
+import {
+  AdjustableDataRegion,
+  ColumnResizeHandle,
+} from "./components/AdjustableDataRegion";
 
 function interceptMockBridge(
   intercept: (
@@ -69,6 +74,185 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-font");
   document.documentElement.removeAttribute("data-compact");
+});
+
+describe("adjustable plan data regions", () => {
+  it("resizes columns with keyboard and pointer input within accessible bounds", () => {
+    const pointerCaptureDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "setPointerCapture",
+    );
+    Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const setWidth = vi.fn();
+    render(
+      <ColumnResizeHandle
+        width={120}
+        label="RFI number"
+        s={makeStrings("en")}
+        onWidthChange={setWidth}
+      />,
+    );
+    const separator = screen.getByRole("separator", {
+      name: "Resize RFI number column",
+    });
+    fireEvent.keyDown(separator, { key: "ArrowRight" });
+    expect(setWidth).toHaveBeenLastCalledWith(136);
+    fireEvent.keyDown(separator, { key: "Home" });
+    expect(setWidth).toHaveBeenLastCalledWith(48);
+    fireEvent.pointerDown(separator, {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+    });
+    fireEvent.pointerMove(separator, { pointerId: 1, clientX: 200 });
+    expect(separator).toHaveAttribute("aria-valuenow", "220");
+    fireEvent.pointerUp(separator, { pointerId: 1, clientX: 200 });
+    expect(setWidth).toHaveBeenLastCalledWith(220);
+    fireEvent.pointerDown(separator, {
+      button: 0,
+      pointerId: 2,
+      clientX: 100,
+    });
+    fireEvent.pointerMove(separator, { pointerId: 2, clientX: 180 });
+    fireEvent.pointerCancel(separator, { pointerId: 2 });
+    expect(separator).toHaveAttribute("aria-valuenow", "120");
+    expect(setWidth).toHaveBeenLastCalledWith(220);
+    if (pointerCaptureDescriptor) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "setPointerCapture",
+        pointerCaptureDescriptor,
+      );
+    } else {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).setPointerCapture;
+    }
+  });
+
+  it("keeps a usable height minimum and clamps height when the window shrinks", () => {
+    const originalHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 700,
+    });
+    render(
+      <AdjustableDataRegion
+        s={makeStrings("en")}
+        className="test-data"
+        label="Results"
+      >
+        <div>Rows</div>
+      </AdjustableDataRegion>,
+    );
+    let separator = screen.getByRole("separator", {
+      name: "Resize Results height",
+    });
+    fireEvent.keyDown(separator, { key: "Home" });
+    fireEvent.keyDown(separator, { key: "ArrowDown" });
+    expect(separator).toHaveAttribute("aria-valuenow", "156");
+    fireEvent.keyDown(separator, { key: "ArrowUp" });
+    expect(separator).toHaveAttribute("aria-valuenow", "140");
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 300,
+    });
+    fireEvent(window, new Event("resize"));
+    separator = screen.getByRole("separator", {
+      name: "Resize Results height",
+    });
+    expect(separator).toHaveAttribute("aria-valuemin", "140");
+    expect(separator).toHaveAttribute("aria-valuenow", "140");
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalHeight,
+    });
+    fireEvent(window, new Event("resize"));
+  });
+  it("retains edited and selected rows and column width across filtering, detail toggles, and revision", () => {
+    const initialRows = [
+      { _rowId: "row-1", rfiNo: "MEC-0700", discipline: "MEC" },
+    ];
+    const basePlan: Plan = {
+      planId: "adjustment-plan-0",
+      opId: "rfi.system_sync",
+      steps: [],
+      warnings: [],
+      meta: {
+        editor: {
+          kind: "recordTable",
+          titleKey: "rfi.systemSync.editor.title",
+          requiredFields: ["rfiNo"],
+          selectionEnabled: true,
+          detailsEnabled: true,
+          detailsDefaultVisible: true,
+          columns: [
+            {
+              key: "rfiNo",
+              labelKey: "rfi.systemSync.column.rfiNo",
+              kind: "text",
+            },
+            {
+              key: "discipline",
+              labelKey: "rfi.systemSync.column.discipline",
+              kind: "text",
+              detail: true,
+            },
+          ],
+        },
+      },
+    };
+    const StatefulPlanView = ({ revision }: { revision: number }) => {
+      const [rows, setRows] = useState<Record<string, unknown>[]>(initialRows);
+      const editor = {
+        ...(basePlan.meta?.editor as Record<string, unknown>),
+        rows,
+      };
+      const plan = {
+        ...basePlan,
+        planId: `adjustment-plan-${revision}`,
+        meta: { editor },
+      };
+      return (
+        <PlanView
+          plan={plan}
+          s={makeStrings("en")}
+          error=""
+          onCancel={vi.fn()}
+          onApply={vi.fn()}
+          editorRows={rows}
+          onEditorRowsChange={setRows}
+          editorDirty
+          onUpdatePreview={vi.fn()}
+        />
+      );
+    };
+
+    const view = render(<StatefulPlanView revision={0} />);
+    const rfiNo = screen.getByRole("textbox", { name: "RFI No." });
+    fireEvent.change(rfiNo, { target: { value: "MEC-0701" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select row 1" }));
+    let resize = screen.getByRole("separator", {
+      name: "Resize RFI No. column",
+    });
+    fireEvent.keyDown(resize, { key: "ArrowRight" });
+    expect(resize).toHaveAttribute("aria-valuenow", "136");
+    fireEvent.click(screen.getByRole("button", { name: "Hide automatic fields" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show automatic fields" }));
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "not a matching RFI" },
+    });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
+    view.rerender(<StatefulPlanView revision={1} />);
+
+    expect(screen.getByRole("textbox", { name: "RFI No." })).toHaveValue("MEC-0701");
+    expect(screen.getByRole("checkbox", { name: "Select row 1" })).toBeChecked();
+    resize = screen.getByRole("separator", {
+      name: "Resize RFI No. column",
+    });
+    expect(resize).toHaveAttribute("aria-valuenow", "136");
+  });
 });
 
 describe("DocFlow shell", () => {
@@ -180,7 +364,7 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
     fireEvent.click(
-      screen.getByText("Hızlı RFI Kapak Taraması", { selector: "strong" }),
+      screen.getByText("Hızlı RFI Taraması", { selector: "strong" }),
     );
     await screen.findByRole("heading", { name: "Yapılandır" });
     expect(
@@ -329,13 +513,13 @@ describe("DocFlow shell", () => {
 
   it("operation presets save only current bool choice and int values", async () => {
     let presets: unknown[] = [];
-    let savedParams: Record<string, unknown> | null = null;
+    const savedParams: { value?: Record<string, unknown> } = {};
     const call = interceptMockBridge((method, params) => {
       if (method === "settings/presets") {
         return { handled: true, value: presets };
       }
       if (method === "settings/savePreset") {
-        savedParams = params;
+        savedParams.value = params;
         const saved = {
           id: "preset-saved",
           name: String(params.name),
@@ -374,8 +558,7 @@ describe("DocFlow shell", () => {
         "settings/savePreset",
       ),
     );
-    expect(savedParams).not.toBeNull();
-    expect(savedParams).toStrictEqual({
+    expect(savedParams.value).toMatchObject({
       opId: "files.batch_print",
       name: "Site A3",
       values: {
@@ -392,6 +575,8 @@ describe("DocFlow shell", () => {
         timeout_minutes: 30,
       },
     });
+    expect(savedParams.value?.values).not.toHaveProperty("files");
+    expect(savedParams.value?.values).not.toHaveProperty("rfi_numbers");
     expect(
       call.mock.calls.filter(([method]) => method === "settings/presets"),
     ).toHaveLength(2);
@@ -649,6 +834,212 @@ describe("DocFlow shell", () => {
     expect(
       isPlanEditorReady(editor, [{ enabled: false, archiveFile: "" }]),
     ).toBe(true);
+  });
+  it("normalizes short Fast RFI Scan edits when rebuilding destinations", async () => {
+    const bridge = new MockBridge();
+    const plan = await bridge.call("engine/preview", {
+      opId: "rfi.process_scans_fast_covers",
+      values: {
+        source: { displayPath: "/isolated/scans" },
+        dest: { displayPath: "/isolated/output" },
+        organize_into_rfi_folders: true,
+      },
+    });
+    const editor = plan.meta.editor as Record<string, unknown>;
+    const rows = editor.rows as Record<string, unknown>[];
+    const sourcePath = plan.steps[0].src;
+    const revised = await bridge.call("engine/revise", {
+      planId: plan.planId,
+      rows: rows.map((row) => ({
+        ...row,
+        code: "AZE-SUN-INT-QMS-RFI-MEC-901",
+      })),
+    });
+
+    expect(revised.steps[0].src).toBe(sourcePath);
+    expect(revised.steps[0].dst).toBe(
+      "/isolated/output/MEC/RFI No. AZE-SUN-INT-QMS-RFI-MEC-0901.pdf",
+    );
+    expect(
+      (revised.meta.editor as Record<string, unknown>).rows,
+    ).toMatchObject([
+      {
+        code: "AZE-SUN-INT-QMS-RFI-MEC-0901",
+        target:
+          "/isolated/output/MEC/RFI No. AZE-SUN-INT-QMS-RFI-MEC-0901.pdf",
+      },
+    ]);
+  });
+
+  it("accepts only exact supported RFI candidates with one-to-four-digit suffixes", () => {
+    const editor = { kind: "rfiScan", requiredFields: ["code"] };
+    for (const suffix of ["9", "91", "901", "0901"]) {
+      expect(
+        isPlanEditorReady(editor, [
+          { code: `AZE-SUN-INT-QMS-RFI-CIV-${suffix}` },
+        ]),
+      ).toBe(true);
+    }
+    for (const code of [
+      "AZE-SUN-INT-QMS-RFI-CLV-0192",
+      "aze-sun-int-qms-rfi-civ-0192",
+      "AZE-SUN-INT-QMS-RFI-CIV-09010",
+      "AZE-SUN-INT-QMS-ITP-CIV-901",
+      "2026-09-01",
+      "AZE-SUN-INT-QMS-RFI-CIV-901A",
+      "AZE-SUN-INT-QMS-RFI-CIV-901А",
+    ]) {
+      expect(isPlanEditorReady(editor, [{ code }])).toBe(false);
+    }
+    expect(
+      isPlanEditorReady(editor, [
+        { code: "AZE-SUN-INT-QMS-RFI-CIV-0192" },
+        { code: "AZE-SUN-INT-QMS-RFI-CIV-0192" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("updates the Fast RFI Scan preview before allowing Apply", () => {
+    const plan: Plan = {
+      planId: "fast-scan-plan",
+      opId: "rfi.process_scans_fast_covers",
+      steps: [
+        {
+          kind: "copy",
+          src: "/incoming/scan.pdf",
+          dst: "/destination/CIV/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0192.pdf",
+          noteKey: "note.renamed",
+          meta: { code: "AZE-SUN-INT-QMS-RFI-CIV-0192" },
+        },
+      ],
+      warnings: [],
+      meta: {
+        editor: {
+          kind: "rfiScan",
+          titleKey: "rfi.fastScan.editor.title",
+          rowCountKey: "rfi.fastScan.editor.rowCount",
+          requiredFields: ["code"],
+          columns: [
+            {
+              key: "code",
+              labelKey: "rfi.fastScan.column.code",
+              kind: "text",
+            },
+            {
+              key: "target",
+              labelKey: "rfi.fastScan.column.target",
+              kind: "readonly",
+            },
+          ],
+          rows: [
+            {
+              _rowId: "scan-output-0",
+              code: "AZE-SUN-INT-QMS-RFI-CIV-0192",
+              target:
+                "/destination/CIV/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0192.pdf",
+            },
+          ],
+        },
+      },
+    };
+    const rows = (plan.meta.editor as Record<string, unknown>)
+      .rows as Record<string, unknown>[];
+    const onApply = vi.fn();
+    const onUpdatePreview = vi.fn();
+    render(
+      <PlanView
+        plan={plan}
+        s={makeStrings("en")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={onApply}
+        editorRows={rows}
+        onEditorRowsChange={vi.fn()}
+        editorDirty
+        onUpdatePreview={onUpdatePreview}
+      />,
+    );
+    fireEvent.keyDown(
+      screen.getByRole("separator", {
+        name: "Resize RFI number column",
+      }),
+      { key: "ArrowRight" },
+    );
+    expect(onApply).not.toHaveBeenCalled();
+
+    const code = screen.getByRole("textbox", {
+      name: "RFI number",
+    });
+    fireEvent.change(code, {
+      target: { value: "AZE-SUN-INT-QMS-RFI-MEC-901" },
+    });
+    const update = screen.getByRole("button", {
+      name: "Update preview",
+    });
+    expect(update).toBeEnabled();
+    fireEvent.click(update);
+    expect(onUpdatePreview).toHaveBeenCalledOnce();
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it("shows a field error and disables preview for invalid scan codes", () => {
+    const code = "AZE-SUN-INT-QMS-RFI-CLV-0192";
+    const plan: Plan = {
+      planId: "invalid-fast-scan-plan",
+      opId: "rfi.process_scans_fast_covers",
+      steps: [
+        {
+          kind: "copy",
+          src: "/incoming/scan.pdf",
+          dst: "/destination/RFI.pdf",
+          noteKey: "note.renamed",
+          meta: { code },
+        },
+      ],
+      warnings: [],
+      meta: {
+        editor: {
+          kind: "rfiScan",
+          requiredFields: ["code"],
+          columns: [
+            {
+              key: "code",
+              labelKey: "rfi.fastScan.column.code",
+              kind: "text",
+            },
+          ],
+          rows: [{ _rowId: "scan-output-0", code }],
+        },
+      },
+    };
+    const editorProps = (candidate: string) => ({
+      plan,
+      s: makeStrings("en"),
+      error: "",
+      onCancel: vi.fn(),
+      onApply: vi.fn(),
+      editorRows: [{ _rowId: "scan-output-0", code: candidate }],
+      onEditorRowsChange: vi.fn(),
+      editorDirty: true,
+      onUpdatePreview: vi.fn(),
+    });
+    const view = render(<PlanView {...editorProps(code)} />);
+
+    for (const invalidCode of [
+      code,
+      "AZE-SUN-INT-QMS-RFI-CIV-901A",
+      "AZE-SUN-INT-QMS-RFI-CIV-09010",
+    ]) {
+      view.rerender(<PlanView {...editorProps(invalidCode)} />);
+      expect(
+        screen.getByRole("textbox", { name: "RFI number" }),
+      ).toHaveAttribute("aria-invalid", "true");
+      expect(
+        screen.getByRole("button", {
+          name: "Update preview",
+        }),
+      ).toBeDisabled();
+    }
   });
 
   it("filters large warning sets and focuses only an exact related RFI", () => {
@@ -998,22 +1389,33 @@ describe("DocFlow shell", () => {
       "src",
       "data:image/png;base64,iVBORw0KGgoAAA==",
     );
+    const archiveBeforeModal = screen.getByRole("combobox");
+    fireEvent.change(archiveBeforeModal, {
+      target: { value: "signed-CODE-candidate-1" },
+    });
+    const editedBeforeModal = onRowsChange.mock.calls[
+      onRowsChange.mock.calls.length - 1
+    ][0] as Record<string, unknown>[];
+    view.rerender(<PlanView {...props} editorRows={editedBeforeModal} />);
+    expect(screen.getByRole("combobox")).toHaveValue("signed-CODE-candidate-1");
     fireEvent.click(
       screen.getByRole("button", {
         name: /CODE için yeni imzalı sayfa · Büyüt/,
       }),
     );
     expect(screen.getByRole("dialog")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(props.onCancel).not.toHaveBeenCalled();
     const archive = screen.getByRole("combobox");
+    expect(archive).toHaveValue("signed-CODE-candidate-1");
     expect(within(archive).getByRole("option", { name: first })).toBeVisible();
     expect(within(archive).getByRole("option", { name: second })).toBeVisible();
 
     fireEvent.change(archive, { target: { value: "signed-CODE-candidate-2" } });
-    const selectedRows = onRowsChange.mock.calls[0][0] as Record<
-      string,
-      unknown
-    >[];
+    const selectedRows = onRowsChange.mock.calls[
+      onRowsChange.mock.calls.length - 1
+    ][0] as Record<string, unknown>[];
     expect(selectedRows[0].archiveFile).toBe("signed-CODE-candidate-2");
     view.rerender(<PlanView {...props} editorRows={selectedRows} />);
     expect(screen.getByRole("button", { name: "Uygula" })).toBeEnabled();
@@ -1079,6 +1481,70 @@ describe("DocFlow shell", () => {
     expect(checkboxes[0]).toBeDisabled();
     expect(checkboxes[1]).toBeEnabled();
     expect(screen.getAllByText("Kapat")).toHaveLength(2);
+  });
+
+  it("shows exact route and source context for Follow Up manual review rows", () => {
+    const details =
+      "ITP: CIV-0007; item: CIV-7.2.3; source context: tag=Camp; area=Camp; location=Camp; expected target: no configured Follow Up route; matching prepared target rows: none";
+    const rows = [
+      {
+        _rowId: "unmapped-CIV-0042",
+        rfiNo: "CIV-0042",
+        reasonKey: "warn.rfi.followUp.reason.mappingUnsupported",
+        mappingDetails: details,
+        selectable: false,
+        enabled: false,
+      },
+    ];
+    const plan: Plan = {
+      planId: "plan-follow-up-mapping-review",
+      opId: "rfi.follow_up_sync",
+      steps: [],
+      warnings: [],
+      meta: {
+        editor: {
+          requiredFields: ["enabled"],
+          detailsEnabled: true,
+          detailsDefaultVisible: true,
+          columns: [
+            {
+              key: "reasonKey",
+              labelKey: "rfi.followUp.column.reason",
+              kind: "readonly",
+              display: "localizedKey",
+              detail: true,
+            },
+            {
+              key: "mappingDetails",
+              labelKey: "rfi.followUp.column.mappingDetails",
+              kind: "readonly",
+              detail: true,
+              width: 320,
+            },
+          ],
+          rows,
+        },
+      },
+    };
+    render(
+      <PlanView
+        plan={plan}
+        editorRows={rows}
+        s={makeStrings("tr")}
+        error=""
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+        onEditorRowsChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Eşleme ayrıntıları")).toBeVisible();
+    expect(screen.getByText(details)).toBeVisible();
+    expect(
+      screen.getByText(
+        "Bu ITP/item birleşimi geçerli şablonda bir Follow Up rotasına sahip değil. Otomatik eşitlenemez.",
+      ),
+    ).toBeVisible();
   });
 
   it("renders the bounded Outlook reply as inert plain-text and escaped-HTML preview", () => {
@@ -1162,7 +1628,7 @@ describe("DocFlow shell", () => {
       screen.queryByText("Taramaları İşle", { selector: "strong" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByText("Hızlı RFI Kapak Taraması", { selector: "strong" }),
+      screen.getByText("Hızlı RFI Taraması", { selector: "strong" }),
     );
 
     expect(
@@ -1170,6 +1636,29 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
     expect(screen.getByText("Kaynak klasör")).toBeVisible();
     expect(screen.getByText("Hedef klasör")).toBeVisible();
+  });
+
+  it("hides page rotation in Single RFI mode and restores it in Multi RFI mode", async () => {
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      screen.getByText("Hızlı RFI Taraması", { selector: "strong" }),
+    );
+    await screen.findByRole("heading", { name: "Yapılandır" });
+
+    const mode = screen.getByRole("combobox", { name: /Tarama modu/ });
+    const rotationLabel = makeStrings("tr").t(
+      "param.rfi.processScans.correctOrientation",
+    );
+    const rotation = () =>
+      screen.queryByRole("switch", { name: rotationLabel });
+    expect(rotation()).toBeInTheDocument();
+
+    fireEvent.change(mode, { target: { value: "single_rfi" } });
+    expect(rotation()).not.toBeInTheDocument();
+
+    fireEvent.change(mode, { target: { value: "multi_rfi" } });
+    expect(rotation()).toBeInTheDocument();
   });
 
   it("renders retired Process Scans history separately from unknown operation IDs", async () => {
@@ -1437,12 +1926,12 @@ describe("DocFlow shell", () => {
       "title",
       "AZE-SUN-INT-QMS-RFI-CIV-0008",
     );
-    const itpSelects = screen.getAllByLabelText("ITP");
+    const itpSelects = screen.getAllByRole("combobox", { name: "ITP" });
     expect(itpSelects[0]).toHaveValue("AZE-SUN-INT-QMS-ITP-CIV-0005");
     expect(
       within(itpSelects[0]).getByRole("option", { name: "5" }),
     ).toBeVisible();
-    const itemSelects = screen.getAllByLabelText("Item");
+    const itemSelects = screen.getAllByRole("combobox", { name: "Item" });
     expect(itemSelects[0]).toHaveValue("CIV-5.2.1");
     expect(
       within(itemSelects[0]).getByRole("option", { name: "5.2.1" }),
@@ -1526,6 +2015,77 @@ describe("DocFlow shell", () => {
     for (const checkbox of screen.getAllByLabelText("Yazdır")) {
       expect(checkbox).not.toBeChecked();
     }
+  });
+
+  it("finds RFI documents and hands only type-selected opaque paths to Batch Print preview", async () => {
+    const call = vi.spyOn(MockBridge.prototype, "call");
+    render(<App />);
+    await signIn();
+
+    fireEvent.click(screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /RFI numaraları/ }),
+      {
+        target: { value: "CIV-1319\nCIV-1320" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Gözat" }));
+    await screen.findByDisplayValue("/Users/demo/Documents/DocFlow");
+    fireEvent.click(screen.getByRole("button", { name: "Hiçbirini seçme" }));
+    fireEvent.click(screen.getByLabelText("CIV-1319"));
+    fireEvent.click(screen.getByRole("button", { name: "RFI Sisteminde ara" }));
+
+    expect(await screen.findByText("AZE-SUN-INT-QMS-RFI-CIV-1319.docx")).toBeVisible();
+    const firstPage = screen.getByRole("checkbox", {
+      name: /AZE-SUN-INT-QMS-RFI-CIV-1319 İlk Sayfa/,
+    });
+    fireEvent.click(firstPage);
+    expect(firstPage).not.toBeChecked();
+    fireEvent.click(firstPage);
+    expect(await screen.findByText("AZE-SUN-INT-QMS-RFI-CIV-1319.docx")).toBeVisible();
+    expect(screen.queryByText("AZE-SUN-INT-QMS-RFI-CIV-1320.docx")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sketch'leri temizle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
+    await screen.findByText("Yazdırma kuyruğunu kontrol et ve özelleştir");
+
+    const previewCall = call.mock.calls.find(([method]) => method === "engine/preview");
+    const previewParams = previewCall?.[1];
+    if (
+      !previewParams ||
+      typeof previewParams !== "object" ||
+      !("values" in previewParams) ||
+      !previewParams.values ||
+      typeof previewParams.values !== "object" ||
+      !("files" in previewParams.values)
+    ) {
+      throw new Error("Batch Print preview values were not submitted");
+    }
+    const values = previewParams.values;
+    expect(values.files).toMatchObject([
+      { selectionId: "demo-rfi-print-0-0-0" },
+    ]);
+    expect(values).not.toHaveProperty("rfi_system_root");
+    expect(values).not.toHaveProperty("rfi_numbers");
+  });
+  it("keeps bare-number cross-discipline candidates explicitly unselected", async () => {
+    render(<App />);
+    await signIn();
+    fireEvent.click(screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /RFI numaraları/ }),
+      {
+        target: { value: "1319" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Gözat" }));
+    await screen.findByDisplayValue("/Users/demo/Documents/DocFlow");
+    fireEvent.click(screen.getByRole("button", { name: "RFI Sisteminde ara" }));
+    expect(await screen.findByText("AZE-SUN-INT-QMS-RFI-CIV-1319.docx")).toBeVisible();
+    expect(screen.getByLabelText(/AZE-SUN-INT-QMS-RFI-CIV-1319 İlk Sayfa/)).not.toBeChecked();
+    expect(screen.getByLabelText(/AZE-SUN-INT-QMS-RFI-MEC-1319 İlk Sayfa/)).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /CIV/ }));
+    expect(screen.getByLabelText(/AZE-SUN-INT-QMS-RFI-CIV-1319 İlk Sayfa/)).toBeChecked();
+    expect(screen.getByLabelText(/AZE-SUN-INT-QMS-RFI-MEC-1319 İlk Sayfa/)).not.toBeChecked();
   });
 
   it("submits one edited print page range without changing the other files or their order", async () => {
@@ -2075,12 +2635,12 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /Birden fazla dosya yazdır/ }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
+      screen.queryByRole("button", { name: /^Hızlı RFI Taraması/ }),
     ).not.toBeInTheDocument();
 
     fireEvent.change(searchInput, { target: { value: "" } });
     expect(
-      screen.getByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
+      screen.getByRole("button", { name: /^Hızlı RFI Taraması/ }),
     ).toBeVisible();
 
     const chipsContainer = document.querySelector(".category-filter-chips")!;
@@ -2090,7 +2650,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(scansChip);
     expect(scansChip).toHaveClass("active");
     expect(
-      screen.getByRole("button", { name: /^Hızlı RFI Kapak Taraması/ }),
+      screen.getByRole("button", { name: /^Hızlı RFI Taraması/ }),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: /Birden fazla dosya yazdır/ }),

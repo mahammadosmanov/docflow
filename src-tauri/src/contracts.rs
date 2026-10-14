@@ -2,7 +2,47 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
+use crate::path_selection::PathSelection;
 pub type JsonObject = Map<String, Value>;
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct RfiPrintFindRequest {
+    pub root: PathSelection,
+    pub numbers: Vec<String>,
+    pub first_page: bool,
+    pub sketch: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RfiPrintCandidate {
+    pub requested: String,
+    pub rfi_code: String,
+    pub document_type: String,
+    pub display_path: String,
+    pub selection: PathSelection,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RfiPrintResolution {
+    pub requested: String,
+    pub rfi_codes: Vec<String>,
+    pub missing_first_page: bool,
+    pub missing_sketch: bool,
+    pub ambiguous: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RfiPrintFindResult {
+    pub candidates: Vec<RfiPrintCandidate>,
+    pub resolutions: Vec<RfiPrintResolution>,
+    pub visited: usize,
+    pub truncated: bool,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

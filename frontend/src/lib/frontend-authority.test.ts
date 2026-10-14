@@ -70,6 +70,38 @@ describe("frontend authority boundary", () => {
     expect(read("frontend/src/lib/bridge.ts")).not.toContain("method: string");
   });
 
+  it("localizes the Fast RFI Scan mode and correction workflow", () => {
+    const requiredKeys = [
+      "param.rfi.processScans.scanMode",
+      "param.rfi.processScans.scanMode.help",
+      "choice.rfi.processScans.scanMode.multiRfi",
+      "choice.rfi.processScans.scanMode.singleRfi",
+      "rfi.fastScan.editor.title",
+      "rfi.fastScan.editor.rowCount",
+      "rfi.fastScan.column.sourceFile",
+      "rfi.fastScan.column.evidence",
+      "rfi.fastScan.column.detectedCode",
+      "rfi.fastScan.column.code",
+      "rfi.fastScan.column.target",
+      "rfi.fastScan.evidence.clvToCiv",
+      "rfi.fastScan.evidence.confirmed",
+      "rfi.fastScan.editor.updatePreview",
+      "rfi.fastScan.editor.updatingPreview",
+      "rfi.fastScan.editor.previewUpdated",
+      "error.rfi.fastScan.codeInvalid",
+      "error.rfi.fastScan.targetExists",
+      "error.rfi.fastScan.revisionInvalid",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
   it("keeps every user-facing locale key available in all four catalogs", () => {
     const locales = ["tr", "en", "ru", "az"].map((locale) =>
       Object.keys(
@@ -142,6 +174,7 @@ describe("frontend authority boundary", () => {
       "rfi.followUp.column.reason",
       "rfi.followUp.column.sheet",
       "rfi.followUp.column.row",
+      "rfi.followUp.column.mappingDetails",
       "rfi.followUp.disposition.ready",
       "rfi.followUp.disposition.alreadySynced",
       "rfi.followUp.disposition.manualReview",
@@ -153,6 +186,7 @@ describe("frontend authority boundary", () => {
       "warn.rfi.followUp.reason.readyRemove",
       "warn.rfi.followUp.reason.mappingMissing",
       "warn.rfi.followUp.reason.mappingAmbiguous",
+      "warn.rfi.followUp.reason.mappingUnsupported",
       "warn.rfi.followUp.reason.targetRfiFormula",
       "warn.rfi.followUp.reason.targetRfiMerged",
       "warn.rfi.followUp.reason.blankRfi",

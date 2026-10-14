@@ -1562,7 +1562,7 @@ impl ParsedPdf {
             if !values.len().is_multiple_of(2) {
                 return Err(PdfError::new("PDF name tree has an odd entry count"));
             }
-            for pair in values.chunks_exact(2) {
+            for pair in values.as_chunks::<2>().0 {
                 output.push((object_text(&pair[0]), pair[1].clone()));
             }
         }
@@ -1701,7 +1701,9 @@ fn parse_xref_section(bytes: &[u8], offset: usize) -> Result<XrefSection, PdfErr
         let decoded = decode_stream(&dictionary, &data)?;
         let entry_width = widths.iter().sum::<usize>();
         let expected = indexes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .try_fold(0usize, |total, pair| total.checked_add(pair[1]))
             .and_then(|count| count.checked_mul(entry_width))
             .ok_or_else(|| PdfError::new("xref stream size overflow"))?;
@@ -1711,7 +1713,7 @@ fn parse_xref_section(bytes: &[u8], offset: usize) -> Result<XrefSection, PdfErr
         let mut entries = BTreeMap::new();
         let mut defined = BTreeSet::new();
         let mut cursor = 0;
-        for pair in indexes.chunks_exact(2) {
+        for pair in indexes.as_chunks::<2>().0 {
             for number in pair[0]..pair[0] + pair[1] {
                 let kind = if widths[0] == 0 {
                     1
@@ -2073,7 +2075,12 @@ impl<'a> Parser<'a> {
         if !digits.len().is_multiple_of(2) {
             digits.push(b'0');
         }
-        digits.chunks_exact(2).map(hex_byte).collect()
+        digits
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| hex_byte(pair))
+            .collect()
     }
 
     fn read_unsigned(&mut self) -> Result<usize, PdfError> {

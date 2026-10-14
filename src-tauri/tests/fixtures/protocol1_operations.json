@@ -550,6 +550,23 @@
         "visibleWhen": {}
       },
       {
+        "choiceLabels": {
+          "multi_rfi": "choice.rfi.processScans.scanMode.multiRfi",
+          "single_rfi": "choice.rfi.processScans.scanMode.singleRfi"
+        },
+        "choices": [
+          "multi_rfi",
+          "single_rfi"
+        ],
+        "default": "multi_rfi",
+        "helpKey": "param.rfi.processScans.scanMode.help",
+        "kind": "choice",
+        "labelKey": "param.rfi.processScans.scanMode",
+        "name": "scan_mode",
+        "required": true,
+        "visibleWhen": {}
+      },
+      {
         "choiceLabels": {},
         "choices": [],
         "default": true,
@@ -580,7 +597,9 @@
         "labelKey": "param.rfi.processScans.correctOrientation",
         "name": "correct_orientation",
         "required": false,
-        "visibleWhen": {}
+        "visibleWhen": {
+          "scan_mode": "multi_rfi"
+        }
       }
     ],
     "supportsPresets": false,

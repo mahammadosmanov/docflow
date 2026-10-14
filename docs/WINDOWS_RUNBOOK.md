@@ -92,7 +92,7 @@ pass from a macOS build or Windows cross-compile.
     source hashes never change, and replacement review copies preserve the
     archive layout. During Preview, confirm discovery/OCR/archive/comparison
     stages update before completion; approved rows, comparisons, warning files,
-    and warnings are reachable through the sticky navigator at the target display
+    and warnings are reachable through the in-flow navigator at the target display
     scale; before/after images are legible and enlarge correctly. Cause a no-code,
     low-confidence, missing-archive, and duplicate-page warning; verify each entry
     names the exact source PDF and page/RFI where known. Apply must copy each

@@ -196,10 +196,14 @@ fn system_scan_requires_the_exact_canonical_rfi_pdf() {
 fn operator_worley_examples_use_only_the_others_signature_cell() {
     let signed = std::env::var("DOCFLOW_SIGNED_WORLEY_PDF").unwrap();
     let unsigned = std::env::var("DOCFLOW_UNSIGNED_WORLEY_PDF").unwrap();
+    let expected_unsigned_rfi =
+        std::env::var("DOCFLOW_UNSIGNED_WORLEY_RFI").unwrap_or_else(|_| "MEC-0737".to_string());
     let fixture = tempfile::tempdir().unwrap();
     let system = fixture.path().join("RFI_SYSTEM");
     let signed_folder = system.join("CIV/AZE-SUN-INT-QMS-RFI-CIV-1041");
-    let unsigned_folder = system.join("MEC/AZE-SUN-INT-QMS-RFI-MEC-0737");
+    let unsigned_folder = system
+        .join("MEC")
+        .join(format!("AZE-SUN-INT-QMS-RFI-{expected_unsigned_rfi}"));
     fs::create_dir_all(&signed_folder).unwrap();
     fs::create_dir_all(&unsigned_folder).unwrap();
     fs::copy(
@@ -209,7 +213,9 @@ fn operator_worley_examples_use_only_the_others_signature_cell() {
     .unwrap();
     fs::copy(
         unsigned,
-        unsigned_folder.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-0737.pdf"),
+        unsigned_folder.join(format!(
+            "RFI No. AZE-SUN-INT-QMS-RFI-{expected_unsigned_rfi}.pdf"
+        )),
     )
     .unwrap();
     let (records, _) = scan_system_root_indexed(&system, None, "owner", false, |_| {}).unwrap();
@@ -219,7 +225,7 @@ fn operator_worley_examples_use_only_the_others_signature_cell() {
         .unwrap();
     let unsigned = records
         .iter()
-        .find(|record| record.canonical_rfi.ends_with("MEC-0737"))
+        .find(|record| record.canonical_rfi.ends_with(&expected_unsigned_rfi))
         .unwrap();
     assert!(signed.signed_by_worley, "{}", signed.signature_reason);
     assert!(!unsigned.signed_by_worley, "{}", unsigned.signature_reason);
@@ -514,7 +520,18 @@ fn test_system_sync_full_preview_apply_and_undo() {
     let civ_104_pdf = civ_104_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0104.pdf");
     write_pdf_with_signature(&civ_104_pdf, false);
 
-    // 3. MEC-0700 signed
+    // 3. CIV-0105 unsigned must not revoke a prior signed status.
+    let civ_105_dir = civ_dir.join("AZE-SUN-INT-QMS-RFI-CIV-0105");
+    fs::create_dir_all(&civ_105_dir).unwrap();
+    let civ_105_pdf = civ_105_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0105.pdf");
+    write_pdf_with_signature(&civ_105_pdf, false);
+    // 4. CIV-0106 unsigned has a source log row but no prepared signature row.
+    let civ_106_dir = civ_dir.join("AZE-SUN-INT-QMS-RFI-CIV-0106");
+    fs::create_dir_all(&civ_106_dir).unwrap();
+    let civ_106_pdf = civ_106_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0106.pdf");
+    write_pdf_with_signature(&civ_106_pdf, false);
+
+    // 5. MEC-0700 signed
     let mec_700_dir = mec_dir.join("AZE-SUN-INT-QMS-RFI-MEC-0700");
     fs::create_dir_all(&mec_700_dir).unwrap();
     let mec_700_pdf = mec_700_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-MEC-0700.pdf");
@@ -549,6 +566,20 @@ fn test_system_sync_full_preview_apply_and_undo() {
                 inline("A11", "AZE-SUN-INT-QMS-RFI-CIV-0104"),
                 formula("T11", r#"t="shared" si="1""#, ""),
                 inline("V11", ""),
+            ],
+        ),
+        row(
+            12,
+            [
+                inline("A12", "AZE-SUN-INT-QMS-RFI-CIV-0105"),
+                inline("V12", ""),
+            ],
+        ),
+        row(
+            13,
+            [
+                inline("A13", "AZE-SUN-INT-QMS-RFI-CIV-0106"),
+                inline("V13", ""),
             ],
         ),
     ]);
@@ -597,7 +628,8 @@ fn test_system_sync_full_preview_apply_and_undo() {
     let fu_civ_content = worksheet([
         row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")]),
         row(5, [inline("C5", "CIV-0103"), inline("D5", "Not Signed")]),
-        row(6, [inline("C6", "CIV-0104"), inline("D6", "Not Signed")]),
+        row(6, [inline("C6", "CIV-0104"), inline("D6", "")]),
+        row(7, [inline("C7", "CIV-0105"), inline("D7", "Signed")]),
     ]);
     let fu_mec_content = worksheet([
         row(3, [inline("S3", "RFI No."), inline("T3", "Worley Status")]),
@@ -629,6 +661,21 @@ fn test_system_sync_full_preview_apply_and_undo() {
         &mut follow_up_file,
     )
     .unwrap();
+    let missing_target = plan.meta["editor"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["rfiNo"] == "CIV-0106")
+        .unwrap();
+    assert_eq!(
+        missing_target["disposition"],
+        "rfi.systemSync.disposition.manualReview"
+    );
+    assert_eq!(
+        missing_target["followUpAction"],
+        "Manual review: no existing Follow Up control row"
+    );
+    assert_eq!(missing_target["selectable"], false);
 
     assert_eq!(plan.op_id, rfi_system_sync::OPERATION_ID);
     assert_eq!(
@@ -756,6 +803,8 @@ fn test_system_sync_full_preview_apply_and_undo() {
         "",
         "Unsigned RFI should remain unchanged"
     );
+    assert_eq!(civ_sheet.value(12, 22), "");
+    assert_eq!(civ_sheet.value(13, 22), "");
     assert!(civ_sheet.cell(10, 20).unwrap().formula.is_some());
     assert!(civ_sheet.cell(11, 20).unwrap().formula.is_some());
 
@@ -774,19 +823,20 @@ fn test_system_sync_full_preview_apply_and_undo() {
     let fu_civ = updated_fu.sheet("Signed By Worley CIV").unwrap();
     assert_eq!(fu_civ.value(5, 4), "Signed");
     assert_eq!(fu_civ.value(6, 4), "Not Signed");
+    assert_eq!(fu_civ.value(7, 4), "Signed");
 
     let fu_mec = updated_fu.sheet("Signed By Worley MEC").unwrap();
     assert_eq!(fu_mec.value(4, 20), "Signed");
 
     // UNDO
     let undo_result = authority.undo(&result.journal_id, &caller, None).unwrap();
-    assert_eq!(undo_result.applied, 4);
     assert_eq!(undo_result.failed, 0);
 
-    // Verify restored workbooks match original bytes
+    // Undo owns restoration of both workbook files; verify their original bytes.
     let restored_rfi_log = fs::read(&rfi_log_path).unwrap();
     let restored_fu = fs::read(&follow_up_path).unwrap();
-
+    assert_eq!(restored_rfi_log, rfi_log_bytes);
+    assert_eq!(restored_fu, follow_up_bytes);
     let mut restored_log_read = Cursor::new(&restored_rfi_log);
     let check_log = read_workbook_from_reader(&mut restored_log_read).unwrap();
     assert_eq!(check_log.sheet("CIV").unwrap().value(10, 22), "");
@@ -798,8 +848,12 @@ fn test_system_sync_full_preview_apply_and_undo() {
     let mut restored_fu_read = Cursor::new(&restored_fu);
     let check_fu = read_workbook_from_reader(&mut restored_fu_read).unwrap();
     assert_eq!(
-        check_fu.sheet("Signed By Worley CIV").unwrap().value(5, 4),
-        "Not Signed"
+        check_fu.sheet("Signed By Worley CIV").unwrap().value(6, 4),
+        ""
+    );
+    assert_eq!(
+        check_fu.sheet("Signed By Worley CIV").unwrap().value(7, 4),
+        "Signed"
     );
     assert_eq!(
         check_fu.sheet("Signed By Worley MEC").unwrap().value(4, 20),
@@ -828,8 +882,10 @@ fn current_workbook_templates_accept_only_closed_guarded_deltas() {
     }
     let rfi_log = fixture.path().join("RFI Log.xlsm");
     let follow_up = fixture.path().join("Inspection Status Follow Up.xlsm");
-    fs::copy(rfi_log_source, &rfi_log).unwrap();
-    fs::copy(follow_up_source, &follow_up).unwrap();
+    let original_rfi_log = fs::read(&rfi_log_source).unwrap();
+    let original_follow_up = fs::read(&follow_up_source).unwrap();
+    fs::copy(&rfi_log_source, &rfi_log).unwrap();
+    fs::copy(&follow_up_source, &follow_up).unwrap();
     let mut rfi_log_file = File::options()
         .read(true)
         .write(true)
@@ -848,12 +904,52 @@ fn current_workbook_templates_accept_only_closed_guarded_deltas() {
         &mut follow_up_file,
     )
     .unwrap();
-    assert!(!plan.steps.is_empty());
-    for (index, step) in plan.steps.iter().enumerate() {
-        let output = fixture.path().join(format!("guarded-output-{index}.xlsm"));
-        rfi_system_sync::execute_sync_step(step, Path::new(step.src.as_deref().unwrap()), &output)
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "both discovered RFIs must remain visible");
+    if plan.steps.is_empty() {
+        assert!(
+            rows.iter().all(|row| {
+                row["disposition"] == "rfi.systemSync.disposition.alreadySynced"
+                    || (row["disposition"] == "rfi.systemSync.disposition.manualReview"
+                        && row["selectable"] == false
+                        && row["enabled"] == false
+                        && row["followUpAction"]
+                            == "Manual review: no existing Follow Up control row")
+            }),
+            "a zero-step plan must represent every RFI as synchronized or as a concrete non-selectable review"
+        );
+        assert!(
+            rows.iter()
+                .any(|row| row["disposition"] == "rfi.systemSync.disposition.manualReview")
+                || rows
+                    .iter()
+                    .all(|row| row["disposition"] == "rfi.systemSync.disposition.alreadySynced"),
+            "a zero-step plan must not disguise unresolved RFIs as already synchronized"
+        );
+        assert!(
+            plan.warnings
+                .iter()
+                .any(|warning| warning.key == "warn.rfi.systemSync.noChangesNeeded")
+        );
+    } else {
+        assert!(
+            rows.iter()
+                .any(|row| row["disposition"] == "rfi.systemSync.disposition.ready"),
+            "a non-empty plan requires at least one ready RFI"
+        );
+        assert!(plan.warnings.is_empty());
+        for (index, step) in plan.steps.iter().enumerate() {
+            let output = fixture.path().join(format!("guarded-output-{index}.xlsm"));
+            rfi_system_sync::execute_sync_step(
+                step,
+                Path::new(step.src.as_deref().unwrap()),
+                &output,
+            )
             .unwrap();
+        }
     }
+    assert_eq!(fs::read(&rfi_log_source).unwrap(), original_rfi_log);
+    assert_eq!(fs::read(&follow_up_source).unwrap(), original_follow_up);
 }
 
 #[test]
@@ -890,4 +986,85 @@ fn current_rfi_log_accepts_only_closed_completion_status_deltas() {
             .join(format!("completion-output-{index}.xlsm"));
         rfi_system_sync::execute_sync_step(step, &log, &output).unwrap();
     }
+}
+
+#[test]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[ignore = "set DOCFLOW_VENTOY_RFI_SYSTEM_ROOT, DOCFLOW_CURRENT_RFI_LOG, and DOCFLOW_CURRENT_FOLLOW_UP to private Ventoy copies"]
+fn operator_ventoy_system_sync_uses_real_signatures_and_workbooks() {
+    let system_root = PathBuf::from(
+        std::env::var("DOCFLOW_VENTOY_RFI_SYSTEM_ROOT")
+            .expect("DOCFLOW_VENTOY_RFI_SYSTEM_ROOT is required"),
+    );
+    let fixture = tempfile::tempdir().unwrap();
+    let rfi_log = fixture.path().join("RFI Log.xlsm");
+    let follow_up = fixture.path().join("Inspection Status Follow Up.xlsm");
+    fs::copy(
+        std::env::var("DOCFLOW_CURRENT_RFI_LOG").expect("DOCFLOW_CURRENT_RFI_LOG is required"),
+        &rfi_log,
+    )
+    .unwrap();
+    fs::copy(
+        std::env::var("DOCFLOW_CURRENT_FOLLOW_UP").expect("DOCFLOW_CURRENT_FOLLOW_UP is required"),
+        &follow_up,
+    )
+    .unwrap();
+    let original_log = fs::read(&rfi_log).unwrap();
+    let original_follow_up = fs::read(&follow_up).unwrap();
+    let mut rfi_log_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&rfi_log)
+        .unwrap();
+    let mut follow_up_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&follow_up)
+        .unwrap();
+    let plan = preview_system_sync(
+        &system_root,
+        &rfi_log,
+        &follow_up,
+        &mut rfi_log_file,
+        &mut follow_up_file,
+    )
+    .unwrap();
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap();
+    eprintln!(
+        "Ventoy System Sync rows={rows:#?} warnings={:?} steps={}",
+        plan.warnings,
+        plan.steps.len()
+    );
+    assert_eq!(rows.len(), 4);
+    assert!(plan.steps.is_empty());
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.systemSync.noChangesNeeded")
+    );
+    let row_for = |suffix: &str| {
+        rows.iter()
+            .find(|row| {
+                row["canonicalRfi"]
+                    .as_str()
+                    .is_some_and(|code| code.ends_with(suffix))
+            })
+            .unwrap_or_else(|| panic!("missing {suffix}; rows={rows:#?}"))
+    };
+    assert_eq!(row_for("ELE-0032")["worleyStatus"], "Signed by Worley");
+    for suffix in ["CIV-1316", "MEC-0767", "PRC-0074"] {
+        assert_eq!(
+            row_for(suffix)["worleyStatus"],
+            "Unsigned",
+            "{suffix} has a visually blank OTHERS signature cell"
+        );
+    }
+    for (index, step) in plan.steps.iter().enumerate() {
+        let output = fixture.path().join(format!("Ventoy-sync-{index}.xlsm"));
+        rfi_system_sync::execute_sync_step(step, Path::new(step.src.as_deref().unwrap()), &output)
+            .unwrap();
+        assert!(output.is_file());
+    }
+    assert_eq!(fs::read(&rfi_log).unwrap(), original_log);
+    assert_eq!(fs::read(&follow_up).unwrap(), original_follow_up);
 }

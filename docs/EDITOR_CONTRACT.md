@@ -40,11 +40,20 @@ authority and does not change confidence thresholds.
 - Signed-page thumbnails are bounded inert PNG metadata tied to row/candidate
   tokens. Signed-page warning-review metadata names only sources/destinations and
   reasons already authorized by Plan steps; it cannot create a copy by itself.
-- The Plan content region owns vertical scrolling; its final action bar remains
-  outside that region. Wide record tables own horizontal scrolling, and dialogs
-  remain vertically scrollable within the viewport.
+- The shared stage shell allocates content below the actual header and gives each
+  stage one vertical scroll owner; its primary action bar remains reachable.
+  Content-region heights and table columns support pointer and keyboard
+  adjustment with Fit/Reset. These controls change presentation only and cannot
+  revise Plan authority or application preferences.
+- Fit does not overlay stage summaries on data. Escape closes an open adjustment
+  dialog without discarding its pending presentation changes; with no dialog
+  open, the existing Escape-to-Configure behavior remains.
+- Wide record tables keep readable minimum column widths and own horizontal
+  scrolling; they must not be compressed to fit. Dialogs remain vertically
+  scrollable within the viewport.
 - Signed-page plans put the approved editor before comparisons and warnings and
-  provide a sticky in-page navigator. Comparison controls change only the visible
-  row/image; warning filters and navigation never revise Plan authority.
+  provide an in-flow navigator so section controls never cover review rows.
+  Comparison controls change only the visible row/image; warning filters and
+  navigation never revise Plan authority.
 
 Any editor interaction change requires a frontend test and all four locale keys.

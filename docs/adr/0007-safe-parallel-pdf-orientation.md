@@ -4,6 +4,8 @@
 - Status: Accepted
 - Amended: 2026-09-27 — two-resolution RFI page-header consensus for sparse
   drawings
+- Amended: 2026-10-13 — strict RFI-ID header consensus and source-hash
+  validation for orientation analysis and cache reuse
 
 ## Context
 
@@ -31,13 +33,17 @@ OSD pass; agreeing evidence may combine. If OSD remains uncertain, the 250-DPI
 page is compared in all four right-angle directions with English OCR. That
 fallback accepts only at least 20 recognized words, average confidence at least
 55, a winner score at least 1.45 times the runner-up, and an average-confidence
-margin of at least 8. If that conflicts or lacks enough body text, it checks
-the top one-sixth of each four-direction OCR result for a clear page-header
-winner at both resolutions. Header consensus requires at least three words,
-confidence sum 120, a 1.8 winner ratio, and an 80-point margin at each DPI, with
-the same direction winning both. A complete PDF becomes actionable only if
-every page has a valid right-angle result with normalized confidence at least
-10.0.
+margin of at least 8. If ordinary direction evidence remains inconclusive, a
+narrow RFI-header fallback accepts one exact canonical RFI ID from the top
+one-sixth only when the same exact ID and right-angle direction agree at both
+250 and 350 DPI and confidence is at least 60 at each resolution. Competing,
+noncanonical, or conflicting evidence leaves the page uncertain. A complete
+PDF becomes actionable only if every page has a valid right-angle result with
+normalized confidence at least 10.0.
+
+Before inspection or detection, Preview pins the source SHA-256 and checks it
+again after analysis; cache hits must match the source hash and v5 profile.
+Apply revalidates the exact approved hash before publishing.
 
 Preview records source hashes and exact page rotations. Apply does not repeat
 OCR. It copies the approved source to private storage, appends only revised page

@@ -23,7 +23,7 @@ pub const MIN_ORIENTATION_CONFIDENCE: f64 = 10.0;
 const MAX_DIRECTORY_ENTRIES: usize = 500_000;
 const MAX_PDFS: usize = 50_000;
 const MAX_PAGES: usize = 250_000;
-const ORIENTATION_SCAN_PROFILE: &str = "content-orientation-cascade-v4";
+const ORIENTATION_SCAN_PROFILE: &str = "content-orientation-cascade-v5";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PdfOrientationParams {
@@ -36,6 +36,25 @@ pub struct OrientationDetection {
     pub rotate_clockwise: i64,
     pub confidence: f64,
     pub method: String,
+}
+/// Converts an OCR correction relative to the rendered page into an absolute PDF rotation.
+/// Returns `None` when the rendered page is already upright.
+pub fn orientation_target_rotation(
+    current_rotation: i64,
+    detection: &OrientationDetection,
+) -> Result<Option<i64>, String> {
+    let current = normalize_rotation(current_rotation).map_err(|error| error.message)?;
+    if !detection.confidence.is_finite() || detection.confidence < MIN_ORIENTATION_CONFIDENCE {
+        return Err(format!(
+            "orientation is uncertain (confidence {:.1})",
+            detection.confidence
+        ));
+    }
+    if !matches!(detection.rotate_clockwise, 0 | 90 | 180 | 270) {
+        return Err("orientation correction is not a right angle".to_string());
+    }
+    let target = (current + detection.rotate_clockwise).rem_euclid(360);
+    Ok((target != current).then_some(target))
 }
 
 pub trait OrientationDetector: Sync {
@@ -63,6 +82,7 @@ struct PreparedPdf {
     path: PathBuf,
     relative: PathBuf,
     fingerprint: FileFingerprint,
+    source_sha256: String,
     cached: Option<CachedPdfOrientation>,
     inspection: Option<Result<PdfInspection, PdfError>>,
 }
@@ -171,6 +191,7 @@ where
     let mut work = Vec::new();
     let mut tasks = Vec::new();
     let mut initial_fingerprints = BTreeMap::<PathBuf, FileFingerprint>::new();
+    let mut initial_hashes = BTreeMap::<PathBuf, String>::new();
     let mut by_file =
         BTreeMap::<PathBuf, Vec<(PageTask, Result<OrientationDetection, String>)>>::new();
     let total_pdfs = pdfs.len() as u64;
@@ -209,6 +230,11 @@ where
                             "orientation fingerprint failed: {error}"
                         ))
                     })?;
+                    let source_sha256 = file_sha256(path).map_err(|error| {
+                        BackendError::path_invalid(format!(
+                            "orientation source hash failed: {error}"
+                        ))
+                    })?;
                     let cached = if force_rescan {
                         None
                     } else {
@@ -222,11 +248,15 @@ where
                             })?
                             .flatten()
                     };
+                    let cached = cached.filter(|cached| {
+                        cached.source_sha256.as_deref() == Some(source_sha256.as_str())
+                    });
                     let inspection = cached.is_none().then(|| inspect(path));
                     Ok::<_, BackendError>(PreparedPdf {
                         path: path.clone(),
                         relative,
                         fingerprint,
+                        source_sha256,
                         cached,
                         inspection,
                     })
@@ -241,6 +271,7 @@ where
                 path,
                 relative,
                 fingerprint,
+                source_sha256,
                 cached,
                 inspection,
             } = prepared?;
@@ -276,11 +307,16 @@ where
                             ));
                         }
                     };
+                    let current_rotation = page.current_rotation;
+                    let (current_rotation, result) = match normalize_rotation(current_rotation) {
+                        Ok(rotation) => (rotation, result),
+                        Err(error) => (current_rotation, Err(error.message)),
+                    };
                     cached_results.push((
                         PageTask {
                             path: path.clone(),
                             page_index,
-                            current_rotation: normalize_rotation(page.current_rotation)?,
+                            current_rotation,
                         },
                         result,
                     ));
@@ -290,7 +326,7 @@ where
                     path,
                     relative,
                     page_count: cached.page_count,
-                    source_hash: cached.source_sha256,
+                    source_hash: Some(source_sha256),
                     cached: true,
                 });
                 continue;
@@ -302,6 +338,7 @@ where
                     run.as_ref(),
                     &relative,
                     &fingerprint,
+                    &source_sha256,
                     "encrypted PDF",
                     &mut stats,
                     &mut plan,
@@ -310,6 +347,7 @@ where
                     run.as_ref(),
                     &relative,
                     &fingerprint,
+                    &source_sha256,
                     "digitally signed PDF",
                     &mut stats,
                     &mut plan,
@@ -318,23 +356,46 @@ where
                     run.as_ref(),
                     &relative,
                     &fingerprint,
+                    &source_sha256,
                     "PDF has no pages",
                     &mut stats,
                     &mut plan,
                 )?,
                 Ok(facts) => {
+                    let current_rotations = facts
+                        .pages
+                        .iter()
+                        .map(|page| normalize_rotation(page.rotation))
+                        .collect::<Result<Vec<_>, _>>();
+                    let current_rotations = match current_rotations {
+                        Ok(rotations) => rotations,
+                        Err(error) => {
+                            record_unsupported(
+                                run.as_ref(),
+                                &relative,
+                                &fingerprint,
+                                &source_sha256,
+                                &error.message,
+                                &mut stats,
+                                &mut plan,
+                            )?;
+                            continue;
+                        }
+                    };
                     if tasks.len().saturating_add(facts.page_count) > MAX_PAGES {
                         return Err(BackendError::validation(format!(
                             "orientation scan exceeds the {MAX_PAGES}-page limit"
                         )));
                     }
-                    for (page_index, page) in facts.pages.iter().enumerate() {
+                    for (page_index, current_rotation) in current_rotations.into_iter().enumerate()
+                    {
                         tasks.push(PageTask {
                             path: path.clone(),
                             page_index,
-                            current_rotation: normalize_rotation(page.rotation)?,
+                            current_rotation,
                         });
                     }
+                    initial_hashes.insert(path.clone(), source_sha256);
                     initial_fingerprints.insert(path.clone(), fingerprint);
                     work.push(PdfWork {
                         path,
@@ -434,6 +495,24 @@ where
                     stats.failed += 1;
                     return Err("source PDF changed during orientation scan".to_string());
                 }
+                let initial_hash = initial_hashes.get(&task.path).ok_or_else(|| {
+                    "orientation checkpoint has no initial content hash".to_string()
+                })?;
+                let current_hash = file_sha256(&task.path)
+                    .map_err(|error| format!("source PDF could not be hashed: {error}"))?;
+                if &current_hash != initial_hash {
+                    if let Some(run) = &run {
+                        let relative = task.path.strip_prefix(&source_root).map_err(|_| {
+                            "orientation checkpoint path escaped its root".to_string()
+                        })?;
+                        run.record_failure(
+                            relative,
+                            "source content changed during orientation scan",
+                        )?;
+                    }
+                    stats.failed += 1;
+                    return Err("source PDF content changed during orientation scan".to_string());
+                }
                 let cached_pages = pages
                     .iter()
                     .enumerate()
@@ -465,22 +544,18 @@ where
                 let actionable = !has_detection_error
                     && cached_pages.iter().all(|page| {
                         page.detection.as_ref().is_some_and(|detection| {
-                            detection.confidence.is_finite()
-                                && detection.confidence >= MIN_ORIENTATION_CONFIDENCE
-                                && matches!(detection.rotate_clockwise, 0 | 90 | 180 | 270)
+                            orientation_target_rotation(page.current_rotation, detection).is_ok()
                         })
                     })
                     && cached_pages.iter().any(|page| {
-                        page.detection
-                            .as_ref()
-                            .is_some_and(|detection| detection.rotate_clockwise != 0)
+                        page.detection.as_ref().is_some_and(|detection| {
+                            matches!(
+                                orientation_target_rotation(page.current_rotation, detection),
+                                Ok(Some(_))
+                            )
+                        })
                     });
-                let source_hash = actionable
-                    .then(|| {
-                        file_sha256(&task.path)
-                            .map_err(|error| format!("source PDF could not be hashed: {error}"))
-                    })
-                    .transpose()?;
+                let source_hash = actionable.then(|| initial_hash.to_owned());
                 if let Some(run) = &run {
                     let relative = task
                         .path
@@ -494,7 +569,7 @@ where
                             initial,
                             &CachedPdfOrientation {
                                 page_count: pages.len(),
-                                source_sha256: source_hash.clone(),
+                                source_sha256: Some(initial_hash.to_owned()),
                                 pages: cached_pages,
                                 unsupported: None,
                             },
@@ -529,34 +604,43 @@ where
     let mut actionable_files = 0_u64;
     let mut manual_review_files = 0_u64;
     for item in work {
+        if item.cached {
+            let expected = item.source_hash.as_deref().ok_or_else(|| {
+                BackendError::request_failed("cached orientation result has no source hash")
+            })?;
+            let current = file_sha256(&item.path)
+                .map_err(|error| BackendError::path_invalid(error.to_string()))?;
+            if current != expected {
+                return Err(BackendError::path_invalid(
+                    "source PDF content changed during orientation scan",
+                ));
+            }
+        }
         let page_results = by_file.remove(&item.path).unwrap_or_default();
         let mut approved = Vec::new();
         let mut uncertain = Vec::new();
         for (task, result) in page_results {
             match result {
-                Ok(detection)
-                    if detection.confidence.is_finite()
-                        && detection.confidence >= MIN_ORIENTATION_CONFIDENCE
-                        && matches!(detection.rotate_clockwise, 0 | 90 | 180 | 270) =>
-                {
-                    verified_pages += 1;
-                    if detection.rotate_clockwise != 0 {
-                        let target = (task.current_rotation + detection.rotate_clockwise) % 360;
-                        approved.push(json!({
-                            "pageIndex": task.page_index,
-                            "fromRotation": task.current_rotation,
-                            "targetRotation": target,
-                            "rotateClockwise": detection.rotate_clockwise,
-                            "confidence": detection.confidence,
-                            "method": detection.method,
-                        }));
+                Ok(detection) => {
+                    match orientation_target_rotation(task.current_rotation, &detection) {
+                        Ok(target) => {
+                            verified_pages += 1;
+                            if let Some(target) = target {
+                                approved.push(json!({
+                                    "pageIndex": task.page_index,
+                                    "fromRotation": task.current_rotation,
+                                    "targetRotation": target,
+                                    "rotateClockwise": detection.rotate_clockwise,
+                                    "confidence": detection.confidence,
+                                    "method": detection.method,
+                                }));
+                            }
+                        }
+                        Err(error) => {
+                            uncertain.push(format!("page {} {error}", task.page_index + 1))
+                        }
                     }
                 }
-                Ok(detection) => uncertain.push(format!(
-                    "page {} confidence {:.1}",
-                    task.page_index + 1,
-                    detection.confidence
-                )),
                 Err(error) => uncertain.push(format!("page {} {error}", task.page_index + 1)),
             }
         }
@@ -665,6 +749,7 @@ fn record_unsupported(
     run: Option<&crate::scan_index::ScanRun<'_>>,
     relative: &Path,
     fingerprint: &FileFingerprint,
+    source_sha256: &str,
     reason: &str,
     stats: &mut ScanIndexStats,
     plan: &mut Plan,
@@ -675,7 +760,7 @@ fn record_unsupported(
             fingerprint,
             &CachedPdfOrientation {
                 page_count: 0,
-                source_sha256: None,
+                source_sha256: Some(source_sha256.to_string()),
                 pages: Vec::new(),
                 unsupported: Some(reason.to_string()),
             },

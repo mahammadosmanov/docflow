@@ -18,8 +18,9 @@ plausible OCR token is not an approved RFI identity.
   least three render resolutions and at least two exact reads. Searchable PDF
   text may corroborate or veto that result, but may never authorize it alone.
 - A page or text layer containing multiple exact RFI codes is ambiguous.
-- Signed-page replacement accepts only the same exact conflict-free identity;
-  repaired or fuzzy codes remain manual review.
+  Signed-page replacement accepts only a high-confidence, consensus-confirmed
+  Strict identity or approved OCR alias for one exact conflict-free RFI;
+  repaired, fuzzy, or conflicting codes remain manual review.
 - OCR cascade changes require a consented, read-only corpus comparison. They may
   improve automatic coverage only while retaining zero wrong automatic labels;
   one competing code keeps the document in Review regardless of vote count.

@@ -23,6 +23,7 @@ import type {
   ReplicaAutomationStatus,
   ReviewItem,
   SupportBundlePreview,
+  RfiPrintFindResult,
 } from "../types";
 
 type ProgressHandler = (event: ProgressEvent) => void;
@@ -122,6 +123,31 @@ const demoFastCoverOperation: OperationDef = {
       helpKey: "param.dest.help",
     },
     {
+      name: "scan_mode",
+      kind: "choice",
+      labelKey: "param.rfi.processScans.scanMode",
+      default: "multi_rfi",
+      required: true,
+      choices: ["multi_rfi", "single_rfi"],
+      choiceLabels: {
+        multi_rfi: "choice.rfi.processScans.scanMode.multiRfi",
+        single_rfi: "choice.rfi.processScans.scanMode.singleRfi",
+      },
+      visibleWhen: {},
+      helpKey: "param.rfi.processScans.scanMode.help",
+    },
+    {
+      name: "organize_into_rfi_folders",
+      kind: "bool",
+      labelKey: "param.organize_into_rfi_folders",
+      default: true,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.organize_into_rfi_folders.help",
+    },
+    {
       name: "keep_original",
       kind: "bool",
       labelKey: "param.keep_original",
@@ -136,11 +162,11 @@ const demoFastCoverOperation: OperationDef = {
       name: "correct_orientation",
       kind: "bool",
       labelKey: "param.rfi.processScans.correctOrientation",
-      default: true,
+      default: false,
       required: false,
       choices: [],
       choiceLabels: {},
-      visibleWhen: {},
+      visibleWhen: { scan_mode: "multi_rfi" },
       helpKey: "param.rfi.processScans.correctOrientation.help",
     },
   ],
@@ -512,6 +538,54 @@ const demoPrintOperation: OperationDef = {
       remember: false,
     },
     {
+      name: "rfi_system_root",
+      kind: "folder",
+      labelKey: "param.print.rfiRoot",
+      default: null,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.rfiRoot.help",
+      remember: false,
+    },
+    {
+      name: "rfi_numbers",
+      kind: "longText",
+      labelKey: "param.print.rfiNumbers",
+      default: "",
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: "param.print.rfiNumbers.help",
+      remember: false,
+    },
+    {
+      name: "include_first_page",
+      kind: "bool",
+      labelKey: "param.print.includeFirstPage",
+      default: true,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+      remember: false,
+    },
+    {
+      name: "include_sketch",
+      kind: "bool",
+      labelKey: "param.print.includeSketch",
+      default: true,
+      required: false,
+      choices: [],
+      choiceLabels: {},
+      visibleWhen: {},
+      helpKey: null,
+      remember: false,
+    },
+    {
       name: "printer",
       kind: "choice",
       labelKey: "param.print.printer",
@@ -768,6 +842,17 @@ function mockPath(value: unknown, fallback: string): string {
     : fallback;
 }
 
+function normalizeMockRfiCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const captures =
+    /^AZE-SUN-INT-QMS-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})(?![\s\S])/.exec(
+      value,
+    );
+  return captures
+    ? `AZE-SUN-INT-QMS-RFI-${captures[1]}-${captures[2].padStart(4, "0")}`
+    : null;
+}
+
 /** Browser-only bridge used by component tests and visual development. */
 export class MockBridge implements Bridge {
   private auth: AuthState = signedOut;
@@ -776,6 +861,7 @@ export class MockBridge implements Bridge {
   private printPlan: Plan | null = null;
   private fileGroupPlan: Plan | null = null;
   private completeStatusPlan: Plan | null = null;
+  private fastScanPlan: Plan | null = null;
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -1283,6 +1369,89 @@ export class MockBridge implements Bridge {
           } satisfies Plan;
           break;
         }
+        if (params.opId === demoFastCoverOperation.id) {
+          const destination = mockPath(values.dest, "/RFI");
+          const organize = values.organize_into_rfi_folders !== false;
+          const code = "AZE-SUN-INT-QMS-RFI-CIV-0064";
+          const discipline = code.split("-")[5];
+          const target = `${destination}${
+            organize ? `/${discipline}` : ""
+          }/RFI No. ${code}.pdf`;
+          const sourceFile = "combined_scan.pdf";
+          const sourcePath = `${mockPath(values.source, "/Scans")}/${sourceFile}`;
+          const row = {
+            _rowId: "scan-output-0",
+            sourceFile,
+            evidenceKey: "rfi.fastScan.evidence.confirmed",
+            detectedCode: code,
+            code,
+            target,
+          };
+          const plan = {
+            planId: "demo-fast-scan-plan",
+            opId: demoFastCoverOperation.id,
+            warnings: [],
+            meta: {
+              scanEdit: {
+                destinationRoot: destination,
+                organizeIntoRfiFolders: organize,
+              },
+              editor: {
+                kind: "rfiScan",
+                titleKey: "rfi.fastScan.editor.title",
+                rowCountKey: "rfi.fastScan.editor.rowCount",
+                groupField: "_rowId",
+                requiredFields: ["code"],
+                columns: [
+                  {
+                    key: "sourceFile",
+                    labelKey: "rfi.fastScan.column.sourceFile",
+                    kind: "readonly",
+                    width: 170,
+                  },
+                  {
+                    key: "evidenceKey",
+                    labelKey: "rfi.fastScan.column.evidence",
+                    kind: "readonly",
+                    display: "localizedKey",
+                    width: 170,
+                  },
+                  {
+                    key: "detectedCode",
+                    labelKey: "rfi.fastScan.column.detectedCode",
+                    kind: "readonly",
+                    width: 270,
+                  },
+                  {
+                    key: "code",
+                    labelKey: "rfi.fastScan.column.code",
+                    kind: "text",
+                    width: 310,
+                  },
+                  {
+                    key: "target",
+                    labelKey: "rfi.fastScan.column.target",
+                    kind: "readonly",
+                    width: 360,
+                  },
+                ],
+                rows: [row],
+              },
+            },
+            steps: [
+              {
+                kind: "copy",
+                src: sourcePath,
+                dst: target,
+                noteKey: "note.renamed",
+                meta: { code, scanEditRowId: row._rowId },
+              },
+            ],
+          } satisfies Plan;
+          this.fastScanPlan = plan;
+          result = plan;
+          break;
+        }
         result = {
           planId: "demo-plan",
           opId: String(params.opId),
@@ -1301,6 +1470,74 @@ export class MockBridge implements Bridge {
         break;
       }
       case "engine/revise": {
+        if (this.fastScanPlan && params.planId === this.fastScanPlan.planId) {
+          const editor = this.fastScanPlan.meta.editor as Record<
+            string,
+            unknown
+          >;
+          const originalRows = Array.isArray(editor.rows)
+            ? (editor.rows as Record<string, unknown>[])
+            : [];
+          const submittedRows = Array.isArray(params.rows)
+            ? (params.rows as Record<string, unknown>[])
+            : [];
+          const edit = this.fastScanPlan.meta.scanEdit as Record<
+            string,
+            unknown
+          >;
+          const destination = String(edit.destinationRoot ?? "");
+          const organize = edit.organizeIntoRfiFolders === true;
+          const seenCodes = new Set<string>();
+          if (submittedRows.length !== originalRows.length) {
+            throw new Error("error.rfi.fastScan.revisionInvalid");
+          }
+          const rows = submittedRows.map<Record<string, unknown>>(
+            (submitted, index) => {
+              const original = originalRows[index];
+              const inputCode = submitted.code;
+              const expected = { ...original, code: inputCode };
+              if (JSON.stringify(submitted) !== JSON.stringify(expected)) {
+                throw new Error("error.rfi.fastScan.revisionInvalid");
+              }
+              const code = normalizeMockRfiCode(inputCode);
+              if (!code) {
+                throw new Error("error.rfi.fastScan.codeInvalid");
+              }
+              if (seenCodes.has(code)) {
+                throw new Error("error.rfi.fastScan.targetExists");
+              }
+              seenCodes.add(code);
+              const discipline = code.split("-")[5];
+              const target = `${destination}${
+                organize ? `/${discipline}` : ""
+              }/RFI No. ${code}.pdf`;
+              return { ...expected, code, target };
+            },
+          );
+          const steps = this.fastScanPlan.steps.map((step) => {
+            const rowId = step.meta.scanEditRowId;
+            const row = rows.find((candidate) => candidate._rowId === rowId);
+            return row
+              ? {
+                  ...step,
+                  dst: String(row.target),
+                  meta: { ...step.meta, code: row.code },
+                }
+              : step;
+          });
+          const revised = {
+            ...this.fastScanPlan,
+            planId: `${this.fastScanPlan.planId}-revised`,
+            meta: {
+              ...this.fastScanPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps,
+          } satisfies Plan;
+          this.fastScanPlan = revised;
+          result = revised;
+          break;
+        }
         if (
           this.completeStatusPlan &&
           params.planId === this.completeStatusPlan.planId
@@ -1467,6 +1704,63 @@ export class MockBridge implements Bridge {
           errors: [],
         } satisfies OperationResult;
         break;
+      case "rfi/printFind": {
+        const requests = Array.isArray(params.numbers) ? (params.numbers as string[]) : [];
+        const candidates = requests.flatMap((requested, requestIndex) => {
+          const normalized = requested.toUpperCase();
+          const codes = /^\d{4}$/.test(normalized)
+            ? ["CIV", "MEC"].map((discipline) => `AZE-SUN-INT-QMS-RFI-${discipline}-${normalized}`)
+            : [
+                normalized.startsWith("AZE-SUN-INT-QMS-RFI-")
+                  ? normalized
+                  : `AZE-SUN-INT-QMS-RFI-${normalized}`,
+              ];
+          const types: Array<"firstPage" | "sketch"> = [];
+          if (params.firstPage) types.push("firstPage");
+          if (params.sketch) types.push("sketch");
+          return codes.flatMap((code, codeIndex) =>
+            types.map((documentType, typeIndex) => {
+              const extension = documentType === "firstPage" ? ".docx" : " Sketch.pdf";
+              const displayPath = `${code}${extension}`;
+              return {
+                requested,
+                rfiCode: code,
+                documentType,
+                displayPath,
+                selection: {
+                  selectionId: `demo-rfi-print-${requestIndex}-${codeIndex}-${typeIndex}`,
+                  displayPath: `/Users/demo/Documents/DocFlow/${displayPath}`,
+                  name: displayPath,
+                },
+                selected: codes.length === 1,
+              };
+            }),
+          );
+        });
+        result = {
+          candidates,
+          resolutions: requests.map((requested) => {
+            const matching = candidates.filter((candidate) => candidate.requested === requested);
+            const codes = matching
+              .map((candidate) => candidate.rfiCode)
+              .filter((code, index, all) => all.indexOf(code) === index);
+            return {
+              requested,
+              rfiCodes: codes,
+              missingFirstPage: Boolean(params.firstPage) && !matching.some(
+                (candidate) => candidate.documentType === "firstPage",
+              ),
+              missingSketch: Boolean(params.sketch) && !matching.some(
+                (candidate) => candidate.documentType === "sketch",
+              ),
+              ambiguous: codes.length > 1,
+            };
+          }),
+          visited: candidates.length,
+          truncated: false,
+        } satisfies RfiPrintFindResult;
+        break;
+      }
       case "history/list":
         result = {
           online: true,

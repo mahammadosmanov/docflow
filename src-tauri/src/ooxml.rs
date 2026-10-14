@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use zip::{ZipArchive, ZipWriter};
 
 pub(crate) const MAX_PACKAGE_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_GUARDED_CELL_UPDATES: usize = 500;
 pub(crate) const MAX_MERGE_VALIDATION_COMPARISONS_PER_WORKBOOK: u64 = 1_000_000;
 pub(crate) const MAX_APPLY_MERGE_COMPARISONS: u64 = 20_000_000;
 const MAX_UNCOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
@@ -604,24 +603,9 @@ fn validate_guarded_update_set(
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
 ) -> Result<(), OoxmlError> {
-    let update_count = updates_by_sheet
-        .values()
-        .try_fold(0_usize, |count, updates| {
-            if updates.is_empty() {
-                return Err(OoxmlError::invalid("guarded worksheet updates are empty"));
-            }
-            count.checked_add(updates.len()).ok_or_else(|| {
-                OoxmlError::limit_exceeded("guarded update count exceeded the limit")
-            })
-        })?;
-    if updates_by_sheet.is_empty() || update_count == 0 {
+    if updates_by_sheet.is_empty() || updates_by_sheet.values().any(|updates| updates.is_empty()) {
         return Err(OoxmlError::invalid(
             "at least one guarded cell update is required",
-        ));
-    }
-    if update_count > MAX_GUARDED_CELL_UPDATES {
-        return Err(OoxmlError::limit_exceeded(
-            "guarded update count exceeded the limit",
         ));
     }
     for updates in updates_by_sheet.values() {

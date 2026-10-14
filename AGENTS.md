@@ -63,6 +63,9 @@ change before moving authority.
 
 - Inspect the worktree and relevant canon before editing.
 - Protect pre-existing user changes; do not mix unrelated cleanup.
+- Follow Up route inclusions/exclusions require an explicit domain decision in
+  `docs/RFI_DOMAIN.md` and an accepted ADR before route code changes. An
+  unmapped pair is not approval to add a route; confirm scope first.
 - Use vertical RED → GREEN → REFACTOR slices for behavior changes.
 - Keep the frontend thin and commands closed, typed, bounded, and authorized in Rust.
 - Never add an interpreter, application sidecar, shell/process authority, or a second mutation backend.

@@ -5,7 +5,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Seek, SeekFrom},
     path::{Path, PathBuf},
-    sync::OnceLock,
 };
 
 use regex::Regex;
@@ -25,6 +24,7 @@ use crate::{
         verify_guarded_workbook_delta_text,
     },
     parallel::{bounded_map, bounded_map_stream},
+    rfi_code::normalize_candidate_number,
     rfi_follow_up::{WorkbookFingerprint, fingerprint_open_file},
     scan_index::{FileFingerprint, ScanIndex, ScanIndexStats},
 };
@@ -194,26 +194,34 @@ pub(crate) fn canonical_rfi_prefix() -> &'static str {
 
 pub(crate) fn parse_rfi_discipline_and_number(name: &str) -> Option<(&'static str, u32)> {
     let clean = name.nfc().collect::<String>().trim().to_ascii_uppercase();
-    static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        Regex::new(r"(?i)(?:^|.*-RFI-|\b)(CIV|MEC|ELE|PRC)[-_ ]*0*([1-9]\d*)\b").unwrap()
+    static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"\A(?:AZE-SUN-INT-QMS-RFI-|RFI-)?(CIV|MEC|ELE|PRC)[-_ ]*([0-9]{1,4})\z")
+            .unwrap()
     });
-    let caps = re.captures(&clean)?;
-    let discipline = match caps.get(1)?.as_str().to_ascii_uppercase().as_str() {
+    let caps = RE.captures(&clean)?;
+    let discipline = match caps.get(1)?.as_str() {
         "CIV" => "CIV",
         "MEC" => "MEC",
         "ELE" => "ELE",
         "PRC" => "PRC",
         _ => return None,
     };
-    Some((discipline, caps.get(2)?.as_str().parse().ok()?))
+    Some((
+        discipline,
+        normalize_candidate_number(caps.get(2)?.as_str())?
+            .parse()
+            .ok()?,
+    ))
 }
 
 fn exact_canonical_rfi(value: &str) -> Option<String> {
     let clean = value.nfc().collect::<String>().trim().to_ascii_uppercase();
     let (discipline, number) = parse_rfi_discipline_and_number(&clean)?;
-    let canonical = format!("{}{}-{number:04}", canonical_rfi_prefix(), discipline);
-    (clean == canonical).then_some(canonical)
+    Some(format!(
+        "{}{}-{number:04}",
+        canonical_rfi_prefix(),
+        discipline
+    ))
 }
 
 fn completion_code_from_filename(name: &str) -> Option<String> {
@@ -1384,81 +1392,104 @@ where
         let mut pending_log_updates = Vec::new();
         let mut pending_follow_up_updates = Vec::new();
 
-        if scanned.signed_by_worley {
-            if !matching_log.is_empty() {
-                if matching_log
-                    .iter()
-                    .all(|row| safe_cell(&row.remarks_cell, row.remarks_merged))
-                {
-                    let mut changed = 0usize;
-                    for row in &matching_log {
-                        let cell = row.remarks_cell.as_ref().expect("safe cell is present");
-                        let replacement = append_signed_marker(&cell.value);
-                        if replacement != cell.value {
-                            pending_log_updates.push((
-                                row.sheet.clone(),
-                                format!("{}:{}", row.row, row.remarks_col),
-                                dto(&row_id, cell, replacement, row.row, row.remarks_col),
-                            ));
-                            changed += 1;
-                        }
+        if scanned.signed_by_worley && !matching_log.is_empty() {
+            if matching_log
+                .iter()
+                .all(|row| safe_cell(&row.remarks_cell, row.remarks_merged))
+            {
+                let mut changed = 0usize;
+                for row in &matching_log {
+                    let cell = row.remarks_cell.as_ref().expect("safe cell is present");
+                    let replacement = append_signed_marker(&cell.value);
+                    if replacement != cell.value {
+                        pending_log_updates.push((
+                            row.sheet.clone(),
+                            format!("{}:{}", row.row, row.remarks_col),
+                            dto(&row_id, cell, replacement, row.row, row.remarks_col),
+                        ));
+                        changed += 1;
                     }
-                    log_action = if changed == 0 {
-                        "Already signed in RFI Log".to_string()
-                    } else {
-                        format!("Add exact Worley remark to {changed} RFI Log row(s)")
-                    };
-                    ready |= changed > 0;
-                } else {
-                    log_action = "Manual review: REMARKS cell missing, merged, or formula-bearing"
-                        .to_string();
-                    unsafe_target = true;
                 }
+                log_action = if changed == 0 {
+                    "Already signed in RFI Log".to_string()
+                } else {
+                    format!("Add exact Worley remark to {changed} RFI Log row(s)")
+                };
+                ready |= changed > 0;
+            } else {
+                log_action =
+                    "Manual review: REMARKS cell missing, merged, or formula-bearing".to_string();
+                unsafe_target = true;
             }
+        }
 
-            if !matching_follow_up.is_empty() {
-                if matching_follow_up
-                    .iter()
-                    .all(|target| safe_cell(&target.status_cell, target.status_merged))
-                {
-                    let mut changed = 0usize;
-                    for target in matching_follow_up {
-                        let cell = target.status_cell.as_ref().expect("safe cell is present");
-                        let current = cell.value.nfc().collect::<String>().trim().to_string();
-                        if !matches!(current.as_str(), "" | "Signed" | "Not Signed") {
-                            unsafe_target = true;
-                            continue;
-                        }
-                        if current != "Signed" {
-                            pending_follow_up_updates.push((
-                                target.sheet.clone(),
-                                format!("{}:{}", target.row, target.status_col),
-                                dto(
-                                    &row_id,
-                                    cell,
-                                    "Signed".to_string(),
-                                    target.row,
-                                    target.status_col,
-                                ),
-                            ));
-                            changed += 1;
-                        }
+        if !matching_follow_up.is_empty() {
+            if matching_follow_up
+                .iter()
+                .all(|target| safe_cell(&target.status_cell, target.status_merged))
+            {
+                let mut changed = 0usize;
+                for target in matching_follow_up {
+                    let cell = target.status_cell.as_ref().expect("safe cell is present");
+                    let current = cell.value.nfc().collect::<String>().trim().to_string();
+                    if !matches!(current.as_str(), "" | "Signed" | "Not Signed") {
+                        unsafe_target = true;
+                        continue;
                     }
-                    follow_up_action = if unsafe_target {
-                        "Manual review: unexpected Follow Up status".to_string()
-                    } else if changed == 0 {
-                        "Already Signed in Follow Up".to_string()
+                    let desired = if scanned.signed_by_worley {
+                        "Signed"
+                    } else if current == "Signed" {
+                        // A weak/unsigned scan can never revoke a prior signature.
+                        "Signed"
                     } else {
-                        format!("Set {changed} Follow Up control status cell(s) to Signed")
+                        "Not Signed"
                     };
-                    ready |= changed > 0;
-                } else {
-                    follow_up_action =
-                        "Manual review: Follow Up status cell missing, merged, or formula-bearing"
-                            .to_string();
-                    unsafe_target = true;
+                    if current != desired {
+                        pending_follow_up_updates.push((
+                            target.sheet.clone(),
+                            format!("{}:{}", target.row, target.status_col),
+                            dto(
+                                &row_id,
+                                cell,
+                                desired.to_string(),
+                                target.row,
+                                target.status_col,
+                            ),
+                        ));
+                        changed += 1;
+                    }
                 }
+                follow_up_action = if unsafe_target {
+                    "Manual review: unexpected Follow Up status".to_string()
+                } else if changed == 0 {
+                    format!(
+                        "Already {} in Follow Up",
+                        if scanned.signed_by_worley {
+                            "Signed"
+                        } else {
+                            "Not Signed or preserved Signed"
+                        }
+                    )
+                } else {
+                    format!(
+                        "Set {changed} Follow Up control status cell(s) to {}",
+                        if scanned.signed_by_worley {
+                            "Signed"
+                        } else {
+                            "Not Signed"
+                        }
+                    )
+                };
+                ready |= changed > 0;
+            } else {
+                follow_up_action =
+                    "Manual review: Follow Up status cell missing, merged, or formula-bearing"
+                        .to_string();
+                unsafe_target = true;
             }
+        } else if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
+            follow_up_action = "Manual review: no existing Follow Up control row".to_string();
+            unsafe_target = true;
         }
 
         if unsafe_target || matching_log.is_empty() {
@@ -1475,13 +1506,7 @@ where
             }
         }
 
-        let (disposition, reason_key, selectable) = if !scanned.signed_by_worley {
-            (
-                "rfi.systemSync.disposition.unsigned",
-                scanned.signature_reason.clone(),
-                false,
-            )
-        } else if unsafe_target || matching_log.is_empty() {
+        let (disposition, reason_key, selectable) = if unsafe_target || matching_log.is_empty() {
             (
                 "rfi.systemSync.disposition.manualReview",
                 "Unsafe or incomplete workbook mapping; no unsafe cell was authorized".to_string(),
@@ -1490,7 +1515,11 @@ where
         } else if ready {
             (
                 "rfi.systemSync.disposition.ready",
-                "Worley signature detected; exact guarded updates are ready".to_string(),
+                if scanned.signed_by_worley {
+                    "Worley signature detected; exact guarded updates are ready".to_string()
+                } else {
+                    "No Worley signature detected; exact Not Signed update is ready".to_string()
+                },
                 true,
             )
         } else {
@@ -1775,7 +1804,11 @@ pub fn revise(plan: &Plan, rows: &[Value]) -> Result<Plan, BackendError> {
 
 fn validate_replacement(kind: SyncWorkbookKind, update: &GuardedCellUpdateDto) -> bool {
     match kind {
-        SyncWorkbookKind::FollowUp => update.replacement_value == "Signed",
+        SyncWorkbookKind::FollowUp => match update.replacement_value.as_str() {
+            "Signed" => matches!(update.expected_value.trim(), "" | "Signed" | "Not Signed"),
+            "Not Signed" => matches!(update.expected_value.trim(), "" | "Not Signed"),
+            _ => false,
+        },
         SyncWorkbookKind::RfiLogStatus => {
             update.replacement_value == "Completed"
                 && matches!(
@@ -1858,4 +1891,23 @@ pub fn execute_sync_step(
         BackendError::validation(format!("Workbook delta verification failed: {e}"))
     })?;
     Ok(())
+}
+#[cfg(test)]
+mod candidate_normalization_tests {
+    use super::*;
+
+    #[test]
+    fn sync_identity_accepts_only_anchored_supported_rfi_suffixes() {
+        assert_eq!(
+            exact_canonical_rfi("AZE-SUN-INT-QMS-RFI-CIV-901").as_deref(),
+            Some("AZE-SUN-INT-QMS-RFI-CIV-0901")
+        );
+        assert_eq!(
+            exact_canonical_rfi("CIV-9").as_deref(),
+            Some("AZE-SUN-INT-QMS-RFI-CIV-0009")
+        );
+        assert!(exact_canonical_rfi("ITP-CIV-901").is_none());
+        assert!(exact_canonical_rfi("2026-09-01").is_none());
+        assert!(exact_canonical_rfi("AZE-SUN-INT-QMS-RFI-CIV-09010").is_none());
+    }
 }

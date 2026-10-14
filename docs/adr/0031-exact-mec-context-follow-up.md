@@ -31,6 +31,25 @@ No section, row, or cell is created. All other multi-row mappings retain manual
 review. Existing formula, merge, protection, exact-cell, and Remarks safeguards
 remain in force.
 
+Regular lifecycle routing and FINAL Worley projection reconcile exact
+destinations independently. A repeated MEC RFI may update only prepared rows
+whose full tuple is represented in the source. When only some of several source
+contexts have prepared rows, each exact matched destination may proceed and the
+uncovered contexts remain manual review. No row or section is created. Duplicate
+destination tuples, conflicting or incomplete source values, ambiguous contexts,
+and unrelated existing placements remain manual review.
+
+For FINAL Worley projection, a code already present in one exact destination
+does not suppress updates to other distinct prepared contexts. Each candidate
+row is reconciled independently. Ambiguous contexts or conflicting source
+status cannot authorize status changes in a shared cell. A status formula is a
+read-only no-op only when its existing RFI is already present and its cached
+value matches the projected status; otherwise the target remains manual review.
+
+This extends the distinct-context rule to lifecycle and FINAL Worley
+destinations without changing the tuple contract or permitting a cartesian
+match.
+
 ## Alternatives
 
 - Leave every repeated MEC identifier for manual review: rejected because the
@@ -58,8 +77,10 @@ Workbook edits remain guarded and journaled for Undo.
 - `src-tauri/src/rfi_follow_up.rs`: retain per-source route contexts and fan
   out only across distinct exact MEC tuples, including one explicit multi-area
   field.
-- `src-tauri/tests/rfi_follow_up_native.rs`: cover safe fan-out and duplicate
-  tuple refusal.
+  `src-tauri/tests/rfi_follow_up_native.rs`: cover safe fan-out and duplicate
+  tuple refusal, destination-specific FINAL fan-out, missing-context review,
+  unrelated placements, shared-cell conflict refusal, and cached-formula
+  satisfied no-op versus unsafe formula refusal.
 
 No existing decision is voided; this defines a narrow MEC case alongside the
 existing exact CIV multi-area rule. No UI or locale changes are needed.
