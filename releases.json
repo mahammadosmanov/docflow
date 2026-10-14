@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.16.8",
+  "currentVersion": "1.17.0",
   "releases": [
+    {
+      "version": "1.17.0",
+      "date": "2026-10-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.17.0",
+      "summary": "Refresh workspace navigation and foreground Fast RFI Scan without changing workflow authority."
+    },
     {
       "version": "1.16.8",
       "date": "2026-10-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.16.8",
       "summary": "Filter Follow Up scope noise, preserve exact ITP/item exclusions, and show actionable partial-context diagnostics."
     },

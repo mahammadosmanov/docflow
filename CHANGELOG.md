@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.17.0 - 2026-10-14
+
+### Improved
+
+- Add persistent navigation across authenticated workspace, review, history,
+  recovery, preferences, and administrator screens. Feature Fast RFI Scan as
+  the primary home task while keeping other operations searchable and
+  category-filtered. Use an icon rail or compact bottom bar at narrower
+  widths; workflow preview, Apply, and Undo authority remain unchanged.
+
 ## 1.16.8 - 2026-10-14
 
 ### Fixed

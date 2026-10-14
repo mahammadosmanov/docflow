@@ -1,6 +1,26 @@
 # DocFlow project state
 
-Updated: 2026-09-29
+Updated: 2026-10-14
+
+## Main integration and Windows cross-build (1.17.0)
+
+- Integrated the current main-line workspace navigation update as DocFlow
+  1.17.0. Home promotes Fast RFI Scan; authenticated routes stay reachable in a
+  desktop sidebar or narrow-window bottom navigation. No workflow authority
+  changed.
+- Added release/changelog/product documentation and raised runtime manifests to
+  1.17.0. Moved a static regex out of a loop and collapsed nested `if let`
+  checks to clear pre-existing Clippy failures.
+- Verification: Node (24), Vitest (73), Rust (690 passed, 20 ignored), frontend
+  build, Rust fmt/clippy/check, version/docs/source/license audits passed.
+  Browser MockBridge smoke verified sign-in, Home, History, Recovery, and a
+  390px viewport with no document-width overflow.
+- Windows x64 cross-build produced NSIS, portable EXE, and portable-with-OCR
+  ZIP in `artifacts/windows-1.17.0/`; package audit and SHA-256 manifest passed.
+  Host OCR resource checksum was identical before/after staging.
+- Native Windows install, packaged executable smoke, GUI startup, Office,
+  OneDrive, and printer acceptance remain unverified. Cross-build emitted
+  unsigned/experimental-toolchain warnings; no Windows release was published.
 
 ## Local build storage cleanup and Rust quality gate fixes (1.13.7)
 

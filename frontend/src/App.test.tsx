@@ -1718,9 +1718,10 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
     fireEvent.click(
-      screen
-        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
-        .closest("button")!,
+      within(screen.getByRole("navigation", { name: "DocFlow" })).getByRole(
+        "button",
+        { name: "Geçmiş" },
+      ),
     );
 
     expect(await screen.findAllByText("Taramaları İşle")).toHaveLength(1);
@@ -1736,50 +1737,50 @@ describe("DocFlow shell", () => {
     expect(makeStrings(locale).t("history.unknownOperation")).toBe(expected);
   });
 
-  it("exposes every preserved feature from the workspace", async () => {
+  it("keeps operations searchable and utilities reachable from persistent navigation", async () => {
     render(<App />);
     await signIn();
 
-    expect(screen.getByText("Diğer özellikler")).toBeVisible();
-    expect(
-      screen.getByText("Bekleyen dosyaları tek tek kontrol edin ve güvenle yerleştirin."),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Yapılan işlemleri görün ve güvenle geri alın."),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Dil, görünüm, yazı ve hesap tercihlerinizi yönetin."),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Kullanıcı erişimlerini ve yönetici yetkilerini yönetin."),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
-      ),
-    ).toBeVisible();
+    const navigation = screen.getByRole("navigation", { name: "DocFlow" });
+    for (const key of [
+      "home.title",
+      "action.review",
+      "action.history",
+      "recovery.title",
+      "prefs.title",
+      "action.admin",
+    ] as const) {
+      const label = makeStrings("tr").t(key);
+      expect(
+        within(navigation).getByRole("button", { name: label }),
+      ).toBeVisible();
+    }
 
+    expect(
+      screen.getByRole("button", {
+        name: /Hızlı RFI Taraması/,
+      }),
+    ).toBeVisible();
     fireEvent.click(
-      screen
-        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
-        .closest("button")!,
+      within(navigation).getByRole("button", {
+        name: makeStrings("tr").t("action.history"),
+      }),
     );
-    const historyHeadings = await screen.findAllByRole("heading", {
-      name: "Geçmiş",
-    });
-    expect(historyHeadings[0]).toBeVisible();
+    expect(
+      (await screen.findAllByRole("heading", { name: "Geçmiş" }))[0],
+    ).toBeVisible();
   });
+
 
   it("opens a recovery center for pending journals and uncertain print queues", async () => {
     render(<App />);
     await signIn();
 
     fireEvent.click(
-      screen
-        .getByText(
-          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
-        )
-        .closest("button")!,
+      within(screen.getByRole("navigation", { name: "DocFlow" })).getByRole(
+        "button",
+        { name: "Kurtarma merkezi" },
+      ),
     );
 
     expect(
@@ -1831,11 +1832,10 @@ describe("DocFlow shell", () => {
     render(<App />);
     await signIn();
     fireEvent.click(
-      screen
-        .getByText(
-          "Bekleyen günlükleri ve belirsiz yazdırma işlerini güvenle inceleyin.",
-        )
-        .closest("button")!,
+      within(screen.getByRole("navigation", { name: "DocFlow" })).getByRole(
+        "button",
+        { name: "Kurtarma merkezi" },
+      ),
     );
 
     fireEvent.click(
@@ -1857,9 +1857,10 @@ describe("DocFlow shell", () => {
     await signIn();
 
     fireEvent.click(
-      screen
-        .getByText("Yapılan işlemleri görün ve güvenle geri alın.")
-        .closest("button")!,
+      within(screen.getByRole("navigation", { name: "DocFlow" })).getByRole(
+        "button",
+        { name: "Geçmiş" },
+      ),
     );
 
     await screen.findAllByRole("heading", { name: "Geçmiş" });

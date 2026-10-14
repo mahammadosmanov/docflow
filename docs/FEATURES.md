@@ -59,6 +59,11 @@
 - OCR-backed preview effects, signed-page rows, orientation decisions, and
   manual-review items display their recognition score out of 100. The score is
   review evidence, not a probability or automatic approval.
+- Persistent navigation keeps Home, Review, History, Recovery, Preferences,
+  and conditional Admin destinations available across authenticated screens.
+  Fast RFI Scan is the primary home task; the remaining registered operations
+  stay searchable and category-filtered. The sidebar becomes a compact icon
+  rail or bottom bar at narrower widths.
 - The shared responsive workspace allocates vertical space from the live header
   and keeps one stage-content scroll owner, with primary actions reachable on
   short or narrow windows. Forms and long paths wrap for reading; wide tables

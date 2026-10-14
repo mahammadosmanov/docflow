@@ -543,6 +543,7 @@ const KNOWN_LABELS: &[&str] = &[
 ];
 
 fn labeled_anchor(parts: &[(String, Vec<u8>)], labels: &[&str]) -> Option<String> {
+    let rfi_label = Regex::new(r"(?i)^CIV-\d+$").expect("static RFI label filter");
     for (name, bytes) in parts {
         if !name.ends_with(".xml") {
             continue;
@@ -567,9 +568,7 @@ fn labeled_anchor(parts: &[(String, Vec<u8>)], labels: &[&str]) -> Option<String
                             .iter()
                             .any(|label| normalize(value) == normalize(label))
                         && !value.trim().starts_with("AZE-SUN-INT-QMS-RFI-")
-                        && !Regex::new(r"(?i)^CIV-\d+$")
-                            .expect("static RFI label filter")
-                            .is_match(value.trim())
+                        && !rfi_label.is_match(value.trim())
                 }) {
                     return Some(value.to_string());
                 }
@@ -637,10 +636,10 @@ fn xml_text_nodes(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event() {
             Ok(Event::Text(text)) => {
-                if let Ok(decoded) = text.decode() {
-                    if let Ok(unescaped) = unescape(&decoded) {
-                        result.push(unescaped.into_owned());
-                    }
+                if let Ok(decoded) = text.decode()
+                    && let Ok(unescaped) = unescape(&decoded)
+                {
+                    result.push(unescaped.into_owned());
                 }
             }
             Ok(Event::CData(text)) => {

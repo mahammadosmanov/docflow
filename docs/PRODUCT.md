@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.16.8**. `VERSION` is authoritative.
+Current product version: **1.17.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -77,6 +77,9 @@ workbook behavior, print batches kept in order, and every change recoverable.
 22. Local support diagnostics include bounded, pathless printer inventory and
     latest-queue evidence so real Windows/EPSON outcomes can be compared without
     exposing document names, contents, paths, credentials, or tokens.
+23. Authenticated users can reach primary tasks and recovery destinations through
+    persistent, responsive navigation. Fast RFI Scan is prominent without
+    removing access to any registered operation.
 
 ## Current capabilities
 
