@@ -546,6 +546,7 @@
   "warn.rfi.followUp.reason.readyWorleySync": "FINAL Worley durumu, REMARKS alanındaki exact Signed by Worley satırından eşitlenebilir.",
   "warn.rfi.followUp.reason.readyRemove": "Cancelled veya Rejected RFI kayıtları çıkarılacak ve kalan grubun ortak durumu yeniden hesaplanacak.",
   "warn.rfi.followUp.reason.mappingMissing": "Desteklenen bir Follow Up rotası var, ancak bu RFI için ITP, item ve bağlamı tam eşleşen hazır bir hedef satırı yok. Değişiklik yapılmadı.",
+  "warn.rfi.followUp.reason.partialContext": "Bazı kaynak bağlamları hazır Follow Up satırlarıyla eşleşiyor, bazıları eşleşmiyor. Eşleşmeyen Tag No, Area ve Inspection Location değerlerini RFI Log'da kontrol edin. DocFlow kaynak kaydı değiştirmez.",
   "warn.rfi.followUp.reason.mappingUnsupported": "Bu ITP/item birleşimi geçerli şablonda bir Follow Up rotasına sahip değil. Otomatik eşitlenemez.",
   "warn.rfi.followUp.reason.mappingAmbiguous": "Bu kayıtla birden fazla hedef satır eşleşiyor; tahmin yürütülmeden değiştirilmeden bırakıldı.",
   "warn.rfi.followUp.reason.readyNotSigned": "Exact Signed by Worley remark kanıtı bulunmadı; hedefe Not Signed uygulanabilir.",

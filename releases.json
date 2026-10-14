@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.16.7",
+  "currentVersion": "1.16.8",
   "releases": [
+    {
+      "version": "1.16.8",
+      "date": "2026-10-14",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.16.8",
+      "summary": "Filter Follow Up scope noise, preserve exact ITP/item exclusions, and show actionable partial-context diagnostics."
+    },
     {
       "version": "1.16.7",
       "date": "2026-10-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.16.7",
       "summary": "Clarify Follow Up mapping diagnostics and record intentional ITP/item scope exclusions."
     },

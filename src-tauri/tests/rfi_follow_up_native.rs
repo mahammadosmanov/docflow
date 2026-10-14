@@ -766,7 +766,7 @@ fn full_sync_maps_mec_multiarea_rfi_to_distinct_rows_and_split_target_location()
 }
 
 #[test]
-fn full_sync_surfaces_a_supported_route_without_a_prepared_follow_up_slot() {
+fn full_sync_hides_a_supported_route_without_a_prepared_follow_up_context() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
         "0041",
@@ -786,61 +786,115 @@ fn full_sync_surfaces_a_supported_route_without_a_prepared_follow_up_slot() {
     )]);
 
     let review = classify(source, target).unwrap();
-    let row = &review["rows"][0];
 
-    assert_eq!(row["rfiNo"], "CIV-0041");
-    assert_eq!(row["sourceStatuses"], json!(["Completed"]));
-    assert_eq!(row["disposition"], "rfi.followUp.disposition.manualReview");
-    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.mappingMissing");
-    assert_eq!(row["selectable"], false);
-    assert!(
-        row["mappingDetails"]
-            .as_str()
-            .is_some_and(|details| details.contains("CIV/1.5") && details.contains("AREA-1")),
-        "{row}"
-    );
-    assert_eq!(review["editor"]["detailsDefaultVisible"], true);
-    assert!(
-        review["warnings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords")
-    );
+    assert!(review["rows"].as_array().unwrap().is_empty(), "{review}");
 }
 
 #[test]
-fn full_sync_distinguishes_an_unsupported_route_from_a_missing_target_row() {
-    let source = full_schema_source([full_schema_record_with_status(
-        10,
-        "0042",
-        "AZE-SUN-INT-QMS-ITP-CIV-0007",
-        "CIV-7.2.3",
-        "Camp",
+fn full_sync_omits_confirmed_scope_exclusions_but_keeps_undecided_routes_visible() {
+    let exclusions = [
+        ("CIV", "0002", "CIV-2.1.4"),
+        ("CIV", "0002", "CIV-2.1.6"),
+        ("CIV", "0005", "CIV-5.1.4"),
+        ("CIV", "0005", "CIV-5.1.5"),
+        ("CIV", "0005", "CIV-5.1.9"),
+        ("CIV", "0005", "CIV-5.3.4"),
+        ("CIV", "0005", "CIV-5.3.5"),
+        ("CIV", "0006", "CIV-6.1.8"),
+        ("CIV", "0006", "CIV-6.2.1"),
+        ("CIV", "0006", "CIV-6.2.2"),
+        ("CIV", "0006", "CIV-6.2.3"),
+        ("CIV", "0006", "CIV-6.2.4"),
+        ("CIV", "0006", "CIV-6.2.5"),
+        ("CIV", "0006", "CIV-6.2.9"),
+        ("CIV", "0007", "CIV-7.1.5"),
+        ("CIV", "0007", "CIV-7.2.3"),
+        ("CIV", "0007", "CIV-7.2.4"),
+        ("CIV", "0007", "CIV-7.3.9"),
+        ("MEC", "0001", "MEC-1.1.4"),
+        ("MEC", "0001", "MEC-1.2.5"),
+        ("MEC", "0004", "MEC-4.3.1"),
+    ];
+    let mut civ_records = Vec::new();
+    let mut mec_records = Vec::new();
+    for (index, (discipline, itp_number, item)) in exclusions.iter().enumerate() {
+        let row_number = 10 + index as u32;
+        let suffix = format!("{:04}", 2000 + index);
+        let itp = format!("AZE-SUN-INT-QMS-ITP-{discipline}-{itp_number}");
+        if *discipline == "CIV" {
+            civ_records.push(full_schema_record_with_status(
+                row_number,
+                &suffix,
+                &itp,
+                item,
+                "AREA-1",
+                "Completed",
+                "",
+            ));
+        } else {
+            mec_records.push(full_schema_mec_record_with_itp(
+                row_number,
+                &suffix,
+                (&itp, item, "PCS-01", "S1", "N1", "Completed"),
+            ));
+        }
+    }
+    civ_records.push(full_schema_record_with_status(
+        100,
+        "1999",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.1.7",
+        "AREA-1",
         "Completed",
         "",
-    )]);
-    let target = package(&[(
-        "CIV",
-        None,
+    ));
+    let civ_header = row(
+        9,
+        [
+            inline("A9", "RFI No."),
+            inline("D9", "ITP No:"),
+            inline("E9", "Item No."),
+            inline("F9", "Tag No"),
+            inline("G9", "Area"),
+            inline("N9", "Inspection Location"),
+            inline("T9", "Inspection Status"),
+            inline("V9", "Remarks"),
+        ],
+    );
+    let source = source_package(
+        worksheet(std::iter::once(civ_header).chain(civ_records), &[]),
         worksheet(
-            [row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")])],
+            std::iter::once(full_schema_mec_header()).chain(mec_records),
             &[],
         ),
-    )]);
+    );
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(1, [inline("N1", "RFI No."), inline("O1", "STATUS")])],
+                &[],
+            ),
+        ),
+    ]);
 
     let review = classify(source, target).unwrap();
-    let row = &review["rows"][0];
+    let rows = review["rows"].as_array().unwrap();
 
-    assert_eq!(row["rfiNo"], "CIV-0042");
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["rfiNo"], "CIV-1999");
     assert_eq!(
-        row["reasonKey"],
+        rows[0]["reasonKey"],
         "warn.rfi.followUp.reason.mappingUnsupported"
-    );
-    assert!(
-        row["mappingDetails"]
-            .as_str()
-            .is_some_and(|details| details.contains("CIV-0007") && details.contains("CIV-7.2.3"))
     );
 }
 
@@ -1070,7 +1124,7 @@ fn full_sync_updates_prepared_mec_context_and_reviews_unprepared_context() {
     let missing_rows = rows
         .iter()
         .filter(|row| {
-            row["_sheet"] == "MEC" && row["reasonKey"] == "warn.rfi.followUp.reason.mappingMissing"
+            row["_sheet"] == "MEC" && row["reasonKey"] == "warn.rfi.followUp.reason.partialContext"
         })
         .collect::<Vec<_>>();
     assert_eq!(missing_rows.len(), 1, "{review}");
@@ -1081,7 +1135,68 @@ fn full_sync_updates_prepared_mec_context_and_reviews_unprepared_context() {
         missing_rows[0]["disposition"],
         "rfi.followUp.disposition.manualReview"
     );
+    let details = missing_rows[0]["mappingDetails"].as_str().unwrap();
+    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2; location=N2"));
+    assert!(details.contains("matched source context: tag=PCS-06; area=S1; location=N2"));
+    assert!(details.contains("row 2: N2 / PCS-06 / S1"));
     assert!(rows.iter().all(|row| row["_row"] != 3));
+}
+
+#[test]
+fn full_sync_explains_unmatched_mec_final_context_for_rfi_log_correction() {
+    let source = source_package(
+        worksheet([full_schema_mec_header()], &[]),
+        worksheet(
+            std::iter::once(full_schema_mec_header()).chain([
+                full_schema_mec_record(10, "0123", "MEC-1.3.5", "PCS-06", "S1", "N2", "Completed")
+                    .replace(&blank("V10"), &inline("V10", "Signed by Worley")),
+                full_schema_mec_record(11, "0123", "MEC-1.3.5", "PCS-06", "S2", "N3", "Completed")
+                    .replace(&blank("V11"), &inline("V11", "Signed by Worley")),
+            ]),
+            &[],
+        ),
+    );
+    let target = package(&[(
+        "Signed By Worley MEC",
+        None,
+        worksheet(
+            [
+                row(
+                    3,
+                    [inline("H3", "Final acceptance of pile installation (3.5)")],
+                ),
+                row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")]),
+                row(
+                    5,
+                    [
+                        inline("B5", "N2"),
+                        inline("C5", "PCS-06"),
+                        inline("D5", "S1"),
+                        blank("H5"),
+                        blank("I5"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let warning = review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["_row"] == 0)
+        .expect("missing MEC FINAL context remains visible");
+    let details = warning["mappingDetails"].as_str().unwrap();
+
+    assert_eq!(
+        warning["reasonKey"],
+        "warn.rfi.followUp.reason.partialContext"
+    );
+    assert!(details.contains("unmatched source context: tag=PCS-06; area=S2; location=N3"));
+    assert!(details.contains("matched source context: tag=PCS-06; area=S1; location=N2"));
+    assert!(details.contains("row 5: N2 / PCS-06 / S1"));
 }
 
 #[test]
@@ -1741,7 +1856,7 @@ fn full_sync_updates_prepared_mec_context_and_reviews_missing_context() {
         row["_row"] == 0
             && row["target"]["worksheet"]["name"] == "Signed By Worley MEC"
             && row["disposition"] == "rfi.followUp.disposition.manualReview"
-            && row["reasonKey"] == "warn.rfi.followUp.reason.mappingMissing"
+            && row["reasonKey"] == "warn.rfi.followUp.reason.partialContext"
     }));
 }
 
@@ -1978,7 +2093,7 @@ fn full_sync_does_not_mark_a_shared_mec_worley_group_signed_from_one_rfi() {
 }
 
 #[test]
-fn full_sync_reports_a_required_final_rfi_without_a_prepared_row() {
+fn full_sync_omits_a_required_final_rfi_without_a_prepared_context() {
     let mec = worksheet(
         [
             full_schema_mec_header(),
@@ -2011,33 +2126,23 @@ fn full_sync_reports_a_required_final_rfi_without_a_prepared_row() {
             &[],
         ),
     )]);
-
     let review = classify(source, target).unwrap();
-    let row = review["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["rfiNo"] == "MEC-0001")
-        .unwrap();
 
-    assert_eq!(row["sourceStatuses"], json!(["Not Signed"]));
-    assert_eq!(row["disposition"], "rfi.followUp.disposition.manualReview");
-    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.mappingMissing");
     assert!(
-        row["mappingDetails"].as_str().is_some_and(|details| {
-            details.contains("Signed By Worley MEC/3.5")
-                && details.contains("PCS-01")
-                && details.contains("N1")
-        }),
-        "{row}"
-    );
-    assert_eq!(review["editor"]["detailsDefaultVisible"], true);
-    assert!(
-        review["warnings"]
+        !review["rows"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords")
+            .any(|row| row["rfiNo"] == "MEC-0001"),
+        "{review}"
+    );
+    assert!(
+        !review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
+        "{review}"
     );
 }
 #[test]
@@ -2287,7 +2392,7 @@ fn full_sync_ignores_formula_summary_in_lifecycle_comparison_and_mapping() {
 }
 
 #[test]
-fn full_sync_surfaces_final_rfi_without_a_prepared_follow_up_row() {
+fn full_sync_omits_a_final_rfi_without_a_prepared_context() {
     let source = full_schema_source([full_schema_record(
         10,
         "0001",
@@ -2306,23 +2411,23 @@ fn full_sync_surfaces_final_rfi_without_a_prepared_follow_up_row() {
             &[],
         ),
     )]);
-
     let review = classify(source, target).unwrap();
 
-    let row = review["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["rfiNo"] == "CIV-0001")
-        .unwrap();
-    assert_eq!(row["disposition"], "rfi.followUp.disposition.manualReview");
-    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.mappingMissing");
     assert!(
-        review["warnings"]
+        !review["rows"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords")
+            .any(|row| row["rfiNo"] == "CIV-0001"),
+        "{review}"
+    );
+    assert!(
+        !review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
+        "{review}"
     );
 }
 
@@ -4206,7 +4311,7 @@ fn multi_section_mec_rfi_populates_both_sections_without_mapping_ambiguous() {
 }
 
 #[test]
-fn full_sync_requires_exact_location_for_signed_mec_destinations() {
+fn full_sync_omits_signed_mec_without_a_matching_prepared_location() {
     let mec_row = row(
         10,
         [
@@ -4259,21 +4364,19 @@ fn full_sync_requires_exact_location_for_signed_mec_destinations() {
             &[],
         ),
     )]);
-
     let review = classify(source, target).unwrap();
     let rows = review["rows"].as_array().unwrap();
-    assert!(rows.iter().any(|row| {
-        row["_row"] == 0
-            && row["disposition"] == "rfi.followUp.disposition.manualReview"
-            && row["reasonKey"] == "warn.rfi.followUp.reason.mappingMissing"
-    }));
+
     assert!(
-        !rows.iter().any(|row| {
-            row["rfiNo"] == "MEC-0001"
-                && (row["disposition"] == "rfi.followUp.disposition.ready"
-                    || row["proposedRfiNo"].is_string()
-                    || row["proposedStatus"].is_string())
-        }),
+        !rows.iter().any(|row| row["rfiNo"] == "MEC-0001"),
+        "{review}"
+    );
+    assert!(
+        !review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
         "{review}"
     );
 }

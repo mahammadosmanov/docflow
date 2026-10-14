@@ -182,18 +182,23 @@ Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
 For supported CIV/MEC routes, including FINAL routes, records synchronize only
-into uniquely matching prepared rows and exact source contexts. A record without
-a matching row or required route-specific layout remains visible in manual
-review and warns the operator; it is never silently discarded or automatically
-synchronized. The operation does not create rows or sections. Multiple matches
-remain manual review except when CIV or MEC records map to distinct existing
-rows justified by different exact source contexts.
+into uniquely matching prepared rows and exact source contexts. If none of a
+record's source contexts matches any prepared row in its intended destination,
+the record is outside the active template scope: omit it from Manual Review and
+propose no RFI or status update, regardless of an unrelated existing placement.
+Leave that existing placement untouched. If any context matches but the target
+cell is unsafe, keep it in Manual Review with the specific target-safety reason.
+Multiple matches remain manual review except when CIV or MEC records map to
+distinct existing rows justified by different exact source contexts.
 
 FINAL destinations are reconciled independently by exact prepared row identity.
 Finding the same RFI in one Signed By row does not satisfy another source
-context. If only some source contexts have prepared destinations, eligible rows
-may synchronize while each missing context remains visible for manual review;
-no row or section is synthesized.
+context. If some source contexts have prepared destinations while others do
+not, eligible rows may synchronize while each unmatched context remains
+visible for manual review; the warning identifies matched contexts and target
+rows, then lists unmatched contexts and asks the operator to verify `Tag No`,
+`Area`, and `Inspection Location` in the read-only source RFI Log. DocFlow never
+corrects the source log. No row or section is synthesized.
 For CIV, each target area tag must be named in the source. For MEC, repeated
 source rows must agree on ITP, item, and lifecycle status. Signature evidence is
 cumulative: an unsigned duplicate cannot revoke a signed finding. A single row may
@@ -209,24 +214,35 @@ older PCU routing behavior. It never creates rows or sections.
 Duplicate contexts, conflicting source values, and other multi-valued contexts
 remain manual review.
 
-The preview distinguishes ITP/item combinations with no configured Follow Up
-route from supported routes that lack a prepared exact-context row. Its
-Mapping details column shows the source ITP, item, tag, area, and location,
-the expected destination, and any candidate target rows. These entries remain
-unselectable; no destination row is created or guessed.
+The preview keeps unsupported ITP/item routes visible unless their exact scope
+is already approved as excluded. For a supported route, records with no source
+context matching any prepared row in the intended destination are outside the
+active template scope and omitted from Manual Review; existing workbook cells
+remain unchanged. A matching context with an unsafe target remains reviewable
+with its specific safety reason. Partial matches remain visible: Mapping
+details lists matched source contexts with their destination rows, unmatched
+contexts, and the RFI Log fields to verify. These warnings are unselectable; no
+destination row is created or guessed and the source RFI Log is never edited by
+Follow Up sync.
 
 Scope decisions take precedence over missing-route diagnostics. The confirmed
 exclusions in [ADR 0035](adr/0035-intentional-follow-up-scope-exclusions.md)
 are deliberately outside Follow Up; they are not missing mappings to add.
-Treat any other unmapped ITP/item combination as undecided until an operator
-explicitly approves its inclusion or exclusion. Record that decision in this
-domain section and an accepted ADR before changing route behavior.
+The exact-context scope and warning behavior are recorded in
+[ADR 0036](adr/0036-follow-up-context-scope-and-diagnostics.md). Treat any
+other unmapped ITP/item combination as undecided until an operator explicitly
+approves its inclusion or exclusion. Record that decision here and in an
+accepted ADR before changing route behavior.
 
 
-An unrelated existing placement is never moved or deleted and cannot satisfy a
-different context. Ambiguous contexts or conflicting source status cannot
-authorize a shared-cell status write for that RFI or any other RFI represented
-by the same cell.
+A context-mismatched existing placement for an otherwise in-scope record is
+never moved or deleted merely to force a match; it remains Manual Review. The
+zero-context template-scope rule above takes precedence and leaves any existing
+placement unchanged without review or status updates. The only automatic
+removal exceptions are the explicitly out-of-scope ITP/item pairs in ADR 0035
+and the CIV `PCS-` rule in ADR 0033. Ambiguous contexts or conflicting source
+status cannot authorize a shared-cell status write for that RFI or any other
+RFI represented by the same cell.
 
 The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the

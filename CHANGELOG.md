@@ -5,6 +5,18 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.16.8 - 2026-10-14
+
+### Fixed
+
+- Omit supported Follow Up records with no source context matching any prepared
+  destination from Manual Review, leaving existing workbook cells unchanged.
+  Keep partial matches and contexts with unsafe candidate rows reviewable using
+  exact matched/unmatched context details and specific target-safety reasons;
+  never create destinations or edit the source RFI Log.
+- Enforce the 21 approved ITP/item scope exclusions without review rows and
+  remove existing occurrences only through the approved sync.
+
 ### Added
 
 - Batch generation of CON-CIV-010/011/013/014 from RFI Log and Follow Up
@@ -12,6 +24,7 @@ Versioning; `releases.json` is the machine-readable release catalog.
   ratios. Only RFIs whose Civil Forms field includes CON-CIV-010 require Follow
   Up data; ineligible forms and missing rows warn per RFI. Existing outputs are
   never overwritten, and applicable documents remain available.
+
 
 ## 1.16.7 - 2026-10-14
 

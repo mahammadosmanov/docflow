@@ -546,6 +546,7 @@
   "warn.rfi.followUp.reason.readyWorleySync": "FINAL Worley statusu REMARKS sahəsindəki dəqiq Signed by Worley sətrindən sinxronlaşdırıla bilər.",
   "warn.rfi.followUp.reason.readyRemove": "Cancelled və ya Rejected RFI qeydləri çıxarılacaq və qalan qrupun ortaq statusu yenidən hesablanacaq.",
   "warn.rfi.followUp.reason.mappingMissing": "Dəstəklənən Follow Up marşrutu mövcuddur, lakin bu RFI üçün ITP, item və konteksti tam uyğun olan hazır hədəf sətri yoxdur. Dəyişiklik edilmədi.",
+  "warn.rfi.followUp.reason.partialContext": "Bəzi mənbə kontekstləri hazır Follow Up sətirləri ilə uyğunlaşır, bəziləri uyğunlaşmır. Uyğunlaşmayan kontekstlərdə Tag No, Area və Inspection Location dəyərlərini RFI Log-da yoxlayın. DocFlow mənbə jurnalını dəyişmir.",
   "warn.rfi.followUp.reason.mappingUnsupported": "Cari şablonda bu ITP/item birləşməsi üçün Follow Up marşrutu yoxdur. Avtomatik sinxronlaşdırıla bilməz.",
   "warn.rfi.followUp.reason.mappingAmbiguous": "Bu qeydə birdən çox hədəf sətri uyğundur; təxmin edilmədən dəyişdirilmədi.",
   "warn.rfi.followUp.reason.readyNotSigned": "Dəqiq Signed by Worley remark sübutu tapılmadı; hədəfə Not Signed tətbiq edilə bilər.",

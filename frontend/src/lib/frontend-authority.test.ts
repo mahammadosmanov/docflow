@@ -185,6 +185,7 @@ describe("frontend authority boundary", () => {
       "warn.rfi.followUp.reason.readyWorleySync",
       "warn.rfi.followUp.reason.readyRemove",
       "warn.rfi.followUp.reason.mappingMissing",
+      "warn.rfi.followUp.reason.partialContext",
       "warn.rfi.followUp.reason.mappingAmbiguous",
       "warn.rfi.followUp.reason.mappingUnsupported",
       "warn.rfi.followUp.reason.targetRfiFormula",

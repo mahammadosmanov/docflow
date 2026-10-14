@@ -445,17 +445,18 @@ fn mapping_details(
         compact_detail(&record.itp),
         compact_detail(&record.item)
     );
+    let context_label = |context: &SourceRouteContext| {
+        format!(
+            "tag={}; area={}; location={}",
+            compact_detail(&context.tag),
+            compact_detail(&context.area),
+            compact_detail(&context.location)
+        )
+    };
     let contexts = record
         .contexts
         .iter()
-        .map(|context| {
-            format!(
-                "tag={}; area={}; location={}",
-                compact_detail(&context.tag),
-                compact_detail(&context.area),
-                compact_detail(&context.location)
-            )
-        })
+        .map(context_label)
         .collect::<BTreeSet<_>>();
     if contexts.is_empty() {
         details.push_str("; source context: none");
@@ -500,6 +501,67 @@ fn mapping_details(
         details.push_str(&format!("; candidate target rows: {targets}"));
         if candidates.len() > 5 {
             details.push_str(&format!(" | +{} more", candidates.len() - 5));
+        }
+    }
+    if let Some((target_sheet, _)) = route {
+        let matcher_sheet = match target_sheet {
+            "Signed By Worley CIV" => "CIV",
+            "Signed By Worley MEC" => "MEC",
+            sheet => sheet,
+        };
+        let mut matched_contexts = BTreeMap::<String, BTreeSet<u32>>::new();
+        let mut unmatched_contexts = BTreeSet::new();
+        for context in &record.contexts {
+            let label = context_label(context);
+            let rows = candidates
+                .iter()
+                .filter_map(|(sheet_name, row, _, _)| {
+                    let sheet = target_workbook.sheet(sheet_name)?;
+                    row_matches_context(matcher_sheet, sheet, *row, context, target_workbook)
+                        .then_some(*row)
+                })
+                .collect::<BTreeSet<_>>();
+            if rows.is_empty() {
+                unmatched_contexts.insert(label);
+            } else {
+                matched_contexts.insert(label, rows);
+            }
+        }
+        if !matched_contexts.is_empty() {
+            let matches = matched_contexts
+                .iter()
+                .take(5)
+                .map(|(context, rows)| {
+                    format!(
+                        "{context} -> row(s) {}",
+                        rows.iter()
+                            .map(u32::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" | ");
+            details.push_str(&format!("; matched source context: {matches}"));
+        }
+        if !unmatched_contexts.is_empty() {
+            let label = if unmatched_contexts.len() == 1 {
+                "unmatched source context"
+            } else {
+                "unmatched source contexts"
+            };
+            details.push_str(&format!(
+                "; {label}: {}",
+                unmatched_contexts
+                    .iter()
+                    .take(5)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ));
+            if unmatched_contexts.len() > 5 {
+                details.push_str(&format!(" | +{} more", unmatched_contexts.len() - 5));
+            }
         }
     }
     details
@@ -558,7 +620,13 @@ fn item_clause(value: &str) -> Option<String> {
         .captures(&normalized)?;
     Some(captures[1].to_string())
 }
-
+fn full_item_identity(value: &str) -> Option<(String, String)> {
+    static ITEM: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\A(CIV|MEC)-([0-9]+(?:\.[0-9]+)+)\z").unwrap());
+    let normalized = normalize_code_text(value);
+    let captures = ITEM.captures(&normalized)?;
+    Some((captures[1].to_string(), captures[2].to_string()))
+}
 fn split_values(value: &str) -> Vec<String> {
     value
         .split([',', '/', ';', '\n'])
@@ -932,6 +1000,54 @@ fn route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str)> {
         _ => None,
     }
 }
+fn intended_lifecycle_route(record: &SourceRecord) -> Option<(&'static str, &'static str)> {
+    let (sheet, clause) = route_clause(record)?;
+    let composite_pcs_route = record.contexts.iter().any(|context| {
+        let tags = normalized_parts(&context.tag);
+        tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
+    });
+    if composite_pcs_route {
+        Some((
+            "CIV",
+            match clause {
+                "1.8" => "1.8",
+                "2.4" => "2.4",
+                _ => "2.5",
+            },
+        ))
+    } else {
+        Some((sheet, clause))
+    }
+}
+
+fn is_confirmed_follow_up_exclusion(record: &SourceRecord) -> bool {
+    let Some((discipline, itp)) = itp_identity(&record.itp) else {
+        return false;
+    };
+    let Some((item_discipline, item)) = full_item_identity(&record.item) else {
+        return false;
+    };
+    if discipline != item_discipline {
+        return false;
+    }
+    matches!(
+        (discipline.as_str(), itp.as_str(), item.as_str()),
+        ("CIV", "0002", "2.1.4" | "2.1.6")
+            | (
+                "CIV",
+                "0005",
+                "5.1.4" | "5.1.5" | "5.1.9" | "5.3.4" | "5.3.5"
+            )
+            | (
+                "CIV",
+                "0006",
+                "6.1.8" | "6.2.1" | "6.2.2" | "6.2.3" | "6.2.4" | "6.2.5" | "6.2.9"
+            )
+            | ("CIV", "0007", "7.1.5" | "7.2.3" | "7.2.4" | "7.3.9")
+            | ("MEC", "0001", "1.1.4" | "1.2.5")
+            | ("MEC", "0004", "4.3.1")
+    )
+}
 
 fn signed_route_clause(
     record: &SourceRecord,
@@ -1091,6 +1207,19 @@ fn row_matches(
     record: &SourceRecord,
     target_workbook: &WorkbookData,
 ) -> bool {
+    record
+        .contexts
+        .iter()
+        .any(|context| row_matches_context(sheet_name, sheet, row, context, target_workbook))
+}
+
+fn row_matches_context(
+    sheet_name: &str,
+    sheet: &WorksheetData,
+    row: u32,
+    context: &SourceRouteContext,
+    target_workbook: &WorkbookData,
+) -> bool {
     let cell = |column| {
         sheet
             .cell(row, column)
@@ -1098,7 +1227,7 @@ fn row_matches(
             .unwrap_or_default()
     };
     match sheet_name {
-        "CIV" => record.contexts.iter().any(|context| {
+        "CIV" => {
             let tags = normalized_parts(&context.tag);
             let pcs = tags
                 .iter()
@@ -1118,37 +1247,62 @@ fn row_matches(
             } else {
                 false
             }
-        }),
-        "PCU" => record
-            .contexts
-            .iter()
-            .any(|context| pcu_row_matches(sheet, row, context)),
-        "Road" => record
-            .contexts
-            .iter()
-            .any(|context| normalized_location(&context.tag) == cell(2)),
+        }
+        "PCU" => pcu_row_matches(sheet, row, context),
+        "Road" => normalized_location(&context.tag) == cell(2),
         "MEC" => {
             let target_sections = normalized_parts(&cell(4));
             let target_tags = normalized_parts(&cell(3));
             let target_locations = normalized_parts(&cell(2));
-            record.contexts.iter().any(|context| {
-                let sections = normalized_parts(&context.area);
-                let tags = normalized_parts(&context.tag);
-                let locations = normalized_parts(&context.location);
-                !sections.is_empty()
-                    && !tags.is_empty()
-                    && !locations.is_empty()
-                    && tags.iter().any(|tag| target_tags.contains(tag))
-                    && sections
-                        .iter()
-                        .any(|value| target_sections.contains(&normalized_location(value)))
-                    && locations
-                        .iter()
-                        .any(|value| target_locations.contains(&normalized_location(value)))
-            })
+            let sections = normalized_parts(&context.area);
+            let tags = normalized_parts(&context.tag);
+            let locations = normalized_parts(&context.location);
+            !sections.is_empty()
+                && !tags.is_empty()
+                && !locations.is_empty()
+                && tags.iter().any(|tag| target_tags.contains(tag))
+                && sections
+                    .iter()
+                    .any(|value| target_sections.contains(&normalized_location(value)))
+                && locations
+                    .iter()
+                    .any(|value| target_locations.contains(&normalized_location(value)))
         }
         _ => false,
     }
+}
+
+fn record_matches_lifecycle_slot(
+    slot: &SlotWork,
+    record: &SourceRecord,
+    target_workbook: &WorkbookData,
+) -> bool {
+    let Some((route_sheet, route_clause)) = intended_lifecycle_route(record) else {
+        return true;
+    };
+    if !slot
+        .layout
+        .worksheet
+        .name
+        .trim()
+        .eq_ignore_ascii_case(route_sheet)
+        || slot
+            .layout
+            .clause
+            .as_deref()
+            .is_some_and(|clause| clause != route_clause)
+        || slot.layout.clause.is_none()
+            && slot.layout.rfi_column != default_route_col(route_sheet, route_clause)
+    {
+        return false;
+    }
+    let Some(sheet) = target_workbook
+        .sheet(&slot.layout.worksheet.name)
+        .or_else(|| find_sheet_flexible(target_workbook, &slot.layout.worksheet.name))
+    else {
+        return false;
+    };
+    row_matches(route_sheet, sheet, slot.row, record, target_workbook)
 }
 
 struct SignedDestinationCoverage {
@@ -1641,10 +1795,11 @@ fn missing_final_review(
     layout: &FollowUpLayout,
     sheet: &str,
     target_clause: &str,
-    rfi_column: u32,
-    status_column: u32,
+    columns: (u32, u32),
+    candidates: &[(String, u32, u32, u32)],
     target_workbook: &WorkbookData,
 ) -> FollowUpRow {
+    let (rfi_column, status_column) = columns;
     FollowUpRow {
         row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
         sheet: sheet.to_string(),
@@ -1675,7 +1830,7 @@ fn missing_final_review(
             record,
             Some((sheet, target_clause)),
             target_workbook,
-            &[],
+            candidates,
         )),
     }
 }
@@ -1741,7 +1896,9 @@ fn classify_workbooks_full(
             .filter(|code| {
                 !is_placeholder_rfi(code)
                     && records.get(*code).is_some_and(|record| {
-                        record.excluded_civ_pcs || record.state == Some(LogState::Remove)
+                        record.excluded_civ_pcs
+                            || is_confirmed_follow_up_exclusion(record)
+                            || record.state == Some(LogState::Remove)
                     })
             })
             .cloned()
@@ -1752,6 +1909,15 @@ fn classify_workbooks_full(
         }
         // Signed By layouts show Worley state, not RFI lifecycle state.
         if !is_signed_layout(&slot.layout)
+            && slot
+                .codes
+                .iter()
+                .filter(|code| !is_placeholder_rfi(code))
+                .all(|code| {
+                    records.get(code).is_some_and(|record| {
+                        record_matches_lifecycle_slot(slot, record, target_workbook)
+                    })
+                })
             && slot
                 .codes
                 .iter()
@@ -1768,7 +1934,7 @@ fn classify_workbooks_full(
         }
     }
 
-    let mut eligible_slots_by_sheet_col =
+    let mut potential_slots_by_sheet_col =
         BTreeMap::<(String, u32), Vec<(String, u32, u32, u32)>>::new();
     let mut existing_slot_keys_by_code = BTreeMap::<String, Vec<(String, u32, u32, u32)>>::new();
     for (key, slot) in &slots {
@@ -1779,20 +1945,19 @@ fn classify_workbooks_full(
                     .or_default()
                     .push(key.clone());
             }
-            if slot.unsafe_reason.is_none() {
-                eligible_slots_by_sheet_col
-                    .entry((key.0.clone(), key.2))
-                    .or_default()
-                    .push(key.clone());
-            }
+            potential_slots_by_sheet_col
+                .entry((key.0.clone(), key.2))
+                .or_default()
+                .push(key.clone());
         }
     }
 
     let mut unmapped_count = 0usize;
-    for record in records
-        .values()
-        .filter(|record| !record.excluded_civ_pcs && record.state != Some(LogState::Remove))
-    {
+    for record in records.values().filter(|record| {
+        !record.excluded_civ_pcs
+            && !is_confirmed_follow_up_exclusion(record)
+            && record.state != Some(LogState::Remove)
+    }) {
         let Some((target_sheet, target_clause)) = route_clause(record) else {
             if slots
                 .values()
@@ -1912,46 +2077,28 @@ fn classify_workbooks_full(
         };
         let sheet_name = layout.worksheet.name.as_str();
         let rfi_column = layout.rfi_column;
-        let empty_eligible = Vec::new();
-        let eligible = eligible_slots_by_sheet_col
+        let empty_potential = Vec::new();
+        let potential = potential_slots_by_sheet_col
             .get(&(sheet_name.to_string(), rfi_column))
-            .unwrap_or(&empty_eligible);
-        let candidates = eligible
-            .iter()
-            .filter(|(_, row, _, _)| {
-                row_matches(
-                    sheet_name,
-                    target_workbook.sheet(sheet_name).unwrap(),
-                    *row,
-                    record,
-                    target_workbook,
-                )
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut candidates = candidates;
-        if candidates.is_empty() && sheet_name == "CIV" {
-            let source_tags = record
-                .contexts
-                .iter()
-                .flat_map(|context| normalized_parts(&context.tag))
-                .collect::<BTreeSet<_>>();
-            if source_tags.iter().any(|tag| {
-                tag.starts_with("PCS-") && unique_zone_for_pcs(target_workbook, tag).is_some()
-            }) {
-                candidates = eligible
-                    .iter()
-                    .filter(|(_, row, _, _)| {
-                        row_matches(
-                            "CIV",
-                            target_workbook.sheet("CIV").unwrap(),
-                            *row,
-                            record,
-                            target_workbook,
-                        )
-                    })
-                    .cloned()
-                    .collect();
+            .unwrap_or(&empty_potential);
+        let target_sheet_data = target_workbook.sheet(sheet_name).unwrap();
+        let mut scope_candidates = Vec::new();
+        let mut candidates = Vec::new();
+        for key in potential {
+            if row_matches(
+                sheet_name,
+                target_sheet_data,
+                key.1,
+                record,
+                target_workbook,
+            ) {
+                scope_candidates.push(key.clone());
+                if slots
+                    .get(key)
+                    .is_some_and(|slot| slot.unsafe_reason.is_none())
+                {
+                    candidates.push(key.clone());
+                }
             }
         }
         let candidate_count = candidates.len();
@@ -1963,6 +2110,9 @@ fn classify_workbooks_full(
             .get(record.canonical_rfi.as_str())
             .cloned()
             .unwrap_or_default();
+        if scope_candidates.is_empty() {
+            continue;
+        }
         if candidate_count == 1 && !existing_slots.is_empty() && mec_context_coverage != Some(false)
         {
             continue;
@@ -1999,7 +2149,11 @@ fn classify_workbooks_full(
                 reason_key: if record.state.is_none() {
                     "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
                 } else if candidate_count == 0 {
-                    "warn.rfi.followUp.reason.mappingMissing".to_string()
+                    scope_candidates
+                        .iter()
+                        .find_map(|key| slots.get(key).and_then(|slot| slot.unsafe_reason))
+                        .map(|reason| format!("warn.rfi.followUp.reason.{reason}"))
+                        .unwrap_or_else(|| "warn.rfi.followUp.reason.mappingMissing".to_string())
                 } else {
                     "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
                 },
@@ -2018,7 +2172,7 @@ fn classify_workbooks_full(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
-                    &candidates,
+                    &scope_candidates,
                 )),
             });
             continue;
@@ -2056,7 +2210,7 @@ fn classify_workbooks_full(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
-                    &candidates,
+                    &scope_candidates,
                 )),
             });
             continue;
@@ -2083,7 +2237,7 @@ fn classify_workbooks_full(
                 reason_key: if record.state.is_none() {
                     "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
                 } else {
-                    "warn.rfi.followUp.reason.mappingMissing".to_string()
+                    "warn.rfi.followUp.reason.partialContext".to_string()
                 },
                 selectable: false,
                 enabled: false,
@@ -2100,7 +2254,7 @@ fn classify_workbooks_full(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
-                    &candidates,
+                    &scope_candidates,
                 )),
             });
         }
@@ -2201,6 +2355,7 @@ fn classify_workbooks_full(
     let mut routed_signed_targets = BTreeMap::<&str, BTreeSet<(u32, u32, u32, u32)>>::new();
     for record in records.values().filter(|record| {
         !record.excluded_civ_pcs
+            && !is_confirmed_follow_up_exclusion(record)
             && record.state != Some(LogState::Remove)
             && signed_route_clause(record).is_some()
     }) {
@@ -2236,8 +2391,8 @@ fn classify_workbooks_full(
                     layout,
                     target_sheet,
                     target_clause,
-                    rfi_column,
-                    status_column,
+                    (rfi_column, status_column),
+                    &[],
                     target_workbook,
                 );
                 review.reason_key = "warn.rfi.followUp.reason.sourceStatusUnknown".to_string();
@@ -2265,8 +2420,8 @@ fn classify_workbooks_full(
                     layout,
                     target_sheet,
                     target_clause,
-                    rfi_column,
-                    status_column,
+                    (rfi_column, status_column),
+                    &[],
                     target_workbook,
                 ));
             }
@@ -2300,42 +2455,6 @@ fn classify_workbooks_full(
                 && !candidate_keys.contains(key)
         });
         if candidate_count == 0 {
-            if !manual_rows.iter().any(|row| row.row_id == final_review_id) {
-                unmapped_count += 1;
-                manual_rows.push(FollowUpRow {
-                    row_id: final_review_id,
-                    sheet: sheet_name.to_string(),
-                    row: 0,
-                    rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![if record.worley_signed {
-                        "Signed".to_string()
-                    } else {
-                        "Not Signed".to_string()
-                    }],
-                    current_status: String::new(),
-                    proposed_status: None,
-                    proposed_rfi_no: None,
-                    disposition: FollowUpDisposition::ManualReview,
-                    reason_key: "warn.rfi.followUp.reason.mappingMissing".to_string(),
-                    selectable: false,
-                    enabled: false,
-                    target: FollowUpReviewTarget {
-                        worksheet: layout.worksheet.clone(),
-                        row: 0,
-                        rfi_column,
-                        status_column,
-                        rfi_cell: None,
-                        status_cell: None,
-                    },
-                    source_evidence: record.evidence.clone(),
-                    mapping_details: Some(mapping_details(
-                        record,
-                        Some((target_sheet, target_clause)),
-                        target_workbook,
-                        &candidate_keys,
-                    )),
-                });
-            }
             continue;
         }
         let coverage =
@@ -2435,15 +2554,17 @@ fn classify_workbooks_full(
                 && !manual_rows.iter().any(|row| row.row_id == final_review_id)
             {
                 unmapped_count += 1;
-                manual_rows.push(missing_final_review(
+                let mut review = missing_final_review(
                     record,
                     layout,
                     target_sheet,
                     target_clause,
-                    rfi_column,
-                    status_column,
+                    (rfi_column, status_column),
+                    &candidate_keys,
                     target_workbook,
-                ));
+                );
+                review.reason_key = "warn.rfi.followUp.reason.partialContext".to_string();
+                manual_rows.push(review);
             }
             continue;
         }

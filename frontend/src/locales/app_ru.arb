@@ -546,6 +546,7 @@
   "warn.rfi.followUp.reason.readyWorleySync": "Статус FINAL Worley можно синхронизировать по точной строке Signed by Worley в REMARKS.",
   "warn.rfi.followUp.reason.readyRemove": "Записи Cancelled или Rejected будут удалены, а общий статус оставшейся группы пересчитан.",
   "warn.rfi.followUp.reason.mappingMissing": "Поддерживаемый маршрут Follow Up найден, но подготовленная целевая строка с точными ITP, item и контекстом этого RFI отсутствует. Изменения не внесены.",
+  "warn.rfi.followUp.reason.partialContext": "Некоторые исходные контексты соответствуют подготовленным строкам Follow Up, другие — нет. Проверьте в RFI Log значения Tag No, Area и Inspection Location для несовпавших контекстов. DocFlow не изменяет исходный журнал.",
   "warn.rfi.followUp.reason.mappingUnsupported": "Для этой пары ITP/item в текущем шаблоне нет маршрута Follow Up. Автоматическая синхронизация невозможна.",
   "warn.rfi.followUp.reason.mappingAmbiguous": "Записи соответствуют несколько целевых строк; вместо предположения изменения не выполняются.",
   "warn.rfi.followUp.reason.readyNotSigned": "Точная отметка Signed by Worley не найдена; можно применить Not Signed.",

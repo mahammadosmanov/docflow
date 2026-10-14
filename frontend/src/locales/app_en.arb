@@ -574,6 +574,7 @@
   "warn.rfi.followUp.reason.readyWorleySync": "The FINAL Worley status can be synchronized from the exact Signed by Worley remark line.",
   "warn.rfi.followUp.reason.readyRemove": "Cancelled or Rejected RFI entries will be removed and the remaining shared status recalculated.",
   "warn.rfi.followUp.reason.mappingMissing": "A supported Follow Up route exists, but no prepared target row matches this RFI's exact ITP, item, and context. Nothing was changed.",
+  "warn.rfi.followUp.reason.partialContext": "Some source contexts match prepared Follow Up rows and others do not. Check the unmatched Tag No, Area, and Inspection Location in the RFI Log. DocFlow will not edit the source log.",
   "warn.rfi.followUp.reason.mappingUnsupported": "This ITP/item combination has no Follow Up route in the current template. It cannot be synchronized automatically.",
   "warn.rfi.followUp.reason.mappingAmbiguous": "More than one target row matches this record; it was left unchanged instead of guessing.",
   "warn.rfi.followUp.reason.readyNotSigned": "No exact Signed by Worley remark was found; Not Signed can be applied.",
