@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.1 - 2026-10-15
+
+### Fixed
+
+- Replace the manual Excel date-serial bounds with an inclusive range check
+  accepted by the pinned Windows Clippy toolchain.
+
 ## 1.20.0 - 2026-10-15
 
 ### Improved
@@ -13,6 +20,8 @@ Versioning; `releases.json` is the machine-readable release catalog.
   operation, review, settings, history, recovery, and administration screens.
 - Improve translated-text wrapping, high-scale readability, responsive action
   areas, and narrow-window fit without changing operation behavior.
+
+## 1.19.0 - 2026-10-14
 
 ### Improved
 

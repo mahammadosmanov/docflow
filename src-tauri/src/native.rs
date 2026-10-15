@@ -198,7 +198,7 @@ fn excel_date_text(value: &str) -> String {
     let Ok(serial) = value.trim().parse::<f64>() else {
         return value.to_string();
     };
-    if !serial.is_finite() || serial < 1.0 || serial > 2_958_466.0 {
+    if !serial.is_finite() || !(1.0..=2_958_466.0).contains(&serial) {
         return value.to_string();
     }
     let Some(epoch) = chrono::NaiveDate::from_ymd_opt(1899, 12, 30) else {
