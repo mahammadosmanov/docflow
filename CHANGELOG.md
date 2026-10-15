@@ -5,7 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
-## 1.19.0 - 2026-10-14
+## 1.20.0 - 2026-10-15
+
+### Improved
+
+- Apply a unified monochrome design system across the existing workspace,
+  operation, review, settings, history, recovery, and administration screens.
+- Improve translated-text wrapping, high-scale readability, responsive action
+  areas, and narrow-window fit without changing operation behavior.
 
 ### Improved
 
