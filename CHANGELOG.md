@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.2 - 2026-10-15
+
+### Fixed
+
+- Use writable handles for Windows PDF fixtures that preserve modification
+  timestamps while changing test content.
+
 ## 1.20.1 - 2026-10-15
 
 ### Fixed

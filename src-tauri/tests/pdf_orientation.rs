@@ -70,9 +70,11 @@ fn replace_pdf_text_preserving_fingerprint(path: &Path) -> Result<(), String> {
         .ok_or_else(|| "replacement sentinel is missing".to_string())?;
     bytes[start..start + before.len()].copy_from_slice(after);
     fs::write(path, bytes).map_err(|error| error.to_string())?;
-    fs::File::open(path)
+    fs::File::options()
+        .write(true)
+        .open(path)
         .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(modified)))
-        .map_err(|error| error.to_string())
+        .map_err(|error| format!("restore PDF fixture timestamp: {error}"))
 }
 struct SameFingerprintReplacementDetector {
     replaced: AtomicBool,
