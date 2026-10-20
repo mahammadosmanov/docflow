@@ -8,64 +8,83 @@ that supersedes the earlier "no second backend" rule (`docs/adr/0039`).
 
 ## What changed (this branch, since the last handoff)
 
-- `1.20.3` Native command router: `NativeBackend` (`lib/engine/native.dart`)
-  with path materialization, every preview dispatch, revise, copy table,
-  reply preview, review scan and preview, RFI print file discovery, apply,
-  cancel, undo, print queue, recovery and cloud sync. OCR adapters are async
-  and bridged over `NativeOcr`. Windows uses `WindowsOutlookAdapter` with the
-  Win32 COM backend.
+- `1.20.3` Native command router: `NativeBackend` (`lib/engine/native.dart`).
+  OCR adapters are async and bridged over `NativeOcr`. Windows uses
+  `WindowsOutlookAdapter` with the Win32 COM backend.
 - `1.20.4` Excel export cancel and timeout supervisor tests.
 - `1.20.5` Follow-up apply, retained undo, retained recovery and S5 restore
   tests over real files and real xlsx packages. Fixes the S5 undo lease,
   which was never released and blocked the next undo.
 - `1.20.6` Batch print validation, persisted-metadata, forged-range and
   unknown-printer tests.
-- `1.20.7` PDF page rendering through poppler (`pdftoppm`, `pdftotext`) on
-  macOS when installed.
-- Earlier on this branch: the platform services, plan UI, `rfi_system_sync`
-  port, and the screen registration in `main.dart`.
+- `1.20.7` PDF page rendering through poppler (`pdftoppm`, `pdftotext`).
+- `1.20.8` / `1.20.9` PDFKit page renderer (Swift helper compiled with
+  `xcrun swiftc`, verified on this Mac). Windows PDF renderer through
+  PowerShell, fail-closed and UNVERIFIED.
+- `1.20.10` / `1.20.11` Stage-signed and orientation apply tests; process-scans
+  apply, undo, orientation, parallel, revision, review and native OCR tests.
+  Fixes: process scans now reject a source changed during OCR (`path_invalid`).
+- `1.20.12` Excel cancel, timeout, late-result, poll, panic, fence and
+  cancelled-waiter tests (41 cases in `e12_excel_pipeline_test.dart`).
+- `1.20.13` All 47 `src-tauri/tests/batch_print.rs` cases
+  (`e11_batch_rust_test.dart`, 46 run, 1 env-gated). Fixes a real bug: path
+  print signatures used microsecond mtime while apply used nanoseconds, so
+  every PDF apply after preview failed with `error.print.failed`.
+- Release tooling: `tools/stage_tesseract_macos.sh` license scan now fails
+  closed (it used `rg`, which made a missing scanner pass silently).
 
 ## Parity coverage
 
-- Flutter tests: 743 pass, 44 skipped (`flutter test`). `flutter analyze`
-  reports 0 errors.
-- Rust suite: not re-run in this PR. The Rust crate is still the reference.
+- Flutter: `flutter analyze` 0 errors (13 info-level lints).
+  `flutter test`: 832 pass, 16 skipped.
+- Rust reference suite (`cargo test`): all suites pass, 0 failed.
 - Ported and exercised by Dart tests: contracts, path selection, filesystem
   authority and capability layer, journal and S5 undo/recovery, OOXML,
   concrete documents, RFI log, RFI follow-up, RFI system sync, RFI file
   group, process scans, stage signed pages, PDF orientation, replica publish,
-  Excel export pipeline (cancel and timeout included), batch print
-  validation and persistence, native router error paths.
+  Excel export pipeline (non-print-queue cases), batch print (all cases),
+  native router error paths.
 
-## Still skipped or partial
+## Source gates re-run on this Mac
 
-- Batch print: 59 of 64 cases in `src-tauri/tests/batch_print.rs` are not
-  ported (preview, revise, resume, queue, apply).
-- Excel: the cancelled-waiter, contention, late-result, live-loser and
-  response-poll cases in `platform/excel.rs` are not ported.
-- Stage signed pages and PDF orientation apply tests (`e9_*`), and process
-  scans apply, orientation and parallel-analysis tests (`e10_*`).
-- Operator-only fixtures (`e7`, `e8_current_proof`, `e10_ocr`): need private
-  workbooks, Ventoy documents or live Tesseract.
+- `node tools/version_manager.mjs check`: OK (1.20.13)
+- `node tools/docs_audit.mjs`: OK
+- `node tools/package_audit.mjs source`: OK
+- `npm test`: 73 pass
+- `npm run build`: OK (chunk-size warning only)
+- `cargo fmt --check`, `cargo clippy -D warnings`, `cargo check`, `cargo test`: OK
+- `npm run audit:licenses`: OK (295 Cargo, 173 npm, 61 OCR checksums), after
+  staging the local macOS Tesseract bundle with `tools/stage_tesseract_macos.sh`.
+
+## Still open
+
+- Excel print-queue cases (12 Rust cases through `PrintService`): not ported.
+  Blocker: `PrintService.apply` is synchronous, `ExcelExportPipelinePort` is
+  synchronous, but `ExcelExportPipeline.exportAndSubmit` is `Future`-based.
+  Production also never injects an Excel pipeline, so Excel print jobs return
+  `error.print.excelUnavailable` in the app. Fix needs an async print apply
+  path plus a production exporter (Windows COM, UNVERIFIED here).
+- Operator-only tests (Rust `#[ignore]`, need private files): process-scan
+  operator PDF, orientation operator PDF/RFI tree, Ventoy print PDF, Ventoy
+  group source, `e8_current_proof`. Each is env-gated with its reason.
 
 ## UNVERIFIED gaps (not run on a real host)
 
-- Windows: COM Excel and Outlook, Win32 printing, the Windows startup
-  registry, the Windows PowerShell picker, and the Windows PDF engine
-  renderer. No Windows host was used.
-- macOS: PDFKit rendering is not ported. Page rendering falls back to poppler
-  only when installed. The AppleScript picker has not been tried interactively.
+- Windows: COM Excel and Outlook, Win32 printing, startup registry, PowerShell
+  picker, PowerShell PDF renderer. No Windows host was used.
+- macOS: the AppleScript picker has not been tried interactively. PDFKit
+  rendering is verified only on this Mac.
 - Printers: no real CUPS or Windows printer submission has run.
-- `print_queue` preview/apply mtime defect: preview uses microsecond mtime and
-  apply uses nanosecond mtime (`_previewApplySignatureDefect`).
 - `WindowsControlledPdfSubmitter` does not implement `ControlledPdfSubmitter`
   yet (excel.dart uses the stub `PrintJob` type).
 - Build: `flutter build macos` is not run (Xcode is not installed here).
+- Package gates (host bundle build, `--package-smoke`, GUI launch) are
+  release-time and not run.
 
 ## Test plan
 
 - [ ] `cd flutter/app && flutter analyze && flutter test`
-- [ ] Rust gates from `docs/RELEASE_SAFETY.md` on the Rust crate
+- [ ] Source gates from `docs/RELEASE_SAFETY.md` (listed above)
 - [ ] Windows host run: Excel, Outlook, printing (UNVERIFIED items above)
 - [ ] macOS host run with and without poppler installed
 

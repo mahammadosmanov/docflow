@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.14 - 2026-10-20
+
+- Source gates re-run on this Mac (all green, license audit after staging local tesseract).
+- tools/stage_tesseract_macos.sh license scan now fails closed (rg missing previously passed silently).
+- Unskipped two e11 print tests now that signature precision is fixed.
+- PR_BODY and HANDOFF refreshed with current counts and open items.
+
 ## 1.20.13 - 2026-10-20
 
 - Ported all 47 batch_print.rs tests (46 run, Ventoy env-gated).

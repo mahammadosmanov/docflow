@@ -124,20 +124,20 @@ porting rules, but its Linux paths are outdated; use the paths below.
    Windows: `lib/engine/windows_pdf_renderer.dart` drives Windows.Data.Pdf
    through PowerShell and fails closed when unavailable. UNVERIFIED: no
    Windows host here. Page text is empty (no text API in Windows.Data.Pdf).
-6. **Release: PREPARED (1.20.8).** `docs/adr/0039` and its index row record that
+6. **Release: PREPARED (1.20.14).** `docs/adr/0039` and its index row record that
    the Dart engine supersedes the "no second backend" decision. `flutter/PR_BODY.md`
-   has the attribution, parity coverage and UNVERIFIED gaps. Nothing is pushed and
-   no PR is open. Still to do before the PR: a push, a PR to `main`, and the
-   Rust and Windows/macOS host checks listed in the PR body.
+   has the attribution, parity coverage, source gates re-run on this Mac, and the
+   UNVERIFIED gaps. Nothing is pushed and no PR is open. Still open before the PR:
+   the 12 Excel print-queue cases (see item 2) and the Windows and macOS host checks.
+   Source gates re-run for 1.20.14: version, docs, package source, `npm test`
+   (73 pass), `npm run build`, cargo fmt, clippy, check and test, and
+   `npm run audit:licenses` (after staging the local macOS Tesseract bundle).
 
 ## Known gaps (UNVERIFIED)
 
 - Windows COM (Excel, Outlook), Win32 printing, the Windows startup registry
   and the Windows PowerShell picker have not run on a Windows host.
-- macOS PDFKit rendering is not ported. The AppleScript picker has not been
-  tried interactively.
-- `print_queue` preview/apply signature defect: preview uses microsecond
-  mtime and apply uses nanosecond mtime. See `_previewApplySignatureDefect`
-  in `e11_platform_test.dart`.
+- macOS PDFKit rendering is verified on this Mac only (1.20.9). The AppleScript
+  picker has not been tried interactively.
 - `pubspec.yaml` needs Dart ^3.13.5. `desktop_drop` 0.9 conflicts with
   `file_selector`, so no `file_selector` is used.

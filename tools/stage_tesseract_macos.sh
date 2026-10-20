@@ -204,9 +204,25 @@ for source in "${queue[@]}"; do
   esac
 done
 
-if find "$staging/licenses" -type f -iname '*agpl*' -print -quit | grep -q . || \
-  find "$staging/licenses" -type f -name sbom.spdx.json -print0 | \
-    xargs -0 rg -i '"license(Concluded|Declared)": "[^"]*(AGPL|Affero|LicenseRef-commercial)' >/dev/null; then
+# Fail closed: a missing or failing scanner must stop staging, never pass.
+license_rejected=0
+if find "$staging/licenses" -type f -iname '*agpl*' -print -quit | grep -q .; then
+  license_rejected=1
+fi
+sbom_list=$(find "$staging/licenses" -type f -name sbom.spdx.json -print0)
+if [[ -n "$sbom_list" ]]; then
+  set +e
+  printf '%s' "$sbom_list" | xargs -0 grep -Eih \
+    '"license(Concluded|Declared)": "[^"]*(AGPL|Affero|LicenseRef-commercial)' >/dev/null
+  scan_status=$?
+  set -e
+  case $scan_status in
+    0) license_rejected=1 ;;
+    1) ;;
+    *) print -u2 "Dependency license scan failed (exit $scan_status)"; exit 1 ;;
+  esac
+fi
+if (( license_rejected )); then
   print -u2 "Rejected dependency license detected in staged OCR resources"
   exit 1
 fi

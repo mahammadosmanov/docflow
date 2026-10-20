@@ -1173,60 +1173,55 @@ void main() {
       return path;
     }
 
-    test(
-      'uncertain and cancelled jobs are never retried automatically',
-      skip: _previewApplySignatureDefect,
-      () {
-        final cases = [
-          (
-            PrintFailure.uncertain('spool outcome unknown'),
-            'uncertain',
-            'warn.print.stateUncertain',
+    test('uncertain and cancelled jobs are never retried automatically', () {
+      final cases = [
+        (
+          PrintFailure.uncertain('spool outcome unknown'),
+          'uncertain',
+          'warn.print.stateUncertain',
+        ),
+        (
+          PrintFailure.cancelled('cancelled while active', uncertain: false),
+          'cancelled',
+          'warn.print.cancelled',
+        ),
+        (
+          PrintFailure.cancelled(
+            'cancelled before acknowledgement',
+            uncertain: true,
           ),
-          (
-            PrintFailure.cancelled('cancelled while active', uncertain: false),
-            'cancelled',
-            'warn.print.cancelled',
-          ),
-          (
-            PrintFailure.cancelled(
-              'cancelled before acknowledgement',
-              uncertain: true,
-            ),
-            'uncertain',
-            'warn.print.cancelledUncertain',
-          ),
-        ];
-        for (final (failure, status, warning) in cases) {
-          final file = writeFile('one-$status.pdf', 'one');
-          final adapter = _FakeAdapter(
-            printers: ['Office Printer'],
-            defaultPrinter: 'Office Printer',
-          )..outcomes.addAll([failure, null]);
-          final service = serviceFor(adapter);
-          final values = paramsFor([file], retries: 3);
-          final plan = service.preview(
-            const CallerIdentity('operator', 'session'),
-            values,
-            (_) {},
-          );
+          'uncertain',
+          'warn.print.cancelledUncertain',
+        ),
+      ];
+      for (final (failure, status, warning) in cases) {
+        final file = writeFile('one-$status.pdf', 'one');
+        final adapter = _FakeAdapter(
+          printers: ['Office Printer'],
+          defaultPrinter: 'Office Printer',
+        )..outcomes.addAll([failure, null]);
+        final service = serviceFor(adapter);
+        final values = paramsFor([file], retries: 3);
+        final plan = service.preview(
+          const CallerIdentity('operator', 'session'),
+          values,
+          (_) {},
+        );
 
-          final result = service.apply(
-            plan.planId,
-            const CallerIdentity('operator', 'session'),
-            (_) {},
-          );
+        final result = service.apply(
+          plan.planId,
+          const CallerIdentity('operator', 'session'),
+          (_) {},
+        );
 
-          expect(adapter.submitted, hasLength(1), reason: status);
-          expect((result.meta['counts'] as Map)[status], 1, reason: status);
-          expect(result.errors.first.key, warning, reason: status);
-        }
-      },
-    );
+        expect(adapter.submitted, hasLength(1), reason: status);
+        expect((result.meta['counts'] as Map)[status], 1, reason: status);
+        expect(result.errors.first.key, warning, reason: status);
+      }
+    });
 
     test(
       'submitted-unconfirmed job is not retried and the queue continues',
-      skip: _previewApplySignatureDefect,
       () {
         final first = writeFile('one.pdf', 'one');
         final second = writeFile('two.pdf', 'two');
@@ -1304,15 +1299,6 @@ void main() {
 }
 
 // ---- Test helpers -----------------------------------------------------------
-
-/// Known defect in the E11 batch/queue code (not in this unit). Preview records
-/// the file signature from `FileStat` (microsecond mtime) through
-/// `batch_print.dart`, while apply compares against the capability handle's
-/// nanosecond mtime in `print_queue.dart`. Every real apply therefore reports
-/// "file changed after the queue was previewed". These two tests are skipped
-/// until that owner fixes the mismatch.
-const String _previewApplySignatureDefect =
-    'KNOWN DEFECT: preview uses microsecond disk mtime, apply uses nanosecond handle mtime';
 
 BackendError _captureBackendError(void Function() body) {
   try {
