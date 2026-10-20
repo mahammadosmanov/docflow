@@ -95,11 +95,11 @@ abstract class RfiOcrAdapter {
   const RfiOcrAdapter();
 
   /// Port of `OcrAdapter::read`. Throws [RfiOcrFailure].
-  RfiOcrRead read(String path);
+  Future<RfiOcrRead> read(String path);
 
   /// Port of `OcrAdapter::read_page` (default body included): page 0 defers to
   /// [read]; other pages are unavailable unless an adapter overrides this.
-  RfiOcrRead readPage(String path, int pageIndex) {
+  Future<RfiOcrRead> readPage(String path, int pageIndex) async {
     if (pageIndex == 0) {
       return read(path);
     }
@@ -243,7 +243,7 @@ Future<Plan> previewRfiFileGroup({
           subject: partial.path,
         ),
       );
-      analyses.add(_finishPdfAnalysis(partial, ocr, pdfPageCount));
+      analyses.add(await _finishPdfAnalysis(partial, ocr, pdfPageCount));
     } else {
       analyses.add(
         _FileAnalysis(
@@ -779,17 +779,17 @@ _PartialAnalysis _analyzeWithoutPdf(String path) {
 
 /// Completes a PDF analysis on the calling isolate (OCR adapter is not
 /// sendable between isolates).
-_FileAnalysis _finishPdfAnalysis(
+Future<_FileAnalysis> _finishPdfAnalysis(
   _PartialAnalysis partial,
   RfiOcrAdapter ocr,
   RfiPdfPageCounter pdfPageCount,
-) {
+) async {
   final detections = <String, _Detection>{
     for (final detection in partial.detections) detection.code: detection,
   };
   String? issue = partial.issue;
   try {
-    final codes = _pdfCodes(partial.path, ocr, pdfPageCount);
+    final codes = await _pdfCodes(partial.path, ocr, pdfPageCount);
     for (final code in codes) {
       detections.putIfAbsent(
         code,
@@ -809,11 +809,11 @@ _FileAnalysis _finishPdfAnalysis(
   );
 }
 
-SplayTreeSet<String> _pdfCodes(
+Future<SplayTreeSet<String>> _pdfCodes(
   String path,
   RfiOcrAdapter ocr,
   RfiPdfPageCounter pdfPageCount,
-) {
+) async {
   final int pageCount;
   try {
     pageCount = pdfPageCount(path);
@@ -828,7 +828,7 @@ SplayTreeSet<String> _pdfCodes(
   final codes = SplayTreeSet<String>();
   for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     try {
-      final read = ocr.readPage(path, pageIndex);
+      final read = await ocr.readPage(path, pageIndex);
       if (read.matched.method == rfi_code.RfiMethod.strict) {
         codes.add(read.matched.code);
       }

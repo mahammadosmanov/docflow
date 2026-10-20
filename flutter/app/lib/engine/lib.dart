@@ -9,6 +9,7 @@ import 'backend.dart';
 import 'credentials.dart';
 import 'doc_flow_engine.dart';
 import 'http.dart';
+import 'native.dart';
 import 'path_selection.dart';
 import 'settings.dart';
 import 'smoke.dart' show runPackageSmoke;
@@ -25,25 +26,39 @@ const String supabaseKey = 'sb_publishable_sK0uEH4t-Hw7LVBpnEaMog_z_2MQwxq';
 const Duration _selectionTtl = Duration(minutes: 30);
 
 /// Builds the engine. [settingsPath] defaults to `~/.docflow/settings.json`.
-/// [native] and [platform] default to the unwired seams.
+/// [native] defaults to the production [NativeBackend] (sharing one
+/// [PathSelectionStore] and the app data directory); its cloud history is
+/// wired to the router when no [native] is passed. [platform] defaults to the
+/// unwired seam.
 DocFlowEngine buildDocFlowEngine({
   String? settingsPath,
-  NativeOperations native = const UnwiredNativeOperations(),
+  NativeOperations? native,
   PlatformServices platform = const UnwiredPlatformServices(),
 }) {
-  final settings = SettingsStore(settingsPath ?? defaultSettingsPath());
+  final resolvedSettingsPath = settingsPath ?? defaultSettingsPath();
+  final settings = SettingsStore(resolvedSettingsPath);
   final credentials = SessionCredentialStore(platformSecureStore());
   final http = HttpClient(const HttpConfig());
   final config = auth.AuthConfig(supabaseUrl, supabaseKey);
   final authService = auth.AuthService(settings, credentials, http, config);
+  final selections = PathSelectionStore(ttl: _selectionTtl);
+  final backend = native == null
+      ? NativeBackend.production(
+          selections: selections,
+          settings: settings,
+          authService: authService,
+          authConfig: config,
+          appDataDir: File(resolvedSettingsPath).parent.path,
+        )
+      : null;
   return DocFlowEngine(
     router: BackendRouter(
       settings: settings,
       authService: authService,
-      selections: PathSelectionStore(ttl: _selectionTtl),
-      native: native,
+      selections: selections,
+      native: native ?? backend!,
       platform: platform,
-      history: null,
+      history: backend?.cloud,
       now: () => DateTime.now().millisecondsSinceEpoch ~/ 1000,
     ),
   );

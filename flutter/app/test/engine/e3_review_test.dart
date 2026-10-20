@@ -19,7 +19,7 @@ class _FakeOcr implements ReviewOcrAdapter {
   final Map<String, String> codes;
 
   @override
-  ReviewOcrRead read(String path) {
+  Future<ReviewOcrRead> read(String path) async {
     final code = codes[p.basename(path)];
     if (code == null) {
       throw StateError('no OCR result');
@@ -52,12 +52,12 @@ void main() {
   String write(String name) =>
       (File(p.join(review, name))..writeAsBytesSync([1])).path;
 
-  test('scan lists visible PDFs in name order and attaches OCR codes', () {
+  test('scan lists visible PDFs in name order and attaches OCR codes', () async {
     write('b.PDF');
     write('a.pdf');
     write('notes.txt');
     write('.hidden.pdf');
-    final items = scan(
+    final items = await scan(
       destination,
       _FakeOcr({'a.pdf': _code, 'b.PDF': 'nothing readable here'}),
     );
@@ -70,9 +70,9 @@ void main() {
     expect(items[1].target, isNull);
   });
 
-  test('scan returns nothing when the review directory is absent', () {
+  test('scan returns nothing when the review directory is absent', () async {
     Directory(review).deleteSync(recursive: true);
-    expect(scan(destination, _FakeOcr({})), isEmpty);
+    expect(await scan(destination, _FakeOcr({})), isEmpty);
   });
 
   test('preview plans a put as folder creation plus rename, and delete to trash', () {

@@ -16,7 +16,7 @@ class _NoOcr extends RfiOcrAdapter {
   const _NoOcr();
 
   @override
-  RfiOcrRead read(String path) => const RfiOcrRead(
+  Future<RfiOcrRead> read(String path) async => const RfiOcrRead(
     matched: rfi_code.RfiMatch(
       code: '',
       discipline: '',

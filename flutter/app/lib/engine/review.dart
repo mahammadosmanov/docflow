@@ -87,10 +87,13 @@ class ReviewOcrRead {
 /// Port for the OCR adapter. Implementations may throw; a throw is treated
 /// as "no OCR result", matching the Rust `.ok()` handling.
 abstract interface class ReviewOcrAdapter {
-  ReviewOcrRead read(String path);
+  Future<ReviewOcrRead> read(String path);
 }
 
-List<ReviewItem> scan(String destinationRoot, ReviewOcrAdapter ocr) {
+Future<List<ReviewItem>> scan(
+  String destinationRoot,
+  ReviewOcrAdapter ocr,
+) async {
   final root = _canonicalOrInvalid(
     destinationRoot,
     'review destination does not exist',
@@ -122,14 +125,18 @@ List<ReviewItem> scan(String destinationRoot, ReviewOcrAdapter ocr) {
   files.sort((left, right) => _compareNames(p.basename(left), p.basename(right)));
 
   return [
-    for (final path in files) _reviewItem(root, path, ocr),
+    for (final path in files) await _reviewItem(root, path, ocr),
   ];
 }
 
-ReviewItem _reviewItem(String destinationRoot, String path, ReviewOcrAdapter ocr) {
+Future<ReviewItem> _reviewItem(
+  String destinationRoot,
+  String path,
+  ReviewOcrAdapter ocr,
+) async {
   ReviewOcrRead? read;
   try {
-    read = ocr.read(path);
+    read = await ocr.read(path);
   } on Object {
     read = null;
   }

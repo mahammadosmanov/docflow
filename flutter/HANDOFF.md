@@ -54,45 +54,21 @@ porting rules, but its Linux paths are outdated; use the paths below.
 
 ## Remaining work, in order
 
-1. **Native command router (largest item).** Create
-   `lib/engine/native.dart` with `class NativeBackend implements
-   NativeOperations`; the interface is in `lib/engine/backend.dart`. Port
-   `src-tauri/src/native.rs`:
-   - Composition: `production()` at lines 245-330.
-   - Path materialization: `materialize_preview` and
-     `materialize_operation_values` at 978-1053, `recovery` at 1054.
-   - Previews at 1062-2333. Dispatch by opId comes from `backend.rs`
-     493-530:
-     - `rfi.process_scans_fast_covers` and `rfi.group_files`
-     - `rfi.log_add` and `rfi.follow_up_sync`
-     - `rfi.generate_concrete_documents`
-     - `rfi.system_sync` and `rfi.complete_status_sync`
-     - `rfi.stage_signed_first_pages` and `rfi.normalize_pdf_orientation`
-     - `files.batch_print`
-   - Outlook previews: `preview_outlook_reply_draft` and
-     `preview_outlook_archive`.
-   - `find_rfi_print_files` at 2210.
-   - Replica previews: `preview_replica_publish` and `cache_replica_plan`
-     at 2314-2415.
-   - `revise_native_plan` at 2416, `copy_native_table` at 2495,
-     `preview_rfi_reply` at 2510.
-   - `apply_native_plan` at 2535, cancel at 2639-2648.
-   - `review_scan` and `review_preview` at 2649-2733, `try_native_undo` at
-     2734.
-   - Helpers at 2832-3428.
-   
-   Rust tests are at 3429 and later; port them too. The Dart preview
-   functions already exist, for example `previewFastCovers`,
-   `previewRfiFileGroup`, `rfi_log.preview`, `previewFromOpenFiles`,
-   `previewSystemSync`, `previewCompleteStatusSync`,
-   `previewStageSignedPages`, `previewOrientation`,
-   `batch_print.preview`, `previewReplicaPublish`, and the
-   `OutlookDraftService` / `PrintService` methods. `FilesystemAuthority`
-   in `fs_ops.dart` already has grants, `cachePlan`, `apply`, `undo` and
-   `recoverPending`.
-   
-   Then pass `native:` and `history: CloudHistory(...)` in
-   `buildDocFlowEngine` (`lib/engine/lib.dart`) and in `main.dart`.
+1. **Native command router: DONE (1.20.3).** `lib/engine/native.dart`
+   (`NativeBackend`) composes the production backend (`production()`), and
+   `buildDocFlowEngine` wires it with `history:` from `cloud`. Ported:
+   path materialization, all preview dispatch (process scans, RFI file group,
+   RFI log, follow-up, system sync, complete status, stage signed pages,
+   orientation, Outlook archive, replica publish, concrete documents,
+   batch print, Outlook reply), revise, copyTable, rfiReplyPreview,
+   reviewScan/reviewPreview, findRfiPrintFiles, apply/cancel/undo, print
+   queue, recovery, cloud sync. OCR is async: `RfiOcrAdapter` and
+   `ReviewOcrAdapter` return `Future`, bridged over `NativeOcr`. Windows uses
+   `WindowsOutlookAdapter` with `Win32ComDispatchBackend`.
+   Remaining gaps: none of the native previews has a happy-path test on real
+   fixtures (only error paths and an empty process-scans run). Every
+   Windows/COM path is UNVERIFIED on a Windows host.
+   Also: `NativeBackend.production` takes `authConfig` explicitly.
 2. **Excel tail:** the cancel/timeout section of `platform/excel.rs`, lines
    3181-5428, into `lib/engine/platform/excel.dart`.
 3. **E2 test bodies.** These tests are skipped with empty bodies and need

@@ -1541,6 +1541,17 @@ FollowUpWorkbookFile openSyncWorkbookFile(String path) {
     throw BackendError.validation('error.rfi.systemSync.workbookLocked');
   }
   try {
+    return workbookFileFromHandle(handle, path);
+  } finally {
+    handle.close();
+  }
+}
+
+/// Reads [handle] (already open) into a [FollowUpWorkbookFile] for [path].
+/// Shared by [openSyncWorkbookFile] and the native follow-up preview, which
+/// opens the workbook through a granted anchor instead of a bare path.
+FollowUpWorkbookFile workbookFileFromHandle(OsHandle handle, String path) {
+  {
     final FilesystemObjectIdentity identity = fileIdentity(handle);
     final stat = handle.metadata();
     final builder = BytesBuilder(copy: false);
@@ -1566,8 +1577,6 @@ FollowUpWorkbookFile openSyncWorkbookFile(String path) {
       },
       mtimeNs: stat.mtimeNs,
     );
-  } finally {
-    handle.close();
   }
 }
 

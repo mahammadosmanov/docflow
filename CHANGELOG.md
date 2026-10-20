@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.3 - 2026-10-20
+
+### Added
+
+- Flutter native command router (`NativeBackend`): path materialization,
+  previews for RFI, print, Outlook, replica and concrete document operations,
+  apply/cancel/undo, print queue, recovery and cloud sync wiring.
+
 ## 1.20.2 - 2026-10-15
 
 ### Fixed
