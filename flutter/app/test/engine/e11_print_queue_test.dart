@@ -1,5 +1,4 @@
 // Ports of the unit tests in src-tauri/src/print_queue.rs (tests module).
-import 'package:docflow/engine/journal.dart';
 import 'package:docflow/engine/ooxml.dart';
 import 'package:docflow/engine/print_queue.dart';
 import 'package:flutter_test/flutter_test.dart';

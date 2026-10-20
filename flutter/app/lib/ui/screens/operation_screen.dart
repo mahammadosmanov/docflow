@@ -250,7 +250,7 @@ class _OperationScreenState extends State<OperationScreen> {
   /// listener ignores keys while another route (a dialog) is on top.
   bool _onKeyEvent(KeyEvent event) {
     if (event is KeyUpEvent || !mounted) return false;
-    final route = ModalRoute.maybeOf(context);
+    final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return false;
     final keyboard = HardwareKeyboard.instance;
     final key = event.logicalKey;

@@ -291,7 +291,10 @@ CapabilityPlatform? _platformCache;
 // libc bindings (POSIX).
 // ---------------------------------------------------------------------------
 
-typedef _OpenatNative = Int32 Function(Int32, Pointer<Utf8>, Int32, Int32);
+// open/openat are variadic: the mode must travel as a variadic argument or
+// arm64 Darwin reads garbage from the stack.
+typedef _OpenatNative =
+    Int32 Function(Int32, Pointer<Utf8>, Int32, VarArgs<(Int32,)>);
 typedef _OpenatDart = int Function(int, Pointer<Utf8>, int, int);
 typedef _CloseNative = Int32 Function(Int32);
 typedef _CloseDart = int Function(int);
@@ -376,7 +379,7 @@ typedef _ReaddirNative = Pointer<Uint8> Function(Pointer<Void>);
 typedef _ReaddirDart = Pointer<Uint8> Function(Pointer<Void>);
 typedef _ClosedirNative = Int32 Function(Pointer<Void>);
 typedef _ClosedirDart = int Function(Pointer<Void>);
-typedef _OpenNative = Int32 Function(Pointer<Utf8>, Int32, Int32);
+typedef _OpenNative = Int32 Function(Pointer<Utf8>, Int32, VarArgs<(Int32,)>);
 typedef _OpenDart = int Function(Pointer<Utf8>, int, int);
 
 /// Per-OS constants and resolved symbols. Only Linux is verified on this host.
@@ -416,7 +419,7 @@ class _Sys {
     fchmod = _lib.lookupFunction<_FchmodNative, _FchmodDart>('fchmod');
     fchown = _lib.lookupFunction<_FchownNative, _FchownDart>('fchown');
     fstat = _lib.lookupFunction<_FstatNative, _FstatDart>(
-      isDarwin ? 'fstat\$INODE64' : 'fstat',
+      isDarwin && _lib.providesSymbol('fstat\$INODE64') ? 'fstat\$INODE64' : 'fstat',
     );
     mkdirat = _lib.lookupFunction<_MkdiratNative, _MkdiratDart>('mkdirat');
     unlinkat = _lib.lookupFunction<_UnlinkatNative, _UnlinkatDart>('unlinkat');

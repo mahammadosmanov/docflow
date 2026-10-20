@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../app/screen_registry.dart';
 import '../../app/routes.dart';
 import '../../bridge/bridge.dart';
+import '../../l10n/strings.dart';
 import '../../models/models.dart';
 import '../../theme/app_icons.dart';
 import '../../theme/tokens.dart';

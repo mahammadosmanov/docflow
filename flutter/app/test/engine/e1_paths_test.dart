@@ -21,7 +21,9 @@ void main() {
   late Directory fixture;
 
   setUp(() {
-    fixture = Directory.systemTemp.createTempSync('e1_paths');
+    fixture = Directory(
+      Directory.systemTemp.createTempSync('e1_paths').resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

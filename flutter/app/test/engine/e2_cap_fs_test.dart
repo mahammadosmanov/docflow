@@ -2,9 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:docflow/engine/cap_fs.dart';
-import 'package:docflow/engine/errors.dart';
-import 'package:docflow/engine/journal.dart' show FsErrorKind;
-import 'package:docflow/engine/journal.dart';
+import 'package:docflow/engine/journal.dart' show sha256Hex;
 
 void main() {
   late Directory dir;

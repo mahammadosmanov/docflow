@@ -3670,7 +3670,9 @@ class _Posix {
   static final _ChmodDart _chmod = _library
       .lookupFunction<_ChmodNative, _ChmodDart>('chmod');
   static final _StatDart _stat = _library.lookupFunction<_StatNative, _StatDart>(
-    Platform.isMacOS ? r'stat$INODE64' : 'stat',
+    Platform.isMacOS && _library.providesSymbol(r'stat$INODE64')
+        ? r'stat$INODE64'
+        : 'stat',
   );
   static final _ErrnoNative _errnoLocation = _library
       .lookupFunction<_ErrnoNative, _ErrnoNative>(
