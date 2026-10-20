@@ -16,6 +16,7 @@ import 'package:docflow/engine/contracts.dart';
 import 'package:docflow/engine/errors.dart';
 import 'package:docflow/engine/fs_ops.dart';
 import 'package:docflow/engine/ocr.dart';
+import 'package:docflow/engine/pdf_tool_renderer.dart';
 import 'package:docflow/engine/ooxml.dart';
 import 'package:docflow/engine/paths.dart';
 import 'package:docflow/engine/plan_store.dart';
@@ -208,7 +209,8 @@ class _PdftoppmSession implements PdfPageSession {
   Future<void> close() async {}
 }
 
-const PdfPageRenderer _renderer = _PdftoppmRenderer();
+/// Production poppler renderer (lib/engine/pdf_tool_renderer.dart) when present.
+final PdfPageRenderer _renderer = PdfToolPageRenderer.discover() ?? const _PdftoppmRenderer();
 
 /// Ports that the RFI system sync apply path never reaches.
 class _UnusedPorts

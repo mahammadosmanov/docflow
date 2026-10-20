@@ -96,11 +96,16 @@ porting rules, but its Linux paths are outdated; use the paths below.
    Remaining: the other 59 batch-print tests (preview/revise/resume/queue).
    `WindowsControlledPdfSubmitter` still does not `implements
    ControlledPdfSubmitter`, because excel.dart uses the stub `PrintJob` type.
-5. **PDF page renderer.** `ocr.dart` `selectPdfPageRenderer` returns an
-   `UnverifiedNativePdfPageRenderer` on macOS and Windows, so OCR and
-   signature rendering do not work on real machines. Port the PDFKit and
-   Windows PDF renderers, which also un-skips the 4 rfi_system_sync render
-   tests.
+5. **PDF page renderer: PARTIAL (1.20.7).** `lib/engine/pdf_tool_renderer.dart`
+   renders PNG pages with poppler `pdftoppm` and extracts text with
+   `pdftotext`. `selectPdfPageRenderer` uses it on macOS when poppler is
+   installed. Otherwise macOS still fails closed in
+   `UnverifiedNativePdfPageRenderer('PDFKit')`. Windows still fails closed
+   (`Windows PDF engine`). Not ported: PDFKit and the Windows PDF engine.
+   The 4 `rfi_system_sync` render tests now use the production renderer,
+   and they run wherever pdftoppm exists. Both new renderer tests run here
+   (pdftoppm is at /opt/homebrew/bin). Renderer behaviour on macOS and
+   Windows is UNVERIFIED.
 6. **Release:**
    - Bump the version with `node tools/version_manager.mjs set <next>`.
      Keep `docflowVersion` in `lib/engine/backend.dart` equal to `VERSION`.

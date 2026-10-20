@@ -22,6 +22,7 @@ import 'package:archive/archive.dart' show ZLibDecoder, ZLibEncoder, getCrc32;
 import 'package:path/path.dart' as p;
 
 import 'operations/process_scans.dart';
+import 'pdf_tool_renderer.dart';
 import 'rfi_code.dart';
 
 const int textLayerMinChars = 50;
@@ -113,7 +114,9 @@ class UnverifiedNativePdfPageRenderer implements PdfPageRenderer {
 /// Port of the `cfg(target_os)` selection of the PDF page backend.
 PdfPageRenderer selectPdfPageRenderer() {
   if (Platform.isMacOS) {
-    return const UnverifiedNativePdfPageRenderer('PDFKit');
+    // PDFKit is not ported; poppler is the verified fallback when installed.
+    return PdfToolPageRenderer.discover() ??
+        const UnverifiedNativePdfPageRenderer('PDFKit');
   }
   if (Platform.isWindows) {
     return const UnverifiedNativePdfPageRenderer('Windows PDF engine');

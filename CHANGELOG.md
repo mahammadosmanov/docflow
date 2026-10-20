@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.7 - 2026-10-20
+
+### Added
+
+- PDF page rendering via pdftoppm and pdftotext when poppler is installed.
+  PDFKit and Windows PDF engine bridges remain unported.
+
 ## 1.20.6 - 2026-10-20
 
 ### Tests
