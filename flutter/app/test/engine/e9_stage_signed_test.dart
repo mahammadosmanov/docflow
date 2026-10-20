@@ -24,7 +24,7 @@ import 'package:path/path.dart' as p;
 import 'e9_pdf_fixture.dart';
 
 const String _applySkip =
-    'apply/journal/undo needs the Dart FilesystemAuthority, which is not ported yet';
+    'UNPORTED: stage-signed apply tests remain (FilesystemAuthority.apply is now available; port the Rust apply cases)';
 const String _operatorSkip =
     'needs private Ventoy RFI documents and Tesseract; ignored in Rust as well';
 

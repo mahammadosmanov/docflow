@@ -4,6 +4,15 @@
 // recover_pending entry points are not yet ported to Dart (see fs_ops.dart).
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+import 'package:docflow/engine/cap_fs.dart';
+import 'package:docflow/engine/fs_ops.dart';
+import 'package:docflow/engine/ooxml.dart';
+import 'package:docflow/engine/production_ports.dart';
+import 'package:docflow/engine/rfi_system_sync.dart';
+import 'package:docflow/engine/undo.dart';
 
 import 'package:docflow/engine/contracts.dart';
 import 'package:docflow/engine/errors.dart';
@@ -66,7 +75,48 @@ JournalRecord _retainedPublicationRecord(String root) {
 }
 
 /// Port of `failed_apply_restore_record`.
-JournalRecord _failedApplyRestoreRecord(String root) {
+/// Journal identities, hashes and security digests for the failed-apply record.
+/// The defaults are the fake values the builder always used.
+final class S5Values {
+  const S5Values({
+    this.rootIdentity,
+    this.sourceIdentity,
+    this.targetIdentity,
+    this.backupIdentity,
+    this.privateIdentity,
+    this.originalSha,
+    this.originalSecurity,
+    this.backupSha,
+    this.backupSecurity,
+    this.privateSha,
+    this.privateSecurity,
+    this.originalLength = 1,
+    this.originalAux = 0,
+    this.originalLogical = 1,
+    this.originalAccess,
+    this.originalAuxSha,
+  });
+
+  final FilesystemObjectIdentity? rootIdentity;
+  final FilesystemObjectIdentity? sourceIdentity;
+  final FilesystemObjectIdentity? targetIdentity;
+  final FilesystemObjectIdentity? backupIdentity;
+  final FilesystemObjectIdentity? privateIdentity;
+  final String? originalSha;
+  final String? originalSecurity;
+  final String? backupSha;
+  final String? backupSecurity;
+  final String? privateSha;
+  final String? privateSecurity;
+  final int originalLength;
+  final int originalAux;
+  final int originalLogical;
+  final String? originalAccess;
+  final String? originalAuxSha;
+}
+
+JournalRecord _failedApplyRestoreRecord(String root, {S5Values? values}) {
+  final v = values ?? const S5Values();
   const locator =
       'journal:journal-failed-apply;root:0;leaf:.docflow-s5-retained-original-journal-failed-apply.xlsx';
   final record = JournalRecord.create(
@@ -79,27 +129,27 @@ JournalRecord _failedApplyRestoreRecord(String root) {
   );
   record.state = JournalState.recoveryRequired;
   record.grantRoots = [root];
-  record.grantRootIdentities = [GrantRootIdentity(root: root, identity: _id(1))];
+  record.grantRootIdentities = [GrantRootIdentity(root: root, identity: (v.rootIdentity ?? _id(1)))];
   record.grantRootAccesses = [
     GrantRootAccessRecord(
       root: root,
-      identity: _id(1),
+      identity: (v.rootIdentity ?? _id(1)),
       access: PersistedRootAccess.readWrite,
     ),
   ];
   record.s5Authority = S5AuthorityRecord(
     initialStep: _workbookStep(root),
     sourcePath: p.join(root, 'source.xlsx'),
-    sourceIdentity: _id(2),
+    sourceIdentity: (v.sourceIdentity ?? _id(2)),
     targetPath: p.join(root, 'target.xlsx'),
-    targetIdentity: _id(3),
+    targetIdentity: (v.targetIdentity ?? _id(3)),
     approvedUpdatesSha256: _hex('b'),
   );
   record.pendingRetainedArtifact = PendingRetainedArtifact(
     role: RetainedArtifactRole.displacedOriginal,
     path: p.join(root, '.docflow-s5-retained-original-journal-failed-apply.xlsx'),
     locator: locator,
-    creationState: PendingArtifactCreated(_id(3)),
+    creationState: PendingArtifactCreated((v.targetIdentity ?? _id(3))),
   );
   record.pendingPublication = RetainedPublication(
     purpose: RetainedPublicationPurpose.apply,
@@ -107,24 +157,24 @@ JournalRecord _failedApplyRestoreRecord(String root) {
     retained: p.join(root, '.docflow-s5-retained-original-journal-failed-apply.xlsx'),
     backup: p.join(root, '.docflow-s5-backup-journal-failed-apply.xlsx'),
     publicationSource: p.join(root, '.docflow-backups', '.docflow-s5-private-output.xlsx'),
-    expectedCanonicalIdentity: _id(3),
-    expectedCanonicalSha256: _hex('c'),
-    expectedBackupIdentity: _id(4),
-    expectedBackupSha256: _hex('c'),
-    publicationSourceIdentity: _id(5),
-    publicationSha256: _hex('e'),
-    expectedCanonicalSecuritySha256: _hex('d'),
-    expectedBackupSecuritySha256: _hex('d'),
-    publicationSecuritySha256: _hex('f'),
-    expectedCanonicalDefaultStreamBytes: 1,
-    expectedCanonicalAuxiliaryChargeBytes: 0,
-    expectedCanonicalLogicalChargeBytes: 1,
-    destinationAccessSha256: _hex('1'),
-    destinationAuxiliarySha256: _hex('2'),
-    destinationAuxiliaryChargeBytes: 0,
-    retainedIdentity: _id(3),
-    retainedSha256: _hex('c'),
-    retainedSecuritySha256: _hex('d'),
+    expectedCanonicalIdentity: (v.targetIdentity ?? _id(3)),
+    expectedCanonicalSha256: (v.originalSha ?? _hex('c')),
+    expectedBackupIdentity: (v.backupIdentity ?? _id(4)),
+    expectedBackupSha256: (v.backupSha ?? _hex('c')),
+    publicationSourceIdentity: (v.privateIdentity ?? _id(5)),
+    publicationSha256: (v.privateSha ?? _hex('e')),
+    expectedCanonicalSecuritySha256: (v.originalSecurity ?? _hex('d')),
+    expectedBackupSecuritySha256: (v.backupSecurity ?? _hex('d')),
+    publicationSecuritySha256: (v.privateSecurity ?? _hex('f')),
+    expectedCanonicalDefaultStreamBytes: v.originalLength,
+    expectedCanonicalAuxiliaryChargeBytes: v.originalAux,
+    expectedCanonicalLogicalChargeBytes: v.originalLogical,
+    destinationAccessSha256: (v.originalAccess ?? _hex('1')),
+    destinationAuxiliarySha256: (v.originalAuxSha ?? _hex('2')),
+    destinationAuxiliaryChargeBytes: v.originalAux,
+    retainedIdentity: (v.targetIdentity ?? _id(3)),
+    retainedSha256: (v.originalSha ?? _hex('c')),
+    retainedSecuritySha256: (v.originalSecurity ?? _hex('d')),
     phase: RetainedPublicationPhase.recoveryRequired,
   );
   record.recoveryNotice = RecoveryNotice(
@@ -147,6 +197,133 @@ RetainedArtifactEvidence _backupEvidence(String root, {int logical = 14, String 
       logicalChargeBytes: logical,
       locator: 'journal:journal-s5;root:0;leaf:.docflow-s5-backup-evidence.xlsx',
     );
+
+
+const _s5Caller = CallerIdentity('owner', 'session');
+
+final class _SeededS5 {
+  _SeededS5({
+    required this.dir,
+    required this.authority,
+    required this.store,
+    required this.target,
+    required this.retained,
+    required this.backup,
+    required this.private,
+    required this.original,
+  });
+
+  final Directory dir;
+  final FilesystemAuthority authority;
+  final JournalStore store;
+  final String target;
+  final String retained;
+  final String backup;
+  final String private;
+  final Uint8List original;
+
+  void dispose() => dir.deleteSync(recursive: true);
+}
+
+/// Port of `seed_failed_apply_restore_fixture`: real files on disk, with the
+/// journal identities, hashes and security digests taken from them.
+_SeededS5 _seedFailedApply() {
+  final dir = Directory.systemTemp.createTempSync('docflow-s5-');
+  final root = Directory(dir.path).resolveSymbolicLinksSync();
+  final journalRoot = p.join(root, 'journals');
+  final source = p.join(root, 'source.xlsx');
+  final target = p.join(root, 'target.xlsx');
+  final backup = p.join(root, '.docflow-s5-backup-journal-failed-apply.xlsx');
+  final retained = p.join(root, '.docflow-s5-retained-original-journal-failed-apply.xlsx');
+  final private = p.join(root, '.docflow-backups', '.docflow-s5-private-output.xlsx');
+  final original = Uint8List.fromList(utf8.encode('original Follow Up workbook bytes'));
+  final applied = Uint8List.fromList(utf8.encode('approved updated Follow Up bytes'));
+  Directory(p.dirname(private)).createSync(recursive: true);
+  File(source).writeAsBytesSync(utf8.encode('RFI Log workbook bytes'));
+  File(target).writeAsBytesSync(original);
+  File(backup).writeAsBytesSync(original);
+  File(private).writeAsBytesSync(applied);
+
+  final authority = FilesystemAuthority(
+    journalDir: journalRoot,
+    ttl: const Duration(minutes: 5),
+    ooxml: const ProductionFollowUpOoxml(),
+    rfiLog: const ProductionRfiLogWorkbook(),
+    rfiSystemSync: const RfiSystemSync(),
+    pdf: const ProductionPdfEngine(),
+    replicaPublish: const ProductionReplicaPublish(),
+    undoJournal: undoJournal,
+  );
+  authority.issueGrant(
+    GrantScope.create('owner', 'session', 'request', 'rfi.follow_up_sync'),
+    root,
+    GrantAccess.readWrite,
+  );
+  final store = JournalStore(journalRoot);
+
+  OsHandle open(String path) => openSourceNoFollow(path);
+  final sourceHandle = open(source);
+  final targetHandle = open(target);
+  final backupHandle = open(backup);
+  final privateHandle = open(private);
+  final originalSnapshot = FileSecuritySnapshot.capture(targetHandle);
+  final backupSnapshot = FileSecuritySnapshot.capture(backupHandle);
+  final privateSnapshot = FileSecuritySnapshot.capture(privateHandle);
+  final targetIdentity = fileIdentity(targetHandle);
+  final identities = (
+    root: CapabilityRoot.open(root).identity(),
+    source: fileIdentity(sourceHandle),
+    backup: fileIdentity(backupHandle),
+    private: fileIdentity(privateHandle),
+  );
+  final hashes = (
+    original: _sha256Hex(original),
+    backup: _sha256Hex(File(backup).readAsBytesSync()),
+    private: _sha256Hex(applied),
+  );
+  for (final handle in [sourceHandle, targetHandle, backupHandle, privateHandle]) {
+    handle.close();
+  }
+  File(target).renameSync(retained);
+
+  final record = _failedApplyRestoreRecord(
+    root,
+    values: S5Values(
+      rootIdentity: identities.root,
+      sourceIdentity: identities.source,
+      targetIdentity: targetIdentity,
+      backupIdentity: identities.backup,
+      privateIdentity: identities.private,
+      originalSha: hashes.original,
+      originalSecurity: originalSnapshot.sha256(),
+      backupSha: hashes.backup,
+      backupSecurity: backupSnapshot.sha256(),
+      privateSha: hashes.private,
+      privateSecurity: privateSnapshot.sha256(),
+      originalLength: original.length,
+      originalAux: originalSnapshot.auxiliaryChargeBytes(),
+      originalLogical: original.length + originalSnapshot.auxiliaryChargeBytes(),
+      originalAccess: originalSnapshot.accessSha256(),
+      originalAuxSha: originalSnapshot.auxiliarySha256(),
+    ),
+  );
+  final token = ValidatedS5Record.forTest(record, _permits(store));
+  store.writeS5Cas(token, 0);
+  token.release();
+
+  return _SeededS5(
+    dir: dir,
+    authority: authority,
+    store: store,
+    target: target,
+    retained: retained,
+    backup: backup,
+    private: private,
+    original: original,
+  );
+}
+
+String _sha256Hex(List<int> bytes) => sha256.convert(bytes).toString();
 
 void main() {
   late Directory fixture;
@@ -336,21 +513,64 @@ void main() {
     expect(pending.mode, S5UndoMode.restoreFailedApply);
   });
 
-  test(
-    'failed follow-up apply undo restores the exact original and keeps backup',
-    () {},
-    skip: _authorityBlocked,
-  );
-  test(
-    'recovery finalizes an exact user-initiated restore without moving files',
-    () {},
-    skip: _authorityBlocked,
-  );
-  test(
-    'failed follow-up apply restore never clobbers a new canonical file',
-    () {},
-    skip: _authorityBlocked,
-  );
+  test('failed follow-up apply undo restores the exact original and keeps backup', () {
+    final fixture = _seedFailedApply();
+    addTearDown(fixture.dispose);
+    final result = fixture.authority.undo('journal-failed-apply', _s5Caller);
+    expect((result.applied, result.failed), (1, 0));
+    expect(File(fixture.target).readAsBytesSync(), fixture.original);
+    expect(File(fixture.retained).existsSync(), isFalse);
+    expect(File(fixture.backup).existsSync(), isTrue);
+    expect(File(fixture.private).existsSync(), isTrue);
+    final record = fixture.store.readS5ForTest('journal-failed-apply');
+    expect(record.state, JournalState.undone);
+    expect(record.pendingPublication, isNull);
+    expect(
+      record.retainedEvidence.every(
+        (evidence) => evidence.role != RetainedArtifactRole.displacedOriginal,
+      ),
+      isTrue,
+    );
+    expect(fixture.authority.recoverPending(_s5Caller), isEmpty);
+  });
+
+  test('recovery finalizes an exact user-initiated restore without moving files', () {
+    final fixture = _seedFailedApply();
+    addTearDown(fixture.dispose);
+    File(fixture.retained).renameSync(fixture.target);
+    final record = fixture.store.readS5ForTest('journal-failed-apply');
+    record.state = JournalState.applying;
+    record.recoveryNotice = null;
+    record.pendingPublication!.phase = RetainedPublicationPhase.restoringOriginal;
+    final token = ValidatedS5Record.forTest(record, _permits(fixture.store));
+    fixture.store.writeS5Cas(token, token.revision);
+    token.release();
+
+    final entries = fixture.authority.recoverPending(_s5Caller);
+    expect(entries, isEmpty);
+    expect(File(fixture.target).readAsBytesSync(), fixture.original);
+    expect(File(fixture.retained).existsSync(), isFalse);
+    expect(File(fixture.backup).existsSync(), isTrue);
+    expect(File(fixture.private).existsSync(), isTrue);
+    final recovered = fixture.store.readS5ForTest('journal-failed-apply');
+    expect(recovered.state, JournalState.undone);
+    expect(recovered.pendingPublication, isNull);
+  });
+
+  test('failed follow-up apply restore never clobbers a new canonical file', () {
+    final fixture = _seedFailedApply();
+    addTearDown(fixture.dispose);
+    File(fixture.target).writeAsBytesSync(utf8.encode('a later user file'));
+    expect(
+      () => fixture.authority.undo('journal-failed-apply', _s5Caller),
+      throwsA(isA<BackendError>()),
+    );
+    expect(File(fixture.target).readAsStringSync(), 'a later user file');
+    expect(File(fixture.retained).readAsBytesSync(), fixture.original);
+    final entries = fixture.authority.recoverPending(_s5Caller);
+    expect(entries, hasLength(1));
+    expect(entries.single.restoreOriginalAvailable, isTrue);
+  });
 
   test(
     'journal replace retries transient Windows access denied',

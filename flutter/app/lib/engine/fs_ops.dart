@@ -2526,240 +2526,245 @@ class FilesystemAuthority {
       ),
     );
     final record = journals.admitS5Undo(pending, roots);
-    if (undoMode == S5UndoMode.restoreFailedApply) {
-      return _restoreFailedFollowUpApply(record);
-    }
-    final steps = record.completedSteps;
-    if (steps.isEmpty) {
-      throw BackendError.journalInvalid('S5 undo step is missing');
-    }
-    final step = steps.first;
-    final backupPathRaw = step.src;
-    if (backupPathRaw == null) {
-      throw BackendError.journalInvalid('S5 backup path is missing');
-    }
-    final canonicalPathRaw = step.dst;
-    if (canonicalPathRaw == null) {
-      throw BackendError.journalInvalid('S5 canonical path is missing');
-    }
-    final backupEvidence = record.retainedEvidenceFor(
-      RetainedArtifactRole.backup,
-    );
-    if (backupEvidence == null) {
-      throw BackendError.journalInvalid('S5 backup evidence is missing');
-    }
-    if (backupEvidence.path != backupPathRaw) {
-      throw BackendError.journalInvalid('S5 backup evidence path is invalid');
-    }
-    final expectedAppliedHash = step.meta['appliedSha256'];
-    if (expectedAppliedHash is! String) {
-      throw BackendError.journalInvalid('S5 applied hash is missing');
-    }
-    final createdIdentityJson = step.meta['createdCanonicalIdentity'];
-    if (createdIdentityJson == null) {
-      throw BackendError.journalInvalid('S5 applied identity is missing');
-    }
-    final FilesystemObjectIdentity expectedAppliedIdentity;
     try {
-      expectedAppliedIdentity = FilesystemObjectIdentity.fromJson(
-        createdIdentityJson,
-      );
-    } on Object {
-      throw BackendError.journalInvalid('S5 applied identity is invalid');
-    }
-    final canonical = _backendAnchorOf(
-      () => _authorizeS5Recorded(record, canonicalPathRaw).anchor(),
-      'S5 canonical workbook cannot be anchored',
-    );
-    final backup = _backendAnchorOf(
-      () => _authorizeS5Recorded(record, backupPathRaw).anchor(),
-      'S5 backup cannot be anchored',
-    );
-    final currentFile = _openOrValidation(
-      () => canonical.openMutable(),
-      'error.rfi.followUp.workbookLocked',
-    );
-    final backupFile = _openOrValidation(
-      () => backup.openRead(),
-      'error.rfi.followUp.backupVerify',
-    );
-    try {
-      final currentIdentity = _validationOf(
-        () => fileIdentity(currentFile),
-        'error.rfi.followUp.workbookChanged',
-      );
-      final backupIdentity = _validationOf(
-        () => fileIdentity(backupFile),
-        'error.rfi.followUp.backupVerify',
-      );
-      final currentHash = _validationOf(
-        () => _sha256Open(currentFile),
-        'error.rfi.followUp.workbookChanged',
-      );
-      final backupHash = _validationOf(
-        () => _sha256Open(backupFile),
-        'error.rfi.followUp.backupVerify',
-      );
-      final currentSnapshot = _validationOf(
-        () => FileSecuritySnapshot.capture(currentFile),
-        'error.rfi.followUp.workbookChanged',
-      );
-      final backupSnapshot = _validationOf(
-        () => FileSecuritySnapshot.capture(backupFile),
-        'error.rfi.followUp.backupVerify',
-      );
-      if (currentIdentity != expectedAppliedIdentity ||
-          currentHash != expectedAppliedHash ||
-          currentSnapshot.sha256() != backupEvidence.securitySha256 ||
-          backupIdentity != backupEvidence.identity ||
-          backupHash != backupEvidence.sha256 ||
-          backupSnapshot.sha256() != backupEvidence.securitySha256) {
-        throw BackendError.validation('error.rfi.followUp.workbookChanged');
+      if (undoMode == S5UndoMode.restoreFailedApply) {
+        return _restoreFailedFollowUpApply(record);
       }
-      final currentLen = _validationOf(
-        () => currentFile.metadata().size,
-        'error.rfi.followUp.workbookChanged',
-      );
-      final reservation = _validationOf(
-        () => RetainedStorageReservation.forUndo(
-          currentLen,
-          currentSnapshot.auxiliaryChargeBytes(),
-        ),
-        'error.rfi.followUp.retainedStorageFull',
-      );
-      final canonicalParentPath = pathParent(canonicalPathRaw);
-      if (canonicalParentPath == null) {
-        throw BackendError.journalInvalid('S5 canonical parent is unavailable');
+      final steps = record.completedSteps;
+      if (steps.isEmpty) {
+        throw BackendError.journalInvalid('S5 undo step is missing');
       }
-      final usage = _s5RecordedRetainedUsage(record, canonicalParentPath);
-      if (usage.$1 + reservation.fileCount > maxS5RetainedFiles ||
-          usage.$2 + reservation.logicalChargeBytes > maxS5RetainedBytes) {
-        throw BackendError.validation('error.rfi.followUp.retainedStorageFull');
+      final step = steps.first;
+      final backupPathRaw = step.src;
+      if (backupPathRaw == null) {
+        throw BackendError.journalInvalid('S5 backup path is missing');
       }
-      final parentSnapshot = _validationOf(
-        () => canonical.captureParentSecurity(),
-        'error.rfi.followUp.workbookChanged',
-      );
-      final creation = _validationOf(
-        () => backupSnapshot.creationDescriptor(parentSnapshot),
-        'error.rfi.followUp.backupVerify',
-      );
-      final extension = pathExtension(canonicalPathRaw);
-      if (extension == null) {
-        throw BackendError.journalInvalid('S5 canonical extension is invalid');
+      final canonicalPathRaw = step.dst;
+      if (canonicalPathRaw == null) {
+        throw BackendError.journalInvalid('S5 canonical path is missing');
       }
-      final retainedPath = pathJoin(
-        canonicalParentPath,
-        '.docflow-s5-retained-applied-${record.journalId}-${_simpleUuid()}.$extension',
+      final backupEvidence = record.retainedEvidenceFor(
+        RetainedArtifactRole.backup,
       );
-      final retained = _backendAnchorOf(
-        () => _authorizeS5Recorded(record, retainedPath).anchor(),
-        'S5 retained applied leaf cannot be anchored',
-      );
-      final String retainedLocator;
+      if (backupEvidence == null) {
+        throw BackendError.journalInvalid('S5 backup evidence is missing');
+      }
+      if (backupEvidence.path != backupPathRaw) {
+        throw BackendError.journalInvalid('S5 backup evidence path is invalid');
+      }
+      final expectedAppliedHash = step.meta['appliedSha256'];
+      if (expectedAppliedHash is! String) {
+        throw BackendError.journalInvalid('S5 applied hash is missing');
+      }
+      final createdIdentityJson = step.meta['createdCanonicalIdentity'];
+      if (createdIdentityJson == null) {
+        throw BackendError.journalInvalid('S5 applied identity is missing');
+      }
+      final FilesystemObjectIdentity expectedAppliedIdentity;
       try {
-        retainedLocator = _s5LocatorBackend(record, retainedPath);
-      } on Object {
-        throw BackendError.journalInvalid('S5 retained locator is invalid');
-      }
-      _transitionS5Backend(
-        record,
-        SetPendingRetainedArtifact(
-          PendingRetainedArtifact(
-            role: RetainedArtifactRole.displacedApplied,
-            path: retainedPath,
-            locator: retainedLocator,
-            creationState: const PendingArtifactCreatedIntent(),
-          ),
-        ),
-      );
-      final chargeBytes = _validationOf(
-        () => currentSnapshot.auxiliaryChargeBytes(),
-        'error.rfi.followUp.retainedStorageFull',
-      );
-      final logicalBytes = _checkedAddOrThrowBackend(currentLen, chargeBytes);
-      _transitionS5Backend(
-        record,
-        InitializePublication(
-          RetainedPublication(
-            purpose: RetainedPublicationPurpose.undo,
-            canonical: canonicalPathRaw,
-            retained: retainedPath,
-            backup: backupPathRaw,
-            publicationSource: backupPathRaw,
-            expectedCanonicalIdentity: currentIdentity,
-            expectedCanonicalSha256: currentHash,
-            expectedBackupIdentity: backupIdentity,
-            expectedBackupSha256: backupHash,
-            publicationSourceIdentity: backupIdentity,
-            publicationSha256: backupHash,
-            expectedCanonicalSecuritySha256: currentSnapshot.sha256(),
-            expectedBackupSecuritySha256: backupSnapshot.sha256(),
-            publicationSecuritySha256: backupSnapshot.sha256(),
-            expectedCanonicalDefaultStreamBytes: currentLen,
-            expectedCanonicalAuxiliaryChargeBytes: chargeBytes,
-            expectedCanonicalLogicalChargeBytes: logicalBytes,
-            destinationAccessSha256: backupSnapshot.accessSha256(),
-            destinationAuxiliarySha256: backupSnapshot.auxiliarySha256(),
-            destinationAuxiliaryChargeBytes: backupSnapshot.auxiliaryChargeBytes(),
-            retainedIdentity: null,
-            retainedSha256: null,
-            retainedSecuritySha256: null,
-            createdCanonicalIdentity: null,
-            phase: RetainedPublicationPhase.prepared,
-          ),
-        ),
-      );
-      final RetainedPublicationOutcome outcome;
-      try {
-        outcome = executeRetainedPublication(
-          journals: journals,
-          record: record,
-          canonical: canonical,
-          retained: retained,
-          publicationSource: backupFile,
-          destinationCreation: creation,
-          destinationSnapshot: backupSnapshot,
-          cancellation: const NotCancellablePublication(),
-          beforeCanonicalCreate: () {},
-          verifyDestination: (_) {},
+        expectedAppliedIdentity = FilesystemObjectIdentity.fromJson(
+          createdIdentityJson,
         );
       } on Object {
-        final locator = record.retainedLocators().first;
-        final notice = RecoveryNotice(
-          warningKey: 'error.rfi.followUp.recoveryRequired',
-          locator: locator,
-        );
-        final expected = record.revision;
-        record.prepareOutcomeUnknown(notice);
-        journals.writeS5Cas(record, expected);
-        return _s5RecoveryResult(record, notice);
+        throw BackendError.journalInvalid('S5 applied identity is invalid');
       }
-      switch (outcome) {
-        case RetainedPublicationPublished():
-          _transitionS5Backend(
-            record,
-            FinalizeUndoSuccess(completedStep: step, evidence: const []),
+      final canonical = _backendAnchorOf(
+        () => _authorizeS5Recorded(record, canonicalPathRaw).anchor(),
+        'S5 canonical workbook cannot be anchored',
+      );
+      final backup = _backendAnchorOf(
+        () => _authorizeS5Recorded(record, backupPathRaw).anchor(),
+        'S5 backup cannot be anchored',
+      );
+      final currentFile = _openOrValidation(
+        () => canonical.openMutable(),
+        'error.rfi.followUp.workbookLocked',
+      );
+      final backupFile = _openOrValidation(
+        () => backup.openRead(),
+        'error.rfi.followUp.backupVerify',
+      );
+      try {
+        final currentIdentity = _validationOf(
+          () => fileIdentity(currentFile),
+          'error.rfi.followUp.workbookChanged',
+        );
+        final backupIdentity = _validationOf(
+          () => fileIdentity(backupFile),
+          'error.rfi.followUp.backupVerify',
+        );
+        final currentHash = _validationOf(
+          () => _sha256Open(currentFile),
+          'error.rfi.followUp.workbookChanged',
+        );
+        final backupHash = _validationOf(
+          () => _sha256Open(backupFile),
+          'error.rfi.followUp.backupVerify',
+        );
+        final currentSnapshot = _validationOf(
+          () => FileSecuritySnapshot.capture(currentFile),
+          'error.rfi.followUp.workbookChanged',
+        );
+        final backupSnapshot = _validationOf(
+          () => FileSecuritySnapshot.capture(backupFile),
+          'error.rfi.followUp.backupVerify',
+        );
+        if (currentIdentity != expectedAppliedIdentity ||
+            currentHash != expectedAppliedHash ||
+            currentSnapshot.sha256() != backupEvidence.securitySha256 ||
+            backupIdentity != backupEvidence.identity ||
+            backupHash != backupEvidence.sha256 ||
+            backupSnapshot.sha256() != backupEvidence.securitySha256) {
+          throw BackendError.validation('error.rfi.followUp.workbookChanged');
+        }
+        final currentLen = _validationOf(
+          () => currentFile.metadata().size,
+          'error.rfi.followUp.workbookChanged',
+        );
+        final reservation = _validationOf(
+          () => RetainedStorageReservation.forUndo(
+            currentLen,
+            currentSnapshot.auxiliaryChargeBytes(),
+          ),
+          'error.rfi.followUp.retainedStorageFull',
+        );
+        final canonicalParentPath = pathParent(canonicalPathRaw);
+        if (canonicalParentPath == null) {
+          throw BackendError.journalInvalid('S5 canonical parent is unavailable');
+        }
+        final usage = _s5RecordedRetainedUsage(record, canonicalParentPath);
+        if (usage.$1 + reservation.fileCount > maxS5RetainedFiles ||
+            usage.$2 + reservation.logicalChargeBytes > maxS5RetainedBytes) {
+          throw BackendError.validation('error.rfi.followUp.retainedStorageFull');
+        }
+        final parentSnapshot = _validationOf(
+          () => canonical.captureParentSecurity(),
+          'error.rfi.followUp.workbookChanged',
+        );
+        final creation = _validationOf(
+          () => backupSnapshot.creationDescriptor(parentSnapshot),
+          'error.rfi.followUp.backupVerify',
+        );
+        final extension = pathExtension(canonicalPathRaw);
+        if (extension == null) {
+          throw BackendError.journalInvalid('S5 canonical extension is invalid');
+        }
+        final retainedPath = pathJoin(
+          canonicalParentPath,
+          '.docflow-s5-retained-applied-${record.journalId}-${_simpleUuid()}.$extension',
+        );
+        final retained = _backendAnchorOf(
+          () => _authorizeS5Recorded(record, retainedPath).anchor(),
+          'S5 retained applied leaf cannot be anchored',
+        );
+        final String retainedLocator;
+        try {
+          retainedLocator = _s5LocatorBackend(record, retainedPath);
+        } on Object {
+          throw BackendError.journalInvalid('S5 retained locator is invalid');
+        }
+        _transitionS5Backend(
+          record,
+          SetPendingRetainedArtifact(
+            PendingRetainedArtifact(
+              role: RetainedArtifactRole.displacedApplied,
+              path: retainedPath,
+              locator: retainedLocator,
+              creationState: const PendingArtifactCreatedIntent(),
+            ),
+          ),
+        );
+        final chargeBytes = _validationOf(
+          () => currentSnapshot.auxiliaryChargeBytes(),
+          'error.rfi.followUp.retainedStorageFull',
+        );
+        final logicalBytes = _checkedAddOrThrowBackend(currentLen, chargeBytes);
+        _transitionS5Backend(
+          record,
+          InitializePublication(
+            RetainedPublication(
+              purpose: RetainedPublicationPurpose.undo,
+              canonical: canonicalPathRaw,
+              retained: retainedPath,
+              backup: backupPathRaw,
+              publicationSource: backupPathRaw,
+              expectedCanonicalIdentity: currentIdentity,
+              expectedCanonicalSha256: currentHash,
+              expectedBackupIdentity: backupIdentity,
+              expectedBackupSha256: backupHash,
+              publicationSourceIdentity: backupIdentity,
+              publicationSha256: backupHash,
+              expectedCanonicalSecuritySha256: currentSnapshot.sha256(),
+              expectedBackupSecuritySha256: backupSnapshot.sha256(),
+              publicationSecuritySha256: backupSnapshot.sha256(),
+              expectedCanonicalDefaultStreamBytes: currentLen,
+              expectedCanonicalAuxiliaryChargeBytes: chargeBytes,
+              expectedCanonicalLogicalChargeBytes: logicalBytes,
+              destinationAccessSha256: backupSnapshot.accessSha256(),
+              destinationAuxiliarySha256: backupSnapshot.auxiliarySha256(),
+              destinationAuxiliaryChargeBytes: backupSnapshot.auxiliaryChargeBytes(),
+              retainedIdentity: null,
+              retainedSha256: null,
+              retainedSecuritySha256: null,
+              createdCanonicalIdentity: null,
+              phase: RetainedPublicationPhase.prepared,
+            ),
+          ),
+        );
+        final RetainedPublicationOutcome outcome;
+        try {
+          outcome = executeRetainedPublication(
+            journals: journals,
+            record: record,
+            canonical: canonical,
+            retained: retained,
+            publicationSource: backupFile,
+            destinationCreation: creation,
+            destinationSnapshot: backupSnapshot,
+            cancellation: const NotCancellablePublication(),
+            beforeCanonicalCreate: () {},
+            verifyDestination: (_) {},
           );
-          final result = _resultWith(
-            applied: 1,
-            failed: 0,
-            journalId: record.journalId,
+        } on Object {
+          final locator = record.retainedLocators().first;
+          final notice = RecoveryNotice(
+            warningKey: 'error.rfi.followUp.recoveryRequired',
+            locator: locator,
           );
-          _insertEffectState(result.meta, 'committed');
-          _insertRetainedEvidence(result.meta, record.retainedEvidence);
-          return result;
-        case RetainedPublicationCancelledBeforeDisplacement():
-          throw BackendError.journalInvalid('S5 undo cannot be cancelled');
-        case RetainedPublicationRecoveryRequired(:final notice):
           final expected = record.revision;
           record.prepareOutcomeUnknown(notice);
           journals.writeS5Cas(record, expected);
           return _s5RecoveryResult(record, notice);
+        }
+        switch (outcome) {
+          case RetainedPublicationPublished():
+            _transitionS5Backend(
+              record,
+              FinalizeUndoSuccess(completedStep: step, evidence: const []),
+            );
+            final result = _resultWith(
+              applied: 1,
+              failed: 0,
+              journalId: record.journalId,
+            );
+            _insertEffectState(result.meta, 'committed');
+            _insertRetainedEvidence(result.meta, record.retainedEvidence);
+            return result;
+          case RetainedPublicationCancelledBeforeDisplacement():
+            throw BackendError.journalInvalid('S5 undo cannot be cancelled');
+          case RetainedPublicationRecoveryRequired(:final notice):
+            final expected = record.revision;
+            record.prepareOutcomeUnknown(notice);
+            journals.writeS5Cas(record, expected);
+            return _s5RecoveryResult(record, notice);
+        }
+      } finally {
+        _closeQuietly(currentFile);
+        _closeQuietly(backupFile);
       }
     } finally {
-      _closeQuietly(currentFile);
-      _closeQuietly(backupFile);
+      // Dart has no Drop: release the S5 lease on every exit (Rust RAII).
+      record.release();
     }
   }
 

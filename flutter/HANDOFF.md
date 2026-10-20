@@ -77,14 +77,17 @@ porting rules, but its Linux paths are outdated; use the paths below.
    cancelled-waiter and acquisition-contention tests (need real concurrency),
    `timeout_late_result_*`, `timeout_live_*`, the `completed_*_loser` tests,
    `*_response_poll_*`, and the PrintService-backed cancel tests (3826, 4287).
-3. **E2 test bodies.** These tests are skipped with empty bodies and need
-   the Rust bodies ported now that the authority exists:
-   - `e3_journal_s5_test.dart`: 3 tests (`_authorityBlocked`). The Rust is
-     in `journal.rs` 2730-2950.
-   - `e9_stage_signed_test.dart` and `e9_orientation_test.dart`:
-     `_applySkip`.
-   - `e10_process_scans_test.dart`: `_skipApply` and `_notPortedYet`.
-   - `e8_native_part8_test.dart`: 3 tests.
+3. **E2 test bodies: PARTIAL (1.20.5).** Filled with real flows:
+   `e8_native_part8` (follow-up apply of 501 guarded updates, retained undo,
+   retained recovery; real xlsx via `e8_xlsx_writer.dart`) and
+   `e3_journal_s5` (failed-apply undo, user-initiated restore recovery, no
+   clobber; real files on disk). This fixed a real bug: the S5 undo lease
+   (`process` + interprocess permits) was never released on exit, so the next
+   undo failed with `operation_in_progress`. Still skipped, with accurate
+   reasons: `e9_stage_signed` and `e9_orientation` apply tests, and
+   `e10_process_scans` apply/undo, orientation and parallel-analysis tests.
+   These need FilesystemAuthority apply plus the fixture PDFs.
+   The Windows-only retry tests stay UNVERIFIED.
 4. **E11:** finish the `platform/windows/printing.dart` and
    `platform/macos/printing.dart` adapters and port
    `src-tauri/tests/batch_print.rs`.

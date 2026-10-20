@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.5 - 2026-10-20
+
+### Fixed
+
+- Release the S5 undo lease on every exit so a later undo is not blocked.
+
+### Tests
+
+- Port follow-up apply, undo and recovery tests over real workbooks.
+
 ## 1.20.4 - 2026-10-20
 
 ### Added

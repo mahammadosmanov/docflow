@@ -26,8 +26,7 @@ const String _fixtureRoot = '../../src-tauri/tests/fixtures';
 const String _civ0064 = 'AZE-SUN-INT-QMS-RFI-CIV-0064';
 
 const String _skipApply =
-    'Apply/Undo is not exercised by this Preview-level port; needs the '
-    'FilesystemAuthority apply and undo harness';
+    'UNPORTED: process-scans apply/undo tests remain (FilesystemAuthority is available; port the Rust apply cases)';
 const String _notPortedYet =
     'not ported in this repair pass: orientation, parallel analysis and '
     'revision cases remain to be ported from src-tauri/tests/process_scans.rs';
