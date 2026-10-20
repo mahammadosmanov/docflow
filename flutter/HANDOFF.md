@@ -96,16 +96,14 @@ porting rules, but its Linux paths are outdated; use the paths below.
    Remaining: the other 59 batch-print tests (preview/revise/resume/queue).
    `WindowsControlledPdfSubmitter` still does not `implements
    ControlledPdfSubmitter`, because excel.dart uses the stub `PrintJob` type.
-5. **PDF page renderer: PARTIAL (1.20.7).** `lib/engine/pdf_tool_renderer.dart`
-   renders PNG pages with poppler `pdftoppm` and extracts text with
-   `pdftotext`. `selectPdfPageRenderer` uses it on macOS when poppler is
-   installed. Otherwise macOS still fails closed in
-   `UnverifiedNativePdfPageRenderer('PDFKit')`. Windows still fails closed
-   (`Windows PDF engine`). Not ported: PDFKit and the Windows PDF engine.
-   The 4 `rfi_system_sync` render tests now use the production renderer,
-   and they run wherever pdftoppm exists. Both new renderer tests run here
-   (pdftoppm is at /opt/homebrew/bin). Renderer behaviour on macOS and
-   Windows is UNVERIFIED.
+5. **PDF page renderer: macOS DONE, Windows UNVERIFIED (1.20.9).**
+   macOS: `lib/engine/pdfkit_renderer.dart` compiles an embedded Swift PDFKit
+   helper with `xcrun swiftc` into the user cache, then uses PDFKit for page
+   text and PNG rendering. Tested here. Poppler (`pdf_tool_renderer.dart`) is
+   the fallback when xcrun is missing.
+   Windows: `lib/engine/windows_pdf_renderer.dart` drives Windows.Data.Pdf
+   through PowerShell and fails closed when unavailable. UNVERIFIED: no
+   Windows host here. Page text is empty (no text API in Windows.Data.Pdf).
 6. **Release: PREPARED (1.20.8).** `docs/adr/0039` and its index row record that
    the Dart engine supersedes the "no second backend" decision. `flutter/PR_BODY.md`
    has the attribution, parity coverage and UNVERIFIED gaps. Nothing is pushed and

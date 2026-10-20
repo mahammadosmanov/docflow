@@ -23,6 +23,8 @@ import 'package:path/path.dart' as p;
 
 import 'operations/process_scans.dart';
 import 'pdf_tool_renderer.dart';
+import 'pdfkit_renderer.dart';
+import 'windows_pdf_renderer.dart';
 import 'rfi_code.dart';
 
 const int textLayerMinChars = 50;
@@ -114,12 +116,15 @@ class UnverifiedNativePdfPageRenderer implements PdfPageRenderer {
 /// Port of the `cfg(target_os)` selection of the PDF page backend.
 PdfPageRenderer selectPdfPageRenderer() {
   if (Platform.isMacOS) {
-    // PDFKit is not ported; poppler is the verified fallback when installed.
+    if (PdfKitPageRenderer.available) {
+      return const PdfKitPageRenderer();
+    }
     return PdfToolPageRenderer.discover() ??
         const UnverifiedNativePdfPageRenderer('PDFKit');
   }
   if (Platform.isWindows) {
-    return const UnverifiedNativePdfPageRenderer('Windows PDF engine');
+    // UNVERIFIED: runs Windows.Data.Pdf through PowerShell; fails closed if absent.
+    return const WindowsPdfPageRenderer();
   }
   return const UnsupportedPdfPageRenderer();
 }

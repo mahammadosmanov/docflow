@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.9 - 2026-10-20
+
+### Added
+
+- PDFKit helper (compiled with xcrun swiftc) for macOS page text and PNG rendering.
+- Windows.Data.Pdf renderer through PowerShell; fails closed; UNVERIFIED.
+
 ## 1.20.8 - 2026-10-20
 
 ### Docs
