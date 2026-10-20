@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.6 - 2026-10-20
+
+### Tests
+
+- Port batch print job validation, persisted metadata, forged page range and
+  unknown printer or option tests.
+
 ## 1.20.5 - 2026-10-20
 
 ### Fixed

@@ -88,9 +88,14 @@ porting rules, but its Linux paths are outdated; use the paths below.
    `e10_process_scans` apply/undo, orientation and parallel-analysis tests.
    These need FilesystemAuthority apply plus the fixture PDFs.
    The Windows-only retry tests stay UNVERIFIED.
-4. **E11:** finish the `platform/windows/printing.dart` and
-   `platform/macos/printing.dart` adapters and port
-   `src-tauri/tests/batch_print.rs`.
+4. **E11: PARTIAL (1.20.6).** The Windows and macOS printing adapters are
+   already ported (`platform/windows/printing.dart`, `platform/macos/printing.dart`),
+   both UNVERIFIED on real hosts. 1.20.6 ports 5 of the 64 tests in
+   `src-tauri/tests/batch_print.rs` (validation, legacy and persisted job
+   metadata, forged page range, unknown printer and unsupported options).
+   Remaining: the other 59 batch-print tests (preview/revise/resume/queue).
+   `WindowsControlledPdfSubmitter` still does not `implements
+   ControlledPdfSubmitter`, because excel.dart uses the stub `PrintJob` type.
 5. **PDF page renderer.** `ocr.dart` `selectPdfPageRenderer` returns an
    `UnverifiedNativePdfPageRenderer` on macOS and Windows, so OCR and
    signature rendering do not work on real machines. Port the PDFKit and
