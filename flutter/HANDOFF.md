@@ -69,8 +69,14 @@ porting rules, but its Linux paths are outdated; use the paths below.
    fixtures (only error paths and an empty process-scans run). Every
    Windows/COM path is UNVERIFIED on a Windows host.
    Also: `NativeBackend.production` takes `authConfig` explicitly.
-2. **Excel tail:** the cancel/timeout section of `platform/excel.rs`, lines
-   3181-5428, into `lib/engine/platform/excel.dart`.
+2. **Excel tail: PARTIAL (1.20.4).** The Dart pipeline in `platform/excel.dart`
+   already had the cancel/timeout logic. 1.20.4 ports 4 more Rust tests into
+   `e12_excel_pipeline_test.dart`: error-response and received-response
+   cleanup review, cancelled failed-join loser cleanup review, and the
+   acquisition deadline. Still not ported from `excel.rs` 3181-5428: the
+   cancelled-waiter and acquisition-contention tests (need real concurrency),
+   `timeout_late_result_*`, `timeout_live_*`, the `completed_*_loser` tests,
+   `*_response_poll_*`, and the PrintService-backed cancel tests (3826, 4287).
 3. **E2 test bodies.** These tests are skipped with empty bodies and need
    the Rust bodies ported now that the authority exists:
    - `e3_journal_s5_test.dart`: 3 tests (`_authorityBlocked`). The Rust is

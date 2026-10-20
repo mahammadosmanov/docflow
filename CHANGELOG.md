@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.4 - 2026-10-20
+
+### Added
+
+- Flutter Excel export tests for cleanup review and acquisition deadline on the
+  cancel and timeout path.
+
 ## 1.20.3 - 2026-10-20
 
 ### Added

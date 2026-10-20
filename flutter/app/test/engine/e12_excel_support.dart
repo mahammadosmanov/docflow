@@ -32,8 +32,9 @@ PrintJob worksheetJob(
   String sourcePath,
   FileSignature signature,
   String name,
-  int workbookIndex,
-) => PrintJob(
+  int workbookIndex, {
+  int timeoutMinutes = 1,
+}) => PrintJob(
   jobId: 'worksheet-$workbookIndex',
   path: sourcePath,
   printer: 'Office Printer',
@@ -45,7 +46,7 @@ PrintJob worksheetJob(
   color: 'printer',
   duplex: 'printer',
   pageRange: 'all',
-  timeoutMinutes: 1,
+  timeoutMinutes: timeoutMinutes,
   signature: signature,
   worksheet: descriptor(name, workbookIndex),
   workbookSafety: safety(),
