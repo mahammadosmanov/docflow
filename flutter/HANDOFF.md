@@ -20,7 +20,8 @@ porting rules, but its Linux paths are outdated; use the paths below.
   `projectPath=/Users/rohtolos/Documents/GitHub/docflow-flutter-migration`.
 - Xcode is not installed, so `flutter build macos` fails. Analyze and tests
   run without it.
-- `frontend/` is deleted on this branch. Read the React source with
+- `frontend/` is intact on this branch (the only change outside `flutter/` is
+  `.gitignore`). If your checkout lacks it, read the React source with
   `git show 5c778e1:frontend/src/App.tsx | sed -n 'A,Bp'`.
 - Token budget is tight. Read only the Rust ranges you port. Run at most two
   subagents at a time.
