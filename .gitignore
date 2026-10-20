@@ -24,7 +24,7 @@ src-tauri/resources/windows-tesseract/
 
 # Retired implementations and local document corpus
 legacy/
-app/
+/app/
 sidecar/
 Test/
 
