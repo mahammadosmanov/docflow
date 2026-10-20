@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.8 - 2026-10-20
+
+### Docs
+
+- ADR 0039: the Dart engine supersedes the no-second-backend decision.
+- Flutter PR body with parity coverage and UNVERIFIED gaps.
+
 ## 1.20.7 - 2026-10-20
 
 ### Added

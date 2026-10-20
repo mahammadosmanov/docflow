@@ -48,6 +48,7 @@ and versioned with the code they govern.
 | Exact canonical PDF and bottom-right OTHERS cell as sole Worley authority | Accepted | [`adr/0021-exact-others-worley-evidence.md`](adr/0021-exact-others-worley-evidence.md) |
 | Existing PCU FINAL RFI as authority for its separate Worley status cell | Accepted | [`adr/0022-pcu-final-worley-projection.md`](adr/0022-pcu-final-worley-projection.md) |
 | Successful guarded RFI Log plan as source for a separate unsent Outlook reply plan | Accepted | [`adr/0023-rfi-log-to-outlook-reply-handoff.md`](adr/0023-rfi-log-to-outlook-reply-handoff.md) |
+| Dart engine supersedes the no-second-backend decision for the Flutter migration | Accepted | [`adr/0039-dart-engine-supersedes-no-second-backend.md`](adr/0039-dart-engine-supersedes-no-second-backend.md) |
 
 ## Adding a decision
 

@@ -106,14 +106,11 @@ porting rules, but its Linux paths are outdated; use the paths below.
    and they run wherever pdftoppm exists. Both new renderer tests run here
    (pdftoppm is at /opt/homebrew/bin). Renderer behaviour on macOS and
    Windows is UNVERIFIED.
-6. **Release:**
-   - Bump the version with `node tools/version_manager.mjs set <next>`.
-     Keep `docflowVersion` in `lib/engine/backend.dart` equal to `VERSION`.
-   - Add a docs note that the Dart engine supersedes the earlier
-     "no second backend" decision (`docs/DECISIONS.md`).
-   - Push, then open a PR from `flutter-migration` to `main`. Its body starts
-     with the attribution block and lists parity coverage and the honest
-     UNVERIFIED gaps: Windows/macOS/Office/printer.
+6. **Release: PREPARED (1.20.8).** `docs/adr/0039` and its index row record that
+   the Dart engine supersedes the "no second backend" decision. `flutter/PR_BODY.md`
+   has the attribution, parity coverage and UNVERIFIED gaps. Nothing is pushed and
+   no PR is open. Still to do before the PR: a push, a PR to `main`, and the
+   Rust and Windows/macOS host checks listed in the PR body.
 
 ## Known gaps (UNVERIFIED)
 
