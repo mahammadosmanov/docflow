@@ -566,7 +566,7 @@ abstract interface class PrintAdapter {
 /// Port of the Excel export pipeline's submit entry point consumed by
 /// [PrintService] for worksheet jobs. Implemented by the E12 Excel adapter.
 abstract interface class ExcelExportPipelinePort {
-  PrintSubmissionOutcome exportAndSubmit(
+  Future<PrintSubmissionOutcome> exportAndSubmit(
     PrintJob job,
     cap.AnchoredPath source,
     cap.OsHandle sourceFile,
@@ -846,6 +846,34 @@ class PrintJob {
     Map<String, Object?>? extra,
   }) : signature = signature ?? const FileSignature(),
        extra = extra ?? <String, Object?>{};
+
+  /// Copy with only the page range changed (the Excel controlled submit path).
+  PrintJob copyWith({String? pageRange}) => PrintJob(
+    jobId: jobId,
+    path: path,
+    printer: printer,
+    verb: verb,
+    format: format,
+    paper: paper,
+    orientation: orientation,
+    scaling: scaling,
+    color: color,
+    duplex: duplex,
+    pageRange: pageRange ?? this.pageRange,
+    timeoutMinutes: timeoutMinutes,
+    retries: retries,
+    onError: onError,
+    copy: copy,
+    signature: signature,
+    worksheet: worksheet,
+    workbookSafety: workbookSafety,
+    status: status,
+    attempts: attempts,
+    error: error,
+    completedAt: completedAt,
+    cleanupReview: cleanupReview,
+    extra: Map.of(extra),
+  );
 
   static const Set<String> _knownKeys = {
     'jobId',
@@ -1852,7 +1880,7 @@ class PrintService {
   }
 
   /// Port of `PrintService::resume`.
-  Plan resume(CallerIdentity caller, String queueId) {
+  Future<Plan> resume(CallerIdentity caller, String queueId) async {
     queues.begin(queueId);
     try {
       final state = queues.load(queueId);
@@ -1916,25 +1944,25 @@ class PrintService {
   }
 
   /// Port of `PrintService::apply`: executes one approved, cached plan.
-  OperationResult apply(
+  Future<OperationResult> apply(
     String planId,
     CallerIdentity caller,
     void Function(ProgressEvent event) progress,
-  ) {
+  ) async {
     final claim = plans.claimForApplyBound(planId, caller, mutationLock);
     try {
-      return _applyClaim(claim, planId, caller, progress);
+      return await _applyClaim(claim, planId, caller, progress);
     } finally {
       claim.release();
     }
   }
 
-  OperationResult _applyClaim(
+  Future<OperationResult> _applyClaim(
     ApplyClaim claim,
     String planId,
     CallerIdentity caller,
     void Function(ProgressEvent event) progress,
-  ) {
+  ) async {
     if (claim.claimed.origin != BackendOrigin.rust ||
         claim.claimed.plan.opId != 'files.batch_print') {
       throw BackendError.validation('plan is not owned by the Rust print backend');
@@ -1984,7 +2012,7 @@ class PrintService {
       );
       queues.begin(state.queueId);
       try {
-        return _runApply(
+        return await _runApply(
           state,
           jobs,
           claim,
@@ -2003,7 +2031,7 @@ class PrintService {
     }
   }
 
-  OperationResult _runApply(
+  Future<OperationResult> _runApply(
     QueueState state,
     List<PrintJob> jobs,
     ApplyClaim claim,
@@ -2013,7 +2041,7 @@ class PrintService {
     List<GrantRootIdentity> rootIdentities,
     CancellationToken token,
     void Function(ProgressEvent event) progress,
-  ) {
+  ) async {
     state.status = 'running';
     queues.save(state);
     final record = JournalRecord.fresh(
@@ -2090,7 +2118,7 @@ class PrintService {
         PrintSubmissionOutcome? outcome;
         PrintFailure? failure;
         try {
-          outcome = _submitApprovedJob(job, binding, caller, token);
+          outcome = await _submitApprovedJob(job, binding, caller, token);
         } on PrintFailure catch (error) {
           failure = error;
         }
@@ -2660,12 +2688,12 @@ class PrintService {
     }
   }
 
-  PrintSubmissionOutcome _submitApprovedJob(
+  Future<PrintSubmissionOutcome> _submitApprovedJob(
     PrintJob job,
     PlanBinding binding,
     CallerIdentity caller,
     CancellationToken cancellation,
-  ) {
+  ) async {
     final cap.AnchoredPath source;
     final cap.OsHandle sourceFile;
     try {

@@ -75,16 +75,13 @@ porting rules, but its Linux paths are outdated; use the paths below.
    losers, panic unwind, late results with bounded retry, live-loser breaker,
    retained workspace locator, response-poll cancel and deadline, shared
    operation fence, and cancelled waiter (real async concurrency via Completer).
-   STILL OPEN (12 cases, Rust lines 3181, 3280, 3368, 3434, 3514, 3663, 3743,
-   3826, 3952, 4033, 4226, 4287): all run through `PrintService` with an Excel
-   pipeline. Dart blocks them on a real gap, not a test gap:
-   `PrintService.apply` is synchronous and `ExcelExportPipelinePort` is
-   synchronous, but `ExcelExportPipeline.exportAndSubmit` is `Future`-based.
-   Production also never injects an Excel pipeline (`native.dart` constructs
-   `PrintService` without `excelPipeline`), so Excel print jobs return
-   `error.print.excelUnavailable` in the app. Fix: make the print apply/resume
-   path async and wire a production pipeline (Windows COM exporter in
-   `platform/windows/excel.dart`, UNVERIFIED on this Mac).
+   DONE (1.20.15): the 12 PrintService-backed cases are ported in
+   `e12_print_service_test.dart` (Rust lines 3181, 3280, 3368, 3434, 3514, 3663,
+   3743, 3826, 3952, 4033, 4226, 4287). `PrintService.apply`/`resume` are async,
+   `NativeBackend` injects `productionExcelPipeline()` on Windows (null elsewhere,
+   so non-Windows still returns `error.print.excelUnavailable`), and
+   `WindowsControlledPdfSubmitter implements ControlledPdfSubmitter`. Windows COM
+   path is UNVERIFIED on this Mac.
 3. **E2 test bodies: DONE for Dart-portable cases (1.20.11).** Filled with
    real flows: `e8_native_part6`/`e8_native_part8` (follow-up apply, retained
    undo and recovery, real xlsx via `e8_xlsx_writer.dart`), `e3_journal_s5`
@@ -128,7 +125,7 @@ porting rules, but its Linux paths are outdated; use the paths below.
    the Dart engine supersedes the "no second backend" decision. `flutter/PR_BODY.md`
    has the attribution, parity coverage, source gates re-run on this Mac, and the
    UNVERIFIED gaps. Nothing is pushed and no PR is open. Still open before the PR:
-   the 12 Excel print-queue cases (see item 2) and the Windows and macOS host checks.
+   the Windows and macOS host checks (the 12 Excel print-queue cases are ported, see item 2).
    Source gates re-run for 1.20.14: version, docs, package source, `npm test`
    (73 pass), `npm run build`, cargo fmt, clippy, check and test, and
    `npm run audit:licenses` (after staging the local macOS Tesseract bundle).

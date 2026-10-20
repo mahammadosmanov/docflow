@@ -2208,19 +2208,18 @@ final class WindowsPrintAdapter implements PrintAdapter {
 }
 
 /// Port of `WindowsControlledPdfSubmitter`. [submitPdf] mirrors
-/// `ControlledPdfSubmitter::submit_pdf`. It does not `implements` the excel.dart
-/// interface yet: that interface is typed against the stub `PrintJob` in
-/// `excel_print_ports.dart`, not the `print_queue.dart` class. Once E12 moves
-/// its import, add `implements ControlledPdfSubmitter`. [deadline] is the
+/// `ControlledPdfSubmitter::submit_pdf`, and the class implements that
+/// interface on the shared `print_queue.dart` job type. [deadline] is the
 /// remaining time budget from submission, converted to an absolute instant as
 /// the Rust `Instant` deadline is.
-final class WindowsControlledPdfSubmitter {
+final class WindowsControlledPdfSubmitter implements ControlledPdfSubmitter {
   const WindowsControlledPdfSubmitter({
     this.pdfBackend = const DefaultWindowsPdfRenderBackend(),
   });
 
   final WindowsPdfRenderBackend pdfBackend;
 
+  @override
   Future<void> submitPdf(
     PrintJob job,
     ExportedWorksheetPdf pdf,

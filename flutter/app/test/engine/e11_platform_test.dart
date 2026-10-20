@@ -1173,56 +1173,59 @@ void main() {
       return path;
     }
 
-    test('uncertain and cancelled jobs are never retried automatically', () {
-      final cases = [
-        (
-          PrintFailure.uncertain('spool outcome unknown'),
-          'uncertain',
-          'warn.print.stateUncertain',
-        ),
-        (
-          PrintFailure.cancelled('cancelled while active', uncertain: false),
-          'cancelled',
-          'warn.print.cancelled',
-        ),
-        (
-          PrintFailure.cancelled(
-            'cancelled before acknowledgement',
-            uncertain: true,
+    test(
+      'uncertain and cancelled jobs are never retried automatically',
+      () async {
+        final cases = [
+          (
+            PrintFailure.uncertain('spool outcome unknown'),
+            'uncertain',
+            'warn.print.stateUncertain',
           ),
-          'uncertain',
-          'warn.print.cancelledUncertain',
-        ),
-      ];
-      for (final (failure, status, warning) in cases) {
-        final file = writeFile('one-$status.pdf', 'one');
-        final adapter = _FakeAdapter(
-          printers: ['Office Printer'],
-          defaultPrinter: 'Office Printer',
-        )..outcomes.addAll([failure, null]);
-        final service = serviceFor(adapter);
-        final values = paramsFor([file], retries: 3);
-        final plan = service.preview(
-          const CallerIdentity('operator', 'session'),
-          values,
-          (_) {},
-        );
+          (
+            PrintFailure.cancelled('cancelled while active', uncertain: false),
+            'cancelled',
+            'warn.print.cancelled',
+          ),
+          (
+            PrintFailure.cancelled(
+              'cancelled before acknowledgement',
+              uncertain: true,
+            ),
+            'uncertain',
+            'warn.print.cancelledUncertain',
+          ),
+        ];
+        for (final (failure, status, warning) in cases) {
+          final file = writeFile('one-$status.pdf', 'one');
+          final adapter = _FakeAdapter(
+            printers: ['Office Printer'],
+            defaultPrinter: 'Office Printer',
+          )..outcomes.addAll([failure, null]);
+          final service = serviceFor(adapter);
+          final values = paramsFor([file], retries: 3);
+          final plan = service.preview(
+            const CallerIdentity('operator', 'session'),
+            values,
+            (_) {},
+          );
 
-        final result = service.apply(
-          plan.planId,
-          const CallerIdentity('operator', 'session'),
-          (_) {},
-        );
+          final result = (await service.apply(
+            plan.planId,
+            const CallerIdentity('operator', 'session'),
+            (_) {},
+          ));
 
-        expect(adapter.submitted, hasLength(1), reason: status);
-        expect((result.meta['counts'] as Map)[status], 1, reason: status);
-        expect(result.errors.first.key, warning, reason: status);
-      }
-    });
+          expect(adapter.submitted, hasLength(1), reason: status);
+          expect((result.meta['counts'] as Map)[status], 1, reason: status);
+          expect(result.errors.first.key, warning, reason: status);
+        }
+      },
+    );
 
     test(
       'submitted-unconfirmed job is not retried and the queue continues',
-      () {
+      () async {
         final first = writeFile('one.pdf', 'one');
         final second = writeFile('two.pdf', 'two');
         final adapter =
@@ -1244,11 +1247,11 @@ void main() {
           (_) {},
         );
 
-        final result = service.apply(
+        final result = (await service.apply(
           plan.planId,
           const CallerIdentity('operator', 'session'),
           (_) {},
-        );
+        ));
 
         expect(adapter.submitted, hasLength(2));
         expect((result.applied, result.failed), (2, 0));

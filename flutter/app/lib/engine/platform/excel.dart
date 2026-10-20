@@ -22,6 +22,7 @@ import 'package:uuid/uuid.dart';
 
 import '../cap_fs.dart';
 import '../ooxml.dart' show WorkbookSafetyFacts, WorksheetDescriptor;
+import '../print_queue.dart' show ExcelExportPipelinePort;
 import '../progress.dart' show CancellationToken;
 import 'excel_print_ports.dart';
 
@@ -299,7 +300,7 @@ final class _WorkerWait {
 enum _LoserTeardown { finished, failed, cleanupFailed }
 
 /// `ExcelExportPipeline`: the supervisor for worksheet export and submit.
-final class ExcelExportPipeline {
+final class ExcelExportPipeline implements ExcelExportPipelinePort {
   ExcelExportPipeline({
     required this.policy,
     required this.exporter,

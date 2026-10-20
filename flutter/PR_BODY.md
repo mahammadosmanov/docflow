@@ -58,12 +58,9 @@ that supersedes the earlier "no second backend" rule (`docs/adr/0039`).
 
 ## Still open
 
-- Excel print-queue cases (12 Rust cases through `PrintService`): not ported.
-  Blocker: `PrintService.apply` is synchronous, `ExcelExportPipelinePort` is
-  synchronous, but `ExcelExportPipeline.exportAndSubmit` is `Future`-based.
-  Production also never injects an Excel pipeline, so Excel print jobs return
-  `error.print.excelUnavailable` in the app. Fix needs an async print apply
-  path plus a production exporter (Windows COM, UNVERIFIED here).
+- Excel print-queue: the 12 PrintService-backed Rust cases are ported (1.20.15).
+  Production Excel pipeline is wired on Windows only; the COM path is UNVERIFIED
+  on a real Windows host and must be checked there before release.
 - Operator-only tests (Rust `#[ignore]`, need private files): process-scan
   operator PDF, orientation operator PDF/RFI tree, Ventoy print PDF, Ventoy
   group source, `e8_current_proof`. Each is env-gated with its reason.

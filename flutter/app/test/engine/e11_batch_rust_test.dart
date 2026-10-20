@@ -428,7 +428,7 @@ void main() {
       },
     );
 
-    test('worksheet print queue persists and resumes typed metadata without submission', () {
+    test('worksheet print queue persists and resumes typed metadata without submission', () async {
       final root = batchTempDir('queue-persist');
       addTearDown(() => root.deleteSync(recursive: true));
       final workbook = p.join(root.path, 'book.xlsx');
@@ -445,7 +445,7 @@ void main() {
       final expectedSafety = (jobs[0] as Map)['workbookSafety'];
       final expectedSignature = (jobs[0] as Map)['signature'];
 
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
       expect(result.applied, 0);
       expect(result.failed, 1);
@@ -463,7 +463,7 @@ void main() {
       expect(savedJob['signature'], expectedSignature);
 
       final restarted = batchService(root, adapter);
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
       final resumedRow = editorRows(resumed)[0];
       expect(resumedRow['worksheet'], expectedWorksheet);
       expect(resumedRow['workbookSafety'], expectedSafety);
@@ -472,7 +472,7 @@ void main() {
   });
 
   group('signatures, resume and job validation', () {
-    test('same workbook rows with inconsistent signatures fail before authorization', () {
+    test('same workbook rows with inconsistent signatures fail before authorization', () async {
       final root = batchTempDir('inconsistent-sig');
       addTearDown(() => root.deleteSync(recursive: true));
       final workbook = p.join(root.path, 'book.xlsx');
@@ -484,7 +484,7 @@ void main() {
         batchParams([workbook]),
         (_) {},
       );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
       final saved = jsonDecode(
@@ -495,15 +495,15 @@ void main() {
       File(queuePath).writeAsStringSync(jsonEncode(saved));
 
       final restarted = batchService(root, adapter);
-      expectBackendMessage(() {
-        final resumed = restarted.resume(batchCaller, queueId);
+      await expectBackendMessageAsync(() async {
+        final resumed = (await restarted.resume(batchCaller, queueId));
         final rows = editorRows(resumed);
         restarted.revise(batchCaller, resumed.planId, rows);
       }, 'error.print.workbookChanged');
       expect(adapter.submitted, isEmpty);
     });
 
-    test('worksheet resume revalidates source before caching a plan', () {
+    test('worksheet resume revalidates source before caching a plan', () async {
       final root = batchTempDir('resume-revalidate');
       addTearDown(() => root.deleteSync(recursive: true));
       final workbook = p.join(root.path, 'book.xlsx');
@@ -515,75 +515,81 @@ void main() {
         batchParams([workbook]),
         (_) {},
       );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       writeWorkbook(workbook, [('Changed', 99, null)]);
 
       final restarted = batchService(root, adapter);
-      expectBackendMessage(
+      await expectBackendMessageAsync(
         () => restarted.resume(batchCaller, queueId),
         'error.print.workbookChanged',
       );
     });
 
-    test('reordered resumed worksheet jobs persist across another pause', () {
-      final root = batchTempDir('reorder-resume');
-      addTearDown(() => root.deleteSync(recursive: true));
-      final workbook = p.join(root.path, 'book.xlsx');
-      writeWorkbook(workbook, [
-        ('MEC', 17, null),
-        ('CIV', 18, null),
-        ('ELE', 19, null),
-      ]);
-      final adapter = FakeBatchAdapter();
-      final service = batchService(root, adapter);
-      final plan = service.preview(
-        batchCaller,
-        batchParams([workbook]),
-        (_) {},
-      );
-      final first = service.apply(plan.planId, batchCaller, (_) {});
-      final queueId = first.meta['queueId']! as String;
+    test(
+      'reordered resumed worksheet jobs persist across another pause',
+      () async {
+        final root = batchTempDir('reorder-resume');
+        addTearDown(() => root.deleteSync(recursive: true));
+        final workbook = p.join(root.path, 'book.xlsx');
+        writeWorkbook(workbook, [
+          ('MEC', 17, null),
+          ('CIV', 18, null),
+          ('ELE', 19, null),
+        ]);
+        final adapter = FakeBatchAdapter();
+        final service = batchService(root, adapter);
+        final plan = service.preview(
+          batchCaller,
+          batchParams([workbook]),
+          (_) {},
+        );
+        final first = (await service.apply(plan.planId, batchCaller, (_) {}));
+        final queueId = first.meta['queueId']! as String;
 
-      final resumedService = batchService(root, adapter);
-      final resumed = resumedService.resume(batchCaller, queueId);
-      final rows = editorRows(resumed);
-      final reordered = [rows[2], rows[1], rows[0]];
-      final revised = resumedService.revise(
-        batchCaller,
-        resumed.planId,
-        reordered,
-      );
-      resumedService.apply(revised.planId, batchCaller, (_) {});
+        final resumedService = batchService(root, adapter);
+        final resumed = (await resumedService.resume(batchCaller, queueId));
+        final rows = editorRows(resumed);
+        final reordered = [rows[2], rows[1], rows[0]];
+        final revised = resumedService.revise(
+          batchCaller,
+          resumed.planId,
+          reordered,
+        );
+        (await resumedService.apply(revised.planId, batchCaller, (_) {}));
 
-      final restarted = batchService(root, adapter);
-      final resumedAgain = restarted.resume(batchCaller, queueId);
-      expect(
-        [for (final row in editorRows(resumedAgain)) row['worksheetName']],
-        ['ELE', 'CIV', 'MEC'],
-      );
-    });
+        final restarted = batchService(root, adapter);
+        final resumedAgain = (await restarted.resume(batchCaller, queueId));
+        expect(
+          [for (final row in editorRows(resumedAgain)) row['worksheetName']],
+          ['ELE', 'CIV', 'MEC'],
+        );
+      },
+    );
 
-    test('worksheet apply rejects source drift before any submission', () {
-      final root = batchTempDir('apply-drift');
-      addTearDown(() => root.deleteSync(recursive: true));
-      final workbook = p.join(root.path, 'book.xlsx');
-      writeWorkbook(workbook, [('MEC', 17, null)]);
-      final adapter = FakeBatchAdapter();
-      final service = batchService(root, adapter);
-      final plan = service.preview(
-        batchCaller,
-        batchParams([workbook]),
-        (_) {},
-      );
-      writeWorkbook(workbook, [('Changed', 99, null)]);
+    test(
+      'worksheet apply rejects source drift before any submission',
+      () async {
+        final root = batchTempDir('apply-drift');
+        addTearDown(() => root.deleteSync(recursive: true));
+        final workbook = p.join(root.path, 'book.xlsx');
+        writeWorkbook(workbook, [('MEC', 17, null)]);
+        final adapter = FakeBatchAdapter();
+        final service = batchService(root, adapter);
+        final plan = service.preview(
+          batchCaller,
+          batchParams([workbook]),
+          (_) {},
+        );
+        writeWorkbook(workbook, [('Changed', 99, null)]);
 
-      expectBackendMessage(
-        () => service.apply(plan.planId, batchCaller, (_) {}),
-        'error.print.workbookChanged',
-      );
-      expect(adapter.submitted, isEmpty);
-    });
+        await expectBackendMessageAsync(
+          () => service.apply(plan.planId, batchCaller, (_) {}),
+          'error.print.workbookChanged',
+        );
+        expect(adapter.submitted, isEmpty);
+      },
+    );
 
     test(
       'worksheet job validation requires typed sha, safety and all-only range',
@@ -749,7 +755,7 @@ void main() {
 
     test(
       'resume authority requires original source and root capability identity',
-      () {
+      () async {
         for (final replaceParent in [false, true]) {
           final root = batchTempDir('resume-authority-$replaceParent');
           addTearDown(() => root.deleteSync(recursive: true));
@@ -766,7 +772,11 @@ void main() {
             batchParams([approved]),
             (_) {},
           );
-          final result = service.apply(plan.planId, batchCaller, (_) {});
+          final result = (await service.apply(
+            plan.planId,
+            batchCaller,
+            (_) {},
+          ));
           final queueId = result.meta['queueId']! as String;
           adapter.submitted.clear();
           final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
@@ -797,7 +807,7 @@ void main() {
           File(queuePath).writeAsStringSync(jsonEncode(saved));
 
           final restarted = batchService(root, adapter);
-          expectBackendMessage(
+          await expectBackendMessageAsync(
             () => restarted.resume(batchCaller, queueId),
             'error.print.queueSourceReselectionRequired',
           );
@@ -812,7 +822,7 @@ void main() {
   group('resume identity and reentrancy', () {
     test(
       'resume rejects coherently rewritten job and source identity paths',
-      () {
+      () async {
         final root = batchTempDir('rewritten-identity');
         addTearDown(() => root.deleteSync(recursive: true));
         final selectedParent = Directory(p.join(root.path, 'selected'))
@@ -829,7 +839,7 @@ void main() {
           batchParams([approved]),
           (_) {},
         );
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
         final queueId = result.meta['queueId']! as String;
         adapter.submitted.clear();
         final inspectedBefore = adapter.inspected;
@@ -850,7 +860,7 @@ void main() {
         final queueBefore = File(queuePath).readAsBytesSync();
 
         final restarted = batchService(root, adapter);
-        expectBackendMessage(
+        await expectBackendMessageAsync(
           () => restarted.resume(batchCaller, queueId),
           'error.print.queueSourceReselectionRequired',
         );
@@ -860,7 +870,7 @@ void main() {
       },
     );
 
-    test('resumed plan rejects same-signature source identity swap before submission', () {
+    test('resumed plan rejects same-signature source identity swap before submission', () async {
       final root = batchTempDir('same-signature-swap');
       addTearDown(() => root.deleteSync(recursive: true));
       final selectedParent = Directory(p.join(root.path, 'selected'))
@@ -877,95 +887,101 @@ void main() {
         batchParams([approved]),
         (_) {},
       );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       adapter.submitted.clear();
 
       final restarted = batchService(root, adapter);
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
       File(approved).renameSync(originalBackup);
       File(approved).writeAsBytesSync('SIGNATURE COMPATIBLE BYTES'.codeUnits);
       File(approved).setLastModifiedSync(originalModified);
       expect(fileSignature(approved).size, fileSignature(originalBackup).size);
 
-      expectBackendMessage(
+      await expectBackendMessageAsync(
         () => restarted.apply(resumed.planId, batchCaller, (_) {}),
         'error.print.queueSourceReselectionRequired',
       );
       expect(adapter.submitted, isEmpty);
     });
 
-    test('concurrent resume reserves queue before loading and caching', () {
-      final root = batchTempDir('concurrent-resume');
-      addTearDown(() => root.deleteSync(recursive: true));
-      final approved = p.join(root.path, 'approved.pdf');
-      File(approved).writeAsBytesSync('approved'.codeUnits);
-      final adapter = FakeBatchAdapter()
-        ..push(PrintFailure.failed('pause queue'));
-      final service = batchService(root, adapter);
-      final plan = service.preview(
-        batchCaller,
-        batchParams([approved]),
-        (_) {},
-      );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
-      final queueId = result.meta['queueId']! as String;
+    test(
+      'concurrent resume reserves queue before loading and caching',
+      () async {
+        final root = batchTempDir('concurrent-resume');
+        addTearDown(() => root.deleteSync(recursive: true));
+        final approved = p.join(root.path, 'approved.pdf');
+        File(approved).writeAsBytesSync('approved'.codeUnits);
+        final adapter = FakeBatchAdapter()
+          ..push(PrintFailure.failed('pause queue'));
+        final service = batchService(root, adapter);
+        final plan = service.preview(
+          batchCaller,
+          batchParams([approved]),
+          (_) {},
+        );
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
+        final queueId = result.meta['queueId']! as String;
 
-      final restarted = batchService(root, adapter);
-      BackendError? secondError;
-      var reentered = false;
-      adapter.onInventory = () {
-        if (reentered) {
-          return;
-        }
-        reentered = true;
-        try {
-          restarted.resume(batchCaller, queueId);
-        } on BackendError catch (error) {
-          secondError = error;
-        }
-      };
-      restarted.resume(batchCaller, queueId);
+        final restarted = batchService(root, adapter);
+        BackendError? secondError;
+        var reentered = false;
+        adapter.onInventory = () async {
+          if (reentered) {
+            return;
+          }
+          reentered = true;
+          try {
+            (await restarted.resume(batchCaller, queueId));
+          } on BackendError catch (error) {
+            secondError = error;
+          }
+        };
+        (await restarted.resume(batchCaller, queueId));
 
-      expect(reentered, isTrue, reason: 'resume must consult the adapter');
-      expect(secondError?.code, 'operation_in_progress');
-    });
+        expect(reentered, isTrue, reason: 'resume must consult the adapter');
+        expect(secondError?.code, 'operation_in_progress');
+      },
+    );
   });
 
   group('resume save failure and revalidation cleanup', () {
-    test('resume save failure does not publish plan or retain grants', () {
-      final root = batchTempDir('save-failure');
-      addTearDown(() {
-        Process.runSync('chmod', ['755', p.join(root.path, 'print-queues')]);
-        root.deleteSync(recursive: true);
-      });
-      final approved = p.join(root.path, 'approved.pdf');
-      File(approved).writeAsBytesSync('approved'.codeUnits);
-      final adapter = FakeBatchAdapter()
-        ..push(PrintFailure.failed('pause queue'));
-      final service = batchService(root, adapter);
-      final plan = service.preview(
-        batchCaller,
-        batchParams([approved]),
-        (_) {},
-      );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
-      final queueId = result.meta['queueId']! as String;
+    test(
+      'resume save failure does not publish plan or retain grants',
+      () async {
+        final root = batchTempDir('save-failure');
+        addTearDown(() {
+          Process.runSync('chmod', ['755', p.join(root.path, 'print-queues')]);
+          root.deleteSync(recursive: true);
+        });
+        final approved = p.join(root.path, 'approved.pdf');
+        File(approved).writeAsBytesSync('approved'.codeUnits);
+        final adapter = FakeBatchAdapter()
+          ..push(PrintFailure.failed('pause queue'));
+        final service = batchService(root, adapter);
+        final plan = service.preview(
+          batchCaller,
+          batchParams([approved]),
+          (_) {},
+        );
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
+        final queueId = result.meta['queueId']! as String;
 
-      final restarted = batchService(root, adapter);
-      final queueRoot = p.join(root.path, 'print-queues');
-      Process.runSync('chmod', ['500', queueRoot]);
-      expectBackendMessage(
-        () => restarted.resume(batchCaller, queueId),
-        'print queue could not be saved',
-      );
-      Process.runSync('chmod', ['755', queueRoot]);
-      expect(restarted.activeGrantCountForTesting, 0);
-      expect(restarted.activePlanCountForTesting, 0);
-      restarted.discard(batchCaller, queueId);
-    });
+        final restarted = batchService(root, adapter);
+        final queueRoot = p.join(root.path, 'print-queues');
+        Process.runSync('chmod', ['500', queueRoot]);
+        await expectBackendMessageAsync(
+          () => restarted.resume(batchCaller, queueId),
+          'print queue could not be saved',
+        );
+        Process.runSync('chmod', ['755', queueRoot]);
+        expect(restarted.activeGrantCountForTesting, 0);
+        expect(restarted.activePlanCountForTesting, 0);
+        restarted.discard(batchCaller, queueId);
+      },
+    );
 
-    test('legacy queue without persisted source identity requires explicit reselection', () {
+    test('legacy queue without persisted source identity requires explicit reselection', () async {
       final root = batchTempDir('legacy-identity');
       addTearDown(() => root.deleteSync(recursive: true));
       final approved = p.join(root.path, 'approved.pdf');
@@ -978,7 +994,7 @@ void main() {
         batchParams([approved]),
         (_) {},
       );
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
       final legacy = jsonDecode(
@@ -989,7 +1005,7 @@ void main() {
       File(queuePath).writeAsStringSync(jsonEncode(legacy));
 
       final restarted = batchService(root, adapter);
-      expectBackendMessage(
+      await expectBackendMessageAsync(
         () => restarted.resume(batchCaller, queueId),
         'error.print.queueSourceReselectionRequired',
       );
@@ -997,7 +1013,7 @@ void main() {
       expect(restarted.activePlanCountForTesting, 0);
     });
 
-    test('failed resume revalidation releases provisional grants', () {
+    test('failed resume revalidation releases provisional grants', () async {
       for (final corruptDescriptor in [false, true]) {
         final root = batchTempDir('revalidate-$corruptDescriptor');
         addTearDown(() => root.deleteSync(recursive: true));
@@ -1013,7 +1029,7 @@ void main() {
           batchParams([workbook]),
           (_) {},
         );
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
         final queueId = result.meta['queueId']! as String;
         final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
         final saved = jsonDecode(
@@ -1054,7 +1070,7 @@ void main() {
         final restarted = batchService(root, adapter);
         final grantsBefore = restarted.activeGrantCountForTesting;
 
-        expectBackendMessage(
+        await expectBackendMessageAsync(
           () => restarted.resume(batchCaller, queueId),
           corruptDescriptor
               ? 'error.print.worksheetChanged'
@@ -1070,7 +1086,7 @@ void main() {
   });
 
   group('regression: preview signature matches apply', () {
-    test('an unchanged PDF previewed then applied is submitted', () {
+    test('an unchanged PDF previewed then applied is submitted', () async {
       final root = batchTempDir('pdf-apply');
       addTearDown(() => root.deleteSync(recursive: true));
       final pdf = p.join(root.path, 'approved.pdf');
@@ -1079,7 +1095,7 @@ void main() {
       final service = batchService(root, adapter);
       final plan = service.preview(batchCaller, batchParams([pdf]), (_) {});
 
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
       expect(
         result.failed,
@@ -1103,7 +1119,7 @@ void main() {
       return File(queuePath).readAsBytesSync();
     }
 
-    test('failed resume drift, grant and cache revalidation leave queue bytes unchanged', () {
+    test('failed resume drift, grant and cache revalidation leave queue bytes unchanged', () async {
       final freshSession = CallerIdentity('operator', 'fresh-session');
 
       final driftRoot = batchTempDir('drift');
@@ -1117,11 +1133,11 @@ void main() {
         batchParams([driftWorkbook]),
         (_) {},
       );
-      final driftResult = driftService.apply(
+      final driftResult = (await driftService.apply(
         driftPlan.planId,
         batchCaller,
         (_) {},
-      );
+      ));
       final driftQueueId = driftResult.meta['queueId']! as String;
       final driftQueuePath = p.join(
         driftRoot.path,
@@ -1150,11 +1166,11 @@ void main() {
         batchParams([cacheWorkbook]),
         (_) {},
       );
-      final cacheResult = cacheService.apply(
+      final cacheResult = (await cacheService.apply(
         cachePlan.planId,
         batchCaller,
         (_) {},
-      );
+      ));
       final cacheQueueId = cacheResult.meta['queueId']! as String;
       final cacheQueuePath = p.join(
         cacheRoot.path,
@@ -1190,11 +1206,11 @@ void main() {
         batchParams([grantedFile]),
         (_) {},
       );
-      final grantResult = grantService.apply(
+      final grantResult = (await grantService.apply(
         grantPlan.planId,
         batchCaller,
         (_) {},
-      );
+      ));
       grantAdapter.submitted.clear();
       final grantQueueId = grantResult.meta['queueId']! as String;
       final grantQueuePath = p.join(
@@ -1219,7 +1235,7 @@ void main() {
 
     test(
       'apply prints the pinned file bytes after the visible parent is swapped',
-      () {
+      () async {
         final root = batchTempDir('pinned-bytes');
         addTearDown(() => root.deleteSync(recursive: true));
         final visibleParent = Directory(p.join(root.path, 'approved'))
@@ -1248,7 +1264,7 @@ void main() {
         );
         swapArmed = true;
 
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
         expect(
           result.applied,
@@ -1405,7 +1421,7 @@ void main() {
       expect((jobs[1] as Map)['pageRange'], '5-7');
     });
 
-    test('out-of-bounds PDF revision leaves the prior plan usable', () {
+    test('out-of-bounds PDF revision leaves the prior plan usable', () async {
       final root = batchTempDir('range-bounds');
       addTearDown(() => root.deleteSync(recursive: true));
       final file = p.join(root.path, 'one.pdf');
@@ -1420,13 +1436,16 @@ void main() {
         () => service.revise(batchCaller, plan.planId, rows),
         'error.print.pageRangeBounds',
       );
-      expect(service.apply(plan.planId, batchCaller, (_) {}).applied, 1);
+      expect(
+        (await service.apply(plan.planId, batchCaller, (_) {})).applied,
+        1,
+      );
       expect(adapter.submitted[0].pageRange, 'all');
     });
 
     test(
       'approved PDF range is rechecked against page count before submission',
-      () {
+      () async {
         final root = batchTempDir('range-recheck');
         addTearDown(() => root.deleteSync(recursive: true));
         final file = p.join(root.path, 'one.pdf');
@@ -1439,7 +1458,11 @@ void main() {
         final revised = service.revise(batchCaller, plan.planId, rows);
         adapter.pdfPageCount = 2;
 
-        final result = service.apply(revised.planId, batchCaller, (_) {});
+        final result = (await service.apply(
+          revised.planId,
+          batchCaller,
+          (_) {},
+        ));
 
         expect(result.applied, 0);
         expect(result.failed, 1);
@@ -1490,7 +1513,7 @@ void main() {
     });
   });
   group('canonical page ranges and persistence', () {
-    test('canonical page ranges persist through copies, retries, queue, journal and resume', () {
+    test('canonical page ranges persist through copies, retries, queue, journal and resume', () async {
       final root = batchTempDir('range-persist');
       addTearDown(() => root.deleteSync(recursive: true));
       final first = p.join(root.path, 'first.pdf');
@@ -1527,7 +1550,7 @@ void main() {
         ['1-3', '5', '1-3', '5'],
       );
 
-      final result = service.apply(revised.planId, batchCaller, (_) {});
+      final result = (await service.apply(revised.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       expect(
         [for (final job in adapter.submitted) job.pageRange],
@@ -1557,14 +1580,14 @@ void main() {
       );
 
       final restarted = batchService(root, adapter);
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
       expect(
         [for (final row in editorRows(resumed)) row['pageRange']],
         ['1-3', '5', '1-3', '5'],
       );
     });
 
-    test('legacy queue without page range resumes as all', () {
+    test('legacy queue without page range resumes as all', () async {
       final root = batchTempDir('range-legacy');
       addTearDown(() => root.deleteSync(recursive: true));
       final file = p.join(root.path, 'one.pdf');
@@ -1574,7 +1597,7 @@ void main() {
         ..pdfPageCount = 3;
       final service = batchService(root, adapter);
       final plan = service.preview(batchCaller, batchParams([file]), (_) {});
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
       final saved = jsonDecode(
@@ -1587,7 +1610,7 @@ void main() {
         root,
         FakeBatchAdapter()..pdfPageCount = 3,
       );
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
 
       expect(editorRows(resumed)[0]['pageRange'], 'all');
       expect(((resumed.meta['jobs']! as List)[0] as Map)['pageRange'], 'all');
@@ -1595,7 +1618,7 @@ void main() {
 
     test(
       'owned persisted queue with empty page range is rejected on resume',
-      () {
+      () async {
         final root = batchTempDir('range-empty');
         addTearDown(() => root.deleteSync(recursive: true));
         final file = p.join(root.path, 'one.pdf');
@@ -1632,7 +1655,7 @@ void main() {
         final adapter = FakeBatchAdapter()..pdfPageCount = 3;
         final service = batchService(root, adapter);
 
-        expectBackendMessage(
+        await expectBackendMessageAsync(
           () => service.resume(batchCaller, queueId),
           'error.print.pageRangeInvalid',
         );
@@ -1658,7 +1681,7 @@ void main() {
       },
     );
 
-    test('queue is persisted and journaled before failure, then resumes and discards', () {
+    test('queue is persisted and journaled before failure, then resumes and discards', () async {
       final root = batchTempDir('queue-journal');
       addTearDown(() => root.deleteSync(recursive: true));
       final files = [
@@ -1674,7 +1697,7 @@ void main() {
       final service = batchService(root, adapter);
       final plan = service.preview(batchCaller, batchParams(files), (_) {});
 
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
       expect(result.applied, 1);
       expect(result.failed, 1);
@@ -1713,7 +1736,7 @@ void main() {
       expect(journal.containsKey('pendingStep'), isFalse);
 
       final restarted = batchService(root, adapter);
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
       expect(
         [for (final row in editorRows(resumed)) row['enabled']],
         [false, true, true],
@@ -1729,7 +1752,7 @@ void main() {
       File(p.join(root, 'print-queues', '$queueId.json')).readAsStringSync(),
     ) as Map<String, Object?>;
 
-    test('partial resume rebuilds the complete displayed order for legacy and worksheet queues', () {
+    test('partial resume rebuilds the complete displayed order for legacy and worksheet queues', () async {
       final legacyRoot = batchTempDir('partial-legacy');
       addTearDown(() => legacyRoot.deleteSync(recursive: true));
       final legacyFiles = [
@@ -1748,14 +1771,17 @@ void main() {
         batchParams(legacyFiles),
         (_) {},
       );
-      final legacyResult = legacyService.apply(
+      final legacyResult = (await legacyService.apply(
         legacyPlan.planId,
         batchCaller,
         (_) {},
-      );
+      ));
       final legacyQueueId = legacyResult.meta['queueId']! as String;
       final legacyRestarted = batchService(legacyRoot, legacyAdapter);
-      final legacyResumed = legacyRestarted.resume(batchCaller, legacyQueueId);
+      final legacyResumed = (await legacyRestarted.resume(
+        batchCaller,
+        legacyQueueId,
+      ));
       final legacyRows = editorRows(legacyResumed);
       expect(
         [for (final row in legacyRows) row['status']],
@@ -1766,7 +1792,7 @@ void main() {
         legacyResumed.planId,
         [legacyRows[2], legacyRows[0], legacyRows[1]],
       );
-      legacyRestarted.apply(legacyRevised.planId, batchCaller, (_) {});
+      (await legacyRestarted.apply(legacyRevised.planId, batchCaller, (_) {}));
 
       final legacySaved = readQueue(legacyRoot.path, legacyQueueId);
       final legacyJobs = (legacySaved['jobs']! as List).cast<Map>();
@@ -1799,11 +1825,11 @@ void main() {
         batchParams([workbook]),
         (_) {},
       );
-      final worksheetResult = worksheetService.apply(
+      final worksheetResult = (await worksheetService.apply(
         worksheetPlan.planId,
         batchCaller,
         (_) {},
-      );
+      ));
       final worksheetQueueId = worksheetResult.meta['queueId']! as String;
       final worksheetQueuePath = p.join(
         worksheetRoot.path,
@@ -1825,17 +1851,21 @@ void main() {
       File(worksheetQueuePath).writeAsStringSync(jsonEncode(worksheetSaved));
 
       final worksheetRestarted = batchService(worksheetRoot, worksheetAdapter);
-      final worksheetResumed = worksheetRestarted.resume(
+      final worksheetResumed = (await worksheetRestarted.resume(
         batchCaller,
         worksheetQueueId,
-      );
+      ));
       final worksheetRows = editorRows(worksheetResumed);
       final worksheetRevised = worksheetRestarted.revise(
         batchCaller,
         worksheetResumed.planId,
         [worksheetRows[2], worksheetRows[0], worksheetRows[1]],
       );
-      worksheetRestarted.apply(worksheetRevised.planId, batchCaller, (_) {});
+      (await worksheetRestarted.apply(
+        worksheetRevised.planId,
+        batchCaller,
+        (_) {},
+      ));
 
       final afterWorksheet = readQueue(worksheetRoot.path, worksheetQueueId);
       final worksheetJobs = (afterWorksheet['jobs']! as List).cast<Map>();
@@ -1853,7 +1883,7 @@ void main() {
 
     test(
       'persisted queues are adopted only by the exact owner after restart',
-      () {
+      () async {
         final root = batchTempDir('adopt');
         addTearDown(() => root.deleteSync(recursive: true));
         final file = p.join(root.path, 'one.pdf');
@@ -1863,15 +1893,15 @@ void main() {
         final service = batchService(root, adapter);
         final original = CallerIdentity('operator-a', 'session-a');
         final plan = service.preview(original, batchParams([file]), (_) {});
-        final result = service.apply(plan.planId, original, (_) {});
+        final result = (await service.apply(plan.planId, original, (_) {}));
         final queueId = result.meta['queueId']! as String;
         final restarted = batchService(root, adapter);
         final otherOwner = CallerIdentity('operator-b', 'session-a');
         final freshSession = CallerIdentity('operator-a', 'session-b');
 
         expect(restarted.latest(otherOwner), isNull);
-        expect(
-          () => restarted.resume(otherOwner, queueId),
+        await expectLater(
+          restarted.resume(otherOwner, queueId),
           throwsA(
             isA<BackendError>().having(
               (e) => e.code,
@@ -1894,7 +1924,7 @@ void main() {
         expect(readQueue(root.path, queueId)['ownerId'], 'operator-a');
         expect(readQueue(root.path, queueId)['sessionId'], 'session-a');
         expect(
-          restarted.resume(freshSession, queueId).opId,
+          (await restarted.resume(freshSession, queueId)).opId,
           'files.batch_print',
         );
         expect(readQueue(root.path, queueId)['sessionId'], 'session-b');
@@ -1904,7 +1934,7 @@ void main() {
     );
   });
   group('retry, uncertainty and unconfirmed submission', () {
-    test('retry, timeout and skip semantics produce partial results without reordering', () {
+    test('retry, timeout and skip semantics produce partial results without reordering', () async {
       final root = batchTempDir('retry-skip');
       addTearDown(() => root.deleteSync(recursive: true));
       final first = p.join(root.path, 'one.pdf');
@@ -1928,7 +1958,7 @@ void main() {
         (_) {},
       );
 
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
       expect(result.applied, 1);
       expect(result.failed, 1);
@@ -1948,58 +1978,65 @@ void main() {
       expect((result.meta['counts']! as Map)['completed'], 1);
     });
 
-    test('uncertain and cancelled jobs are never retried automatically', () {
-      final cases = <(PrintFailure, String, String)>[
-        (
-          PrintFailure.uncertain('spool outcome unknown'),
-          'uncertain',
-          'warn.print.stateUncertain',
-        ),
-        (
-          PrintFailure.cancelled('cancelled while active', uncertain: false),
-          'cancelled',
-          'warn.print.cancelled',
-        ),
-        (
-          PrintFailure.cancelled(
-            'cancelled before acknowledgement',
-            uncertain: true,
+    test(
+      'uncertain and cancelled jobs are never retried automatically',
+      () async {
+        final cases = <(PrintFailure, String, String)>[
+          (
+            PrintFailure.uncertain('spool outcome unknown'),
+            'uncertain',
+            'warn.print.stateUncertain',
           ),
-          'uncertain',
-          'warn.print.cancelledUncertain',
-        ),
-      ];
-      for (final (failure, expectedStatus, expectedWarning) in cases) {
-        final root = batchTempDir('uncertain-$expectedStatus');
-        addTearDown(() => root.deleteSync(recursive: true));
-        final file = p.join(root.path, 'one.pdf');
-        File(file).writeAsBytesSync('one'.codeUnits);
-        final adapter = FakeBatchAdapter()
-          ..push(failure)
-          ..push(null);
-        final service = batchService(root, adapter);
-        final plan = service.preview(
-          batchCaller,
-          BatchPrintParams(
-            files: [file],
-            printer: 'Office Printer',
-            retries: 3,
-            timeoutMinutes: 30,
+          (
+            PrintFailure.cancelled('cancelled while active', uncertain: false),
+            'cancelled',
+            'warn.print.cancelled',
           ),
-          (_) {},
-        );
+          (
+            PrintFailure.cancelled(
+              'cancelled before acknowledgement',
+              uncertain: true,
+            ),
+            'uncertain',
+            'warn.print.cancelledUncertain',
+          ),
+        ];
+        for (final (failure, expectedStatus, expectedWarning) in cases) {
+          final root = batchTempDir('uncertain-$expectedStatus');
+          addTearDown(() => root.deleteSync(recursive: true));
+          final file = p.join(root.path, 'one.pdf');
+          File(file).writeAsBytesSync('one'.codeUnits);
+          final adapter = FakeBatchAdapter()
+            ..push(failure)
+            ..push(null);
+          final service = batchService(root, adapter);
+          final plan = service.preview(
+            batchCaller,
+            BatchPrintParams(
+              files: [file],
+              printer: 'Office Printer',
+              retries: 3,
+              timeoutMinutes: 30,
+            ),
+            (_) {},
+          );
 
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+          final result = (await service.apply(
+            plan.planId,
+            batchCaller,
+            (_) {},
+          ));
 
-        expect(adapter.submitted, hasLength(1));
-        expect((result.meta['counts']! as Map)[expectedStatus], 1);
-        expect(result.errors[0].key, expectedWarning);
-      }
-    });
+          expect(adapter.submitted, hasLength(1));
+          expect((result.meta['counts']! as Map)[expectedStatus], 1);
+          expect(result.errors[0].key, expectedWarning);
+        }
+      },
+    );
 
     test(
       'submitted unconfirmed job is not retried and the queue continues',
-      () {
+      () async {
         final root = batchTempDir('unconfirmed');
         addTearDown(() => root.deleteSync(recursive: true));
         final first = p.join(root.path, 'one.pdf');
@@ -2026,7 +2063,7 @@ void main() {
           (_) {},
         );
 
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
 
         expect(adapter.submitted, hasLength(2));
         expect(result.applied, 2);
@@ -2053,7 +2090,7 @@ void main() {
     );
   });
   group('restart recovery, unowned queues and rejection', () {
-    test('restart recovery marks an active job uncertain and requires explicit selection', () {
+    test('restart recovery marks an active job uncertain and requires explicit selection', () async {
       final root = batchTempDir('restart-recovery');
       addTearDown(() => root.deleteSync(recursive: true));
       final file = p.join(root.path, 'one.pdf');
@@ -2062,7 +2099,7 @@ void main() {
         ..push(PrintFailure.failed('pause queue'));
       final service = batchService(root, adapter);
       final plan = service.preview(batchCaller, batchParams([file]), (_) {});
-      final result = service.apply(plan.planId, batchCaller, (_) {});
+      final result = (await service.apply(plan.planId, batchCaller, (_) {}));
       final queueId = result.meta['queueId']! as String;
       adapter.submitted.clear();
       final queuePath = p.join(root.path, 'print-queues', '$queueId.json');
@@ -2086,20 +2123,24 @@ void main() {
       ) as Map<String, Object?>;
       expect(beforeResume['status'], 'running');
       expect(((beforeResume['jobs']! as List)[0] as Map)['status'], 'printing');
-      final resumed = restarted.resume(batchCaller, queueId);
+      final resumed = (await restarted.resume(batchCaller, queueId));
       final rows = editorRows(resumed);
       expect(rows[0]['status'], 'uncertain');
       expect(rows[0]['enabled'], isFalse);
       expect(resumed.meta['jobs'] as List, isEmpty);
       rows[0]['enabled'] = true;
       final approved = restarted.revise(batchCaller, resumed.planId, rows);
-      final applied = restarted.apply(approved.planId, batchCaller, (_) {});
+      final applied = (await restarted.apply(
+        approved.planId,
+        batchCaller,
+        (_) {},
+      ));
       expect(applied.applied, 1);
       expect(applied.failed, 0);
       expect((applied.meta['counts']! as Map)['completed'], 1);
     });
 
-    test('legacy unowned queues remain untrusted and unavailable', () {
+    test('legacy unowned queues remain untrusted and unavailable', () async {
       final root = batchTempDir('legacy-unowned');
       addTearDown(() => root.deleteSync(recursive: true));
       const queueId = '22222222-2222-4222-8222-222222222222';
@@ -2133,8 +2174,8 @@ void main() {
       final service = batchService(root, FakeBatchAdapter());
 
       expect(service.latest(batchCaller), isNull);
-      expect(
-        () => service.resume(batchCaller, queueId),
+      await expectLater(
+        service.resume(batchCaller, queueId),
         throwsA(
           isA<BackendError>().having(
             (e) => e.code,
@@ -2190,7 +2231,7 @@ void main() {
 
     test(
       'active queue is not recovered or discarded while submission is running',
-      () {
+      () async {
         final root = batchTempDir('active-queue');
         addTearDown(() => root.deleteSync(recursive: true));
         final file = p.join(root.path, 'one.pdf');
@@ -2215,7 +2256,7 @@ void main() {
           );
         };
 
-        final applied = service.apply(plan.planId, batchCaller, (_) {});
+        final applied = (await service.apply(plan.planId, batchCaller, (_) {}));
 
         expect(checked, isTrue);
         expect(applied.applied, 1);
@@ -2226,7 +2267,7 @@ void main() {
   group('operator Ventoy PDF', () {
     test(
       'operator Ventoy PDF print preview and fake submit preserve source',
-      () {
+      () async {
         final source = File(Platform.environment['DOCFLOW_VENTOY_PRINT_PDF']!);
         final original = source.readAsBytesSync();
         final root = batchTempDir('ventoy');
@@ -2240,7 +2281,7 @@ void main() {
         expect(plan.meta['jobCount'], 1);
         expect(adapter.submitted, isEmpty);
 
-        final result = service.apply(plan.planId, batchCaller, (_) {});
+        final result = (await service.apply(plan.planId, batchCaller, (_) {}));
         expect(result.applied, 1);
         expect(result.failed, 0);
         expect(result.meta['status'], 'completed');
@@ -2254,3 +2295,12 @@ void main() {
     );
   });
 }
+
+/// [expectBackendMessage] for PrintService calls that return futures.
+Future<void> expectBackendMessageAsync(
+  Future<Object?> Function() call,
+  String message,
+) => expectLater(
+  call(),
+  throwsA(isA<BackendError>().having((e) => e.message, 'message', message)),
+);

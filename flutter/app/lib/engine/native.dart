@@ -55,6 +55,10 @@ import 'outlook_reply_draft.dart';
 import 'paths.dart';
 import 'path_selection.dart';
 import 'plan_store.dart';
+import 'platform/excel.dart';
+import 'platform/excel_windows_contract.dart';
+import 'platform/windows/excel.dart';
+import 'platform/windows/printing.dart' show WindowsControlledPdfSubmitter;
 import 'print_queue.dart';
 import 'production_ports.dart';
 import '../models/progress.dart' as models;
@@ -155,6 +159,7 @@ final class NativeBackend implements NativeOperations {
       ttl: _authorityTtl,
       mutationLock: mutationLock,
       adapter: productionPrintAdapter(),
+      excelPipeline: productionExcelPipeline(),
     );
     final outlook = OutlookDraftService(
       journalDir: journalDir,
@@ -1701,7 +1706,7 @@ final class NativeBackend implements NativeOperations {
           'apply operation does not match the approved plan',
         );
       }
-      final result = print.apply(planId, caller, progress);
+      final result = await print.apply(planId, caller, progress);
       return (result: result.toJson(), approvedOpId: _batchPrintOperationId);
     }
     final validated = filesystem.validatePlanOperation(
@@ -1832,7 +1837,7 @@ final class NativeBackend implements NativeOperations {
   Future<Object?> printQueueResume(
     CallerIdentity caller,
     String queueId,
-  ) async => print.resume(caller, queueId).toJson();
+  ) async => (await print.resume(caller, queueId)).toJson();
 
   @override
   Future<Object?> recovery(CallerIdentity caller) async => {
@@ -2367,4 +2372,21 @@ final class _ReviewOcrBridge implements review.ReviewOcrAdapter {
     final read = await _ocr.read(path);
     return review.ReviewOcrRead(matched: read.matched, source: read.source);
   }
+}
+
+/// Production Excel export pipeline. Only Windows has Excel COM; other hosts
+/// return null, so worksheet jobs fail with `error.print.excelUnavailable`.
+ExcelExportPipeline? productionExcelPipeline() {
+  if (!Platform.isWindows) {
+    return null;
+  }
+  final clock = SystemMonotonicClock();
+  return ExcelExportPipeline(
+    policy: const AnchoredWorkbookSourcePolicy(WindowsZoneIdentifierReader()),
+    exporter: WindowsExcelExporter(
+      backendFactory: Win32ComDispatchBackend.new,
+      clock: clock.now,
+    ),
+    submitter: const WindowsControlledPdfSubmitter(),
+  );
 }

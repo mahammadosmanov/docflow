@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.15 - 2026-10-20
+
+- PrintService apply/resume are async; call sites and e11 tests updated.
+- Production Excel pipeline injected into NativeBackend on Windows (null off Windows, so non-Windows still returns error.print.excelUnavailable). Not verified on a real Windows host.
+- WindowsControlledPdfSubmitter now implements ControlledPdfSubmitter.
+- Ported the 12 PrintService-backed Excel cases (e12_print_service_test.dart).
+
 ## 1.20.14 - 2026-10-20
 
 - Source gates re-run on this Mac (all green, license audit after staging local tesseract).
