@@ -33,3 +33,6 @@ Test/
 .claude/
 output/
 artifacts/
+
+# Flutter tests (macOS matches Test/ case-insensitively)
+!flutter/app/test/
