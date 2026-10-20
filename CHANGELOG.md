@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.11 - 2026-10-20
+
+- Ported remaining process-scans apply, undo, orientation, parallel, revision, review and native OCR tests.
+- Ported stage-signed cancel, pending recovery, stale hardlink and unrelated-copy tests.
+- Fixed: process-scans did not reject a source changed during OCR (path_invalid).
+
 ## 1.20.10 - 2026-10-20
 
 - Ported stage-signed archive-drift and changed-input apply tests; orientation apply and source-drift tests; retained follow-up apply revalidation test.

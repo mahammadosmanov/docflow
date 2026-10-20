@@ -595,6 +595,15 @@ Future<Plan> _previewWithCoverMode({
         );
       }
     }
+    for (final entry in orientationSourceHashes.entries) {
+      if (await _hashPdf(entry.key) != entry.value) {
+        throw BackendError(
+          'path_invalid',
+          'scan source changed during orientation or OCR analysis: '
+          '${p.basename(entry.key)}',
+        );
+      }
+    }
     final cached = _CachedPageOcr(
       reads: {
         for (var index = 0; index < tasks.length; index++)

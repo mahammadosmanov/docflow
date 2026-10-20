@@ -13,11 +13,11 @@ import 'dart:io';
 
 import 'package:docflow/engine/contracts.dart';
 import 'package:docflow/engine/fs_ops.dart';
+import 'package:docflow/engine/journal.dart';
 import 'package:docflow/engine/paths.dart';
 import 'package:docflow/engine/plan_store.dart';
 import 'package:docflow/engine/production_ports.dart';
-import 'package:docflow/engine/rfi_system_sync.dart'
-    show RfiSystemSync, FollowUpWorkbookFile;
+import 'package:docflow/engine/rfi_system_sync.dart' show RfiSystemSync;
 import 'package:docflow/engine/undo.dart';
 import 'package:docflow/engine/errors.dart';
 import 'package:docflow/engine/naming.dart' show filenameFor;
@@ -30,8 +30,6 @@ import 'package:path/path.dart' as p;
 
 import 'e9_pdf_fixture.dart';
 
-const String _applySkip =
-    'UNPORTED: stage-signed apply tests remain (FilesystemAuthority.apply is now available; port the Rust apply cases)';
 const String _operatorSkip =
     'needs private Ventoy RFI documents and Tesseract; ignored in Rust as well';
 
@@ -958,23 +956,146 @@ void main() {
     }
   });
 
-  test(
-    'completed publish stale hardlink is reviewed and cleaned without touching output',
-    () {},
-    skip: _operatorSkip,
-  );
+  test('completed publish stale hardlink is reviewed and cleaned without touching output', () async {
+    final (signedRoot, archiveRoot, reviewRoot) = roots();
+    final signed = p.join(signedRoot, 'signed.pdf');
+    final archive = p.join(archiveRoot, 'Package', 'Civil', filenameFor(_code));
+    final output = p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code));
+    writeSigned(signed, extraPage: false);
+    writeRichArchive(archive);
+    writeRichArchive(output);
+    final outputHash = fileSha256(output);
+    final stale = p.join(
+      p.dirname(output),
+      '.${p.basename(output)}.docflow-leftover.tmp',
+    );
+    // Hard link (not symlink): same inode as the published output.
+    final linked = Process.runSync('ln', [output, stale]);
+    expect(linked.exitCode, 0, reason: '${linked.stderr}');
+
+    final plan = await previewStageSignedPages(
+      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+      _FixtureOcr.one(['signed.pdf']),
+    );
+    expect(plan.steps.map((s) => s.kind).toList(), [StepKind.cleanupTemp]);
+    expect(plan.warnings.map((w) => w.key).toList(), [
+      'warn.rfi.staleTempFound',
+    ]);
+
+    final authority = _stageAuthority(at('journal'));
+    final cached = _cacheStage(
+      authority,
+      plan,
+      signedRoot,
+      archiveRoot,
+      reviewRoot,
+    );
+    final result = authority.apply(
+      cached.planId,
+      const CallerIdentity('owner-1', 'session-1'),
+    );
+    expect(result.applied, 1);
+    expect(result.failed, 0);
+    expect(File(stale).existsSync(), isFalse);
+    expect(fileSha256(output), outputHash);
+    expect(authority.journals.read(result.journalId).steps, isEmpty);
+  });
 
   test(
     'same bytes in an unrelated temp copy never authorize deletion',
-    () {},
-    skip: _applySkip,
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      final signed = p.join(signedRoot, 'signed.pdf');
+      final archive = p.join(
+        archiveRoot,
+        'Package',
+        'Civil',
+        filenameFor(_code),
+      );
+      final output = p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code));
+      writeSigned(signed, extraPage: false);
+      writeRichArchive(archive);
+      writeRichArchive(output);
+      final outputBytes = File(output).readAsBytesSync();
+      final unrelated = p.join(
+        p.dirname(output),
+        '.${p.basename(output)}.docflow-unrelated.tmp',
+      );
+      File(unrelated).writeAsBytesSync(outputBytes);
+
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(
+        plan.steps.every((s) => s.kind != StepKind.pdfFirstPageReplace),
+        isTrue,
+      );
+      expect(plan.warnings.first.key, 'warn.rfi.reviewExists');
+      expect(File(output).readAsBytesSync(), outputBytes);
+      expect(File(unrelated).existsSync(), isTrue);
+    },
   );
 
-  test(
-    'stage cancellation and pending journal recovery are explicit and non-mutating',
-    () {},
-    skip: _applySkip,
-  );
+  test('stage cancellation and pending journal recovery are explicit and non-mutating', () async {
+    final (signedRoot, archiveRoot, reviewRoot) = roots();
+    final signed = p.join(signedRoot, 'signed.pdf');
+    final archive = p.join(archiveRoot, 'Package', 'Civil', filenameFor(_code));
+    writeSigned(signed, extraPage: false);
+    writeRichArchive(archive);
+    final plan = await previewStageSignedPages(
+      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+      _FixtureOcr.one(['signed.pdf']),
+    );
+    final journalRoot = at('journal');
+    final authority = _stageAuthority(journalRoot);
+    final cached = _cacheStage(
+      authority,
+      plan,
+      signedRoot,
+      archiveRoot,
+      reviewRoot,
+    );
+    const caller = CallerIdentity('owner-1', 'session-1');
+    final cancelled = authority.applyWithProgress(cached.planId, caller, (
+      event,
+    ) {
+      if (event.done == 0) {
+        expect(authority.cancel(cached.planId), isTrue);
+      }
+    });
+    expect(cancelled.meta['effectState'], 'cancelled_clean');
+    expect(Directory(reviewRoot).listSync(), isEmpty);
+
+    final output = p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code));
+    final replacement = plan.steps.firstWhere(
+      (s) => s.kind == StepKind.pdfFirstPageReplace,
+    );
+    final store = JournalStore(journalRoot);
+    final pending = JournalRecord.create(
+      journalId: 'slice7-pending',
+      opId: 'rfi.stage_signed_first_pages',
+      ts: '2026-08-25T00-00-00Z',
+      ownerId: 'owner-1',
+      sessionId: 'session-1',
+      planDigest: 'digest',
+    );
+    pending.pendingStep = replacement;
+    pending.state = JournalState.applying;
+    store.write(pending);
+    Directory(p.dirname(output)).createSync(recursive: true);
+    File(output).writeAsBytesSync('UNCERTAIN PUBLISHED OUTPUT'.codeUnits);
+    final recovery = store.recoverPending();
+    expect(
+      recovery.any(
+        (e) =>
+            e.journalId == 'slice7-pending' &&
+            e.disposition == RecoveryDisposition.outcomeUnknown,
+      ),
+      isTrue,
+    );
+    expect(File(output).readAsStringSync(), 'UNCERTAIN PUBLISHED OUTPUT');
+  });
 
   test(
     'changed approved inputs fail without publishing or recalculating',
