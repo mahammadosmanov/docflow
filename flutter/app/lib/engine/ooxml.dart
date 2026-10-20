@@ -11,6 +11,7 @@ library;
 
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -22,6 +23,7 @@ part 'ooxml/package.dart';
 part 'ooxml/workbook.dart';
 part 'ooxml/sheet.dart';
 part 'ooxml/patch.dart';
+part 'ooxml/files.dart';
 
 const int maxPackageBytes = 256 * 1024 * 1024;
 const int maxMergeValidationComparisonsPerWorkbook = 1000000;
@@ -311,7 +313,8 @@ class CellData {
   int get hashCode => Object.hash(value, formula, style);
 
   @override
-  String toString() => 'CellData(value: $value, formula: $formula, style: $style)';
+  String toString() =>
+      'CellData(value: $value, formula: $formula, style: $style)';
 }
 
 class CellRange {
@@ -395,10 +398,8 @@ class WorkbookData {
 class MergeComparisonBudget {
   MergeComparisonBudget._(this._remaining, this.consumed);
 
-  factory MergeComparisonBudget.forValidation() => MergeComparisonBudget._(
-    maxMergeValidationComparisonsPerWorkbook,
-    0,
-  );
+  factory MergeComparisonBudget.forValidation() =>
+      MergeComparisonBudget._(maxMergeValidationComparisonsPerWorkbook, 0);
 
   factory MergeComparisonBudget.forApply(int parsedComparisons) {
     final remaining = maxApplyMergeComparisons - parsedComparisons;
@@ -434,3 +435,104 @@ XmlDocument parseDocumentWithLimitsForTesting(
   required int maxNodes,
 }) => _parseDocumentWithLimits(raw, maxDepth, maxNodes);
 
+/// Indexed view of a ZIP package for template-based generation. Port of the
+/// `ZipArchive` use in concrete_documents.rs. Members are read in central
+/// directory order; [write] re-packs with raw-copied untouched members and
+/// the archive comment preserved (see `_writePackage`).
+final class OfficePackage {
+  OfficePackage._(this._archive);
+
+  final _ZipPackage _archive;
+
+  factory OfficePackage.open(Uint8List source) {
+    _validateSourceBytes(source);
+    return OfficePackage._(_openArchive(source));
+  }
+
+  int get length => _archive.entries.length;
+
+  /// Archive-level comment bytes.
+  Uint8List get comment => _archive.comment;
+
+  String nameAt(int index) => _archive.entries[index].name;
+
+  /// Per-member comment, decoded as UTF-8 (lossy).
+  String commentAt(int index) =>
+      utf8.decode(_archive.entries[index].comment, allowMalformed: true);
+
+  int uncompressedSizeAt(int index) => _archive.entries[index].uncompressedSize;
+
+  /// Decoded member bytes with CRC verified.
+  Uint8List readAt(int index) => _archive._decode(_archive.entries[index]);
+
+  /// Packs the package with [replacements] (keyed by member name). Every
+  /// other member is copied with its original compressed bytes.
+  Uint8List write(Map<String, Uint8List> replacements) =>
+      _writePackage(_archive, replacements);
+
+  /// Per-member metadata used to check round-trip fidelity (port of the
+  /// `EntryEvidence` capture in tests/ooxml_fidelity.rs).
+  List<ZipEntryEvidence> evidence() => [
+    for (final entry in _archive.entries)
+      ZipEntryEvidence(
+        name: entry.name,
+        content: _archive._decode(entry),
+        compressed: Uint8List.fromList(_archive._compressedBytes(entry)),
+        method: entry.method,
+        time: entry.time,
+        date: entry.date,
+        externalAttributes: entry.externalAttributes,
+        comment: utf8.decode(entry.comment, allowMalformed: true),
+      ),
+  ];
+}
+
+/// Round-trip evidence for one ZIP member. See [OfficePackage.evidence].
+class ZipEntryEvidence {
+  const ZipEntryEvidence({
+    required this.name,
+    required this.content,
+    required this.compressed,
+    required this.method,
+    required this.time,
+    required this.date,
+    required this.externalAttributes,
+    required this.comment,
+  });
+
+  final String name;
+  final Uint8List content;
+  final Uint8List compressed;
+  final int method;
+  final int time;
+  final int date;
+  final int externalAttributes;
+  final String comment;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ZipEntryEvidence &&
+      other.name == name &&
+      _bytesEq(other.content, content) &&
+      _bytesEq(other.compressed, compressed) &&
+      other.method == method &&
+      other.time == time &&
+      other.date == date &&
+      other.externalAttributes == externalAttributes &&
+      other.comment == comment;
+
+  @override
+  int get hashCode =>
+      Object.hash(name, method, time, date, externalAttributes, comment);
+
+  @override
+  String toString() => 'ZipEntryEvidence($name)';
+}
+
+bool _bytesEq(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}

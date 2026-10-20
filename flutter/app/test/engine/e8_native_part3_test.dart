@@ -1,10 +1,8 @@
 // Port of src-tauri/tests/rfi_follow_up_native.rs (part 3: MEC route-context
 // fan-out, duplicate MEC contexts and inspection-location independence).
-import 'package:docflow/engine/rfi_follow_up.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'e8_full_schema_support.dart';
-import 'e8_support.dart';
 
 void main() {
   test('full sync fans out MEC RFI only across distinct exact route contexts', () {

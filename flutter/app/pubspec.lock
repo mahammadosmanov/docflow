@@ -57,6 +57,54 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  cross_file:
+    dependency: transitive
+    description:
+      name: cross_file
+      sha256: "3bde17bce71488fc4dc99216da1d990642a726472874dcce4db700eb103d3fa4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.0"
+  cross_file_android:
+    dependency: transitive
+    description:
+      name: cross_file_android
+      sha256: "7143b2d4451b21aef10a20a651ba99e85b6f73c17c269a23a72fa4a8c2d543dd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_darwin:
+    dependency: transitive
+    description:
+      name: cross_file_darwin
+      sha256: "5ae2e0165199c4dd09bd2a21733817b6fda390692ad6bf3ffd69be2bb9c37330"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_io:
+    dependency: transitive
+    description:
+      name: cross_file_io
+      sha256: b8d6af657ed47860d603130e2908f76c062c13b4764fd0ae3190243c55c396bc
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_platform_interface:
+    dependency: transitive
+    description:
+      name: cross_file_platform_interface
+      sha256: "6f8fd6dc53835107ca38f7f2226985b7730c26bb8dedc313de19ed6a68feac84"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_web:
+    dependency: transitive
+    description:
+      name: cross_file_web
+      sha256: de01eb6f6bec735f3e501770cceb89638cd50298ef5dd1a58aa04b4c254b3f85
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   crypto:
     dependency: "direct main"
     description:
@@ -73,6 +121,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.9"
+  desktop_drop:
+    dependency: "direct main"
+    description:
+      name: desktop_drop
+      sha256: "08fb4e37b0cc365c27a195b4932109daab0e98bac57af393923e4390ba4ee6e0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.1"
   fake_async:
     dependency: transitive
     description:
@@ -125,6 +181,11 @@ packages:
     version: "0.0.0"
   flutter_test:
     dependency: "direct dev"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  flutter_web_plugins:
+    dependency: transitive
     description: flutter
     source: sdk
     version: "0.0.0"
@@ -232,6 +293,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.0"
+  mime:
+    dependency: transitive
+    description:
+      name: mime
+      sha256: bd47de35f07e27267e69c8c8b22edf9473bfee170a60d60fcc93730c5144b7f6
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   native_toolchain_c:
     dependency: transitive
     description:
@@ -240,6 +309,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.5"
+  objective_c:
+    dependency: transitive
+    description:
+      name: objective_c
+      sha256: "5c80c2ad6e2c0397de5db38c6d653e69616a3397e13aa7633bf39eb668f2041b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.6.2"
   path:
     dependency: "direct main"
     description:
@@ -415,4 +492,4 @@ packages:
     version: "3.1.4"
 sdks:
   dart: ">=3.13.5 <4.0.0"
-  flutter: ">=3.18.0-18.0.pre.54"
+  flutter: ">=3.47.7"

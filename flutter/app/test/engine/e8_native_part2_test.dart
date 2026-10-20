@@ -1,6 +1,5 @@
 // Port of src-tauri/tests/rfi_follow_up_native.rs (part 2: scope exclusions,
 // CIV multi-tag fan-out and duplicate-row refusal).
-import 'package:docflow/engine/rfi_follow_up.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'e8_full_schema_support.dart';

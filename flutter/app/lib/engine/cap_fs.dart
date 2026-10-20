@@ -26,6 +26,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:ffi/ffi.dart';
 
+import 'ooxml.dart' show maxPackageBytes;
 import 'journal.dart'
     show
         AnchoredPathPort,
@@ -816,6 +817,9 @@ final class _PosixCapabilityPlatform implements CapabilityPlatform {
       uid: view.getUint32(28, Endian.little),
       gid: view.getUint32(32, Endian.little),
       size: view.getInt64(48, Endian.little),
+      mtimeNs:
+          view.getInt64(88, Endian.little) * 1000000000 +
+          view.getInt64(96, Endian.little),
     );
   }
 
@@ -2188,11 +2192,11 @@ final class AnchoredPath implements AnchoredPathPort {
     _syncDir(parent);
   }
 
-  ParentSecuritySnapshot capturePArentSecurity() =>
+  ParentSecuritySnapshot captureParentSecurity() =>
       _parentSecuritySnapshot(parent);
 
   void verifyParentSecurity(ParentSecuritySnapshot expected) {
-    final actual = capturePArentSecurity();
+    final actual = captureParentSecurity();
     if (actual != expected) {
       throw const IoError(
         FsErrorKind.other,
@@ -2349,4 +2353,72 @@ class TempWorkspace {
     final dir = Directory(path);
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   }
+}
+
+/// Logical storage reservation for one retained-publication step
+/// (`RetainedStorageReservation`).
+class RetainedStorageReservation {
+  const RetainedStorageReservation._({
+    required this.fileCount,
+    required this.logicalChargeBytes,
+  });
+
+  final int fileCount;
+  final int logicalChargeBytes;
+
+  /// Apply keeps the original, the private output, and the backup: three files.
+  static RetainedStorageReservation forApply(
+    int originalDefaultStreamBytes,
+    int originalAuxiliaryChargeBytes,
+  ) {
+    final base = _checkedMul(originalDefaultStreamBytes, 2);
+    final withPackage = base == null ? null : _checkedAdd(base, maxPackageBytes);
+    final auxiliary = _checkedMul(originalAuxiliaryChargeBytes, 3);
+    final total = withPackage == null || auxiliary == null
+        ? null
+        : _checkedAdd(withPackage, auxiliary);
+    if (total == null) {
+      throw const FsIoException(
+        FsErrorKind.other,
+        'retained storage reservation overflowed',
+      );
+    }
+    return RetainedStorageReservation._(
+      fileCount: 3,
+      logicalChargeBytes: total,
+    );
+  }
+
+  /// Undo retains the applied workbook: one file.
+  static RetainedStorageReservation forUndo(
+    int currentAppliedDefaultStreamBytes,
+    int currentAppliedAuxiliaryChargeBytes,
+  ) {
+    final total = _checkedAdd(
+      currentAppliedDefaultStreamBytes,
+      currentAppliedAuxiliaryChargeBytes,
+    );
+    if (total == null) {
+      throw const FsIoException(
+        FsErrorKind.other,
+        'retained storage reservation overflowed',
+      );
+    }
+    return RetainedStorageReservation._(
+      fileCount: 1,
+      logicalChargeBytes: total,
+    );
+  }
+}
+
+int? _checkedMul(int left, int right) {
+  if (left < 0 || right < 0) return null;
+  if (right != 0 && left > 0x7fffffffffffffff ~/ right) return null;
+  return left * right;
+}
+
+int? _checkedAdd(int left, int right) {
+  if (left < 0 || right < 0) return null;
+  if (left > 0x7fffffffffffffff - right) return null;
+  return left + right;
 }
