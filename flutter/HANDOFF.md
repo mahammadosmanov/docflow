@@ -101,14 +101,21 @@ porting rules, but its Linux paths are outdated; use the paths below.
    `DOCFLOW_OPERATOR_PROCESS_SCAN_RFI`), `e9_stage_signed` and `e9_orientation`
    operator Ventoy and PDF cases (`pdf_orientation.rs` 97/122/162). The
    Windows-only retry tests stay UNVERIFIED.
-4. **E11: PARTIAL (1.20.6).** The Windows and macOS printing adapters are
-   already ported (`platform/windows/printing.dart`, `platform/macos/printing.dart`),
-   both UNVERIFIED on real hosts. 1.20.6 ports 5 of the 64 tests in
-   `src-tauri/tests/batch_print.rs` (validation, legacy and persisted job
-   metadata, forged page range, unknown printer and unsupported options).
-   Remaining: the other 59 batch-print tests (preview/revise/resume/queue).
-   `WindowsControlledPdfSubmitter` still does not `implements
-   ControlledPdfSubmitter`, because excel.dart uses the stub `PrintJob` type.
+4. **E11: DONE for Dart-portable cases (1.20.13).** The Windows and macOS
+   printing adapters are ported (`platform/windows/printing.dart`,
+   `platform/macos/printing.dart`), both UNVERIFIED on real Windows/printers.
+   `test/engine/e11_batch_rust_test.dart` ports all 47 `#[test]` functions in
+   `src-tauri/tests/batch_print.rs` (46 run, 1 env-gated: the Ventoy PDF,
+   needs `DOCFLOW_VENTOY_PRINT_PDF`, same as the Rust `#[ignore]`). Rust
+   thread gates become synchronous `FakeBatchAdapter` hooks (`onSubmit`,
+   `onInventory`, `onInspect`); the reentrant resume test proves the queue
+   reservation. Real bug fixed in 1.20.13: path-based print signatures used
+   microsecond `File.stat` mtimes while apply-time checks used handle
+   nanoseconds, so every PDF apply after preview failed with
+   `error.print.failed`. Signatures now come from the capability handle.
+   Open (separate): `WindowsControlledPdfSubmitter` still does not
+   `implements ControlledPdfSubmitter`.
+
 5. **PDF page renderer: macOS DONE, Windows UNVERIFIED (1.20.9).**
    macOS: `lib/engine/pdfkit_renderer.dart` compiles an embedded Swift PDFKit
    helper with `xcrun swiftc` into the user cache, then uses PDFKit for page

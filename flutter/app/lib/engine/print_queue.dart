@@ -652,20 +652,36 @@ FileSignature fileSignatureFromOpenFile(
 }
 
 /// Port of `file_signature` (path form, no digest unless requested).
-FileSignature fileSignature(String path) {
-  final File file = File(path);
-  if (!file.existsSync()) {
-    throw BackendError.pathInvalid('print file is unavailable');
-  }
-  return fileSignatureFromOpenFile(_DiskPrintFile(file), includeSha256: false);
-}
+FileSignature fileSignature(String path) =>
+    _pathSignature(path, includeSha256: false);
 
 /// Port of `file_signature_from_open_file` for a [File] with the digest.
 FileSignature fileSignatureFromFile(File file, {required bool includeSha256}) =>
-    fileSignatureFromOpenFile(
-      _DiskPrintFile(file),
-      includeSha256: includeSha256,
-    );
+    _pathSignature(file.path, includeSha256: includeSha256);
+
+/// Path signature read through a capability handle, so its mtime has the same
+/// nanosecond precision as the apply-time handle check. `File.stat` only gives
+/// microseconds, which made every preview-built signature mismatch on apply.
+FileSignature _pathSignature(String path, {required bool includeSha256}) {
+  if (!File(path).existsSync()) {
+    throw BackendError.pathInvalid('print file is unavailable');
+  }
+  final cap.OsHandle handle;
+  try {
+    handle = cap.CapabilityRoot.open(p.dirname(path)).authorize(path).anchor().openRead();
+  } on BackendError {
+    throw BackendError.pathInvalid('print file is unavailable');
+  }
+  try {
+    final stat = handle.metadata();
+    final digest = includeSha256
+        ? crypto.sha256.convert(File(path).readAsBytesSync()).toString()
+        : null;
+    return FileSignature(size: stat.size, mtimeNs: stat.mtimeNs, sha256: digest);
+  } finally {
+    handle.close();
+  }
+}
 
 /// Adapter over an opened capability handle, used by the queue engine.
 OpenedPrintFile openedPrintFileFromHandle(cap.OsHandle handle) =>

@@ -23,7 +23,7 @@ import 'settings.dart';
 
 /// Engine version reported by `app/bootstrap` and diagnostics. Must match the
 /// root `VERSION` file.
-const String docflowVersion = '1.20.12';
+const String docflowVersion = '1.20.13';
 
 /// Every frontend-reachable method (`BackendMethod` in backend.rs). The wire
 /// names are the exact strings in `frontend/src/lib/commands.ts`.

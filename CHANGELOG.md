@@ -5,6 +5,11 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.13 - 2026-10-20
+
+- Ported all 47 batch_print.rs tests (46 run, Ventoy env-gated).
+- Fixed: path-based print signatures now use capability-handle nanosecond mtime; previously every PDF apply after preview failed (error.print.failed).
+
 ## 1.20.12 - 2026-10-20
 
 - Ported remaining plain Excel pipeline cases (timeouts, late results, poll cancel/deadline, panic, fence, cancelled waiter, retained locator).
