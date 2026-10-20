@@ -10,8 +10,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:docflow/engine/contracts.dart';
+import 'package:docflow/engine/fs_ops.dart';
+import 'package:docflow/engine/paths.dart';
+import 'package:docflow/engine/plan_store.dart';
+import 'package:docflow/engine/production_ports.dart';
+import 'package:docflow/engine/rfi_system_sync.dart';
+import 'package:docflow/engine/undo.dart';
 import 'package:docflow/engine/errors.dart';
-import 'package:docflow/engine/fs_ops.dart' show fileSha256;
 import 'package:docflow/engine/operations/pdf_orientation.dart';
 import 'package:docflow/engine/pdf.dart' show inspect;
 import 'package:docflow/engine/scan_index.dart';
@@ -20,8 +25,6 @@ import 'package:path/path.dart' as p;
 
 import 'e9_pdf_fixture.dart';
 
-const String _applySkip =
-    'UNPORTED: orientation apply tests remain (FilesystemAuthority.apply is now available; port the Rust apply cases)';
 const String _operatorSkip =
     'operator-supplied documents and Tesseract; ignored in Rust as well';
 
@@ -118,6 +121,44 @@ int _indexOf(Uint8List bytes, List<int> needle) {
 Object? _scanStat(Plan plan, String key) =>
     (plan.meta['scanIndex']! as Map<String, Object?>)[key];
 
+FilesystemAuthority _orientationAuthority(String journalDir) =>
+    FilesystemAuthority(
+      journalDir: journalDir,
+      ttl: const Duration(minutes: 5),
+      ooxml: const ProductionFollowUpOoxml(),
+      rfiLog: const ProductionRfiLogWorkbook(),
+      rfiSystemSync: const RfiSystemSync(),
+      pdf: const ProductionPdfEngine(),
+      replicaPublish: const ProductionReplicaPublish(),
+      undoJournal: undoJournal,
+    );
+
+Plan _cacheOrientation(
+  FilesystemAuthority authority,
+  Plan plan,
+  String source,
+  String review,
+) {
+  const opId = 'rfi.normalize_pdf_orientation';
+  final scope = GrantScope.create('owner-1', 'session-1', 'preview-1', opId);
+  final sourceGrant = authority.issueGrant(scope, source, GrantAccess.read);
+  final reviewGrant = authority.issueGrant(
+    scope,
+    review,
+    GrantAccess.readWrite,
+  );
+  return authority.cachePlan(
+    BackendOrigin.rust,
+    PlanBinding(
+      ownerId: 'owner-1',
+      sessionId: 'session-1',
+      operationId: opId,
+      grantIds: [sourceGrant.grantId, reviewGrant.grantId],
+    ),
+    plan,
+  );
+}
+
 void main() {
   late Directory fixture;
 
@@ -176,27 +217,30 @@ void main() {
     },
   );
 
-  test('preview rejects same-fingerprint content change during detection', () async {
-    final source = mkdirs(at('system')).path;
-    final review = mkdirs(at('review')).path;
-    final pdf = p.join(source, 'CIV/RFI-0001/document.pdf');
-    Directory(p.dirname(pdf)).createSync(recursive: true);
-    writeRichArchive(pdf);
-    final originalFingerprint = FileFingerprint.read(pdf);
-    final originalHash = fileSha256(pdf);
+  test(
+    'preview rejects same-fingerprint content change during detection',
+    () async {
+      final source = mkdirs(at('system')).path;
+      final review = mkdirs(at('review')).path;
+      final pdf = p.join(source, 'CIV/RFI-0001/document.pdf');
+      Directory(p.dirname(pdf)).createSync(recursive: true);
+      writeRichArchive(pdf);
+      final originalFingerprint = FileFingerprint.read(pdf);
+      final originalHash = fileSha256(pdf);
 
-    await expectLater(
-      previewOrientation(
-        PdfOrientationParams(rfiSystemRoot: source, reviewRoot: review),
-        _SameFingerprintReplacementDetector(),
-      ),
-      throwsA(isA<BackendError>()),
-    );
+      await expectLater(
+        previewOrientation(
+          PdfOrientationParams(rfiSystemRoot: source, reviewRoot: review),
+          _SameFingerprintReplacementDetector(),
+        ),
+        throwsA(isA<BackendError>()),
+      );
 
-    expect(FileFingerprint.read(pdf), originalFingerprint);
-    expect(fileSha256(pdf), isNot(originalHash));
-    expect(inspect(pdf).pageCount, 3);
-  });
+      expect(FileFingerprint.read(pdf), originalFingerprint);
+      expect(fileSha256(pdf), isNot(originalHash));
+      expect(inspect(pdf).pageCount, 3);
+    },
+  );
 
   test('preview scans only discipline trees and proposes confident rotations', () async {
     final source = mkdirs(at('system')).path;
@@ -399,25 +443,29 @@ void main() {
     expect(plan.warnings.first.key, 'warn.rfi.orientationNeedsReview');
   });
 
-  test('orientation discovery never follows PDF or directory symlinks', () async {
-    final source = mkdirs(p.join(fixture.path, 'system', 'CIV')).path;
-    final review = mkdirs(at('review')).path;
-    final outside = mkdirs(at('outside')).path;
-    writeRichArchive(p.join(outside, 'outside.pdf'));
-    Link(p.join(source, 'linked-directory')).createSync(outside);
-    Link(p.join(source, 'linked-file.pdf')).createSync(p.join(outside, 'outside.pdf'));
+  test(
+    'orientation discovery never follows PDF or directory symlinks',
+    () async {
+      final source = mkdirs(p.join(fixture.path, 'system', 'CIV')).path;
+      final review = mkdirs(at('review')).path;
+      final outside = mkdirs(at('outside')).path;
+      writeRichArchive(p.join(outside, 'outside.pdf'));
+      Link(p.join(source, 'linked-directory')).createSync(outside);
+      Link(p.join(source, 'linked-file.pdf'))
+          .createSync(p.join(outside, 'outside.pdf'));
 
-    final plan = await previewOrientation(
-      PdfOrientationParams(
-        rfiSystemRoot: p.join(fixture.path, 'system'),
-        reviewRoot: review,
-      ),
-      _FakeDetector(),
-    );
+      final plan = await previewOrientation(
+        PdfOrientationParams(
+          rfiSystemRoot: p.join(fixture.path, 'system'),
+          reviewRoot: review,
+        ),
+        _FakeDetector(),
+      );
 
-    expect(plan.steps, isEmpty);
-    expect(plan.warnings.first.key, 'warn.rfi.orientationNoPdfs');
-  });
+      expect(plan.steps, isEmpty);
+      expect(plan.warnings.first.key, 'warn.rfi.orientationNoPdfs');
+    },
+  );
 
   test('review root overlapping the source is rejected', () async {
     final source = mkdirs(at('system')).path;
@@ -440,15 +488,74 @@ void main() {
 
   test(
     'apply preserves source, publishes no-clobber, and undoes an exact copy',
-    () {},
-    skip: _applySkip,
+    () async {
+      final source = at('system');
+      final review = at('review');
+      final pdf = p.join(source, 'MEC', 'RFI-0003', 'document.pdf');
+      mkdirs(p.dirname(pdf));
+      mkdirs(review);
+      writeRichArchive(pdf);
+      final sourceHash = fileSha256(pdf);
+      final plan = await previewOrientation(
+        PdfOrientationParams(rfiSystemRoot: source, reviewRoot: review),
+        _FakeDetector({
+          0: _detection(90, 18.0),
+          1: _detection(0, 22.0),
+          2: _detection(0, 15.0),
+        }),
+      );
+      final authority = _orientationAuthority(at('journal'));
+      final cached = _cacheOrientation(authority, plan, source, review);
+      const caller = CallerIdentity('owner-1', 'session-1');
+
+      final result = authority.apply(cached.planId, caller);
+      final output = p.join(review, 'MEC', 'RFI-0003', 'document.pdf');
+      expect((result.applied, result.failed), (3, 0));
+      expect(fileSha256(pdf), sourceHash);
+      expect(inspect(output).pages[0].rotation, 90);
+      final journal = authority.journals.read(result.journalId);
+      expect(journal.steps.any((step) => step.kind == StepKind.copy), isTrue);
+
+      final undone = authority.undo(result.journalId, caller);
+      expect(undone.failed, 0);
+      expect(File(output).existsSync(), isFalse);
+    },
   );
 
-  test(
-    'apply rejects source drift without creating a review PDF',
-    () {},
-    skip: _applySkip,
-  );
+  test('apply rejects source drift without creating a review PDF', () async {
+    final source = at('system');
+    final review = at('review');
+    final pdf = p.join(source, 'ELE', 'RFI-0004', 'document.pdf');
+    mkdirs(p.dirname(pdf));
+    mkdirs(review);
+    writeRichArchive(pdf);
+    final plan = await previewOrientation(
+      PdfOrientationParams(rfiSystemRoot: source, reviewRoot: review),
+      _FakeDetector({
+        0: _detection(90, 18.0),
+        1: _detection(0, 22.0),
+        2: _detection(0, 15.0),
+      }),
+    );
+    final authority = _orientationAuthority(at('journal'));
+    final cached = _cacheOrientation(authority, plan, source, review);
+    File(pdf).writeAsBytesSync([
+      ...File(pdf).readAsBytesSync(),
+      ...'\n% operator edit'.codeUnits,
+    ], flush: true);
+
+    final result = authority.apply(
+      cached.planId,
+      const CallerIdentity('owner-1', 'session-1'),
+    );
+
+    expect(result.failed, 1);
+    expect(
+      File(p.join(review, 'ELE', 'RFI-0004', 'document.pdf')).existsSync(),
+      isFalse,
+    );
+    expect(Directory(p.join(review, 'ELE')).existsSync(), isFalse);
+  });
 
   test(
     'operator orientation pages match visual review',
@@ -471,6 +578,5 @@ void main() {
 
 /// Serialized steps, for the same-plan comparison the Rust test performs with
 /// `assert_eq!(first.steps, second.steps)`.
-String _stepsJson(Plan plan) => [
-  for (final step in plan.steps) step.toJson(),
-].toString();
+String _stepsJson(Plan plan) =>
+    [for (final step in plan.steps) step.toJson()].toString();

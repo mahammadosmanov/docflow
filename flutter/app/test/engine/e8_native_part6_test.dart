@@ -1,49 +1,95 @@
 // Port of src-tauri/tests/rfi_follow_up_native.rs (part 6: missing FINAL
 // contexts, conflicting MEC routes, formula-backed targets and plan shape).
 import 'package:docflow/engine/rfi_follow_up.dart';
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:docflow/engine/contracts.dart';
+import 'package:docflow/engine/fs_ops.dart';
+import 'package:docflow/engine/ooxml.dart';
+import 'package:docflow/engine/paths.dart';
+import 'package:docflow/engine/plan_store.dart';
+import 'package:docflow/engine/production_ports.dart';
+import 'package:docflow/engine/rfi_follow_up.dart';
+import 'package:docflow/engine/rfi_system_sync.dart';
+import 'package:docflow/engine/undo.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'e8_xlsx_writer.dart';
+import 'package:path/path.dart' as p;
 
 import 'e8_full_schema_support.dart';
 
 void main() {
-  test('full sync does not mark a shared MEC Worley group signed from one RFI', () {
-    final source = sourcePackage(
-      worksheet([fullSchemaMecHeaderRow()]),
-      worksheet([
-        fullSchemaMecHeaderRow(),
-        mecRecordWithRemarks(10, '0020', 'MEC-1.3.5', 'PCS-06', 'S1', 'N2', 'Completed', 'Signed by Worley'),
-        fullSchemaMecRecord(11, '0021', 'MEC-1.3.5', 'PCS-06', 'S1', 'N2', 'Completed'),
-      ]),
-    );
-    final target = package([
-      (
-        'Signed By Worley MEC',
-        null,
+  test(
+    'full sync does not mark a shared MEC Worley group signed from one RFI',
+    () {
+      final source = sourcePackage(
+        worksheet([fullSchemaMecHeaderRow()]),
         worksheet([
-          row(3, [inline('H3', 'Final acceptance of pile installation (3.5)')]),
-          row(4, [inline('H4', 'RFI No.'), inline('I4', 'STATUS')]),
-          row(5, [
-            inline('B5', 'N2'),
-            inline('C5', 'PCS-06'),
-            inline('D5', 'S1'),
-            inline('H5', 'MEC-0020/0021'),
-            inline('I5', 'Signed'),
-          ]),
+          fullSchemaMecHeaderRow(),
+          mecRecordWithRemarks(
+            10,
+            '0020',
+            'MEC-1.3.5',
+            'PCS-06',
+            'S1',
+            'N2',
+            'Completed',
+            'Signed by Worley',
+          ),
+          fullSchemaMecRecord(
+            11,
+            '0021',
+            'MEC-1.3.5',
+            'PCS-06',
+            'S1',
+            'N2',
+            'Completed',
+          ),
         ]),
-      ),
-    ]);
+      );
+      final target = package([
+        (
+          'Signed By Worley MEC',
+          null,
+          worksheet([
+            row(3, [
+              inline('H3', 'Final acceptance of pile installation (3.5)'),
+            ]),
+            row(4, [inline('H4', 'RFI No.'), inline('I4', 'STATUS')]),
+            row(5, [
+              inline('B5', 'N2'),
+              inline('C5', 'PCS-06'),
+              inline('D5', 'S1'),
+              inline('H5', 'MEC-0020/0021'),
+              inline('I5', 'Signed'),
+            ]),
+          ]),
+        ),
+      ]);
 
-    final review = classifyBytes(source, target);
-    expect(rowsOf(review).length, 1, reason: review.toString());
-    expect(rowsOf(review)[0]['proposedStatus'], 'Not Signed');
-  });
+      final review = classifyBytes(source, target);
+      expect(rowsOf(review).length, 1, reason: review.toString());
+      expect(rowsOf(review)[0]['proposedStatus'], 'Not Signed');
+    },
+  );
 
   test('full sync omits a required FINAL RFI without a prepared context', () {
     final source = sourcePackage(
       worksheet([fullSchemaMecHeaderRow()]),
       worksheet([
         fullSchemaMecHeaderRow(),
-        fullSchemaMecRecord(10, '0001', 'MEC-1.3.5', 'PCS-01', 'S1', 'N1', 'Completed'),
+        fullSchemaMecRecord(
+          10,
+          '0001',
+          'MEC-1.3.5',
+          'PCS-01',
+          'S1',
+          'N1',
+          'Completed',
+        ),
       ]),
     );
     final target = package([
@@ -119,7 +165,9 @@ void main() {
         'Signed By Worley MEC',
         null,
         worksheet([
-          row(3, [inline('H3', 'Final acceptance of mechanical installation (3.1)')]),
+          row(3, [
+            inline('H3', 'Final acceptance of mechanical installation (3.1)'),
+          ]),
           row(4, [inline('H4', 'RFI No.'), inline('I4', 'STATUS')]),
           row(5, [
             inline('B5', 'N1'),
@@ -191,80 +239,102 @@ void main() {
     expect(rows[0]['enabled'], false);
   });
 
-  test('full sync ignores formula summary in lifecycle comparison and mapping', () {
-    final header = fullSchemaMecHeaderRow();
-    final source = sourcePackage(
-      worksheet([header]),
-      worksheet([
-        header,
-        mecRecordWithRemarks(10, '0001', 'MEC-1.3.5', 'PCS-01', 'S1', 'N1', 'Completed', 'Signed by Worley'),
-        mecRecordWithRemarks(11, '0001', 'MEC-1.3.5', 'PCS-01', 'S2', 'N1', 'Completed', 'Signed by Worley'),
-      ]),
-    );
-    final target = package([
-      (
-        'MEC',
-        null,
+  test(
+    'full sync ignores formula summary in lifecycle comparison and mapping',
+    () {
+      final header = fullSchemaMecHeaderRow();
+      final source = sourcePackage(
+        worksheet([header]),
         worksheet([
-          row(4, [inline('N4', 'RFI No.'), inline('O4', 'STATUS')]),
-          row(5, [
-            inline('A5', 'Zone 1'),
-            inline('B5', 'N1'),
-            inline('C5', 'PCS-01'),
-            inline('D5', 'S1'),
-            inline('N5', 'MEC-0001'),
-            inline('O5', 'Completed'),
-          ]),
-          row(6, [
-            inline('A6', 'Zone 1'),
-            inline('B6', 'N1'),
-            inline('C6', 'PCS-01'),
-            inline('D6', 'S2'),
-            inline('N6', 'MEC-0001'),
-            inline('O6', 'Completed'),
-          ]),
+          header,
+          mecRecordWithRemarks(
+            10,
+            '0001',
+            'MEC-1.3.5',
+            'PCS-01',
+            'S1',
+            'N1',
+            'Completed',
+            'Signed by Worley',
+          ),
+          mecRecordWithRemarks(
+            11,
+            '0001',
+            'MEC-1.3.5',
+            'PCS-01',
+            'S2',
+            'N1',
+            'Completed',
+            'Signed by Worley',
+          ),
         ]),
-      ),
-      (
-        'Signed By Worley MEC',
-        null,
-        worksheet([
-          row(3, [inline('S3', 'RFI No.'), inline('T3', 'Worley Status')]),
-          row(4, [
-            inline('H4', 'RFI No.'),
-            inline('I4', 'STATUS'),
-            inline('S4', 'MEC-0001'),
-            inline('T4', 'Signed'),
+      );
+      final target = package([
+        (
+          'MEC',
+          null,
+          worksheet([
+            row(4, [inline('N4', 'RFI No.'), inline('O4', 'STATUS')]),
+            row(5, [
+              inline('A5', 'Zone 1'),
+              inline('B5', 'N1'),
+              inline('C5', 'PCS-01'),
+              inline('D5', 'S1'),
+              inline('N5', 'MEC-0001'),
+              inline('O5', 'Completed'),
+            ]),
+            row(6, [
+              inline('A6', 'Zone 1'),
+              inline('B6', 'N1'),
+              inline('C6', 'PCS-01'),
+              inline('D6', 'S2'),
+              inline('N6', 'MEC-0001'),
+              inline('O6', 'Completed'),
+            ]),
           ]),
-          row(5, [
-            inline('A5', 'Zone 1'),
-            inline('B5', 'N1'),
-            inline('C5', 'PCS-01'),
-            inline('D5', 'S1'),
-            inline('H5', 'MEC-0001'),
-            formula('I5', 'T4', 'Signed'),
+        ),
+        (
+          'Signed By Worley MEC',
+          null,
+          worksheet([
+            row(3, [inline('S3', 'RFI No.'), inline('T3', 'Worley Status')]),
+            row(4, [
+              inline('H4', 'RFI No.'),
+              inline('I4', 'STATUS'),
+              inline('S4', 'MEC-0001'),
+              inline('T4', 'Signed'),
+            ]),
+            row(5, [
+              inline('A5', 'Zone 1'),
+              inline('B5', 'N1'),
+              inline('C5', 'PCS-01'),
+              inline('D5', 'S1'),
+              inline('H5', 'MEC-0001'),
+              formula('I5', 'T4', 'Signed'),
+            ]),
+            row(6, [
+              inline('A6', 'Zone 1'),
+              inline('B6', 'N1'),
+              inline('C6', 'PCS-01'),
+              inline('D6', 'S2'),
+              inline('H6', 'MEC-0001'),
+              formula('I6', 'T4', 'Signed'),
+            ]),
           ]),
-          row(6, [
-            inline('A6', 'Zone 1'),
-            inline('B6', 'N1'),
-            inline('C6', 'PCS-01'),
-            inline('D6', 'S2'),
-            inline('H6', 'MEC-0001'),
-            formula('I6', 'T4', 'Signed'),
-          ]),
-        ]),
-      ),
-    ]);
+        ),
+      ]);
 
-    final review = classifyBytes(source, target);
-    expect(rowsOf(review), isEmpty, reason: review.toString());
-    expect(
-      (review['warnings'] as List).every(
-        (warning) => obj(warning)['key'] != 'warn.rfi.followUp.unmappedRecords',
-      ),
-      isTrue,
-    );
-  });
+      final review = classifyBytes(source, target);
+      expect(rowsOf(review), isEmpty, reason: review.toString());
+      expect(
+        (review['warnings'] as List).every(
+          (warning) =>
+              obj(warning)['key'] != 'warn.rfi.followUp.unmappedRecords',
+        ),
+        isTrue,
+      );
+    },
+  );
 
   test('full sync omits a FINAL RFI without a prepared context', () {
     final source = fullSchemaSource([
@@ -299,10 +369,14 @@ void main() {
   test('preview builds an inert exact workbook plan', () {
     const rfi = 'AZE-SUN-INT-QMS-RFI-CIV-0006';
     final source = sourcePackage(
-      worksheet([row(10, [inline('A10', rfi), inline('T10', 'Completed')])]),
+      worksheet([
+        row(10, [inline('A10', rfi), inline('T10', 'Completed')]),
+      ]),
       worksheet(const []),
     );
-    final target = targetWithRows([row(2, [inline('A2', rfi), blank('B2')])]);
+    final target = targetWithRows([
+      row(2, [inline('A2', rfi), blank('B2')]),
+    ]);
 
     final plan = previewBytes(source, target);
     guardedUpdates(plan.steps[0]);
@@ -320,7 +394,98 @@ void main() {
   // these tests are carried as skipped entries until they land.
   test(
     'follow up retained apply revalidates open workbooks at every boundary',
-    () {},
-    skip: 'Requires FilesystemAuthority journal/grant/apply port (E2/E3).',
+    () {
+      final root = Directory.systemTemp.createTempSync('docflow-fu-retained-');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final canonical = Directory(root.path).resolveSymbolicLinksSync();
+      final sourcePath = p.join(canonical, 'RFI Log.xlsx');
+      final targetPath = p.join(canonical, 'Follow Up.xlsx');
+      const rfi = 'AZE-SUN-INT-QMS-RFI-CIV-0006';
+      final sourceBytes = xlsxSourcePackage(
+        worksheet([
+          row(10, [inline('A10', rfi), inline('T10', 'Completed')]),
+        ]),
+        worksheet(const []),
+      );
+      final originalTarget = xlsxTargetWithRows([
+        row(2, [inline('A2', rfi), blank('B2')]),
+      ]);
+      File(sourcePath).writeAsBytesSync(sourceBytes);
+      File(targetPath).writeAsBytesSync(originalTarget);
+      for (var index = 0; index < 64; index++) {
+        File(p.join(canonical, '.docflow-s5-backup-prior-$index.xlsx'))
+            .writeAsBytesSync(utf8.encode('retained recovery evidence'));
+      }
+      final plan = previewFromOpenFiles(
+        rfiLog: openSyncWorkbookFile(sourcePath),
+        followUp: openSyncWorkbookFile(targetPath),
+        ooxml: const ProductionFollowUpOoxml(),
+      );
+      final authority = FilesystemAuthority(
+        journalDir: p.join(canonical, 'journals'),
+        ttl: const Duration(minutes: 5),
+        ooxml: const ProductionFollowUpOoxml(),
+        rfiLog: const ProductionRfiLogWorkbook(),
+        rfiSystemSync: const RfiSystemSync(),
+        pdf: const ProductionPdfEngine(),
+        replicaPublish: const ProductionReplicaPublish(),
+        undoJournal: undoJournal,
+      );
+      const caller = CallerIdentity('owner', 'session');
+      final scope = GrantScope.create(
+        'owner',
+        'session',
+        'request',
+        'rfi.follow_up_sync',
+      );
+      final source = authority.issueGrant(scope, canonical, GrantAccess.read);
+      final target = authority.issueGrant(
+        scope,
+        canonical,
+        GrantAccess.readWrite,
+      );
+      final cached = authority.cachePlan(
+        BackendOrigin.rust,
+        PlanBinding(
+          ownerId: 'owner',
+          sessionId: 'session',
+          operationId: 'rfi.follow_up_sync',
+          grantIds: [source.grantId, target.grantId],
+        ),
+        plan,
+      );
+      final result = authority.apply(cached.planId, caller);
+
+      expect(result.applied, 1, reason: '${result.errors}');
+      expect(result.failed, 0);
+      expect(File(sourcePath).readAsBytesSync(), sourceBytes);
+      final applied = readWorkbookAndDiscovery(
+        File(targetPath).readAsBytesSync(),
+      ).$2;
+      expect(applied.sheets['Follow Up']!.cells[(2, 2)]!.value, 'Not Signed');
+      final names = [
+        for (final entity in Directory(canonical).listSync())
+          p.basename(entity.path),
+      ];
+      expect(
+        names.any((name) => name.startsWith('.docflow-s5-backup-')),
+        isTrue,
+      );
+      expect(
+        names.any((name) => name.startsWith('.docflow-s5-retained-original-')),
+        isTrue,
+      );
+      expect(
+        Directory(p.join(canonical, '.docflow-backups')).existsSync(),
+        isTrue,
+      );
+      final retained = result.meta['retainedEvidence'] as List;
+      expect(retained, hasLength(3));
+      expect(
+        retained.every((item) => !(item as Map).containsKey('path')),
+        isTrue,
+      );
+      expect(authority.recoverPending(caller), isEmpty);
+    },
   );
 }

@@ -77,16 +77,19 @@ porting rules, but its Linux paths are outdated; use the paths below.
    cancelled-waiter and acquisition-contention tests (need real concurrency),
    `timeout_late_result_*`, `timeout_live_*`, the `completed_*_loser` tests,
    `*_response_poll_*`, and the PrintService-backed cancel tests (3826, 4287).
-3. **E2 test bodies: PARTIAL (1.20.5).** Filled with real flows:
+3. **E2 test bodies: PARTIAL (1.20.10).** Filled with real flows (1.20.10 adds
+   the retained apply revalidation in `e8_native_part6`, orientation apply and
+   source-drift tests, stage-signed archive-drift and changed-input apply tests):
    `e8_native_part8` (follow-up apply of 501 guarded updates, retained undo,
    retained recovery; real xlsx via `e8_xlsx_writer.dart`) and
    `e3_journal_s5` (failed-apply undo, user-initiated restore recovery, no
    clobber; real files on disk). This fixed a real bug: the S5 undo lease
    (`process` + interprocess permits) was never released on exit, so the next
    undo failed with `operation_in_progress`. Still skipped, with accurate
-   reasons: `e9_stage_signed` and `e9_orientation` apply tests, and
-   `e10_process_scans` apply/undo, orientation and parallel-analysis tests.
-   These need FilesystemAuthority apply plus the fixture PDFs.
+   reasons: `e9_stage_signed` cancel-mid-apply, pending-journal recovery and
+   same-bytes temp-copy cases (Dart `apply` exposes no progress/cancel hook
+   yet), and `e10_process_scans` apply/undo, orientation and parallel-analysis
+   tests (about 25 cases, still to port).
    The Windows-only retry tests stay UNVERIFIED.
 4. **E11: PARTIAL (1.20.6).** The Windows and macOS printing adapters are
    already ported (`platform/windows/printing.dart`, `platform/macos/printing.dart`),

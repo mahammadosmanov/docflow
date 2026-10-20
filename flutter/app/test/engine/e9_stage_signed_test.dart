@@ -12,6 +12,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:docflow/engine/contracts.dart';
+import 'package:docflow/engine/fs_ops.dart';
+import 'package:docflow/engine/paths.dart';
+import 'package:docflow/engine/plan_store.dart';
+import 'package:docflow/engine/production_ports.dart';
+import 'package:docflow/engine/rfi_system_sync.dart'
+    show RfiSystemSync, FollowUpWorkbookFile;
+import 'package:docflow/engine/undo.dart';
 import 'package:docflow/engine/errors.dart';
 import 'package:docflow/engine/naming.dart' show filenameFor;
 import 'package:docflow/engine/operations/process_scans.dart'
@@ -31,21 +38,21 @@ const String _operatorSkip =
 const String _code = fixtureCode;
 const String _secondCode = 'AZE-SUN-INT-QMS-RFI-MEC-0249';
 
-rfi.RfiMatch _withMethod(rfi.RfiMatch match, rfi.RfiMethod method) => rfi.RfiMatch(
-  code: match.code,
-  discipline: match.discipline,
-  number: match.number,
-  method: method,
-  confidence: match.confidence,
-);
+rfi.RfiMatch _withMethod(rfi.RfiMatch match, rfi.RfiMethod method) =>
+    rfi.RfiMatch(
+      code: match.code,
+      discipline: match.discipline,
+      number: match.number,
+      method: method,
+      confidence: match.confidence,
+    );
 
 /// Port of `FixtureOcr`: a text-layer read keyed by file name.
 class _FixtureOcr extends OcrAdapter {
   _FixtureOcr(this.codes);
 
-  factory _FixtureOcr.one(List<String> names) => _FixtureOcr({
-    for (final name in names) name: _code,
-  });
+  factory _FixtureOcr.one(List<String> names) =>
+      _FixtureOcr({for (final name in names) name: _code});
 
   final Map<String, String> codes;
 
@@ -84,10 +91,7 @@ class _PageFixtureOcr extends OcrAdapter {
   @override
   Future<OcrRead> readPage(String path, int pageIndex) async {
     final code = codes[(p.basename(path), pageIndex)] ?? '';
-    return OcrRead(
-      matched: rfi.find(code),
-      source: 'fixture-page-$pageIndex',
-    );
+    return OcrRead(matched: rfi.find(code), source: 'fixture-page-$pageIndex');
   }
 
   @override
@@ -164,6 +168,49 @@ List<Map<String, Object?>> _rows(Plan plan) => [
 Map<String, Object?> _copyRow(Map<String, Object?> row) =>
     Map<String, Object?>.from(row);
 
+FilesystemAuthority _stageAuthority(String journalDir) => FilesystemAuthority(
+  journalDir: journalDir,
+  ttl: const Duration(minutes: 5),
+  ooxml: const ProductionFollowUpOoxml(),
+  rfiLog: const ProductionRfiLogWorkbook(),
+  rfiSystemSync: const RfiSystemSync(),
+  pdf: const ProductionPdfEngine(),
+  replicaPublish: const ProductionReplicaPublish(),
+  undoJournal: undoJournal,
+);
+
+Plan _cacheStage(
+  FilesystemAuthority authority,
+  Plan plan,
+  String signed,
+  String archive,
+  String review,
+) {
+  const opId = 'rfi.stage_signed_first_pages';
+  final scope = GrantScope.create('owner-1', 'session-1', 'preview-1', opId);
+  final signedGrant = authority.issueGrant(scope, signed, GrantAccess.read);
+  final archiveGrant = authority.issueGrant(scope, archive, GrantAccess.read);
+  final reviewGrant = authority.issueGrant(
+    scope,
+    review,
+    GrantAccess.readWrite,
+  );
+  return authority.cachePlan(
+    BackendOrigin.rust,
+    PlanBinding(
+      ownerId: 'owner-1',
+      sessionId: 'session-1',
+      operationId: opId,
+      grantIds: [
+        signedGrant.grantId,
+        archiveGrant.grantId,
+        reviewGrant.grantId,
+      ],
+    ),
+    plan,
+  );
+}
+
 void main() {
   late Directory fixture;
 
@@ -193,48 +240,111 @@ void main() {
     writer(path);
   }
 
-  test('one multi-page scan creates one staging row per exact RFI page', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeRichArchive(p.join(archiveRoot, 'CIV', filenameFor(_code)));
-    writeRichArchive(p.join(archiveRoot, 'MEC', filenameFor(_secondCode)));
-    writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
-    final ocr = _PageFixtureOcr({
-      ('combined.pdf', 0): _code,
-      ('combined.pdf', 1): _secondCode,
-    });
+  test(
+    'one multi-page scan creates one staging row per exact RFI page',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeRichArchive(p.join(archiveRoot, 'CIV', filenameFor(_code)));
+      writeRichArchive(p.join(archiveRoot, 'MEC', filenameFor(_secondCode)));
+      writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
+      final ocr = _PageFixtureOcr({
+        ('combined.pdf', 0): _code,
+        ('combined.pdf', 1): _secondCode,
+      });
 
-    final progress = <ProgressEvent>[];
+      final progress = <ProgressEvent>[];
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        ocr,
+        progress: progress.add,
+      );
+
+      final replacements = _replacements(plan);
+      expect(replacements, hasLength(2));
+      expect(replacements[0].meta['signedPageIndex'], 0);
+      expect(replacements[1].meta['signedPageIndex'], 1);
+      final rows = _rows(plan);
+      expect(rows, hasLength(2));
+      expect(rows[0]['confidence'], 1.0);
+      expect(
+        (_editor(plan)['columns']! as List<Object?>).any((column) {
+          final map = column! as Map<String, Object?>;
+          return map['key'] == 'confidence' && map['display'] == 'percent';
+        }),
+        isTrue,
+      );
+      expect(plan.meta['pageComparisons'], isEmpty);
+      expect(_keys(plan), contains('warn.rfi.signedMultiPage'));
+      expect(progress.last.phase, 'preview_ready');
+      // Apply (four effects, then journal) is skipped: see _applySkip.
+    },
+  );
+
+  test('staged apply revalidates hashes, never clobbers, and undoes created output', () async {
+    final (signedRoot, archiveRoot, reviewRoot) = roots();
+    final signed = p.join(signedRoot, 'signed.pdf');
+    final archive = p.join(archiveRoot, 'Package', 'Civil', filenameFor(_code));
+    writeSigned(signed, extraPage: false);
+    writeRichArchive(archive);
+    final archiveHash = fileSha256(archive);
+    final signedHash = fileSha256(signed);
     final plan = await previewStageSignedPages(
       _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      ocr,
-      progress: progress.add,
+      _FixtureOcr.one(['signed.pdf']),
     );
+    final authority = _stageAuthority(at('journal'));
+    final cached = _cacheStage(
+      authority,
+      plan,
+      signedRoot,
+      archiveRoot,
+      reviewRoot,
+    );
+    const caller = CallerIdentity('owner-1', 'session-1');
 
-    final replacements = _replacements(plan);
-    expect(replacements, hasLength(2));
-    expect(replacements[0].meta['signedPageIndex'], 0);
-    expect(replacements[1].meta['signedPageIndex'], 1);
-    final rows = _rows(plan);
-    expect(rows, hasLength(2));
-    expect(rows[0]['confidence'], 1.0);
+    final result = authority.apply(cached.planId, caller);
+    final output = p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code));
+    expect(result.failed, 0);
+    expect(result.meta['effectState'], 'committed');
+    expect(File(output).existsSync(), isTrue);
+    expect(fileSha256(archive), archiveHash);
+    expect(fileSha256(signed), signedHash);
+    final canonicalOutput = p.join(
+      Directory(reviewRoot).resolveSymbolicLinksSync(),
+      'Package',
+      'Civil',
+      filenameFor(_code),
+    );
+    final journal = authority.journals.read(result.journalId);
     expect(
-      (_editor(plan)['columns']! as List<Object?>).any((column) {
-        final map = column! as Map<String, Object?>;
-        return map['key'] == 'confidence' && map['display'] == 'percent';
-      }),
+      journal.steps.any(
+        (step) => step.kind == StepKind.copy && step.dst == canonicalOutput,
+      ),
       isTrue,
     );
-    expect(plan.meta['pageComparisons'], isEmpty);
-    expect(_keys(plan), contains('warn.rfi.signedMultiPage'));
-    expect(progress.last.phase, 'preview_ready');
-    // Apply (four effects, then journal) is skipped: see _applySkip.
-  });
 
-  test(
-    'staged apply revalidates hashes, never clobbers, and undoes created output',
-    () {},
-    skip: _applySkip,
-  );
+    final undone = authority.undo(result.journalId, caller);
+    expect(undone.failed, 0);
+    expect(File(output).existsSync(), isFalse);
+    expect(Directory(p.join(reviewRoot, 'Package')).existsSync(), isFalse);
+
+    final secondPlan = await previewStageSignedPages(
+      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+      _FixtureOcr.one(['signed.pdf']),
+    );
+    final second = _cacheStage(
+      authority,
+      secondPlan,
+      signedRoot,
+      archiveRoot,
+      reviewRoot,
+    );
+    Directory(p.dirname(output)).createSync(recursive: true);
+    File(output).writeAsBytesSync('USER RACE WINNER'.codeUnits);
+    final collision = authority.apply(second.planId, caller);
+    expect(collision.failed, 1);
+    expect(File(output).readAsStringSync(), 'USER RACE WINNER');
+  });
 
   test('combined scan uses bounded parallel page OCR when supported', () async {
     final (signedRoot, archiveRoot, reviewRoot) = roots();
@@ -261,103 +371,116 @@ void main() {
     expect(progress.last.phase, 'preview_ready');
   });
 
-  test('archive discovery scans every depth with bounded parallel evidence', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'incoming/day-1/signed.pdf'), extraPage: false);
-    for (final branch in ['CIV', 'MEC', 'ELE', 'PRC']) {
-      Directory(p.join(archiveRoot, branch, 'Area/Package')).createSync(recursive: true);
-    }
-    writeRichArchive(
-      p.join(archiveRoot, 'CIV/Area/Package/RFI folder', filenameFor(_code)),
-    );
+  test(
+    'archive discovery scans every depth with bounded parallel evidence',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(
+        p.join(signedRoot, 'incoming/day-1/signed.pdf'),
+        extraPage: false,
+      );
+      for (final branch in ['CIV', 'MEC', 'ELE', 'PRC']) {
+        Directory(p.join(archiveRoot, branch, 'Area/Package'))
+            .createSync(recursive: true);
+      }
+      writeRichArchive(
+        p.join(archiveRoot, 'CIV/Area/Package/RFI folder', filenameFor(_code)),
+      );
 
-    final plan = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
-      _FixtureOcr.one(['signed.pdf']),
-    );
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
+        _FixtureOcr.one(['signed.pdf']),
+      );
 
-    expect(_replacements(plan), isNotEmpty);
-    expect(plan.meta['archiveRecursive'], true);
-    expect(plan.meta['archiveDirectoriesScanned'], greaterThanOrEqualTo(10));
-    expect(plan.meta['archiveEntriesScanned'], greaterThanOrEqualTo(10));
-    final workers = plan.meta['archiveWorkerCount']! as int;
-    expect(workers, inInclusiveRange(1, 4));
-  });
+      expect(_replacements(plan), isNotEmpty);
+      expect(plan.meta['archiveRecursive'], true);
+      expect(plan.meta['archiveDirectoriesScanned'], greaterThanOrEqualTo(10));
+      expect(plan.meta['archiveEntriesScanned'], greaterThanOrEqualTo(10));
+      final workers = plan.meta['archiveWorkerCount']! as int;
+      expect(workers, inInclusiveRange(1, 4));
+    },
+  );
 
-  test('unreadable and duplicate combined-scan pages fail closed with page labels', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
-    writeRichArchive(p.join(archiveRoot, 'CIV', filenameFor(_code)));
+  test(
+    'unreadable and duplicate combined-scan pages fail closed with page labels',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
+      writeRichArchive(p.join(archiveRoot, 'CIV', filenameFor(_code)));
 
-    final unreadable = _PageFixtureOcr({('combined.pdf', 0): _code});
-    final first = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      unreadable,
-    );
-    expect(_replacements(first), hasLength(1));
-    expect(
-      first.warnings.any(
-        (w) =>
-            w.key == 'warn.no_code' &&
-            w.subject.contains('combined.pdf') &&
-            w.subject.contains('#2'),
-      ),
-      isTrue,
-    );
-
-    final duplicate = _PageFixtureOcr({
-      ('combined.pdf', 0): _code,
-      ('combined.pdf', 1): _code,
-    });
-    final second = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      duplicate,
-    );
-    expect(_replacements(second), isEmpty);
-    expect(
-      second.warnings.any(
-        (w) =>
-            w.key == 'warn.rfi.signedDuplicate' &&
-            w.subject.contains('#1') &&
-            w.subject.contains('#2'),
-      ),
-      isTrue,
-    );
-  });
-
-  test('combined-scan preview reports pages and cancels between them', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
-    final ocr = _PageFixtureOcr({
-      ('combined.pdf', 0): _code,
-      ('combined.pdf', 1): _secondCode,
-    });
-    var cancellationChecks = 0;
-    final subjects = <String>[];
-
-    await expectLater(
-      previewStageSignedPages(
+      final unreadable = _PageFixtureOcr({('combined.pdf', 0): _code});
+      final first = await previewStageSignedPages(
         _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-        ocr,
-        progress: (event) => subjects.add(event.subject),
-        cancelled: () {
-          cancellationChecks++;
-          return cancellationChecks >= 3;
-        },
-      ),
-      throwsA(
-        isA<BackendError>().having(
-          (error) => error.code,
-          'code',
-          'operation_cancelled',
+        unreadable,
+      );
+      expect(_replacements(first), hasLength(1));
+      expect(
+        first.warnings.any(
+          (w) =>
+              w.key == 'warn.no_code' &&
+              w.subject.contains('combined.pdf') &&
+              w.subject.contains('#2'),
         ),
-      ),
-    );
+        isTrue,
+      );
 
-    expect(subjects.any((subject) => subject.contains('#1')), isTrue);
-    expect(subjects.any((subject) => subject.contains('#2')), isFalse);
-    expect(Directory(reviewRoot).listSync(), isEmpty);
-  });
+      final duplicate = _PageFixtureOcr({
+        ('combined.pdf', 0): _code,
+        ('combined.pdf', 1): _code,
+      });
+      final second = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        duplicate,
+      );
+      expect(_replacements(second), isEmpty);
+      expect(
+        second.warnings.any(
+          (w) =>
+              w.key == 'warn.rfi.signedDuplicate' &&
+              w.subject.contains('#1') &&
+              w.subject.contains('#2'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'combined-scan preview reports pages and cancels between them',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(p.join(signedRoot, 'combined.pdf'), extraPage: true);
+      final ocr = _PageFixtureOcr({
+        ('combined.pdf', 0): _code,
+        ('combined.pdf', 1): _secondCode,
+      });
+      var cancellationChecks = 0;
+      final subjects = <String>[];
+
+      await expectLater(
+        previewStageSignedPages(
+          _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+          ocr,
+          progress: (event) => subjects.add(event.subject),
+          cancelled: () {
+            cancellationChecks++;
+            return cancellationChecks >= 3;
+          },
+        ),
+        throwsA(
+          isA<BackendError>().having(
+            (error) => error.code,
+            'code',
+            'operation_cancelled',
+          ),
+        ),
+      );
+
+      expect(subjects.any((subject) => subject.contains('#1')), isTrue);
+      expect(subjects.any((subject) => subject.contains('#2')), isFalse);
+      expect(Directory(reviewRoot).listSync(), isEmpty);
+    },
+  );
 
   test('archive lookup ignores nonstandard names even when the path contains the RFI code', () async {
     final (signedRoot, archiveRoot, reviewRoot) = roots();
@@ -410,7 +533,11 @@ void main() {
         isNotEmpty,
         reason: 'archive number $archiveNumber should resolve the RFI',
       );
-      expect(_rows(plan).first['code'], _code, reason: 'persisted code is canonical');
+      expect(
+        _rows(plan).first['code'],
+        _code,
+        reason: 'persisted code is canonical',
+      );
       fixture.deleteSync(recursive: true);
       fixture = Directory.systemTemp.createTempSync('e9_stage');
     }
@@ -433,130 +560,177 @@ void main() {
     expect((reasons.first! as Map)['key'], 'warn.no_code');
   });
 
-  test('archive ambiguity requires an allowlisted RFI-No PDF selection', () async {
+  test(
+    'archive ambiguity requires an allowlisted RFI-No PDF selection',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(p.join(signedRoot, 'signed.pdf'), extraPage: false);
+      final first = p.join('Other', filenameFor(_code));
+      final second = p.join('Package', 'Civil', filenameFor(_code));
+      writeRichArchive(p.join(archiveRoot, first));
+      writeRichArchive(p.join(archiveRoot, second));
+
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+
+      expect(_replacements(plan), isEmpty);
+      expect(plan.warnings, hasLength(1));
+      expect(plan.warnings.first.key, 'warn.rfi.archiveAmbiguous');
+      final rows = _rows(plan);
+      expect(rows, hasLength(1));
+      expect(rows.first['enabled'], true);
+      expect(rows.first['code'], _code);
+      expect(rows.first['archiveFile'], '');
+      expect(_editor(plan)['requiredFields'], ['archiveFile']);
+      final choices =
+          (_editor(plan)['choicesByValue']! as Map)['archiveFile']! as Map;
+      expect((choices['values']! as Map)[_code], [
+        '',
+        'signed-$_code-candidate-1',
+        'signed-$_code-candidate-2',
+      ]);
+      final labels =
+          (_editor(plan)['choiceLabels']! as Map)['archiveFile']! as Map;
+      expect(labels['signed-$_code-candidate-1'], first);
+      expect(labels['signed-$_code-candidate-2'], second);
+
+      final selected = [for (final row in rows) _copyRow(row)];
+      selected.first['archiveFile'] = 'signed-$_code-candidate-2';
+      final revised = revise(plan, {'rows': selected});
+      final replacements = _replacements(revised);
+      expect(replacements, hasLength(1));
+      final canonicalArchiveRoot = Directory(archiveRoot)
+          .resolveSymbolicLinksSync();
+      final canonicalReviewRoot = Directory(reviewRoot)
+          .resolveSymbolicLinksSync();
+      expect(replacements.first.src, p.join(canonicalArchiveRoot, second));
+      expect(replacements.first.dst, p.join(canonicalReviewRoot, second));
+
+      final missing = [for (final row in rows) _copyRow(row)];
+      missing.first['archiveFile'] = '';
+      expect(
+        () => revise(plan, {'rows': missing}),
+        throwsA(isA<BackendError>()),
+      );
+
+      final forged = [for (final row in rows) _copyRow(row)];
+      forged.first['archiveFile'] =
+          'Forged/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf';
+      expect(
+        () => revise(plan, {'rows': forged}),
+        throwsA(isA<BackendError>()),
+      );
+
+      final disabled = [for (final row in rows) _copyRow(row)];
+      disabled.first['enabled'] = false;
+      final skipped = revise(plan, {'rows': disabled});
+      expect(_replacements(skipped), isEmpty);
+    },
+  );
+
+  test('archive apply after a changed selection fails closed', () async {
     final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'signed.pdf'), extraPage: false);
-    final first = p.join('Other', filenameFor(_code));
-    final second = p.join('Package', 'Civil', filenameFor(_code));
-    writeRichArchive(p.join(archiveRoot, first));
-    writeRichArchive(p.join(archiveRoot, second));
-
-    final plan = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      _FixtureOcr.one(['signed.pdf']),
-    );
-
-    expect(_replacements(plan), isEmpty);
-    expect(plan.warnings, hasLength(1));
-    expect(plan.warnings.first.key, 'warn.rfi.archiveAmbiguous');
-    final rows = _rows(plan);
-    expect(rows, hasLength(1));
-    expect(rows.first['enabled'], true);
-    expect(rows.first['code'], _code);
-    expect(rows.first['archiveFile'], '');
-    expect(_editor(plan)['requiredFields'], ['archiveFile']);
-    final choices = (_editor(plan)['choicesByValue']! as Map)['archiveFile']! as Map;
-    expect((choices['values']! as Map)[_code], [
-      '',
-      'signed-$_code-candidate-1',
-      'signed-$_code-candidate-2',
-    ]);
-    final labels = (_editor(plan)['choiceLabels']! as Map)['archiveFile']! as Map;
-    expect(labels['signed-$_code-candidate-1'], first);
-    expect(labels['signed-$_code-candidate-2'], second);
-
-    final selected = [for (final row in rows) _copyRow(row)];
-    selected.first['archiveFile'] = 'signed-$_code-candidate-2';
-    final revised = revise(plan, {'rows': selected});
-    final replacements = _replacements(revised);
-    expect(replacements, hasLength(1));
-    final canonicalArchiveRoot = Directory(archiveRoot).resolveSymbolicLinksSync();
-    final canonicalReviewRoot = Directory(reviewRoot).resolveSymbolicLinksSync();
-    expect(replacements.first.src, p.join(canonicalArchiveRoot, second));
-    expect(replacements.first.dst, p.join(canonicalReviewRoot, second));
-
-    final missing = [for (final row in rows) _copyRow(row)];
-    missing.first['archiveFile'] = '';
-    expect(
-      () => revise(plan, {'rows': missing}),
-      throwsA(isA<BackendError>()),
-    );
-
-    final forged = [for (final row in rows) _copyRow(row)];
-    forged.first['archiveFile'] = 'Forged/RFI No. AZE-SUN-INT-QMS-RFI-CIV-0064.pdf';
-    expect(() => revise(plan, {'rows': forged}), throwsA(isA<BackendError>()));
-
-    final disabled = [for (final row in rows) _copyRow(row)];
-    disabled.first['enabled'] = false;
-    final skipped = revise(plan, {'rows': disabled});
-    expect(_replacements(skipped), isEmpty);
-  });
-
-  test('archive apply after a changed selection fails closed', () {}, skip: _applySkip);
-
-  test('archive lookup rejects numeric tails, suffixes, and non-PDF files', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'signed.pdf'), extraPage: false);
-    for (final name in [
-      'RFI No. ${_code}5.pdf',
-      'RFI No. $_code approved.pdf',
-      'RFI No. $_code٥.pdf',
-      'RFI No. $_code.txt',
-    ]) {
-      writeRichArchive(p.join(archiveRoot, 'Package/Civil', name));
-    }
-
-    final plan = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      _FixtureOcr.one(['signed.pdf']),
-    );
-
-    expect(_replacements(plan), isEmpty);
-    expect(plan.warnings, hasLength(1));
-    expect(plan.warnings.first.key, 'warn.rfi.archiveMissing');
-  });
-
-  test('preview preserves scan subfolders and surfaces PDF fidelity warnings', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    final nestedSigned = p.join(signedRoot, 'incoming/day-1/signed.pdf');
-    final archive = p.join(
-      archiveRoot,
-      'Package/Civil',
-      'rfi no. ${_code.toLowerCase()}.PdF',
-    );
-    writeSigned(nestedSigned, extraPage: true);
+    final signed = p.join(signedRoot, 'signed.pdf');
+    final archive = p.join(archiveRoot, 'Package', 'Civil', filenameFor(_code));
+    writeSigned(signed, extraPage: false);
     writeRichArchive(archive);
-
-    final shallow = await previewStageSignedPages(
+    final plan = await previewStageSignedPages(
       _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
       _FixtureOcr.one(['signed.pdf']),
     );
-    expect(shallow.steps, isEmpty);
-    expect(shallow.warnings.first.key, 'warn.rfi.noSignedPdfs');
-
-    final recursive = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
-      _FixtureOcr.one(['signed.pdf']),
+    final authority = _stageAuthority(at('journal'));
+    final cached = _cacheStage(
+      authority,
+      plan,
+      signedRoot,
+      archiveRoot,
+      reviewRoot,
     );
-    expect(_replacements(recursive), hasLength(1));
-    expect(_keys(recursive), contains('warn.rfi.signedExtraPages'));
+    File(archive).writeAsBytesSync('ARCHIVE CHANGED AFTER SELECTION'.codeUnits);
 
-    writeSignedDocument(archive);
-    final unsupported = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
-      _FixtureOcr.one(['signed.pdf']),
+    final result = authority.apply(
+      cached.planId,
+      const CallerIdentity('owner-1', 'session-1'),
     );
-    expect(_replacements(unsupported), isEmpty);
-    expect(_keys(unsupported), contains('warn.rfi.pdfFidelityUnsupported'));
-
-    writeTaggedDocument(archive);
-    final tagged = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
-      _FixtureOcr.one(['signed.pdf']),
+    expect(result.failed, 1);
+    expect(
+      File(p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code)))
+          .existsSync(),
+      isFalse,
     );
-    expect(_replacements(tagged), isEmpty);
-    expect(_keys(tagged), contains('warn.rfi.pdfFidelityUnsupported'));
   });
+
+  test(
+    'archive lookup rejects numeric tails, suffixes, and non-PDF files',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(p.join(signedRoot, 'signed.pdf'), extraPage: false);
+      for (final name in [
+        'RFI No. ${_code}5.pdf',
+        'RFI No. $_code approved.pdf',
+        'RFI No. $_code٥.pdf',
+        'RFI No. $_code.txt',
+      ]) {
+        writeRichArchive(p.join(archiveRoot, 'Package/Civil', name));
+      }
+
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+
+      expect(_replacements(plan), isEmpty);
+      expect(plan.warnings, hasLength(1));
+      expect(plan.warnings.first.key, 'warn.rfi.archiveMissing');
+    },
+  );
+
+  test(
+    'preview preserves scan subfolders and surfaces PDF fidelity warnings',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      final nestedSigned = p.join(signedRoot, 'incoming/day-1/signed.pdf');
+      final archive = p.join(
+        archiveRoot,
+        'Package/Civil',
+        'rfi no. ${_code.toLowerCase()}.PdF',
+      );
+      writeSigned(nestedSigned, extraPage: true);
+      writeRichArchive(archive);
+
+      final shallow = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(shallow.steps, isEmpty);
+      expect(shallow.warnings.first.key, 'warn.rfi.noSignedPdfs');
+
+      final recursive = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(_replacements(recursive), hasLength(1));
+      expect(_keys(recursive), contains('warn.rfi.signedExtraPages'));
+
+      writeSignedDocument(archive);
+      final unsupported = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(_replacements(unsupported), isEmpty);
+      expect(_keys(unsupported), contains('warn.rfi.pdfFidelityUnsupported'));
+
+      writeTaggedDocument(archive);
+      final tagged = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(_replacements(tagged), isEmpty);
+      expect(_keys(tagged), contains('warn.rfi.pdfFidelityUnsupported'));
+    },
+  );
 
   test('fuzzy prefixes never authorize signed-page staging', () async {
     final (signedRoot, archiveRoot, reviewRoot) = roots();
@@ -571,7 +745,8 @@ void main() {
     final reviewCopy = plan.steps.firstWhere(
       (step) => step.kind == StepKind.copy,
     );
-    final canonicalReviewRoot = Directory(reviewRoot).resolveSymbolicLinksSync();
+    final canonicalReviewRoot = Directory(reviewRoot)
+        .resolveSymbolicLinksSync();
     expect(reviewCopy.dst, p.join(canonicalReviewRoot, '_review', 'fuzzy.pdf'));
     expect(reviewCopy.meta['warningReview'], true);
     expect(reviewCopy.meta['expectedSourceSha256'], isA<String>());
@@ -586,65 +761,104 @@ void main() {
     expect(plan.meta['archiveEntriesScanned'], 0);
   });
 
-  test('warning-review copy is planned with the previewed source hash', () async {
-    final (signedRoot, archiveRoot, reviewRoot) = roots();
-    writeSigned(p.join(signedRoot, 'unmatched.pdf'), extraPage: false);
+  test(
+    'warning-review copy is planned with the previewed source hash',
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      writeSigned(p.join(signedRoot, 'unmatched.pdf'), extraPage: false);
 
-    final plan = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
-      _FixtureOcr({}),
-    );
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr({}),
+      );
 
-    final copy = plan.steps.firstWhere((step) => step.kind == StepKind.copy);
-    expect(copy.src, endsWith('unmatched.pdf'));
-    expect(copy.meta['expectedSourceSha256'], isA<String>());
-  });
+      final copy = plan.steps.firstWhere((step) => step.kind == StepKind.copy);
+      expect(copy.src, endsWith('unmatched.pdf'));
+      expect(copy.meta['expectedSourceSha256'], isA<String>());
+    },
+  );
 
   test(
     'warning-review copy revalidates the previewed source hash on apply',
-    () {},
-    skip: _applySkip,
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      final source = p.join(signedRoot, 'unmatched.pdf');
+      writeSigned(source, extraPage: false);
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr({}),
+      );
+      final authority = _stageAuthority(at('journal'));
+      final cached = _cacheStage(
+        authority,
+        plan,
+        signedRoot,
+        archiveRoot,
+        reviewRoot,
+      );
+      File(source).writeAsBytesSync('changed after preview'.codeUnits);
+
+      final result = authority.apply(
+        cached.planId,
+        const CallerIdentity('owner-1', 'session-1'),
+      );
+      expect(result.failed, 1);
+      expect(
+        File(p.join(reviewRoot, '_review', 'unmatched.pdf')).existsSync(),
+        isFalse,
+      );
+    },
   );
 
-  test('recursive discovery never follows signed or archive directory symlinks', () async {
-    final signedFixture = at('signed-links');
-    Directory(signedFixture).createSync();
-    final signedRoot = p.join(signedFixture, 'signed');
-    final archiveRoot = p.join(signedFixture, 'archive');
-    final reviewRoot = p.join(signedFixture, 'review');
-    for (final root in [signedRoot, archiveRoot, reviewRoot]) {
-      Directory(root).createSync(recursive: true);
-    }
-    final outsideSigned = p.join(signedFixture, 'outside-signed');
-    writeSigned(p.join(outsideSigned, 'signed.pdf'), extraPage: false);
-    Link(p.join(signedRoot, 'linked-scans')).createSync(outsideSigned);
-    writeRichArchive(p.join(archiveRoot, 'Package/Civil', filenameFor(_code)));
+  test(
+    'recursive discovery never follows signed or archive directory symlinks',
+    () async {
+      final signedFixture = at('signed-links');
+      Directory(signedFixture).createSync();
+      final signedRoot = p.join(signedFixture, 'signed');
+      final archiveRoot = p.join(signedFixture, 'archive');
+      final reviewRoot = p.join(signedFixture, 'review');
+      for (final root in [signedRoot, archiveRoot, reviewRoot]) {
+        Directory(root).createSync(recursive: true);
+      }
+      final outsideSigned = p.join(signedFixture, 'outside-signed');
+      writeSigned(p.join(outsideSigned, 'signed.pdf'), extraPage: false);
+      Link(p.join(signedRoot, 'linked-scans')).createSync(outsideSigned);
+      writeRichArchive(
+        p.join(archiveRoot, 'Package/Civil', filenameFor(_code)),
+      );
 
-    final signedPlan = await previewStageSignedPages(
-      _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
-      _FixtureOcr.one(['signed.pdf']),
-    );
-    expect(signedPlan.steps, isEmpty);
-    expect(signedPlan.warnings.first.key, 'warn.rfi.noSignedPdfs');
+      final signedPlan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: true),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(signedPlan.steps, isEmpty);
+      expect(signedPlan.warnings.first.key, 'warn.rfi.noSignedPdfs');
 
-    final archiveSignedRoot = at('signed-2');
-    final archiveReview = at('review-2');
-    final archiveSource = at('archive-2');
-    for (final root in [archiveSignedRoot, archiveReview, archiveSource]) {
-      Directory(root).createSync(recursive: true);
-    }
-    writeSigned(p.join(archiveSignedRoot, 'signed.pdf'), extraPage: false);
-    final outsideArchive = at('outside-archive');
-    writeRichArchive(p.join(outsideArchive, filenameFor(_code)));
-    Link(p.join(archiveSource, 'linked-package')).createSync(outsideArchive);
+      final archiveSignedRoot = at('signed-2');
+      final archiveReview = at('review-2');
+      final archiveSource = at('archive-2');
+      for (final root in [archiveSignedRoot, archiveReview, archiveSource]) {
+        Directory(root).createSync(recursive: true);
+      }
+      writeSigned(p.join(archiveSignedRoot, 'signed.pdf'), extraPage: false);
+      final outsideArchive = at('outside-archive');
+      writeRichArchive(p.join(outsideArchive, filenameFor(_code)));
+      Link(p.join(archiveSource, 'linked-package')).createSync(outsideArchive);
 
-    final archivePlan = await previewStageSignedPages(
-      _params(archiveSignedRoot, archiveSource, archiveReview, recursive: false),
-      _FixtureOcr.one(['signed.pdf']),
-    );
-    expect(_replacements(archivePlan), isEmpty);
-    expect(archivePlan.warnings.first.key, 'warn.rfi.archiveMissing');
-  });
+      final archivePlan = await previewStageSignedPages(
+        _params(
+          archiveSignedRoot,
+          archiveSource,
+          archiveReview,
+          recursive: false,
+        ),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      expect(_replacements(archivePlan), isEmpty);
+      expect(archivePlan.warnings.first.key, 'warn.rfi.archiveMissing');
+    },
+  );
 
   test('archive lookup never follows direct PDF symlinks', () async {
     final (signedRoot, archiveRoot, reviewRoot) = roots();
@@ -701,22 +915,23 @@ void main() {
   });
 
   test('preview matches the frozen compatibility oracle for duplicates, misses, ambiguity, and no-clobber', () async {
-    final oracle =
-        jsonDecode(
-              File(
-                '../../src-tauri/tests/fixtures/slice7_signed_pages_oracle.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, Object?>;
+    final oracle = jsonDecode(
+      File('../../src-tauri/tests/fixtures/slice7_signed_pages_oracle.json')
+          .readAsStringSync(),
+    ) as Map<String, Object?>;
     for (final raw in oracle['cases']! as List<Object?>) {
       final tc = raw! as Map<String, Object?>;
       final name = tc['name']! as String;
       final (signedRoot, archiveRoot, reviewRoot) = roots();
-      final signedNames = [for (final value in tc['signed']! as List<Object?>) value! as String];
+      final signedNames = [
+        for (final value in tc['signed']! as List<Object?>) value! as String,
+      ];
       for (final signedName in signedNames) {
         writeSigned(p.join(signedRoot, signedName), extraPage: false);
       }
-      final archives = [for (final value in tc['archives']! as List<Object?>) value! as String];
+      final archives = [
+        for (final value in tc['archives']! as List<Object?>) value! as String,
+      ];
       for (final relative in archives) {
         writeRichArchive(p.join(archiveRoot, relative, filenameFor(_code)));
       }
@@ -732,11 +947,9 @@ void main() {
       );
 
       expect(_replacements(plan), hasLength(tc['steps']! as int), reason: name);
-      expect(
-        _keys(plan),
-        [for (final value in tc['warnings']! as List<Object?>) value! as String],
-        reason: name,
-      );
+      expect(_keys(plan), [
+        for (final value in tc['warnings']! as List<Object?>) value! as String,
+      ], reason: name);
       for (final signedName in signedNames) {
         expect(File(p.join(signedRoot, signedName)).existsSync(), isTrue);
       }
@@ -765,8 +978,38 @@ void main() {
 
   test(
     'changed approved inputs fail without publishing or recalculating',
-    () {},
-    skip: _applySkip,
+    () async {
+      final (signedRoot, archiveRoot, reviewRoot) = roots();
+      final signed = p.join(signedRoot, 'signed.pdf');
+      writeSigned(signed, extraPage: false);
+      writeRichArchive(
+        p.join(archiveRoot, 'Package', 'Civil', filenameFor(_code)),
+      );
+      final plan = await previewStageSignedPages(
+        _params(signedRoot, archiveRoot, reviewRoot, recursive: false),
+        _FixtureOcr.one(['signed.pdf']),
+      );
+      final authority = _stageAuthority(at('journal'));
+      final cached = _cacheStage(
+        authority,
+        plan,
+        signedRoot,
+        archiveRoot,
+        reviewRoot,
+      );
+      writeSigned(signed, extraPage: true);
+
+      final result = authority.apply(
+        cached.planId,
+        const CallerIdentity('owner-1', 'session-1'),
+      );
+      expect(result.failed, 1);
+      expect(
+        File(p.join(reviewRoot, 'Package', 'Civil', filenameFor(_code)))
+            .existsSync(),
+        isFalse,
+      );
+    },
   );
 
   test(

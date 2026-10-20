@@ -5,6 +5,10 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.10 - 2026-10-20
+
+- Ported stage-signed archive-drift and changed-input apply tests; orientation apply and source-drift tests; retained follow-up apply revalidation test.
+
 ## 1.20.9 - 2026-10-20
 
 ### Added
