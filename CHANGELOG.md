@@ -5,6 +5,11 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.12 - 2026-10-20
+
+- Ported remaining plain Excel pipeline cases (timeouts, late results, poll cancel/deadline, panic, fence, cancelled waiter, retained locator).
+- Open: 12 PrintService-backed Excel cases blocked by sync PrintService apply vs async pipeline; production has no Excel pipeline wired.
+
 ## 1.20.11 - 2026-10-20
 
 - Ported remaining process-scans apply, undo, orientation, parallel, revision, review and native OCR tests.

@@ -66,7 +66,9 @@ Uint8List xlsxPackage(List<(String, SheetSpec)> sheets) {
       '<Override PartName="/xl/worksheets/sheet$number.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
     );
     sheetEntries.write(
-      '<sheet name="${_esc(sheets[index].$1)}" sheetId="$number" r:id="rId$number"/>',
+      '<sheet name="${_esc(sheets[index].$1)}" sheetId="$number"'
+      '${sheets[index].$2.state == null ? '' : ' state="${_esc(sheets[index].$2.state!)}"'}'
+      ' r:id="rId$number"/>',
     );
     relEntries.write(
       '<Relationship Id="rId$number" Type="$_relNs/worksheet" Target="worksheets/sheet$number.xml"/>',

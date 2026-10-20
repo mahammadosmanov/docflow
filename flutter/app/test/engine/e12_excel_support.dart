@@ -69,7 +69,9 @@ Uint8List fixturePdfBytes(int pageCount) {
     out.add(latin1.encode('${index + 1} 0 obj\n${objects[index]}\nendobj\n'));
   }
   final xref = out.length;
-  out.add(latin1.encode('xref\n0 ${objects.length + 1}\n0000000000 65535 f \n'));
+  out.add(
+    latin1.encode('xref\n0 ${objects.length + 1}\n0000000000 65535 f \n'),
+  );
   for (final offset in offsets) {
     out.add(latin1.encode('${offset.toString().padLeft(10, '0')} 00000 n \n'));
   }
@@ -244,7 +246,8 @@ class RecordingExporter implements WorksheetPdfExporter {
         safety: request.safety,
         worksheet: request.worksheet,
         deadline: request.deadline,
-        workbookBytes: File(request.stagedWorkbook.workbookPath).readAsBytesSync(),
+        workbookBytes: File(request.stagedWorkbook.workbookPath)
+            .readAsBytesSync(),
         cancelled: request.cancellation.isCancelled,
       ),
     );
@@ -266,7 +269,8 @@ class SequencedPdfExporter implements WorksheetPdfExporter {
     final bytes = BytesBuilder()
       ..add(multiPagePdf(2))
       ..add(utf8.encode('\n% attempt-$attempts\n'));
-    File(request.stagedWorkbook.pdfOutputPath()).writeAsBytesSync(bytes.takeBytes());
+    File(request.stagedWorkbook.pdfOutputPath())
+        .writeAsBytesSync(bytes.takeBytes());
     return request.stagedWorkbook.intoExportedPdf();
   }
 }
@@ -510,8 +514,12 @@ class ImmediateWorker implements ExcelWorkerHandle {
 
 /// Runtime that runs the exporter at launch and returns its response.
 class ImmediateRuntime implements ExcelWorkerRuntime {
-  ImmediateRuntime({this.join = WorkerJoin.finished, this.generationDelta = 0,
-      this.beforeLaunch, this.afterExport});
+  ImmediateRuntime({
+    this.join = WorkerJoin.finished,
+    this.generationDelta = 0,
+    this.beforeLaunch,
+    this.afterExport,
+  });
 
   final WorkerJoin join;
   final int generationDelta;
@@ -579,6 +587,23 @@ class _DeferredWorker implements ExcelWorkerHandle {
   WorkerJoin joinStatus() => _join;
 }
 
+/// Runtime whose response arrives after the clock has passed the deadline, like
+/// the Rust `LateResponseRuntime`.
+class LateResponseRuntime implements ExcelWorkerRuntime {
+  LateResponseRuntime(this.clock);
+
+  final AdvancingClock clock;
+
+  @override
+  ExcelWorkerHandle launch(
+    WorksheetPdfExporter exporter,
+    ExcelExportRequest request,
+  ) {
+    clock.advance();
+    return ImmediateRuntime().launch(exporter, request);
+  }
+}
+
 /// Runtime whose worker never responds and never joins; the clock advances
 /// on launch so the pipeline times out.
 class StuckRuntime implements ExcelWorkerRuntime {
@@ -619,4 +644,3 @@ class LaunchCountingRuntime implements ExcelWorkerRuntime {
     throw PrintFailure.failed('worker must not launch');
   }
 }
-

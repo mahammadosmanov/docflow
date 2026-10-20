@@ -1,6 +1,7 @@
 // Port of the export_supervisor tests in src-tauri/src/platform/excel.rs that
 // exercise ExcelExportPipeline without the print queue (PrintService-backed
 // tests are ported separately with the E11 print queue).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:collection';
@@ -12,7 +13,9 @@ import 'package:docflow/engine/platform/excel.dart';
 import 'package:docflow/engine/platform/excel_print_ports.dart';
 import 'package:docflow/engine/platform/excel_windows_contract.dart';
 import 'package:docflow/engine/progress.dart';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'e12_excel_support.dart';
 
@@ -42,6 +45,72 @@ Future<PrintFailure> captureFailureAsync(
     return failure;
   }
   throw StateError('expected a PrintFailure');
+}
+
+/// Exporter that arms cleanup failure and then panics (a worker panic).
+class _PanickingCleanupFailingExporter implements WorksheetPdfExporter {
+  _PanickingCleanupFailingExporter(this.events, this.stagedPaths);
+
+  final List<String> events;
+  final List<String> stagedPaths;
+
+  @override
+  Future<ExportedWorksheetPdf> exportPdf(ExcelExportRequest request) async {
+    events.add('export');
+    request.stagedWorkbook.cleanupFailure = true;
+    stagedPaths.add(request.stagedWorkbook.workspacePath);
+    throw StateError('fake Excel worker panic');
+  }
+}
+
+/// Exporter that fails with a synthetic, non-cleanup error.
+class _PlainFailingExporter implements WorksheetPdfExporter {
+  @override
+  Future<ExportedWorksheetPdf> exportPdf(ExcelExportRequest request) async {
+    throw PrintFailure.failed('error.print.syntheticExporterFailure');
+  }
+}
+
+/// Runtime whose response arrives after the deadline and whose join fails.
+class _LateFailedJoinRuntime implements ExcelWorkerRuntime {
+  _LateFailedJoinRuntime(this.clock);
+
+  final AdvancingClock clock;
+
+  @override
+  ExcelWorkerHandle launch(
+    WorksheetPdfExporter exporter,
+    ExcelExportRequest request,
+  ) {
+    clock.advance();
+    return ImmediateRuntime(join: WorkerJoin.failed).launch(exporter, request);
+  }
+}
+
+/// Runtime that keeps the worker live past teardown and records its workspace.
+class _RetainingRequestRuntime implements ExcelWorkerRuntime {
+  _RetainingRequestRuntime(this.clock);
+
+  final AdvancingClock clock;
+  String? retainedPath;
+
+  @override
+  ExcelWorkerHandle launch(
+    WorksheetPdfExporter exporter,
+    ExcelExportRequest request,
+  ) {
+    clock.advance();
+    retainedPath = request.stagedWorkbook.workspacePath;
+    return _StuckWorkerForE12();
+  }
+}
+
+class _StuckWorkerForE12 implements ExcelWorkerHandle {
+  @override
+  Future<WorkerPoll> poll(Duration wait) async => const WorkerPollPending();
+
+  @override
+  WorkerJoin joinStatus() => WorkerJoin.pending;
 }
 
 void main() {
@@ -943,6 +1012,556 @@ void main() {
       }
       guards.quarantine.clear();
     }
+
+    test(
+      'completed timeout loser surfaces queued artifact cleanup failure',
+      () async {
+        final events = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final clock = AdvancingClock();
+        final guards = ExcelProcessGuards();
+        final pipeline = guardedPipeline(
+          events: events,
+          requests: [],
+          submitted: submitted,
+          exporter: CleanupFailingExporter(events),
+          runtime: LateResponseRuntime(clock),
+          guards: guards,
+          clock: clock,
+        );
+        final token = CancellationRegistry().register('cleanup-timeout');
+        final fixture = sourceFixture();
+        addTearDown(fixture.dispose);
+        final job = worksheetJob(
+          fixture.source.absolute,
+          fixture.signature,
+          'MEC',
+          1,
+        );
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expectCleanupReview(
+          pipeline,
+          guards,
+          failure,
+          PrintFailureKind.failed,
+          'error.print.excelExportTimedOut',
+          events,
+          submitted,
+        );
+      },
+    );
+
+    test(
+      'completed cancelled loser surfaces queued artifact cleanup failure',
+      () async {
+        final events = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final registry = CancellationRegistry();
+        final token = registry.register('cleanup-cancel');
+        final guards = ExcelProcessGuards();
+        final pipeline = guardedPipeline(
+          events: events,
+          requests: [],
+          submitted: submitted,
+          exporter: CleanupFailingExporter(events),
+          runtime: ImmediateRuntime(
+            afterExport: (_) => registry.cancel('cleanup-cancel'),
+          ),
+          guards: guards,
+        );
+        final fixture = sourceFixture();
+        addTearDown(fixture.dispose);
+        final job = worksheetJob(
+          fixture.source.absolute,
+          fixture.signature,
+          'MEC',
+          1,
+        );
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expectCleanupReview(
+          pipeline,
+          guards,
+          failure,
+          PrintFailureKind.cancelled,
+          'error.print.excelExportCancelled',
+          events,
+          submitted,
+        );
+      },
+    );
+
+    test('timeout late result is destroyed and retry stays bounded', () async {
+      final events = <String>[];
+      final requests = <RequestObservation>[];
+      final submitted = <SubmittedPdf>[];
+      final clock = AdvancingClock();
+      final pipeline = guardedPipeline(
+        events: events,
+        requests: requests,
+        submitted: submitted,
+        exporter: RecordingExporter(events, requests),
+        runtime: LateResponseRuntime(clock),
+        clock: clock,
+      );
+      final token = CancellationRegistry().register('plan');
+      final fixture = sourceFixture();
+      addTearDown(fixture.dispose);
+      final job = worksheetJob(
+        fixture.source.absolute,
+        fixture.signature,
+        'MEC',
+        1,
+      );
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expect(failure.kind, PrintFailureKind.failed);
+        expect(failure.uncertain, isFalse);
+      }
+      expect(requests, hasLength(2));
+      expect(submitted, isEmpty);
+    });
+
+    test('timeout live loser trips one-way breaker', () async {
+      final events = <String>[];
+      final submitted = <SubmittedPdf>[];
+      final clock = AdvancingClock();
+      final pipeline = guardedPipeline(
+        events: events,
+        requests: [],
+        submitted: submitted,
+        exporter: RecordingExporter(events, []),
+        runtime: StuckRuntime(clock),
+        clock: clock,
+      );
+      final token = CancellationRegistry().register('plan');
+      final fixture = sourceFixture();
+      addTearDown(fixture.dispose);
+      final job = worksheetJob(
+        fixture.source.absolute,
+        fixture.signature,
+        'MEC',
+        1,
+      );
+      for (final expected in [
+        (PrintFailureKind.failed, 'error.print.excelExportTimedOut'),
+        (PrintFailureKind.unsupported, 'error.print.excelExportQuarantined'),
+      ]) {
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expect(failure.kind, expected.$1);
+        expect(failure.message, expected.$2);
+        expect(failure.uncertain, isFalse);
+      }
+      expect(events, ['policy']);
+      expect(submitted, isEmpty);
+    });
+
+    test('distinct pipelines share the process operation fence', () async {
+      final events = <String>[];
+      final submitted = <SubmittedPdf>[];
+      final entered = Completer<void>();
+      final contended = Completer<void>();
+      final guards = ExcelProcessGuards();
+      final first = ExcelExportPipeline(
+        policy: RecordingPolicy(events),
+        exporter: CancellationBlockingExporter(events, entered),
+        submitter: RecordingSubmitter(events, submitted),
+        guards: guards,
+      );
+      final second = ExcelExportPipeline(
+        policy: RecordingPolicy(events),
+        exporter: RecordingExporter(events, []),
+        submitter: RecordingSubmitter(events, submitted),
+        guards: guards,
+        onOperationContended: () {
+          if (!contended.isCompleted) {
+            contended.complete();
+          }
+        },
+      );
+      final registry = CancellationRegistry();
+      final firstToken = registry.register('first');
+      final secondToken = registry.register('second');
+      final firstFixture = sourceFixture();
+      final secondFixture = sourceFixture();
+      addTearDown(firstFixture.dispose);
+      addTearDown(secondFixture.dispose);
+      final firstJob = worksheetJob(
+        firstFixture.source.absolute,
+        firstFixture.signature,
+        'MEC',
+        1,
+      );
+      final secondJob = worksheetJob(
+        secondFixture.source.absolute,
+        secondFixture.signature,
+        'CIV',
+        2,
+      );
+
+      final firstFailure = captureFailureAsync(
+        () => first.exportAndSubmit(
+          firstJob,
+          firstFixture.source,
+          firstFixture.openSource(),
+          firstToken,
+        ),
+      );
+      await entered.future;
+      final secondFailure = captureFailureAsync(
+        () => second.exportAndSubmit(
+          secondJob,
+          secondFixture.source,
+          secondFixture.openSource(),
+          secondToken,
+        ),
+      );
+      await contended.future.timeout(const Duration(seconds: 2));
+      final eventsWhileFirstLive = List<String>.of(events);
+
+      expect(registry.cancel('first'), isTrue);
+      expect(registry.cancel('second'), isTrue);
+      final firstResult = await firstFailure;
+      final secondResult = await secondFailure;
+
+      expect(
+        eventsWhileFirstLive,
+        ['policy', 'export'],
+        reason: 'a second request reached policy/export while the first generation was live',
+      );
+      expect(firstResult.kind, PrintFailureKind.cancelled);
+      expect(secondResult.kind, PrintFailureKind.cancelled);
+      expect(submitted, isEmpty);
+    });
+
+    test(
+      'cancelled waiter exits before the live operation is released',
+      () async {
+        final firstEvents = <String>[];
+        final secondEvents = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final entered = Completer<void>();
+        final attempted = Completer<void>();
+        final guards = ExcelProcessGuards();
+        final first = ExcelExportPipeline(
+          policy: RecordingPolicy(firstEvents),
+          exporter: CancellationBlockingExporter(firstEvents, entered),
+          submitter: RecordingSubmitter(firstEvents, submitted),
+          guards: guards,
+        );
+        final second = ExcelExportPipeline(
+          policy: RecordingPolicy(secondEvents),
+          exporter: RecordingExporter(secondEvents, []),
+          submitter: RecordingSubmitter(secondEvents, submitted),
+          guards: guards,
+          onOperationContended: () {
+            if (!attempted.isCompleted) {
+              attempted.complete();
+            }
+          },
+        );
+        final registry = CancellationRegistry();
+        final firstToken = registry.register('first');
+        final secondToken = registry.register('second');
+        final firstFixture = sourceFixture();
+        final secondFixture = sourceFixture();
+        addTearDown(firstFixture.dispose);
+        addTearDown(secondFixture.dispose);
+        final firstJob = worksheetJob(
+          firstFixture.source.absolute,
+          firstFixture.signature,
+          'MEC',
+          1,
+        );
+        final secondJob = worksheetJob(
+          secondFixture.source.absolute,
+          secondFixture.signature,
+          'CIV',
+          2,
+        );
+
+        final firstFailure = captureFailureAsync(
+          () => first.exportAndSubmit(
+            firstJob,
+            firstFixture.source,
+            firstFixture.openSource(),
+            firstToken,
+          ),
+        );
+        await entered.future;
+        final secondFailure = captureFailureAsync(
+          () => second.exportAndSubmit(
+            secondJob,
+            secondFixture.source,
+            secondFixture.openSource(),
+            secondToken,
+          ),
+        );
+        await attempted.future.timeout(const Duration(seconds: 2));
+        expect(registry.cancel('second'), isTrue);
+        // The cancelled waiter must return while the first operation is still live.
+        final secondResult = await secondFailure.timeout(
+          const Duration(milliseconds: 500),
+          onTimeout: () =>
+              throw StateError('cancelled waiter remained blocked'),
+        );
+        expect(registry.cancel('first'), isTrue);
+        final firstResult = await firstFailure;
+
+        expect(firstResult.kind, PrintFailureKind.cancelled);
+        expect(secondResult.kind, PrintFailureKind.cancelled);
+        expect(secondEvents, isEmpty);
+        expect(submitted, isEmpty);
+      },
+    );
+
+    test(
+      'panic unwind cleanup failure attaches review to worker-stopped primary',
+      () async {
+        final events = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final stagedPaths = <String>[];
+        final guards = ExcelProcessGuards();
+        final pipeline = guardedPipeline(
+          events: events,
+          requests: [],
+          submitted: submitted,
+          exporter: _PanickingCleanupFailingExporter(events, stagedPaths),
+          runtime: const FutureExcelWorkerRuntime(),
+          guards: guards,
+        );
+        final fixture = sourceFixture();
+        addTearDown(fixture.dispose);
+        final token = CancellationRegistry().register('cleanup-panic-join');
+        final job = worksheetJob(
+          fixture.source.absolute,
+          fixture.signature,
+          'MEC',
+          1,
+        );
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expect(stagedPaths, hasLength(1));
+        expect(Directory(stagedPaths.single).existsSync(), isTrue);
+        expectCleanupReview(
+          pipeline,
+          guards,
+          failure,
+          PrintFailureKind.failed,
+          'error.print.excelWorkerStopped',
+          events,
+          submitted,
+        );
+      },
+    );
+
+    test(
+      'timeout failed-join loser cleanup failure preserves timeout primary',
+      () async {
+        final events = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final clock = AdvancingClock();
+        final guards = ExcelProcessGuards();
+        final pipeline = guardedPipeline(
+          events: events,
+          requests: [],
+          submitted: submitted,
+          exporter: CleanupFailingExporter(events),
+          runtime: _LateFailedJoinRuntime(clock),
+          guards: guards,
+          clock: clock,
+        );
+        final fixture = sourceFixture();
+        addTearDown(fixture.dispose);
+        final token = CancellationRegistry().register(
+          'cleanup-timeout-failed-join',
+        );
+        final job = worksheetJob(
+          fixture.source.absolute,
+          fixture.signature,
+          'MEC',
+          1,
+        );
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expectCleanupReview(
+          pipeline,
+          guards,
+          failure,
+          PrintFailureKind.failed,
+          'error.print.excelExportTimedOut',
+          events,
+          submitted,
+        );
+      },
+    );
+
+    test(
+      'cancellation during response poll preserves cancelled primary',
+      () async {
+        final events = <String>[];
+        final submitted = <SubmittedPdf>[];
+        final registry = CancellationRegistry();
+        final token = registry.register('poll-cancel-error-response');
+        final pipeline = guardedPipeline(
+          events: events,
+          requests: [],
+          submitted: submitted,
+          exporter: _PlainFailingExporter(),
+          runtime: ImmediateRuntime(
+            afterExport: (_) => registry.cancel('poll-cancel-error-response'),
+          ),
+        );
+        final fixture = sourceFixture();
+        addTearDown(fixture.dispose);
+        final job = worksheetJob(
+          fixture.source.absolute,
+          fixture.signature,
+          'MEC',
+          1,
+        );
+        final failure = await captureFailureAsync(
+          () => pipeline.exportAndSubmit(
+            job,
+            fixture.source,
+            fixture.openSource(),
+            token,
+          ),
+        );
+        expect(failure.kind, PrintFailureKind.cancelled);
+        expect(failure.message, 'error.print.excelExportCancelled');
+        expect(submitted, isEmpty);
+      },
+    );
+
+    test('deadline during response poll preserves timeout primary', () async {
+      final events = <String>[];
+      final submitted = <SubmittedPdf>[];
+      final clock = AdvancingClock();
+      final pipeline = guardedPipeline(
+        events: events,
+        requests: [],
+        submitted: submitted,
+        exporter: _PlainFailingExporter(),
+        runtime: ImmediateRuntime(afterExport: (_) => clock.advance()),
+        clock: clock,
+      );
+      final token = CancellationRegistry().register(
+        'poll-expire-error-response',
+      );
+      final fixture = sourceFixture();
+      addTearDown(fixture.dispose);
+      final job = worksheetJob(
+        fixture.source.absolute,
+        fixture.signature,
+        'MEC',
+        1,
+      );
+      final failure = await captureFailureAsync(
+        () => pipeline.exportAndSubmit(
+          job,
+          fixture.source,
+          fixture.openSource(),
+          token,
+        ),
+      );
+      expect(failure.kind, PrintFailureKind.failed);
+      expect(failure.message, 'error.print.excelExportTimedOut');
+      expect(submitted, isEmpty);
+    });
+
+    test('timeout live request reports retained workspace locator', () async {
+      final events = <String>[];
+      final submitted = <SubmittedPdf>[];
+      final clock = AdvancingClock();
+      final runtime = _RetainingRequestRuntime(clock);
+      final guards = ExcelProcessGuards();
+      final pipeline = guardedPipeline(
+        events: events,
+        requests: [],
+        submitted: submitted,
+        exporter: RecordingExporter(events, []),
+        runtime: runtime,
+        guards: guards,
+        clock: clock,
+      );
+      final token = CancellationRegistry().register('live-request');
+      final fixture = sourceFixture();
+      addTearDown(fixture.dispose);
+      final job = worksheetJob(
+        fixture.source.absolute,
+        fixture.signature,
+        'MEC',
+        1,
+      );
+      final failure = await captureFailureAsync(
+        () => pipeline.exportAndSubmit(
+          job,
+          fixture.source,
+          fixture.openSource(),
+          token,
+        ),
+      );
+      final retained = runtime.retainedPath!;
+      final locator = p.basename(retained);
+      expect(
+        Directory(retained).existsSync(),
+        isTrue,
+        reason: 'request was not retained past teardown grace',
+      );
+      expect(failure.kind, PrintFailureKind.failed);
+      expect(failure.message, 'error.print.excelExportTimedOut');
+      expect(failure.cleanupReview?.locator, locator);
+      expect(locator.startsWith('docflow-excel-'), isTrue);
+      expect(locator.contains(Platform.pathSeparator), isFalse);
+      expect(
+        failure.cleanupReview?.warningKey,
+        'error.print.exportCleanupRequiresReview',
+      );
+      expect(events, ['policy']);
+      expect(submitted, isEmpty);
+      Directory(retained).deleteSync(recursive: true);
+      guards.quarantine.clear();
+    });
 
     test(
       'error response cleanup failure attaches review to cancelled primary',

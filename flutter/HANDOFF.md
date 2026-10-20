@@ -69,14 +69,22 @@ porting rules, but its Linux paths are outdated; use the paths below.
    fixtures (only error paths and an empty process-scans run). Every
    Windows/COM path is UNVERIFIED on a Windows host.
    Also: `NativeBackend.production` takes `authConfig` explicitly.
-2. **Excel tail: PARTIAL (1.20.4).** The Dart pipeline in `platform/excel.dart`
-   already had the cancel/timeout logic. 1.20.4 ports 4 more Rust tests into
-   `e12_excel_pipeline_test.dart`: error-response and received-response
-   cleanup review, cancelled failed-join loser cleanup review, and the
-   acquisition deadline. Still not ported from `excel.rs` 3181-5428: the
-   cancelled-waiter and acquisition-contention tests (need real concurrency),
-   `timeout_late_result_*`, `timeout_live_*`, the `completed_*_loser` tests,
-   `*_response_poll_*`, and the PrintService-backed cancel tests (3826, 4287).
+2. **Excel tail: PARTIAL (1.20.12).** `e12_excel_pipeline_test.dart` now
+   ports 41 cases of the Rust `excel.rs` 3181-5428 range that run without the
+   print queue: cleanup review for error, received, cancelled and timeout
+   losers, panic unwind, late results with bounded retry, live-loser breaker,
+   retained workspace locator, response-poll cancel and deadline, shared
+   operation fence, and cancelled waiter (real async concurrency via Completer).
+   STILL OPEN (12 cases, Rust lines 3181, 3280, 3368, 3434, 3514, 3663, 3743,
+   3826, 3952, 4033, 4226, 4287): all run through `PrintService` with an Excel
+   pipeline. Dart blocks them on a real gap, not a test gap:
+   `PrintService.apply` is synchronous and `ExcelExportPipelinePort` is
+   synchronous, but `ExcelExportPipeline.exportAndSubmit` is `Future`-based.
+   Production also never injects an Excel pipeline (`native.dart` constructs
+   `PrintService` without `excelPipeline`), so Excel print jobs return
+   `error.print.excelUnavailable` in the app. Fix: make the print apply/resume
+   path async and wire a production pipeline (Windows COM exporter in
+   `platform/windows/excel.dart`, UNVERIFIED on this Mac).
 3. **E2 test bodies: DONE for Dart-portable cases (1.20.11).** Filled with
    real flows: `e8_native_part6`/`e8_native_part8` (follow-up apply, retained
    undo and recovery, real xlsx via `e8_xlsx_writer.dart`), `e3_journal_s5`
