@@ -129,7 +129,7 @@ fn generated_outlook_msg_write_is_no_clobber_and_undoable() {
 
 #[test]
 fn workbook_output_sync_uses_a_writable_handle_for_windows() {
-    let source = include_str!("../fs_ops.rs");
+    let source = include_str!("effects.rs");
     let workbook_update = source
         .split("fn execute_workbook_update(")
         .nth(1)
@@ -569,7 +569,7 @@ fn pinned_parent_capability_defeats_post_acquisition_path_swap() {
 
 #[test]
 fn file_effect_source_metadata_is_read_only_through_the_pinned_capability() {
-    let source = include_str!("../fs_ops.rs");
+    let source = include_str!("effects.rs");
     let function = source
         .split("fn execute_file_effect(")
         .nth(1)
