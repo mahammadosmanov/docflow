@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.4 - 2026-10-21
+
+### Improved
+
+- Add an opt-in OOXML timing probe (cargo test --release --test perf_ooxml -- --ignored --nocapture). On a 20,000-row by 12-column workbook it reads 240,000 cells in about 0.27 s and patches and verifies 200 guarded cells in under 2 s, so no parser hot spot needs changing.
+
 ## 1.20.3 - 2026-10-21
 
 ### Improved
