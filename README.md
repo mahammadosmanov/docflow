@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.21.0 is a Flutter desktop application with a Dart engine and nine
+DocFlow 1.21.1 is a Flutter desktop application with a Dart engine and nine
 registered document workflows:
 
 - Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for

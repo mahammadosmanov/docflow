@@ -36,3 +36,6 @@ artifacts/
 
 # Flutter tests (macOS matches Test/ case-insensitively)
 !flutter/app/test/
+
+# stray Windows-style paths created by tests on POSIX hosts
+/flutter/app/C:*
