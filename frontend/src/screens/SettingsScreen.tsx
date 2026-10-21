@@ -1,0 +1,423 @@
+import {
+  BadgeCheck,
+  Check,
+  Copy,
+  Download,
+  Eye,
+  FileSearch,
+  LoaderCircle,
+  Monitor,
+  RotateCcw,
+  Save,
+  Shield,
+  SlidersHorizontal,
+  User,
+} from "lucide-react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import {
+  Button,
+  Header,
+  Notice,
+  Segmented,
+  Switch,
+} from "../components/ui";
+import {
+  type Strings,
+} from "../i18n";
+import {
+  type Bridge,
+} from "../lib/bridge";
+import {
+  type AppPrefs,
+  type AuthState,
+  type ReplicaAutomationStatus,
+  type SupportBundlePreview,
+  type ThemePreference,
+} from "../types";
+import {
+  humanError,
+  usernamePattern,
+} from "../helpers";
+
+export function SettingsScreen({
+  bridge,
+  auth,
+  prefs,
+  s,
+  onPrefs,
+  onAuth,
+  onBack,
+}: {
+  bridge: Bridge;
+  auth: AuthState;
+  prefs: AppPrefs;
+  s: Strings;
+  onPrefs: (prefs: AppPrefs) => void;
+  onAuth: (auth: AuthState) => void;
+  onBack: () => void;
+}) {
+  const [username, setUsername] = useState(auth.user?.username ?? "");
+  const [saved, setSaved] = useState("");
+  const [error, setError] = useState("");
+  const [diagnostics, setDiagnostics] = useState<SupportBundlePreview | null>(
+    null,
+  );
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
+  const [replicaStatus, setReplicaStatus] =
+    useState<ReplicaAutomationStatus | null>(null);
+  const refreshReplicaStatus = useCallback(async () => {
+    try {
+      setReplicaStatus(await bridge.call("settings/replicaStatus"));
+    } catch {
+      // The preference remains usable when a read-only refresh is unavailable.
+    }
+  }, [bridge]);
+  useEffect(() => {
+    void refreshReplicaStatus();
+    const timer = window.setInterval(() => void refreshReplicaStatus(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [refreshReplicaStatus]);
+  const update = async (patch: Partial<AppPrefs>) => {
+    try {
+      const next = await bridge.call(
+        "settings/update",
+        patch as Record<string, unknown>,
+      );
+      onPrefs(next);
+      void refreshReplicaStatus();
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+  const saveUsername = async () => {
+    setError("");
+    try {
+      onAuth(await bridge.call("auth/setUsername", { username }));
+      setSaved(s.t("prefs.account.saved"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+  const previewDiagnostics = async () => {
+    setError("");
+    setDiagnosticsStatus("");
+    setDiagnosticsBusy(true);
+    try {
+      setDiagnostics(await bridge.call("support/diagnostics"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+  const copyDiagnostics = async () => {
+    if (!diagnostics) return;
+    setError("");
+    setDiagnosticsStatus("");
+    setDiagnosticsBusy(true);
+    try {
+      await bridge.call("support/copyDiagnostics", {
+        content: diagnostics.content,
+      });
+      setDiagnosticsStatus(s.t("prefs.support.copied"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+  const downloadDiagnostics = () => {
+    if (!diagnostics) return;
+    try {
+      const blob = new Blob([diagnostics.content], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = diagnostics.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setDiagnosticsStatus(s.t("prefs.support.downloaded"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+  return (
+    <div className="screen">
+      <Header
+        title={s.t("prefs.title")}
+        onBack={onBack}
+        backLabel={s.t("action.back")}
+      />
+      <main className="settings-pane">
+        {auth.signedIn && (
+          <SettingsGroup title={s.t("prefs.account")} icon={<User />}>
+            <div className="settings-account">
+              <div>
+                <strong>{auth.session?.email}</strong>
+                <small>{s.t("prefs.account.emailFixed")}</small>
+              </div>
+              <input
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  setSaved("");
+                }}
+                placeholder={s.t("auth.username")}
+              />
+              <Button
+                variant="secondary"
+                icon={<Save />}
+                disabled={!usernamePattern.test(username)}
+                onClick={() => void saveUsername()}
+              >
+                {s.t("action.save")}
+              </Button>
+            </div>
+            {saved && <Notice kind="info">{saved}</Notice>}
+          </SettingsGroup>
+        )}
+        <SettingsGroup title={s.t("prefs.language")} icon={<BadgeCheck />}>
+          <ChoiceGrid
+            value={prefs.locale ?? "system"}
+            options={[
+              ["system", s.t("prefs.lang.system")],
+              ["tr", s.t("prefs.lang.tr")],
+              ["en", s.t("prefs.lang.en")],
+              ["ru", s.t("prefs.lang.ru")],
+              ["az", s.t("prefs.lang.az")],
+            ]}
+            onChange={(locale) =>
+              void update({
+                locale:
+                  locale === "system" ? null : (locale as AppPrefs["locale"]),
+              })
+            }
+          />
+        </SettingsGroup>
+        <SettingsGroup title={s.t("prefs.theme")} icon={<SlidersHorizontal />}>
+          <Segmented
+            value={prefs.theme}
+            options={(["system", "light", "dark"] as ThemePreference[]).map(
+              (theme) => [theme, s.t(`prefs.theme.${theme}`)],
+            )}
+            onChange={(theme) =>
+              void update({ theme: theme as ThemePreference })
+            }
+          />
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.font")}
+          icon={<FileSearch />}
+          help={s.t("prefs.font.help")}
+        >
+          <ChoiceGrid
+            value={prefs.font}
+            options={(["system", "sans", "serif", "mono"] as const).map(
+              (font) => [font, s.t(`prefs.font.${font}`)],
+            )}
+            onChange={(font) => void update({ font: font as AppPrefs["font"] })}
+          />
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.fontSize")}
+          icon={<SlidersHorizontal />}
+        >
+          <div className="range-row">
+            <span>80%</span>
+            <input
+              type="range"
+              min="0.8"
+              max="1.6"
+              step="0.05"
+              value={prefs.fontScale}
+              onChange={(event) =>
+                void update({ fontScale: Number(event.target.value) })
+              }
+            />
+            <strong>{Math.round(prefs.fontScale * 100)}%</strong>
+          </div>
+          <div className="font-sample">{s.t("prefs.fontSize.sample")}</div>
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.density")}
+          icon={<SlidersHorizontal />}
+          help={s.t("prefs.density.help")}
+        >
+          <label className="toggle-row">
+            <span>
+              <strong>{s.t("prefs.density.compact")}</strong>
+            </span>
+            <Switch
+              checked={prefs.compact}
+              onChange={(compact) => void update({ compact })}
+            />
+          </label>
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.automation")}
+          icon={<Monitor />}
+          help={s.t("prefs.automation.help")}
+        >
+          <label className="toggle-row">
+            <span>
+              <strong>{s.t("prefs.startWithWindows")}</strong>
+            </span>
+            <Switch
+              checked={prefs.startWithWindows}
+              onChange={(startWithWindows) => void update({ startWithWindows })}
+            />
+          </label>
+          <label className="toggle-row">
+            <span>
+              <strong>{s.t("prefs.replicaSyncEnabled")}</strong>
+              <small>{s.t("prefs.replicaSyncEnabled.help")}</small>
+              {replicaStatus && (
+                <small>{s.t(`prefs.replica.status.${replicaStatus.status}`)}</small>
+              )}
+              {replicaStatus?.lastErrorCode && (
+                <small>{s.t(replicaStatus.lastErrorCode)}</small>
+              )}
+            </span>
+            <Switch
+              checked={replicaStatus?.enabled ?? prefs.replicaSyncEnabled}
+              onChange={(replicaSyncEnabled) =>
+                void update({ replicaSyncEnabled })
+              }
+            />
+          </label>
+        </SettingsGroup>
+        <SettingsGroup
+          title={s.t("prefs.support.title")}
+          icon={<Shield />}
+          help={s.t("prefs.support.help")}
+        >
+          <div className="support-diagnostics">
+            <p>{s.t("prefs.support.privacy")}</p>
+            <div className="support-diagnostics-actions">
+              <Button
+                variant="secondary"
+                icon={
+                  diagnosticsBusy ? <LoaderCircle className="spin" /> : <Eye />
+                }
+                disabled={diagnosticsBusy}
+                onClick={() => void previewDiagnostics()}
+              >
+                {s.t("prefs.support.preview")}
+              </Button>
+              {diagnostics && (
+                <>
+                  <Button
+                    variant="secondary"
+                    icon={<Copy />}
+                    disabled={diagnosticsBusy}
+                    onClick={() => void copyDiagnostics()}
+                  >
+                    {s.t("prefs.support.copy")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<Download />}
+                    disabled={diagnosticsBusy}
+                    onClick={downloadDiagnostics}
+                  >
+                    {s.t("prefs.support.download")}
+                  </Button>
+                </>
+              )}
+            </div>
+            {diagnostics && (
+              <div className="support-diagnostics-preview">
+                <small>
+                  {diagnostics.fileName} ·{" "}
+                  {s.t("prefs.support.size", {
+                    count: diagnostics.byteLength,
+                  })}
+                </small>
+                <pre aria-label={s.t("prefs.support.previewLabel")}>
+                  {diagnostics.content}
+                </pre>
+              </div>
+            )}
+            {diagnosticsStatus && (
+              <Notice kind="info">{diagnosticsStatus}</Notice>
+            )}
+          </div>
+        </SettingsGroup>
+        {error && <Notice kind="error">{error}</Notice>}
+        <Button
+          variant="danger"
+          icon={<RotateCcw />}
+          onClick={() =>
+            void bridge
+              .call("settings/reset")
+              .then(onPrefs)
+              .catch((reason: unknown) => setError(humanError(reason, s)))
+          }
+        >
+          {s.t("prefs.reset")}
+        </Button>
+      </main>
+    </div>
+  );
+}
+
+export function SettingsGroup({
+  title,
+  icon,
+  help,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  help?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="settings-group">
+      <div className="settings-title">
+        <span>{icon}</span>
+        <div>
+          <h2>{title}</h2>
+          {help && <p>{help}</p>}
+        </div>
+      </div>
+      <div className="settings-content">{children}</div>
+    </section>
+  );
+}
+
+export function ChoiceGrid({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: readonly (readonly [string, string])[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="choice-grid">
+      {options.map(([key, label]) => (
+        <button
+          type="button"
+          key={key}
+          className={value === key ? "selected" : ""}
+          onClick={() => onChange(key)}
+        >
+          <span>{value === key && <Check />}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}

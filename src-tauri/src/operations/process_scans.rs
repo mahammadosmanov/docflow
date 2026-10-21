@@ -252,168 +252,15 @@ where
     });
 
     if ocr.supports_parallel_analysis() && !pdfs.is_empty() {
-        if cancelled() {
-            return Err(BackendError::cancelled());
-        }
-        let mut orientation_source_hashes = BTreeMap::new();
-        if params.scan_mode == ScanMode::MultiRfi
-            && params.correct_orientation
-            && ocr.supports_orientation()
-        {
-            for pdf in &pdfs {
-                orientation_source_hashes.insert(
-                    pdf.clone(),
-                    hash_pdf(pdf).map_err(BackendError::path_invalid)?,
-                );
-            }
-        }
-        let (inspection_workers, inspections) = if ocr.supports_page_scan() {
-            let mut completed = 0_u64;
-            let (workers, results) = bounded_map_stream(
-                &pdfs,
-                |pdf| crate::pdf::inspect(pdf),
-                |index, _| {
-                    completed += 1;
-                    progress(ProgressEvent {
-                        phase: "scan_discovery".to_string(),
-                        done: completed,
-                        total: pdfs.len() as u64,
-                        subject: display_name(&pdfs[index]),
-                    });
-                    Ok(())
-                },
-            )
-            .map_err(BackendError::request_failed)?;
-            (
-                workers,
-                pdfs.iter()
-                    .cloned()
-                    .zip(
-                        results
-                            .into_iter()
-                            .map(|result| result.map_err(|error| error.to_string())),
-                    )
-                    .collect::<BTreeMap<_, _>>(),
-            )
-        } else {
-            (0, BTreeMap::new())
-        };
-        let mut tasks = Vec::new();
-        let mut fast_cover_pdfs = BTreeSet::new();
-        let mut total_pages = 0_usize;
-        for pdf in &pdfs {
-            let page_count = inspections
-                .get(pdf)
-                .and_then(|inspection| inspection.as_ref().ok())
-                .map_or(1, |facts| facts.page_count);
-            total_pages = total_pages.saturating_add(page_count);
-            if total_pages > MAX_SCAN_PAGES {
-                return Err(BackendError::validation(format!(
-                    "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
-                )));
-            }
-            if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
-                if fast_cover_mode && params.scan_mode == ScanMode::MultiRfi && page_count > 1 {
-                    fast_cover_pdfs.insert(pdf.clone());
-                }
-                let ocr_page_count = if params.scan_mode == ScanMode::SingleRfi {
-                    1
-                } else {
-                    page_count
-                };
-                tasks.extend((0..ocr_page_count).map(|page| (pdf.clone(), page)));
-            }
-        }
-        let (orientation_workers, orientations) = if params.scan_mode == ScanMode::MultiRfi
-            && params.correct_orientation
-            && ocr.supports_orientation()
-        {
-            let mut completed = 0_u64;
-            let (workers, results) = bounded_map_stream(
-                &tasks,
-                |(pdf, page)| ocr.detect_orientation(pdf, *page),
-                |index, _| {
-                    completed += 1;
-                    let (pdf, page) = &tasks[index];
-                    progress(ProgressEvent {
-                        phase: "scan_orientation".to_string(),
-                        done: completed,
-                        total: tasks.len() as u64,
-                        subject: format!("{} — #{}", display_name(pdf), page + 1),
-                    });
-                    Ok(())
-                },
-            )
-            .map_err(BackendError::request_failed)?;
-            (workers, tasks.iter().cloned().zip(results).collect())
-        } else {
-            (0, BTreeMap::new())
-        };
-        let mut completed = 0_u64;
-        let (ocr_workers, results) = if tasks.is_empty() {
-            (0, Vec::new())
-        } else {
-            bounded_map_stream(
-                &tasks,
-                |(pdf, page)| {
-                    if fast_cover_pdfs.contains(pdf) {
-                        ocr.read_cover_page(pdf, *page)
-                    } else {
-                        ocr.read_page(pdf, *page)
-                    }
-                },
-                |index, _| {
-                    completed += 1;
-                    let (pdf, page) = &tasks[index];
-                    progress(ProgressEvent {
-                        phase: "scan_ocr".to_string(),
-                        done: completed,
-                        total: tasks.len() as u64,
-                        subject: format!("{} — #{}", display_name(pdf), page + 1),
-                    });
-                    Ok(())
-                },
-            )
-            .map_err(BackendError::request_failed)?
-        };
-        if cancelled() {
-            return Err(BackendError::cancelled());
-        }
-        for (pdf, expected) in &orientation_source_hashes {
-            if hash_pdf(pdf).map_err(BackendError::path_invalid)? != *expected {
-                return Err(BackendError::path_invalid(format!(
-                    "scan source changed during orientation or OCR analysis: {}",
-                    display_name(pdf)
-                )));
-            }
-        }
-        let cached = CachedPageOcr {
-            reads: tasks.into_iter().zip(results).collect(),
-            inspections,
-            page_scan: ocr.supports_page_scan(),
-            diagnostics: ocr.diagnostics(),
-            orientations,
-        };
-        let mut plan = preview_with_cover_mode(
+        return preview_parallel(
             params,
-            &cached,
+            ocr,
             operation_id,
             fast_cover_mode,
-            Some(&orientation_source_hashes),
+            &pdfs,
             progress,
             cancelled,
-        )?;
-        plan.meta.insert(
-            "workerCount".to_string(),
-            Value::from(ocr_workers.max(inspection_workers) as u64),
         );
-        plan.meta
-            .insert("parallelAnalysis".to_string(), Value::Bool(true));
-        plan.meta.insert(
-            "orientationWorkerCount".to_string(),
-            Value::from(orientation_workers as u64),
-        );
-        return Ok(plan);
     }
 
     let transfer_kind = if params.keep_original {
@@ -1043,6 +890,184 @@ where
         total: 1,
         subject: String::new(),
     });
+    Ok(plan)
+}
+
+fn preview_parallel<A, P, C>(
+    params: &ProcessScansParams,
+    ocr: &A,
+    operation_id: &str,
+    fast_cover_mode: bool,
+    pdfs: &[PathBuf],
+    mut progress: P,
+    mut cancelled: C,
+) -> Result<Plan, BackendError>
+where
+    A: OcrAdapter,
+    P: FnMut(ProgressEvent),
+    C: FnMut() -> bool,
+{
+    if cancelled() {
+        return Err(BackendError::cancelled());
+    }
+    let mut orientation_source_hashes = BTreeMap::new();
+    if params.scan_mode == ScanMode::MultiRfi
+        && params.correct_orientation
+        && ocr.supports_orientation()
+    {
+        for pdf in pdfs {
+            orientation_source_hashes.insert(
+                pdf.clone(),
+                hash_pdf(pdf).map_err(BackendError::path_invalid)?,
+            );
+        }
+    }
+    let (inspection_workers, inspections) = if ocr.supports_page_scan() {
+        let mut completed = 0_u64;
+        let (workers, results) = bounded_map_stream(
+            pdfs,
+            |pdf| crate::pdf::inspect(pdf),
+            |index, _| {
+                completed += 1;
+                progress(ProgressEvent {
+                    phase: "scan_discovery".to_string(),
+                    done: completed,
+                    total: pdfs.len() as u64,
+                    subject: display_name(&pdfs[index]),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?;
+        (
+            workers,
+            pdfs.iter()
+                .cloned()
+                .zip(
+                    results
+                        .into_iter()
+                        .map(|result| result.map_err(|error| error.to_string())),
+                )
+                .collect::<BTreeMap<_, _>>(),
+        )
+    } else {
+        (0, BTreeMap::new())
+    };
+    let mut tasks = Vec::new();
+    let mut fast_cover_pdfs = BTreeSet::new();
+    let mut total_pages = 0_usize;
+    for pdf in pdfs {
+        let page_count = inspections
+            .get(pdf)
+            .and_then(|inspection| inspection.as_ref().ok())
+            .map_or(1, |facts| facts.page_count);
+        total_pages = total_pages.saturating_add(page_count);
+        if total_pages > MAX_SCAN_PAGES {
+            return Err(BackendError::validation(format!(
+                "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
+            )));
+        }
+        if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
+            if fast_cover_mode && params.scan_mode == ScanMode::MultiRfi && page_count > 1 {
+                fast_cover_pdfs.insert(pdf.clone());
+            }
+            let ocr_page_count = if params.scan_mode == ScanMode::SingleRfi {
+                1
+            } else {
+                page_count
+            };
+            tasks.extend((0..ocr_page_count).map(|page| (pdf.clone(), page)));
+        }
+    }
+    let (orientation_workers, orientations) = if params.scan_mode == ScanMode::MultiRfi
+        && params.correct_orientation
+        && ocr.supports_orientation()
+    {
+        let mut completed = 0_u64;
+        let (workers, results) = bounded_map_stream(
+            &tasks,
+            |(pdf, page)| ocr.detect_orientation(pdf, *page),
+            |index, _| {
+                completed += 1;
+                let (pdf, page) = &tasks[index];
+                progress(ProgressEvent {
+                    phase: "scan_orientation".to_string(),
+                    done: completed,
+                    total: tasks.len() as u64,
+                    subject: format!("{} — #{}", display_name(pdf), page + 1),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?;
+        (workers, tasks.iter().cloned().zip(results).collect())
+    } else {
+        (0, BTreeMap::new())
+    };
+    let mut completed = 0_u64;
+    let (ocr_workers, results) = if tasks.is_empty() {
+        (0, Vec::new())
+    } else {
+        bounded_map_stream(
+            &tasks,
+            |(pdf, page)| {
+                if fast_cover_pdfs.contains(pdf) {
+                    ocr.read_cover_page(pdf, *page)
+                } else {
+                    ocr.read_page(pdf, *page)
+                }
+            },
+            |index, _| {
+                completed += 1;
+                let (pdf, page) = &tasks[index];
+                progress(ProgressEvent {
+                    phase: "scan_ocr".to_string(),
+                    done: completed,
+                    total: tasks.len() as u64,
+                    subject: format!("{} — #{}", display_name(pdf), page + 1),
+                });
+                Ok(())
+            },
+        )
+        .map_err(BackendError::request_failed)?
+    };
+    if cancelled() {
+        return Err(BackendError::cancelled());
+    }
+    for (pdf, expected) in &orientation_source_hashes {
+        if hash_pdf(pdf).map_err(BackendError::path_invalid)? != *expected {
+            return Err(BackendError::path_invalid(format!(
+                "scan source changed during orientation or OCR analysis: {}",
+                display_name(pdf)
+            )));
+        }
+    }
+    let cached = CachedPageOcr {
+        reads: tasks.into_iter().zip(results).collect(),
+        inspections,
+        page_scan: ocr.supports_page_scan(),
+        diagnostics: ocr.diagnostics(),
+        orientations,
+    };
+    let mut plan = preview_with_cover_mode(
+        params,
+        &cached,
+        operation_id,
+        fast_cover_mode,
+        Some(&orientation_source_hashes),
+        progress,
+        cancelled,
+    )?;
+    plan.meta.insert(
+        "workerCount".to_string(),
+        Value::from(ocr_workers.max(inspection_workers) as u64),
+    );
+    plan.meta
+        .insert("parallelAnalysis".to_string(), Value::Bool(true));
+    plan.meta.insert(
+        "orientationWorkerCount".to_string(),
+        Value::from(orientation_workers as u64),
+    );
     Ok(plan)
 }
 

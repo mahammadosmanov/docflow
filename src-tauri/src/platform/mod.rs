@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn windows_root_identity_uses_volume_serial_and_file_index_from_the_open_handle() {
-        let source = include_str!("../cap_fs.rs");
+        let source = include_str!("../cap_fs/windows_dir.rs");
         let implementation = source
             .split("fn windows_file_identity(")
             .nth(1)
