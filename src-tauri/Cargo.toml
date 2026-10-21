@@ -7,13 +7,19 @@ edition = "2024"
 
 [profile.dev]
 incremental = false
+debug = "line-tables-only"
 
 [profile.test]
 incremental = false
+debug = "line-tables-only"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
 
 [lib]
 name = "docflow_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [build-dependencies]
 cc = "1"
