@@ -320,3 +320,23 @@ write/delete paths.
 
 The completed migration rationale and historical phase gates are in
 `docs/superpowers/specs/2026-08-24-rust-engine-migration-design.md`.
+
+## Source layout
+
+Large Rust modules are split into child modules that live in a directory next
+to the root file, for example `src-tauri/src/ooxml/`, `fs_ops/`, `native/`,
+`journal/`, `ocr/`, `pdf/`, `rfi_log/`, `rfi_follow_up/`, `rfi_system_sync/`
+and `print_queue/`. The root file keeps the types and constants and re-exports
+child items with glob `use` declarations, so paths such as `crate::ooxml::X`
+are unchanged. Child items use `pub(super)` visibility. Unit tests live in a
+sibling `tests.rs` per module. `tools/file_size.test.mjs` fails when a
+production source file exceeds 2,500 lines.
+
+The frontend keeps `frontend/src/App.tsx` as the shell and routes. Screens are
+under `frontend/src/screens/` and plan components under `frontend/src/plan/`.
+
+## Build size
+
+Release builds use fat LTO, one codegen unit and stripped symbols. Debug and
+test profiles keep line tables only. `src-tauri/target/` is regenerable and can
+grow past 15 GB; run `cargo clean` in `src-tauri/` to reclaim it.
