@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.20.16 is a Flutter desktop application with a Dart engine and nine
+DocFlow 1.21.0 is a Flutter desktop application with a Dart engine and nine
 registered document workflows:
 
 - Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for
@@ -98,8 +98,9 @@ Run `node tools/version_manager.mjs list` to list releases and
 
 ## Windows build
 
-Windows packages are built on a real Windows host with `flutter build windows
---release` from `flutter/app`. The packaged executable has not been verified on
+Windows packages are built by the manual "Windows build" workflow
+(`.github/workflows/windows-build.yml`) or with `flutter build windows --release`
+on a Windows host; see [`flutter/WINDOWS_TEST.md`](flutter/WINDOWS_TEST.md). The packaged executable has not been verified on
 Windows from this macOS workspace; Office, Excel COM, Outlook, printer, and
 signing checks remain explicit manual Windows-host gates.
 

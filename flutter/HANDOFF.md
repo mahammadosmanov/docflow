@@ -1,4 +1,4 @@
-# Flutter migration handoff (1.20.16)
+# Flutter migration handoff (1.21.0)
 
 ## Current state
 
@@ -25,8 +25,8 @@ Ubuntu). That workflow has not run on GitHub from this branch.
 
 ## Remaining work, in order
 
-1. Windows build: `flutter build windows --release` on a Windows host
-   (`.github/workflows/windows-build.yml` once added, see `flutter/WINDOWS_TEST.md`).
+1. Windows build: run the manual "Windows build" workflow
+   (`.github/workflows/windows-build.yml`), then follow `flutter/WINDOWS_TEST.md`.
 2. Windows host checks: Excel COM, Office open/recalculate, Outlook reply and
    MSG archive, Microsoft Print to PDF, physical/network printers.
 3. Live Supabase RLS deployment and two-user verification.

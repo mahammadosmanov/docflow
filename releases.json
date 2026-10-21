@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.20.16",
+  "currentVersion": "1.21.0",
   "releases": [
+    {
+      "version": "1.21.0",
+      "date": "2026-10-21",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.21.0",
+      "summary": "Windows build workflow (flutter build windows --release, zip artifact with SHA-256) and WINDOWS_TEST guide"
+    },
     {
       "version": "1.20.16",
       "date": "2026-10-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.20.16",
       "summary": "Remove Tauri/Rust/React application and Node tooling; Dart engine is the sole backend; Flutter gates only"
     },

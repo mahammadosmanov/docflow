@@ -1,0 +1,55 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: flutter build windows --release
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter 3.47.7
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.7"
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        working-directory: flutter/app
+        run: flutter pub get
+
+      - name: Build Windows release
+        working-directory: flutter/app
+        run: flutter build windows --release
+
+      - name: Package release zip and checksum
+        working-directory: flutter/app
+        shell: pwsh
+        run: |
+          $release = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$release/docflow.exe")) { throw "docflow.exe missing from $release" }
+          Compress-Archive -Path "$release/*" -DestinationPath "$env:RUNNER_TEMP/docflow-windows-release.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP/docflow-windows-release.zip" -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "$env:RUNNER_TEMP/docflow-windows-release.zip.sha256" -Value "$hash  docflow-windows-release.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docflow-windows-release
+          path: |
+            ${{ runner.temp }}/docflow-windows-release.zip
+            ${{ runner.temp }}/docflow-windows-release.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

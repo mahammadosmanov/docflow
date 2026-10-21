@@ -19,6 +19,12 @@ the Tauri/Rust/React application and its Node tooling.
 - Safety rules text is kept unchanged. Push and tag rules now require explicit
   user authorization.
 
+## Windows build
+
+- Added manual workflow `.github/workflows/windows-build.yml`: `flutter build windows --release`
+  on `windows-latest` with Flutter 3.47.7; uploads a zip and SHA-256.
+- Guide: `flutter/WINDOWS_TEST.md`. Not yet run from this branch.
+
 ## Test plan
 
 - [x] `node tools/version_manager.mjs check`

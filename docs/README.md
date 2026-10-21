@@ -24,6 +24,8 @@ prose ever drifts.
 10. [`VERSIONING.md`](VERSIONING.md) and [`ROADMAP.md`](ROADMAP.md) — version
     rules and planned work.
 
+Windows build and manual acceptance: [`../flutter/WINDOWS_TEST.md`](../flutter/WINDOWS_TEST.md).
+
 ## Source-of-truth order
 
 1. `AGENTS.md` and accepted ADRs

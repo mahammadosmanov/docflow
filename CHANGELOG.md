@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.21.0 - 2026-10-21
+
+- Added `.github/workflows/windows-build.yml` (manual `workflow_dispatch`): Flutter 3.47.7 on `windows-latest`, `flutter build windows --release`, zip plus SHA-256 uploaded as an artifact.
+- Added `flutter/WINDOWS_TEST.md` with run, download, check, and UNVERIFIED steps.
+- Windows build is not yet verified: the workflow has not run from this branch.
+
 ## 1.20.16 - 2026-10-21
 
 - Removed the Tauri/Rust application (`src-tauri/`), the React frontend (`frontend/`), Node tooling, and Rust/Tauri-only tools, workflows, and docs. The Dart engine is the sole backend.
