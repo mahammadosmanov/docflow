@@ -914,7 +914,7 @@ void main() {
 
   test('preview matches the frozen compatibility oracle for duplicates, misses, ambiguity, and no-clobber', () async {
     final oracle = jsonDecode(
-      File('../../src-tauri/tests/fixtures/slice7_signed_pages_oracle.json')
+      File('test/fixtures/slice7_signed_pages_oracle.json')
           .readAsStringSync(),
     ) as Map<String, Object?>;
     for (final raw in oracle['cases']! as List<Object?>) {

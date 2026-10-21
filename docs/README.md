@@ -1,7 +1,9 @@
 # Documentation map
 
 This directory is the onboarding entry point for operators, maintainers, and
-coding agents. Runtime behavior and executable tests win if prose ever drifts.
+coding agents. The Dart engine under `flutter/app/lib/engine` is the sole
+application and mutation authority. Runtime behavior and executable tests win if
+prose ever drifts.
 
 ## Read in this order
 
@@ -12,22 +14,23 @@ coding agents. Runtime behavior and executable tests win if prose ever drifts.
 4. [`SAFETY_AND_STATE.md`](SAFETY_AND_STATE.md) — preview/apply/recovery/undo
    invariants and persistent state.
 5. [`EDITOR_CONTRACT.md`](EDITOR_CONTRACT.md) — reusable schema and table UI.
-6. [`ARCHITECTURE.md`](ARCHITECTURE.md) and
-   [`IPC_PROTOCOL.md`](IPC_PROTOCOL.md) — runtime authority and command boundary.
-7. [`TRACEABILITY.md`](TRACEABILITY.md) — requirements to implementation and tests.
-8. [`DECISIONS.md`](DECISIONS.md), [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md), and
+6. [`TRACEABILITY.md`](TRACEABILITY.md) — requirements to implementation and tests.
+7. [`DECISIONS.md`](DECISIONS.md), [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md), and
    [`RELEASE_SAFETY.md`](RELEASE_SAFETY.md) — accepted choices, honest debt, gates.
-9. [`WINDOWS_RUNBOOK.md`](WINDOWS_RUNBOOK.md) — build and native acceptance.
-10. [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) — slice, measure, verify,
-    and accept every feature consistently.
+8. [`adr/0039-dart-engine-supersedes-no-second-backend.md`](adr/0039-dart-engine-supersedes-no-second-backend.md)
+   — why the Dart engine is the single backend.
+9. [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) — slice, measure, verify,
+   and accept every feature consistently.
+10. [`VERSIONING.md`](VERSIONING.md) and [`ROADMAP.md`](ROADMAP.md) — version
+    rules and planned work.
 
 ## Source-of-truth order
 
 1. `AGENTS.md` and accepted ADRs
 2. `PRODUCT.md` plus `PRD.md`
-3. Rust contracts, registry, and operation code
-4. Executable tests and frozen synthetic fixtures
-5. Release/version metadata
+3. Dart engine code under `flutter/app/lib/engine` and its tests
+4. Executable tests and frozen synthetic fixtures under `flutter/app/test/fixtures`
+5. Release/version metadata (`VERSION`, `releases.json`, `CHANGELOG.md`)
 6. Roadmap prose
 
 Never use a private workbook, scan, email, secret, or production path as a

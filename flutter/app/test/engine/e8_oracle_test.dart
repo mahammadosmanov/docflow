@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'e8_full_schema_support.dart';
 
 const String _oraclePath =
-    '../../src-tauri/tests/fixtures/rfi_follow_up_compatibility_oracle.json';
+    'test/fixtures/rfi_follow_up_compatibility_oracle.json';
 
 Map<String, Object?> _loadOracle() =>
     jsonDecode(File(_oraclePath).readAsStringSync()) as Map<String, Object?>;

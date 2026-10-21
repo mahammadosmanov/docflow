@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.16 - 2026-10-21
+
+- Removed the Tauri/Rust application (`src-tauri/`), the React frontend (`frontend/`), Node tooling, and Rust/Tauri-only tools, workflows, and docs. The Dart engine is the sole backend.
+- Moved ARB locale sources to `flutter/app/tool/locales/` and frozen oracles to `flutter/app/test/fixtures/`; updated paths in code and tests.
+- Version manager now bumps `VERSION` and `flutter/app/lib/engine/backend.dart` only; docs audit and quality CI run Flutter gates.
+- Updated AGENTS.md, CLAUDE.md, README, CONTRIBUTING, docs map, RELEASE_SAFETY, HANDOFF, and PR body. Safety rules unchanged.
+
 ## 1.20.15 - 2026-10-20
 
 - PrintService apply/resume are async; call sites and e11 tests updated.

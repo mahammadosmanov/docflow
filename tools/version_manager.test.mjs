@@ -27,23 +27,19 @@ function repositoryFixture() {
   const temporary = mkdtempSync(join(tmpdir(), "docflow-version-"));
   for (const path of [
     "VERSION",
-    "package.json",
-    "package-lock.json",
+    "flutter/app/lib/engine/backend.dart",
     "releases.json",
     "CHANGELOG.md",
     "README.md",
     "docs/PRODUCT.md",
     "docs/ROADMAP.md",
-    "src-tauri/Cargo.toml",
-    "src-tauri/Cargo.lock",
-    "src-tauri/tauri.conf.json",
   ]) {
     cpSync(join(root, path), join(temporary, path), { recursive: true });
   }
   return temporary;
 }
 
-test("repository version contract is consistent without Python manifests", () => {
+test("repository version contract is consistent for the Flutter engine", () => {
   assert.deepEqual(validateRepository(root), []);
   const version = canonicalVersion(root);
   for (const manifestVersion of Object.values(manifestVersions(root))) {

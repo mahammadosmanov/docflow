@@ -7,7 +7,7 @@ import 'package:docflow/engine/lib.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-const String _commandsTs = '../../frontend/src/lib/commands.ts';
+const String _commandsTs = 'test/fixtures/frontend_commands.ts';
 
 Matcher _errorCode(String code) => isA<BackendError>().having(
   (error) => error.code,

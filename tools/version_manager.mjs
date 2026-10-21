@@ -66,57 +66,27 @@ function readJson(path) {
   return value;
 }
 
-function sectionVersion(source, section, path) {
-  const escaped = section.replaceAll(".", "\\.");
-  const match = source.match(
-    new RegExp(`^\\[${escaped}\\][\\s\\S]*?^version\\s*=\\s*"([^"]+)"`, "mu"),
-  );
-  if (!match) throw new VersionError(`missing [${section}].version in ${path}`);
-  return match[1];
-}
-
-function cargoLockVersion(source) {
-  const matches = [
-    ...source.matchAll(
-      /^\[\[package\]\]\s*\nname = "docflow"\s*\nversion = "([^"]+)"/gmu,
-    ),
-  ];
-  if (matches.length !== 1) {
-    throw new VersionError("expected one docflow package in src-tauri/Cargo.lock");
-  }
-  return matches[0][1];
-}
-
 export function canonicalVersion(root = REPOSITORY_ROOT) {
   const version = readFileSync(join(root, "VERSION"), "utf8").trim();
   parseVersion(version);
   return version;
 }
 
-export function manifestVersions(root = REPOSITORY_ROOT) {
-  const packageJson = readJson(join(root, "package.json"));
-  const packageLock = readJson(join(root, "package-lock.json"));
-  const lockRoot = packageLock.packages?.[""];
-  if (
-    typeof packageLock.version !== "string" ||
-    typeof lockRoot?.version !== "string" ||
-    packageLock.version !== lockRoot.version
-  ) {
-    throw new VersionError("package-lock.json root versions disagree");
+const DART_ENGINE_VERSION_FILE = "flutter/app/lib/engine/backend.dart";
+
+function dartEngineVersion(source) {
+  const matches = [...source.matchAll(/^const String docflowVersion = '([^']+)';/gmu)];
+  if (matches.length !== 1) {
+    throw new VersionError(`expected one docflowVersion in ${DART_ENGINE_VERSION_FILE}`);
   }
-  const cargoSource = readFileSync(join(root, "src-tauri/Cargo.toml"), "utf8");
-  const cargoLockSource = readFileSync(join(root, "src-tauri/Cargo.lock"), "utf8");
-  const tauri = readJson(join(root, "src-tauri/tauri.conf.json"));
+  return matches[0][1];
+}
+
+export function manifestVersions(root = REPOSITORY_ROOT) {
   const versions = {
-    "package.json": packageJson.version,
-    "package-lock.json": packageLock.version,
-    "src-tauri/Cargo.toml": sectionVersion(
-      cargoSource,
-      "package",
-      "src-tauri/Cargo.toml",
+    [DART_ENGINE_VERSION_FILE]: dartEngineVersion(
+      readFileSync(join(root, DART_ENGINE_VERSION_FILE), "utf8"),
     ),
-    "src-tauri/Cargo.lock": cargoLockVersion(cargoLockSource),
-    "src-tauri/tauri.conf.json": tauri.version,
   };
   for (const [path, version] of Object.entries(versions)) {
     if (typeof version !== "string") throw new VersionError(`missing version in ${path}`);
@@ -268,33 +238,6 @@ export function validateRepository(root = REPOSITORY_ROOT, { requireTag = false 
   return errors;
 }
 
-function replaceSectionVersion(source, section, version, path) {
-  const escaped = section.replaceAll(".", "\\.");
-  const header = new RegExp(`^\\[${escaped}\\]\\s*$`, "mu").exec(source);
-  if (!header) throw new VersionError(`could not find [${section}] in ${path}`);
-  const start = header.index + header[0].length;
-  const nextHeader = /^\[/mu.exec(source.slice(start));
-  const end = nextHeader ? start + nextHeader.index : source.length;
-  const block = source.slice(start, end);
-  const updatedBlock = block.replace(/(^version\s*=\s*)"[^"]+"/mu, `$1"${version}"`);
-  if (updatedBlock === block) {
-    throw new VersionError(`could not update [${section}].version in ${path}`);
-  }
-  return source.slice(0, start) + updatedBlock + source.slice(end);
-}
-
-function replaceCargoLockVersion(source, version) {
-  const pattern = /(^\[\[package\]\]\s*\nname = "docflow"\s*\nversion = )"[^"]+"/mu;
-  if (!pattern.test(source)) {
-    throw new VersionError("could not update docflow version in src-tauri/Cargo.lock");
-  }
-  return source.replace(pattern, `$1"${version}"`);
-}
-
-function jsonText(value) {
-  return `${JSON.stringify(value, null, 2)}\n`;
-}
-
 function writeAtomic(path, content) {
   const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
   writeFileSync(temporary, content, "utf8");
@@ -311,37 +254,16 @@ function replaceRequired(source, pattern, replacement, path) {
 export function setVersion(root, version) {
   parseVersion(version);
   const updates = new Map([[join(root, "VERSION"), `${version}\n`]]);
-  const packagePath = join(root, "package.json");
-  const packageJson = readJson(packagePath);
-  packageJson.version = version;
-  updates.set(packagePath, jsonText(packageJson));
-  const lockPath = join(root, "package-lock.json");
-  const packageLock = readJson(lockPath);
-  if (!packageLock.packages?.[""]) {
-    throw new VersionError("package-lock.json has no root package entry");
-  }
-  packageLock.version = version;
-  packageLock.packages[""].version = version;
-  updates.set(lockPath, jsonText(packageLock));
-  const cargoPath = join(root, "src-tauri/Cargo.toml");
+  const enginePath = join(root, DART_ENGINE_VERSION_FILE);
   updates.set(
-    cargoPath,
-    replaceSectionVersion(
-      readFileSync(cargoPath, "utf8"),
-      "package",
-      version,
-      "src-tauri/Cargo.toml",
+    enginePath,
+    replaceRequired(
+      readFileSync(enginePath, "utf8"),
+      /^const String docflowVersion = '[^']+';/mu,
+      `const String docflowVersion = '${version}';`,
+      DART_ENGINE_VERSION_FILE,
     ),
   );
-  const cargoLockPath = join(root, "src-tauri/Cargo.lock");
-  updates.set(
-    cargoLockPath,
-    replaceCargoLockVersion(readFileSync(cargoLockPath, "utf8"), version),
-  );
-  const tauriPath = join(root, "src-tauri/tauri.conf.json");
-  const tauri = readJson(tauriPath);
-  tauri.version = version;
-  updates.set(tauriPath, jsonText(tauri));
   const readmePath = join(root, "README.md");
   updates.set(
     readmePath,

@@ -1,7 +1,7 @@
 # DocFlow
 
-DocFlow 1.20.15 is a Tauri 2 desktop application with nine registered document
-workflows:
+DocFlow 1.20.16 is a Flutter desktop application with a Dart engine and nine
+registered document workflows:
 
 - Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for
   a single RFI while keeping the complete PDF; review and correct canonical
@@ -46,7 +46,7 @@ updated files, moves, print jobs, drafts, cleanup actions, and warnings before
 Apply becomes available. Editable previews provide an optional bounded list of
 the approved effects with their full source and destination paths. Worley
 signed-page previews also show bounded thumbnails of the selected archive page
-and exact signed source page without exposing local file access to React.
+and exact signed source page without exposing local file access to the UI layer.
 Large warning sets stay compact and can be searched or filtered by type; exact
 Worley RFI warnings can focus their related page comparison directly.
 Existing-cell RFI Log and Follow Up updates can also be expanded into an exact
@@ -57,36 +57,32 @@ printer, format, route, option, attempt, outcome, count, and redacted-error
 evidence. It never includes document names, paths, contents, credentials, or
 tokens and never claims that software status proves physical paper output.
 
-The shipping stack is Tauri 2 plus a Rust authority and a thin React 19 /
-TypeScript presentation layer. Tesseract and operating-system document/print
-adapters are loaded only when needed. There is no application sidecar, embedded
-interpreter, or local server.
+The stack is Flutter with a Dart engine under `flutter/app/lib/engine`. The
+engine is the sole application and mutation authority; the Flutter UI is a thin
+presentation layer. Tesseract and operating-system document/print adapters are
+loaded only when needed. There is no application sidecar, embedded interpreter,
+or local server.
 
-The webview never receives Supabase tokens and cannot directly touch arbitrary
+The UI layer never receives Supabase tokens and cannot directly touch arbitrary
 files. All document changes remain preview-first, explicitly approved, journaled,
 and undoable.
 
 ## Development
 
-Requirements: Node 22+, stable Rust, the platform Tauri prerequisites, and
-Tesseract 5 for OCR development.
+Requirements: Flutter 3.47.7 (stable) with the desktop target for your host.
+Tesseract 5 is needed for OCR development.
 
 ```bash
-npm ci
 node tools/version_manager.mjs check
-npm test
-npm run build
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo check --manifest-path src-tauri/Cargo.toml
-npm run audit:licenses
-npm run tauri dev
+node tools/docs_audit.mjs
+cd flutter/app
+flutter pub get
+flutter analyze
+flutter test
+flutter run -d macos   # or -d windows on a Windows host
 ```
 
-`npm run build` includes the final-source audit, which fails if retired runtime,
-sidecar, shell-plugin, or packaging configuration is reintroduced. Rust builds
-apply the same fail-fast guard.
+`flutter analyze` must report zero errors and `flutter test` must be green.
 
 ## Project and version tracking
 
@@ -97,49 +93,15 @@ apply the same fail-fast guard.
 - [`releases.json`](releases.json) — machine-readable release history
 - [`CHANGELOG.md`](CHANGELOG.md) — user-visible changes and safety notes
 
-Run `npm run versions` to list releases and `npm run version:check` to detect
-version drift. On macOS, `./tools/run_macos.sh` verifies the source contract,
-stages the native OCR resources if needed, and starts the application.
+Run `node tools/version_manager.mjs list` to list releases and
+`node tools/version_manager.mjs check` to detect version drift.
 
-## Unsigned local packages
+## Windows build
 
-```bash
-npm run tauri build
-```
-
-Tauri writes native packages under `src-tauri/target/release/bundle/`. Audit a
-bundle before use:
-
-```bash
-node tools/package_audit.mjs package src-tauri/target/release/bundle/macos/DocFlow.app
-node tools/checksum.mjs path/to/package
-```
-
-The packaged executable exposes an isolated, non-GUI verification mode used by
-release automation:
-
-```bash
-path/to/docflow --package-smoke artifacts/package-smoke.json
-```
-
-It round-trips bootstrap/settings, performs real image-only OCR, and applies then
-undoes a representative Fast RFI Scan fixture in a temporary directory.
-
-## Windows installer
-
-On a Windows host with Node 22+, stable Rust, Visual Studio C++ Build Tools, and
-Tesseract 5, run:
-
-```powershell
-npm run build:windows
-```
-
-The command runs all source gates, stages Tesseract, audits dependency licenses,
-builds the NSIS installer, exercises the unpackaged release executable, audits
-the artifact, and writes a SHA-256 file. The Windows Actions workflow additionally
-performs a silent clean install, packaged startup/OCR/apply/undo smoke, content
-audit, and uninstall. Office/Excel COM and representative physical/network printer
-certification remain explicit manual Windows-host gates.
+Windows packages are built on a real Windows host with `flutter build windows
+--release` from `flutter/app`. The packaged executable has not been verified on
+Windows from this macOS workspace; Office, Excel COM, Outlook, printer, and
+signing checks remain explicit manual Windows-host gates.
 
 ## Safety model
 
@@ -151,5 +113,5 @@ certification remain explicit manual Windows-host gates.
 Unknown or low-confidence documents go to `_review/`; delete from review is a
 recoverable move to `~/.docflow/trash/`.
 
-See [architecture](docs/ARCHITECTURE.md), [migration decision](docs/MIGRATION.md),
-and [Supabase schema](docs/supabase_auth.sql).
+See the [Dart engine decision](docs/adr/0039-dart-engine-supersedes-no-second-backend.md)
+and the [Supabase schema](docs/supabase_auth.sql).

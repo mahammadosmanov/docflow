@@ -31,7 +31,7 @@ import 'package:docflow/engine/rfi_code.dart';
 import 'package:flutter_test/flutter_test.dart' hide find;
 import 'package:path/path.dart' as p;
 
-const String _fixtureRoot = '../../src-tauri/tests/fixtures';
+const String _fixtureRoot = 'test/fixtures';
 const String _civ0064 = 'AZE-SUN-INT-QMS-RFI-CIV-0064';
 
 const String _processOp = 'rfi.process_scans_fast_covers';

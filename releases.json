@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.20.15",
+  "currentVersion": "1.20.16",
   "releases": [
+    {
+      "version": "1.20.16",
+      "date": "2026-10-21",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.20.16",
+      "summary": "Remove Tauri/Rust/React application and Node tooling; Dart engine is the sole backend; Flutter gates only"
+    },
     {
       "version": "1.20.15",
       "date": "2026-10-20",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.20.15",
       "summary": "PrintService apply/resume async; production Excel pipeline wired on Windows; 12 PrintService Excel cases ported"
     },

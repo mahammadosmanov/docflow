@@ -11,7 +11,7 @@
 ## Development discipline
 
 - Write a failing behavior test before production behavior.
-- Keep presentation in React and all trusted/domain authority in Rust.
+- Keep presentation in the Flutter UI and all trusted/domain authority in the Dart engine.
 - Preserve preview → approval → apply → journal → undo.
 - Add user-visible strings to all four catalogs.
 - Do not add a dependency without documenting why the current stack is insufficient.
@@ -22,14 +22,10 @@
 
 ```bash
 node tools/version_manager.mjs check
-node tools/package_audit.mjs source
-npm test
-npm run build
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo check --manifest-path src-tauri/Cargo.toml
-npm run audit:licenses
+node tools/docs_audit.mjs
+cd flutter/app
+flutter analyze
+flutter test
 ```
 
 Packaging rules and release gates are in `docs/RELEASE_SAFETY.md`.

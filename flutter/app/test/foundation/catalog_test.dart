@@ -7,7 +7,7 @@ import 'package:docflow/l10n/strings.dart';
 import 'package:docflow/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const String _frontendLocales = '../../frontend/src/locales';
+const String _frontendLocales = 'tool/locales';
 
 RegExp _placeholder = RegExp(r'\{[^{}]+\}');
 

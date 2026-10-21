@@ -138,7 +138,7 @@ Map<String, Object?> toGenL10nArb(Map<String, Object?> arb, String locale) {
 String renderMessageCatalog(Map<String, Map<String, Object?>> arbByLocale) {
   final out = StringBuffer()
     ..writeln('// GENERATED FILE. Do not edit by hand.')
-    ..writeln('// Source: frontend/src/locales/app_*.arb')
+    ..writeln('// Source: tool/locales/app_*.arb')
     ..writeln(
       '// Regenerate: cd flutter/app && dart run lib/l10n/generate_catalog.dart',
     )
@@ -148,7 +148,7 @@ String renderMessageCatalog(Map<String, Map<String, Object?>> arbByLocale) {
     ..writeln(
       '/// Placeholders stay in their `{name}` form and are substituted at',
     )
-    ..writeln('/// lookup time, exactly as frontend/src/i18n.ts does.')
+    ..writeln('/// lookup time, exactly as the original i18n loader did.')
     ..writeln('const Map<String, Map<String, String>> messageCatalog = {');
   for (final locale in catalogLocales) {
     out.writeln("  '$locale': {");
@@ -216,7 +216,7 @@ List<String> _placeholders(String message) {
 }
 
 Future<void> main(List<String> args) async {
-  final sourceDir = args.isEmpty ? '../../frontend/src/locales' : args.first;
+  final sourceDir = args.isEmpty ? 'tool/locales' : args.first;
   final outputDir = args.length > 1 ? args[1] : 'lib/l10n';
   final catalogs = readCatalogs(sourceDir);
   const encoder = JsonEncoder.withIndent('  ');

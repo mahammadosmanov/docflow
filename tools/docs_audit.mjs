@@ -15,13 +15,10 @@ const REQUIRED_DOCUMENTS = [
   "docs/RFI_DOMAIN.md",
   "docs/SAFETY_AND_STATE.md",
   "docs/EDITOR_CONTRACT.md",
-  "docs/ARCHITECTURE.md",
-  "docs/IPC_PROTOCOL.md",
   "docs/TRACEABILITY.md",
   "docs/DECISIONS.md",
   "docs/KNOWN_ISSUES.md",
   "docs/RELEASE_SAFETY.md",
-  "docs/WINDOWS_RUNBOOK.md",
 ];
 
 function normalized(path) {

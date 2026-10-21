@@ -25,11 +25,8 @@
 ## Verification
 
 - [ ] `node tools/version_manager.mjs check`
-- [ ] `node tools/package_audit.mjs source`
-- [ ] `npm test`
-- [ ] `npm run build`
-- [ ] Rust fmt/Clippy/tests/check
-- [ ] `npm run audit:licenses`
+- [ ] `node tools/docs_audit.mjs`
+- [ ] `flutter analyze` (zero errors) and `flutter test` in `flutter/app`
 
 Paste concise real results and any platform-only omission below.
 

@@ -20,7 +20,7 @@ import 'package:path/path.dart' as p;
 const String _main =
     'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const String _oracleRelative =
-    '../../src-tauri/tests/fixtures/slice6_rfi_compatibility_oracle.json';
+    'test/fixtures/slice6_rfi_compatibility_oracle.json';
 final DateTime _today = DateTime.utc(2026, 8, 25);
 
 String _inline(String ref, String value, int style) =>

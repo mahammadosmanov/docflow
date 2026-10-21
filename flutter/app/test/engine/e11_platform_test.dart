@@ -495,10 +495,10 @@ void main() {
       'controlled route error keys have all four operator localizations',
       () {
         const catalogs = [
-          '../../frontend/src/locales/app_en.arb',
-          '../../frontend/src/locales/app_az.arb',
-          '../../frontend/src/locales/app_ru.arb',
-          '../../frontend/src/locales/app_tr.arb',
+          'tool/locales/app_en.arb',
+          'tool/locales/app_az.arb',
+          'tool/locales/app_ru.arb',
+          'tool/locales/app_tr.arb',
         ];
         const keys = [
           'error.print.excelPrintPreparationFailed',

@@ -7,7 +7,7 @@ import 'package:docflow/engine/registry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-const String _fixtures = '../../src-tauri/tests/fixtures';
+const String _fixtures = 'test/fixtures';
 
 Object? _loadFixture(String name) =>
     jsonDecode(File(p.join(_fixtures, name)).readAsStringSync());

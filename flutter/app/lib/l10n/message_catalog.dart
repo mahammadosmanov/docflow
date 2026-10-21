@@ -1,11 +1,11 @@
 // GENERATED FILE. Do not edit by hand.
-// Source: frontend/src/locales/app_*.arb
+// Source: tool/locales/app_*.arb
 // Regenerate: cd flutter/app && dart run lib/l10n/generate_catalog.dart
 
 /// Raw ARB messages keyed by dotted catalog keys, per locale.
 ///
 /// Placeholders stay in their `{name}` form and are substituted at
-/// lookup time, exactly as frontend/src/i18n.ts does.
+/// lookup time, exactly as the original i18n loader did.
 const Map<String, Map<String, String>> messageCatalog = {
   'az': {
     'app.title': 'DocFlow',

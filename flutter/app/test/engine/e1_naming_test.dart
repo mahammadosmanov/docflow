@@ -24,7 +24,7 @@ void main() {
 
   test('slice5 naming cases match the shared oracle fixture', () {
     final fixture = jsonDecode(
-      File('../../src-tauri/tests/fixtures/slice5_rfi_naming.json')
+      File('test/fixtures/slice5_rfi_naming.json')
           .readAsStringSync(),
     ) as Map<String, Object?>;
     const root = 'fixture-root';
