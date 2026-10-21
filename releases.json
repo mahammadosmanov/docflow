@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.20.6",
+  "currentVersion": "1.20.7",
   "releases": [
+    {
+      "version": "1.20.7",
+      "date": "2026-10-21",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.20.7",
+      "summary": "Extract the per-PDF scan step from the Process Scans preview; behavior unchanged."
+    },
     {
       "version": "1.20.6",
       "date": "2026-10-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.20.6",
       "summary": "Apply behavior-preserving Clippy pedantic fixes across the Rust engine."
     },

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.7 - 2026-10-21
+
+### Improved
+
+- Extract the per-PDF scan step from the Process Scans preview into its own function with explicit context and state types; preview_with_cover_mode drops from 845 to 338 lines with identical behavior.
+
 ## 1.20.6 - 2026-10-21
 
 ### Improved
