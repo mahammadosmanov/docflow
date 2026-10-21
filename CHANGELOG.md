@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.3 - 2026-10-21
+
+### Improved
+
+- Split oversized Rust and React modules into focused submodules with unit
+  tests in sibling files; behavior is unchanged.
+- Build releases with fat LTO and stripped symbols (macOS binary 25.5 MB to
+  16.0 MB) and reduce debug info for dev and test builds.
+- Add a 2,500-line source file size guard and document the source layout.
+
 ## 1.20.2 - 2026-10-15
 
 ### Fixed
