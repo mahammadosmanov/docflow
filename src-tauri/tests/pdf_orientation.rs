@@ -102,8 +102,7 @@ fn operator_orientation_pages_match_visual_review() {
     let pages = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_PAGES")
         .expect("DOCFLOW_OPERATOR_ORIENTATION_PAGES is required");
     let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
-        .map(NativeOcr::with_tesseract)
-        .unwrap_or_else(NativeOcr::discover);
+        .map_or_else(NativeOcr::discover, NativeOcr::with_tesseract);
     for entry in pages.split(',') {
         let (page, expected) = entry.split_once(':').expect("page:rotation");
         let page_number = page.parse::<usize>().expect("page number");
@@ -127,8 +126,7 @@ fn operator_orientation_directory_preview_reaches_expected_pdf() {
     let fragment = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT")
         .expect("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT is required");
     let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
-        .map(NativeOcr::with_tesseract)
-        .unwrap_or_else(NativeOcr::discover);
+        .map_or_else(NativeOcr::discover, NativeOcr::with_tesseract);
     let review = tempfile::tempdir().unwrap();
     let plan = preview(
         &PdfOrientationParams {
@@ -167,8 +165,7 @@ fn operator_uncertain_orientation_page_is_reported_without_rotating() {
     let fragment = std::env::var("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT")
         .expect("DOCFLOW_OPERATOR_ORIENTATION_EXPECTED_FRAGMENT is required");
     let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
-        .map(NativeOcr::with_tesseract)
-        .unwrap_or_else(NativeOcr::discover);
+        .map_or_else(NativeOcr::discover, NativeOcr::with_tesseract);
     let review = tempfile::tempdir().unwrap();
     let plan = preview(
         &PdfOrientationParams {

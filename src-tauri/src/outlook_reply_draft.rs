@@ -756,7 +756,7 @@ fn lock_authorities(
 ) -> MutexGuard<'_, HashMap<String, OutlookPlanAuthority>> {
     authorities
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn lock_archive_authorities(
@@ -764,7 +764,7 @@ fn lock_archive_authorities(
 ) -> MutexGuard<'_, HashMap<String, OutlookArchiveAuthority>> {
     authorities
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(test)]

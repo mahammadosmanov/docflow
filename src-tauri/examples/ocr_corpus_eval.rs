@@ -61,8 +61,7 @@ fn main() {
     assert!(!paths.is_empty(), "corpus is empty");
 
     let workers = thread::available_parallelism()
-        .map(|count| count.get())
-        .unwrap_or(1)
+        .map_or(1, std::num::NonZero::get)
         .min(4)
         .min(paths.len());
     let total_started = Instant::now();

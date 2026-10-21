@@ -247,7 +247,7 @@ pub fn revise<A: PrintAdapter + ?Sized>(
         } else {
             adapter
                 .inspect(&path, &printer, &settings)
-                .map_err(|error| error.into_backend_error())?
+                .map_err(super::super::print_queue::PrintFailure::into_backend_error)?
         };
         let page_range = if worksheet_row {
             if string_field(raw, "pageRange") != "all" {
@@ -354,8 +354,7 @@ pub fn resume_plan(state: &Value, inventory: &PrinterInventory) -> Result<Plan, 
                 saved
                     .get("jobId")
                     .and_then(Value::as_str)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("job-{}", index + 1))
+                    .map_or_else(|| format!("job-{}", index + 1), str::to_string)
             ),
         );
         row.insert(
@@ -375,8 +374,7 @@ pub fn resume_plan(state: &Value, inventory: &PrinterInventory) -> Result<Plan, 
                     .get("format")
                     .and_then(Value::as_str)
                     .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-                    .unwrap_or_else(|| file_format(&path))
+                    .map_or_else(|| file_format(&path), str::to_string)
             ),
         );
         copy_or_default(&mut row, saved, "printer", json!(""));
@@ -593,13 +591,11 @@ fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
     let row_id = row
         .get("_rowId")
         .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
+        .map_or_else(|| Uuid::new_v4().simple().to_string(), str::to_string);
     let job_id = row
         .get("_resumeJobId")
         .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("{row_id}-c{copy}"));
+        .map_or_else(|| format!("{row_id}-c{copy}"), str::to_string);
     PrintJob {
         job_id,
         path: string_field(row, "path"),

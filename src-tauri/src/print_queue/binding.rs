@@ -159,8 +159,7 @@ impl PrintService {
             .get("queueId")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
+            .map_or_else(|| Uuid::new_v4().to_string(), str::to_string);
         let resume_queue_id = plan
             .meta
             .get("resumeQueueId")

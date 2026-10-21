@@ -107,11 +107,10 @@ impl OrientationDetector for NativeOcr {
     }
 
     fn diagnostics(&self) -> String {
-        let engine = self
-            .tesseract
-            .as_deref()
-            .map(|path| path.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "unavailable".to_string());
+        let engine = self.tesseract.as_deref().map_or_else(
+            || "unavailable".to_string(),
+            |path| path.to_string_lossy().into_owned(),
+        );
         let osd = self
             .tessdata
             .as_deref()

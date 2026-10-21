@@ -309,7 +309,7 @@ impl JournalStore {
                 "journal recovery root entry limit was exceeded",
             ));
         }
-        paths.sort_by_key(|entry| entry.file_name());
+        paths.sort_by_key(std::fs::DirEntry::file_name);
         let mut entries = VecDeque::new();
         let mut pending_s5 = 0_usize;
         let mut invalid_notices = 0_usize;

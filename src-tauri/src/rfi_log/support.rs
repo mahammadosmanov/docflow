@@ -298,12 +298,10 @@ pub(super) fn record_map(record: Record) -> BTreeMap<String, String> {
 pub(super) fn copy_cell_text(sheet: &WorksheetData, row: u32, column: u32, field: &str) -> String {
     let raw = sheet.value(row, column);
     match field {
-        "dateOfIssue" | "inspectionDate" => cell_date(raw)
-            .map(date_text)
-            .unwrap_or_else(|| raw.to_string()),
-        "startTime" => cell_time(raw)
-            .map(time_text)
-            .unwrap_or_else(|| raw.to_string()),
+        "dateOfIssue" | "inspectionDate" => {
+            cell_date(raw).map_or_else(|| raw.to_string(), date_text)
+        }
+        "startTime" => cell_time(raw).map_or_else(|| raw.to_string(), time_text),
         _ => raw.to_string(),
     }
 }

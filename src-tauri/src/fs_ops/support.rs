@@ -31,11 +31,10 @@ pub(super) fn follow_up_backend_partial(error: BackendError) -> FollowUpApplyFai
 }
 
 pub(super) fn follow_up_outcome(record: &ValidatedS5Record) -> FollowUpApplyFailure {
-    let locator = record
-        .retained_locators()
-        .ok()
-        .map(|locators| locators.first().to_string())
-        .unwrap_or_else(|| format!("journal:{};root:0;leaf:record", record.journal_id()));
+    let locator = record.retained_locators().ok().map_or_else(
+        || format!("journal:{};root:0;leaf:record", record.journal_id()),
+        |locators| locators.first().to_string(),
+    );
     FollowUpApplyFailure::OutcomeUnknown(follow_up_warning(
         "error.rfi.followUp.recoveryRequired",
         locator,

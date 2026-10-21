@@ -55,8 +55,7 @@ impl From<io::Error> for PresetStoreError {
 pub fn default_settings_path() -> PathBuf {
     env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .unwrap_or_else(env::temp_dir)
+        .map_or_else(env::temp_dir, PathBuf::from)
         .join(".docflow")
         .join("settings.json")
 }
@@ -388,7 +387,8 @@ fn normalize_preferences(mut preferences: AppPrefs) -> AppPrefs {
 }
 
 fn lock_data(data: &Mutex<JsonObject>) -> MutexGuard<'_, JsonObject> {
-    data.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    data.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn preset_name_key(name: &str) -> String {

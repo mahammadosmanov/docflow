@@ -556,7 +556,7 @@ fn lock_plans(
 ) -> MutexGuard<'_, HashMap<String, StoredPlan>> {
     plans
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn expired(created_at: SystemTime, now: SystemTime, ttl: Duration) -> bool {

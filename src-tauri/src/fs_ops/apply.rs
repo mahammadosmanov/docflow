@@ -169,17 +169,16 @@ impl FilesystemAuthority {
                 false,
             ));
         }
-        let hash = match destination.sha256() {
-            Ok(hash) => hash,
-            Err(_) => {
-                record.state = Some(JournalState::RecoveryRequired);
-                self.journals.write(&record)?;
-                return Ok(operation_result_for_generated_failure(
-                    &record,
-                    "error.rfi.outlookArchive.writeUnknown",
-                    true,
-                ));
-            }
+        let hash = if let Ok(hash) = destination.sha256() {
+            hash
+        } else {
+            record.state = Some(JournalState::RecoveryRequired);
+            self.journals.write(&record)?;
+            return Ok(operation_result_for_generated_failure(
+                &record,
+                "error.rfi.outlookArchive.writeUnknown",
+                true,
+            ));
         };
         actual
             .meta

@@ -200,7 +200,7 @@ impl FilesystemAuthority {
         *self
             .before_capability_effect
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(hook));
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Box::new(hook));
     }
 
     #[cfg(test)]
@@ -208,7 +208,7 @@ impl FilesystemAuthority {
         let hook = self
             .before_capability_effect
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
         if let Some(hook) = hook {
             hook();

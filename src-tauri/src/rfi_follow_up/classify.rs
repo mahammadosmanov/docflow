@@ -311,8 +311,10 @@ pub(super) fn classify_workbooks_full(
                     scope_candidates
                         .iter()
                         .find_map(|key| slots.get(key).and_then(|slot| slot.unsafe_reason))
-                        .map(|reason| format!("warn.rfi.followUp.reason.{reason}"))
-                        .unwrap_or_else(|| "warn.rfi.followUp.reason.mappingMissing".to_string())
+                        .map_or_else(
+                            || "warn.rfi.followUp.reason.mappingMissing".to_string(),
+                            |reason| format!("warn.rfi.followUp.reason.{reason}"),
+                        )
                 } else {
                     "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
                 },

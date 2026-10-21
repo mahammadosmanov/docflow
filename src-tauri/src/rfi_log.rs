@@ -721,7 +721,7 @@ pub fn copy_payload(plan: &Plan, sheet: Option<&str>) -> Result<ClipboardPayload
                 .iter()
                 .map(|field| {
                     let align = if matches!(field.as_str(), "description" | "forms" | "location") { "left" } else { "center" };
-                    let value = html_escape(row.get(field).map(String::as_str).unwrap_or("")).replace('\n', "<br>");
+                    let value = html_escape(row.get(field).map_or("", String::as_str)).replace('\n', "<br>");
                     format!("<td style=\"border:1px solid #9a9a9a;padding:6px 8px;text-align:{align};vertical-align:middle;white-space:normal;\">{value}</td>")
                 })
                 .collect::<String>();

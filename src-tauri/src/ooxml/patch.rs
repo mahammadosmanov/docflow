@@ -261,7 +261,11 @@ pub(super) fn validate_guarded_update_set(
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
 ) -> Result<(), OoxmlError> {
-    if updates_by_sheet.is_empty() || updates_by_sheet.values().any(|updates| updates.is_empty()) {
+    if updates_by_sheet.is_empty()
+        || updates_by_sheet
+            .values()
+            .any(std::collections::BTreeMap::is_empty)
+    {
         return Err(OoxmlError::invalid(
             "at least one guarded cell update is required",
         ));

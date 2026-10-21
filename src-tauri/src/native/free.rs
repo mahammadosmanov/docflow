@@ -13,12 +13,11 @@ pub(super) fn resolve_scoped_rfi_print_file(
         "files",
         SelectionKind::File,
     )?;
-    let canonical_path = match fs::canonicalize(&issued_path) {
-        Ok(path) => path,
-        Err(_) => {
-            selections.revoke_selection(&selection.selection_id, caller);
-            return Err(BackendError::validation("error.print.rfi.changed"));
-        }
+    let canonical_path = if let Ok(path) = fs::canonicalize(&issued_path) {
+        path
+    } else {
+        selections.revoke_selection(&selection.selection_id, caller);
+        return Err(BackendError::validation("error.print.rfi.changed"));
     };
     if canonical_path != issued_path || !canonical_path.starts_with(canonical_root) {
         selections.revoke_selection(&selection.selection_id, caller);

@@ -101,7 +101,7 @@ fn lock_requests(
 ) -> MutexGuard<'_, HashMap<String, Arc<AtomicBool>>> {
     requests
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(test)]

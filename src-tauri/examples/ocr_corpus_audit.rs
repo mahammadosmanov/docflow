@@ -120,8 +120,7 @@ fn run() -> Result<usize, String> {
         .build()
         .map_err(|error| format!("worker pool: {error}"))?;
     let ocr = env::var_os("DOCFLOW_OPERATOR_TESSERACT")
-        .map(NativeOcr::with_tesseract)
-        .unwrap_or_else(NativeOcr::discover);
+        .map_or_else(NativeOcr::discover, NativeOcr::with_tesseract);
     let mut rows = pool.install(|| {
         selected
             .par_iter()

@@ -103,7 +103,7 @@ impl NativeBackend {
         let session_id = self
             .process_session_id
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         authenticated_caller_identity(&self.auth.state(), &session_id)
     }
@@ -112,7 +112,7 @@ impl NativeBackend {
         let session_id = self
             .process_session_id
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         signed_in_caller_identity(&self.auth.state(), &session_id)
     }
@@ -128,7 +128,7 @@ impl NativeBackend {
         *self
             .process_session_id
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = uuid::Uuid::new_v4().to_string();
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = uuid::Uuid::new_v4().to_string();
     }
 
     pub(super) fn registry_facts(&self) -> RegistryFacts {

@@ -118,13 +118,12 @@ impl AuthService {
         };
 
         if session.expired_at(now) {
-            match self.refresh_session(&session, now) {
-                Ok(refreshed) => session = refreshed,
-                Err(_) => {
-                    let _ = self.credentials.delete();
-                    let _ = self.settings.save_section("session", None);
-                    return Ok(self.clear_runtime());
-                }
+            if let Ok(refreshed) = self.refresh_session(&session, now) {
+                session = refreshed
+            } else {
+                let _ = self.credentials.delete();
+                let _ = self.settings.save_section("session", None);
+                return Ok(self.clear_runtime());
             }
         }
         let me = self.load_user(&session).ok().flatten();
@@ -359,12 +358,11 @@ impl AuthService {
             let _ = self.credentials.delete();
             return false;
         }
-        match self.settings.strip_legacy_session_tokens(session) {
-            Ok(true) => true,
-            Ok(false) | Err(_) => {
-                let _ = self.credentials.delete();
-                false
-            }
+        if let Ok(true) = self.settings.strip_legacy_session_tokens(session) {
+            true
+        } else {
+            let _ = self.credentials.delete();
+            false
         }
     }
 
@@ -608,8 +606,10 @@ fn require_auth_json(response: HttpResponse) -> Result<Value, BackendError> {
     let message = ["error_description", "msg", "message", "error"]
         .into_iter()
         .find_map(|key| raw.get(key).and_then(Value::as_str))
-        .map(stable_auth_message)
-        .unwrap_or_else(|| format!("auth_http_{}", response.status));
+        .map_or_else(
+            || format!("auth_http_{}", response.status),
+            stable_auth_message,
+        );
     Err(BackendError::auth_failed(message))
 }
 
@@ -648,5 +648,5 @@ fn map_http_error(error: HttpError) -> BackendError {
 fn lock_runtime(runtime: &Mutex<AuthRuntime>) -> MutexGuard<'_, AuthRuntime> {
     runtime
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }

@@ -573,10 +573,9 @@ mod export_supervisor {
 
     impl ExcelWorkerHandle for ImmediateWorker {
         fn poll(&mut self, _wait: Duration) -> WorkerPoll {
-            self.0
-                .take()
-                .map(|response| WorkerPoll::Response(Box::new(response)))
-                .unwrap_or(WorkerPoll::Disconnected)
+            self.0.take().map_or(WorkerPoll::Disconnected, |response| {
+                WorkerPoll::Response(Box::new(response))
+            })
         }
 
         fn join_status(&mut self) -> WorkerJoin {
@@ -613,8 +612,9 @@ mod export_supervisor {
         fn poll(&mut self, _wait: Duration) -> WorkerPoll {
             self.response
                 .take()
-                .map(|response| WorkerPoll::Response(Box::new(response)))
-                .unwrap_or(WorkerPoll::Disconnected)
+                .map_or(WorkerPoll::Disconnected, |response| {
+                    WorkerPoll::Response(Box::new(response))
+                })
         }
 
         fn join_status(&mut self) -> WorkerJoin {
@@ -1652,7 +1652,7 @@ mod export_supervisor {
         assert_eq!(
             quarantine
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .iter()
                 .cloned()
                 .collect::<Vec<_>>(),
@@ -1665,7 +1665,7 @@ mod export_supervisor {
         std::fs::remove_dir_all(&workspace_path).unwrap();
         quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
     }
 
@@ -3724,7 +3724,7 @@ mod export_supervisor {
         let retained = pipeline
             .quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .cloned()
             .collect::<Vec<_>>();
@@ -3776,7 +3776,7 @@ mod export_supervisor {
         let retained = pipeline
             .quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .cloned()
             .collect::<Vec<_>>();
@@ -3833,7 +3833,7 @@ mod export_supervisor {
         let retained = pipeline
             .quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .cloned()
             .collect::<Vec<_>>();

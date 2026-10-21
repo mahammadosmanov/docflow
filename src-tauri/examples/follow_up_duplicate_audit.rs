@@ -794,7 +794,7 @@ fn unique_header_column(
 fn normalize_header(header: &str) -> String {
     header
         .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .map(|character| character.to_ascii_uppercase())
         .collect()
 }

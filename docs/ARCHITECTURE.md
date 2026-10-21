@@ -334,6 +334,8 @@ production source file exceeds 2,500 lines.
 
 The frontend keeps `frontend/src/App.tsx` as the shell and routes. Screens are
 under `frontend/src/screens/` and plan components under `frontend/src/plan/`.
+Locale catalogs load on demand through `loadLocale` in `frontend/src/i18n.ts`;
+`main.tsx` and the bootstrap path await the active locale before rendering.
 
 ## Build size
 

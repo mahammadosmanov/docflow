@@ -218,7 +218,7 @@ fn lock(
 ) -> MutexGuard<'_, HashMap<String, StoredSelection>> {
     selections
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(test)]

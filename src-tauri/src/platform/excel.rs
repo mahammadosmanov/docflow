@@ -302,7 +302,7 @@ impl ExcelExportPipeline {
         let retained = self
             .quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .cloned()
             .collect::<Vec<_>>();
@@ -312,7 +312,7 @@ impl ExcelExportPipeline {
             }
             self.quarantine
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&path);
         }
     }
@@ -365,20 +365,18 @@ impl ExcelExportPipeline {
             drop(staged_workbook);
             return Err(self.prefer_cleanup_review(failure));
         }
-        let previous_generation =
-            match self
-                .generation
+        let previous_generation = if let Ok(generation) =
+            self.generation
                 .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
                     generation.checked_add(1)
                 }) {
-                Ok(generation) => generation,
-                Err(_) => {
-                    drop(staged_workbook);
-                    return Err(self.prefer_cleanup_review(PrintFailure::unsupported(
-                        "error.print.excelGenerationExhausted",
-                    )));
-                }
-            };
+            generation
+        } else {
+            drop(staged_workbook);
+            return Err(self.prefer_cleanup_review(PrintFailure::unsupported(
+                "error.print.excelGenerationExhausted",
+            )));
+        };
         let generation = previous_generation + 1;
         let request_id = Uuid::new_v4();
         let request = ExcelExportRequest {
@@ -471,8 +469,7 @@ impl ExcelExportPipeline {
 
         let source_is_unchanged = match source.open_read() {
             Ok(mut reopened_source) => file_signature_from_open_file(&mut reopened_source, true)
-                .map(|signature| signature == job.signature)
-                .unwrap_or(false),
+                .is_ok_and(|signature| signature == job.signature),
             Err(_) => false,
         };
         if !source_is_unchanged {
@@ -553,7 +550,7 @@ impl ExcelExportPipeline {
     fn cleanup_review(&self) -> Option<CleanupReview> {
         self.quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .find_map(|path| {
                 path.file_name()
@@ -828,17 +825,16 @@ fn finish_without_submit(
     failure: PrintFailure,
 ) -> Result<PrintSubmissionOutcome, PrintFailure> {
     let cleanup_locator = artifact.cleanup_locator();
-    match artifact.cleanup() {
-        Ok(()) => Err(failure),
-        Err(_) => {
-            breaker.store(true, Ordering::Release);
-            Err(failure
-                .with_retry_disposition(RetryDisposition::CleanupQuarantined)
-                .with_cleanup_review(CleanupReview {
-                    warning_key: "error.print.exportCleanupRequiresReview",
-                    locator: cleanup_locator,
-                }))
-        }
+    if let Ok(()) = artifact.cleanup() {
+        Err(failure)
+    } else {
+        breaker.store(true, Ordering::Release);
+        Err(failure
+            .with_retry_disposition(RetryDisposition::CleanupQuarantined)
+            .with_cleanup_review(CleanupReview {
+                warning_key: "error.print.exportCleanupRequiresReview",
+                locator: cleanup_locator,
+            }))
     }
 }
 
@@ -1005,7 +1001,7 @@ impl StagedWorkbook {
         let workspace_path = workspace.path().to_path_buf();
         self.cleanup_quarantine
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(workspace_path.clone());
         #[cfg(test)]
         let result = if self.cleanup_failure {
@@ -1023,7 +1019,7 @@ impl StagedWorkbook {
             Ok(()) => {
                 self.cleanup_quarantine
                     .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(&workspace_path);
                 Ok(())
             }
@@ -1132,10 +1128,10 @@ impl ExportedWorksheetPdf {
     }
 
     fn cleanup_locator(&self) -> String {
-        self.workspace
-            .as_ref()
-            .map(StagedWorkbook::cleanup_locator)
-            .unwrap_or_else(|| "docflow-excel-cleanup".to_string())
+        self.workspace.as_ref().map_or_else(
+            || "docflow-excel-cleanup".to_string(),
+            StagedWorkbook::cleanup_locator,
+        )
     }
 
     fn cleanup(&mut self) -> io::Result<()> {

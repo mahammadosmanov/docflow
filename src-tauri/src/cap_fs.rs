@@ -766,7 +766,7 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
     let mut records = names
         .split(|byte| *byte == 0)
         .filter(|name| !name.is_empty())
-        .map(|name| name.to_vec())
+        .map(<[u8]>::to_vec)
         .collect::<Vec<_>>();
     records.sort();
     records.dedup();

@@ -80,7 +80,10 @@ pub(crate) struct RecentErrorCodes {
 impl RecentErrorCodes {
     pub(crate) fn record(&self, code: &str) {
         let code = sanitize_error_code(code);
-        let mut codes = self.codes.lock().unwrap_or_else(|error| error.into_inner());
+        let mut codes = self
+            .codes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if codes.len() == MAX_RECENT_ERROR_CODES {
             codes.pop_front();
         }
@@ -90,7 +93,7 @@ impl RecentErrorCodes {
     pub(crate) fn snapshot(&self) -> Vec<String> {
         self.codes
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .rev()
             .cloned()
@@ -493,7 +496,7 @@ fn sanitize_value(value: &mut Value, depth: usize) {
 
 fn normalize_key(key: &str) -> String {
     key.chars()
-        .filter(|character| character.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_lowercase)
         .collect()
 }

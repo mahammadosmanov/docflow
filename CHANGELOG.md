@@ -5,6 +5,36 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.8 - 2026-10-21
+
+### Improved
+
+- Load locale catalogs on demand instead of bundling all four; the main JavaScript bundle drops from 685 kB to 345 kB (187 kB to 100 kB gzip) and only the active language loads at startup.
+
+## 1.20.7 - 2026-10-21
+
+### Improved
+
+- Extract the per-PDF scan step from the Process Scans preview into its own function with explicit context and state types; preview_with_cover_mode drops from 845 to 338 lines with identical behavior.
+
+## 1.20.6 - 2026-10-21
+
+### Improved
+
+- Apply behavior-preserving Clippy pedantic fixes (redundant closures, let-else, map_unwrap_or, identical match arms, explicit Default calls) across the Rust engine.
+
+## 1.20.5 - 2026-10-21
+
+### Security
+
+- Update Tauri API/CLI to 2.12, the Tauri Rust crates and other Cargo dependencies to current compatible releases, and Vite to 8.3.5 (clears the high-severity launch-editor advisories); npm audit now reports 0 vulnerabilities.
+
+## 1.20.4 - 2026-10-21
+
+### Improved
+
+- Add an opt-in OOXML timing probe (cargo test --release --test perf_ooxml -- --ignored --nocapture). On a 20,000-row by 12-column workbook it reads 240,000 cells in about 0.27 s and patches and verifies 200 guarded cells in under 2 s, so no parser hot spot needs changing.
+
 ## 1.20.3 - 2026-10-21
 
 ### Improved
