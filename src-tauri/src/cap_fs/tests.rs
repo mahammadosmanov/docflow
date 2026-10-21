@@ -5,7 +5,15 @@ use tempfile::tempdir;
 use super::*;
 
 fn normalized_source() -> String {
-    include_str!("../cap_fs.rs").replace("\r\n", "\n")
+    [
+        include_str!("../cap_fs.rs"),
+        include_str!("anchored.rs"),
+        include_str!("unix_dir.rs"),
+        include_str!("windows_dir.rs"),
+    ]
+    .join("\n")
+    .replace("\r\n", "\n")
+        + "\n#[cfg(test)]\nmod tests"
 }
 
 #[test]
