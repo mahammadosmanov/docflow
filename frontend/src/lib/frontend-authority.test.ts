@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,18 @@ import { FRONTEND_METHODS } from "./commands";
 
 const repositoryRoot = process.cwd();
 const read = (path: string) => readFileSync(resolve(repositoryRoot, path), "utf8");
+const componentSources = (dir = "frontend/src"): string[] =>
+  readdirSync(resolve(repositoryRoot, dir), { withFileTypes: true }).flatMap(
+    (entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        return ["test", "locales"].includes(entry.name) ? [] : componentSources(path);
+      }
+      return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)
+        ? [path]
+        : [];
+    },
+  );
 
 describe("frontend authority boundary", () => {
   it("has no shell, process, filesystem, network, opener, or credential authority", () => {
@@ -19,13 +31,7 @@ describe("frontend authority boundary", () => {
     const tauriConfig = JSON.parse(read("src-tauri/tauri.conf.json")) as {
       app: { security: { csp: string } };
     };
-    const sources = [
-      "frontend/src/App.tsx",
-      "frontend/src/lib/bridge.ts",
-      "frontend/src/lib/commands.ts",
-      "frontend/src/lib/platform.ts",
-      "frontend/src/main.tsx",
-    ]
+    const sources = componentSources()
       .map(read)
       .join("\n");
 
@@ -57,7 +63,8 @@ describe("frontend authority boundary", () => {
   });
 
   it("keeps TypeScript usage equal to the closed command roster", () => {
-    const usage = ["frontend/src/App.tsx", "frontend/src/lib/platform.ts"]
+    const usage = componentSources()
+      .filter((path) => !path.endsWith("/lib/commands.ts"))
       .map(read)
       .join("\n");
     const used = [...usage.matchAll(/\.call\(\s*["']([^"']+)["']/g)]
