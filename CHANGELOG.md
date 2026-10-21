@@ -5,6 +5,10 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.21.1 - 2026-10-21
+
+- Removed a stray tracked file named `C:\private\sheet.pdf` that made Windows checkout fail; ignored `/flutter/app/C:*`.
+
 ## 1.21.0 - 2026-10-21
 
 - Added `.github/workflows/windows-build.yml` (manual `workflow_dispatch`): Flutter 3.47.7 on `windows-latest`, `flutter build windows --release`, zip plus SHA-256 uploaded as an artifact.
