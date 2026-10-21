@@ -86,12 +86,10 @@ impl S5RecoverySession {
                         PendingArtifactCreationState::Created(_)
                     )
                 });
-        let locator = token
-            .retained_locators()
-            .map(|locators| locators.first().to_string())
-            .unwrap_or_else(|_| {
-                format!("journal:{};root:0;leaf:recovery", token.record.journal_id)
-            });
+        let locator = token.retained_locators().map_or_else(
+            |_| format!("journal:{};root:0;leaf:recovery", token.record.journal_id),
+            |locators| locators.first().to_string(),
+        );
         let notice = RecoveryNotice {
             warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
             locator,

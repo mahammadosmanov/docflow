@@ -143,8 +143,7 @@ pub(super) fn workbook_safety_is_unsafe(safety: &WorkbookSafetyFacts) -> bool {
 pub fn default_queue_root(app_data_dir: &Path) -> PathBuf {
     std::env::var_os("DOCFLOW_PRINT_QUEUE_DIR")
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| app_data_dir.join("print-queues"))
+        .map_or_else(|| app_data_dir.join("print-queues"), PathBuf::from)
 }
 
 pub(super) fn valid_printer_name(printer: &str) -> bool {
@@ -291,12 +290,11 @@ pub(super) fn failure_evidence(error: &PrintFailure) -> String {
     error
         .diagnostic_detail
         .as_deref()
-        .map(redact_error)
-        .unwrap_or_else(|| redact_error(&error.message))
+        .map_or_else(|| redact_error(&error.message), redact_error)
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }

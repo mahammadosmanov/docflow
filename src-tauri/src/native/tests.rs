@@ -912,7 +912,7 @@ fn dispatch_sign_out_stays_revoked_when_settings_cleanup_fails() {
         *backend
             .process_session_id
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
         initial_epoch
     );
     assert_eq!(

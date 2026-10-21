@@ -88,12 +88,11 @@ pub fn discover(
             truncated = true;
             continue;
         }
-        let entries = match fs::read_dir(&directory) {
-            Ok(entries) => entries,
-            Err(_) => {
-                truncated = true;
-                continue;
-            }
+        let entries = if let Ok(entries) = fs::read_dir(&directory) {
+            entries
+        } else {
+            truncated = true;
+            continue;
         };
         for entry in entries {
             if visited >= MAX_ENTRIES {

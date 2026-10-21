@@ -413,8 +413,7 @@ impl NativeBackend {
                 let field = |key: &str| {
                     follow
                         .and_then(|row| row.get(key))
-                        .map(String::as_str)
-                        .unwrap_or("")
+                        .map_or("", String::as_str)
                 };
                 let additional_batches = if document_type == DocumentType::Civ010 {
                     follow_rows

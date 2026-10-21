@@ -124,22 +124,21 @@ impl OcrAdapter for NativeOcr {
         }
 
         Ok(
-            match select_rfi_consensus(&observations, text_layer.as_ref()) {
-                Some((matched, votes, dpi_count)) => {
-                    consensus_read(matched, votes, dpi_count, text_layer.as_ref(), true)
-                }
-                None => {
-                    let unresolved = OcrRead {
-                        matched: find(""),
-                        source: unconfirmed_page_source(&observations, text_layer.as_ref()),
-                    };
-                    read_fast_cover_page(self, path, page_index)
-                        .ok()
-                        .and_then(|cover| {
-                            cover_recovery_read(cover, &observations, text_layer.as_ref())
-                        })
-                        .unwrap_or(unresolved)
-                }
+            if let Some((matched, votes, dpi_count)) =
+                select_rfi_consensus(&observations, text_layer.as_ref())
+            {
+                consensus_read(matched, votes, dpi_count, text_layer.as_ref(), true)
+            } else {
+                let unresolved = OcrRead {
+                    matched: find(""),
+                    source: unconfirmed_page_source(&observations, text_layer.as_ref()),
+                };
+                read_fast_cover_page(self, path, page_index)
+                    .ok()
+                    .and_then(|cover| {
+                        cover_recovery_read(cover, &observations, text_layer.as_ref())
+                    })
+                    .unwrap_or(unresolved)
             },
         )
     }
@@ -151,10 +150,10 @@ impl OcrAdapter for NativeOcr {
     fn diagnostics(&self) -> String {
         format!(
             "tesseract: {}",
-            self.tesseract
-                .as_deref()
-                .map(|path| path.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "BULUNAMADI".to_string())
+            self.tesseract.as_deref().map_or_else(
+                || "BULUNAMADI".to_string(),
+                |path| path.to_string_lossy().into_owned()
+            )
         )
     }
 }

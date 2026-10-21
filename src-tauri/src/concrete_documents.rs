@@ -288,7 +288,7 @@ fn patch_civ010_numeric_cells(
             xml = expand_civ010_batch_rows(&xml, batches.len())?;
             for (index, batch) in batches.iter().enumerate() {
                 let row = 19 + index * 2;
-                let ambient = ambients.get(index).map(String::as_str).unwrap_or("");
+                let ambient = ambients.get(index).map_or("", String::as_str);
                 for (column, value) in [
                     ("AI", batch.quantity.as_str()),
                     ("AP", batch.total_quantity.as_str()),
@@ -353,7 +353,7 @@ fn patch_civ010_numeric_cells(
     }
     output
         .finish()
-        .map(|cursor| cursor.into_inner())
+        .map(std::io::Cursor::into_inner)
         .map_err(|error| format!("Could not finish generated workbook: {error}"))
 }
 
@@ -624,7 +624,7 @@ fn ambient_anchor(parts: &[(String, Vec<u8>)]) -> Option<String> {
 fn normalize(value: &str) -> String {
     value
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_uppercase)
         .collect()
 }
@@ -675,7 +675,7 @@ fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Re
                 let close_start = node.rfind("</").unwrap_or(node.len());
                 let content = &node[open_end..close_start];
                 let decoded = unescape(content)
-                    .map(|value| value.into_owned())
+                    .map(std::borrow::Cow::into_owned)
                     .unwrap_or_default();
                 let replacement = if decoded == *old || (old.len() > 8 && decoded.contains(old)) {
                     replaced = true;
@@ -710,7 +710,7 @@ fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Re
             let close_start = node.rfind("</").unwrap_or(node.len());
             let content = &node[open_end..close_start];
             let decoded = unescape(content)
-                .map(|value| value.into_owned())
+                .map(std::borrow::Cow::into_owned)
                 .unwrap_or_default();
             if let Some(found) = rfi_regex.find(&decoded) {
                 replaced_rfi = true;
@@ -767,7 +767,7 @@ fn replace_split_text_nodes(xml: &str, old: &str, new: &str) -> String {
                     let close_start = raw.rfind("</").unwrap_or(raw.len());
                     unescape(&raw[open_end..close_start])
                         .ok()
-                        .map(|value| value.into_owned())
+                        .map(std::borrow::Cow::into_owned)
                         .unwrap_or_default()
                 })
                 .collect::<Vec<_>>();
@@ -829,7 +829,7 @@ fn output_filename(document_type: DocumentType, record: &SourceRecord) -> String
     let serial = record.rfi.rsplit('-').next().unwrap_or(record.rfi.as_str());
     let serial = serial
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .collect::<String>();
     let kind = match document_type {
         DocumentType::Civ010 => "CON-CIV-010",

@@ -306,7 +306,7 @@ fn cell_value(sheet: &WorksheetData, row: u32, column: u32) -> Result<String, St
 fn normalize(value: &str) -> String {
     value
         .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_lowercase)
         .collect()
 }

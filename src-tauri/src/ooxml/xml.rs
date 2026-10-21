@@ -222,9 +222,7 @@ pub(super) fn ensure_guarded_cell<'a>(
     let coordinate = cell_reference(row_number, column_number);
     let cell = ensure_cell(row, row_number, column_number, None)?;
     cell.namespace = Some(namespace.to_vec());
-    let qualified_name = prefix
-        .map(|prefix| format!("{prefix}:c"))
-        .unwrap_or_else(|| "c".to_string());
+    let qualified_name = prefix.map_or_else(|| "c".to_string(), |prefix| format!("{prefix}:c"));
     cell.start.set_name(qualified_name.as_bytes());
     cell.attributes = vec![ExpandedAttribute {
         namespace: None,
@@ -874,9 +872,7 @@ pub(super) fn collect_text(element: &XmlElement, output: &mut String) {
 }
 
 pub(super) fn decode_entities(value: &str) -> String {
-    unescape(value)
-        .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| value.to_string())
+    unescape(value).map_or_else(|_| value.to_string(), std::borrow::Cow::into_owned)
 }
 
 pub(super) fn set_element_text(element: &mut XmlElement, value: &str) {

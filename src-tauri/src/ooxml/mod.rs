@@ -149,8 +149,7 @@ impl WorksheetData {
     pub fn value(&self, row: u32, column: u32) -> &str {
         self.cells
             .get(&(row, column))
-            .map(|cell| cell.value.as_str())
-            .unwrap_or("")
+            .map_or("", |cell| cell.value.as_str())
     }
 
     pub fn cell(&self, row: u32, column: u32) -> Option<&CellData> {

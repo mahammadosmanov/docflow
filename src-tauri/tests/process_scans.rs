@@ -296,8 +296,7 @@ fn operator_process_scan_pdf_matches_the_expected_exact_rfi() {
         .expect("DOCFLOW_OPERATOR_PROCESS_SCAN_RFI is required");
 
     let ocr = std::env::var_os("DOCFLOW_OPERATOR_TESSERACT")
-        .map(NativeOcr::with_tesseract)
-        .unwrap_or_else(NativeOcr::discover);
+        .map_or_else(NativeOcr::discover, NativeOcr::with_tesseract);
     let read = ocr.read(&path).unwrap();
 
     assert_eq!(read.matched.code, expected, "source={}", read.source);
@@ -680,7 +679,7 @@ fn combined_scan_splits_ordered_rf_is_into_discipline_folders_and_undoes() {
             correct_orientation: false,
             trash_root: Some(trash.clone()),
         },
-        &PageFixtureOcr(codes.iter().map(|code| code.to_string()).collect()),
+        &PageFixtureOcr(codes.iter().map(std::string::ToString::to_string).collect()),
         |_| {},
         || false,
     )

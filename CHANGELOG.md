@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.6 - 2026-10-21
+
+### Improved
+
+- Apply behavior-preserving Clippy pedantic fixes (redundant closures, let-else, map_unwrap_or, identical match arms, explicit Default calls) across the Rust engine.
+
 ## 1.20.5 - 2026-10-21
 
 ### Security

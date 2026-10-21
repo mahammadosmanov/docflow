@@ -206,8 +206,10 @@ fn excel_date_text(value: &str) -> String {
     };
     epoch
         .checked_add_signed(chrono::Duration::days(serial.floor() as i64))
-        .map(|date| date.format("%d.%m.%Y").to_string())
-        .unwrap_or_else(|| value.to_string())
+        .map_or_else(
+            || value.to_string(),
+            |date| date.format("%d.%m.%Y").to_string(),
+        )
 }
 
 fn excel_time_text(value: &str) -> String {
@@ -244,19 +246,19 @@ pub(crate) struct NativeBackend {
 impl NativeBackend {
     pub(crate) fn production() -> Result<Self, BackendError> {
         let settings_path = default_settings_path();
-        let app_data_dir = settings_path
-            .parent()
-            .map(std::path::Path::to_path_buf)
-            .unwrap_or_else(|| env::temp_dir().join("docflow"));
+        let app_data_dir = settings_path.parent().map_or_else(
+            || env::temp_dir().join("docflow"),
+            std::path::Path::to_path_buf,
+        );
         let _ = fs::create_dir_all(app_data_dir.join("trash"));
         let scan_index =
             ScanIndex::new(app_data_dir.join("scan-index.sqlite3")).map_err(|error| {
                 BackendError::protocol(format!("scan index initialization: {error}"))
             })?;
-        let journal_dir = settings_path
-            .parent()
-            .map(|parent| parent.join("journal"))
-            .unwrap_or_else(|| env::temp_dir().join("docflow-journal"));
+        let journal_dir = settings_path.parent().map_or_else(
+            || env::temp_dir().join("docflow-journal"),
+            |parent| parent.join("journal"),
+        );
         let settings = Arc::new(
             SettingsStore::new(settings_path).map_err(|_| BackendError::settings_write())?,
         );
@@ -612,8 +614,9 @@ impl NativeBackend {
                 let code = result
                     .errors
                     .first()
-                    .map(|warning| warning.key.as_str())
-                    .unwrap_or("error.replica.automaticApplyFailed");
+                    .map_or("error.replica.automaticApplyFailed", |warning| {
+                        warning.key.as_str()
+                    });
                 self.pause_replica_automation(code);
             }
             Err(error) if matches!(error.code, "operation_in_progress" | "auth_required") => {

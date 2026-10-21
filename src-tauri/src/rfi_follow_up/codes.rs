@@ -38,7 +38,7 @@ pub fn canonical_follow_up_rfi(value: &str) -> Option<(String, String)> {
 }
 
 pub fn is_placeholder_rfi(code: &str) -> bool {
-    let digits = code.rsplit_once('-').map(|(_, num)| num).unwrap_or(code);
+    let digits = code.rsplit_once('-').map_or(code, |(_, num)| num);
     digits.parse::<u32>().ok().is_some_and(|n| n >= 2000)
 }
 

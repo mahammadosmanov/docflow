@@ -250,8 +250,9 @@ pub(super) fn next_slot_minutes(
     occupied
         .get(&day)
         .and_then(|values| values.values().max())
-        .map(|time| time.hour() * 60 + time.minute() + SLOT_MINUTES)
-        .unwrap_or(DAY_START_MINUTES)
+        .map_or(DAY_START_MINUTES, |time| {
+            time.hour() * 60 + time.minute() + SLOT_MINUTES
+        })
 }
 
 pub(super) fn record(
