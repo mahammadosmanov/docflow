@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.8 - 2026-10-21
+
+### Improved
+
+- Load locale catalogs on demand instead of bundling all four; the main JavaScript bundle drops from 685 kB to 345 kB (187 kB to 100 kB gzip) and only the active language loads at startup.
+
 ## 1.20.7 - 2026-10-21
 
 ### Improved

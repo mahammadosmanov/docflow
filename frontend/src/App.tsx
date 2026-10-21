@@ -23,7 +23,9 @@ import {
 } from "./components/ui";
 import {
   type Strings,
+  loadLocale,
   makeStrings,
+  systemLocale,
 } from "./i18n";
 import {
   type Bridge,
@@ -80,6 +82,7 @@ export function App() {
     setFatal("");
     try {
       const value = await bridge.call("app/bootstrap");
+      await loadLocale(value.prefs.locale ?? systemLocale());
       setBootstrap(value);
       applyAppearance(value.prefs);
     } catch (error) {
@@ -115,7 +118,9 @@ export function App() {
     setBootstrap((current) => (current ? { ...current, auth } : current));
   const updatePrefs = (prefs: AppPrefs) => {
     applyAppearance(prefs);
-    setBootstrap((current) => (current ? { ...current, prefs } : current));
+    void loadLocale(prefs.locale ?? systemLocale()).then(() =>
+      setBootstrap((current) => (current ? { ...current, prefs } : current)),
+    );
   };
 
   if (route.name === "settings") {
