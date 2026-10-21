@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.20.5 - 2026-10-21
+
+### Security
+
+- Update Tauri API/CLI to 2.12, the Tauri Rust crates and other Cargo dependencies to current compatible releases, and Vite to 8.3.5 (clears the high-severity launch-editor advisories); npm audit now reports 0 vulnerabilities.
+
 ## 1.20.4 - 2026-10-21
 
 ### Improved
