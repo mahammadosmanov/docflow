@@ -1064,5 +1064,7 @@
   "queue.failed.generic": "Не удалось подготовить предпросмотр ({code}).",
   "error.watch.notReady": "Этот предпросмотр больше недоступен. Подготовьте его снова.",
   "error.watch.tooManyEntries": "В папке слишком много файлов для автоматической проверки.",
-  "error.watch.unreadable": "Папку сейчас не удаётся прочитать."
+  "error.watch.unreadable": "Папку сейчас не удаётся прочитать.",
+  "queue.setup": "Выбрать папки",
+  "queue.needsFolders": "Папки ещё не выбраны"
 }

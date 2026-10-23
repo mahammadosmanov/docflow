@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.21.1 - 2026-10-23
+
+### Fixed
+
+- Action Queue now shows which watched operations still have no remembered folders and offers a "Choose folders" button that opens the operation, instead of silently doing nothing until folders were saved elsewhere.
+
 ## 1.21.0 - 2026-10-23
 
 ### Added

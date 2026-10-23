@@ -204,3 +204,16 @@ fn update_rejects_operations_that_cannot_be_watched() {
         assert_eq!(error.code, "validation", "{id}");
     }
 }
+
+#[test]
+fn status_reports_which_operations_have_remembered_folders() {
+    let _guard = WORK_ITEM_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let f = fixture();
+    let status = f.backend.watch_dispatch_status(json!({})).unwrap();
+    assert_eq!(status["configured"], json!([OP]));
+    fs::remove_dir_all(&f.source).unwrap();
+    let status = f.backend.watch_dispatch_status(json!({})).unwrap();
+    assert_eq!(status["configured"], json!([]));
+}

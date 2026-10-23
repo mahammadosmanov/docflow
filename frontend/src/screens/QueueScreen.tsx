@@ -2,6 +2,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Eye,
+  FolderOpen,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -39,6 +40,7 @@ export function QueueScreen({
   s,
   onBack,
   onOpenPlan,
+  onOpenOperation,
 }: {
   bridge: Bridge;
   operations: OperationDef[];
@@ -49,6 +51,7 @@ export function QueueScreen({
     plan: Plan,
     values: Record<string, unknown>,
   ) => void;
+  onOpenOperation: (operation: OperationDef) => void;
 }) {
   const [status, setStatus] = useState<WatchStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -249,8 +252,12 @@ export function QueueScreen({
             <fieldset className="queue-watch-list">
               {status.operations.map((opId) => {
                 const checkboxId = `queue-watch-${opId}`;
+                const operation = operations.find(
+                  (candidate) => candidate.id === opId,
+                );
+                const configured = status.configured.includes(opId);
                 return (
-                  <label className="queue-watch-row" htmlFor={checkboxId} key={opId}>
+                  <div className="queue-watch-row" key={opId}>
                     <input
                       id={checkboxId}
                       type="checkbox"
@@ -260,11 +267,26 @@ export function QueueScreen({
                         void update(opId, { enabled: event.target.checked })
                       }
                     />
-                    <span>
+                    <label htmlFor={checkboxId}>
                       <strong>{titleOf(opId)}</strong>
-                      <small>{s.t("queue.watch")}</small>
-                    </span>
-                  </label>
+                      <small>
+                        {configured
+                          ? s.t("queue.watch")
+                          : s.t("queue.needsFolders")}
+                      </small>
+                    </label>
+                    {operation && (
+                      <Button
+                        variant="secondary"
+                        icon={<FolderOpen />}
+                        disabled={busy}
+                        aria-label={`${s.t("queue.setup")}: ${titleOf(opId)}`}
+                        onClick={() => onOpenOperation(operation)}
+                      >
+                        {s.t("queue.setup")}
+                      </Button>
+                    )}
+                  </div>
                 );
               })}
             </fieldset>

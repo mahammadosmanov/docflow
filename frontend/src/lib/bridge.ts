@@ -901,6 +901,7 @@ export class MockBridge implements Bridge {
         "rfi.complete_status_sync",
       ],
       enabled: this.watchEnabled,
+      configured: [],
       pollSeconds: 300,
       paused: false,
       items: [],

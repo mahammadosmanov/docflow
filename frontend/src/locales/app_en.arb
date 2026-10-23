@@ -1092,5 +1092,7 @@
   "queue.failed.generic": "The preview could not be prepared ({code}).",
   "error.watch.notReady": "This preview is no longer available. Prepare it again.",
   "error.watch.tooManyEntries": "The folder has too many files to check automatically.",
-  "error.watch.unreadable": "The folder cannot be read right now."
+  "error.watch.unreadable": "The folder cannot be read right now.",
+  "queue.setup": "Choose folders",
+  "queue.needsFolders": "Folders not chosen yet"
 }

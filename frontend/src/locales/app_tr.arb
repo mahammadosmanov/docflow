@@ -1064,5 +1064,7 @@
   "queue.failed.generic": "Önizleme hazırlanamadı ({code}).",
   "error.watch.notReady": "Bu önizleme artık kullanılamıyor. Yeniden hazırlayın.",
   "error.watch.tooManyEntries": "Klasörde otomatik kontrol için çok fazla dosya var.",
-  "error.watch.unreadable": "Klasör şu anda okunamıyor."
+  "error.watch.unreadable": "Klasör şu anda okunamıyor.",
+  "queue.setup": "Klasörleri seç",
+  "queue.needsFolders": "Klasörler henüz seçilmedi"
 }

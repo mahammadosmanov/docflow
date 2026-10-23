@@ -44,6 +44,10 @@ impl NativeBackend {
         json!({
             "operations": watch::watchable_ids(),
             "enabled": settings.enabled,
+            "configured": watch::watchable_ids()
+                .into_iter()
+                .filter(|id| watch::roots_from_saved(id, &self.settings.params_for(id)).is_some())
+                .collect::<Vec<_>>(),
             "pollSeconds": settings.poll.as_secs(),
             "paused": self.watch.operator_busy(),
             "items": self.watch.items(),

@@ -1064,5 +1064,7 @@
   "queue.failed.generic": "Öncədən baxış hazırlanmadı ({code}).",
   "error.watch.notReady": "Bu öncədən baxış artıq əlçatan deyil. Yenidən hazırlayın.",
   "error.watch.tooManyEntries": "Qovluqda avtomatik yoxlama üçün çox fayl var.",
-  "error.watch.unreadable": "Qovluq hazırda oxunmur."
+  "error.watch.unreadable": "Qovluq hazırda oxunmur.",
+  "queue.setup": "Qovluqları seç",
+  "queue.needsFolders": "Qovluqlar hələ seçilməyib"
 }

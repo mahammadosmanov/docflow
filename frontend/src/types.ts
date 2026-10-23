@@ -259,6 +259,7 @@ export interface WatchItem {
 export interface WatchStatus {
   operations: string[];
   enabled: string[];
+  configured: string[];
   pollSeconds: number;
   paused: boolean;
   items: WatchItem[];

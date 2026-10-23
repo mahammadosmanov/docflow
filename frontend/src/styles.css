@@ -4267,6 +4267,8 @@ textarea:focus-visible {
   border-radius: var(--radius);
 }
 
-.queue-watch-row span {
+.queue-watch-row label {
   display: grid;
+  flex: 1;
+  cursor: pointer;
 }

@@ -30,7 +30,7 @@ function operation(id: string): OperationDef {
 }
 
 function status(items: WatchItem[], enabled: string[] = []): WatchStatus {
-  return { operations: OPS, enabled, pollSeconds: 300, paused: false, items };
+  return { operations: OPS, enabled, configured: ["rfi.group_files"], pollSeconds: 300, paused: false, items };
 }
 
 const ready: WatchItem = {
@@ -54,7 +54,11 @@ function fakeBridge(
 
 afterEach(() => cleanup());
 
-function renderQueue(bridge: Bridge, onOpenPlan = vi.fn()) {
+function renderQueue(
+  bridge: Bridge,
+  onOpenPlan = vi.fn(),
+  onOpenOperation = vi.fn(),
+) {
   render(
     <QueueScreen
       bridge={bridge}
@@ -62,9 +66,16 @@ function renderQueue(bridge: Bridge, onOpenPlan = vi.fn()) {
       s={s}
       onBack={() => {}}
       onOpenPlan={onOpenPlan}
+      onOpenOperation={onOpenOperation}
     />,
   );
   return onOpenPlan;
+}
+
+function renderWithOpen(bridge: Bridge) {
+  const onOpenOperation = vi.fn();
+  renderQueue(bridge, vi.fn(), onOpenOperation);
+  return onOpenOperation;
 }
 
 describe("QueueScreen", () => {
@@ -74,6 +85,20 @@ describe("QueueScreen", () => {
     expect(await screen.findByText("No previews are waiting")).toBeVisible();
     expect(screen.getAllByRole("checkbox")).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Check now" })).toBeDisabled();
+  });
+
+  it("tells the user which operations still need folders and opens them to choose", async () => {
+    const { bridge } = fakeBridge(() => status([]));
+    const onOpenOperation = renderWithOpen(bridge);
+    const buttons = await screen.findAllByRole("button", {
+      name: /^Choose folders/,
+    });
+    expect(buttons).toHaveLength(4);
+    expect(screen.getAllByText("Folders not chosen yet")).toHaveLength(3);
+    fireEvent.click(buttons[0]);
+    expect(onOpenOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: OPS[0] }),
+    );
   });
 
   it("enables an operation through watch/update", async () => {

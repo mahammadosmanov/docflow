@@ -212,6 +212,9 @@ export function App() {
             operations={bootstrap.operations}
             s={s}
             onBack={() => setRoute({ name: "home" })}
+            onOpenOperation={(operation) =>
+              setRoute({ name: "operation", operation })
+            }
             onOpenPlan={(operation, plan, values) =>
               setRoute({
                 name: "operation",
