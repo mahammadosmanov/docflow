@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.20.8",
+  "currentVersion": "1.21.0",
   "releases": [
+    {
+      "version": "1.21.0",
+      "date": "2026-10-23",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.21.0",
+      "summary": "Action Queue: opt-in read-only inbox watcher that prepares normal Previews in the background; nothing applies without approval."
+    },
     {
       "version": "1.20.8",
       "date": "2026-10-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.20.8",
       "summary": "Load locale catalogs on demand; main JavaScript bundle roughly halves."
     },

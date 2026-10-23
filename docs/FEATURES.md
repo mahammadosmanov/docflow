@@ -130,6 +130,18 @@ appear unselected until deliberately enabled. The Windows native Office and
 printer handoff requires a real Windows host with the supported Office/printer
 setup; macOS discovery and UI smoke do not certify `.docx` printing.
 
+## Action Queue (inbox watcher)
+
+Off by default. In Action Queue, turn on checks for Fast RFI Scan, Group Files,
+Stage signed first pages, or Completion Status Sync. DocFlow reuses each
+operation's remembered folders, checks them every 5 minutes after files finish
+copying (60-second settle), and prepares the normal Preview in the background.
+Ready previews appear in the queue and as a count on the navigation item. Open
+Preview loads the same review screen; nothing changes until you apply it, and
+Apply and Undo behave exactly as before. Out-of-date previews can be prepared
+again or dismissed. Checks pause while any operation is running, and the queue
+is rebuilt after restart.
+
 ## Intentional limits
 
 - RFI System replica publication has internal implementation code but is not exposed as an active operation in the application.

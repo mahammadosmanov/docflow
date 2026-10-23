@@ -16,6 +16,7 @@ import type {
   ReviewItem,
   RfiPrintFindResult,
   SupportBundlePreview,
+  WatchStatus,
 } from "../types";
 
 interface CommandSpec<Params, Result> {
@@ -134,6 +135,16 @@ export interface FrontendCommandMap {
     },
     RfiPrintFindResult
   >;
+  "watch/status": CommandSpec<NoParams, WatchStatus>;
+  "watch/update": CommandSpec<
+    {
+      opId: string;
+      enabled?: boolean;
+      action?: "checkNow" | "dismiss" | "reprepare";
+    },
+    WatchStatus
+  >;
+  "watch/open": CommandSpec<{ opId: string }, Plan>;
 }
 
 // BEGIN RUST-VERIFIED FRONTEND METHODS
@@ -174,6 +185,9 @@ export const FRONTEND_METHODS = [
   "paths/reveal",
   "rfi/printFind",
   "recovery/list",
+  "watch/status",
+  "watch/update",
+  "watch/open",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

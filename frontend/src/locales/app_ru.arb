@@ -1027,5 +1027,42 @@
   "param.rfi.documents.rfis.help": "Введите полные номера RFI или серийные номера CIV через запятую или с новой строки.",
   "param.rfi.documents.waterRatios.help": "Необязательно: по одной строке «номер RFI = коэффициент». Для отсутствующего значения ячейка остаётся пустой.",
   "param.rfi.documents.ambientGroups.help": "Необязательно, одна строка на группу: RFI[, RFI...]=MIN-MAX. Границы диапазона включены; для неуказанных RFI используются значения по умолчанию Минимальная/Максимальная температура воздуха.",
-  "step.rfi.generatedConcreteDocument": "Создание документа по бетону"
+  "step.rfi.generatedConcreteDocument": "Создание документа по бетону",
+  "queue.title": "Очередь действий",
+  "queue.help": "DocFlow проверяет сохранённые папки и готовит предпросмотры. Ничего не меняется, пока вы не откроете предпросмотр и не примените его.",
+  "queue.checkNow": "Проверить сейчас",
+  "queue.watch": "Готовить предпросмотры автоматически",
+  "queue.empty": "Нет готовых предпросмотров",
+  "queue.empty.help": "Включите проверку ниже. Новые файлы появятся здесь после завершения копирования.",
+  "queue.status.preparing": "Подготовка…",
+  "queue.status.ready": "Готово",
+  "queue.status.stale": "Устарело",
+  "queue.status.failed": "Не удалось подготовить",
+  "queue.summary": "Запланировано изменений: {steps} · предупреждений: {warnings}",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Открыть предпросмотр",
+  "queue.dismiss": "Скрыть",
+  "queue.reprepare": "Подготовить снова",
+  "queue.paused": "Приостановлено, пока выполняется другая операция.",
+  "queue.badge": "Готовых предпросмотров: {count}",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "Не удалось подготовить предпросмотр ({code}).",
+  "error.watch.notReady": "Этот предпросмотр больше недоступен. Подготовьте его снова.",
+  "error.watch.tooManyEntries": "В папке слишком много файлов для автоматической проверки.",
+  "error.watch.unreadable": "Папку сейчас не удаётся прочитать."
 }

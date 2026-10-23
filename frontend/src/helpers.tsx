@@ -21,6 +21,7 @@ export type Route =
     }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
+  | { name: "queue" }
   | { name: "history" }
   | { name: "admin" }
   | { name: "settings"; back: "home" | "login" | "pending" };

@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.21.0 - 2026-10-23
+
+### Added
+
+- Action Queue: an opt-in, read-only inbox watcher that checks the saved folders of Fast RFI Scan, Group Files, Stage signed first pages, and Completion Status Sync, waits for files to settle, and prepares the normal Preview in the background. Ready previews are listed in a new Action Queue screen with a navigation count; Open Preview, Dismiss, and Prepare again are provided. The watcher never applies, writes, prints, or sends, and pauses while any operation runs (ADR 0039).
+- Localized Action Queue text in Turkish, English, Russian, and Azerbaijani.
+
 ## 1.20.8 - 2026-10-21
 
 ### Improved

@@ -89,6 +89,12 @@ pub(crate) enum BackendMethod {
     RecoveryList,
     #[serde(rename = "rfi/printFind")]
     RfiPrintFind,
+    #[serde(rename = "watch/status")]
+    WatchStatus,
+    #[serde(rename = "watch/update")]
+    WatchUpdate,
+    #[serde(rename = "watch/open")]
+    WatchOpen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,7 +103,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 36] = [
+    pub(crate) const ALL: [Self; 39] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -134,6 +140,9 @@ impl BackendMethod {
         Self::PathsReveal,
         Self::RecoveryList,
         Self::RfiPrintFind,
+        Self::WatchStatus,
+        Self::WatchUpdate,
+        Self::WatchOpen,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -178,6 +187,9 @@ impl BackendMethod {
             Self::PathsReveal => "paths/reveal",
             Self::RfiPrintFind => "rfi/printFind",
             Self::RecoveryList => "recovery/list",
+            Self::WatchStatus => "watch/status",
+            Self::WatchUpdate => "watch/update",
+            Self::WatchOpen => "watch/open",
         }
     }
 
@@ -240,6 +252,18 @@ fn path_dialog_filter(
 }
 
 impl BackendRouter {
+    /// Starts the read-only inbox check loop. It only prepares Previews.
+    pub(crate) fn start_watch(&self) {
+        let native = Arc::clone(&self.native);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            loop {
+                native.watch_tick();
+                std::thread::sleep(native.watch_poll_interval());
+            }
+        });
+    }
+
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         let native = Arc::new(NativeBackend::production()?);
         Ok(Self {
@@ -256,7 +280,29 @@ impl BackendRouter {
         progress: Channel<ProgressEvent>,
     ) -> Result<Value, BackendError> {
         method.authorize(&self.native.auth_state())?;
+        let _operator = matches!(
+            method,
+            BackendMethod::EnginePreview
+                | BackendMethod::EngineApply
+                | BackendMethod::EngineUndo
+                | BackendMethod::EngineReviewScan
+                | BackendMethod::EngineReviewPreview
+        )
+        .then(|| self.native.watch_operator_guard());
         match method {
+            BackendMethod::WatchUpdate => {
+                let native = Arc::clone(&self.native);
+                tauri::async_runtime::spawn_blocking(move || {
+                    let status = native.dispatch(BackendMethod::WatchUpdate, params);
+                    if status.is_ok() {
+                        let background = Arc::clone(&native);
+                        std::thread::spawn(move || background.watch_tick());
+                    }
+                    status
+                })
+                .await
+                .map_err(|_| BackendError::request_failed("watch update task failed"))?
+            }
             BackendMethod::SupportDiagnostics => self.support_diagnostics(params).await,
             BackendMethod::SupportCopyDiagnostics => self.copy_diagnostics(params).await,
             BackendMethod::EnginePreview => self.preview(params, progress).await,
@@ -333,6 +379,7 @@ impl BackendRouter {
         let (plan_id, op_id) = validate_apply_envelope(&params)?;
         let native = Arc::clone(&self.native);
         let plan_id = plan_id.to_string();
+        let params_plan_id = Some(plan_id.clone());
         let op_id = op_id.map(str::to_string);
         let progress_channel = progress.clone();
         let (mut result, approved_op_id) = tauri::async_runtime::spawn_blocking(move || {
@@ -342,6 +389,9 @@ impl BackendRouter {
         })
         .await
         .map_err(|_| BackendError::request_failed("native apply task failed"))??;
+        if let Some(plan_id) = params_plan_id.as_deref() {
+            self.native.watch_forget_plan(plan_id);
+        }
         let native = Arc::clone(&self.native);
         tauri::async_runtime::spawn_blocking(move || {
             native.sync_result(&approved_op_id, &mut result);

@@ -66,6 +66,7 @@ Method families:
 - `auth/*`: sign-in/up/out, approval profile, admin controls
 - `engine/*`: operations, preview, apply, review, undo
 - `history/*`: cloud history with local fallback
+- `watch/*`: Action Queue status, per-operation watch toggle and queue actions, and opening a prepared Preview by operation ID (read-only; no Apply path)
 - `system/*`: ping and diagnostics
 
 Authentication responses expose only user/profile state; Supabase access and

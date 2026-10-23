@@ -245,3 +245,21 @@ export interface RecoveryPayload {
   journals: RecoveryEntry[];
   printQueue: PrintQueueSummary | null;
 }
+
+export interface WatchItem {
+  opId: string;
+  status: "preparing" | "ready" | "stale" | "failed";
+  planId: string | null;
+  steps: number;
+  warnings: number;
+  errorCode: string | null;
+  preparedAt: number;
+}
+
+export interface WatchStatus {
+  operations: string[];
+  enabled: string[];
+  pollSeconds: number;
+  paused: boolean;
+  items: WatchItem[];
+}

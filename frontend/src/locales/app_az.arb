@@ -1027,5 +1027,42 @@
   "param.rfi.documents.rfis.help": "Tam RFI nömrələrini və ya CIV seriya nömrələrini vergüllə və ya yeni sətirlə daxil edin.",
   "param.rfi.documents.waterRatios.help": "İstəyə bağlı: hər sətirdə RFI nömrəsi = nisbət. Göstərilməyən RFI üçün xana boş qalır.",
   "param.rfi.documents.ambientGroups.help": "İstəyə bağlı, hər qrup üçün bir sətir: RFI[, RFI...]=MIN-MAX. Diapazonun hər iki sərhədi daxildir; göstərilməyən RFI-lər üçün standart Minimum/Maksimum mühit temperaturu istifadə olunur.",
-  "step.rfi.generatedConcreteDocument": "Beton sənədini yarat"
+  "step.rfi.generatedConcreteDocument": "Beton sənədini yarat",
+  "queue.title": "Əməliyyat növbəsi",
+  "queue.help": "DocFlow yadda saxlanmış qovluqları yoxlayır və öncədən baxışları hazırlayır. Öncədən baxışı açıb tətbiq etməyincə heç nə dəyişmir.",
+  "queue.checkNow": "İndi yoxla",
+  "queue.watch": "Öncədən baxışları avtomatik hazırla",
+  "queue.empty": "Gözləyən öncədən baxış yoxdur",
+  "queue.empty.help": "Aşağıdan yoxlamanı aktiv edin. Yeni fayllar köçürülməsi bitdikdən sonra burada görünür.",
+  "queue.status.preparing": "Hazırlanır…",
+  "queue.status.ready": "Hazırdır",
+  "queue.status.stale": "Köhnəlib",
+  "queue.status.failed": "Hazırlanmadı",
+  "queue.summary": "{steps} planlaşdırılmış dəyişiklik · {warnings} xəbərdarlıq",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Öncədən baxışı aç",
+  "queue.dismiss": "Gizlət",
+  "queue.reprepare": "Yenidən hazırla",
+  "queue.paused": "Başqa əməliyyat işləyərkən dayandırılıb.",
+  "queue.badge": "{count} öncədən baxış hazırdır",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "Öncədən baxış hazırlanmadı ({code}).",
+  "error.watch.notReady": "Bu öncədən baxış artıq əlçatan deyil. Yenidən hazırlayın.",
+  "error.watch.tooManyEntries": "Qovluqda avtomatik yoxlama üçün çox fayl var.",
+  "error.watch.unreadable": "Qovluq hazırda oxunmur."
 }
