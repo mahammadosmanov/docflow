@@ -18,6 +18,7 @@ mod leaf_transaction;
 pub mod naming;
 mod native;
 pub mod ocr;
+pub mod ocr_cache;
 pub mod ooxml;
 pub mod operations;
 pub mod outlook_reply_draft;

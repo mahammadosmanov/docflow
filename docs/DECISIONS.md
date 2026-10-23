@@ -38,6 +38,7 @@ and versioned with the code they govern.
 | MEC Follow Up Section/Block matching and multi-section fan-out | Accepted | [`adr/0037-mec-follow-up-section-block-matching.md`](adr/0037-mec-follow-up-section-block-matching.md) |
 | CIV Follow Up Tag No token fan-out and partial-coverage diagnostics | Accepted | [`adr/0038-civ-follow-up-tag-token-coverage.md`](adr/0038-civ-follow-up-tag-token-coverage.md) |
 | Background read-only Preview preparation (Action Queue) | Accepted | [`adr/0039-background-read-only-preview-preparation.md`](adr/0039-background-read-only-preview-preparation.md) |
+| Cover-first identity reading and OCR page cache | Accepted | [`adr/0040-cover-first-identity-and-ocr-page-cache.md`](adr/0040-cover-first-identity-and-ocr-page-cache.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

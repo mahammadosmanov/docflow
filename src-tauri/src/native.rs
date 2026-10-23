@@ -33,6 +33,7 @@ use crate::{
     http::{HttpClient, HttpConfig, JsonHttp},
     journal::JournalStore,
     ocr::NativeOcr,
+    ocr_cache::CachingOcr,
     operations::pdf_orientation::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },

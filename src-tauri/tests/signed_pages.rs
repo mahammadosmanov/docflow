@@ -425,6 +425,64 @@ fn combined_scan_uses_bounded_parallel_page_ocr_when_supported() {
     );
 }
 
+struct IdentityOnlyOcr(ParallelPageFixtureOcr);
+
+impl OcrAdapter for IdentityOnlyOcr {
+    fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
+        self.0.read(path)
+    }
+
+    fn supports_page_scan(&self) -> bool {
+        true
+    }
+
+    fn supports_parallel_analysis(&self) -> bool {
+        true
+    }
+
+    fn read_page(&self, _path: &Path, _page_index: usize) -> Result<OcrRead, OcrFailure> {
+        panic!("signed first pages must use the cover-first identity reader");
+    }
+
+    fn read_identity_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        self.0.read_page(path, page_index)
+    }
+
+    fn diagnostics(&self) -> String {
+        "identity only fixture".to_string()
+    }
+}
+
+#[test]
+fn signed_pages_read_identities_through_the_cover_first_reader() {
+    const SECOND_CODE: &str = "AZE-SUN-INT-QMS-RFI-MEC-0249";
+    let fixture = tempfile::TempDir::new().unwrap();
+    let (signed_root, archive_root, review_root) = roots(&fixture);
+    write_signed(&signed_root.join("combined.pdf"), true);
+    write_rich_archive(&archive_root.join("CIV").join(filename_for(CODE)));
+    write_rich_archive(&archive_root.join("MEC").join(filename_for(SECOND_CODE)));
+    let ocr = IdentityOnlyOcr(ParallelPageFixtureOcr {
+        codes: BTreeMap::from([
+            (("combined.pdf".to_string(), 0), CODE.to_string()),
+            (("combined.pdf".to_string(), 1), SECOND_CODE.to_string()),
+        ]),
+    });
+    let plan = preview(
+        &params(&signed_root, &archive_root, &review_root, false),
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    assert_eq!(
+        plan.steps
+            .iter()
+            .filter(|step| step.kind == StepKind::PdfFirstPageReplace)
+            .count(),
+        2
+    );
+}
+
 #[test]
 fn archive_discovery_scans_every_depth_with_bounded_parallel_evidence() {
     let fixture = tempfile::TempDir::new().unwrap();

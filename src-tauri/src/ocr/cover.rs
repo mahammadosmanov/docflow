@@ -284,3 +284,24 @@ pub(super) struct PdfOcrSession {
     #[cfg(target_os = "windows")]
     pub(super) document: crate::windows_pdf::InMemoryPdf,
 }
+
+/// Accept the cheap cover-band read only when it is a confirmed cover with an
+/// exact (or approved OCR-alias) identity. Everything else, including a failed
+/// render, falls back to the full-page reader, so accuracy never drops below
+/// the full reader; only the engine-missing condition is propagated as is.
+pub(super) fn cover_first_identity(
+    fast: Result<OcrRead, OcrFailure>,
+    full: impl FnOnce() -> Result<OcrRead, OcrFailure>,
+) -> Result<OcrRead, OcrFailure> {
+    match fast {
+        Ok(read) if is_trusted_cover_read(&read) => Ok(read),
+        Err(OcrFailure::EngineMissing) => Err(OcrFailure::EngineMissing),
+        _ => full(),
+    }
+}
+
+fn is_trusted_cover_read(read: &OcrRead) -> bool {
+    read.source.starts_with("ocr:fast-cover:confirmed:")
+        && matches!(read.matched.method, RfiMethod::Strict | RfiMethod::OcrAlias)
+        && read.matched.confidence >= 0.8
+}

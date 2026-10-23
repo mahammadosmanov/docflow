@@ -147,6 +147,12 @@ impl OcrAdapter for NativeOcr {
         read_fast_cover_page(self, path, page_index)
     }
 
+    fn read_identity_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        cover_first_identity(read_fast_cover_page(self, path, page_index), || {
+            self.read_page(path, page_index)
+        })
+    }
+
     fn diagnostics(&self) -> String {
         format!(
             "tesseract: {}",

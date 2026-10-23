@@ -43,6 +43,11 @@ pub trait OcrAdapter: Sync {
     fn read_cover_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         self.read_page(path, page_index)
     }
+    /// Reads the RFI identity of a page that is expected to be a form cover.
+    /// Adapters may answer from a cheap cover read; the default is the full reader.
+    fn read_identity_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
+        self.read_page(path, page_index)
+    }
     fn supports_page_scan(&self) -> bool {
         false
     }

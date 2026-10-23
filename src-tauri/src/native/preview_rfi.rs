@@ -481,6 +481,13 @@ impl NativeBackend {
             GrantAccess::ReadWrite,
         )?;
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
+        let native_ocr = NativeOcr::discover();
+        let ocr = CachingOcr::new(
+            &native_ocr,
+            &self.scan_index,
+            &caller.owner_id,
+            &request.values.signed_scans,
+        );
         let plan = preview_stage_signed_pages(
             &StageSignedPagesParams {
                 signed_scans: request.values.signed_scans,
@@ -488,7 +495,7 @@ impl NativeBackend {
                 review_root: request.values.review_root,
                 scan_subfolders: request.values.scan_subfolders,
             },
-            &NativeOcr::discover(),
+            &ocr,
             progress,
             || cancellation.is_cancelled(),
         )?;

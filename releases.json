@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.21.1",
+  "currentVersion": "1.22.0",
   "releases": [
+    {
+      "version": "1.22.0",
+      "date": "2026-10-23",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.22.0",
+      "summary": "Faster scanning: cover-first identity reading for signed pages and a durable OCR page cache."
+    },
     {
       "version": "1.21.1",
       "date": "2026-10-23",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.21.1",
       "summary": "Action Queue shows which operations still need folders and links to choose them."
     },

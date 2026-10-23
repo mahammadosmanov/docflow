@@ -130,6 +130,16 @@ appear unselected until deliberately enabled. The Windows native Office and
 printer handoff requires a real Windows host with the supported Office/printer
 setup; macOS discovery and UI smoke do not certify `.docx` printing.
 
+## Faster scanning
+
+Stage signed first pages now reads each page's RFI number with the same fast
+cover read used by Fast RFI Scan and falls back to the full-page read whenever
+the cover is not confirmed, so uncertain pages are handled exactly as before.
+Fast RFI Scan, Group Files, and Stage signed first pages remember successful
+page reads for unchanged files (including after restart), so a repeated or
+queue-prepared Preview reads only new or changed files. Combined multi-page
+scans and separate single-page PDFs are both handled page by page.
+
 ## Action Queue (inbox watcher)
 
 Off by default. In Action Queue, turn on checks for Fast RFI Scan, Group Files,

@@ -174,7 +174,7 @@ where
         let mut completed = 0_u64;
         let (worker_count, results) = bounded_map_stream(
             &tasks,
-            |(pdf, page_index)| ocr.read_page(pdf, *page_index),
+            |(pdf, page_index)| ocr.read_identity_page(pdf, *page_index),
             |index, _| {
                 completed += 1;
                 let (pdf, page_index) = &tasks[index];
@@ -286,7 +286,7 @@ where
                 total: pdfs.len() as u64,
                 subject: candidate_display(pdf, page_index),
             });
-            let read = match ocr.read_page(pdf, page_index) {
+            let read = match ocr.read_identity_page(pdf, page_index) {
                 Ok(read) => read,
                 Err(OcrFailure::EngineMissing) => {
                     return Ok(Plan {

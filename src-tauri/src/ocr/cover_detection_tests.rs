@@ -326,3 +326,62 @@ where
         continuation_uncertain,
     )
 }
+
+fn confirmed_read() -> OcrRead {
+    confirmed_cover_read(
+        "SUNRISE PROJECT\nREQUEST FOR INSPECTION (RFI)\nRFI No: AZE-SUN-INT-QMS-RFI-CIV-1348",
+        "test",
+    )
+    .expect("fixture is a confirmed cover")
+}
+
+#[test]
+fn cover_first_identity_trusts_only_a_confirmed_strict_cover() {
+    let read = cover_first_identity(Ok(confirmed_read()), || {
+        panic!("full OCR must not run after a confirmed cover")
+    })
+    .unwrap();
+    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1348");
+    assert!(read.source.starts_with("ocr:fast-cover:confirmed:"));
+}
+
+#[test]
+fn cover_first_identity_falls_back_to_full_ocr_for_everything_else() {
+    let full = || {
+        Ok(OcrRead {
+            matched: find("AZE-SUN-INT-QMS-RFI-MEC-0007"),
+            source: "ocr:full".to_string(),
+        })
+    };
+    for fast in [
+        Ok(uncertain_cover_read("x".to_string())),
+        Ok(no_cover_signal_read()),
+        Err(OcrFailure::Document("render failed".to_string())),
+    ] {
+        let read = cover_first_identity(fast, full).unwrap();
+        assert_eq!(read.source, "ocr:full");
+    }
+}
+
+#[test]
+fn cover_first_identity_never_masks_a_missing_engine() {
+    let error = cover_first_identity(Err(OcrFailure::EngineMissing), || {
+        panic!("full OCR must not run without an engine")
+    })
+    .unwrap_err();
+    assert!(matches!(error, OcrFailure::EngineMissing));
+}
+
+#[test]
+fn cover_first_identity_rejects_a_non_strict_match_labelled_as_a_cover() {
+    let mut forged = confirmed_read();
+    forged.matched.method = RfiMethod::Fuzzy;
+    let read = cover_first_identity(Ok(forged), || {
+        Ok(OcrRead {
+            matched: find(""),
+            source: "ocr:full".to_string(),
+        })
+    })
+    .unwrap();
+    assert_eq!(read.source, "ocr:full");
+}

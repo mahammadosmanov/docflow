@@ -13,6 +13,12 @@ These are not silently waived by passing local tests.
   marking after a source change, and source-tree immutability across a full
   cycle. macOS tests do not certify these.
 
+- Cover-first identity reading and the OCR page cache (ADR 0040) need
+  measurement on real signed cover scans on Windows: the share of pages the
+  fast read confirms, per-page time against 1.21.x, correct fallback for stamped
+  or hand-annotated covers, cache reuse after a restart, and that a replaced
+  file is always read again. No timing claim is made from macOS fixtures.
+
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy

@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.22.0 - 2026-10-23
+
+### Added
+
+- Cover-first identity reading for Stage signed first pages: a confirmed fast cover read replaces the full-page OCR cascade, with automatic fallback to the full read for any page it cannot confirm (ADR 0040).
+- Durable OCR page cache for Fast RFI Scan, Group Files, and Stage signed first pages: unchanged files are not re-read by later or Action Queue Previews.
+
 ## 1.21.1 - 2026-10-23
 
 ### Fixed
