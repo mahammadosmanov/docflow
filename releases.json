@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.23.2",
+  "currentVersion": "1.23.3",
   "releases": [
+    {
+      "version": "1.23.3",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.23.3",
+      "summary": "Follow Up sync previews more than 5,000 changed rows (cap raised to 20,000, byte guard kept)."
+    },
     {
       "version": "1.23.2",
       "date": "2026-10-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.23.2",
       "summary": "Follow Up sync names the exact safe-processing limit that was exceeded."
     },

@@ -4545,3 +4545,65 @@ fn rfis_of_different_items_or_itps_are_strictly_isolated_and_never_merge_into_sa
             .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords")
     );
 }
+
+#[test]
+fn large_follow_up_with_more_than_five_thousand_changes_previews_within_the_byte_budget() {
+    let count = 8_406;
+    let code = |n: usize| format!("AZE-SUN-INT-QMS-RFI-CIV-{n:04}");
+    let source_rows = (1..=count).map(|n| {
+        let r = n as u32 + 9;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), &code(n)),
+                inline(&format!("T{r}"), "Completed"),
+            ],
+        )
+    });
+    let target_rows = (1..=count).map(|n| {
+        let r = n as u32 + 1;
+        row(
+            r,
+            [inline(&format!("A{r}"), &code(n)), blank(&format!("B{r}"))],
+        )
+    });
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(source_rows, &[]),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows(target_rows, &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), count);
+    assert_eq!(
+        guarded_updates(&plan.steps[0])
+            .unwrap()
+            .values()
+            .map(|u| u.len())
+            .sum::<usize>(),
+        count
+    );
+    let bytes = serde_json::to_vec(&plan).unwrap().len();
+    eprintln!("PLAN_BYTES {bytes}");
+    assert!(bytes < 32 * 1024 * 1024);
+}

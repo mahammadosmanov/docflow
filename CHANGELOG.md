@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.23.3 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync no longer stops at 5,000 reviewable rows. A Follow Up needing 8,406 changes now previews; the review-row cap is 20,000 and the existing 32 MiB preview-size guard still applies (about 15 MB for 8,406 rows, so roughly 17,000 rows fit). Every other safe-processing limit is unchanged.
+
 ## 1.23.2 - 2026-10-24
 
 ### Fixed
