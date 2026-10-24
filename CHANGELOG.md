@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.23.4 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync ignores RFI Log rows that contain only an RFI No. (pre-numbered placeholders). Thousands of them used to appear in Manual Review as unmapped RFIs. A row with any status, ITP, item, tag, area, location, or remark is still a record (ADR 0042).
+
 ## 1.23.3 - 2026-10-24
 
 ### Fixed

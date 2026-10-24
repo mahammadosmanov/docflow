@@ -434,6 +434,13 @@ pub(super) fn scan_source_records(
             let tag = get(tag_col);
             let area = get(area_col);
             let location = get(location_col);
+            // A row that holds only a pre-numbered RFI No. is not a record yet.
+            if [&status, &remarks, &itp, &item, &tag, &area, &location]
+                .iter()
+                .all(|value| value.is_empty())
+            {
+                continue;
+            }
             let context = SourceRouteContext {
                 tag: tag.clone(),
                 area: area.clone(),

@@ -4607,3 +4607,74 @@ fn large_follow_up_with_more_than_five_thousand_changes_previews_within_the_byte
     eprintln!("PLAN_BYTES {bytes}");
     assert!(bytes < 32 * 1024 * 1024);
 }
+
+fn number_only_record(row_number: u32, suffix: &str) -> String {
+    row(
+        row_number,
+        [inline(
+            &format!("A{row_number}"),
+            &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
+        )],
+    )
+}
+
+fn civ_template_target() -> Cursor<Vec<u8>> {
+    package(&[
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(5, [inline("A5", "Zone 4"), inline("C5", "PCS-19")])],
+                &[],
+            ),
+        ),
+        (
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
+                    row(
+                        20,
+                        [
+                            inline("A20", "Zone 4"),
+                            inline("B20", "S1"),
+                            inline("I20", ""),
+                            inline("J20", ""),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+        ("PCU", None, pcu_target("", "", "")),
+    ])
+}
+
+#[test]
+fn number_only_rfi_log_rows_are_not_records_and_raise_no_manual_review() {
+    let source = full_schema_source([
+        number_only_record(10, "2001"),
+        number_only_record(11, "2002"),
+        number_only_record(12, "2003"),
+    ]);
+
+    let review = classify(source, civ_template_target()).unwrap();
+
+    assert!(review["rows"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn rfi_log_row_with_a_status_but_no_itp_stays_visible_for_review() {
+    let source = full_schema_source([row(
+        10,
+        [
+            inline("A10", "AZE-SUN-INT-QMS-RFI-CIV-2004"),
+            inline("T10", "Completed"),
+        ],
+    )]);
+
+    let review = classify(source, civ_template_target()).unwrap();
+
+    assert_eq!(review["rows"].as_array().unwrap().len(), 1);
+}
