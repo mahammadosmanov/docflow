@@ -1,3 +1,4 @@
+pub(crate) mod activity_log;
 pub mod auth;
 mod backend;
 mod cap_fs;

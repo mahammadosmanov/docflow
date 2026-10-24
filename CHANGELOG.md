@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.24.0 - 2026-10-24
+
+### Added
+
+- Local activity log: every backend call is recorded with its error key, OS cause, warnings, and Manual Review reasons (counts plus samples with RFI and ITP/item details). Settings > Advanced support > Save activity log exports one redacted file to share for support (ADR 0043).
+
 ## 1.23.4 - 2026-10-24
 
 ### Fixed

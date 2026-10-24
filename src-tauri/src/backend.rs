@@ -39,6 +39,8 @@ pub(crate) enum BackendMethod {
     SupportDiagnostics,
     #[serde(rename = "support/copyDiagnostics")]
     SupportCopyDiagnostics,
+    #[serde(rename = "support/activityLog")]
+    SupportActivityLog,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -103,7 +105,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 39] = [
+    pub(crate) const ALL: [Self; 40] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -123,6 +125,7 @@ impl BackendMethod {
         Self::SettingsDeletePreset,
         Self::SupportDiagnostics,
         Self::SupportCopyDiagnostics,
+        Self::SupportActivityLog,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -162,6 +165,7 @@ impl BackendMethod {
             Self::SettingsDeletePreset => "settings/deletePreset",
             Self::SupportDiagnostics => "support/diagnostics",
             Self::SupportCopyDiagnostics => "support/copyDiagnostics",
+            Self::SupportActivityLog => "support/activityLog",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",
@@ -202,6 +206,7 @@ impl BackendMethod {
                 | Self::SettingsReplicaStatus
                 | Self::SupportDiagnostics
                 | Self::SupportCopyDiagnostics
+                | Self::SupportActivityLog
                 | Self::AuthSignIn
                 | Self::AuthSignUp
                 | Self::AuthSignOut
@@ -227,6 +232,7 @@ pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
+    activity_log: crate::activity_log::ActivityLog,
 }
 
 fn path_dialog_filter(
@@ -271,6 +277,9 @@ impl BackendRouter {
             app,
             native,
             recent_error_codes: RecentErrorCodes::default(),
+            activity_log: crate::activity_log::ActivityLog::new(
+                crate::activity_log::ActivityLog::default_dir(),
+            ),
         })
     }
 
@@ -306,6 +315,14 @@ impl BackendRouter {
             }
             BackendMethod::SupportDiagnostics => self.support_diagnostics(params).await,
             BackendMethod::SupportCopyDiagnostics => self.copy_diagnostics(params).await,
+            BackendMethod::SupportActivityLog => {
+                validate_empty_params(&params)?;
+                Ok(serde_json::json!({
+                    "fileName": "docflow-activity-log.jsonl",
+                    "mediaType": "application/x-ndjson",
+                    "content": self.activity_log.export(),
+                }))
+            }
             BackendMethod::EnginePreview => self.preview(params, progress).await,
             BackendMethod::EngineApply => self.apply(params, progress).await,
             BackendMethod::EngineCancel => self.cancel(params).await,
@@ -633,6 +650,13 @@ struct CopyDiagnosticsParams {
     content: String,
 }
 
+fn chrono_free_timestamp() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    format!("unix:{seconds}")
+}
+
 fn validate_empty_params(params: &Value) -> Result<(), BackendError> {
     if params.as_object().is_some_and(serde_json::Map::is_empty) {
         Ok(())
@@ -649,12 +673,44 @@ pub(crate) async fn frontend_call(
 ) -> Result<Value, BackendError> {
     debug_assert_eq!(request.method.owner(), MethodOwner::Rust);
     debug_assert!(BackendMethod::ALL.contains(&request.method));
-    let _method_name = request.method.as_str();
-    let result = router
-        .call(request.method, request.params, on_progress)
-        .await;
+    let method_name = request.method.as_str();
+    let op_id = request
+        .params
+        .get("opId")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let started = std::time::Instant::now();
+    let method = request.method;
+    let result = router.call(method, request.params, on_progress).await;
     if let Err(error) = &result {
         router.recent_error_codes.record(error.code);
+    }
+    if method != BackendMethod::SupportActivityLog {
+        let mut entry = serde_json::json!({
+            "at": chrono_free_timestamp(),
+            "version": env!("CARGO_PKG_VERSION"),
+            "os": std::env::consts::OS,
+            "method": method_name,
+            "opId": op_id,
+            "ms": started.elapsed().as_millis() as u64,
+        });
+        match &result {
+            Ok(value) => {
+                entry["ok"] = Value::Bool(true);
+                if matches!(
+                    method,
+                    BackendMethod::EnginePreview | BackendMethod::EngineRevise
+                ) {
+                    entry["plan"] = crate::activity_log::summarize_plan(value);
+                }
+            }
+            Err(error) => {
+                entry["ok"] = Value::Bool(false);
+                entry["errorCode"] = Value::String(error.code.to_string());
+                entry["error"] = Value::String(error.message.clone());
+            }
+        }
+        router.activity_log.record(entry);
     }
     result
 }
@@ -689,6 +745,7 @@ mod tests {
             BackendMethod::SettingsReplicaStatus,
             BackendMethod::SupportDiagnostics,
             BackendMethod::SupportCopyDiagnostics,
+            BackendMethod::SupportActivityLog,
             BackendMethod::AuthSignIn,
             BackendMethod::AuthSignUp,
             BackendMethod::AuthSignOut,

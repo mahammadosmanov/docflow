@@ -1099,5 +1099,7 @@
   "rfi.publishStatus.disposition.incompleteFiles": "Нет PDF или Word",
   "rfi.publishStatus.disposition.notInLog": "Нет в Log",
   "rfi.publishStatus.disposition.unsafeCell": "Ячейку нельзя безопасно менять",
-  "progress.phase.publish_workbook_read": "Чтение ячеек статуса RFI Log"
+  "progress.phase.publish_workbook_read": "Чтение ячеек статуса RFI Log",
+  "prefs.support.activityLog": "Сохранить журнал действий",
+  "prefs.support.activityLogSaved": "Журнал действий сохранён. Файлом можно поделиться для поддержки; пути, содержимое документов и токены скрыты."
 }

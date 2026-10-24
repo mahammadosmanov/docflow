@@ -1099,5 +1099,7 @@
   "rfi.publishStatus.disposition.incompleteFiles": "PDF və ya Word çatışmır",
   "rfi.publishStatus.disposition.notInLog": "Log-da yoxdur",
   "rfi.publishStatus.disposition.unsafeCell": "Xana təhlükəsiz deyil",
-  "progress.phase.publish_workbook_read": "RFI Log status xanaları oxunur"
+  "progress.phase.publish_workbook_read": "RFI Log status xanaları oxunur",
+  "prefs.support.activityLog": "Fəaliyyət jurnalını saxla",
+  "prefs.support.activityLogSaved": "Fəaliyyət jurnalı saxlanıldı. Faylı dəstək üçün paylaşa bilərsiniz; fayl yolları, sənəd məzmunu və tokenlər gizlədilir."
 }

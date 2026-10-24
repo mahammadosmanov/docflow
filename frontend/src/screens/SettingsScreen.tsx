@@ -132,6 +132,28 @@ export function SettingsScreen({
       setDiagnosticsBusy(false);
     }
   };
+  const saveActivityLog = async () => {
+    setError("");
+    setDiagnosticsStatus("");
+    setDiagnosticsBusy(true);
+    try {
+      const log = await bridge.call("support/activityLog");
+      const blob = new Blob([log.content], { type: log.mediaType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = log.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setDiagnosticsStatus(s.t("prefs.support.activityLogSaved"));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
   const downloadDiagnostics = () => {
     if (!diagnostics) return;
     try {
@@ -313,6 +335,14 @@ export function SettingsScreen({
                 onClick={() => void previewDiagnostics()}
               >
                 {s.t("prefs.support.preview")}
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<Download />}
+                disabled={diagnosticsBusy}
+                onClick={() => void saveActivityLog()}
+              >
+                {s.t("prefs.support.activityLog")}
               </Button>
               {diagnostics && (
                 <>

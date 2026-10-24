@@ -1127,5 +1127,7 @@
   "rfi.publishStatus.disposition.incompleteFiles": "PDF or Word missing",
   "rfi.publishStatus.disposition.notInLog": "Not in the Log",
   "rfi.publishStatus.disposition.unsafeCell": "Cell is not safe to change",
-  "progress.phase.publish_workbook_read": "Reading RFI Log status cells"
+  "progress.phase.publish_workbook_read": "Reading RFI Log status cells",
+  "prefs.support.activityLog": "Save activity log",
+  "prefs.support.activityLogSaved": "Activity log saved. You can share the file for support; file paths, document content and tokens are redacted."
 }

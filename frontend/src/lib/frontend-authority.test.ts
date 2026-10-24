@@ -304,6 +304,20 @@ describe("frontend authority boundary", () => {
     }
   });
 
+  it("defines the activity log export in every locale", () => {
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of [
+        "prefs.support.activityLog",
+        "prefs.support.activityLogSaved",
+      ]) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
   it("defines the publish-status operation in every locale", () => {
     const requiredKeys = [
       "op.rfi.publish_status.title",

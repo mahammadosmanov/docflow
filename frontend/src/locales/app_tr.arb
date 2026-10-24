@@ -1099,5 +1099,7 @@
   "rfi.publishStatus.disposition.incompleteFiles": "PDF veya Word eksik",
   "rfi.publishStatus.disposition.notInLog": "Log'da yok",
   "rfi.publishStatus.disposition.unsafeCell": "Hücre güvenli değil",
-  "progress.phase.publish_workbook_read": "RFI Log durum hücreleri okunuyor"
+  "progress.phase.publish_workbook_read": "RFI Log durum hücreleri okunuyor",
+  "prefs.support.activityLog": "Etkinlik günlüğünü kaydet",
+  "prefs.support.activityLogSaved": "Etkinlik günlüğü kaydedildi. Dosyayı destek için paylaşabilirsiniz; dosya yolları, belge içeriği ve belirteçler gizlenir."
 }

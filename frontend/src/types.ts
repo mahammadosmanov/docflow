@@ -153,6 +153,12 @@ export interface Bootstrap {
   operations: OperationDef[];
 }
 
+export interface ActivityLogExport {
+  fileName: string;
+  mediaType: string;
+  content: string;
+}
+
 export interface SupportBundlePreview {
   fileName: string;
   mediaType: "application/json";

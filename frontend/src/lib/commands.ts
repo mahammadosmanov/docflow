@@ -15,6 +15,7 @@ import type {
   ReviewDecision,
   ReviewItem,
   RfiPrintFindResult,
+  ActivityLogExport,
   SupportBundlePreview,
   WatchStatus,
 } from "../types";
@@ -73,6 +74,7 @@ export interface FrontendCommandMap {
   >;
   "support/diagnostics": CommandSpec<NoParams, SupportBundlePreview>;
   "support/copyDiagnostics": CommandSpec<{ content: string }, Ok>;
+  "support/activityLog": CommandSpec<NoParams, ActivityLogExport>;
   "engine/preview": CommandSpec<
     { opId: string; values: Record<string, unknown> },
     Plan
@@ -168,6 +170,7 @@ export const FRONTEND_METHODS = [
   "settings/deletePreset",
   "support/diagnostics",
   "support/copyDiagnostics",
+  "support/activityLog",
   "engine/preview",
   "engine/apply",
   "engine/cancel",

@@ -1048,6 +1048,13 @@ export class MockBridge implements Bridge {
       case "support/copyDiagnostics":
         result = { ok: true };
         break;
+      case "support/activityLog":
+        result = {
+          fileName: "docflow-activity-log.jsonl",
+          mediaType: "application/x-ndjson",
+          content: "",
+        };
+        break;
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
         const values = params.values as Record<string, unknown>;
