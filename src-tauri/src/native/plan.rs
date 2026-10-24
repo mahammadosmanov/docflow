@@ -267,7 +267,8 @@ impl NativeBackend {
                     .as_array()
                     .ok_or_else(BackendError::invalid_params)?,
             )?,
-            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID => rfi_system_sync::revise(
+            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
+            | rfi_system_sync::PUBLISH_STATUS_OPERATION_ID => rfi_system_sync::revise(
                 &claimed.plan,
                 payload["rows"]
                     .as_array()

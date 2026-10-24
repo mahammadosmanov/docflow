@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.22.0",
+  "currentVersion": "1.23.0",
   "releases": [
+    {
+      "version": "1.23.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.23.0",
+      "summary": "Publish status: pair a requester's PDF and DOCX with the RFI Log and mark only blank statuses Ongoing, with guarded Apply and Undo."
+    },
     {
       "version": "1.22.0",
       "date": "2026-10-23",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.22.0",
       "summary": "Faster scanning: cover-first identity reading for signed pages and a durable OCR page cache."
     },

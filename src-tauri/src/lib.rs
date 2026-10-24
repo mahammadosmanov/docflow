@@ -32,6 +32,7 @@ pub mod plan_store;
 pub mod platform;
 pub mod print_queue;
 pub mod progress;
+pub mod publish_intake;
 pub mod registry;
 pub mod review;
 pub mod rfi_code;

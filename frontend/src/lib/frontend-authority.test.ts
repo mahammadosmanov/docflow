@@ -304,6 +304,52 @@ describe("frontend authority boundary", () => {
     }
   });
 
+  it("defines the publish-status operation in every locale", () => {
+    const requiredKeys = [
+      "op.rfi.publish_status.title",
+      "op.rfi.publish_status.desc",
+      "param.rfi.publishStatus.stagingFolder",
+      "param.rfi.publishStatus.stagingFolder.help",
+      "param.rfi.publishStatus.rfiLogWorkbook",
+      "param.rfi.publishStatus.rfiLogWorkbook.help",
+      "error.param.required.staging_folder",
+      "error.rfi.publishStatus.stagingInvalid",
+      "error.rfi.publishStatus.stagingTooLarge",
+      "error.rfi.publishStatus.workbookInvalid",
+      "error.rfi.publishStatus.workbookLocked",
+      "error.rfi.publishStatus.approvedUpdateInvalid",
+      "warn.rfi.publishStatus.noChangesNeeded",
+      "warn.rfi.publishStatus.noRowsSelected",
+      "warn.rfi.publishStatus.ambiguousName",
+      "note.rfi.publishStatus.rfiLog",
+      "rfi.publishStatus.editor.title",
+      "rfi.publishStatus.editor.rowCount",
+      "rfi.publishStatus.column.enabled",
+      "rfi.publishStatus.column.discipline",
+      "rfi.publishStatus.column.rfiNo",
+      "rfi.publishStatus.column.pdfName",
+      "rfi.publishStatus.column.docxName",
+      "rfi.publishStatus.column.currentStatus",
+      "rfi.publishStatus.column.proposedStatus",
+      "rfi.publishStatus.column.disposition",
+      "rfi.publishStatus.column.action",
+      "rfi.publishStatus.disposition.ready",
+      "rfi.publishStatus.disposition.statusNotBlank",
+      "rfi.publishStatus.disposition.incompleteFiles",
+      "rfi.publishStatus.disposition.notInLog",
+      "rfi.publishStatus.disposition.unsafeCell",
+      "progress.phase.publish_workbook_read",
+    ];
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of requiredKeys) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
   it("defines the separate Windows Outlook draft boundary in every locale", () => {
     const requiredKeys = [
       "op.rfi.outlook_reply_draft.title",

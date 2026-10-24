@@ -13,6 +13,7 @@
 | `rfi.normalize_pdf_orientation` | Searchable standalone normalization uses rendered-content OSD and directional OCR, plus unique exact canonical header-ID evidence only when the same ID and direction agree at both 250/350 DPI. Source hashes bind analysis/cache and Apply; unresolved files remain unchanged for review-copy handling. |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
+| `rfi.publish_status` | Read-only match of PDF+DOCX pairs saved from a requester's mail (top-level of one folder, exact RFI code in the file name) to the RFI Log; Preview proposes `Ongoing` only for literal blank Inspection Status cells (never overwrites a filled status), with guarded Apply and Undo (ADR 0041). Outlook attachment save and the publish mail draft are not part of this release |
 | `rfi.generate_concrete_documents` | Batch-generate CON-CIV-010/011/013/014 from RFI Log data; require Concrete Specimen Test Follow-Up only when Civil Forms includes CON-CIV-010, with configurable template values and no-overwrite safeguards |
 
 

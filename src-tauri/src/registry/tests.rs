@@ -58,7 +58,7 @@ fn param_schema_validation_matches_frozen_required_value_rules() {
 #[test]
 fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
     let operations = operation_registry(RegistryFacts::default());
-    assert_eq!(operations.len(), 10);
+    assert_eq!(operations.len(), 11);
     let operation = operations
         .iter()
         .find(|operation| operation.id == "rfi.generate_concrete_documents")
@@ -77,4 +77,20 @@ fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
         .find(|parameter| parameter.name == "follow_up_workbook")
         .expect("optional Follow-Up source is registered");
     assert!(!follow_up.required);
+}
+
+#[test]
+fn publish_status_requires_staging_folder_and_log_workbook() {
+    let operations = operation_registry(RegistryFacts::default());
+    let operation = operations
+        .iter()
+        .find(|operation| operation.id == "rfi.publish_status")
+        .expect("publish status is registered");
+    assert_eq!(
+        operation.schema.validate(&Map::new()),
+        vec![
+            "error.param.required.staging_folder".to_string(),
+            "error.param.required.rfi_log_workbook".to_string(),
+        ]
+    );
 }

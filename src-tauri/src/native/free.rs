@@ -255,6 +255,15 @@ pub(super) struct RfiSystemSyncPreviewValues {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(super) struct RfiPublishStatusPreviewValues {
+    #[serde(rename = "staging_folder")]
+    pub(super) staging_folder: PathBuf,
+    #[serde(rename = "rfi_log_workbook")]
+    pub(super) rfi_log_workbook: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct RfiCompleteStatusPreviewValues {
     #[serde(rename = "rfi_system_root")]
     pub(super) rfi_system_root: PathBuf,

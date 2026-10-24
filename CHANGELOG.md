@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.23.0 - 2026-10-24
+
+### Added
+
+- Publish status (`rfi.publish_status`): choose the folder where a requester's PDF and DOCX attachments were saved and the RFI Log; Preview pairs files by the exact RFI code in each name and proposes `Ongoing` only for literal blank Inspection Status cells. Filled statuses, missing Log rows, incomplete pairs, ambiguous names, and formula or merged cells authorize nothing. Apply and Undo reuse the guarded workbook pipeline (ADR 0041).
+- Localized publish-status text in Turkish, English, Russian, and Azerbaijani.
+
 ## 1.22.0 - 2026-10-23
 
 ### Added
