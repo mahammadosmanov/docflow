@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.24.0",
+  "currentVersion": "1.24.1",
   "releases": [
+    {
+      "version": "1.24.1",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.24.1",
+      "summary": "Activity log records which Follow Up publication step failed and why."
+    },
     {
       "version": "1.24.0",
       "date": "2026-10-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.24.0",
       "summary": "Local activity log with one-click redacted export for support."
     },

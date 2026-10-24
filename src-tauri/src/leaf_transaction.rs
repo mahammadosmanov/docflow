@@ -75,16 +75,20 @@ where
         RetainedPublicationPhase::Prepared,
         RetainedPublicationPhase::Displacing,
     )?;
-    if canonical.retain_current_name_no_clobber(retained).is_err() {
-        return Ok(recovery_required(&pending_retained.locator));
+    let fail = |step: &str, detail: String| {
+        note_failure(step, &detail);
+        recovery_required(&pending_retained.locator)
+    };
+    if let Err(error) = canonical.retain_current_name_no_clobber(retained) {
+        return Ok(fail("retain_original", format!("{error:?}")));
     }
     let retained_file = match retained.open_read() {
         Ok(file) => file,
-        Err(_) => return Ok(recovery_required(&pending_retained.locator)),
+        Err(error) => return Ok(fail("open_retained", error.to_string())),
     };
     let retained_identity = match crate::cap_fs::file_identity(&retained_file) {
         Ok(identity) => identity,
-        Err(_) => return Ok(recovery_required(&pending_retained.locator)),
+        Err(error) => return Ok(fail("retained_identity", error.to_string())),
     };
     let retained_bytes = retained_file.metadata().map(|metadata| metadata.len());
     let retained_security = FileSecuritySnapshot::capture(&retained_file, None);
@@ -92,18 +96,36 @@ where
     let (retained_bytes, retained_security, retained_hash) =
         match (retained_bytes, retained_security, retained_hash) {
             (Ok(bytes), Ok(security), Ok(hash)) => (bytes, security, hash),
-            _ => return Ok(recovery_required(&pending_retained.locator)),
+            (bytes, security, hash) => {
+                return Ok(fail(
+                    "read_retained",
+                    format!(
+                        "metadata={:?} security={:?} hash={:?}",
+                        bytes.err(),
+                        security.err(),
+                        hash.err()
+                    ),
+                ));
+            }
         };
     if retained_identity != publication.expected_canonical_identity
         || retained_hash != publication.expected_canonical_sha256
         || retained_security.sha256() != publication.expected_canonical_security_sha256
     {
-        return Ok(recovery_required(&pending_retained.locator));
+        return Ok(fail(
+            "retained_mismatch",
+            format!(
+                "identity_same={} hash_same={} security_same={}",
+                retained_identity == publication.expected_canonical_identity,
+                retained_hash == publication.expected_canonical_sha256,
+                retained_security.sha256() == publication.expected_canonical_security_sha256
+            ),
+        ));
     }
     let auxiliary_charge_bytes = retained_security.auxiliary_charge_bytes();
     let logical_charge_bytes = match retained_bytes.checked_add(auxiliary_charge_bytes) {
         Some(value) => value,
-        None => return Ok(recovery_required(&pending_retained.locator)),
+        None => return Ok(fail("retained_size", String::new())),
     };
     let evidence = RetainedArtifactEvidence {
         role: expected_role,
@@ -131,17 +153,14 @@ where
 
     let mut created = match canonical.create_new_secured(destination_creation) {
         Ok(file) => file,
-        Err(_) => return Ok(recovery_required(&pending_retained.locator)),
+        Err(error) => return Ok(fail("create_canonical", error.to_string())),
     };
     let created_identity = match created.identity() {
         Ok(identity) => identity,
-        Err(_) => return Ok(recovery_required(&pending_retained.locator)),
+        Err(error) => return Ok(fail("created_identity", error.to_string())),
     };
-    if destination_snapshot
-        .verify_created_access(&created)
-        .is_err()
-    {
-        return Ok(recovery_required(&pending_retained.locator));
+    if let Err(error) = destination_snapshot.verify_created_access(&created) {
+        return Ok(fail("verify_created_access", error.to_string()));
     }
     transition(
         journals,
@@ -151,14 +170,11 @@ where
             descriptor_sha256: destination_snapshot.access_sha256(),
         },
     )?;
-    if canonical.sync_parent().is_err() {
-        return Ok(recovery_required(&pending_retained.locator));
+    if let Err(error) = canonical.sync_parent() {
+        return Ok(fail("sync_parent", error.to_string()));
     }
-    if destination_snapshot
-        .replay_and_verify_auxiliary(&mut created)
-        .is_err()
-    {
-        return Ok(recovery_required(&pending_retained.locator));
+    if let Err(error) = destination_snapshot.replay_and_verify_auxiliary(&mut created) {
+        return Ok(fail("replay_auxiliary", error.to_string()));
     }
     transition(
         journals,
@@ -173,20 +189,27 @@ where
         .seek(SeekFrom::Start(0))
         .and_then(|_| std::io::copy(publication_source, &mut created).map(|_| ()))
         .and_then(|_| created.sync_all())
-        .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
+        .map_err(|error| {
+            note_failure("write_canonical", &error.to_string());
+            BackendError::validation("error.rfi.followUp.recoveryRequired")
+        })?;
     transition(journals, record, S5Transition::MarkCanonicalVerifying)?;
     verify_destination(&mut created)?;
-    if destination_snapshot.verify_complete(&created).is_err()
-        || created.identity().ok().as_ref() != Some(&created_identity)
-    {
-        return Ok(recovery_required(&pending_retained.locator));
+    if let Err(error) = destination_snapshot.verify_complete(&created) {
+        return Ok(fail("verify_complete", error.to_string()));
     }
-    let created_hash = sha256_reader(&mut created)
-        .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
-    if created_hash != publication.publication_sha256
-        || canonical.identity().ok().as_ref() != Some(&created_identity)
-    {
-        return Ok(recovery_required(&pending_retained.locator));
+    if created.identity().ok().as_ref() != Some(&created_identity) {
+        return Ok(fail("created_identity_changed", String::new()));
+    }
+    let created_hash = sha256_reader(&mut created).map_err(|error| {
+        note_failure("hash_canonical", &error.to_string());
+        BackendError::validation("error.rfi.followUp.recoveryRequired")
+    })?;
+    if created_hash != publication.publication_sha256 {
+        return Ok(fail("published_hash_mismatch", String::new()));
+    }
+    if canonical.identity().ok().as_ref() != Some(&created_identity) {
+        return Ok(fail("canonical_identity_mismatch", String::new()));
     }
     Ok(RetainedPublicationOutcome::Published { created_identity })
 }
@@ -424,6 +447,21 @@ fn transition_phase(
     journals.write_s5_cas(record, expected_revision)
 }
 
+static LAST_FAILURE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Records which publication step failed and the OS cause, for the activity
+/// log only. Never feeds journal state, authority, or user-visible messages.
+pub(crate) fn note_failure(step: &str, detail: &str) {
+    *LAST_FAILURE.lock().unwrap_or_else(|e| e.into_inner()) = Some(format!("{step}: {detail}"));
+}
+
+pub(crate) fn take_last_failure() -> Option<String> {
+    LAST_FAILURE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+}
+
 fn recovery_required(locator: &str) -> RetainedPublicationOutcome {
     RetainedPublicationOutcome::RecoveryRequired(RecoveryNotice {
         warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
@@ -444,4 +482,19 @@ fn sha256_reader<R: Read + Seek>(mut reader: R) -> std::io::Result<String> {
     }
     reader.seek(SeekFrom::Start(0))?;
     Ok(format!("{:x}", digest.finalize()))
+}
+
+#[cfg(test)]
+mod failure_note_tests {
+    use super::*;
+
+    #[test]
+    fn failure_note_is_taken_once() {
+        note_failure("sync_parent", "os error 1");
+        assert_eq!(
+            take_last_failure().as_deref(),
+            Some("sync_parent: os error 1")
+        );
+        assert_eq!(take_last_failure(), None);
+    }
 }

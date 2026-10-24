@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.24.1 - 2026-10-24
+
+### Fixed
+
+- When a Follow Up Apply ends in recovery-required, the activity log now records the exact publication step that failed and its OS cause (for example `sync_parent: ...`), so a failure on a remote or mapped folder can be diagnosed from one exported file. Behavior and journal formats are unchanged.
+
 ## 1.24.0 - 2026-10-24
 
 ### Added

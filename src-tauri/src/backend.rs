@@ -710,6 +710,9 @@ pub(crate) async fn frontend_call(
                 entry["error"] = Value::String(error.message.clone());
             }
         }
+        if let Some(failure) = crate::leaf_transaction::take_last_failure() {
+            entry["publicationFailure"] = Value::String(failure);
+        }
         router.activity_log.record(entry);
     }
     result

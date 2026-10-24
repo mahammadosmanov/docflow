@@ -423,7 +423,10 @@ impl FilesystemAuthority {
                 rfi_follow_up::verify_patched_output(&step, &mut **original, created)
             },
         )
-        .map_err(|_| follow_up_outcome(record))?;
+        .map_err(|error| {
+            crate::leaf_transaction::note_failure("publication_error", &format!("{error:?}"));
+            follow_up_outcome(record)
+        })?;
         match outcome {
             RetainedPublicationOutcome::CancelledBeforeDisplacement => {
                 Err(FollowUpApplyFailure::Cancelled)
