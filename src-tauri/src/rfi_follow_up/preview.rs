@@ -234,7 +234,8 @@ pub(crate) fn validate_owned_plan_budget(plan: &Plan) -> Result<(), BackendError
         count: 0,
         limit: MAX_PREVIEW_AUTHORITY_BYTES,
     };
-    serde_json::to_writer(&mut writer, plan).map_err(|_| limit_exceeded())
+    serde_json::to_writer(&mut writer, plan)
+        .map_err(|_| limit_exceeded_for("the preview is larger than 32 MiB"))
 }
 
 pub(crate) fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, BackendError> {

@@ -3223,7 +3223,10 @@ fn source_evidence_per_rfi_limit_fails_before_projection_amplification() {
             target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3259,7 +3262,10 @@ fn projection_budget_rejects_500_by_500_before_owned_materialization() {
             target_with_rows(target_rows, &[]),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3305,7 +3311,10 @@ fn merge_query_budget_bounds_duplicate_target_range_amplification() {
             target_package(target),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3479,12 +3488,11 @@ fn empty_physical_high_row_enforces_source_limit() {
         worksheet(Vec::<String>::new(), &[]),
     );
 
-    assert_eq!(
-        classify(source, target_with_rows(Vec::<String>::new(), &[]))
-            .unwrap_err()
-            .message,
-        "error.rfi.followUp.limitExceeded"
-    );
+    let message = classify(source, target_with_rows(Vec::<String>::new(), &[]))
+        .unwrap_err()
+        .message;
+    assert!(message.starts_with("error.rfi.followUp.limitExceeded: "));
+    assert!(message.contains("reaches row 20010"), "{message}");
 }
 
 #[test]

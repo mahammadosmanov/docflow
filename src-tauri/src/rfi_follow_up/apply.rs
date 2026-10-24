@@ -105,7 +105,9 @@ where
     let updates = guarded_updates(step)?;
     verify_guarded_workbook_delta_text(source, private_output, &updates).map_err(
         |error| match error.kind() {
-            OoxmlErrorKind::LimitExceeded => limit_exceeded(),
+            OoxmlErrorKind::LimitExceeded => {
+                limit_exceeded_for(format!("patch verification: {error}"))
+            }
             OoxmlErrorKind::Invalid => {
                 BackendError::validation("error.rfi.followUp.patchVerification")
             }
@@ -121,7 +123,7 @@ pub(crate) fn changed_cell_count(step: &Step) -> Result<u64, BackendError> {
             .map(BTreeMap::len)
             .sum::<usize>(),
     )
-    .map_err(|_| limit_exceeded())
+    .map_err(|_| limit_exceeded_for("changed cell count"))
 }
 
 pub(crate) fn step_workbook_paths(step: &Step) -> Result<(String, String, String), BackendError> {
@@ -180,7 +182,9 @@ pub(super) fn validate_cell_text(worksheet: &WorksheetData) -> Result<(), Backen
                 .as_ref()
                 .is_some_and(|formula| formula.chars().count() > MAX_CELL_TEXT_CHARS)
     }) {
-        return Err(limit_exceeded());
+        return Err(limit_exceeded_for(format!(
+            "a cell has more than {MAX_CELL_TEXT_CHARS} characters"
+        )));
     }
     Ok(())
 }
@@ -258,6 +262,8 @@ pub(crate) fn map_follow_up_ooxml_error(error: OoxmlError) -> BackendError {
     }
 }
 
-pub(super) fn limit_exceeded() -> BackendError {
-    BackendError::validation("error.rfi.followUp.limitExceeded")
+/// Same stable key plus the exact limit that tripped, so the operator can tell
+/// a huge used range from an oversized cell or preview.
+pub(super) fn limit_exceeded_for(reason: impl std::fmt::Display) -> BackendError {
+    BackendError::validation(format!("error.rfi.followUp.limitExceeded: {reason}"))
 }

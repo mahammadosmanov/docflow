@@ -866,7 +866,10 @@ pub(super) fn classify_workbooks_full(
     rows.extend(manual_rows);
 
     if rows.len() > MAX_PREVIEW_ROWS {
-        return Err(limit_exceeded());
+        return Err(limit_exceeded_for(format!(
+            "{} preview rows; at most {MAX_PREVIEW_ROWS}",
+            rows.len()
+        )));
     }
     rows.sort_by(|left, right| {
         left.sheet

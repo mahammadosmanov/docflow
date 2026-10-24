@@ -334,7 +334,7 @@ impl MergeQueryBudget {
         self.remaining = self
             .remaining
             .checked_sub(worksheet.merged_ranges.len() as u64)
-            .ok_or_else(limit_exceeded)?;
+            .ok_or_else(|| limit_exceeded_for("merged-cell comparison budget"))?;
         Ok(worksheet.merged_ranges.iter().any(|range| {
             range.first_row <= row
                 && row <= range.last_row

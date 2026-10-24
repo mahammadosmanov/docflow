@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.23.2 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync now says which safe-processing limit was exceeded (for example the sheet name and the row it reaches versus the allowed row) instead of the generic "exceeds the safe processing limits" message. The limits themselves are unchanged.
+
 ## 1.23.1 - 2026-10-24
 
 ### Fixed
