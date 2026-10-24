@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.23.1 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync now reports the operating-system cause (for example `os error 5` or `32`) when it cannot open a workbook for writing, and explains when the filesystem reports the same file identity for the RFI Log and Follow Up. Previously every cause appeared as a generic "close the workbook" message, which hid failures on remote or mapped folders.
+
 ## 1.23.0 - 2026-10-24
 
 ### Added

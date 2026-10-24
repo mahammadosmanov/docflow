@@ -60,7 +60,7 @@ impl NativeBackend {
             ))
         })? {
             return Err(BackendError::validation(
-                "RFI Log and Follow Up workbooks must be different files",
+                "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
             ));
         }
         let mut source = source_anchor.open_read().map_err(|e| {
@@ -70,7 +70,7 @@ impl NativeBackend {
         })?;
         let mut target = target_anchor
             .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+            .map_err(|error| open_failure("error.rfi.followUp.workbookLocked", &error))?;
         progress(ProgressEvent {
             phase: "follow_up_analysis".to_string(),
             done: 0,
@@ -211,7 +211,7 @@ impl NativeBackend {
             ))
         })? {
             return Err(BackendError::validation(
-                "RFI Log and Follow Up workbooks must be different files",
+                "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
             ));
         }
         let mut source = source_anchor.open_mutable().map_err(|e| {

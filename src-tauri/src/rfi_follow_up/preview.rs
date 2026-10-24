@@ -20,7 +20,7 @@ pub fn preview_from_open_files(
     let target_fingerprint = fingerprint_open_file(follow_up)?;
     if source_fingerprint.identity == target_fingerprint.identity {
         return Err(BackendError::validation(
-            "RFI Log and Follow Up workbooks must be different files",
+            "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
         ));
     }
 
