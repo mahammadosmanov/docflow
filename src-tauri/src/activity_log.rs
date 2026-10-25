@@ -125,7 +125,11 @@ pub(crate) fn summarize_plan(plan: &Value) -> Value {
                     "sheet": row.get("_sheet").or_else(|| row.get("discipline")),
                     "decision": decision,
                     "reason": reason,
-                    "details": row.get("mappingDetails"),
+                    "details": row
+                        .get("mappingDetails")
+                        .and_then(Value::as_str)
+                        // Slashes in tags would be mistaken for paths by the redactor.
+                        .map(|text| text.replace(['/', '\\'], "|")),
                 }));
             }
         }

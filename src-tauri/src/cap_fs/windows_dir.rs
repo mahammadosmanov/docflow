@@ -238,11 +238,25 @@ impl PlatformDirectory {
         use windows_sys::Win32::{Foundation::HANDLE, Storage::FileSystem::FlushFileBuffers};
 
         if unsafe { FlushFileBuffers(self.0.as_raw_handle() as HANDLE) } == 0 {
-            Err(io::Error::last_os_error())
+            let error = io::Error::last_os_error();
+            // Remote shares cannot flush directory handles; the rename itself
+            // has already completed and every later hash/identity check still runs.
+            if directory_flush_unsupported(error.raw_os_error()) {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
         } else {
             Ok(())
         }
     }
+}
+
+/// `ERROR_INVALID_FUNCTION` (1) and `ERROR_NOT_SUPPORTED` (50) from flushing a
+/// directory handle mean the filesystem has no directory flush (SMB/network).
+#[cfg(any(windows, test))]
+pub(super) fn directory_flush_unsupported(code: Option<i32>) -> bool {
+    matches!(code, Some(1 | 50))
 }
 
 #[cfg(windows)]
@@ -572,4 +586,18 @@ pub(super) fn windows_file_identity(file: &File) -> io::Result<(u32, u64)> {
         information.dwVolumeSerialNumber,
         (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
     ))
+}
+
+#[cfg(test)]
+mod directory_flush_tests {
+    use super::directory_flush_unsupported;
+
+    #[test]
+    fn only_unsupported_function_codes_are_tolerated() {
+        assert!(directory_flush_unsupported(Some(1)));
+        assert!(directory_flush_unsupported(Some(50)));
+        for code in [Some(5), Some(32), Some(112), Some(1117), None] {
+            assert!(!directory_flush_unsupported(code), "{code:?}");
+        }
+    }
 }

@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.24.2 - 2026-10-24
+
+### Fixed
+
+- Follow Up Apply no longer stops in recovery-required on remote or network RFI System folders. Flushing a directory handle is unsupported there (Windows error 1 or 50) and is now tolerated; all hash, identity, backup, and journal checks still run (ADR 0044).
+- Activity log details for Follow Up review rows are no longer hidden when a tag contains a slash.
+
 ## 1.24.1 - 2026-10-24
 
 ### Fixed
