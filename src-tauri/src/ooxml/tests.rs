@@ -11,7 +11,8 @@ use super::{
     CellData, CellUpdate, GuardedCellUpdate, MAX_APPLY_MERGE_COMPARISONS, MergeComparisonBudget,
     OoxmlErrorKind, WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
     parse_document_with_limits, patch_workbook_sheets, patch_workbook_sheets_guarded_text,
-    read_workbook, sheet_infos_from_path, verify_guarded_workbook_delta_text,
+    patch_workbook_sheets_guarded_text_recalc, read_workbook, sheet_infos_from_path,
+    verify_guarded_workbook_delta_text, verify_guarded_workbook_delta_text_recalc,
 };
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2283,4 +2284,123 @@ fn ordered_worksheet_discovery_rejects_oversized_sheet_attribute() {
         error.to_string(),
         "workbook sheet name exceeded the size limit"
     );
+}
+
+type GuardedUpdates = BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>;
+
+fn recalc_fixture(calc_pr: &str) -> (Cursor<Vec<u8>>, GuardedUpdates) {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Follow Up" sheetId="1" r:id="rId1"/></sheets>{calc_pr}</workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Pending</t></is></c><c r="B1"><f>COUNTIF(A1:A1,"Completed")</f><v>0</v></c></row></sheetData></worksheet>"#
+    );
+    let source = fixture(
+        &workbook,
+        &relationships,
+        &[("xl/worksheets/sheet1.xml", worksheet.as_bytes())],
+    );
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (1, 1),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: "Pending".to_string(),
+                    formula: None,
+                    style: None,
+                },
+                replacement: CellUpdate::Text("Completed".to_string()),
+                create_if_absent: false,
+            },
+        )]),
+    )]);
+    (source, updates)
+}
+
+fn workbook_xml(package: &mut Cursor<Vec<u8>>) -> String {
+    package.set_position(0);
+    let mut archive = zip::ZipArchive::new(&mut *package).unwrap();
+    let mut text = String::new();
+    archive
+        .by_name("xl/workbook.xml")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+#[test]
+fn recalc_patch_sets_full_calc_on_load_and_nothing_else_in_the_workbook_part() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text_recalc(&mut source, &mut destination, &updates).unwrap();
+
+    let after = workbook_xml(&mut destination);
+    assert!(after.contains(r#"fullCalcOnLoad="1""#), "{after}");
+    assert_eq!(
+        after.replace(r#" fullCalcOnLoad="1""#, ""),
+        before,
+        "only the calcPr attribute may differ"
+    );
+}
+
+#[test]
+fn recalc_verification_rejects_any_other_workbook_part_change() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    let patched_sheet = {
+        destination.set_position(0);
+        let mut archive = zip::ZipArchive::new(&mut destination).unwrap();
+        let mut bytes = Vec::new();
+        archive
+            .by_name("xl/worksheets/sheet1.xml")
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        bytes
+    };
+    let tampered = workbook_xml(&mut destination)
+        .replace(r#"calcId="191029""#, r#"calcId="191029" iterate="1""#);
+    let mut forged = fixture_from_members(
+        &tampered,
+        &format!(
+            r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+        ),
+        [("xl/worksheets/sheet1.xml", patched_sheet.as_slice())],
+    );
+    source.set_position(0);
+    let error =
+        verify_guarded_workbook_delta_text_recalc(&mut source, &mut forged, &updates).unwrap_err();
+    assert!(error.to_string().contains("recalculation flag"), "{error}");
+}
+
+#[test]
+fn plain_guarded_patch_leaves_the_workbook_part_untouched() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    assert_eq!(workbook_xml(&mut destination), before);
+}
+
+#[test]
+fn recalc_without_a_calc_pr_element_leaves_the_workbook_part_untouched() {
+    let (mut source, updates) = recalc_fixture("");
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    assert_eq!(workbook_xml(&mut destination), before);
 }

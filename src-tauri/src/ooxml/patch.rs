@@ -68,7 +68,7 @@ where
     R: Read + Seek,
     W: Read + Write + Seek,
 {
-    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true)
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true, false)
 }
 
 /// Applies arbitrary text replacements while retaining the same exact-cell and
@@ -83,7 +83,24 @@ where
     R: Read + Seek,
     W: Read + Write + Seek,
 {
-    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false)
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false, false)
+}
+
+/// Same as [`patch_workbook_sheets_guarded_text`] and additionally sets
+/// `fullCalcOnLoad="1"` on the existing `calcPr` of `xl/workbook.xml`. Only that
+/// one attribute may change in the workbook part. Cached formula values (for
+/// example percentage indicators) are otherwise left stale because Excel does
+/// not mark XML-patched cells dirty, so neither opening nor F9 refreshes them.
+pub fn patch_workbook_sheets_guarded_text_recalc<R, W>(
+    source: &mut R,
+    destination: &mut W,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Read + Write + Seek,
+{
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false, true)
 }
 
 pub(super) fn patch_workbook_sheets_guarded_inner<R, W>(
@@ -91,6 +108,7 @@ pub(super) fn patch_workbook_sheets_guarded_inner<R, W>(
     destination: &mut W,
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
+    recalc_on_load: bool,
 ) -> Result<(), OoxmlError>
 where
     R: Read + Seek,
@@ -125,6 +143,11 @@ where
         );
     }
 
+    if recalc_on_load {
+        let raw = read_entry(&mut archive, WORKBOOK_PART)?;
+        patched.insert(WORKBOOK_PART.to_string(), with_full_calc_on_load(&raw)?);
+    }
+
     if destination.seek(SeekFrom::End(0))? != 0 {
         return Err(OoxmlError::invalid(
             "guarded destination must be an empty create-new file",
@@ -145,7 +168,7 @@ where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, true)
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, true, false)
 }
 
 pub fn verify_guarded_workbook_delta_text<R1, R2>(
@@ -157,7 +180,32 @@ where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false)
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false, false)
+}
+
+pub fn verify_guarded_workbook_delta_text_recalc<R1, R2>(
+    source: &mut R1,
+    destination: &mut R2,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false, true)
+}
+
+const WORKBOOK_PART: &str = "xl/workbook.xml";
+
+/// Returns the workbook XML with `fullCalcOnLoad="1"` on its existing `calcPr`.
+/// A workbook without `calcPr` is returned byte-identical.
+pub(super) fn with_full_calc_on_load(raw: &[u8]) -> Result<Vec<u8>, OoxmlError> {
+    let mut document = parse_document(raw)?;
+    let Some(calc) = find_element_mut(&mut document.nodes, b"calcPr") else {
+        return Ok(raw.to_vec());
+    };
+    set_attribute(calc, b"fullCalcOnLoad", "1");
+    serialize_document(&document)
 }
 
 pub(super) fn verify_guarded_workbook_delta_inner<R1, R2>(
@@ -165,6 +213,7 @@ pub(super) fn verify_guarded_workbook_delta_inner<R1, R2>(
     destination: &mut R2,
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
+    recalc_on_load: bool,
 ) -> Result<(), OoxmlError>
 where
     R1: Read + Seek,
@@ -216,6 +265,12 @@ where
             if destination_tokens != source_tokens {
                 return Err(OoxmlError::invalid(
                     "guarded worksheet delta verification failed",
+                ));
+            }
+        } else if recalc_on_load && source_name == WORKBOOK_PART {
+            if destination_bytes != with_full_calc_on_load(&source_bytes)? {
+                return Err(OoxmlError::invalid(
+                    "guarded workbook part changed beyond the recalculation flag",
                 ));
             }
         } else if destination_bytes != source_bytes {

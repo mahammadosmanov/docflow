@@ -103,16 +103,16 @@ where
     R2: Read + Seek,
 {
     let updates = guarded_updates(step)?;
-    verify_guarded_workbook_delta_text(source, private_output, &updates).map_err(
-        |error| match error.kind() {
+    verify_guarded_workbook_delta_text_recalc(source, private_output, &updates).map_err(|error| {
+        match error.kind() {
             OoxmlErrorKind::LimitExceeded => {
                 limit_exceeded_for(format!("patch verification: {error}"))
             }
             OoxmlErrorKind::Invalid => {
                 BackendError::validation("error.rfi.followUp.patchVerification")
             }
-        },
-    )
+        }
+    })
 }
 
 #[allow(dead_code)]
@@ -158,7 +158,7 @@ where
     R: Read + Write + Seek,
 {
     let updates = guarded_updates(step)?;
-    patch_workbook_sheets_guarded_text(source, destination, &updates)
+    patch_workbook_sheets_guarded_text_recalc(source, destination, &updates)
         .map_err(map_apply_ooxml_error)?;
     verify_patched_output(step, source, destination)
 }

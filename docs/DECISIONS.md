@@ -43,6 +43,7 @@ and versioned with the code they govern.
 | Follow Up ignores number-only RFI Log rows | Accepted | [`adr/0042-follow-up-ignores-number-only-log-rows.md`](adr/0042-follow-up-ignores-number-only-log-rows.md) |
 | Local activity log for support | Accepted | [`adr/0043-local-activity-log.md`](adr/0043-local-activity-log.md) |
 | Tolerate unsupported directory flush on network shares | Accepted | [`adr/0044-tolerate-unsupported-directory-flush.md`](adr/0044-tolerate-unsupported-directory-flush.md) |
+| Follow Up Apply requests recalculation on open | Accepted | [`adr/0045-follow-up-recalculate-on-open.md`](adr/0045-follow-up-recalculate-on-open.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

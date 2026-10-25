@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.24.3 - 2026-10-24
+
+### Fixed
+
+- Follow Up percentage indicators (for example the Road sheet's completion and overall columns) now refresh after Apply. Apply sets `fullCalcOnLoad` on the workbook's calculation settings so Excel recalculates once on open; that attribute is the only workbook-part change allowed and is verified (ADR 0045).
+
 ## 1.24.2 - 2026-10-24
 
 ### Fixed

@@ -27,8 +27,8 @@ use crate::{
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
         OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
-        WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text,
-        read_workbook_and_discovery, verify_guarded_workbook_delta_text,
+        WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text_recalc,
+        read_workbook_and_discovery, verify_guarded_workbook_delta_text_recalc,
     },
     rfi_code::normalize_candidate_number,
     rfi_log::status_columns,
