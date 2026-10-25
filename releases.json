@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.25.0",
+  "currentVersion": "1.26.0",
   "releases": [
+    {
+      "version": "1.26.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.26.0",
+      "summary": "Follow Up writes and clears generated row remarks on CIV, PCU, and Road."
+    },
     {
       "version": "1.25.0",
       "date": "2026-10-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.25.0",
       "summary": "Follow Up maps Road RFIs to part rows and removes RFIs deleted from the Log."
     },

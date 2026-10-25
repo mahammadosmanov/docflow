@@ -58,9 +58,18 @@ const TRANSITIONAL_RELATIONSHIP_PREFIX: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
 const STRICT_RELATIONSHIP_PREFIX: &str = "http://purl.oclc.org/ooxml/officeDocument/relationships/";
 
+/// One run of a rich-text cell. `emphasized` renders bold, underlined, theme accent 5.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RichRun {
+    pub text: String,
+    pub emphasized: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum CellUpdate {
     Text(String),
+    /// Guarded rich text in the cell's own font; see `rich.rs`.
+    Rich(Vec<RichRun>),
     Number(String),
     Bool(bool),
     Formula {
@@ -345,6 +354,7 @@ mod archive;
 mod patch;
 mod read;
 mod relationships;
+mod rich;
 mod sheet_patch;
 mod worksheet;
 mod xml;
@@ -352,6 +362,7 @@ use archive::*;
 pub use patch::*;
 pub use read::*;
 use relationships::*;
+use rich::*;
 use sheet_patch::*;
 use worksheet::*;
 use xml::*;

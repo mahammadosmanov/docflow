@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.26.0 - 2026-10-24
+
+### Added
+
+- Follow Up generated row remarks on CIV, PCU, and Road: when a cell holds several RFIs and at least one is not Completed, the row's Remarks lists every RFI left to right, Completed first (bold, underlined, Accent 5) then In Progress in plain text, for example `CIV-0021,0022 Completed CIV-0043 In Progress`. A generated remark is cleared once every RFI is Completed. Operator-written remarks are never changed (ADR 0047, supersedes ADR 0028).
+
 ## 1.25.0 - 2026-10-24
 
 ### Added

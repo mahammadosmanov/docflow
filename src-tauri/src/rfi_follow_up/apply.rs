@@ -6,9 +6,12 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
     }
     let meta: FollowUpStepMeta =
         serde_json::from_value(Value::Object(step.meta.clone())).map_err(|_| workbook_invalid())?;
-    if meta.updates.is_empty() || meta.updates.len() > MAX_PREVIEW_ROWS {
+    if (meta.updates.is_empty() && meta.remarks.is_empty())
+        || meta.updates.len() + meta.remarks.len() > MAX_PREVIEW_ROWS
+    {
         return Err(workbook_invalid());
     }
+    validate_remarks(&meta)?;
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
@@ -89,7 +92,87 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
             return Err(workbook_invalid());
         }
     }
+    for remark in meta.remarks {
+        let replacement = if remark.runs.is_empty() {
+            CellUpdate::Text(String::new())
+        } else {
+            CellUpdate::Rich(
+                remark
+                    .runs
+                    .iter()
+                    .map(|run| RichRun {
+                        text: run.text.clone(),
+                        emphasized: run.emphasized,
+                    })
+                    .collect(),
+            )
+        };
+        let guarded = GuardedCellUpdate {
+            create_if_absent: remark.expected.is_none(),
+            expected: remark
+                .expected
+                .map_or_else(CellData::default, |cell| CellData {
+                    value: cell.value,
+                    formula: cell.formula,
+                    style: cell.style,
+                }),
+            replacement,
+        };
+        if updates_by_sheet
+            .entry(remark.worksheet.name)
+            .or_default()
+            .insert((remark.row, remark.column), guarded)
+            .is_some()
+        {
+            return Err(workbook_invalid());
+        }
+    }
     Ok(updates_by_sheet)
+}
+
+/// Remark updates may only add, replace, or clear text DocFlow generated.
+fn validate_remarks(meta: &FollowUpStepMeta) -> Result<(), BackendError> {
+    let mut row_ids = BTreeSet::new();
+    let mut targets = BTreeSet::new();
+    for remark in &meta.remarks {
+        let valid_layout = meta
+            .all_layouts()
+            .any(|layout| layout.worksheet == remark.worksheet);
+        let expected_text = remark
+            .expected
+            .as_ref()
+            .map(|cell| cell.value.trim().to_string())
+            .unwrap_or_default();
+        let new_text = runs_text(&remark.runs);
+        if !valid_layout
+            || remark.row == 0
+            || remark.column == 0
+            || !row_ids.insert(remark.row_id.as_str())
+            || !targets.insert((
+                remark.worksheet.part_path.as_str(),
+                remark.row,
+                remark.column,
+            ))
+            || meta.updates.iter().any(|update| {
+                update.target.worksheet == remark.worksheet
+                    && update.target.row == remark.row
+                    && (update.target.rfi_column == remark.column
+                        || update.target.status_column == remark.column)
+            })
+            || remark
+                .expected
+                .as_ref()
+                .is_some_and(|cell| cell.formula.is_some())
+            || !(expected_text.is_empty() || is_app_remark(&expected_text))
+            || (remark.runs.is_empty() && expected_text.is_empty())
+            || (!remark.runs.is_empty() && !is_app_remark(&new_text))
+            || remark.runs.iter().any(|run| run.text.is_empty())
+            || new_text.chars().count() > MAX_CELL_TEXT_CHARS
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    Ok(())
 }
 
 #[allow(dead_code)]

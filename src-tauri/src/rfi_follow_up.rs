@@ -26,7 +26,7 @@ use crate::{
     journal::FilesystemObjectIdentity,
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
-        OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
+        OrderedWorkbookDiscovery, RichRun, WorkbookData, WorksheetData, WorksheetDescriptor,
         WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text_recalc,
         read_workbook_and_discovery, verify_guarded_workbook_delta_text_recalc,
     },
@@ -159,6 +159,8 @@ pub(crate) struct FollowUpStepMeta {
     #[serde(default)]
     layouts: Vec<FollowUpLayout>,
     updates: Vec<FollowUpApprovedUpdate>,
+    #[serde(default)]
+    remarks: Vec<FollowUpApprovedRemark>,
 }
 
 impl FollowUpStepMeta {
@@ -207,6 +209,30 @@ struct FollowUpRow {
     source_evidence: Vec<SourceStatusEvidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mapping_details: Option<String>,
+    /// Present only on remark review rows; they write no RFI or status cell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    remark: Option<FollowUpRemarkChange>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpRemarkChange {
+    column: u32,
+    /// `None` when the remark cell is absent from the worksheet XML.
+    expected: Option<CellSnapshot>,
+    /// Empty clears a generated remark.
+    runs: Vec<RemarkRun>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpApprovedRemark {
+    row_id: String,
+    worksheet: WorksheetDescriptor,
+    row: u32,
+    column: u32,
+    expected: Option<CellSnapshot>,
+    runs: Vec<RemarkRun>,
 }
 
 #[derive(Clone, Debug)]
@@ -348,6 +374,8 @@ mod apply;
 mod classify;
 mod codes;
 mod preview;
+mod remark;
+mod remark_rows;
 mod road;
 mod routing;
 mod scan;
@@ -356,6 +384,8 @@ pub use apply::*;
 pub use classify::*;
 pub use codes::*;
 pub use preview::*;
+use remark::*;
+use remark_rows::*;
 use road::*;
 use routing::*;
 use scan::*;

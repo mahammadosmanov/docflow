@@ -1130,5 +1130,9 @@
   "progress.phase.publish_workbook_read": "Reading RFI Log status cells",
   "prefs.support.activityLog": "Save activity log",
   "prefs.support.activityLogSaved": "Activity log saved. You can share the file for support; file paths, document content and tokens are redacted.",
-  "warn.rfi.followUp.reason.readyDeleted": "This RFI no longer exists anywhere in the RFI Log, so it is treated as deleted and will be removed from the cell."
+  "warn.rfi.followUp.reason.readyDeleted": "This RFI no longer exists anywhere in the RFI Log, so it is treated as deleted and will be removed from the cell.",
+  "warn.rfi.followUp.reason.readyRemark": "The generated Remarks text for this row (Completed first) will be written.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Every RFI is Completed, so the generated Remarks text will be cleared.",
+  "warn.rfi.followUp.reason.remarkManual": "The Remarks cell has operator-written text; DocFlow left it unchanged.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "The Remarks cell contains a formula or is merged; it was not changed."
 }

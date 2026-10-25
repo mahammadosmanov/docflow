@@ -1102,5 +1102,9 @@
   "progress.phase.publish_workbook_read": "RFI Log durum hücreleri okunuyor",
   "prefs.support.activityLog": "Etkinlik günlüğünü kaydet",
   "prefs.support.activityLogSaved": "Etkinlik günlüğü kaydedildi. Dosyayı destek için paylaşabilirsiniz; dosya yolları, belge içeriği ve belirteçler gizlenir.",
-  "warn.rfi.followUp.reason.readyDeleted": "RFI, RFI Log'da hiçbir yerde bulunmadığı için silinmiş sayıldı ve hücreden çıkarılacak."
+  "warn.rfi.followUp.reason.readyDeleted": "RFI, RFI Log'da hiçbir yerde bulunmadığı için silinmiş sayıldı ve hücreden çıkarılacak.",
+  "warn.rfi.followUp.reason.readyRemark": "Satır için üretilmiş Remarks metni (Completed önce) yazılacak.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Tüm RFI'lar Completed olduğu için üretilmiş Remarks metni silinecek.",
+  "warn.rfi.followUp.reason.remarkManual": "Remarks hücresinde elle yazılmış metin var; DocFlow dokunmadı.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks hücresi formül içeriyor veya birleştirilmiş; değiştirilmedi."
 }

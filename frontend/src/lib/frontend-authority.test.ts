@@ -304,6 +304,17 @@ describe("frontend authority boundary", () => {
     }
   });
 
+  it("defines the generated remark reasons in every locale", () => {
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of ["warn.rfi.followUp.reason.readyRemark","warn.rfi.followUp.reason.readyRemarkClear","warn.rfi.followUp.reason.remarkManual","warn.rfi.followUp.reason.remarkUnsafe"]) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
   it("defines the deleted-RFI follow up reason in every locale", () => {
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(

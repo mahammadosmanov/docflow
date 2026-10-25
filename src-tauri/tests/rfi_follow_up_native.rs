@@ -4929,3 +4929,218 @@ fn placeholder_rfi_numbers_are_never_removed_as_deleted() {
         "{review}"
     );
 }
+
+fn remark_target(rfi_cell: &str, status: &str, remark: &str) -> Cursor<Vec<u8>> {
+    package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                        inline("Q1", "Remarks"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", rfi_cell),
+                        inline("D2", status),
+                        inline("Q2", remark),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )])
+}
+
+fn remark_source(statuses: &[(&str, &str)]) -> Cursor<Vec<u8>> {
+    full_schema_source(
+        statuses
+            .iter()
+            .enumerate()
+            .map(|(index, (suffix, status))| {
+                full_schema_record_with_status(
+                    10 + index as u32,
+                    suffix,
+                    "AZE-SUN-INT-QMS-ITP-CIV-0002",
+                    "CIV-1.5",
+                    "AREA-1",
+                    status,
+                    "",
+                )
+            }),
+    )
+}
+
+fn remark_row(review: &Value) -> Option<&Value> {
+    review["rows"].as_array().unwrap().iter().find(|row| {
+        row["remark"].is_object()
+            || row["reasonKey"]
+                .as_str()
+                .is_some_and(|key| key.contains("remark"))
+    })
+}
+
+fn remark_text(row: &Value) -> String {
+    row["remark"]["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|run| run["text"].as_str().unwrap())
+        .collect()
+}
+
+#[test]
+fn mixed_status_cell_gets_a_completed_first_remark() {
+    let review = classify(
+        remark_source(&[("1223", "Ongoing"), ("1222", "Completed")]),
+        remark_target("CIV-1222/1223", "In Progress", ""),
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("remark row");
+    assert_eq!(row["disposition"], "rfi.followUp.disposition.ready");
+    assert_eq!(row["selectable"], true);
+    assert_eq!(remark_text(row), "CIV-1222 Completed CIV-1223 In Progress");
+    let runs = row["remark"]["runs"].as_array().unwrap();
+    assert_eq!(runs[0]["emphasized"], true);
+    assert_eq!(runs[1]["emphasized"], false);
+    assert_eq!(row["remark"]["column"], 17);
+}
+
+#[test]
+fn single_rfi_cell_gets_no_remark() {
+    let review = classify(
+        remark_source(&[("1222", "Ongoing")]),
+        remark_target("CIV-1222", "In Progress", ""),
+    )
+    .unwrap();
+
+    assert!(remark_row(&review).is_none(), "{review}");
+}
+
+#[test]
+fn generated_remark_is_cleared_once_every_rfi_in_the_cell_is_completed() {
+    let review = classify(
+        remark_source(&[("1222", "Completed"), ("1223", "Completed")]),
+        remark_target(
+            "CIV-1222/1223",
+            "Completed",
+            "CIV-1222 Completed CIV-1223 In Progress",
+        ),
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("clear row");
+    assert_eq!(
+        row["reasonKey"],
+        "warn.rfi.followUp.reason.readyRemarkClear"
+    );
+    assert_eq!(row["remark"]["runs"].as_array().unwrap().len(), 0);
+    assert_eq!(row["selectable"], true);
+}
+
+#[test]
+fn operator_notes_are_never_replaced_or_cleared() {
+    for (statuses, cell) in [
+        (
+            vec![("1222", "Completed"), ("1223", "Ongoing")],
+            "CIV-1222/1223",
+        ),
+        (
+            vec![("1222", "Completed"), ("1223", "Completed")],
+            "CIV-1222/1223",
+        ),
+    ] {
+        let review = classify(
+            remark_source(&statuses),
+            remark_target(cell, "In Progress", "operator note"),
+        )
+        .unwrap();
+
+        let touched = remark_row(&review);
+        assert!(
+            touched.is_none_or(|row| row["selectable"] == false && row["remark"].is_null()),
+            "{review}"
+        );
+    }
+}
+
+#[test]
+fn up_to_date_generated_remark_is_left_alone() {
+    let review = classify(
+        remark_source(&[("1222", "Completed"), ("1223", "Ongoing")]),
+        remark_target(
+            "CIV-1222/1223",
+            "In Progress",
+            "CIV-1222 Completed CIV-1223 In Progress",
+        ),
+    )
+    .unwrap();
+
+    assert!(remark_row(&review).is_none(), "{review}");
+}
+
+#[test]
+fn remark_is_written_as_rich_text_through_apply_and_undone_exactly() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let source_bytes = remark_source(&[("1222", "Completed"), ("1223", "Ongoing")]).into_inner();
+    let original_target = remark_target("CIV-1222/1223", "Pending", "").into_inner();
+    std::fs::write(&source_path, &source_bytes).unwrap();
+    std::fs::write(&target_path, &original_target).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    assert!(plan.steps[0].meta["remarks"].as_array().unwrap().len() == 1);
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.applied, 2, "{:?}", applied.errors);
+
+    let mut written = File::open(&target_path).unwrap();
+    let workbook = read_workbook_from_reader(&mut written).unwrap();
+    assert_eq!(
+        workbook.sheet("CIV").unwrap().value(2, 17),
+        "CIV-1222 Completed CIV-1223 In Progress"
+    );
+    assert_eq!(workbook.sheet("CIV").unwrap().value(2, 4), "In Progress");
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original_target);
+}

@@ -1102,5 +1102,9 @@
   "progress.phase.publish_workbook_read": "Чтение ячеек статуса RFI Log",
   "prefs.support.activityLog": "Сохранить журнал действий",
   "prefs.support.activityLogSaved": "Журнал действий сохранён. Файлом можно поделиться для поддержки; пути, содержимое документов и токены скрыты.",
-  "warn.rfi.followUp.reason.readyDeleted": "Этого RFI больше нет нигде в RFI Log, поэтому он считается удалённым и будет убран из ячейки."
+  "warn.rfi.followUp.reason.readyDeleted": "Этого RFI больше нет нигде в RFI Log, поэтому он считается удалённым и будет убран из ячейки.",
+  "warn.rfi.followUp.reason.readyRemark": "Будет записан сформированный текст Remarks для строки (сначала Completed).",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Все RFI Completed, поэтому сформированный текст Remarks будет удалён.",
+  "warn.rfi.followUp.reason.remarkManual": "В ячейке Remarks текст, написанный вручную; DocFlow его не изменил.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Ячейка Remarks содержит формулу или объединена; не изменена."
 }

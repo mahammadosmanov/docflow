@@ -545,6 +545,7 @@ impl BorrowedFollowUpRow<'_> {
             reason_key: self.reason_key.clone(),
             selectable: self.selectable,
             enabled: self.enabled,
+            remark: None,
             target: FollowUpReviewTarget {
                 worksheet: self.target.worksheet.clone(),
                 row: self.target.row,

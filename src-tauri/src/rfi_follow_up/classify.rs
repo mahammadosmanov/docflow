@@ -147,6 +147,7 @@ pub(super) fn classify_workbooks_full(
                     },
                     selectable: false,
                     enabled: false,
+                    remark: None,
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -213,6 +214,7 @@ pub(super) fn classify_workbooks_full(
                     },
                     selectable: false,
                     enabled: false,
+                    remark: None,
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -333,6 +335,7 @@ pub(super) fn classify_workbooks_full(
                 },
                 selectable: false,
                 enabled: false,
+                remark: None,
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -371,6 +374,7 @@ pub(super) fn classify_workbooks_full(
                 reason_key: "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
                 selectable: false,
                 enabled: false,
+                remark: None,
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -415,6 +419,7 @@ pub(super) fn classify_workbooks_full(
                 },
                 selectable: false,
                 enabled: false,
+                remark: None,
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -501,6 +506,7 @@ pub(super) fn classify_workbooks_full(
                 reason_key: format!("warn.rfi.followUp.reason.{reason}"),
                 selectable: false,
                 enabled: false,
+                remark: None,
                 target: FollowUpReviewTarget {
                     worksheet: slot.layout.worksheet.clone(),
                     row: slot.row,
@@ -684,6 +690,7 @@ pub(super) fn classify_workbooks_full(
                         reason_key: format!("warn.rfi.followUp.reason.{reason}"),
                         selectable: false,
                         enabled: false,
+                        remark: None,
                         target: FollowUpReviewTarget {
                             worksheet: slot.layout.worksheet.clone(),
                             row: slot.row,
@@ -776,6 +783,7 @@ pub(super) fn classify_workbooks_full(
             },
             selectable: false,
             enabled: false,
+            remark: None,
             target: FollowUpReviewTarget {
                 worksheet: layout.worksheet,
                 row: 0,
@@ -877,6 +885,12 @@ pub(super) fn classify_workbooks_full(
         }
     }
     rows.extend(manual_rows);
+    rows.extend(remark_review_rows(
+        &slots,
+        &records,
+        target_workbook,
+        &mut merge_budget,
+    )?);
 
     if rows.len() > MAX_PREVIEW_ROWS {
         return Err(limit_exceeded_for(format!(

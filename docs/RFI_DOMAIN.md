@@ -173,9 +173,12 @@ cell satisfy the required state. `Ongoing` corresponds to `In Progress` where th
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
 their safe headers, not assumed coordinates.
 
-Follow Up sync changes only the mapped RFI and status cells. It never adds,
-replaces, or clears content in worksheet `Remarks` cells. RFI Log `REMARKS`
-remain read-only source evidence for Worley Signed/Not Signed mapping.
+Follow Up sync changes the mapped RFI and status cells and, on `CIV`, `PCU`, and
+`Road`, the generated row remark described in ADR 0047 (Completed RFIs first in
+bold underlined Accent 5, then In Progress in plain text; cleared once all are
+Completed). It replaces or clears only text in that generated format and never
+changes operator notes. RFI Log `REMARKS` remain read-only source evidence for
+Worley Signed/Not Signed mapping.
 
 For RFI Log projection, blank means `Pending`, all `Completed` means
 `Completed`, and any `Ongoing` or Completed/Pending mixture means `In Progress`.

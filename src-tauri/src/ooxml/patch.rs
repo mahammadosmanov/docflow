@@ -131,6 +131,7 @@ where
 
     source.seek(SeekFrom::Start(0))?;
     let mut archive = open_archive(source)?;
+    let fonts = load_font_table(&mut archive)?;
     let mut patched = BTreeMap::<String, Vec<u8>>::new();
     for (sheet_name, updates) in updates_by_sheet {
         let info = sheet_infos
@@ -139,7 +140,7 @@ where
         let raw = read_entry(&mut archive, &info.path)?;
         patched.insert(
             info.path.clone(),
-            patch_sheet_xml_guarded(&raw, updates, status_values_only)?,
+            patch_sheet_xml_guarded(&raw, updates, status_values_only, &fonts)?,
         );
     }
 
@@ -237,6 +238,7 @@ where
     destination.seek(SeekFrom::Start(0))?;
     let mut source_archive = open_archive(&mut *source)?;
     let mut destination_archive = open_archive(&mut *destination)?;
+    let fonts = load_font_table(&mut source_archive)?;
     if source_archive.len() != destination_archive.len() {
         return Err(OoxmlError::invalid("guarded package member roster changed"));
     }
@@ -260,8 +262,9 @@ where
             let updates = updates_by_sheet
                 .get(sheet_name)
                 .ok_or_else(|| OoxmlError::invalid("guarded updates are missing"))?;
-            let source_tokens = guarded_sheet_tokens(&source_bytes, updates, false)?;
-            let destination_tokens = guarded_sheet_tokens(&destination_bytes, updates, true)?;
+            let source_tokens = guarded_sheet_tokens(&source_bytes, updates, false, &fonts)?;
+            let destination_tokens =
+                guarded_sheet_tokens(&destination_bytes, updates, true, &fonts)?;
             if destination_tokens != source_tokens {
                 return Err(OoxmlError::invalid(
                     "guarded worksheet delta verification failed",
@@ -294,10 +297,12 @@ where
                 .cells
                 .get(&coordinate)
                 .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
-            let CellUpdate::Text(replacement) = &update.replacement else {
-                return Err(OoxmlError::invalid("guarded replacement is invalid"));
+            let replacement = match &update.replacement {
+                CellUpdate::Text(replacement) => replacement.clone(),
+                CellUpdate::Rich(runs) => rich_plain_text(runs),
+                _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
             };
-            if cell.value != *replacement
+            if cell.value != replacement
                 || cell.formula.is_some()
                 || cell.style != update.expected.style
             {
@@ -332,7 +337,11 @@ pub(super) fn validate_guarded_update_set(
                     "guarded worksheet cell reference is invalid",
                 ));
             }
-            if !matches!(&update.replacement, CellUpdate::Text(_))
+            if !matches!(
+                &update.replacement,
+                CellUpdate::Text(_) | CellUpdate::Rich(_)
+            ) || matches!(&update.replacement, CellUpdate::Rich(runs) if runs.is_empty())
+                || status_values_only && matches!(&update.replacement, CellUpdate::Rich(_))
                 || status_values_only
                     && !matches!(
                         &update.replacement,
@@ -392,4 +401,14 @@ pub(super) fn validate_guarded_source(
         }
     }
     Ok(())
+}
+
+/// Fonts for rich-text runs; a workbook without `xl/styles.xml` yields no font facts.
+pub(super) fn load_font_table<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+) -> Result<FontTable, OoxmlError> {
+    if !has_entry(archive, "xl/styles.xml")? {
+        return Ok(FontTable::default());
+    }
+    FontTable::parse(&read_entry(archive, "xl/styles.xml")?)
 }

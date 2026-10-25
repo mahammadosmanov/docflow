@@ -1102,5 +1102,9 @@
   "progress.phase.publish_workbook_read": "RFI Log status xanaları oxunur",
   "prefs.support.activityLog": "Fəaliyyət jurnalını saxla",
   "prefs.support.activityLogSaved": "Fəaliyyət jurnalı saxlanıldı. Faylı dəstək üçün paylaşa bilərsiniz; fayl yolları, sənəd məzmunu və tokenlər gizlədilir.",
-  "warn.rfi.followUp.reason.readyDeleted": "Bu RFI RFI Log-da heç yerdə yoxdur, ona görə silinmiş sayılır və xanadan çıxarılacaq."
+  "warn.rfi.followUp.reason.readyDeleted": "Bu RFI RFI Log-da heç yerdə yoxdur, ona görə silinmiş sayılır və xanadan çıxarılacaq.",
+  "warn.rfi.followUp.reason.readyRemark": "Sətir üçün yaradılmış Remarks mətni (əvvəlcə Completed) yazılacaq.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Bütün RFI-lar Completed olduğundan yaradılmış Remarks mətni silinəcək.",
+  "warn.rfi.followUp.reason.remarkManual": "Remarks xanasında əllə yazılmış mətn var; DocFlow toxunmadı.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks xanası düstur ehtiva edir və ya birləşdirilib; dəyişdirilmədi."
 }

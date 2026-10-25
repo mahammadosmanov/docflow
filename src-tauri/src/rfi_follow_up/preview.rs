@@ -289,9 +289,30 @@ pub(super) fn plan_from_classification(
     let warnings: Vec<Warning> =
         serde_json::from_value(decode_field("warnings")?).map_err(|_| workbook_invalid())?;
     let editor = decode_field("editor")?;
-    let updates = rows
+    let remarks = rows
         .iter()
         .filter(|row| row.enabled)
+        .filter_map(|row| {
+            let change = row.remark.as_ref()?;
+            Some(
+                if !row.selectable || row.disposition != FollowUpDisposition::Ready {
+                    Err(workbook_invalid())
+                } else {
+                    Ok(FollowUpApprovedRemark {
+                        row_id: row.row_id.clone(),
+                        worksheet: row.target.worksheet.clone(),
+                        row: row.row,
+                        column: change.column,
+                        expected: change.expected.clone(),
+                        runs: change.runs.clone(),
+                    })
+                },
+            )
+        })
+        .collect::<Result<Vec<_>, BackendError>>()?;
+    let updates = rows
+        .iter()
+        .filter(|row| row.enabled && row.remark.is_none())
         .map(|row| {
             if !row.selectable || row.disposition != FollowUpDisposition::Ready {
                 return Err(workbook_invalid());
@@ -340,7 +361,7 @@ pub(super) fn plan_from_classification(
         "rfiFollowUp".to_string(),
         serde_json::to_value(plan_meta).map_err(|_| workbook_invalid())?,
     );
-    let steps = if updates.is_empty() {
+    let steps = if updates.is_empty() && remarks.is_empty() {
         Vec::new()
     } else {
         let step_meta = FollowUpStepMeta {
@@ -350,6 +371,7 @@ pub(super) fn plan_from_classification(
             layout,
             layouts,
             updates,
+            remarks,
         };
         let step_meta = serde_json::to_value(step_meta)
             .map_err(|_| workbook_invalid())?

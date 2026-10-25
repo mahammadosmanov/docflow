@@ -31,6 +31,7 @@ pub(super) fn patch_sheet_xml_guarded(
     raw: &[u8],
     updates: &BTreeMap<(u32, u32), GuardedCellUpdate>,
     status_values_only: bool,
+    fonts: &FontTable,
 ) -> Result<Vec<u8>, OoxmlError> {
     let mut document = parse_document(raw)?;
     let root = document_root_mut_local(
@@ -103,6 +104,7 @@ pub(super) fn patch_sheet_xml_guarded(
             prefix.as_deref(),
             &update.replacement,
             status_values_only,
+            fonts,
         )?;
     }
     serialize_document(&document)
@@ -114,11 +116,14 @@ pub(super) fn patch_guarded_cell_value(
     prefix: Option<&str>,
     update: &CellUpdate,
     status_values_only: bool,
+    fonts: &FontTable,
 ) -> Result<(), OoxmlError> {
-    let CellUpdate::Text(value) = update else {
-        return Err(OoxmlError::invalid("guarded replacement is invalid"));
+    let (value, runs) = match update {
+        CellUpdate::Text(value) => (value.as_str(), None),
+        CellUpdate::Rich(runs) if !status_values_only && !runs.is_empty() => ("", Some(runs)),
+        _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
     };
-    if status_values_only && !matches!(value.as_str(), "Signed" | "Not Signed") {
+    if status_values_only && !matches!(value, "Signed" | "Not Signed") {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     }
     if child_elements_in_namespace(cell, b"f", namespace)
@@ -171,15 +176,20 @@ pub(super) fn patch_guarded_cell_value(
         Some(prefix) => format!("{prefix}:{local}"),
         None => local.to_string(),
     };
-    let mut inline = XmlElement::new(&qualify("is"));
-    inline.namespace = Some(namespace.to_vec());
-    let mut text = XmlElement::new(&qualify("t"));
-    text.namespace = Some(namespace.to_vec());
-    if value.trim() != value {
-        set_attribute(&mut text, b"xml:space", "preserve");
-    }
-    set_element_text(&mut text, value);
-    inline.children.push(XmlNode::Element(text));
+    let inline = if let Some(runs) = runs {
+        build_rich_inline(namespace, prefix, runs, &fonts.font_for_cell(cell))
+    } else {
+        let mut inline = XmlElement::new(&qualify("is"));
+        inline.namespace = Some(namespace.to_vec());
+        let mut text = XmlElement::new(&qualify("t"));
+        text.namespace = Some(namespace.to_vec());
+        if value.trim() != value {
+            set_attribute(&mut text, b"xml:space", "preserve");
+        }
+        set_element_text(&mut text, value);
+        inline.children.push(XmlNode::Element(text));
+        inline
+    };
     cell.children.insert(insert_at, XmlNode::Element(inline));
     cell.empty = false;
     Ok(())
@@ -189,6 +199,7 @@ pub(super) fn guarded_sheet_tokens(
     raw: &[u8],
     updates: &BTreeMap<(u32, u32), GuardedCellUpdate>,
     output: bool,
+    fonts: &FontTable,
 ) -> Result<Vec<CanonicalXmlEvent>, OoxmlError> {
     let mut document = parse_document(raw)?;
     let root = document_root_mut_local(
@@ -254,7 +265,15 @@ pub(super) fn guarded_sheet_tokens(
                 ));
             }
         };
-        normalize_guarded_cell_for_tokens(cell, &namespace, &coordinate, update, output)?;
+        normalize_guarded_cell_for_tokens(
+            cell,
+            &namespace,
+            prefix.as_deref(),
+            &coordinate,
+            update,
+            output,
+            fonts,
+        )?;
     }
 
     let mut tokens = Vec::new();
@@ -265,15 +284,24 @@ pub(super) fn guarded_sheet_tokens(
 pub(super) fn normalize_guarded_cell_for_tokens(
     cell: &mut XmlElement,
     namespace: &[u8],
+    prefix: Option<&str>,
     coordinate: &str,
     update: &GuardedCellUpdate,
     output: bool,
+    fonts: &FontTable,
 ) -> Result<(), OoxmlError> {
-    let CellUpdate::Text(replacement) = &update.replacement else {
-        return Err(OoxmlError::invalid("guarded replacement is invalid"));
+    let replacement = match &update.replacement {
+        CellUpdate::Text(replacement) => replacement.clone(),
+        CellUpdate::Rich(runs) if !runs.is_empty() => format!("rich:{}", rich_marker(runs)),
+        _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
     };
     if output {
-        validate_exact_guarded_output_value(cell, namespace, replacement)?;
+        match &update.replacement {
+            CellUpdate::Rich(runs) => {
+                validate_exact_rich_output(cell, namespace, prefix, runs, fonts)?;
+            }
+            _ => validate_exact_guarded_output_value(cell, namespace, &replacement)?,
+        }
     } else if child_elements_in_namespace(cell, b"f", namespace)
         .next()
         .is_some()

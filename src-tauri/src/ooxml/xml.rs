@@ -238,6 +238,16 @@ pub(super) fn write_update(cell: &mut XmlElement, update: &CellUpdate) {
     remove_attribute(cell, b"t");
     match update {
         CellUpdate::Text(value) if value.is_empty() => {}
+        CellUpdate::Rich(runs) => {
+            // Unguarded writers only get the plain text; rich text is guarded-only.
+            let value = rich_plain_text(runs);
+            set_attribute(cell, b"t", "inlineStr");
+            let mut inline = XmlElement::new("is");
+            let mut text = XmlElement::new("t");
+            set_element_text(&mut text, &value);
+            inline.children.push(XmlNode::Element(text));
+            cell.children.push(XmlNode::Element(inline));
+        }
         CellUpdate::Text(value) => {
             set_attribute(cell, b"t", "inlineStr");
             let mut inline = XmlElement::new("is");

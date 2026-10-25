@@ -736,6 +736,7 @@ pub(super) fn row_from_slot(
         },
         selectable: true,
         enabled: true,
+        remark: None,
         target: FollowUpReviewTarget {
             worksheet: slot.layout.worksheet,
             row: slot.row,
@@ -774,6 +775,7 @@ pub(super) fn unsafe_slot_review(
         reason_key: format!("warn.rfi.followUp.reason.{reason}"),
         selectable: false,
         enabled: false,
+        remark: None,
         target: FollowUpReviewTarget {
             worksheet: slot.layout.worksheet.clone(),
             row: slot.row,
@@ -813,6 +815,7 @@ pub(super) fn missing_final_review(
         reason_key: "warn.rfi.followUp.reason.mappingMissing".to_string(),
         selectable: false,
         enabled: false,
+        remark: None,
         target: FollowUpReviewTarget {
             worksheet: layout.worksheet.clone(),
             row: 0,
