@@ -1129,5 +1129,6 @@
   "rfi.publishStatus.disposition.unsafeCell": "Cell is not safe to change",
   "progress.phase.publish_workbook_read": "Reading RFI Log status cells",
   "prefs.support.activityLog": "Save activity log",
-  "prefs.support.activityLogSaved": "Activity log saved. You can share the file for support; file paths, document content and tokens are redacted."
+  "prefs.support.activityLogSaved": "Activity log saved. You can share the file for support; file paths, document content and tokens are redacted.",
+  "warn.rfi.followUp.reason.readyDeleted": "This RFI no longer exists anywhere in the RFI Log, so it is treated as deleted and will be removed from the cell."
 }

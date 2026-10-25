@@ -206,7 +206,9 @@ pub(super) fn row_matches_context(
             }
         }
         "PCU" => pcu_row_matches(sheet, row, context),
-        "Road" => normalized_location(&context.tag) == cell(2),
+        "Road" => sheet
+            .cell(row, 2)
+            .is_some_and(|target| road_tag_matches_row(&context.tag, &target.value)),
         "MEC" => {
             let target_sections = normalized_parts(&cell(4));
             let target_tags = normalized_parts(&cell(3));
@@ -670,8 +672,24 @@ pub(super) fn row_from_slot(
     if proposed_rfi == slot.rfi_cell.value && proposed_status == slot.current_status {
         return None;
     }
-    let canonical_rfi = slot.changed_rfis.iter().next()?.clone();
-    let record = records.get(&canonical_rfi)?;
+    // A changed RFI without a record was deleted from the Log; it still needs a row so
+    // the operator sees and approves its removal.
+    let canonical_rfi = slot
+        .changed_rfis
+        .iter()
+        .find(|code| records.contains_key(*code))
+        .or_else(|| slot.changed_rfis.iter().next())?
+        .clone();
+    let record = records.get(&canonical_rfi);
+    let short_rfi = record.map_or_else(
+        || {
+            canonical_rfi
+                .strip_prefix(FULL_RFI_PREFIX)
+                .unwrap_or(&canonical_rfi)
+                .to_string()
+        },
+        |record| record.short_rfi.clone(),
+    );
     Some(FollowUpRow {
         row_id: if slot.layout.status_column == slot.layout.rfi_column + 1 {
             format!(
@@ -689,21 +707,27 @@ pub(super) fn row_from_slot(
         },
         sheet: slot.layout.worksheet.name.clone(),
         row: slot.row,
-        rfi_no: record.short_rfi.clone(),
-        source_statuses: vec![if signed {
-            if record.worley_signed {
-                "Signed".to_string()
+        rfi_no: short_rfi,
+        source_statuses: record.map_or_else(Vec::new, |record| {
+            vec![if signed {
+                if record.worley_signed {
+                    "Signed".to_string()
+                } else {
+                    "Not Signed".to_string()
+                }
             } else {
-                "Not Signed".to_string()
-            }
-        } else {
-            record.inspection_status_for_ui()
-        }],
+                record.inspection_status_for_ui()
+            }]
+        }),
         current_status: slot.current_status,
         proposed_status: Some(proposed_status),
         proposed_rfi_no: Some(proposed_rfi),
         disposition: FollowUpDisposition::Ready,
-        reason_key: if record.excluded_civ_pcs || record.state == Some(LogState::Remove) {
+        reason_key: if record.is_none() {
+            "warn.rfi.followUp.reason.readyDeleted".to_string()
+        } else if record
+            .is_some_and(|record| record.excluded_civ_pcs || record.state == Some(LogState::Remove))
+        {
             "warn.rfi.followUp.reason.readyRemove".to_string()
         } else if signed {
             "warn.rfi.followUp.reason.readyWorleySync".to_string()
@@ -720,7 +744,7 @@ pub(super) fn row_from_slot(
             rfi_cell: Some(slot.rfi_cell),
             status_cell: Some(slot.status_cell),
         },
-        source_evidence: record.evidence.clone(),
+        source_evidence: record.map_or_else(Vec::new, |record| record.evidence.clone()),
         mapping_details: None,
     })
 }
@@ -818,4 +842,25 @@ impl SourceRecord {
         }
         .to_string()
     }
+}
+
+pub(super) fn road_context_coverage(
+    target_workbook: &WorkbookData,
+    candidates: &[(String, u32, u32, u32)],
+    record: &SourceRecord,
+) -> Option<bool> {
+    let sheet = target_workbook.sheet("Road")?;
+    let rows: Vec<String> = candidates
+        .iter()
+        .filter_map(|(_, row, _, _)| sheet.cell(*row, 2).map(|cell| cell.value.clone()))
+        .collect();
+    let mut result = None;
+    for context in &record.contexts {
+        match road_tag_coverage(&context.tag, &rows) {
+            Some(false) => return Some(false),
+            Some(true) => result = Some(true),
+            None => {}
+        }
+    }
+    result
 }

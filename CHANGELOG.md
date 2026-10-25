@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.25.0 - 2026-10-24
+
+### Added
+
+- Follow Up understands Road parts: an RFI whose Log tag names a Road without a part is written to every part row of that Road (including parts added later), a tag with a part goes only to that part, and lists such as `Road 15 (Part 1), (Part 2)` go to each listed part (ADR 0046).
+- An RFI that no longer exists anywhere in the RFI Log is removed from its Follow Up cell in the normal reviewed sync. Bare numbers present in the Log and placeholder numbers are kept.
+
 ## 1.24.3 - 2026-10-24
 
 ### Fixed

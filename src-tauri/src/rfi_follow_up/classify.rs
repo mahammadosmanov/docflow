@@ -8,6 +8,7 @@ pub(super) fn classify_workbooks_full(
     target_has_signature: bool,
 ) -> Result<Value, BackendError> {
     let records = scan_source_records(source_discovery, source_workbook)?;
+    let logged_numbers = scan_logged_rfi_numbers(source_discovery, source_workbook);
     let mut merge_budget = MergeQueryBudget {
         remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
     };
@@ -47,11 +48,15 @@ pub(super) fn classify_workbooks_full(
             .iter()
             .filter(|code| {
                 !is_placeholder_rfi(code)
-                    && records.get(*code).is_some_and(|record| {
-                        record.excluded_civ_pcs
-                            || is_confirmed_follow_up_exclusion(record)
-                            || record.state == Some(LogState::Remove)
-                    })
+                    && match records.get(*code) {
+                        Some(record) => {
+                            record.excluded_civ_pcs
+                                || is_confirmed_follow_up_exclusion(record)
+                                || record.state == Some(LogState::Remove)
+                        }
+                        // Deleted from the Log: absent even as a bare number.
+                        None => !logged_numbers.contains(*code),
+                    }
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -259,7 +264,13 @@ pub(super) fn classify_workbooks_full(
             .flatten();
         let mec_context_coverage = (sheet_name == "MEC")
             .then(|| mec_context_coverage(target_workbook, sheet_name, &candidates, record))
-            .flatten();
+            .flatten()
+            .or_else(|| {
+                // Road tags are checked the same way: every named Road/part needs a row.
+                (sheet_name == "Road")
+                    .then(|| road_context_coverage(target_workbook, &candidates, record))
+                    .flatten()
+            });
         // Signed By rows repeat RFIs as Worley summaries, not lifecycle placements.
         let existing_slots = existing_slot_keys_by_code
             .get(record.canonical_rfi.as_str())
@@ -280,7 +291,9 @@ pub(super) fn classify_workbooks_full(
                 && (distinct_civ_area_rows(target_workbook, &candidates, record)
                     || distinct_civ_zone_area_rows(target_workbook, &candidates, record)
                     || civ_tag_coverage == Some(true)))
-                || (sheet_name == "MEC" && mec_context_coverage.is_some()));
+                || (sheet_name == "MEC" && mec_context_coverage.is_some())
+                // A Road tag without a part intentionally fans out to every part row.
+                || sheet_name == "Road");
         if (candidate_count == 0 || candidate_count > 1 && !exact_multi_area)
             && (candidate_count == 0 || existing_slots.is_empty())
         {

@@ -1101,5 +1101,6 @@
   "rfi.publishStatus.disposition.unsafeCell": "Hücre güvenli değil",
   "progress.phase.publish_workbook_read": "RFI Log durum hücreleri okunuyor",
   "prefs.support.activityLog": "Etkinlik günlüğünü kaydet",
-  "prefs.support.activityLogSaved": "Etkinlik günlüğü kaydedildi. Dosyayı destek için paylaşabilirsiniz; dosya yolları, belge içeriği ve belirteçler gizlenir."
+  "prefs.support.activityLogSaved": "Etkinlik günlüğü kaydedildi. Dosyayı destek için paylaşabilirsiniz; dosya yolları, belge içeriği ve belirteçler gizlenir.",
+  "warn.rfi.followUp.reason.readyDeleted": "RFI, RFI Log'da hiçbir yerde bulunmadığı için silinmiş sayıldı ve hücreden çıkarılacak."
 }

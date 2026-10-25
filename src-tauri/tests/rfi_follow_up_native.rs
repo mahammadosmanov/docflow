@@ -4286,7 +4286,15 @@ fn multi_section_mec_signed_rfi_uses_section_and_block_without_location() {
     );
     let source = source_package(
         worksheet([full_schema_mec_header()], &[]),
-        worksheet([full_schema_mec_header(), mec_row], &[]),
+        worksheet(
+            [
+                full_schema_mec_header(),
+                mec_row,
+                // Already numbered in the Log, so Follow Up's MEC-0558 is not a deleted RFI.
+                row(11, [inline("A11", "AZE-SUN-INT-QMS-RFI-MEC-0558")]),
+            ],
+            &[],
+        ),
     );
     let target = package(&[
         (
@@ -4677,4 +4685,247 @@ fn rfi_log_row_with_a_status_but_no_itp_stays_visible_for_review() {
     let review = classify(source, civ_template_target()).unwrap();
 
     assert_eq!(review["rows"].as_array().unwrap().len(), 1);
+}
+
+fn road_source(rfis: &[(&str, &str, &str)]) -> Cursor<Vec<u8>> {
+    // (suffix, tag, status), every record is ITP CIV-0004 item 4.2.4.
+    full_schema_source(
+        rfis.iter()
+            .enumerate()
+            .map(|(index, (suffix, tag, status))| {
+                full_schema_record_with_status(
+                    10 + index as u32,
+                    suffix,
+                    "AZE-SUN-INT-QMS-ITP-CIV-0004",
+                    "CIV-4.2.4",
+                    tag,
+                    status,
+                    "",
+                )
+            }),
+    )
+}
+
+fn road_target(road_cells: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = road_cells.iter().enumerate().map(|(index, cell)| {
+        let r = 5 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "North"),
+                inline(&format!("B{r}"), cell),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+            ],
+        )
+    });
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ])
+}
+
+fn road_rows(review: &Value) -> Vec<(u64, String)> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["_sheet"] == "Road" && row["selectable"] == true)
+        .map(|row| {
+            (
+                row["_row"].as_u64().unwrap(),
+                row["proposedRfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn road_rfi_without_a_part_goes_to_every_part_row_of_that_road() {
+    let review = classify(
+        road_source(&[("0001", "Road 06", "Ongoing")]),
+        road_target(&[
+            "Road 06 (Part 1)",
+            "Road 06 (Part 2)",
+            "Road 07 (Part 1)",
+            "Road 06 (Part 3)",
+        ]),
+    )
+    .unwrap();
+
+    assert_eq!(
+        road_rows(&review),
+        [
+            (5, "CIV-0001".to_string()),
+            (6, "CIV-0001".to_string()),
+            (8, "CIV-0001".to_string())
+        ]
+    );
+}
+
+#[test]
+fn road_rfi_with_a_part_goes_only_to_that_part_row() {
+    let review = classify(
+        road_source(&[("0002", "Road 06 (Part 2)", "Completed")]),
+        road_target(&["Road 06 (Part 1)", "Road 06 (Part 2)", "Road 06 (Part 3)"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(6, "CIV-0002".to_string())]);
+}
+
+#[test]
+fn road_rfi_listing_several_parts_goes_to_each_listed_part() {
+    for tag in [
+        "Road 15 (Part 1), (Part 2)",
+        "Road 15 (Part 1),Road 15 (Part 2)",
+    ] {
+        let review = classify(
+            road_source(&[("0003", tag, "Ongoing")]),
+            road_target(&["Road 15 (Part 1)", "Road 15 (Part 2)", "Road 15 (Part 3)"]),
+        )
+        .unwrap();
+
+        assert_eq!(
+            road_rows(&review),
+            [(5, "CIV-0003".to_string()), (6, "CIV-0003".to_string())],
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn road_rfi_names_a_part_with_no_row_as_partial_context_and_still_syncs_the_rest() {
+    let review = classify(
+        road_source(&[("0004", "Road 06 (Part 1), Road 06 (Part 9)", "Ongoing")]),
+        road_target(&["Road 06 (Part 1)", "Road 06 (Part 2)"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(5, "CIV-0004".to_string())]);
+    assert!(
+        review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| { row["reasonKey"] == "warn.rfi.followUp.reason.partialContext" })
+    );
+}
+
+#[test]
+fn partless_road_row_still_matches_a_partless_tag() {
+    let review = classify(
+        road_source(&[("0005", "Road 02", "Completed")]),
+        road_target(&["Road 02", "Road 03"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(5, "CIV-0005".to_string())]);
+}
+
+fn deleted_rfi_review(extra_log_rows: Vec<String>, target_cell: &str) -> Value {
+    let mut civ = vec![full_schema_record_with_status(
+        10,
+        "1222",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-1.5",
+        "AREA-1",
+        "Completed",
+        "",
+    )];
+    civ.extend(extra_log_rows);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", target_cell),
+                        inline("D2", "In Progress"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+    classify(full_schema_source(civ), target).unwrap()
+}
+
+fn proposed_rfis(review: &Value) -> Vec<String> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|row| row["proposedRfiNo"].as_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn rfi_missing_from_the_whole_log_is_removed_from_the_follow_up_cell() {
+    let review = deleted_rfi_review(Vec::new(), "CIV-1222/0099");
+
+    assert_eq!(proposed_rfis(&review), ["CIV-1222"]);
+    assert_eq!(review["rows"][0]["proposedStatus"], "Completed");
+    assert_eq!(review["rows"][0]["selectable"], true);
+}
+
+#[test]
+fn rfi_that_is_only_numbered_in_the_log_is_not_treated_as_deleted() {
+    let review = deleted_rfi_review(
+        vec![row(11, [inline("A11", "AZE-SUN-INT-QMS-RFI-CIV-0098")])],
+        "CIV-1222/0098",
+    );
+
+    assert!(
+        !proposed_rfis(&review).contains(&"CIV-1222".to_string()),
+        "{review}"
+    );
+}
+
+#[test]
+fn placeholder_rfi_numbers_are_never_removed_as_deleted() {
+    let review = deleted_rfi_review(Vec::new(), "CIV-1222/2001");
+
+    assert!(
+        !proposed_rfis(&review).contains(&"CIV-1222".to_string()),
+        "{review}"
+    );
 }

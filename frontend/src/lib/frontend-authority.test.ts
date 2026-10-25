@@ -304,6 +304,18 @@ describe("frontend authority boundary", () => {
     }
   });
 
+  it("defines the deleted-RFI follow up reason in every locale", () => {
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      expect(
+        catalog["warn.rfi.followUp.reason.readyDeleted"],
+        locale,
+      ).toEqual(expect.any(String));
+    }
+  });
+
   it("defines the activity log export in every locale", () => {
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(
