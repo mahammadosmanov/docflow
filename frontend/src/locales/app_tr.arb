@@ -1106,5 +1106,8 @@
   "warn.rfi.followUp.reason.readyRemark": "Satır için üretilmiş Remarks metni (Completed önce) yazılacak.",
   "warn.rfi.followUp.reason.readyRemarkClear": "Tüm RFI'lar Completed olduğu için üretilmiş Remarks metni silinecek.",
   "warn.rfi.followUp.reason.remarkManual": "Remarks hücresinde elle yazılmış metin var; DocFlow dokunmadı.",
-  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks hücresi formül içeriyor veya birleştirilmiş; değiştirilmedi."
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks hücresi formül içeriyor veya birleştirilmiş; değiştirilmedi.",
+  "warn.rfi.followUp.massDeletionBrake": "Follow Up'taki RFI'ların büyük bölümü seçilen RFI Log'da yok; silme duraklatıldı. Doğru ve güncel RFI Log'u seçtiğinizden emin olun.",
+  "warn.rfi.followUp.reason.structureInsert": "Road part satırı eklenecek (biçim ve formüller komşu satırdan kopyalanır).",
+  "warn.rfi.followUp.reason.structureRename": "Parçasız Road satırı, Log'daki parçalar için 'Part 1' olarak yeniden adlandırılacak."
 }

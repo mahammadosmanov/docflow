@@ -173,6 +173,10 @@ cell satisfy the required state. `Ongoing` corresponds to `In Progress` where th
 workbook mapping requires it. Worley CIV/MEC control tables are discovered by
 their safe headers, not assumed coordinates.
 
+Follow Up sync keeps the `Road` sheet's part rows in step with the Log (ADR 0048):
+missing parts are inserted, a partless row that now has parts becomes `Part 1`, and
+rows are never removed. A Road tag without a part belongs to every part row.
+
 Follow Up sync changes the mapped RFI and status cells and, on `CIV`, `PCU`, and
 `Road`, the generated row remark described in ADR 0047 (Completed RFIs first in
 bold underlined Accent 5, then In Progress in plain text; cleared once all are

@@ -26,9 +26,10 @@ use crate::{
     journal::FilesystemObjectIdentity,
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
-        OrderedWorkbookDiscovery, RichRun, WorkbookData, WorksheetData, WorksheetDescriptor,
-        WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text_recalc,
-        read_workbook_and_discovery, verify_guarded_workbook_delta_text_recalc,
+        OrderedWorkbookDiscovery, RichRun, RowOp, WorkbookData, WorksheetData, WorksheetDescriptor,
+        WorksheetVisibility, apply_row_ops, package_has_signature,
+        patch_workbook_sheets_guarded_text_recalc, read_workbook_and_discovery,
+        verify_guarded_workbook_delta_text_recalc,
     },
     rfi_code::normalize_candidate_number,
     rfi_log::status_columns,
@@ -46,6 +47,9 @@ const MAX_SOURCE_EVIDENCE_PER_RFI: usize = 500;
 const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 20_000_000;
 const MAX_CELL_TEXT_CHARS: usize = 20_000;
+/// More than this many absent RFIs, and more than 1/5 of Follow Up's RFIs, pauses removal.
+const MASS_DELETION_FLOOR: usize = 50;
+const MASS_DELETION_DENOMINATOR: usize = 5;
 const FULL_RFI_PREFIX: &str = "AZE-SUN-INT-QMS-RFI-";
 const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
 
@@ -161,6 +165,9 @@ pub(crate) struct FollowUpStepMeta {
     updates: Vec<FollowUpApprovedUpdate>,
     #[serde(default)]
     remarks: Vec<FollowUpApprovedRemark>,
+    /// Road part rows to add or relabel before the cell updates; applied in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    structure: Vec<RowOp>,
 }
 
 impl FollowUpStepMeta {
@@ -184,6 +191,8 @@ struct FollowUpPlanMeta {
     layout: FollowUpLayout,
     #[serde(default)]
     layouts: Vec<FollowUpLayout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    structure: Vec<RowOp>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -377,9 +386,11 @@ mod preview;
 mod remark;
 mod remark_rows;
 mod road;
+mod road_structure;
 mod routing;
 mod scan;
 mod source;
+mod structure_rows;
 pub use apply::*;
 pub use classify::*;
 pub use codes::*;
@@ -387,9 +398,11 @@ pub use preview::*;
 use remark::*;
 use remark_rows::*;
 use road::*;
+use road_structure::*;
 use routing::*;
 use scan::*;
 use source::*;
+use structure_rows::*;
 
 #[cfg(test)]
 mod tests;

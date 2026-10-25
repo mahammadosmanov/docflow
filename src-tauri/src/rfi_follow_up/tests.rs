@@ -143,6 +143,7 @@ fn step_meta(updates: Vec<FollowUpApprovedUpdate>) -> FollowUpStepMeta {
         layouts: Vec::new(),
         updates,
         remarks: Vec::new(),
+        structure: Vec::new(),
     }
 }
 
@@ -243,6 +244,7 @@ fn plan_from_classification_emits_one_exact_workbook_step_for_enabled_rows() {
         fingerprint(),
         fingerprint(),
         classification,
+        Vec::new(),
     )
     .unwrap();
 

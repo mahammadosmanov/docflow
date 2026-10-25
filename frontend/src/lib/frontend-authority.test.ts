@@ -304,6 +304,17 @@ describe("frontend authority boundary", () => {
     }
   });
 
+  it("defines the Road structure and deletion-brake texts in every locale", () => {
+    for (const locale of ["tr", "en", "ru", "az"]) {
+      const catalog = JSON.parse(
+        read(`frontend/src/locales/app_${locale}.arb`),
+      ) as Record<string, unknown>;
+      for (const key of ["warn.rfi.followUp.massDeletionBrake","warn.rfi.followUp.reason.structureInsert","warn.rfi.followUp.reason.structureRename"]) {
+        expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
+      }
+    }
+  });
+
   it("defines the generated remark reasons in every locale", () => {
     for (const locale of ["tr", "en", "ru", "az"]) {
       const catalog = JSON.parse(

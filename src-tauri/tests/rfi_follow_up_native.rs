@@ -5144,3 +5144,286 @@ fn remark_is_written_as_rich_text_through_apply_and_undone_exactly() {
     assert_eq!(undone.failed, 0);
     assert_eq!(std::fs::read(&target_path).unwrap(), original_target);
 }
+
+fn road_target_with_formulas(road_cells: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = road_cells.iter().enumerate().map(|(index, cell)| {
+        let r = 5 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "South"),
+                inline(&format!("B{r}"), cell),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+                formula(
+                    &format!("Y{r}"),
+                    &format!("COUNTIF(K{r}:L{r},\"Completed\")/6"),
+                    "0",
+                ),
+            ],
+        )
+    });
+    let last = 4 + road_cells.len();
+    let summary = row(3, [formula("Z3", &format!("AVERAGE(Y5:Y{last})"), "0")]);
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(
+                std::iter::once(summary)
+                    .chain(std::iter::once(header))
+                    .chain(rows),
+                &[],
+            ),
+        ),
+    ])
+}
+
+fn structure_reasons(review: &Value) -> Vec<(String, String)> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| {
+            row["reasonKey"]
+                .as_str()
+                .is_some_and(|key| key.contains("reason.structure"))
+        })
+        .map(|row| {
+            (
+                row["reasonKey"].as_str().unwrap().to_string(),
+                row["rfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+fn road_preview(
+    root: &std::path::Path,
+    source: Cursor<Vec<u8>>,
+    target: Cursor<Vec<u8>>,
+) -> (
+    docflow_lib::contracts::Plan,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    Vec<u8>,
+) {
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let target_bytes = target.into_inner();
+    std::fs::write(&source_path, source.into_inner()).unwrap();
+    std::fs::write(&target_path, &target_bytes).unwrap();
+    let mut source_file = File::open(&source_path).unwrap();
+    let mut target_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut source_file,
+        &mut target_file,
+    )
+    .unwrap();
+    (plan, source_path, target_path, target_bytes)
+}
+
+fn plan_rows(plan: &docflow_lib::contracts::Plan) -> Value {
+    json!({"rows": plan.meta["editor"]["rows"].clone()})
+}
+
+#[test]
+fn partless_road_row_is_split_into_parts_when_the_log_names_a_part() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let (plan, ..) = road_preview(
+        &root,
+        road_source(&[
+            ("0001", "Road 18", "Ongoing"),
+            ("0002", "Road 18 (Part 2)", "Completed"),
+        ]),
+        road_target_with_formulas(&["Road 17", "Road 18", "Road 19"]),
+    );
+    let review = plan_rows(&plan);
+
+    assert_eq!(
+        structure_reasons(&review),
+        [
+            (
+                "warn.rfi.followUp.reason.structureInsert".to_string(),
+                "Road 18 (Part 2)".to_string()
+            ),
+            (
+                "warn.rfi.followUp.reason.structureRename".to_string(),
+                "Road 18 (Part 1)".to_string()
+            ),
+        ]
+    );
+    let mapped = road_rows(&review);
+    assert!(mapped.contains(&(6, "CIV-0001".to_string())), "{mapped:?}");
+    assert!(
+        mapped.contains(&(7, "CIV-0001/0002".to_string())),
+        "{mapped:?}"
+    );
+}
+
+#[test]
+fn road_structure_is_applied_through_the_guarded_pipeline_and_undone_exactly() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let (plan, _, target_path, original) = road_preview(
+        &root,
+        road_source(&[
+            ("0001", "Road 18", "Ongoing"),
+            ("0002", "Road 18 (Part 2)", "Completed"),
+        ]),
+        road_target_with_formulas(&["Road 17", "Road 18", "Road 19"]),
+    );
+    assert_eq!(plan.steps[0].meta["structure"].as_array().unwrap().len(), 2);
+    eprintln!(
+        "GUARDED {:?}",
+        guarded_updates(&plan.steps[0]).map(|u| u.len())
+    );
+    eprintln!(
+        "STEP {}",
+        serde_json::to_string(&plan.steps[0].meta["structure"]).unwrap()
+    );
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert!(applied.failed == 0, "{:?}", applied.errors);
+
+    let mut written = File::open(&target_path).unwrap();
+    let workbook = read_workbook_from_reader(&mut written).unwrap();
+    let road = workbook.sheet("Road").unwrap();
+    assert_eq!(road.value(5, 2), "Road 17");
+    assert_eq!(road.value(6, 2), "Road 18 (Part 1)");
+    assert_eq!(road.value(7, 2), "Road 18 (Part 2)");
+    assert_eq!(road.value(8, 2), "Road 19");
+    assert_eq!(road.value(6, 11), "CIV-0001");
+    assert_eq!(road.value(7, 11), "CIV-0001/0002");
+    assert_eq!(road.value(7, 12), "In Progress");
+    assert_eq!(
+        road.cell(7, 25).unwrap().formula.as_deref(),
+        Some("COUNTIF(K7:L7,\"Completed\")/6")
+    );
+    assert_eq!(
+        road.cell(3, 26).unwrap().formula.as_deref(),
+        Some("AVERAGE(Y5:Y8)")
+    );
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}
+
+#[test]
+fn a_log_missing_most_follow_up_rfis_pauses_deletion_and_warns() {
+    let cells = (0..120)
+        .map(|n| format!("CIV-{:04}", 1000 + n))
+        .collect::<Vec<_>>();
+    let rows = cells.iter().enumerate().map(|(index, code)| {
+        let r = 2 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("B{r}"), "AREA-1"),
+                inline(&format!("C{r}"), code),
+                inline(&format!("D{r}"), "In Progress"),
+            ],
+        )
+    });
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            std::iter::once(row(
+                1,
+                [
+                    inline("B1", "Tag"),
+                    inline("C1", "RFI No."),
+                    inline("D1", "STATUS"),
+                ],
+            ))
+            .chain(rows),
+            &[],
+        ),
+    )]);
+    let review = classify(
+        full_schema_source([full_schema_record_with_status(
+            10,
+            "1222",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Completed",
+            "",
+        )]),
+        target,
+    )
+    .unwrap();
+
+    assert!(
+        review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |warning| warning["key"] == "warn.rfi.followUp.massDeletionBrake"
+                    && warning["subject"] == "120"
+            ),
+        "{review}"
+    );
+    assert!(
+        review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["reasonKey"] != "warn.rfi.followUp.reason.readyDeleted")
+    );
+}

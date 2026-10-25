@@ -12,6 +12,7 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
         return Err(workbook_invalid());
     }
     validate_remarks(&meta)?;
+    validate_structure(&meta.structure)?;
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
@@ -186,16 +187,20 @@ where
     R2: Read + Seek,
 {
     let updates = guarded_updates(step)?;
-    verify_guarded_workbook_delta_text_recalc(source, private_output, &updates).map_err(|error| {
-        match error.kind() {
-            OoxmlErrorKind::LimitExceeded => {
-                limit_exceeded_for(format!("patch verification: {error}"))
-            }
-            OoxmlErrorKind::Invalid => {
-                BackendError::validation("error.rfi.followUp.patchVerification")
-            }
-        }
-    })
+    let structure = decode_step_meta(step)?.structure;
+    let map_error = |error: OoxmlError| match error.kind() {
+        OoxmlErrorKind::LimitExceeded => limit_exceeded_for(format!("patch verification: {error}")),
+        OoxmlErrorKind::Invalid => BackendError::validation("error.rfi.followUp.patchVerification"),
+    };
+    if structure.is_empty() {
+        return verify_guarded_workbook_delta_text_recalc(source, private_output, &updates)
+            .map_err(map_error);
+    }
+    // The published file must equal the original with the approved Road rows and then
+    // only the approved cell updates.
+    let mut baseline = std::io::Cursor::new(structured_baseline(source, &structure)?);
+    verify_guarded_workbook_delta_text_recalc(&mut baseline, private_output, &updates)
+        .map_err(map_error)
 }
 
 #[allow(dead_code)]
@@ -241,8 +246,15 @@ where
     R: Read + Write + Seek,
 {
     let updates = guarded_updates(step)?;
-    patch_workbook_sheets_guarded_text_recalc(source, destination, &updates)
-        .map_err(map_apply_ooxml_error)?;
+    let structure = decode_step_meta(step)?.structure;
+    if structure.is_empty() {
+        patch_workbook_sheets_guarded_text_recalc(source, destination, &updates)
+            .map_err(map_apply_ooxml_error)?;
+    } else {
+        let mut baseline = std::io::Cursor::new(structured_baseline(source, &structure)?);
+        patch_workbook_sheets_guarded_text_recalc(&mut baseline, destination, &updates)
+            .map_err(map_apply_ooxml_error)?;
+    }
     verify_patched_output(step, source, destination)
 }
 

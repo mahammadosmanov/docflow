@@ -1134,5 +1134,8 @@
   "warn.rfi.followUp.reason.readyRemark": "The generated Remarks text for this row (Completed first) will be written.",
   "warn.rfi.followUp.reason.readyRemarkClear": "Every RFI is Completed, so the generated Remarks text will be cleared.",
   "warn.rfi.followUp.reason.remarkManual": "The Remarks cell has operator-written text; DocFlow left it unchanged.",
-  "warn.rfi.followUp.reason.remarkUnsafe": "The Remarks cell contains a formula or is merged; it was not changed."
+  "warn.rfi.followUp.reason.remarkUnsafe": "The Remarks cell contains a formula or is merged; it was not changed.",
+  "warn.rfi.followUp.massDeletionBrake": "Most RFIs in Follow Up are missing from the selected RFI Log, so removal was paused. Make sure you selected the correct, current RFI Log.",
+  "warn.rfi.followUp.reason.structureInsert": "A Road part row will be added (format and formulas are copied from the neighbouring row).",
+  "warn.rfi.followUp.reason.structureRename": "The partless Road row will be renamed 'Part 1' because the Log names parts of it."
 }

@@ -1106,5 +1106,8 @@
   "warn.rfi.followUp.reason.readyRemark": "Sətir üçün yaradılmış Remarks mətni (əvvəlcə Completed) yazılacaq.",
   "warn.rfi.followUp.reason.readyRemarkClear": "Bütün RFI-lar Completed olduğundan yaradılmış Remarks mətni silinəcək.",
   "warn.rfi.followUp.reason.remarkManual": "Remarks xanasında əllə yazılmış mətn var; DocFlow toxunmadı.",
-  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks xanası düstur ehtiva edir və ya birləşdirilib; dəyişdirilmədi."
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks xanası düstur ehtiva edir və ya birləşdirilib; dəyişdirilmədi.",
+  "warn.rfi.followUp.massDeletionBrake": "Follow Up-dakı RFI-ların böyük hissəsi seçilmiş RFI Log-da yoxdur, ona görə silmə dayandırıldı. Düzgün və cari RFI Log seçdiyinizdən əmin olun.",
+  "warn.rfi.followUp.reason.structureInsert": "Road hissə sətri əlavə ediləcək (format və düsturlar qonşu sətirdən köçürülür).",
+  "warn.rfi.followUp.reason.structureRename": "Hissəsiz Road sətri, Log-da hissələri göstərildiyi üçün 'Part 1' adlandırılacaq."
 }

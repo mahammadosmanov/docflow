@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.27.0 - 2026-10-24
+
+### Added
+
+- Road part rows: Follow Up inserts missing `Road NN (Part k)` rows, relabels a partless Road row to `Part 1` when the Log names parts, and places new Roads in number order. New rows are cloned from their neighbour with formulas, styles, and all references (formulas on every sheet, ranges, merges, conditional formatting, filter, print area) shifted like Excel's Insert Row. Rows are never removed (ADR 0048).
+- Mass-deletion brake: if most Follow Up RFIs are missing from the selected RFI Log, removal is paused with a warning instead of proposing thousands of removals.
+
 ## 1.26.0 - 2026-10-24
 
 ### Added

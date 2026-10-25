@@ -41,6 +41,24 @@ pub(super) fn classify_workbooks_full(
         }
     }
 
+    let deleted_count = slots
+        .values()
+        .flat_map(|slot| slot.codes.iter())
+        .filter(|code| {
+            !is_placeholder_rfi(code)
+                && !records.contains_key(*code)
+                && !logged_numbers.contains(*code)
+        })
+        .count();
+    let total_codes = slots
+        .values()
+        .flat_map(|slot| slot.codes.iter())
+        .filter(|code| !is_placeholder_rfi(code))
+        .count();
+    // Removing a large share of Follow Up's RFIs means the wrong or an outdated RFI Log
+    // was selected; refuse to remove anything on that evidence.
+    let mass_deletion = deleted_count > MASS_DELETION_FLOOR
+        && deleted_count * MASS_DELETION_DENOMINATOR > total_codes;
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {
         let removed = slot
@@ -55,7 +73,7 @@ pub(super) fn classify_workbooks_full(
                                 || record.state == Some(LogState::Remove)
                         }
                         // Deleted from the Log: absent even as a bare number.
-                        None => !logged_numbers.contains(*code),
+                        None => !mass_deletion && !logged_numbers.contains(*code),
                     }
             })
             .cloned()
@@ -909,6 +927,12 @@ pub(super) fn classify_workbooks_full(
         warnings.push(Warning {
             key: "warn.rfi.followUp.unmappedRecords".to_string(),
             subject: unmapped_count.to_string(),
+        });
+    }
+    if mass_deletion {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.massDeletionBrake".to_string(),
+            subject: deleted_count.to_string(),
         });
     }
     if rows.is_empty() {
