@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.46 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `history/list` handler moves out of the `MockBridge.call` dispatch switch in `frontend/src/lib/mockBridge.ts` into the private `historyListOperation` method. The App tests cover the History screen and pass unchanged. No operator-facing behavior changes.
+
 ## 1.33.45 - 2026-10-27
 
 ### Changed
