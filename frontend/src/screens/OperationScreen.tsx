@@ -62,6 +62,7 @@ import { persistableValues, previewValuesFor } from "../lib/operationValues";
 import { editorRowsOf, rememberedParams } from "./operationState";
 import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
+import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -117,7 +118,6 @@ export function OperationScreen({
     searchRfiDocuments,
     setRfiCandidateGroup,
   } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
-  const [isUpdatingScanPreview, setIsUpdatingScanPreview] = useState(false);
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
   const [previousValues, setPreviousValues] = useState<Record<
@@ -252,30 +252,18 @@ export function OperationScreen({
       setError(humanError(reason, s));
     }
   };
-  const updateScanPreview = async () => {
-    if (
-      !plan ||
-      plan.opId !== "rfi.process_scans_fast_covers" ||
-      !editorDirty ||
-      isUpdatingScanPreview
-    ) {
-      return;
-    }
-    setIsUpdatingScanPreview(true);
-    setError("");
-    try {
-      const revised = await bridge.call("engine/revise", {
-        planId: plan.planId,
-        rows: editorRows,
-      });
+  const { isUpdatingScanPreview, updateScanPreview } = useScanPreviewUpdate({
+    bridge,
+    plan,
+    editorDirty,
+    editorRows,
+    s,
+    setError,
+    onRevised: (revised) => {
       installPlan(revised);
       setScanPreviewUpdated(true);
-    } catch (reason) {
-      setError(humanError(reason, s));
-    } finally {
-      setIsUpdatingScanPreview(false);
-    }
-  };
+    },
+  });
   const apply = async () => {
     if (editorDirty && plan?.opId === "rfi.process_scans_fast_covers") {
       await updateScanPreview();

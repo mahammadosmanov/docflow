@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.51 - 2026-10-27
+
+### Changed
+
+- The fast-scan preview re-run (`updateScanPreview` and its in-flight flag) moves from `frontend/src/screens/OperationScreen.tsx` into the `useScanPreviewUpdate` hook in `frontend/src/screens/useScanPreviewUpdate.ts`. The screen still owns the "preview updated" flag and passes an `onRevised` callback that installs the revised plan. `useScanPreviewUpdate.test.ts` covers the non-scan and clean-editor no-ops, a successful revision, and a failed revision. Behavior is unchanged.
+
 ## 1.33.50 - 2026-10-27
 
 ### Changed
