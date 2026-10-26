@@ -20,3 +20,27 @@ export function persistableValues(
     }),
   );
 }
+
+/** The values sent to `engine/preview`. Batch print takes its file list from the
+ * RFI finder when the finder ran, and drops finder-only inputs. */
+export function previewValuesFor(
+  operationId: string,
+  values: Record<string, unknown>,
+  finder: {
+    ran: boolean;
+    candidates: { selected: boolean; selection: unknown }[];
+  },
+): Record<string, unknown> {
+  const previewValues = { ...values };
+  if (operationId !== "files.batch_print") return previewValues;
+  delete previewValues.rfi_system_root;
+  delete previewValues.rfi_numbers;
+  delete previewValues.include_first_page;
+  delete previewValues.include_sketch;
+  if (finder.ran) {
+    previewValues.files = finder.candidates
+      .filter((candidate) => candidate.selected)
+      .map((candidate) => candidate.selection);
+  }
+  return previewValues;
+}

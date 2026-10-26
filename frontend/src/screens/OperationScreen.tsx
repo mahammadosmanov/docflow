@@ -60,7 +60,7 @@ import {
 import {
   ResultView,
 } from "./ResultView";
-import { persistableValues } from "../lib/operationValues";
+import { persistableValues, previewValuesFor } from "../lib/operationValues";
 
 export function OperationScreen({
   bridge,
@@ -302,18 +302,10 @@ export function OperationScreen({
       if (operation.supportsPresets && Object.keys(sanitized).length > 0) {
         setPreviousValues(sanitized);
       }
-      const previewValues = { ...values };
-      if (operation.id === "files.batch_print") {
-        delete previewValues.rfi_system_root;
-        delete previewValues.rfi_numbers;
-        delete previewValues.include_first_page;
-        delete previewValues.include_sketch;
-        if (rfiFinderWasRun) {
-          previewValues.files = rfiPrintCandidates
-            .filter((candidate) => candidate.selected)
-            .map((candidate) => candidate.selection);
-        }
-      }
+      const previewValues = previewValuesFor(operation.id, values, {
+        ran: rfiFinderWasRun,
+        candidates: rfiPrintCandidates,
+      });
       const next = await bridge.call(
         "engine/preview",
         { opId: operation.id, values: previewValues },

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.14 - 2026-10-26
+
+### Changed
+
+- The values sent to `engine/preview` are built by `previewValuesFor` in `frontend/src/lib/operationValues.ts`. Batch print's finder-only inputs and file list are covered by unit tests.
+
 ## 1.33.13 - 2026-10-26
 
 ### Changed
