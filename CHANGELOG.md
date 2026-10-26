@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.57 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `rfi/printFind` and `support/diagnostics` handlers do not use bridge state, so they move from `MockBridge` in `frontend/src/lib/mockBridge.ts` into plain exported functions in `frontend/src/lib/mockHandlers.ts`. `MockBridge` calls them from its dispatch. `mockBridge.ts` drops from 1,093 to 993 lines. The 177 frontend tests pass, including the direct `rfi/printFind` check. No operator-facing behavior changes.
+
 ## 1.33.56 - 2026-10-27
 
 ### Changed
