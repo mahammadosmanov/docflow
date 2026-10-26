@@ -43,6 +43,27 @@ pub(super) fn ocr_alias_matches(text: &str) -> Vec<RfiMatch> {
         .collect()
 }
 
+/// The cover's own identity line is `RFI No: <exact code>`. When other RFI codes also
+/// appear on the page (references, remarks), the code printed right after that label is
+/// the cover's identity, but only if exactly one distinct code follows such a label.
+pub(super) fn labeled_identity(text: &str) -> Option<String> {
+    static LABELED: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"RFI\s*NO\s*[:.]?\s*(AZE-SUN-INT-QMS-RFI-[A-Z]{3}-[0-9]{1,4})")
+            .expect("the labeled identity pattern is valid")
+    });
+    let normalized = canonical(text);
+    let mut found = std::collections::BTreeSet::new();
+    for captures in LABELED.captures_iter(&normalized) {
+        let whole = captures.get(0)?;
+        let after = normalized[whole.end()..].chars().next();
+        if after.is_some_and(char::is_alphanumeric) {
+            continue;
+        }
+        found.insert(find(&captures[1]).code);
+    }
+    (found.len() == 1).then(|| found.into_iter().next())?
+}
+
 pub(super) fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
     let normalized = text
         .split_whitespace()
@@ -66,9 +87,11 @@ pub(super) fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
     let mut codes = exact_codes(&normalized);
     codes.extend(aliases.iter().map(|matched| matched.code.clone()));
     let matched = find(&normalized);
-    let strict_identity = codes.len() == 1
+    let labeled = labeled_identity(&normalized);
+    let strict_identity = (codes.len() == 1
         && ((matched.method == RfiMethod::Strict && matched.confidence >= 0.8)
-            || aliases.iter().any(|alias| codes.contains(&alias.code)));
+            || aliases.iter().any(|alias| codes.contains(&alias.code))))
+        || labeled.as_ref().is_some_and(|code| codes.contains(code));
     let identity_hint = !codes.is_empty() || matched.ok();
     CoverSignals {
         request_heading,
@@ -83,9 +106,10 @@ pub(super) fn confirmed_cover_read(text: &str, source: &str) -> Option<OcrRead> 
     if !(signals.request_heading && signals.template_mark && signals.strict_identity) {
         return None;
     }
-    let matched = ocr_alias_matches(text)
-        .into_iter()
-        .next()
+    let matched = labeled_identity(text)
+        .map(|code| find(&code))
+        .filter(|labeled| labeled.ok())
+        .or_else(|| ocr_alias_matches(text).into_iter().next())
         .unwrap_or_else(|| find(text));
     let alias_evidence = if matched.method == RfiMethod::OcrAlias {
         ":alias:CLV->CIV"
@@ -167,6 +191,35 @@ pub(super) fn read_cover_band_text(
     )
 }
 
+static COVER_TRACE: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+const MAX_COVER_TRACE: usize = 40;
+
+/// Records why a cover page was not confirmed (cue flags and text length only, never the
+/// text) for the activity log, so an unreadable scan can be diagnosed from one export.
+fn trace_cover(page_index: usize, direction: i64, text: &str, signals: CoverSignals) {
+    let mut trace = COVER_TRACE.lock().unwrap_or_else(|e| e.into_inner());
+    if trace.len() < MAX_COVER_TRACE {
+        // Only the identity-looking line is kept: it is the thing being diagnosed.
+        let identity_line = text
+            .lines()
+            .find(|line| line.to_ascii_uppercase().contains("RFI-"))
+            .map(|line| line.trim().chars().take(70).collect::<String>())
+            .unwrap_or_default();
+        trace.push(format!(
+            "page={page_index} dir={direction} chars={} heading={} mark={} strict={} hint={} identity=[{identity_line}]",
+            text.chars().count(),
+            signals.request_heading,
+            signals.template_mark,
+            signals.strict_identity,
+            signals.identity_hint
+        ));
+    }
+}
+
+pub fn take_cover_trace() -> Vec<String> {
+    std::mem::take(&mut *COVER_TRACE.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
 pub(super) fn read_fast_cover_page(
     ocr: &NativeOcr,
     source: &Path,
@@ -208,6 +261,7 @@ pub(super) fn read_fast_cover_page(
             return Ok(read);
         }
         let mut signals = cover_signals(&text, true);
+        trace_cover(page_index, direction, &text, signals);
         possible_cover |= signals.request_heading;
         let promising = u8::from(signals.request_heading)
             + u8::from(signals.template_mark)
@@ -283,4 +337,66 @@ pub(super) struct PdfOcrSession {
     pub(super) document: std::ptr::NonNull<std::ffi::c_void>,
     #[cfg(target_os = "windows")]
     pub(super) document: crate::windows_pdf::InMemoryPdf,
+}
+
+/// Accept the cheap cover-band read only when it is a confirmed cover with an
+/// exact (or approved OCR-alias) identity. Everything else, including a failed
+/// render, falls back to the full-page reader, so accuracy never drops below
+/// the full reader; only the engine-missing condition is propagated as is.
+pub(super) fn cover_first_identity(
+    fast: Result<OcrRead, OcrFailure>,
+    full: impl FnOnce() -> Result<OcrRead, OcrFailure>,
+) -> Result<OcrRead, OcrFailure> {
+    match fast {
+        Ok(read) if is_trusted_cover_read(&read) => Ok(read),
+        Err(OcrFailure::EngineMissing) => Err(OcrFailure::EngineMissing),
+        _ => full(),
+    }
+}
+
+fn is_trusted_cover_read(read: &OcrRead) -> bool {
+    read.source.starts_with("ocr:fast-cover:confirmed:")
+        && matches!(read.matched.method, RfiMethod::Strict | RfiMethod::OcrAlias)
+        && read.matched.confidence >= 0.8
+}
+
+#[cfg(test)]
+mod labeled_identity_tests {
+    use super::*;
+
+    const HEAD: &str = "SUNRISE PROJECT\nREQUEST FOR INSPECTION\n";
+
+    #[test]
+    fn labeled_identity_wins_over_other_codes_on_the_cover() {
+        let text = format!(
+            "{HEAD}RFI No: AZE-SUN-INT-QMS-RFI-CIV-1625\nRelated: AZE-SUN-INT-QMS-RFI-CIV-1500"
+        );
+        let read = confirmed_cover_read(&text, "test").expect("confirmed");
+        assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-1625");
+    }
+
+    #[test]
+    fn several_codes_without_a_single_label_stay_unconfirmed() {
+        let unlabeled = format!("{HEAD}AZE-SUN-INT-QMS-RFI-CIV-1625 AZE-SUN-INT-QMS-RFI-CIV-1500");
+        assert!(confirmed_cover_read(&unlabeled, "test").is_none());
+        let two_labels = format!(
+            "{HEAD}RFI No: AZE-SUN-INT-QMS-RFI-CIV-1625\nRFI No: AZE-SUN-INT-QMS-RFI-CIV-1500"
+        );
+        assert!(confirmed_cover_read(&two_labels, "test").is_none());
+    }
+
+    #[test]
+    fn a_label_needs_the_cover_heading_and_template_mark() {
+        let text = "RFI No: AZE-SUN-INT-QMS-RFI-CIV-1625\nAZE-SUN-INT-QMS-RFI-CIV-1500";
+        assert!(confirmed_cover_read(text, "test").is_none());
+    }
+
+    #[test]
+    fn the_single_code_path_is_unchanged() {
+        let text = format!("{HEAD}RFI No: AZE-SUN-INT-QMS-RFI-CIV-1625");
+        assert_eq!(
+            confirmed_cover_read(&text, "test").unwrap().matched.code,
+            "AZE-SUN-INT-QMS-RFI-CIV-1625"
+        );
+    }
 }

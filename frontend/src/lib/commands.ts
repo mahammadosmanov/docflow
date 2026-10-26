@@ -15,7 +15,9 @@ import type {
   ReviewDecision,
   ReviewItem,
   RfiPrintFindResult,
+  ActivityLogExport,
   SupportBundlePreview,
+  WatchStatus,
 } from "../types";
 
 interface CommandSpec<Params, Result> {
@@ -72,6 +74,7 @@ export interface FrontendCommandMap {
   >;
   "support/diagnostics": CommandSpec<NoParams, SupportBundlePreview>;
   "support/copyDiagnostics": CommandSpec<{ content: string }, Ok>;
+  "support/activityLog": CommandSpec<NoParams, ActivityLogExport>;
   "engine/preview": CommandSpec<
     { opId: string; values: Record<string, unknown> },
     Plan
@@ -134,6 +137,16 @@ export interface FrontendCommandMap {
     },
     RfiPrintFindResult
   >;
+  "watch/status": CommandSpec<NoParams, WatchStatus>;
+  "watch/update": CommandSpec<
+    {
+      opId: string;
+      enabled?: boolean;
+      action?: "checkNow" | "dismiss" | "reprepare";
+    },
+    WatchStatus
+  >;
+  "watch/open": CommandSpec<{ opId: string }, Plan>;
 }
 
 // BEGIN RUST-VERIFIED FRONTEND METHODS
@@ -157,6 +170,7 @@ export const FRONTEND_METHODS = [
   "settings/deletePreset",
   "support/diagnostics",
   "support/copyDiagnostics",
+  "support/activityLog",
   "engine/preview",
   "engine/apply",
   "engine/cancel",
@@ -174,6 +188,9 @@ export const FRONTEND_METHODS = [
   "paths/reveal",
   "rfi/printFind",
   "recovery/list",
+  "watch/status",
+  "watch/update",
+  "watch/open",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

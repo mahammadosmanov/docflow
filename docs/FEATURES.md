@@ -13,6 +13,7 @@
 | `rfi.normalize_pdf_orientation` | Searchable standalone normalization uses rendered-content OSD and directional OCR, plus unique exact canonical header-ID evidence only when the same ID and direction agree at both 250/350 DPI. Source hashes bind analysis/cache and Apply; unresolved files remain unchanged for review-copy handling. |
 | `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
 | `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
+| `rfi.publish_status` | Read-only match of PDF+DOCX pairs saved from a requester's mail (top-level of one folder, exact RFI code in the file name) to the RFI Log; Preview proposes `Ongoing` only for literal blank Inspection Status cells (never overwrites a filled status), with guarded Apply and Undo (ADR 0041). Outlook attachment save and the publish mail draft are not part of this release |
 | `rfi.generate_concrete_documents` | Batch-generate CON-CIV-010/011/013/014 from RFI Log data; require Concrete Specimen Test Follow-Up only when Civil Forms includes CON-CIV-010, with configurable template values and no-overwrite safeguards |
 
 
@@ -129,6 +130,28 @@ file to another subfolder in a private fixture copy and verify both versions
 appear unselected until deliberately enabled. The Windows native Office and
 printer handoff requires a real Windows host with the supported Office/printer
 setup; macOS discovery and UI smoke do not certify `.docx` printing.
+
+## Faster scanning
+
+Stage signed first pages now reads each page's RFI number with the same fast
+cover read used by Fast RFI Scan and falls back to the full-page read whenever
+the cover is not confirmed, so uncertain pages are handled exactly as before.
+Fast RFI Scan, Group Files, and Stage signed first pages remember successful
+page reads for unchanged files (including after restart), so a repeated or
+queue-prepared Preview reads only new or changed files. Combined multi-page
+scans and separate single-page PDFs are both handled page by page.
+
+## Action Queue (inbox watcher)
+
+Off by default. In Action Queue, turn on checks for Fast RFI Scan, Group Files,
+Stage signed first pages, or Completion Status Sync. DocFlow reuses each
+operation's remembered folders, checks them every 5 minutes after files finish
+copying (60-second settle), and prepares the normal Preview in the background.
+Ready previews appear in the queue and as a count on the navigation item. Open
+Preview loads the same review screen; nothing changes until you apply it, and
+Apply and Undo behave exactly as before. Out-of-date previews can be prepared
+again or dismissed. Checks pause while any operation is running, and the queue
+is rebuilt after restart.
 
 ## Intentional limits
 

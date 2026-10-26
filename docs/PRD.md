@@ -238,7 +238,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   existing targets before Apply. Missing discipline/RFI folders are created
   safely. Page extraction preserves XMP metadata; unsupported catalog features
   remain Review cases.
-- **DF-033 — Retired Follow Up status remarks:** Superseded by ADR 0028.
+- **DF-033 — Follow Up generated row remarks:** Restored by ADR 0047 in a new format (supersedes the retirement in ADR 0028).
   `rfi.follow_up_sync` never writes worksheet Remarks cells. RFI Log REMARKS
   remain read-only source evidence for Worley Signed/Not Signed status.
 

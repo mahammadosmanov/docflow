@@ -8,10 +8,13 @@ use tempfile::tempdir;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
 use super::{
-    CellData, CellUpdate, GuardedCellUpdate, MAX_APPLY_MERGE_COMPARISONS, MergeComparisonBudget,
-    OoxmlErrorKind, WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
-    parse_document_with_limits, patch_workbook_sheets, patch_workbook_sheets_guarded_text,
-    read_workbook, sheet_infos_from_path, verify_guarded_workbook_delta_text,
+    CellData, CellText, CellUpdate, GuardedCellUpdate, MAX_APPLY_MERGE_COMPARISONS,
+    MergeComparisonBudget, OoxmlErrorKind, RichRun, RowOp, WorksheetDescriptor,
+    WorksheetVisibility, apply_row_ops, ordered_workbook_discovery, parse_document_with_limits,
+    patch_workbook_sheets, patch_workbook_sheets_guarded_text,
+    patch_workbook_sheets_guarded_text_recalc, read_workbook, read_workbook_from_reader,
+    sheet_infos_from_path, verify_guarded_workbook_delta_text,
+    verify_guarded_workbook_delta_text_recalc,
 };
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2283,4 +2286,560 @@ fn ordered_worksheet_discovery_rejects_oversized_sheet_attribute() {
         error.to_string(),
         "workbook sheet name exceeded the size limit"
     );
+}
+
+type GuardedUpdates = BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>;
+
+fn recalc_fixture(calc_pr: &str) -> (Cursor<Vec<u8>>, GuardedUpdates) {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Follow Up" sheetId="1" r:id="rId1"/></sheets>{calc_pr}</workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Pending</t></is></c><c r="B1"><f>COUNTIF(A1:A1,"Completed")</f><v>0</v></c></row></sheetData></worksheet>"#
+    );
+    let source = fixture(
+        &workbook,
+        &relationships,
+        &[("xl/worksheets/sheet1.xml", worksheet.as_bytes())],
+    );
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (1, 1),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: "Pending".to_string(),
+                    formula: None,
+                    style: None,
+                },
+                replacement: CellUpdate::Text("Completed".to_string()),
+                create_if_absent: false,
+            },
+        )]),
+    )]);
+    (source, updates)
+}
+
+fn workbook_xml(package: &mut Cursor<Vec<u8>>) -> String {
+    package.set_position(0);
+    let mut archive = zip::ZipArchive::new(&mut *package).unwrap();
+    let mut text = String::new();
+    archive
+        .by_name("xl/workbook.xml")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+#[test]
+fn recalc_patch_sets_full_calc_on_load_and_nothing_else_in_the_workbook_part() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text_recalc(&mut source, &mut destination, &updates).unwrap();
+
+    let after = workbook_xml(&mut destination);
+    assert!(after.contains(r#"fullCalcOnLoad="1""#), "{after}");
+    assert_eq!(
+        after.replace(r#" fullCalcOnLoad="1""#, ""),
+        before,
+        "only the calcPr attribute may differ"
+    );
+}
+
+#[test]
+fn recalc_verification_rejects_any_other_workbook_part_change() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    let patched_sheet = {
+        destination.set_position(0);
+        let mut archive = zip::ZipArchive::new(&mut destination).unwrap();
+        let mut bytes = Vec::new();
+        archive
+            .by_name("xl/worksheets/sheet1.xml")
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        bytes
+    };
+    let tampered = workbook_xml(&mut destination)
+        .replace(r#"calcId="191029""#, r#"calcId="191029" iterate="1""#);
+    let mut forged = fixture_from_members(
+        &tampered,
+        &format!(
+            r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+        ),
+        [("xl/worksheets/sheet1.xml", patched_sheet.as_slice())],
+    );
+    source.set_position(0);
+    let error =
+        verify_guarded_workbook_delta_text_recalc(&mut source, &mut forged, &updates).unwrap_err();
+    assert!(error.to_string().contains("recalculation flag"), "{error}");
+}
+
+#[test]
+fn plain_guarded_patch_leaves_the_workbook_part_untouched() {
+    let (mut source, updates) = recalc_fixture(r#"<calcPr calcId="191029"/>"#);
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    assert_eq!(workbook_xml(&mut destination), before);
+}
+
+#[test]
+fn recalc_without_a_calc_pr_element_leaves_the_workbook_part_untouched() {
+    let (mut source, updates) = recalc_fixture("");
+    let before = workbook_xml(&mut source);
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text_recalc(&mut source, &mut destination, &updates).unwrap();
+    assert_eq!(workbook_xml(&mut destination), before);
+}
+
+const STYLES: &str = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><sz val="9"/><color theme="1"/><name val="Arial"/><family val="2"/></font></fonts><cellXfs count="2"><xf fontId="0"/><xf fontId="1"/></cellXfs></styleSheet>"#;
+
+fn rich_runs() -> Vec<RichRun> {
+    vec![
+        RichRun {
+            text: "CIV-0021,0022 Completed".to_string(),
+            emphasized: true,
+        },
+        RichRun {
+            text: " CIV-0043 In Progress".to_string(),
+            emphasized: false,
+        },
+    ]
+}
+
+fn rich_fixture() -> (Cursor<Vec<u8>>, GuardedUpdates) {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Follow Up" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" s="1"/></row></sheetData></worksheet>"#
+    );
+    let source = fixture(
+        &workbook,
+        &relationships,
+        &[
+            ("xl/worksheets/sheet1.xml", worksheet.as_bytes()),
+            ("xl/styles.xml", STYLES.as_bytes()),
+        ],
+    );
+    let updates = BTreeMap::from([(
+        "Follow Up".to_string(),
+        BTreeMap::from([(
+            (1, 1),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("1".to_string()),
+                },
+                replacement: CellUpdate::Rich(rich_runs()),
+                create_if_absent: false,
+            },
+        )]),
+    )]);
+    (source, updates)
+}
+
+fn sheet_xml(package: &mut Cursor<Vec<u8>>) -> String {
+    package.set_position(0);
+    let mut archive = zip::ZipArchive::new(&mut *package).unwrap();
+    let mut text = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+#[test]
+fn rich_patch_writes_emphasized_and_plain_runs_in_the_cell_font() {
+    let (mut source, updates) = rich_fixture();
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    let xml = sheet_xml(&mut destination);
+
+    assert!(
+        xml.contains(
+            r#"<b/><u/><sz val="9"/><color theme="8"/><rFont val="Arial"/><family val="2"/>"#
+        ),
+        "{xml}"
+    );
+    assert!(xml.contains(r#"<sz val="9"/><color theme="1"/><rFont val="Arial"/><family val="2"/></rPr><t xml:space="preserve"> CIV-0043 In Progress</t>"#), "{xml}");
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text(&mut source, &mut destination, &updates).unwrap();
+    destination.set_position(0);
+    let workbook = read_workbook_from_reader(&mut destination).unwrap();
+    assert_eq!(
+        workbook.sheet("Follow Up").unwrap().value(1, 1),
+        "CIV-0021,0022 Completed CIV-0043 In Progress"
+    );
+}
+
+#[test]
+fn rich_verification_rejects_changed_formatting() {
+    let (mut source, updates) = rich_fixture();
+    let mut destination = Cursor::new(Vec::new());
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    let forged_sheet =
+        sheet_xml(&mut destination).replace(r#"<color theme="8"/>"#, r#"<color theme="9"/>"#);
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Follow Up" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let mut forged = fixture(
+        &workbook,
+        &relationships,
+        &[
+            ("xl/worksheets/sheet1.xml", forged_sheet.as_bytes()),
+            ("xl/styles.xml", STYLES.as_bytes()),
+        ],
+    );
+    source.set_position(0);
+
+    assert!(verify_guarded_workbook_delta_text(&mut source, &mut forged, &updates).is_err());
+}
+
+#[test]
+fn empty_rich_replacement_is_rejected() {
+    let (mut source, mut updates) = rich_fixture();
+    updates
+        .get_mut("Follow Up")
+        .unwrap()
+        .get_mut(&(1, 1))
+        .unwrap()
+        .replacement = CellUpdate::Rich(Vec::new());
+    let mut destination = Cursor::new(Vec::new());
+
+    assert!(patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).is_err());
+}
+
+const CONTENT_TYPES: &str = r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="x"/><Override PartName="/xl/calcChain.xml" ContentType="y"/></Types>"#;
+
+fn rows_fixture(stat_formula: &str) -> Cursor<Vec<u8>> {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Road" sheetId="1" r:id="rId1"/><sheet name="STAT" sheetId="2" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">Road!$A$1:$D$6</definedName></definedNames></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="{REL}" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>"#
+    );
+    let road = format!(
+        r#"<worksheet xmlns="{MAIN}"><dimension ref="A1:D6"/><sheetData><row r="1"><c r="D1"><f>AVERAGE(D3:D6)</f><v>0</v></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>ZONE</t></is></c></row><row r="3" ht="15"><c r="A3" s="2" t="inlineStr"><is><t>North</t></is></c><c r="B3" s="2" t="inlineStr"><is><t>Road 01</t></is></c><c r="C3" s="3" t="inlineStr"><is><t>CIV-0001</t></is></c><c r="D3" s="4"><f t="shared" ref="D3:D6" si="0">IF(C3="","empty",C3)</f><v>0</v></c></row><row r="4"><c r="A4" t="inlineStr"><is><t>North</t></is></c><c r="B4" t="inlineStr"><is><t>Road 02</t></is></c><c r="D4"><f t="shared" si="0"/><v>0</v></c></row><row r="6"><c r="D6"><f t="shared" si="0"/><v>0</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="A3:A4"/></mergeCells><conditionalFormatting sqref="C3:C6"><cfRule type="expression" priority="1"><formula>C3="x"</formula></cfRule></conditionalFormatting></worksheet>"#
+    );
+    let stat = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1"><f>{stat_formula}</f></c></row></sheetData></worksheet>"#
+    );
+    fixture_from_members(
+        &workbook,
+        &relationships,
+        [
+            ("xl/worksheets/sheet1.xml", road.as_bytes()),
+            ("xl/worksheets/sheet2.xml", stat.as_bytes()),
+            ("xl/calcChain.xml", b"<calcChain/>".as_slice()),
+            ("[Content_Types].xml", CONTENT_TYPES.as_bytes()),
+        ],
+    )
+}
+
+fn member(bytes: &[u8], name: &str) -> String {
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes.to_vec())).unwrap();
+    let mut text = String::new();
+    archive
+        .by_name(name)
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+fn insert_after_row_three() -> RowOp {
+    RowOp::InsertRow {
+        sheet: "Road".to_string(),
+        after_row: 3,
+        template_row: 3,
+        copy_columns: vec![1],
+        texts: vec![CellText {
+            column: 2,
+            text: "Road 01 (Part 2)".to_string(),
+        }],
+    }
+}
+
+#[test]
+fn insert_row_clones_the_template_and_shifts_everything_it_owns() {
+    let mut source = rows_fixture("SUM(Road!D3:D6)");
+    let output = apply_row_ops(&mut source, &[insert_after_row_three()]).unwrap();
+    let road = member(&output, "xl/worksheets/sheet1.xml");
+
+    // Rows below move down, the new row sits at 4.
+    assert!(road.contains(r#"<row r="4" ht="15">"#), "{road}");
+    assert!(road.contains(r#"<row r="5"><c r="A5""#), "{road}");
+    assert!(road.contains(r#"<row r="7"><c r="D7">"#), "{road}");
+    // Template styles and the zone are kept, the label is set, the RFI is cleared.
+    assert!(
+        road.contains(r#"<c r="A4" s="2" t="inlineStr"><is><t>North</t></is></c>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="B4" s="2" t="inlineStr"><is><t>Road 01 (Part 2)</t></is></c>"#),
+        "{road}"
+    );
+    assert!(road.contains(r#"<c r="C4" s="3"/>"#), "{road}");
+    // Shared formulas are expanded; the clone gets its own translated formula.
+    assert!(!road.contains("shared"), "{road}");
+    assert!(
+        road.contains(r#"<c r="D3" s="4"><f>IF(C3=&quot;&quot;,&quot;empty&quot;,C3)</f>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="D4" s="4"><f>IF(C4=&quot;&quot;,&quot;empty&quot;,C4)</f></c>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="D5"><f>IF(C5=&quot;&quot;,&quot;empty&quot;,C5)</f>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="D7"><f>IF(C7=&quot;&quot;,&quot;empty&quot;,C7)</f>"#),
+        "{road}"
+    );
+    // Ranges, merges, conditional formatting and the dimension follow Excel's rules.
+    assert!(road.contains("AVERAGE(D3:D7)"), "{road}");
+    assert!(road.contains(r#"<dimension ref="A1:D7"/>"#), "{road}");
+    assert!(road.contains(r#"<mergeCell ref="A3:A5"/>"#), "{road}");
+    assert!(
+        road.contains(r#"sqref="C3:C7""#) && road.contains(r#"<formula>C3="x"</formula>"#),
+        "{road}"
+    );
+}
+
+#[test]
+fn insert_row_updates_other_sheets_defined_names_and_drops_the_calc_chain() {
+    let mut source = rows_fixture("SUM(Road!D3:D6)+Road!C9");
+    let output = apply_row_ops(&mut source, &[insert_after_row_three()]).unwrap();
+
+    assert!(member(&output, "xl/worksheets/sheet2.xml").contains("SUM(Road!D3:D7)+Road!C10"));
+    assert!(member(&output, "xl/workbook.xml").contains("Road!$A$1:$D$7"));
+    let mut archive = zip::ZipArchive::new(Cursor::new(output.clone())).unwrap();
+    assert!(archive.by_name("xl/calcChain.xml").is_err());
+    assert!(!member(&output, "xl/_rels/workbook.xml.rels").contains("calcChain"));
+    assert!(!member(&output, "[Content_Types].xml").contains("calcChain"));
+    let mut reread = Cursor::new(output);
+    let workbook = read_workbook_from_reader(&mut reread).unwrap();
+    assert_eq!(
+        workbook.sheet("Road").unwrap().value(4, 2),
+        "Road 01 (Part 2)"
+    );
+    assert_eq!(workbook.sheet("Road").unwrap().value(5, 2), "Road 02");
+}
+
+#[test]
+fn insert_row_refuses_a_shared_formula_on_another_sheet_that_points_at_the_sheet() {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Road" sheetId="1" r:id="rId1"/><sheet name="STAT" sheetId="2" r:id="rId2"/></sheets></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="{REL}" Target="worksheets/sheet2.xml"/></Relationships>"#
+    );
+    let road = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="3"><c r="A3"/></row></sheetData></worksheet>"#
+    );
+    let stat = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1"><f t="shared" ref="A1:A2" si="0">Road!A5</f></c></row><row r="2"><c r="A2"><f t="shared" si="0"/></c></row></sheetData></worksheet>"#
+    );
+    let mut source = fixture_from_members(
+        &workbook,
+        &relationships,
+        [
+            ("xl/worksheets/sheet1.xml", road.as_bytes()),
+            ("xl/worksheets/sheet2.xml", stat.as_bytes()),
+        ],
+    );
+
+    let error = apply_row_ops(&mut source, &[insert_after_row_three()]).unwrap_err();
+
+    assert!(error.to_string().contains("shared formula"), "{error}");
+}
+
+#[test]
+fn set_text_relabels_a_value_cell_but_refuses_a_formula_cell() {
+    let mut source = rows_fixture("1");
+    let output = apply_row_ops(
+        &mut source,
+        &[RowOp::SetText {
+            sheet: "Road".to_string(),
+            row: 3,
+            column: 2,
+            text: "Road 01 (Part 1)".to_string(),
+        }],
+    )
+    .unwrap();
+    assert!(
+        member(&output, "xl/worksheets/sheet1.xml")
+            .contains(r#"<c r="B3" s="2" t="inlineStr"><is><t>Road 01 (Part 1)</t></is></c>"#)
+    );
+
+    let mut source = rows_fixture("1");
+    let error = apply_row_ops(
+        &mut source,
+        &[RowOp::SetText {
+            sheet: "Road".to_string(),
+            row: 3,
+            column: 4,
+            text: "x".to_string(),
+        }],
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("formula"), "{error}");
+}
+
+#[test]
+fn insert_row_can_precede_the_first_data_row_using_the_row_below_as_template() {
+    let mut source = rows_fixture("1");
+    let output = apply_row_ops(
+        &mut source,
+        &[RowOp::InsertRow {
+            sheet: "Road".to_string(),
+            after_row: 2,
+            template_row: 3,
+            copy_columns: vec![1],
+            texts: vec![CellText {
+                column: 2,
+                text: "Road 00".to_string(),
+            }],
+        }],
+    )
+    .unwrap();
+    let road = member(&output, "xl/worksheets/sheet1.xml");
+
+    assert!(road.contains(r#"<row r="3" ht="15">"#), "{road}");
+    assert!(
+        road.contains(r#"<c r="B3" s="2" t="inlineStr"><is><t>Road 00</t></is></c>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="D3" s="4"><f>IF(C3=&quot;&quot;,&quot;empty&quot;,C3)</f></c>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="B4" s="2" t="inlineStr"><is><t>Road 01</t></is></c>"#),
+        "{road}"
+    );
+    assert!(
+        road.contains(r#"<c r="D4" s="4"><f>IF(C4=&quot;&quot;,&quot;empty&quot;,C4)</f>"#),
+        "{road}"
+    );
+}
+
+fn formula_fixture(cell_xml: &str) -> (Cursor<Vec<u8>>, GuardedUpdates) {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Road" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="5"><c r="C5" t="inlineStr"><is><t>Completed</t></is></c>{cell_xml}</row></sheetData></worksheet>"#
+    );
+    let source = fixture(
+        &workbook,
+        &relationships,
+        &[("xl/worksheets/sheet1.xml", worksheet.as_bytes())],
+    );
+    let updates = BTreeMap::from([(
+        "Road".to_string(),
+        BTreeMap::from([(
+            (5, 25),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("34".to_string()),
+                },
+                replacement: CellUpdate::Formula {
+                    formula: "COUNTIF(C5:P5,\"Completed\")/6".to_string(),
+                    cached: None,
+                },
+                create_if_absent: false,
+            },
+        )]),
+    )]);
+    (source, updates)
+}
+
+#[test]
+fn guarded_formula_fills_an_empty_styled_cell_and_verifies() {
+    let (mut source, updates) = formula_fixture(r#"<c r="Y5" s="34"/>"#);
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text(&mut source, &mut destination, &updates).unwrap();
+
+    let xml = sheet_xml(&mut destination);
+    assert!(
+        xml.contains(r#"<c r="Y5" s="34"><f>COUNTIF(C5:P5,&quot;Completed&quot;)/6</f></c>"#),
+        "{xml}"
+    );
+    destination.set_position(0);
+    let workbook = read_workbook_from_reader(&mut destination).unwrap();
+    assert_eq!(
+        workbook
+            .sheet("Road")
+            .unwrap()
+            .cell(5, 25)
+            .unwrap()
+            .formula
+            .as_deref(),
+        Some("COUNTIF(C5:P5,\"Completed\")/6")
+    );
+}
+
+#[test]
+fn guarded_formula_never_overwrites_a_value_or_an_existing_formula() {
+    for cell in [
+        r#"<c r="Y5" s="34" t="inlineStr"><is><t>READY</t></is></c>"#,
+        r#"<c r="Y5" s="34"><f>1+1</f><v>2</v></c>"#,
+    ] {
+        let (mut source, mut updates) = formula_fixture(cell);
+        // The preview would have recorded the real content; the engine must still refuse.
+        updates
+            .get_mut("Road")
+            .unwrap()
+            .get_mut(&(5, 25))
+            .unwrap()
+            .expected = CellData {
+            value: String::new(),
+            formula: None,
+            style: Some("34".to_string()),
+        };
+        let mut destination = Cursor::new(Vec::new());
+        assert!(
+            patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).is_err(),
+            "{cell}"
+        );
+    }
 }

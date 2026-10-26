@@ -26,7 +26,7 @@ and versioned with the code they govern.
 | Retire RFI work tracking, audit export, and device readiness | Accepted | [`adr/0014-retire-work-tracking-and-device-readiness.md`](adr/0014-retire-work-tracking-and-device-readiness.md) |
 | Exact completed-PDF evidence as a separate guarded RFI Log status operation | Accepted | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
 | Per-RFI mixed-status remarks on CIV and PCU Follow Up sheets | Superseded | [`adr/0026-mixed-rfi-status-remarks.md`](adr/0026-mixed-rfi-status-remarks.md) |
-| Keep Follow Up Sync away from worksheet Remarks cells | Accepted | [`adr/0028-remove-follow-up-status-remarks.md`](adr/0028-remove-follow-up-status-remarks.md) |
+| Keep Follow Up Sync away from worksheet Remarks cells | Superseded by ADR 0047 | [`adr/0028-remove-follow-up-status-remarks.md`](adr/0028-remove-follow-up-status-remarks.md) |
 | Exact multi-area CIV Follow Up fan-out | Accepted | [`adr/0029-exact-civ-multi-area-follow-up.md`](adr/0029-exact-civ-multi-area-follow-up.md) |
 | Larger bounded S5 retained-file capacity | Accepted | [`adr/0030-bounded-s5-retained-file-capacity.md`](adr/0030-bounded-s5-retained-file-capacity.md) |
 | Distinct-context MEC Follow Up fan-out (matching key superseded) | Partially superseded | [`adr/0031-exact-mec-context-follow-up.md`](adr/0031-exact-mec-context-follow-up.md) |
@@ -37,6 +37,18 @@ and versioned with the code they govern.
 | Follow Up context-scope filtering and actionable partial-match diagnostics | Accepted | [`adr/0036-follow-up-context-scope-and-diagnostics.md`](adr/0036-follow-up-context-scope-and-diagnostics.md) |
 | MEC Follow Up Section/Block matching and multi-section fan-out | Accepted | [`adr/0037-mec-follow-up-section-block-matching.md`](adr/0037-mec-follow-up-section-block-matching.md) |
 | CIV Follow Up Tag No token fan-out and partial-coverage diagnostics | Accepted | [`adr/0038-civ-follow-up-tag-token-coverage.md`](adr/0038-civ-follow-up-tag-token-coverage.md) |
+| Background read-only Preview preparation (Action Queue) | Accepted | [`adr/0039-background-read-only-preview-preparation.md`](adr/0039-background-read-only-preview-preparation.md) |
+| Cover-first identity reading and OCR page cache | Accepted | [`adr/0040-cover-first-identity-and-ocr-page-cache.md`](adr/0040-cover-first-identity-and-ocr-page-cache.md) |
+| Separate publish-status operation | Accepted | [`adr/0041-separate-publish-status-operation.md`](adr/0041-separate-publish-status-operation.md) |
+| Follow Up ignores number-only RFI Log rows | Accepted | [`adr/0042-follow-up-ignores-number-only-log-rows.md`](adr/0042-follow-up-ignores-number-only-log-rows.md) |
+| Local activity log for support | Accepted | [`adr/0043-local-activity-log.md`](adr/0043-local-activity-log.md) |
+| Tolerate unsupported directory flush on network shares | Accepted | [`adr/0044-tolerate-unsupported-directory-flush.md`](adr/0044-tolerate-unsupported-directory-flush.md) |
+| Follow Up Apply requests recalculation on open | Accepted | [`adr/0045-follow-up-recalculate-on-open.md`](adr/0045-follow-up-recalculate-on-open.md) |
+| Follow Up Road parts and deleted RFIs | Accepted | [`adr/0046-follow-up-road-parts-and-deleted-rfis.md`](adr/0046-follow-up-road-parts-and-deleted-rfis.md) |
+| Follow Up generated row remarks | Accepted | [`adr/0047-follow-up-generated-row-remarks.md`](adr/0047-follow-up-generated-row-remarks.md) |
+| Follow Up Road part rows | Accepted | [`adr/0048-follow-up-road-part-rows.md`](adr/0048-follow-up-road-part-rows.md) |
+| Follow Up formula maintenance and per-cell remarks | Accepted | [`adr/0049-follow-up-formula-maintenance.md`](adr/0049-follow-up-formula-maintenance.md) |
+| Follow Up keeps every planned Road and its zone | Accepted | [`adr/0050-follow-up-road-plan-and-zones.md`](adr/0050-follow-up-road-plan-and-zones.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

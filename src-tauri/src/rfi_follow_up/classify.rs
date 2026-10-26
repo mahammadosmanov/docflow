@@ -8,6 +8,7 @@ pub(super) fn classify_workbooks_full(
     target_has_signature: bool,
 ) -> Result<Value, BackendError> {
     let records = scan_source_records(source_discovery, source_workbook)?;
+    let logged_numbers = scan_logged_rfi_numbers(source_discovery, source_workbook);
     let mut merge_budget = MergeQueryBudget {
         remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
     };
@@ -40,6 +41,24 @@ pub(super) fn classify_workbooks_full(
         }
     }
 
+    let deleted_count = slots
+        .values()
+        .flat_map(|slot| slot.codes.iter())
+        .filter(|code| {
+            !is_placeholder_rfi(code)
+                && !records.contains_key(*code)
+                && !logged_numbers.contains(*code)
+        })
+        .count();
+    let total_codes = slots
+        .values()
+        .flat_map(|slot| slot.codes.iter())
+        .filter(|code| !is_placeholder_rfi(code))
+        .count();
+    // Removing a large share of Follow Up's RFIs means the wrong or an outdated RFI Log
+    // was selected; refuse to remove anything on that evidence.
+    let mass_deletion = deleted_count > MASS_DELETION_FLOOR
+        && deleted_count * MASS_DELETION_DENOMINATOR > total_codes;
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {
         let removed = slot
@@ -47,11 +66,15 @@ pub(super) fn classify_workbooks_full(
             .iter()
             .filter(|code| {
                 !is_placeholder_rfi(code)
-                    && records.get(*code).is_some_and(|record| {
-                        record.excluded_civ_pcs
-                            || is_confirmed_follow_up_exclusion(record)
-                            || record.state == Some(LogState::Remove)
-                    })
+                    && match records.get(*code) {
+                        Some(record) => {
+                            record.excluded_civ_pcs
+                                || is_confirmed_follow_up_exclusion(record)
+                                || record.state == Some(LogState::Remove)
+                        }
+                        // Deleted from the Log: absent even as a bare number.
+                        None => !mass_deletion && !logged_numbers.contains(*code),
+                    }
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -142,6 +165,8 @@ pub(super) fn classify_workbooks_full(
                     },
                     selectable: false,
                     enabled: false,
+                    remark: None,
+                    formula_fixes: Vec::new(),
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -208,6 +233,8 @@ pub(super) fn classify_workbooks_full(
                     },
                     selectable: false,
                     enabled: false,
+                    remark: None,
+                    formula_fixes: Vec::new(),
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -259,7 +286,13 @@ pub(super) fn classify_workbooks_full(
             .flatten();
         let mec_context_coverage = (sheet_name == "MEC")
             .then(|| mec_context_coverage(target_workbook, sheet_name, &candidates, record))
-            .flatten();
+            .flatten()
+            .or_else(|| {
+                // Road tags are checked the same way: every named Road/part needs a row.
+                (sheet_name == "Road")
+                    .then(|| road_context_coverage(target_workbook, &candidates, record))
+                    .flatten()
+            });
         // Signed By rows repeat RFIs as Worley summaries, not lifecycle placements.
         let existing_slots = existing_slot_keys_by_code
             .get(record.canonical_rfi.as_str())
@@ -280,7 +313,9 @@ pub(super) fn classify_workbooks_full(
                 && (distinct_civ_area_rows(target_workbook, &candidates, record)
                     || distinct_civ_zone_area_rows(target_workbook, &candidates, record)
                     || civ_tag_coverage == Some(true)))
-                || (sheet_name == "MEC" && mec_context_coverage.is_some()));
+                || (sheet_name == "MEC" && mec_context_coverage.is_some())
+                // A Road tag without a part intentionally fans out to every part row.
+                || sheet_name == "Road");
         if (candidate_count == 0 || candidate_count > 1 && !exact_multi_area)
             && (candidate_count == 0 || existing_slots.is_empty())
         {
@@ -320,6 +355,8 @@ pub(super) fn classify_workbooks_full(
                 },
                 selectable: false,
                 enabled: false,
+                remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -358,6 +395,8 @@ pub(super) fn classify_workbooks_full(
                 reason_key: "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
                 selectable: false,
                 enabled: false,
+                remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -402,6 +441,8 @@ pub(super) fn classify_workbooks_full(
                 },
                 selectable: false,
                 enabled: false,
+                remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -488,6 +529,8 @@ pub(super) fn classify_workbooks_full(
                 reason_key: format!("warn.rfi.followUp.reason.{reason}"),
                 selectable: false,
                 enabled: false,
+                remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: slot.layout.worksheet.clone(),
                     row: slot.row,
@@ -671,6 +714,8 @@ pub(super) fn classify_workbooks_full(
                         reason_key: format!("warn.rfi.followUp.reason.{reason}"),
                         selectable: false,
                         enabled: false,
+                        remark: None,
+                        formula_fixes: Vec::new(),
                         target: FollowUpReviewTarget {
                             worksheet: slot.layout.worksheet.clone(),
                             row: slot.row,
@@ -763,6 +808,8 @@ pub(super) fn classify_workbooks_full(
             },
             selectable: false,
             enabled: false,
+            remark: None,
+            formula_fixes: Vec::new(),
             target: FollowUpReviewTarget {
                 worksheet: layout.worksheet,
                 row: 0,
@@ -864,9 +911,19 @@ pub(super) fn classify_workbooks_full(
         }
     }
     rows.extend(manual_rows);
+    rows.extend(remark_review_rows(
+        &slots,
+        &records,
+        target_workbook,
+        &mut merge_budget,
+    )?);
+    rows.extend(formula_repair_rows(&layouts, target_workbook));
 
     if rows.len() > MAX_PREVIEW_ROWS {
-        return Err(limit_exceeded());
+        return Err(limit_exceeded_for(format!(
+            "{} preview rows; at most {MAX_PREVIEW_ROWS}",
+            rows.len()
+        )));
     }
     rows.sort_by(|left, right| {
         left.sheet
@@ -879,6 +936,12 @@ pub(super) fn classify_workbooks_full(
         warnings.push(Warning {
             key: "warn.rfi.followUp.unmappedRecords".to_string(),
             subject: unmapped_count.to_string(),
+        });
+    }
+    if mass_deletion {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.massDeletionBrake".to_string(),
+            subject: deleted_count.to_string(),
         });
     }
     if rows.is_empty() {

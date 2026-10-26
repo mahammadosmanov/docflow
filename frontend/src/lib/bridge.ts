@@ -24,6 +24,7 @@ import type {
   ReviewItem,
   SupportBundlePreview,
   RfiPrintFindResult,
+  WatchStatus,
 } from "../types";
 
 type ProgressHandler = (event: ProgressEvent) => void;
@@ -889,6 +890,23 @@ export class MockBridge implements Bridge {
   private fileGroupPlan: Plan | null = null;
   private completeStatusPlan: Plan | null = null;
   private fastScanPlan: Plan | null = null;
+  private watchEnabled: string[] = [];
+
+  private watchStatus(): WatchStatus {
+    return {
+      operations: [
+        "rfi.process_scans_fast_covers",
+        "rfi.group_files",
+        "rfi.stage_signed_first_pages",
+        "rfi.complete_status_sync",
+      ],
+      enabled: this.watchEnabled,
+      configured: [],
+      pollSeconds: 300,
+      paused: false,
+      items: [],
+    };
+  }
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -1029,6 +1047,13 @@ export class MockBridge implements Bridge {
       }
       case "support/copyDiagnostics":
         result = { ok: true };
+        break;
+      case "support/activityLog":
+        result = {
+          fileName: "docflow-activity-log.jsonl",
+          mediaType: "application/x-ndjson",
+          content: "",
+        };
         break;
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
@@ -1863,6 +1888,21 @@ export class MockBridge implements Bridge {
           },
         } satisfies RecoveryPayload;
         break;
+      case "watch/status":
+        result = this.watchStatus();
+        break;
+      case "watch/update": {
+        const opId = String(params.opId);
+        if (typeof params.enabled === "boolean") {
+          this.watchEnabled = params.enabled
+            ? [...new Set([...this.watchEnabled, opId])]
+            : this.watchEnabled.filter((id) => id !== opId);
+        }
+        result = this.watchStatus();
+        break;
+      }
+      case "watch/open":
+        throw new Error("error.watch.notReady");
       default:
         throw new Error(`Mock method not implemented: ${String(method)}`);
     }

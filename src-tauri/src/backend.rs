@@ -39,6 +39,8 @@ pub(crate) enum BackendMethod {
     SupportDiagnostics,
     #[serde(rename = "support/copyDiagnostics")]
     SupportCopyDiagnostics,
+    #[serde(rename = "support/activityLog")]
+    SupportActivityLog,
     #[serde(rename = "auth/signIn")]
     AuthSignIn,
     #[serde(rename = "auth/signUp")]
@@ -89,6 +91,12 @@ pub(crate) enum BackendMethod {
     RecoveryList,
     #[serde(rename = "rfi/printFind")]
     RfiPrintFind,
+    #[serde(rename = "watch/status")]
+    WatchStatus,
+    #[serde(rename = "watch/update")]
+    WatchUpdate,
+    #[serde(rename = "watch/open")]
+    WatchOpen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,7 +105,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 36] = [
+    pub(crate) const ALL: [Self; 40] = [
         Self::AppBootstrap,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
@@ -117,6 +125,7 @@ impl BackendMethod {
         Self::SettingsDeletePreset,
         Self::SupportDiagnostics,
         Self::SupportCopyDiagnostics,
+        Self::SupportActivityLog,
         Self::EnginePreview,
         Self::EngineApply,
         Self::EngineCancel,
@@ -134,6 +143,9 @@ impl BackendMethod {
         Self::PathsReveal,
         Self::RecoveryList,
         Self::RfiPrintFind,
+        Self::WatchStatus,
+        Self::WatchUpdate,
+        Self::WatchOpen,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -153,6 +165,7 @@ impl BackendMethod {
             Self::SettingsDeletePreset => "settings/deletePreset",
             Self::SupportDiagnostics => "support/diagnostics",
             Self::SupportCopyDiagnostics => "support/copyDiagnostics",
+            Self::SupportActivityLog => "support/activityLog",
             Self::AuthSignIn => "auth/signIn",
             Self::AuthSignUp => "auth/signUp",
             Self::AuthSignOut => "auth/signOut",
@@ -178,6 +191,9 @@ impl BackendMethod {
             Self::PathsReveal => "paths/reveal",
             Self::RfiPrintFind => "rfi/printFind",
             Self::RecoveryList => "recovery/list",
+            Self::WatchStatus => "watch/status",
+            Self::WatchUpdate => "watch/update",
+            Self::WatchOpen => "watch/open",
         }
     }
 
@@ -190,6 +206,7 @@ impl BackendMethod {
                 | Self::SettingsReplicaStatus
                 | Self::SupportDiagnostics
                 | Self::SupportCopyDiagnostics
+                | Self::SupportActivityLog
                 | Self::AuthSignIn
                 | Self::AuthSignUp
                 | Self::AuthSignOut
@@ -215,6 +232,7 @@ pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
+    activity_log: crate::activity_log::ActivityLog,
 }
 
 fn path_dialog_filter(
@@ -226,6 +244,7 @@ fn path_dialog_filter(
         | ("rfi.follow_up_sync", "rfi_log_workbook" | "follow_up_workbook")
         | ("rfi.system_sync", "rfi_log_workbook" | "follow_up_workbook")
         | ("rfi.complete_status_sync", "rfi_log_workbook")
+        | ("rfi.publish_status", "rfi_log_workbook")
         | ("rfi.generate_concrete_documents", "rfi_log_workbook" | "follow_up_workbook") => {
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
         }
@@ -240,12 +259,27 @@ fn path_dialog_filter(
 }
 
 impl BackendRouter {
+    /// Starts the read-only inbox check loop. It only prepares Previews.
+    pub(crate) fn start_watch(&self) {
+        let native = Arc::clone(&self.native);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            loop {
+                native.watch_tick();
+                std::thread::sleep(native.watch_poll_interval());
+            }
+        });
+    }
+
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         let native = Arc::new(NativeBackend::production()?);
         Ok(Self {
             app,
             native,
             recent_error_codes: RecentErrorCodes::default(),
+            activity_log: crate::activity_log::ActivityLog::new(
+                crate::activity_log::ActivityLog::default_dir(),
+            ),
         })
     }
 
@@ -256,9 +290,39 @@ impl BackendRouter {
         progress: Channel<ProgressEvent>,
     ) -> Result<Value, BackendError> {
         method.authorize(&self.native.auth_state())?;
+        let _operator = matches!(
+            method,
+            BackendMethod::EnginePreview
+                | BackendMethod::EngineApply
+                | BackendMethod::EngineUndo
+                | BackendMethod::EngineReviewScan
+                | BackendMethod::EngineReviewPreview
+        )
+        .then(|| self.native.watch_operator_guard());
         match method {
+            BackendMethod::WatchUpdate => {
+                let native = Arc::clone(&self.native);
+                tauri::async_runtime::spawn_blocking(move || {
+                    let status = native.dispatch(BackendMethod::WatchUpdate, params);
+                    if status.is_ok() {
+                        let background = Arc::clone(&native);
+                        std::thread::spawn(move || background.watch_tick());
+                    }
+                    status
+                })
+                .await
+                .map_err(|_| BackendError::request_failed("watch update task failed"))?
+            }
             BackendMethod::SupportDiagnostics => self.support_diagnostics(params).await,
             BackendMethod::SupportCopyDiagnostics => self.copy_diagnostics(params).await,
+            BackendMethod::SupportActivityLog => {
+                validate_empty_params(&params)?;
+                Ok(serde_json::json!({
+                    "fileName": "docflow-activity-log.jsonl",
+                    "mediaType": "application/x-ndjson",
+                    "content": self.activity_log.export(),
+                }))
+            }
             BackendMethod::EnginePreview => self.preview(params, progress).await,
             BackendMethod::EngineApply => self.apply(params, progress).await,
             BackendMethod::EngineCancel => self.cancel(params).await,
@@ -333,6 +397,7 @@ impl BackendRouter {
         let (plan_id, op_id) = validate_apply_envelope(&params)?;
         let native = Arc::clone(&self.native);
         let plan_id = plan_id.to_string();
+        let params_plan_id = Some(plan_id.clone());
         let op_id = op_id.map(str::to_string);
         let progress_channel = progress.clone();
         let (mut result, approved_op_id) = tauri::async_runtime::spawn_blocking(move || {
@@ -342,6 +407,9 @@ impl BackendRouter {
         })
         .await
         .map_err(|_| BackendError::request_failed("native apply task failed"))??;
+        if let Some(plan_id) = params_plan_id.as_deref() {
+            self.native.watch_forget_plan(plan_id);
+        }
         let native = Arc::clone(&self.native);
         tauri::async_runtime::spawn_blocking(move || {
             native.sync_result(&approved_op_id, &mut result);
@@ -519,6 +587,7 @@ impl BackendRouter {
                 }
                 "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
                 "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
+                "rfi.publish_status" => native.preview_rfi_publish_status(params, send),
                 "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
                 "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
                 "files.batch_print" => native.preview_batch_print(params, send),
@@ -581,6 +650,13 @@ struct CopyDiagnosticsParams {
     content: String,
 }
 
+fn chrono_free_timestamp() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    format!("unix:{seconds}")
+}
+
 fn validate_empty_params(params: &Value) -> Result<(), BackendError> {
     if params.as_object().is_some_and(serde_json::Map::is_empty) {
         Ok(())
@@ -597,12 +673,51 @@ pub(crate) async fn frontend_call(
 ) -> Result<Value, BackendError> {
     debug_assert_eq!(request.method.owner(), MethodOwner::Rust);
     debug_assert!(BackendMethod::ALL.contains(&request.method));
-    let _method_name = request.method.as_str();
-    let result = router
-        .call(request.method, request.params, on_progress)
-        .await;
+    let method_name = request.method.as_str();
+    let op_id = request
+        .params
+        .get("opId")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let started = std::time::Instant::now();
+    let method = request.method;
+    let result = router.call(method, request.params, on_progress).await;
     if let Err(error) = &result {
         router.recent_error_codes.record(error.code);
+    }
+    if method != BackendMethod::SupportActivityLog {
+        let mut entry = serde_json::json!({
+            "at": chrono_free_timestamp(),
+            "version": env!("CARGO_PKG_VERSION"),
+            "os": std::env::consts::OS,
+            "method": method_name,
+            "opId": op_id,
+            "ms": started.elapsed().as_millis() as u64,
+        });
+        match &result {
+            Ok(value) => {
+                entry["ok"] = Value::Bool(true);
+                if matches!(
+                    method,
+                    BackendMethod::EnginePreview | BackendMethod::EngineRevise
+                ) {
+                    entry["plan"] = crate::activity_log::summarize_plan(value);
+                }
+            }
+            Err(error) => {
+                entry["ok"] = Value::Bool(false);
+                entry["errorCode"] = Value::String(error.code.to_string());
+                entry["error"] = Value::String(error.message.clone());
+            }
+        }
+        let trace = crate::ocr::take_cover_trace();
+        if !trace.is_empty() {
+            entry["ocrCoverTrace"] = serde_json::json!(trace);
+        }
+        if let Some(failure) = crate::leaf_transaction::take_last_failure() {
+            entry["publicationFailure"] = Value::String(failure);
+        }
+        router.activity_log.record(entry);
     }
     result
 }
@@ -637,6 +752,7 @@ mod tests {
             BackendMethod::SettingsReplicaStatus,
             BackendMethod::SupportDiagnostics,
             BackendMethod::SupportCopyDiagnostics,
+            BackendMethod::SupportActivityLog,
             BackendMethod::AuthSignIn,
             BackendMethod::AuthSignUp,
             BackendMethod::AuthSignOut,
@@ -786,6 +902,10 @@ mod tests {
         );
         assert_eq!(
             path_dialog_filter("rfi.complete_status_sync", "rfi_log_workbook"),
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
+        );
+        assert_eq!(
+            path_dialog_filter("rfi.publish_status", "rfi_log_workbook"),
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
         );
         assert_eq!(path_dialog_filter("rfi.process_scans", "source"), None);

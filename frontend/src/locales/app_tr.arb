@@ -1027,5 +1027,89 @@
   "param.rfi.documents.rfis.help": "Tam RFI numaralarını veya CIV seri numaralarını virgülle ya da yeni satırlarla girin.",
   "param.rfi.documents.waterRatios.help": "İsteğe bağlı olarak her satıra RFI numarası = oran girin. Yazılmayan RFI'nin hücresi boş kalır.",
   "param.rfi.documents.ambientGroups.help": "İsteğe bağlı; her grup için bir satır: RFI[, RFI...]=MIN-MAX. Aralık uçları dahildir; listelenmeyen RFI'ler varsayılan En düşük/En yüksek ortam sıcaklıklarını kullanır.",
-  "step.rfi.generatedConcreteDocument": "Beton belgesi oluştur"
+  "step.rfi.generatedConcreteDocument": "Beton belgesi oluştur",
+  "queue.title": "İşlem kuyruğu",
+  "queue.help": "DocFlow kayıtlı klasörlerinizi kontrol eder ve önizlemeleri hazırlar. Bir önizlemeyi açıp uygulamadığınız sürece hiçbir şey değişmez.",
+  "queue.checkNow": "Şimdi kontrol et",
+  "queue.watch": "Önizlemeleri otomatik hazırla",
+  "queue.empty": "Bekleyen önizleme yok",
+  "queue.empty.help": "Aşağıdan bir kontrolü açın. Yeni dosyalar kopyalanması bittikten sonra burada görünür.",
+  "queue.status.preparing": "Hazırlanıyor…",
+  "queue.status.ready": "Hazır",
+  "queue.status.stale": "Güncel değil",
+  "queue.status.failed": "Hazırlanamadı",
+  "queue.summary": "{steps} planlı değişiklik · {warnings} uyarı",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Önizlemeyi aç",
+  "queue.dismiss": "Gizle",
+  "queue.reprepare": "Yeniden hazırla",
+  "queue.paused": "Başka bir işlem çalışırken duraklatıldı.",
+  "queue.badge": "{count} önizleme hazır",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "Önizleme hazırlanamadı ({code}).",
+  "error.watch.notReady": "Bu önizleme artık kullanılamıyor. Yeniden hazırlayın.",
+  "error.watch.tooManyEntries": "Klasörde otomatik kontrol için çok fazla dosya var.",
+  "error.watch.unreadable": "Klasör şu anda okunamıyor.",
+  "queue.setup": "Klasörleri seç",
+  "queue.needsFolders": "Klasörler henüz seçilmedi",
+  "op.rfi.publish_status.title": "RFI'ları yayına hazırla (Ongoing)",
+  "op.rfi.publish_status.desc": "Klasördeki PDF + DOCX çiftlerini RFI Log ile eşleştirir ve yalnızca boş Inspection Status hücrelerini Ongoing yapmayı önerir.",
+  "param.rfi.publishStatus.stagingFolder": "Gelen dosyalar klasörü",
+  "param.rfi.publishStatus.stagingFolder.help": "Mail eklerini kaydettiğiniz klasör. Yalnızca üst düzey dosyalar salt okunur okunur.",
+  "param.rfi.publishStatus.rfiLogWorkbook": "RFI Log Çalışma Kitabı",
+  "param.rfi.publishStatus.rfiLogWorkbook.help": "Güvenli boş Inspection Status hücrelerinin incelemeden sonra Ongoing yapılabileceği .xlsm veya .xlsx RFI Log.",
+  "error.param.required.staging_folder": "Gelen dosyalar klasörü zorunlu",
+  "error.rfi.publishStatus.stagingInvalid": "Okunabilir bir gelen dosyalar klasörü seçin.",
+  "error.rfi.publishStatus.stagingTooLarge": "Klasörde çok fazla dosya var.",
+  "error.rfi.publishStatus.workbookInvalid": "Geçerli bir RFI Log .xlsm veya .xlsx seçin.",
+  "error.rfi.publishStatus.workbookLocked": "Seçili RFI Log'u Excel'de veya başka uygulamada kapatıp tekrar deneyin.",
+  "error.rfi.publishStatus.approvedUpdateInvalid": "Onaylanan yayın durumu güncellemesi geçersiz; yeniden önizleyin.",
+  "warn.rfi.publishStatus.noChangesNeeded": "Hazır güvenli RFI Log durum değişikliği yok.",
+  "warn.rfi.publishStatus.noRowsSelected": "Yayına hazırlamak için en az bir RFI seçin.",
+  "warn.rfi.publishStatus.ambiguousName": "Bir dosya adında birden fazla RFI kodu var; kullanılmadı.",
+  "note.rfi.publishStatus.rfiLog": "Onaylanan RFI Log Inspection Status hücrelerini Ongoing yap",
+  "rfi.publishStatus.editor.title": "Gelen dosyaları ve durum güncellemelerini inceleyin",
+  "rfi.publishStatus.editor.rowCount": "{count} RFI bulundu",
+  "rfi.publishStatus.column.enabled": "Uygula",
+  "rfi.publishStatus.column.discipline": "Disiplin",
+  "rfi.publishStatus.column.rfiNo": "RFI No.",
+  "rfi.publishStatus.column.pdfName": "PDF",
+  "rfi.publishStatus.column.docxName": "Word",
+  "rfi.publishStatus.column.currentStatus": "Mevcut durum",
+  "rfi.publishStatus.column.proposedStatus": "Yeni durum",
+  "rfi.publishStatus.column.disposition": "Karar",
+  "rfi.publishStatus.column.action": "İşlem",
+  "rfi.publishStatus.disposition.ready": "Hazır",
+  "rfi.publishStatus.disposition.statusNotBlank": "Durum zaten dolu",
+  "rfi.publishStatus.disposition.incompleteFiles": "PDF veya Word eksik",
+  "rfi.publishStatus.disposition.notInLog": "Log'da yok",
+  "rfi.publishStatus.disposition.unsafeCell": "Hücre güvenli değil",
+  "progress.phase.publish_workbook_read": "RFI Log durum hücreleri okunuyor",
+  "prefs.support.activityLog": "Etkinlik günlüğünü kaydet",
+  "prefs.support.activityLogSaved": "Etkinlik günlüğü kaydedildi. Dosyayı destek için paylaşabilirsiniz; dosya yolları, belge içeriği ve belirteçler gizlenir.",
+  "warn.rfi.followUp.reason.readyDeleted": "RFI, RFI Log'da hiçbir yerde bulunmadığı için silinmiş sayıldı ve hücreden çıkarılacak.",
+  "warn.rfi.followUp.reason.readyRemark": "Satır için üretilmiş Remarks metni (Completed önce) yazılacak.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Tüm RFI'lar Completed olduğu için üretilmiş Remarks metni silinecek.",
+  "warn.rfi.followUp.reason.remarkManual": "Remarks hücresinde elle yazılmış metin var; DocFlow dokunmadı.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks hücresi formül içeriyor veya birleştirilmiş; değiştirilmedi.",
+  "warn.rfi.followUp.massDeletionBrake": "Follow Up'taki RFI'ların büyük bölümü seçilen RFI Log'da yok; silme duraklatıldı. Doğru ve güncel RFI Log'u seçtiğinizden emin olun.",
+  "warn.rfi.followUp.reason.structureInsert": "Road part satırı eklenecek (biçim ve formüller komşu satırdan kopyalanır).",
+  "warn.rfi.followUp.reason.structureRename": "Parçasız Road satırı, Log'daki parçalar için 'Part 1' olarak yeniden adlandırılacak.",
+  "warn.rfi.followUp.reason.readyFormulaRepair": "Eksik formül, sütunun diğer satırlarındaki formülden kopyalanarak eklenecek.",
+  "warn.rfi.followUp.reason.structureZone": "Boş ZONE hücresi Road numarasına göre doldurulacak (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }

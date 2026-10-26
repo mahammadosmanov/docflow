@@ -3,13 +3,18 @@ use super::*;
 #[doc(hidden)]
 pub fn revise(plan: &Plan, rows: &[Value]) -> Result<Plan, BackendError> {
     let completion = plan.op_id == COMPLETE_STATUS_OPERATION_ID;
+    let publish = plan.op_id == PUBLISH_STATUS_OPERATION_ID;
     let invalid_key = if completion {
         "error.rfi.completeStatus.approvedUpdateInvalid"
+    } else if publish {
+        "error.rfi.publishStatus.approvedUpdateInvalid"
     } else {
         "error.rfi.systemSync.approvedUpdateInvalid"
     };
     let no_rows_key = if completion {
         "warn.rfi.completeStatus.noRowsSelected"
+    } else if publish {
+        "warn.rfi.publishStatus.noRowsSelected"
     } else {
         "warn.rfi.systemSync.noRowsSelected"
     };
@@ -107,11 +112,14 @@ pub fn revise(plan: &Plan, rows: &[Value]) -> Result<Plan, BackendError> {
     revised.warnings.retain(|warning| {
         warning.key != "warn.rfi.systemSync.noRowsSelected"
             && warning.key != "warn.rfi.completeStatus.noRowsSelected"
+            && warning.key != "warn.rfi.publishStatus.noRowsSelected"
     });
     if revised.steps.is_empty() {
         revised.warnings.push(Warning {
             key: no_rows_key.to_string(),
-            subject: if completion {
+            subject: if publish {
+                "No RFI rows are selected for publishing".to_string()
+            } else if completion {
                 "No completed RFI rows are selected for synchronization".to_string()
             } else {
                 "No signed RFI rows are selected for synchronization".to_string()
@@ -134,6 +142,15 @@ pub(super) fn validate_replacement(kind: SyncWorkbookKind, update: &GuardedCellU
                     update.expected_value.nfc().collect::<String>().trim(),
                     "" | "Ongoing" | "Completed"
                 )
+        }
+        SyncWorkbookKind::RfiLogPublish => {
+            update.replacement_value == "Ongoing"
+                && update
+                    .expected_value
+                    .nfc()
+                    .collect::<String>()
+                    .trim()
+                    .is_empty()
         }
         SyncWorkbookKind::RfiLog => {
             update.replacement_value == WORLEY_SIGNED_MARKER
@@ -164,6 +181,8 @@ pub fn execute_sync_step(
             {
                 let key = if meta.workbook_kind == SyncWorkbookKind::RfiLogStatus {
                     "error.rfi.completeStatus.approvedUpdateInvalid"
+                } else if meta.workbook_kind == SyncWorkbookKind::RfiLogPublish {
+                    "error.rfi.publishStatus.approvedUpdateInvalid"
                 } else {
                     "error.rfi.systemSync.approvedUpdateInvalid"
                 };

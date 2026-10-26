@@ -1,12 +1,164 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.20.8",
+  "currentVersion": "1.30.0",
   "releases": [
+    {
+      "version": "1.30.0",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.30.0",
+      "summary": "Follow Up keeps all 21 Roads with their zones."
+    },
+    {
+      "version": "1.29.1",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.29.1",
+      "summary": "Excel-safe row insertion (no references past the last row) and labeled-identity cover confirmation."
+    },
+    {
+      "version": "1.29.0",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.29.0",
+      "summary": "Structural validation before publishing rewritten worksheets; Road part rows applied with the sync."
+    },
+    {
+      "version": "1.28.0",
+      "date": "2026-10-25",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.28.0",
+      "summary": "Per-cell Follow Up remarks and automatic repair of empty formula cells."
+    },
+    {
+      "version": "1.27.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.27.0",
+      "summary": "Follow Up manages Road part rows from the Log and pauses mass removals."
+    },
+    {
+      "version": "1.26.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.26.0",
+      "summary": "Follow Up writes and clears generated row remarks on CIV, PCU, and Road."
+    },
+    {
+      "version": "1.25.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.25.0",
+      "summary": "Follow Up maps Road RFIs to part rows and removes RFIs deleted from the Log."
+    },
+    {
+      "version": "1.24.3",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.24.3",
+      "summary": "Follow Up percentage indicators refresh after Apply via recalculate-on-open."
+    },
+    {
+      "version": "1.24.2",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.24.2",
+      "summary": "Follow Up Apply works on remote network folders by tolerating unsupported directory flush."
+    },
+    {
+      "version": "1.24.1",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.24.1",
+      "summary": "Activity log records which Follow Up publication step failed and why."
+    },
+    {
+      "version": "1.24.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.24.0",
+      "summary": "Local activity log with one-click redacted export for support."
+    },
+    {
+      "version": "1.23.4",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.23.4",
+      "summary": "Follow Up sync ignores number-only RFI Log rows instead of listing them in Manual Review."
+    },
+    {
+      "version": "1.23.3",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.23.3",
+      "summary": "Follow Up sync previews more than 5,000 changed rows (cap raised to 20,000, byte guard kept)."
+    },
+    {
+      "version": "1.23.2",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.23.2",
+      "summary": "Follow Up sync names the exact safe-processing limit that was exceeded."
+    },
+    {
+      "version": "1.23.1",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.23.1",
+      "summary": "Follow Up sync shows the OS cause when a workbook cannot be opened for writing, to diagnose remote-folder failures."
+    },
+    {
+      "version": "1.23.0",
+      "date": "2026-10-24",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.23.0",
+      "summary": "Publish status: pair a requester's PDF and DOCX with the RFI Log and mark only blank statuses Ongoing, with guarded Apply and Undo."
+    },
+    {
+      "version": "1.22.0",
+      "date": "2026-10-23",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.22.0",
+      "summary": "Faster scanning: cover-first identity reading for signed pages and a durable OCR page cache."
+    },
+    {
+      "version": "1.21.1",
+      "date": "2026-10-23",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.21.1",
+      "summary": "Action Queue shows which operations still need folders and links to choose them."
+    },
+    {
+      "version": "1.21.0",
+      "date": "2026-10-23",
+      "channel": "stable",
+      "status": "superseded",
+      "tag": "v1.21.0",
+      "summary": "Action Queue: opt-in read-only inbox watcher that prepares normal Previews in the background; nothing applies without approval."
+    },
     {
       "version": "1.20.8",
       "date": "2026-10-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.20.8",
       "summary": "Load locale catalogs on demand; main JavaScript bundle roughly halves."
     },

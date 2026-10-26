@@ -248,12 +248,16 @@ impl FilesystemAuthority {
         }
         if matches!(
             inspected.plan.op_id.as_str(),
-            rfi_system_sync::OPERATION_ID | rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
+            rfi_system_sync::OPERATION_ID
+                | rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
+                | rfi_system_sync::PUBLISH_STATUS_OPERATION_ID
         ) {
             if inspected.plan.steps.is_empty() {
                 return Err(BackendError::validation(
                     if inspected.plan.op_id == rfi_system_sync::COMPLETE_STATUS_OPERATION_ID {
                         "warn.rfi.completeStatus.noChangesNeeded"
+                    } else if inspected.plan.op_id == rfi_system_sync::PUBLISH_STATUS_OPERATION_ID {
+                        "warn.rfi.publishStatus.noChangesNeeded"
                     } else {
                         "warn.rfi.systemSync.noChangesNeeded"
                     },

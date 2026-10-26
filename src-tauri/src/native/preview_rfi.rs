@@ -60,7 +60,7 @@ impl NativeBackend {
             ))
         })? {
             return Err(BackendError::validation(
-                "RFI Log and Follow Up workbooks must be different files",
+                "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
             ));
         }
         let mut source = source_anchor.open_read().map_err(|e| {
@@ -70,7 +70,7 @@ impl NativeBackend {
         })?;
         let mut target = target_anchor
             .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+            .map_err(|error| open_failure("error.rfi.followUp.workbookLocked", &error))?;
         progress(ProgressEvent {
             phase: "follow_up_analysis".to_string(),
             done: 0,
@@ -211,7 +211,7 @@ impl NativeBackend {
             ))
         })? {
             return Err(BackendError::validation(
-                "RFI Log and Follow Up workbooks must be different files",
+                "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
             ));
         }
         let mut source = source_anchor.open_mutable().map_err(|e| {
@@ -327,6 +327,103 @@ impl NativeBackend {
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let mut plan = rfi_system_sync::preview_complete_status_sync(
             &system_root,
+            &workbook_path,
+            &mut workbook,
+            progress,
+            || cancellation.is_cancelled(),
+        )?;
+        drop(workbook);
+        let reservation = self.filesystem.reserve_plan_id();
+        reservation.assign_to_empty(&mut plan)?;
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_reserved_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                caller.owner_id,
+                caller.session_id,
+                request.op_id.clone(),
+                grant_ids,
+            ),
+            reservation,
+            plan,
+        )?;
+        provisional.commit();
+        encode(cached)
+    }
+    pub(crate) fn preview_rfi_publish_status<F>(
+        &self,
+        params: Value,
+        progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<RfiPublishStatusPreviewValues> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != rfi_system_sync::PUBLISH_STATUS_OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the Rust RFI publish-status backend",
+            ));
+        }
+        let staging_root = fs::canonicalize(&request.values.staging_folder).map_err(|error| {
+            BackendError::validation(format!(
+                "error.rfi.publishStatus.stagingInvalid: cannot resolve root: {error}"
+            ))
+        })?;
+        let workbook_path =
+            fs::canonicalize(&request.values.rfi_log_workbook).map_err(|error| {
+                BackendError::validation(format!(
+                    "error.rfi.publishStatus.workbookInvalid: cannot resolve RFI Log: {error}"
+                ))
+            })?;
+        let workbook_root = workbook_path
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
+            .to_path_buf();
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            &request.op_id,
+        );
+        let workbook_in_staging = workbook_path.starts_with(&staging_root);
+        let mut grant_requests = vec![(
+            staging_root.clone(),
+            if workbook_in_staging {
+                GrantAccess::ReadWrite
+            } else {
+                GrantAccess::Read
+            },
+        )];
+        if !workbook_in_staging {
+            grant_requests.push((workbook_root, GrantAccess::ReadWrite));
+        }
+        let provisional = self
+            .filesystem
+            .issue_provisional_grants(&scope, &grant_requests)?;
+        let workbook_grant = provisional
+            .grants()
+            .iter()
+            .find(|grant| {
+                grant.access.allows(PathIntent::Write) && workbook_path.starts_with(&grant.root)
+            })
+            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
+        let workbook_anchor = self.filesystem.anchor_granted_path(
+            workbook_grant,
+            &workbook_path,
+            PathIntent::Write,
+        )?;
+        let mut workbook = workbook_anchor
+            .open_mutable()
+            .map_err(|_| BackendError::validation("error.rfi.publishStatus.workbookLocked"))?;
+        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
+        let mut plan = rfi_system_sync::preview_publish_status(
+            &staging_root,
             &workbook_path,
             &mut workbook,
             progress,
@@ -481,6 +578,13 @@ impl NativeBackend {
             GrantAccess::ReadWrite,
         )?;
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
+        let native_ocr = NativeOcr::discover();
+        let ocr = CachingOcr::new(
+            &native_ocr,
+            &self.scan_index,
+            &caller.owner_id,
+            &request.values.signed_scans,
+        );
         let plan = preview_stage_signed_pages(
             &StageSignedPagesParams {
                 signed_scans: request.values.signed_scans,
@@ -488,7 +592,7 @@ impl NativeBackend {
                 review_root: request.values.review_root,
                 scan_subfolders: request.values.scan_subfolders,
             },
-            &NativeOcr::discover(),
+            &ocr,
             progress,
             || cancellation.is_cancelled(),
         )?;

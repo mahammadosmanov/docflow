@@ -239,7 +239,7 @@ impl NativeBackend {
                 .map_err(|_| BackendError::validation("error.rfi.followUp.workbookInvalid"))?;
             let mut target = target_anchor
                 .open_mutable()
-                .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+                .map_err(|error| open_failure("error.rfi.followUp.workbookLocked", &error))?;
             let revised = rfi_follow_up::revise_from_open_files(
                 &claimed.plan,
                 &request.rows,
@@ -267,7 +267,8 @@ impl NativeBackend {
                     .as_array()
                     .ok_or_else(BackendError::invalid_params)?,
             )?,
-            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID => rfi_system_sync::revise(
+            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
+            | rfi_system_sync::PUBLISH_STATUS_OPERATION_ID => rfi_system_sync::revise(
                 &claimed.plan,
                 payload["rows"]
                     .as_array()

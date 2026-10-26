@@ -20,7 +20,7 @@ pub fn preview_from_open_files(
     let target_fingerprint = fingerprint_open_file(follow_up)?;
     if source_fingerprint.identity == target_fingerprint.identity {
         return Err(BackendError::validation(
-            "RFI Log and Follow Up workbooks must be different files",
+            "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
         ));
     }
 
@@ -46,13 +46,41 @@ pub fn preview_from_open_files(
     })?;
     let (target_discovery, target_workbook) =
         read_workbook_and_discovery(follow_up).map_err(map_follow_up_ooxml_error)?;
-    let classification = classify_workbooks(
+    let structure = plan_structure(
         &source_discovery,
         &source_workbook,
-        &target_discovery,
         &target_workbook,
         target_has_signature,
-    )?;
+    )?
+    .ops;
+    // Classification runs on the workbook as it will look once the Road rows exist, so
+    // every reviewed coordinate already refers to the final layout.
+    let classification = if structure.is_empty() {
+        classify_workbooks(
+            &source_discovery,
+            &source_workbook,
+            &target_discovery,
+            &target_workbook,
+            target_has_signature,
+        )?
+    } else {
+        follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
+            BackendError::validation(format!(
+                "error.rfi.followUp.workbookInvalid: Follow Up seek failed: {e}"
+            ))
+        })?;
+        let (structured_discovery, structured_workbook) =
+            parse_baseline(structured_baseline(follow_up, &structure)?)?;
+        let mut classification = classify_workbooks(
+            &source_discovery,
+            &source_workbook,
+            &structured_discovery,
+            &structured_workbook,
+            target_has_signature,
+        )?;
+        add_structure_rows(&mut classification, &structure)?;
+        classification
+    };
     let extension = follow_up_path
         .extension()
         .and_then(|value| value.to_str())
@@ -86,7 +114,40 @@ pub fn preview_from_open_files(
         source_fingerprint,
         target_fingerprint,
         classification,
+        structure,
     )
+}
+
+/// Prepends the informational structure rows and rebuilds the editor metadata.
+fn add_structure_rows(classification: &mut Value, structure: &[RowOp]) -> Result<(), BackendError> {
+    let layouts: Vec<FollowUpLayout> = classification
+        .get("layouts")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| workbook_invalid())?
+        .unwrap_or_default();
+    let mut rows: Vec<FollowUpRow> = serde_json::from_value(
+        classification
+            .get("rows")
+            .cloned()
+            .ok_or_else(workbook_invalid)?,
+    )
+    .map_err(|_| workbook_invalid())?;
+    let mut all = structure_review_rows(structure, &layouts);
+    all.append(&mut rows);
+    let object = classification
+        .as_object_mut()
+        .ok_or_else(workbook_invalid)?;
+    object.insert(
+        "editor".to_string(),
+        editor_metadata(&all, editor_columns()),
+    );
+    object.insert(
+        "rows".to_string(),
+        serde_json::to_value(&all).map_err(|_| workbook_invalid())?,
+    );
+    Ok(())
 }
 
 pub fn revise_from_open_files(
@@ -154,6 +215,7 @@ pub fn revise_from_open_files(
         || authority.follow_up_fingerprint != fresh_authority.follow_up_fingerprint
         || authority.layout != fresh_authority.layout
         || authority.layouts != fresh_authority.layouts
+        || authority.structure != fresh_authority.structure
     {
         return Err(BackendError::validation(
             "error.rfi.followUp.workbookChanged",
@@ -180,6 +242,10 @@ pub fn revise_from_open_files(
     }
     for (revised, fresh) in revised_rows.iter_mut().zip(fresh_rows) {
         revised.enabled = revised.enabled && fresh.selectable;
+        // Part rows cannot be deselected on their own: later rows may sit in them.
+        if revised.row_id.starts_with(STRUCTURE_ROW_PREFIX) {
+            revised.enabled = true;
+        }
     }
     let mut warnings = fresh.warnings;
     warnings.retain(|warning| warning.key != "warn.rfi.followUp.noRowsSelected");
@@ -204,6 +270,7 @@ pub fn revise_from_open_files(
         fresh_authority.rfi_log_fingerprint,
         fresh_authority.follow_up_fingerprint,
         classification,
+        authority.structure.clone(),
     )?;
     revised.plan_id.clone_from(&plan.plan_id);
     validate_owned_plan_budget(&revised)?;
@@ -234,7 +301,8 @@ pub(crate) fn validate_owned_plan_budget(plan: &Plan) -> Result<(), BackendError
         count: 0,
         limit: MAX_PREVIEW_AUTHORITY_BYTES,
     };
-    serde_json::to_writer(&mut writer, plan).map_err(|_| limit_exceeded())
+    serde_json::to_writer(&mut writer, plan)
+        .map_err(|_| limit_exceeded_for("the preview is larger than 32 MiB"))
 }
 
 pub(crate) fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerprint, BackendError> {
@@ -274,6 +342,7 @@ pub(super) fn plan_from_classification(
     rfi_log_fingerprint: WorkbookFingerprint,
     follow_up_fingerprint: WorkbookFingerprint,
     classification: Value,
+    structure: Vec<RowOp>,
 ) -> Result<Plan, BackendError> {
     let object = classification.as_object().ok_or_else(workbook_invalid)?;
     let decode_field = |name: &str| object.get(name).cloned().ok_or_else(workbook_invalid);
@@ -288,9 +357,49 @@ pub(super) fn plan_from_classification(
     let warnings: Vec<Warning> =
         serde_json::from_value(decode_field("warnings")?).map_err(|_| workbook_invalid())?;
     let editor = decode_field("editor")?;
-    let updates = rows
+    let remarks = rows
         .iter()
         .filter(|row| row.enabled)
+        .filter_map(|row| {
+            let change = row.remark.as_ref()?;
+            Some(
+                if !row.selectable || row.disposition != FollowUpDisposition::Ready {
+                    Err(workbook_invalid())
+                } else {
+                    Ok(FollowUpApprovedRemark {
+                        row_id: row.row_id.clone(),
+                        worksheet: row.target.worksheet.clone(),
+                        row: row.row,
+                        column: change.column,
+                        expected: change.expected.clone(),
+                        runs: change.runs.clone(),
+                    })
+                },
+            )
+        })
+        .collect::<Result<Vec<_>, BackendError>>()?;
+    let formulas = rows
+        .iter()
+        .filter(|row| row.enabled && !row.formula_fixes.is_empty())
+        .flat_map(|row| {
+            row.formula_fixes.iter().map(|fix| FollowUpApprovedFormula {
+                row_id: row.row_id.clone(),
+                worksheet: row.target.worksheet.clone(),
+                row: row.row,
+                column: fix.column,
+                formula: fix.formula.clone(),
+                style: fix.style.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let updates = rows
+        .iter()
+        .filter(|row| {
+            row.enabled
+                && row.remark.is_none()
+                && row.formula_fixes.is_empty()
+                && !row.row_id.starts_with(STRUCTURE_ROW_PREFIX)
+        })
         .map(|row| {
             if !row.selectable || row.disposition != FollowUpDisposition::Ready {
                 return Err(workbook_invalid());
@@ -332,6 +441,7 @@ pub(super) fn plan_from_classification(
         follow_up_fingerprint: follow_up_fingerprint.clone(),
         layout: layout.clone(),
         layouts: layouts.clone(),
+        structure: structure.clone(),
     };
     let mut meta = serde_json::Map::new();
     meta.insert("editor".to_string(), editor);
@@ -339,7 +449,7 @@ pub(super) fn plan_from_classification(
         "rfiFollowUp".to_string(),
         serde_json::to_value(plan_meta).map_err(|_| workbook_invalid())?,
     );
-    let steps = if updates.is_empty() {
+    let steps = if updates.is_empty() && remarks.is_empty() && formulas.is_empty() {
         Vec::new()
     } else {
         let step_meta = FollowUpStepMeta {
@@ -349,6 +459,9 @@ pub(super) fn plan_from_classification(
             layout,
             layouts,
             updates,
+            remarks,
+            formulas,
+            structure,
         };
         let step_meta = serde_json::to_value(step_meta)
             .map_err(|_| workbook_invalid())?

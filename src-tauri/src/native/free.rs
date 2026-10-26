@@ -255,6 +255,15 @@ pub(super) struct RfiSystemSyncPreviewValues {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(super) struct RfiPublishStatusPreviewValues {
+    #[serde(rename = "staging_folder")]
+    pub(super) staging_folder: PathBuf,
+    #[serde(rename = "rfi_log_workbook")]
+    pub(super) rfi_log_workbook: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct RfiCompleteStatusPreviewValues {
     #[serde(rename = "rfi_system_root")]
     pub(super) rfi_system_root: PathBuf,
@@ -508,4 +517,27 @@ where
     let summary = cloud_result_summary(applied, step_count);
     let synced = push(applied, failed, &journal_id, &summary);
     payload.insert("cloudSynced".to_string(), Value::Bool(synced));
+}
+
+/// Keeps the stable localized key and appends the OS cause (no path), so a
+/// remote-share failure is distinguishable from a plain sharing violation.
+pub(super) fn open_failure(key: &str, error: &std::io::Error) -> BackendError {
+    BackendError::validation(format!("{key}: {error}"))
+}
+
+#[cfg(test)]
+mod open_failure_tests {
+    use super::*;
+
+    #[test]
+    fn open_failure_keeps_key_and_os_cause() {
+        let error = std::io::Error::from_raw_os_error(5);
+        let failure = open_failure("error.rfi.followUp.workbookLocked", &error);
+        assert!(
+            failure
+                .message
+                .starts_with("error.rfi.followUp.workbookLocked: ")
+        );
+        assert!(failure.message.contains("os error 5"));
+    }
 }

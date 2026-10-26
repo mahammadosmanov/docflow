@@ -122,7 +122,7 @@ fn fast_scan_plan_revision_routes_through_trusted_scan_editor() {
     );
 }
 
-static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
+pub(super) static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn rfi_reply_requires_exact_committed_plan_provenance() {
@@ -209,7 +209,7 @@ fn auth_responses_with_allowed(
     ]
 }
 
-fn test_backend(temporary: &tempfile::TempDir) -> NativeBackend {
+pub(super) fn test_backend(temporary: &tempfile::TempDir) -> NativeBackend {
     let responses = auth_responses("owner")
         .into_iter()
         .chain(auth_responses("owner"))
@@ -496,6 +496,7 @@ fn test_backend_with_responses(
         process_session_id: Mutex::new("epoch-initial".to_string()),
         app_data_dir: temporary.path().to_path_buf(),
         scan_index: ScanIndex::new(temporary.path().join("scan-index.sqlite3")).unwrap(),
+        watch: crate::watch::WatchQueue::default(),
     }
 }
 

@@ -46,7 +46,13 @@ impl NativeBackend {
             correct_orientation: request.values.correct_orientation,
             trash_root: (!request.values.keep_original).then(|| self.app_data_dir.join("trash")),
         };
-        let ocr = NativeOcr::discover();
+        let native_ocr = NativeOcr::discover();
+        let ocr = CachingOcr::new(
+            &native_ocr,
+            &self.scan_index,
+            &caller.owner_id,
+            &scan_params.source,
+        );
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = preview_fast_covers(&scan_params, &ocr, &mut progress, || {
             cancellation.is_cancelled()
@@ -102,12 +108,19 @@ impl NativeBackend {
             ],
         )?;
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
+        let native_ocr = NativeOcr::discover();
+        let ocr = CachingOcr::new(
+            &native_ocr,
+            &self.scan_index,
+            &caller.owner_id,
+            &request.values.source,
+        );
         let plan = preview_rfi_file_group(
             &GroupRfiFilesParams {
                 source: request.values.source,
                 destination: request.values.destination,
             },
-            &NativeOcr::discover(),
+            &ocr,
             progress,
             || cancellation.is_cancelled(),
         )?;

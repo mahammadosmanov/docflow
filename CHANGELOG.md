@@ -5,6 +5,137 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.30.0 - 2026-10-26
+
+### Added
+
+- Follow Up keeps all 21 planned Roads on the Road sheet even when no RFI names them yet, and fills each ZONE (Roads 1-5 North, 6-13 Center, 14-20 South, 21 North), including empty ZONE cells of existing rows (ADR 0050).
+
+## 1.29.1 - 2026-10-26
+
+### Fixed
+
+- Follow Up row insertion no longer writes references past Excel's last worksheet row (a whole-column conditional-format or data-validation range such as `P1:P1048576` became `P1:P1048577`), which made Excel report a sheet XML error and repair the Road sheet. References are clamped, and the pre-publish check now rejects any reference outside the grid.
+- Fast RFI Scan confirms a cover whose identity line `RFI No: <code>` is the only labeled code even when other RFI codes (references, remarks) also appear on the page. Several unlabeled codes, or several labeled ones, still stay unconfirmed.
+
+## 1.29.0 - 2026-10-26
+
+### Fixed
+
+- Rewritten worksheets are now checked before anything is published: parseable XML, ascending unique rows and cells whose references match their position, no empty formula, no duplicated attributes, no forbidden characters. A rewrite that fails is refused instead of producing a file Excel must repair.
+- Road part rows are shown as ticked rows that are applied together with the sync, instead of unselectable rows that looked like manual review.
+
+### Added
+
+- The activity log's cover-page trace also records the identity-looking line the OCR read, to diagnose scans whose RFI number is not confirmed.
+
+## 1.28.0 - 2026-10-25
+
+### Fixed
+
+- Follow Up remarks are decided cell by cell: only RFI cells holding several RFIs with at least one not Completed contribute, and only their RFIs are listed. A remark no longer lists Completed RFIs from unrelated cells of the row (ADR 0049).
+
+### Added
+
+- Follow Up maintenance: empty formula cells in a formula-driven column of CIV, PCU, or Road (for example missing `Y`/`Z` on Road rows) are filled from the column's formula as reviewable rows. Typed values and existing formulas are never changed.
+- The activity log records why a scanned cover page was not confirmed (cue flags and text length only), to diagnose unreadable scans.
+
+## 1.27.0 - 2026-10-24
+
+### Added
+
+- Road part rows: Follow Up inserts missing `Road NN (Part k)` rows, relabels a partless Road row to `Part 1` when the Log names parts, and places new Roads in number order. New rows are cloned from their neighbour with formulas, styles, and all references (formulas on every sheet, ranges, merges, conditional formatting, filter, print area) shifted like Excel's Insert Row. Rows are never removed (ADR 0048).
+- Mass-deletion brake: if most Follow Up RFIs are missing from the selected RFI Log, removal is paused with a warning instead of proposing thousands of removals.
+
+## 1.26.0 - 2026-10-24
+
+### Added
+
+- Follow Up generated row remarks on CIV, PCU, and Road: when a cell holds several RFIs and at least one is not Completed, the row's Remarks lists every RFI left to right, Completed first (bold, underlined, Accent 5) then In Progress in plain text, for example `CIV-0021,0022 Completed CIV-0043 In Progress`. A generated remark is cleared once every RFI is Completed. Operator-written remarks are never changed (ADR 0047, supersedes ADR 0028).
+
+## 1.25.0 - 2026-10-24
+
+### Added
+
+- Follow Up understands Road parts: an RFI whose Log tag names a Road without a part is written to every part row of that Road (including parts added later), a tag with a part goes only to that part, and lists such as `Road 15 (Part 1), (Part 2)` go to each listed part (ADR 0046).
+- An RFI that no longer exists anywhere in the RFI Log is removed from its Follow Up cell in the normal reviewed sync. Bare numbers present in the Log and placeholder numbers are kept.
+
+## 1.24.3 - 2026-10-24
+
+### Fixed
+
+- Follow Up percentage indicators (for example the Road sheet's completion and overall columns) now refresh after Apply. Apply sets `fullCalcOnLoad` on the workbook's calculation settings so Excel recalculates once on open; that attribute is the only workbook-part change allowed and is verified (ADR 0045).
+
+## 1.24.2 - 2026-10-24
+
+### Fixed
+
+- Follow Up Apply no longer stops in recovery-required on remote or network RFI System folders. Flushing a directory handle is unsupported there (Windows error 1 or 50) and is now tolerated; all hash, identity, backup, and journal checks still run (ADR 0044).
+- Activity log details for Follow Up review rows are no longer hidden when a tag contains a slash.
+
+## 1.24.1 - 2026-10-24
+
+### Fixed
+
+- When a Follow Up Apply ends in recovery-required, the activity log now records the exact publication step that failed and its OS cause (for example `sync_parent: ...`), so a failure on a remote or mapped folder can be diagnosed from one exported file. Behavior and journal formats are unchanged.
+
+## 1.24.0 - 2026-10-24
+
+### Added
+
+- Local activity log: every backend call is recorded with its error key, OS cause, warnings, and Manual Review reasons (counts plus samples with RFI and ITP/item details). Settings > Advanced support > Save activity log exports one redacted file to share for support (ADR 0043).
+
+## 1.23.4 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync ignores RFI Log rows that contain only an RFI No. (pre-numbered placeholders). Thousands of them used to appear in Manual Review as unmapped RFIs. A row with any status, ITP, item, tag, area, location, or remark is still a record (ADR 0042).
+
+## 1.23.3 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync no longer stops at 5,000 reviewable rows. A Follow Up needing 8,406 changes now previews; the review-row cap is 20,000 and the existing 32 MiB preview-size guard still applies (about 15 MB for 8,406 rows, so roughly 17,000 rows fit). Every other safe-processing limit is unchanged.
+
+## 1.23.2 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync now says which safe-processing limit was exceeded (for example the sheet name and the row it reaches versus the allowed row) instead of the generic "exceeds the safe processing limits" message. The limits themselves are unchanged.
+
+## 1.23.1 - 2026-10-24
+
+### Fixed
+
+- Follow Up sync now reports the operating-system cause (for example `os error 5` or `32`) when it cannot open a workbook for writing, and explains when the filesystem reports the same file identity for the RFI Log and Follow Up. Previously every cause appeared as a generic "close the workbook" message, which hid failures on remote or mapped folders.
+
+## 1.23.0 - 2026-10-24
+
+### Added
+
+- Publish status (`rfi.publish_status`): choose the folder where a requester's PDF and DOCX attachments were saved and the RFI Log; Preview pairs files by the exact RFI code in each name and proposes `Ongoing` only for literal blank Inspection Status cells. Filled statuses, missing Log rows, incomplete pairs, ambiguous names, and formula or merged cells authorize nothing. Apply and Undo reuse the guarded workbook pipeline (ADR 0041).
+- Localized publish-status text in Turkish, English, Russian, and Azerbaijani.
+
+## 1.22.0 - 2026-10-23
+
+### Added
+
+- Cover-first identity reading for Stage signed first pages: a confirmed fast cover read replaces the full-page OCR cascade, with automatic fallback to the full read for any page it cannot confirm (ADR 0040).
+- Durable OCR page cache for Fast RFI Scan, Group Files, and Stage signed first pages: unchanged files are not re-read by later or Action Queue Previews.
+
+## 1.21.1 - 2026-10-23
+
+### Fixed
+
+- Action Queue now shows which watched operations still have no remembered folders and offers a "Choose folders" button that opens the operation, instead of silently doing nothing until folders were saved elsewhere.
+
+## 1.21.0 - 2026-10-23
+
+### Added
+
+- Action Queue: an opt-in, read-only inbox watcher that checks the saved folders of Fast RFI Scan, Group Files, Stage signed first pages, and Completion Status Sync, waits for files to settle, and prepares the normal Preview in the background. Ready previews are listed in a new Action Queue screen with a navigation count; Open Preview, Dismiss, and Prepare again are provided. The watcher never applies, writes, prints, or sends, and pauses while any operation runs (ADR 0039).
+- Localized Action Queue text in Turkish, English, Russian, and Azerbaijani.
+
 ## 1.20.8 - 2026-10-21
 
 ### Improved

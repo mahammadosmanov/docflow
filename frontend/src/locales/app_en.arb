@@ -1055,5 +1055,89 @@
   "param.rfi.documents.rfis.help": "Enter full RFI numbers or CIV serials, separated by commas or new lines.",
   "param.rfi.documents.waterRatios.help": "Optional one per line as RFI number = ratio. Leave out an RFI to keep its cell blank.",
   "param.rfi.documents.ambientGroups.help": "Optional, one line per group: RFI[, RFI...]=MIN-MAX. Both range endpoints are included; unlisted RFIs use the default Minimum/Maximum ambient temperature.",
-  "step.rfi.generatedConcreteDocument": "Generate concrete document"
+  "step.rfi.generatedConcreteDocument": "Generate concrete document",
+  "queue.title": "Action queue",
+  "queue.help": "DocFlow checks your saved folders and prepares previews. Nothing changes until you open a preview and apply it.",
+  "queue.checkNow": "Check now",
+  "queue.watch": "Prepare previews automatically",
+  "queue.empty": "No previews are waiting",
+  "queue.empty.help": "Turn on a check below. New files appear here after they finish copying.",
+  "queue.status.preparing": "Preparing…",
+  "queue.status.ready": "Ready",
+  "queue.status.stale": "Out of date",
+  "queue.status.failed": "Could not prepare",
+  "queue.summary": "{steps} planned changes · {warnings} warnings",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Open preview",
+  "queue.dismiss": "Dismiss",
+  "queue.reprepare": "Prepare again",
+  "queue.paused": "Paused while another operation is running.",
+  "queue.badge": "{count} previews ready",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "The preview could not be prepared ({code}).",
+  "error.watch.notReady": "This preview is no longer available. Prepare it again.",
+  "error.watch.tooManyEntries": "The folder has too many files to check automatically.",
+  "error.watch.unreadable": "The folder cannot be read right now.",
+  "queue.setup": "Choose folders",
+  "queue.needsFolders": "Folders not chosen yet",
+  "op.rfi.publish_status.title": "Prepare RFIs for publishing (Ongoing)",
+  "op.rfi.publish_status.desc": "Matches PDF + DOCX pairs in a folder to the RFI Log and proposes Ongoing only for blank Inspection Status cells.",
+  "param.rfi.publishStatus.stagingFolder": "Incoming files folder",
+  "param.rfi.publishStatus.stagingFolder.help": "The folder where you saved the mail attachments. Only top-level files are read, read-only.",
+  "param.rfi.publishStatus.rfiLogWorkbook": "RFI Log Workbook",
+  "param.rfi.publishStatus.rfiLogWorkbook.help": "The .xlsm or .xlsx RFI Log whose safe blank Inspection Status cells may be set to Ongoing after review.",
+  "error.param.required.staging_folder": "Incoming files folder is required",
+  "error.rfi.publishStatus.stagingInvalid": "Select a readable incoming files folder.",
+  "error.rfi.publishStatus.stagingTooLarge": "The folder has too many files.",
+  "error.rfi.publishStatus.workbookInvalid": "Select a valid RFI Log .xlsm or .xlsx workbook.",
+  "error.rfi.publishStatus.workbookLocked": "Close the selected RFI Log in Excel or another application, then try again.",
+  "error.rfi.publishStatus.approvedUpdateInvalid": "The approved publish-status update is invalid; preview again.",
+  "warn.rfi.publishStatus.noChangesNeeded": "No safe RFI Log status changes are ready.",
+  "warn.rfi.publishStatus.noRowsSelected": "Select at least one RFI to prepare for publishing.",
+  "warn.rfi.publishStatus.ambiguousName": "A file name contains more than one RFI code and was not used.",
+  "note.rfi.publishStatus.rfiLog": "Set approved RFI Log Inspection Status cells to Ongoing",
+  "rfi.publishStatus.editor.title": "Review incoming files and status updates",
+  "rfi.publishStatus.editor.rowCount": "{count} RFIs found",
+  "rfi.publishStatus.column.enabled": "Apply",
+  "rfi.publishStatus.column.discipline": "Discipline",
+  "rfi.publishStatus.column.rfiNo": "RFI No.",
+  "rfi.publishStatus.column.pdfName": "PDF",
+  "rfi.publishStatus.column.docxName": "Word",
+  "rfi.publishStatus.column.currentStatus": "Current status",
+  "rfi.publishStatus.column.proposedStatus": "New status",
+  "rfi.publishStatus.column.disposition": "Decision",
+  "rfi.publishStatus.column.action": "Action",
+  "rfi.publishStatus.disposition.ready": "Ready",
+  "rfi.publishStatus.disposition.statusNotBlank": "Status already filled",
+  "rfi.publishStatus.disposition.incompleteFiles": "PDF or Word missing",
+  "rfi.publishStatus.disposition.notInLog": "Not in the Log",
+  "rfi.publishStatus.disposition.unsafeCell": "Cell is not safe to change",
+  "progress.phase.publish_workbook_read": "Reading RFI Log status cells",
+  "prefs.support.activityLog": "Save activity log",
+  "prefs.support.activityLogSaved": "Activity log saved. You can share the file for support; file paths, document content and tokens are redacted.",
+  "warn.rfi.followUp.reason.readyDeleted": "This RFI no longer exists anywhere in the RFI Log, so it is treated as deleted and will be removed from the cell.",
+  "warn.rfi.followUp.reason.readyRemark": "The generated Remarks text for this row (Completed first) will be written.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Every RFI is Completed, so the generated Remarks text will be cleared.",
+  "warn.rfi.followUp.reason.remarkManual": "The Remarks cell has operator-written text; DocFlow left it unchanged.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "The Remarks cell contains a formula or is merged; it was not changed.",
+  "warn.rfi.followUp.massDeletionBrake": "Most RFIs in Follow Up are missing from the selected RFI Log, so removal was paused. Make sure you selected the correct, current RFI Log.",
+  "warn.rfi.followUp.reason.structureInsert": "A Road part row will be added (format and formulas are copied from the neighbouring row).",
+  "warn.rfi.followUp.reason.structureRename": "The partless Road row will be renamed 'Part 1' because the Log names parts of it.",
+  "warn.rfi.followUp.reason.readyFormulaRepair": "The missing formula will be filled in from the formula used by the rest of the column.",
+  "warn.rfi.followUp.reason.structureZone": "The empty ZONE cell will be filled from the Road number (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }

@@ -450,7 +450,7 @@ fn sanitize_error_code(code: &str) -> String {
     }
 }
 
-fn sanitize_value(value: &mut Value, depth: usize) {
+pub(crate) fn sanitize_value(value: &mut Value, depth: usize) {
     if depth >= MAX_DIAGNOSTIC_DEPTH {
         *value = Value::String(REDACTED_DEPTH.to_string());
         return;

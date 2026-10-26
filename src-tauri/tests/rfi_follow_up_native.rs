@@ -3223,7 +3223,10 @@ fn source_evidence_per_rfi_limit_fails_before_projection_amplification() {
             target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3259,7 +3262,10 @@ fn projection_budget_rejects_500_by_500_before_owned_materialization() {
             target_with_rows(target_rows, &[]),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3305,7 +3311,10 @@ fn merge_query_budget_bounds_duplicate_target_range_amplification() {
             target_package(target),
         )
         .unwrap_err()
-        .message,
+        .message
+        .split(':')
+        .next()
+        .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }
@@ -3479,12 +3488,11 @@ fn empty_physical_high_row_enforces_source_limit() {
         worksheet(Vec::<String>::new(), &[]),
     );
 
-    assert_eq!(
-        classify(source, target_with_rows(Vec::<String>::new(), &[]))
-            .unwrap_err()
-            .message,
-        "error.rfi.followUp.limitExceeded"
-    );
+    let message = classify(source, target_with_rows(Vec::<String>::new(), &[]))
+        .unwrap_err()
+        .message;
+    assert!(message.starts_with("error.rfi.followUp.limitExceeded: "));
+    assert!(message.contains("reaches row 20010"), "{message}");
 }
 
 #[test]
@@ -4278,7 +4286,15 @@ fn multi_section_mec_signed_rfi_uses_section_and_block_without_location() {
     );
     let source = source_package(
         worksheet([full_schema_mec_header()], &[]),
-        worksheet([full_schema_mec_header(), mec_row], &[]),
+        worksheet(
+            [
+                full_schema_mec_header(),
+                mec_row,
+                // Already numbered in the Log, so Follow Up's MEC-0558 is not a deleted RFI.
+                row(11, [inline("A11", "AZE-SUN-INT-QMS-RFI-MEC-0558")]),
+            ],
+            &[],
+        ),
     );
     let target = package(&[
         (
@@ -4535,5 +4551,1142 @@ fn rfis_of_different_items_or_itps_are_strictly_isolated_and_never_merge_into_sa
             .unwrap()
             .iter()
             .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords")
+    );
+}
+
+#[test]
+fn large_follow_up_with_more_than_five_thousand_changes_previews_within_the_byte_budget() {
+    let count = 8_406;
+    let code = |n: usize| format!("AZE-SUN-INT-QMS-RFI-CIV-{n:04}");
+    let source_rows = (1..=count).map(|n| {
+        let r = n as u32 + 9;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), &code(n)),
+                inline(&format!("T{r}"), "Completed"),
+            ],
+        )
+    });
+    let target_rows = (1..=count).map(|n| {
+        let r = n as u32 + 1;
+        row(
+            r,
+            [inline(&format!("A{r}"), &code(n)), blank(&format!("B{r}"))],
+        )
+    });
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(source_rows, &[]),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    std::fs::write(
+        &target_path,
+        target_with_rows(target_rows, &[]).into_inner(),
+    )
+    .unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+
+    assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), count);
+    assert_eq!(
+        guarded_updates(&plan.steps[0])
+            .unwrap()
+            .values()
+            .map(|u| u.len())
+            .sum::<usize>(),
+        count
+    );
+    let bytes = serde_json::to_vec(&plan).unwrap().len();
+    eprintln!("PLAN_BYTES {bytes}");
+    assert!(bytes < 32 * 1024 * 1024);
+}
+
+fn number_only_record(row_number: u32, suffix: &str) -> String {
+    row(
+        row_number,
+        [inline(
+            &format!("A{row_number}"),
+            &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
+        )],
+    )
+}
+
+fn civ_template_target() -> Cursor<Vec<u8>> {
+    package(&[
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(5, [inline("A5", "Zone 4"), inline("C5", "PCS-19")])],
+                &[],
+            ),
+        ),
+        (
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("I1", "RFI No."), inline("J1", "STATUS")]),
+                    row(
+                        20,
+                        [
+                            inline("A20", "Zone 4"),
+                            inline("B20", "S1"),
+                            inline("I20", ""),
+                            inline("J20", ""),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        ),
+        ("PCU", None, pcu_target("", "", "")),
+    ])
+}
+
+#[test]
+fn number_only_rfi_log_rows_are_not_records_and_raise_no_manual_review() {
+    let source = full_schema_source([
+        number_only_record(10, "2001"),
+        number_only_record(11, "2002"),
+        number_only_record(12, "2003"),
+    ]);
+
+    let review = classify(source, civ_template_target()).unwrap();
+
+    assert!(review["rows"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn rfi_log_row_with_a_status_but_no_itp_stays_visible_for_review() {
+    let source = full_schema_source([row(
+        10,
+        [
+            inline("A10", "AZE-SUN-INT-QMS-RFI-CIV-2004"),
+            inline("T10", "Completed"),
+        ],
+    )]);
+
+    let review = classify(source, civ_template_target()).unwrap();
+
+    assert_eq!(review["rows"].as_array().unwrap().len(), 1);
+}
+
+fn road_source(rfis: &[(&str, &str, &str)]) -> Cursor<Vec<u8>> {
+    // (suffix, tag, status), every record is ITP CIV-0004 item 4.2.4.
+    full_schema_source(
+        rfis.iter()
+            .enumerate()
+            .map(|(index, (suffix, tag, status))| {
+                full_schema_record_with_status(
+                    10 + index as u32,
+                    suffix,
+                    "AZE-SUN-INT-QMS-ITP-CIV-0004",
+                    "CIV-4.2.4",
+                    tag,
+                    status,
+                    "",
+                )
+            }),
+    )
+}
+
+fn road_target(road_cells: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = road_cells.iter().enumerate().map(|(index, cell)| {
+        let r = 5 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "North"),
+                inline(&format!("B{r}"), cell),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+            ],
+        )
+    });
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ])
+}
+
+fn road_rows(review: &Value) -> Vec<(u64, String)> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| {
+            row["_sheet"] == "Road" && row["selectable"] == true && row["proposedRfiNo"].is_string()
+        })
+        .map(|row| {
+            (
+                row["_row"].as_u64().unwrap(),
+                row["proposedRfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn road_rfi_without_a_part_goes_to_every_part_row_of_that_road() {
+    let review = classify(
+        road_source(&[("0001", "Road 06", "Ongoing")]),
+        road_target(&[
+            "Road 06 (Part 1)",
+            "Road 06 (Part 2)",
+            "Road 07 (Part 1)",
+            "Road 06 (Part 3)",
+        ]),
+    )
+    .unwrap();
+
+    assert_eq!(
+        road_rows(&review),
+        [
+            (5, "CIV-0001".to_string()),
+            (6, "CIV-0001".to_string()),
+            (8, "CIV-0001".to_string())
+        ]
+    );
+}
+
+#[test]
+fn road_rfi_with_a_part_goes_only_to_that_part_row() {
+    let review = classify(
+        road_source(&[("0002", "Road 06 (Part 2)", "Completed")]),
+        road_target(&["Road 06 (Part 1)", "Road 06 (Part 2)", "Road 06 (Part 3)"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(6, "CIV-0002".to_string())]);
+}
+
+#[test]
+fn road_rfi_listing_several_parts_goes_to_each_listed_part() {
+    for tag in [
+        "Road 15 (Part 1), (Part 2)",
+        "Road 15 (Part 1),Road 15 (Part 2)",
+    ] {
+        let review = classify(
+            road_source(&[("0003", tag, "Ongoing")]),
+            road_target(&["Road 15 (Part 1)", "Road 15 (Part 2)", "Road 15 (Part 3)"]),
+        )
+        .unwrap();
+
+        assert_eq!(
+            road_rows(&review),
+            [(5, "CIV-0003".to_string()), (6, "CIV-0003".to_string())],
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn road_rfi_names_a_part_with_no_row_as_partial_context_and_still_syncs_the_rest() {
+    let review = classify(
+        road_source(&[("0004", "Road 06 (Part 1), Road 06 (Part 9)", "Ongoing")]),
+        road_target(&["Road 06 (Part 1)", "Road 06 (Part 2)"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(5, "CIV-0004".to_string())]);
+    assert!(
+        review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| { row["reasonKey"] == "warn.rfi.followUp.reason.partialContext" })
+    );
+}
+
+#[test]
+fn partless_road_row_still_matches_a_partless_tag() {
+    let review = classify(
+        road_source(&[("0005", "Road 02", "Completed")]),
+        road_target(&["Road 02", "Road 03"]),
+    )
+    .unwrap();
+
+    assert_eq!(road_rows(&review), [(5, "CIV-0005".to_string())]);
+}
+
+fn deleted_rfi_review(extra_log_rows: Vec<String>, target_cell: &str) -> Value {
+    let mut civ = vec![full_schema_record_with_status(
+        10,
+        "1222",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-1.5",
+        "AREA-1",
+        "Completed",
+        "",
+    )];
+    civ.extend(extra_log_rows);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", target_cell),
+                        inline("D2", "In Progress"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+    classify(full_schema_source(civ), target).unwrap()
+}
+
+fn proposed_rfis(review: &Value) -> Vec<String> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|row| row["proposedRfiNo"].as_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn rfi_missing_from_the_whole_log_is_removed_from_the_follow_up_cell() {
+    let review = deleted_rfi_review(Vec::new(), "CIV-1222/0099");
+
+    assert_eq!(proposed_rfis(&review), ["CIV-1222"]);
+    assert_eq!(review["rows"][0]["proposedStatus"], "Completed");
+    assert_eq!(review["rows"][0]["selectable"], true);
+}
+
+#[test]
+fn rfi_that_is_only_numbered_in_the_log_is_not_treated_as_deleted() {
+    let review = deleted_rfi_review(
+        vec![row(11, [inline("A11", "AZE-SUN-INT-QMS-RFI-CIV-0098")])],
+        "CIV-1222/0098",
+    );
+
+    assert!(
+        !proposed_rfis(&review).contains(&"CIV-1222".to_string()),
+        "{review}"
+    );
+}
+
+#[test]
+fn placeholder_rfi_numbers_are_never_removed_as_deleted() {
+    let review = deleted_rfi_review(Vec::new(), "CIV-1222/2001");
+
+    assert!(
+        !proposed_rfis(&review).contains(&"CIV-1222".to_string()),
+        "{review}"
+    );
+}
+
+fn remark_target(rfi_cell: &str, status: &str, remark: &str) -> Cursor<Vec<u8>> {
+    package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                        inline("Q1", "Remarks"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", rfi_cell),
+                        inline("D2", status),
+                        inline("Q2", remark),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )])
+}
+
+fn remark_source(statuses: &[(&str, &str)]) -> Cursor<Vec<u8>> {
+    full_schema_source(
+        statuses
+            .iter()
+            .enumerate()
+            .map(|(index, (suffix, status))| {
+                full_schema_record_with_status(
+                    10 + index as u32,
+                    suffix,
+                    "AZE-SUN-INT-QMS-ITP-CIV-0002",
+                    "CIV-1.5",
+                    "AREA-1",
+                    status,
+                    "",
+                )
+            }),
+    )
+}
+
+fn remark_row(review: &Value) -> Option<&Value> {
+    review["rows"].as_array().unwrap().iter().find(|row| {
+        row["remark"].is_object()
+            || row["reasonKey"]
+                .as_str()
+                .is_some_and(|key| key.contains("remark"))
+    })
+}
+
+fn remark_text(row: &Value) -> String {
+    row["remark"]["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|run| run["text"].as_str().unwrap())
+        .collect()
+}
+
+#[test]
+fn mixed_status_cell_gets_a_completed_first_remark() {
+    let review = classify(
+        remark_source(&[("1223", "Ongoing"), ("1222", "Completed")]),
+        remark_target("CIV-1222/1223", "In Progress", ""),
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("remark row");
+    assert_eq!(row["disposition"], "rfi.followUp.disposition.ready");
+    assert_eq!(row["selectable"], true);
+    assert_eq!(remark_text(row), "CIV-1222 Completed CIV-1223 In Progress");
+    let runs = row["remark"]["runs"].as_array().unwrap();
+    assert_eq!(runs[0]["emphasized"], true);
+    assert_eq!(runs[1]["emphasized"], false);
+    assert_eq!(row["remark"]["column"], 17);
+}
+
+#[test]
+fn single_rfi_cell_gets_no_remark() {
+    let review = classify(
+        remark_source(&[("1222", "Ongoing")]),
+        remark_target("CIV-1222", "In Progress", ""),
+    )
+    .unwrap();
+
+    assert!(remark_row(&review).is_none(), "{review}");
+}
+
+#[test]
+fn generated_remark_is_cleared_once_every_rfi_in_the_cell_is_completed() {
+    let review = classify(
+        remark_source(&[("1222", "Completed"), ("1223", "Completed")]),
+        remark_target(
+            "CIV-1222/1223",
+            "Completed",
+            "CIV-1222 Completed CIV-1223 In Progress",
+        ),
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("clear row");
+    assert_eq!(
+        row["reasonKey"],
+        "warn.rfi.followUp.reason.readyRemarkClear"
+    );
+    assert_eq!(row["remark"]["runs"].as_array().unwrap().len(), 0);
+    assert_eq!(row["selectable"], true);
+}
+
+#[test]
+fn operator_notes_are_never_replaced_or_cleared() {
+    for (statuses, cell) in [
+        (
+            vec![("1222", "Completed"), ("1223", "Ongoing")],
+            "CIV-1222/1223",
+        ),
+        (
+            vec![("1222", "Completed"), ("1223", "Completed")],
+            "CIV-1222/1223",
+        ),
+    ] {
+        let review = classify(
+            remark_source(&statuses),
+            remark_target(cell, "In Progress", "operator note"),
+        )
+        .unwrap();
+
+        let touched = remark_row(&review);
+        assert!(
+            touched.is_none_or(|row| row["selectable"] == false && row["remark"].is_null()),
+            "{review}"
+        );
+    }
+}
+
+#[test]
+fn up_to_date_generated_remark_is_left_alone() {
+    let review = classify(
+        remark_source(&[("1222", "Completed"), ("1223", "Ongoing")]),
+        remark_target(
+            "CIV-1222/1223",
+            "In Progress",
+            "CIV-1222 Completed CIV-1223 In Progress",
+        ),
+    )
+    .unwrap();
+
+    assert!(remark_row(&review).is_none(), "{review}");
+}
+
+#[test]
+fn remark_is_written_as_rich_text_through_apply_and_undone_exactly() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let source_bytes = remark_source(&[("1222", "Completed"), ("1223", "Ongoing")]).into_inner();
+    let original_target = remark_target("CIV-1222/1223", "Pending", "").into_inner();
+    std::fs::write(&source_path, &source_bytes).unwrap();
+    std::fs::write(&target_path, &original_target).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan =
+        preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
+    assert!(plan.steps[0].meta["remarks"].as_array().unwrap().len() == 1);
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.applied, 2, "{:?}", applied.errors);
+
+    let mut written = File::open(&target_path).unwrap();
+    let workbook = read_workbook_from_reader(&mut written).unwrap();
+    assert_eq!(
+        workbook.sheet("CIV").unwrap().value(2, 17),
+        "CIV-1222 Completed CIV-1223 In Progress"
+    );
+    assert_eq!(workbook.sheet("CIV").unwrap().value(2, 4), "In Progress");
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original_target);
+}
+
+fn road_target_with_formulas(road_cells: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = road_cells.iter().enumerate().map(|(index, cell)| {
+        let r = 5 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "South"),
+                inline(&format!("B{r}"), cell),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+                formula(
+                    &format!("Y{r}"),
+                    &format!("COUNTIF(K{r}:L{r},\"Completed\")/6"),
+                    "0",
+                ),
+            ],
+        )
+    });
+    let last = 4 + road_cells.len();
+    let summary = row(3, [formula("Z3", &format!("AVERAGE(Y5:Y{last})"), "0")]);
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(
+                std::iter::once(summary)
+                    .chain(std::iter::once(header))
+                    .chain(rows),
+                &[],
+            ),
+        ),
+    ])
+}
+
+fn structure_reasons(review: &Value) -> Vec<(String, String)> {
+    review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| {
+            row["reasonKey"]
+                .as_str()
+                .is_some_and(|key| key.contains("reason.structure"))
+        })
+        .map(|row| {
+            (
+                row["reasonKey"].as_str().unwrap().to_string(),
+                row["rfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+fn road_preview(
+    root: &std::path::Path,
+    source: Cursor<Vec<u8>>,
+    target: Cursor<Vec<u8>>,
+) -> (
+    docflow_lib::contracts::Plan,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    Vec<u8>,
+) {
+    let source_path = root.join("RFI Log.xlsx");
+    let target_path = root.join("Follow Up.xlsx");
+    let target_bytes = target.into_inner();
+    std::fs::write(&source_path, source.into_inner()).unwrap();
+    std::fs::write(&target_path, &target_bytes).unwrap();
+    let mut source_file = File::open(&source_path).unwrap();
+    let mut target_file = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut source_file,
+        &mut target_file,
+    )
+    .unwrap();
+    (plan, source_path, target_path, target_bytes)
+}
+
+fn plan_rows(plan: &docflow_lib::contracts::Plan) -> Value {
+    json!({"rows": plan.meta["editor"]["rows"].clone()})
+}
+
+#[test]
+fn partless_road_row_is_split_into_parts_when_the_log_names_a_part() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let (plan, ..) = road_preview(
+        &root,
+        road_source(&[
+            ("0001", "Road 18", "Ongoing"),
+            ("0002", "Road 18 (Part 2)", "Completed"),
+        ]),
+        road_target_with_formulas(&["Road 17", "Road 18", "Road 19"]),
+    );
+    let review = plan_rows(&plan);
+
+    let road_18: Vec<_> = structure_reasons(&review)
+        .into_iter()
+        .filter(|(_, label)| label.starts_with("Road 18"))
+        .collect();
+    assert_eq!(
+        road_18,
+        [
+            (
+                "warn.rfi.followUp.reason.structureInsert".to_string(),
+                "Road 18 (Part 2)".to_string()
+            ),
+            (
+                "warn.rfi.followUp.reason.structureRename".to_string(),
+                "Road 18 (Part 1)".to_string()
+            ),
+        ]
+    );
+    let mut codes: Vec<String> = road_rows(&review)
+        .into_iter()
+        .map(|(_, code)| code)
+        .collect();
+    codes.sort();
+    assert_eq!(codes, ["CIV-0001", "CIV-0001/0002"]);
+}
+
+#[test]
+fn road_structure_is_applied_through_the_guarded_pipeline_and_undone_exactly() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let (plan, _, target_path, original) = road_preview(
+        &root,
+        road_source(&[
+            ("0001", "Road 18", "Ongoing"),
+            ("0002", "Road 18 (Part 2)", "Completed"),
+        ]),
+        road_target_with_formulas(&["Road 17", "Road 18", "Road 19"]),
+    );
+    assert!(plan.steps[0].meta["structure"].as_array().unwrap().len() >= 2);
+    eprintln!(
+        "GUARDED {:?}",
+        guarded_updates(&plan.steps[0]).map(|u| u.len())
+    );
+    eprintln!(
+        "STEP {}",
+        serde_json::to_string(&plan.steps[0].meta["structure"]).unwrap()
+    );
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let source_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let target_grant = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![source_grant.grant_id, target_grant.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert!(applied.failed == 0, "{:?}", applied.errors);
+
+    let mut written = File::open(&target_path).unwrap();
+    let workbook = read_workbook_from_reader(&mut written).unwrap();
+    let road = workbook.sheet("Road").unwrap();
+    let row_of = |label: &str| {
+        (1..=road.max_row)
+            .find(|row| road.value(*row, 2) == label)
+            .unwrap_or_else(|| panic!("{label} missing"))
+    };
+    let part1 = row_of("Road 18 (Part 1)");
+    assert_eq!(row_of("Road 18 (Part 2)"), part1 + 1);
+    assert_eq!(road.value(part1, 11), "CIV-0001");
+    assert_eq!(road.value(part1 + 1, 11), "CIV-0001/0002");
+    assert_eq!(road.value(part1 + 1, 12), "In Progress");
+    assert_eq!(road.value(part1 + 1, 1), "South");
+    assert_eq!(
+        road.cell(part1 + 1, 25).unwrap().formula.as_deref(),
+        Some(format!("COUNTIF(K{0}:L{0},\"Completed\")/6", part1 + 1).as_str())
+    );
+    for (label, zone) in [
+        ("Road 01", "North"),
+        ("Road 08", "Center"),
+        ("Road 14", "South"),
+        ("Road 21", "North"),
+    ] {
+        assert_eq!(road.value(row_of(label), 1), zone, "{label}");
+    }
+    for n in 1..=21 {
+        let prefix = format!("Road {n:02}");
+        assert!(
+            (1..=road.max_row).any(|row| road.value(row, 2).starts_with(&prefix)),
+            "{prefix} has a row"
+        );
+    }
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}
+
+#[test]
+fn a_log_missing_most_follow_up_rfis_pauses_deletion_and_warns() {
+    let cells = (0..120)
+        .map(|n| format!("CIV-{:04}", 1000 + n))
+        .collect::<Vec<_>>();
+    let rows = cells.iter().enumerate().map(|(index, code)| {
+        let r = 2 + index as u32;
+        row(
+            r,
+            [
+                inline(&format!("B{r}"), "AREA-1"),
+                inline(&format!("C{r}"), code),
+                inline(&format!("D{r}"), "In Progress"),
+            ],
+        )
+    });
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            std::iter::once(row(
+                1,
+                [
+                    inline("B1", "Tag"),
+                    inline("C1", "RFI No."),
+                    inline("D1", "STATUS"),
+                ],
+            ))
+            .chain(rows),
+            &[],
+        ),
+    )]);
+    let review = classify(
+        full_schema_source([full_schema_record_with_status(
+            10,
+            "1222",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-1.5",
+            "AREA-1",
+            "Completed",
+            "",
+        )]),
+        target,
+    )
+    .unwrap();
+
+    assert!(
+        review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |warning| warning["key"] == "warn.rfi.followUp.massDeletionBrake"
+                    && warning["subject"] == "120"
+            ),
+        "{review}"
+    );
+    assert!(
+        review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["reasonKey"] != "warn.rfi.followUp.reason.readyDeleted")
+    );
+}
+
+#[test]
+fn remark_lists_only_the_rfis_of_cells_that_need_it() {
+    // Row has a mixed two-RFI cell and, in another cell pair, one single Completed RFI.
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                        inline("E1", "RFI No."),
+                        inline("F1", "STATUS"),
+                        inline("Q1", "Remarks"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", "CIV-1222/1223"),
+                        inline("D2", "In Progress"),
+                        inline("E2", "CIV-1300"),
+                        inline("F2", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+    let review = classify(
+        remark_source(&[
+            ("1222", "Completed"),
+            ("1223", "Ongoing"),
+            ("1300", "Completed"),
+        ]),
+        target,
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("remark row");
+    assert_eq!(remark_text(row), "CIV-1222 Completed CIV-1223 In Progress");
+}
+
+#[test]
+fn empty_formula_cells_in_a_formula_column_are_repaired_and_values_are_never_overwritten() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    // Rows 5-8: Y is formula-driven; row 6 has an empty Y, row 7 holds a typed value.
+    let rows = (5..=8).map(|r| {
+        let y = match r {
+            6 => blank(&format!("Y{r}")),
+            7 => inline(&format!("Y{r}"), "READY"),
+            _ => formula(
+                &format!("Y{r}"),
+                &format!("COUNTIF(K{r}:L{r},\"Completed\")/6"),
+                "0",
+            ),
+        };
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "South"),
+                inline(&format!("B{r}"), &format!("Road {r:02}")),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+                y,
+            ],
+        )
+    });
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ]);
+    let (plan, _, target_path, original) = road_preview(
+        &root,
+        road_source(&[("0001", "Road 99", "Completed")]),
+        target,
+    );
+
+    let fixes = plan.meta["editor"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["reasonKey"] == "warn.rfi.followUp.reason.readyFormulaRepair")
+        .collect::<Vec<_>>();
+    assert_eq!(fixes.len(), 1, "{fixes:?}");
+    assert!(
+        fixes[0]["mappingDetails"]
+            .as_str()
+            .unwrap()
+            .contains("= COUNTIF(K"),
+        "{fixes:?}"
+    );
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let g1 = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let g2 = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![g1.grant_id, g2.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    let mut written = File::open(&target_path).unwrap();
+    let road = read_workbook_from_reader(&mut written).unwrap();
+    let road = road.sheet("Road").unwrap();
+    let row_of = |label: &str| {
+        (1..=road.max_row)
+            .find(|row| road.value(*row, 2) == label)
+            .unwrap()
+    };
+    let repaired = row_of("Road 06");
+    let typed = row_of("Road 07");
+    assert_eq!(
+        road.cell(repaired, 25).unwrap().formula.as_deref(),
+        Some(format!("COUNTIF(K{0}:L{0},\"Completed\")/6", repaired).as_str())
+    );
+    assert_eq!(road.value(typed, 25), "READY");
+    assert!(road.cell(typed, 25).unwrap().formula.is_none());
+    authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}
+
+#[test]
+fn empty_zone_cells_are_filled_from_the_fixed_road_table() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    let rows = [(5, "Road 06 (Part 1)"), (6, "Road 14")]
+        .into_iter()
+        .map(|(r, label)| {
+            row(
+                r,
+                [
+                    blank(&format!("A{r}")),
+                    inline(&format!("B{r}"), label),
+                    inline(&format!("K{r}"), ""),
+                    inline(&format!("L{r}"), ""),
+                ],
+            )
+        });
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ]);
+    let (plan, ..) = road_preview(
+        &root,
+        road_source(&[("0001", "Road 06", "Ongoing")]),
+        target,
+    );
+
+    let zones: Vec<(String, String)> = plan.meta["editor"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["reasonKey"] == "warn.rfi.followUp.reason.structureZone")
+        .map(|row| {
+            (
+                row["rfiNo"].as_str().unwrap().to_string(),
+                row["_row"].to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(zones.len(), 2, "{zones:?}");
+    let texts: Vec<&str> = zones.iter().map(|(text, _)| text.as_str()).collect();
+    assert!(
+        texts.contains(&"Center") && texts.contains(&"South"),
+        "{texts:?}"
     );
 }

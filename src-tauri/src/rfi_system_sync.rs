@@ -31,6 +31,7 @@ use crate::{
 
 pub const OPERATION_ID: &str = "rfi.system_sync";
 pub const COMPLETE_STATUS_OPERATION_ID: &str = "rfi.complete_status_sync";
+pub const PUBLISH_STATUS_OPERATION_ID: &str = "rfi.publish_status";
 pub const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
 pub const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
 const MAX_HEADER_ROWS: u32 = 32;
@@ -109,6 +110,7 @@ pub(crate) struct SystemSyncRow {
 pub(crate) enum SyncWorkbookKind {
     RfiLog,
     RfiLogStatus,
+    RfiLogPublish,
     FollowUp,
 }
 
@@ -191,13 +193,17 @@ struct HeaderLayout {
 mod codes;
 mod log;
 mod preview;
+mod publish_preview;
 mod revise;
 mod scan;
 pub(crate) use codes::*;
 use log::*;
 pub use preview::*;
+pub use publish_preview::*;
 pub use revise::*;
 pub use scan::*;
 
 #[cfg(test)]
 mod candidate_normalization_tests;
+#[cfg(test)]
+mod publish_status_tests;

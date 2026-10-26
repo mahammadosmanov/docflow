@@ -475,6 +475,34 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
+    let rfi_publish_status = operation(
+        "rfi.publish_status",
+        vec![
+            parameter(
+                "staging_folder",
+                ParamKind::Folder,
+                "param.rfi.publishStatus.stagingFolder",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.publishStatus.stagingFolder.help"),
+            ),
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.publishStatus.rfiLogWorkbook",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.publishStatus.rfiLogWorkbook.help"),
+            ),
+        ],
+    );
+
     let default_printer = facts
         .default_printer
         .or_else(|| facts.printers.first().cloned())
@@ -823,6 +851,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         normalize_pdf_orientation,
         rfi_system_sync,
         rfi_complete_status_sync,
+        rfi_publish_status,
         fast_cover_scans,
     ]
 }

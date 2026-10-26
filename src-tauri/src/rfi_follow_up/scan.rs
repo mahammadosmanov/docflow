@@ -159,7 +159,10 @@ pub(super) fn scan_source(
         validate_cell_text(worksheet)?;
         let last_allowed = SOURCE_FIRST_DATA_ROW + MAX_SOURCE_DATA_ROWS_PER_SHEET - 1;
         if worksheet.max_row > last_allowed {
-            return Err(limit_exceeded());
+            return Err(limit_exceeded_for(format!(
+                "RFI Log sheet '{}' reaches row {}; at most row {last_allowed}",
+                descriptor.name, worksheet.max_row
+            )));
         }
         let (rfi_col, status_col) = detect_rfi_and_status_columns(
             worksheet,
@@ -178,7 +181,9 @@ pub(super) fn scan_source(
             let status_cell = worksheet.cell(row, status_col);
             let evidence = grouped.entry(rfi).or_default();
             if evidence.len() >= MAX_SOURCE_EVIDENCE_PER_RFI {
-                return Err(limit_exceeded());
+                return Err(limit_exceeded_for(format!(
+                    "one RFI appears in more than {MAX_SOURCE_EVIDENCE_PER_RFI} RFI Log rows"
+                )));
             }
             evidence.push(SourceStatusEvidence {
                 sheet: descriptor.name.clone(),
@@ -206,7 +211,10 @@ pub(super) fn scan_source(
             let (rfi_col, status_col) = detect_rfi_and_status_columns(worksheet, 1, 20);
             let last_allowed = SOURCE_FIRST_DATA_ROW + MAX_SOURCE_DATA_ROWS_PER_SHEET - 1;
             if worksheet.max_row > last_allowed {
-                return Err(limit_exceeded());
+                return Err(limit_exceeded_for(format!(
+                    "RFI Log sheet '{}' reaches row {}; at most row {last_allowed}",
+                    descriptor.name, worksheet.max_row
+                )));
             }
             let mut sheet_had_rfis = false;
             for row in 1..=worksheet.max_row {
@@ -221,7 +229,9 @@ pub(super) fn scan_source(
                 let status_cell = worksheet.cell(row, status_col);
                 let evidence = grouped.entry(rfi).or_default();
                 if evidence.len() >= MAX_SOURCE_EVIDENCE_PER_RFI {
-                    return Err(limit_exceeded());
+                    return Err(limit_exceeded_for(format!(
+                        "one RFI appears in more than {MAX_SOURCE_EVIDENCE_PER_RFI} RFI Log rows"
+                    )));
                 }
                 evidence.push(SourceStatusEvidence {
                     sheet: descriptor.name.clone(),
@@ -386,7 +396,10 @@ pub(super) fn scan_target_rows(
 ) -> Result<Vec<PendingTargetRow>, BackendError> {
     let last_allowed = layout.header_row + MAX_FOLLOW_UP_DATA_ROWS;
     if worksheet.max_row > last_allowed {
-        return Err(limit_exceeded());
+        return Err(limit_exceeded_for(format!(
+            "Follow Up sheet '{}' reaches row {}; at most row {last_allowed}",
+            layout.worksheet.name, worksheet.max_row
+        )));
     }
     let mut rows = Vec::new();
     for row in (layout.header_row + 1)..=worksheet.max_row {
@@ -406,7 +419,10 @@ pub(super) fn scan_target_rows(
             continue;
         }
         if rows.len() >= MAX_PREVIEW_ROWS {
-            return Err(limit_exceeded());
+            return Err(limit_exceeded_for(format!(
+                "Follow Up sheet '{}' has more than {MAX_PREVIEW_ROWS} reviewable rows",
+                layout.worksheet.name
+            )));
         }
         rows.push(PendingTargetRow {
             row,
@@ -529,6 +545,8 @@ impl BorrowedFollowUpRow<'_> {
             reason_key: self.reason_key.clone(),
             selectable: self.selectable,
             enabled: self.enabled,
+            remark: None,
+            formula_fixes: Vec::new(),
             target: FollowUpReviewTarget {
                 worksheet: self.target.worksheet.clone(),
                 row: self.target.row,
@@ -714,5 +732,6 @@ pub(super) fn validate_projection_budget<T: Serialize>(projection: &T) -> Result
         count: 0,
         limit: MAX_PREVIEW_AUTHORITY_BYTES,
     };
-    serde_json::to_writer(&mut writer, projection).map_err(|_| limit_exceeded())
+    serde_json::to_writer(&mut writer, projection)
+        .map_err(|_| limit_exceeded_for("the projection is larger than 32 MiB"))
 }

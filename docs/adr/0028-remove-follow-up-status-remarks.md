@@ -1,7 +1,7 @@
 # ADR 0028: Remove generated Follow Up status remarks
 
 - Date: 2026-09-26
-- Status: Accepted
+- Status: Superseded by [ADR 0047](0047-follow-up-generated-row-remarks.md)
 - Supersedes: [ADR 0026](0026-mixed-rfi-status-remarks.md)
 
 ## Context

@@ -68,7 +68,7 @@ where
     R: Read + Seek,
     W: Read + Write + Seek,
 {
-    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true)
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true, false)
 }
 
 /// Applies arbitrary text replacements while retaining the same exact-cell and
@@ -83,7 +83,24 @@ where
     R: Read + Seek,
     W: Read + Write + Seek,
 {
-    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false)
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false, false)
+}
+
+/// Same as [`patch_workbook_sheets_guarded_text`] and additionally sets
+/// `fullCalcOnLoad="1"` on the existing `calcPr` of `xl/workbook.xml`. Only that
+/// one attribute may change in the workbook part. Cached formula values (for
+/// example percentage indicators) are otherwise left stale because Excel does
+/// not mark XML-patched cells dirty, so neither opening nor F9 refreshes them.
+pub fn patch_workbook_sheets_guarded_text_recalc<R, W>(
+    source: &mut R,
+    destination: &mut W,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Read + Write + Seek,
+{
+    patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, false, true)
 }
 
 pub(super) fn patch_workbook_sheets_guarded_inner<R, W>(
@@ -91,6 +108,7 @@ pub(super) fn patch_workbook_sheets_guarded_inner<R, W>(
     destination: &mut W,
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
+    recalc_on_load: bool,
 ) -> Result<(), OoxmlError>
 where
     R: Read + Seek,
@@ -113,6 +131,7 @@ where
 
     source.seek(SeekFrom::Start(0))?;
     let mut archive = open_archive(source)?;
+    let fonts = load_font_table(&mut archive)?;
     let mut patched = BTreeMap::<String, Vec<u8>>::new();
     for (sheet_name, updates) in updates_by_sheet {
         let info = sheet_infos
@@ -121,8 +140,13 @@ where
         let raw = read_entry(&mut archive, &info.path)?;
         patched.insert(
             info.path.clone(),
-            patch_sheet_xml_guarded(&raw, updates, status_values_only)?,
+            patch_sheet_xml_guarded(&raw, updates, status_values_only, &fonts)?,
         );
+    }
+
+    if recalc_on_load {
+        let raw = read_entry(&mut archive, WORKBOOK_PART)?;
+        patched.insert(WORKBOOK_PART.to_string(), with_full_calc_on_load(&raw)?);
     }
 
     if destination.seek(SeekFrom::End(0))? != 0 {
@@ -145,7 +169,7 @@ where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, true)
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, true, false)
 }
 
 pub fn verify_guarded_workbook_delta_text<R1, R2>(
@@ -157,7 +181,32 @@ where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false)
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false, false)
+}
+
+pub fn verify_guarded_workbook_delta_text_recalc<R1, R2>(
+    source: &mut R1,
+    destination: &mut R2,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
+) -> Result<(), OoxmlError>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
+    verify_guarded_workbook_delta_inner(source, destination, updates_by_sheet, false, true)
+}
+
+const WORKBOOK_PART: &str = "xl/workbook.xml";
+
+/// Returns the workbook XML with `fullCalcOnLoad="1"` on its existing `calcPr`.
+/// A workbook without `calcPr` is returned byte-identical.
+pub(super) fn with_full_calc_on_load(raw: &[u8]) -> Result<Vec<u8>, OoxmlError> {
+    let mut document = parse_document(raw)?;
+    let Some(calc) = find_element_mut(&mut document.nodes, b"calcPr") else {
+        return Ok(raw.to_vec());
+    };
+    set_attribute(calc, b"fullCalcOnLoad", "1");
+    serialize_document(&document)
 }
 
 pub(super) fn verify_guarded_workbook_delta_inner<R1, R2>(
@@ -165,6 +214,7 @@ pub(super) fn verify_guarded_workbook_delta_inner<R1, R2>(
     destination: &mut R2,
     updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), GuardedCellUpdate>>,
     status_values_only: bool,
+    recalc_on_load: bool,
 ) -> Result<(), OoxmlError>
 where
     R1: Read + Seek,
@@ -188,6 +238,7 @@ where
     destination.seek(SeekFrom::Start(0))?;
     let mut source_archive = open_archive(&mut *source)?;
     let mut destination_archive = open_archive(&mut *destination)?;
+    let fonts = load_font_table(&mut source_archive)?;
     if source_archive.len() != destination_archive.len() {
         return Err(OoxmlError::invalid("guarded package member roster changed"));
     }
@@ -211,11 +262,18 @@ where
             let updates = updates_by_sheet
                 .get(sheet_name)
                 .ok_or_else(|| OoxmlError::invalid("guarded updates are missing"))?;
-            let source_tokens = guarded_sheet_tokens(&source_bytes, updates, false)?;
-            let destination_tokens = guarded_sheet_tokens(&destination_bytes, updates, true)?;
+            let source_tokens = guarded_sheet_tokens(&source_bytes, updates, false, &fonts)?;
+            let destination_tokens =
+                guarded_sheet_tokens(&destination_bytes, updates, true, &fonts)?;
             if destination_tokens != source_tokens {
                 return Err(OoxmlError::invalid(
                     "guarded worksheet delta verification failed",
+                ));
+            }
+        } else if recalc_on_load && source_name == WORKBOOK_PART {
+            if destination_bytes != with_full_calc_on_load(&source_bytes)? {
+                return Err(OoxmlError::invalid(
+                    "guarded workbook part changed beyond the recalculation flag",
                 ));
             }
         } else if destination_bytes != source_bytes {
@@ -239,11 +297,17 @@ where
                 .cells
                 .get(&coordinate)
                 .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
-            let CellUpdate::Text(replacement) = &update.replacement else {
-                return Err(OoxmlError::invalid("guarded replacement is invalid"));
+            let (replacement, formula) = match &update.replacement {
+                CellUpdate::Text(replacement) => (replacement.clone(), None),
+                CellUpdate::Rich(runs) => (rich_plain_text(runs), None),
+                CellUpdate::Formula {
+                    formula,
+                    cached: None,
+                } => (String::new(), Some(formula.as_str())),
+                _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
             };
-            if cell.value != *replacement
-                || cell.formula.is_some()
+            if cell.value != replacement
+                || cell.formula.as_deref() != formula
                 || cell.style != update.expected.style
             {
                 return Err(OoxmlError::invalid(
@@ -277,7 +341,14 @@ pub(super) fn validate_guarded_update_set(
                     "guarded worksheet cell reference is invalid",
                 ));
             }
-            if !matches!(&update.replacement, CellUpdate::Text(_))
+            if !matches!(
+                &update.replacement,
+                CellUpdate::Text(_)
+                    | CellUpdate::Rich(_)
+                    | CellUpdate::Formula { cached: None, .. }
+            ) || matches!(&update.replacement, CellUpdate::Rich(runs) if runs.is_empty())
+                || matches!(&update.replacement, CellUpdate::Formula { formula, .. } if formula.is_empty())
+                || status_values_only && !matches!(&update.replacement, CellUpdate::Text(_))
                 || status_values_only
                     && !matches!(
                         &update.replacement,
@@ -337,4 +408,14 @@ pub(super) fn validate_guarded_source(
         }
     }
     Ok(())
+}
+
+/// Fonts for rich-text runs; a workbook without `xl/styles.xml` yields no font facts.
+pub(super) fn load_font_table<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+) -> Result<FontTable, OoxmlError> {
+    if !has_entry(archive, "xl/styles.xml")? {
+        return Ok(FontTable::default());
+    }
+    FontTable::parse(&read_entry(archive, "xl/styles.xml")?)
 }

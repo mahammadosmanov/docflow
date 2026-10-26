@@ -6,9 +6,14 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
     }
     let meta: FollowUpStepMeta =
         serde_json::from_value(Value::Object(step.meta.clone())).map_err(|_| workbook_invalid())?;
-    if meta.updates.is_empty() || meta.updates.len() > MAX_PREVIEW_ROWS {
+    if (meta.updates.is_empty() && meta.remarks.is_empty() && meta.formulas.is_empty())
+        || meta.updates.len() + meta.remarks.len() + meta.formulas.len() > MAX_PREVIEW_ROWS
+    {
         return Err(workbook_invalid());
     }
+    validate_remarks(&meta)?;
+    validate_structure(&meta.structure)?;
+    validate_formulas(&meta)?;
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
@@ -89,7 +94,142 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
             return Err(workbook_invalid());
         }
     }
+    for remark in meta.remarks {
+        let replacement = if remark.runs.is_empty() {
+            CellUpdate::Text(String::new())
+        } else {
+            CellUpdate::Rich(
+                remark
+                    .runs
+                    .iter()
+                    .map(|run| RichRun {
+                        text: run.text.clone(),
+                        emphasized: run.emphasized,
+                    })
+                    .collect(),
+            )
+        };
+        let guarded = GuardedCellUpdate {
+            create_if_absent: remark.expected.is_none(),
+            expected: remark
+                .expected
+                .map_or_else(CellData::default, |cell| CellData {
+                    value: cell.value,
+                    formula: cell.formula,
+                    style: cell.style,
+                }),
+            replacement,
+        };
+        if updates_by_sheet
+            .entry(remark.worksheet.name)
+            .or_default()
+            .insert((remark.row, remark.column), guarded)
+            .is_some()
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    for fix in meta.formulas {
+        let guarded = GuardedCellUpdate {
+            expected: CellData {
+                value: String::new(),
+                formula: None,
+                style: fix.style,
+            },
+            replacement: CellUpdate::Formula {
+                formula: fix.formula,
+                cached: None,
+            },
+            create_if_absent: false,
+        };
+        if updates_by_sheet
+            .entry(fix.worksheet.name)
+            .or_default()
+            .insert((fix.row, fix.column), guarded)
+            .is_some()
+        {
+            return Err(workbook_invalid());
+        }
+    }
     Ok(updates_by_sheet)
+}
+
+/// Formula repairs fill only empty cells of the lifecycle sheets with plain formulas.
+fn validate_formulas(meta: &FollowUpStepMeta) -> Result<(), BackendError> {
+    let mut targets = BTreeSet::new();
+    for fix in &meta.formulas {
+        let sheet = fix.worksheet.name.trim().to_uppercase();
+        if !matches!(sheet.as_str(), "CIV" | "PCU" | "ROAD")
+            || !meta
+                .all_layouts()
+                .any(|layout| layout.worksheet == fix.worksheet)
+            || fix.row == 0
+            || fix.column == 0
+            || fix.formula.trim().is_empty()
+            || fix.formula.chars().count() > MAX_CELL_TEXT_CHARS
+            || fix.formula.contains(['[', '\n'])
+            || !targets.insert((fix.worksheet.part_path.as_str(), fix.row, fix.column))
+            || meta.updates.iter().any(|update| {
+                update.target.worksheet == fix.worksheet
+                    && update.target.row == fix.row
+                    && (update.target.rfi_column == fix.column
+                        || update.target.status_column == fix.column)
+            })
+            || meta.remarks.iter().any(|remark| {
+                remark.worksheet == fix.worksheet
+                    && remark.row == fix.row
+                    && remark.column == fix.column
+            })
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    Ok(())
+}
+
+/// Remark updates may only add, replace, or clear text DocFlow generated.
+fn validate_remarks(meta: &FollowUpStepMeta) -> Result<(), BackendError> {
+    let mut row_ids = BTreeSet::new();
+    let mut targets = BTreeSet::new();
+    for remark in &meta.remarks {
+        let valid_layout = meta
+            .all_layouts()
+            .any(|layout| layout.worksheet == remark.worksheet);
+        let expected_text = remark
+            .expected
+            .as_ref()
+            .map(|cell| cell.value.trim().to_string())
+            .unwrap_or_default();
+        let new_text = runs_text(&remark.runs);
+        if !valid_layout
+            || remark.row == 0
+            || remark.column == 0
+            || !row_ids.insert(remark.row_id.as_str())
+            || !targets.insert((
+                remark.worksheet.part_path.as_str(),
+                remark.row,
+                remark.column,
+            ))
+            || meta.updates.iter().any(|update| {
+                update.target.worksheet == remark.worksheet
+                    && update.target.row == remark.row
+                    && (update.target.rfi_column == remark.column
+                        || update.target.status_column == remark.column)
+            })
+            || remark
+                .expected
+                .as_ref()
+                .is_some_and(|cell| cell.formula.is_some())
+            || !(expected_text.is_empty() || is_app_remark(&expected_text))
+            || (remark.runs.is_empty() && expected_text.is_empty())
+            || (!remark.runs.is_empty() && !is_app_remark(&new_text))
+            || remark.runs.iter().any(|run| run.text.is_empty())
+            || new_text.chars().count() > MAX_CELL_TEXT_CHARS
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -103,14 +243,20 @@ where
     R2: Read + Seek,
 {
     let updates = guarded_updates(step)?;
-    verify_guarded_workbook_delta_text(source, private_output, &updates).map_err(
-        |error| match error.kind() {
-            OoxmlErrorKind::LimitExceeded => limit_exceeded(),
-            OoxmlErrorKind::Invalid => {
-                BackendError::validation("error.rfi.followUp.patchVerification")
-            }
-        },
-    )
+    let structure = decode_step_meta(step)?.structure;
+    let map_error = |error: OoxmlError| match error.kind() {
+        OoxmlErrorKind::LimitExceeded => limit_exceeded_for(format!("patch verification: {error}")),
+        OoxmlErrorKind::Invalid => BackendError::validation("error.rfi.followUp.patchVerification"),
+    };
+    if structure.is_empty() {
+        return verify_guarded_workbook_delta_text_recalc(source, private_output, &updates)
+            .map_err(map_error);
+    }
+    // The published file must equal the original with the approved Road rows and then
+    // only the approved cell updates.
+    let mut baseline = std::io::Cursor::new(structured_baseline(source, &structure)?);
+    verify_guarded_workbook_delta_text_recalc(&mut baseline, private_output, &updates)
+        .map_err(map_error)
 }
 
 #[allow(dead_code)]
@@ -121,7 +267,7 @@ pub(crate) fn changed_cell_count(step: &Step) -> Result<u64, BackendError> {
             .map(BTreeMap::len)
             .sum::<usize>(),
     )
-    .map_err(|_| limit_exceeded())
+    .map_err(|_| limit_exceeded_for("changed cell count"))
 }
 
 pub(crate) fn step_workbook_paths(step: &Step) -> Result<(String, String, String), BackendError> {
@@ -156,8 +302,15 @@ where
     R: Read + Write + Seek,
 {
     let updates = guarded_updates(step)?;
-    patch_workbook_sheets_guarded_text(source, destination, &updates)
-        .map_err(map_apply_ooxml_error)?;
+    let structure = decode_step_meta(step)?.structure;
+    if structure.is_empty() {
+        patch_workbook_sheets_guarded_text_recalc(source, destination, &updates)
+            .map_err(map_apply_ooxml_error)?;
+    } else {
+        let mut baseline = std::io::Cursor::new(structured_baseline(source, &structure)?);
+        patch_workbook_sheets_guarded_text_recalc(&mut baseline, destination, &updates)
+            .map_err(map_apply_ooxml_error)?;
+    }
     verify_patched_output(step, source, destination)
 }
 
@@ -180,7 +333,9 @@ pub(super) fn validate_cell_text(worksheet: &WorksheetData) -> Result<(), Backen
                 .as_ref()
                 .is_some_and(|formula| formula.chars().count() > MAX_CELL_TEXT_CHARS)
     }) {
-        return Err(limit_exceeded());
+        return Err(limit_exceeded_for(format!(
+            "a cell has more than {MAX_CELL_TEXT_CHARS} characters"
+        )));
     }
     Ok(())
 }
@@ -258,6 +413,8 @@ pub(crate) fn map_follow_up_ooxml_error(error: OoxmlError) -> BackendError {
     }
 }
 
-pub(super) fn limit_exceeded() -> BackendError {
-    BackendError::validation("error.rfi.followUp.limitExceeded")
+/// Same stable key plus the exact limit that tripped, so the operator can tell
+/// a huge used range from an oversized cell or preview.
+pub(super) fn limit_exceeded_for(reason: impl std::fmt::Display) -> BackendError {
+    BackendError::validation(format!("error.rfi.followUp.limitExceeded: {reason}"))
 }

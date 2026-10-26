@@ -33,6 +33,7 @@ use crate::{
     http::{HttpClient, HttpConfig, JsonHttp},
     journal::JournalStore,
     ocr::NativeOcr,
+    ocr_cache::CachingOcr,
     operations::pdf_orientation::{
         PdfOrientationParams, preview_indexed as preview_pdf_orientation,
     },
@@ -241,6 +242,7 @@ pub(crate) struct NativeBackend {
     process_session_id: Mutex<String>,
     app_data_dir: PathBuf,
     scan_index: ScanIndex,
+    watch: crate::watch::WatchQueue,
 }
 
 impl NativeBackend {
@@ -327,6 +329,7 @@ impl NativeBackend {
             process_session_id: Mutex::new(uuid::Uuid::new_v4().to_string()),
             app_data_dir,
             scan_index,
+            watch: crate::watch::WatchQueue::default(),
         })
     }
 
@@ -350,6 +353,9 @@ impl NativeBackend {
                     operations: operation_registry(self.registry_facts()),
                 })
             }
+            BackendMethod::WatchStatus => self.watch_dispatch_status(params),
+            BackendMethod::WatchUpdate => self.watch_dispatch_update(params),
+            BackendMethod::WatchOpen => self.watch_dispatch_open(params),
             BackendMethod::SettingsUpdate => self.update_settings(params),
             BackendMethod::SettingsReset => {
                 decode_empty(params)?;
@@ -680,7 +686,10 @@ mod plan;
 mod preview;
 mod preview_rfi;
 mod session;
+mod watch;
 pub(crate) use free::*;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod watch_tests;

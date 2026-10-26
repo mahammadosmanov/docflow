@@ -2,6 +2,7 @@ import {
   FileCheck2,
   Files,
   History,
+  ListChecks,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -61,6 +62,9 @@ import {
 import {
   HistoryScreen,
 } from "./screens/HistoryScreen";
+import {
+  QueueScreen,
+} from "./screens/QueueScreen";
 import {
   RecoveryScreen,
 } from "./screens/RecoveryScreen";
@@ -201,6 +205,26 @@ export function App() {
             onBack={() => setRoute({ name: "home" })}
           />
         );
+      case "queue":
+        return (
+          <QueueScreen
+            bridge={bridge}
+            operations={bootstrap.operations}
+            s={s}
+            onBack={() => setRoute({ name: "home" })}
+            onOpenOperation={(operation) =>
+              setRoute({ name: "operation", operation })
+            }
+            onOpenPlan={(operation, plan, values) =>
+              setRoute({
+                name: "operation",
+                operation,
+                initialValues: values,
+                initialPlan: plan,
+              })
+            }
+          />
+        );
       case "history":
         return (
           <HistoryScreen
@@ -295,6 +319,28 @@ export function AppFrame({
       setOpeningReview(false);
     }
   };
+  const [readyCount, setReadyCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const status = await bridge.call("watch/status");
+        if (active) {
+          setReadyCount(
+            status.items.filter((item) => item.status === "ready").length,
+          );
+        }
+      } catch {
+        if (active) setReadyCount(0);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [bridge, routeName]);
   const profileName = user?.display || user?.email || "";
 
   return (
@@ -331,6 +377,26 @@ export function AppFrame({
             >
               <FileCheck2 aria-hidden="true" />
               <span>{s.t("action.review")}</span>
+            </button>
+            <button
+              type="button"
+              className={`app-nav-item ${routeName === "queue" ? "active" : ""}`}
+              aria-label={
+                readyCount > 0
+                  ? `${s.t("queue.title")}, ${s.t("queue.badge", { count: readyCount })}`
+                  : s.t("queue.title")
+              }
+              title={s.t("queue.title")}
+              aria-current={routeName === "queue" ? "page" : undefined}
+              onClick={() => navigate({ name: "queue" })}
+            >
+              <ListChecks aria-hidden="true" />
+              <span>{s.t("queue.title")}</span>
+              {readyCount > 0 && (
+                <span className="app-nav-badge" aria-hidden="true">
+                  {readyCount}
+                </span>
+              )}
             </button>
             <button
               type="button"

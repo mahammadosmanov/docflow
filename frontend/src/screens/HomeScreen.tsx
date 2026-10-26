@@ -12,6 +12,7 @@ import {
   Printer,
   RefreshCw,
   RotateCcw,
+  Send,
   Shield,
   Sun,
   TableProperties,
@@ -59,6 +60,7 @@ export function getOperationCategory(id: string): OperationCategory {
     id === "rfi.log_add" ||
     id === "rfi.follow_up_sync" ||
     id === "rfi.complete_status_sync" ||
+    id === "rfi.publish_status" ||
     id === "rfi.system_sync"
   ) {
     return "excel";
@@ -81,6 +83,8 @@ export function getOperationIcon(id: string) {
       return <RefreshCw />;
     case "rfi.complete_status_sync":
       return <CheckCircle2 />;
+    case "rfi.publish_status":
+      return <Send />;
     case "rfi.stage_signed_first_pages":
       return <BadgeCheck />;
     case "rfi.system_sync":

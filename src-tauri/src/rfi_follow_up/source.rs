@@ -371,6 +371,38 @@ pub(super) fn find_header_column(sheet: &WorksheetData, names: &[&str]) -> Optio
     None
 }
 
+/// Every canonical RFI number written in the CIV and MEC RFI No. columns of the Log,
+/// including rows that only carry a number. The Log is the source of truth: a
+/// number found nowhere in it was deleted and does not belong in Follow Up.
+pub(super) fn scan_logged_rfi_numbers(
+    discovery: &OrderedWorkbookDiscovery,
+    workbook: &WorkbookData,
+) -> BTreeSet<String> {
+    let mut numbers = BTreeSet::new();
+    for discipline in ["CIV", "MEC"] {
+        let Some(sheet) = discovery
+            .worksheets
+            .iter()
+            .find(|sheet| sheet.name.trim().eq_ignore_ascii_case(discipline))
+            .and_then(|descriptor| workbook.sheet(&descriptor.name))
+        else {
+            continue;
+        };
+        let Some(rfi_col) = find_header_column(sheet, &["RFI NO.", "RFI NO"]) else {
+            continue;
+        };
+        for row in SOURCE_FIRST_DATA_ROW..=sheet.max_row {
+            if let Some(code) = sheet
+                .cell(row, rfi_col)
+                .and_then(|cell| canonical_rfi(&cell.value))
+            {
+                numbers.insert(code);
+            }
+        }
+    }
+    numbers
+}
+
 pub(super) fn scan_source_records(
     discovery: &OrderedWorkbookDiscovery,
     workbook: &WorkbookData,
@@ -434,6 +466,13 @@ pub(super) fn scan_source_records(
             let tag = get(tag_col);
             let area = get(area_col);
             let location = get(location_col);
+            // A row that holds only a pre-numbered RFI No. is not a record yet.
+            if [&status, &remarks, &itp, &item, &tag, &area, &location]
+                .iter()
+                .all(|value| value.is_empty())
+            {
+                continue;
+            }
             let context = SourceRouteContext {
                 tag: tag.clone(),
                 area: area.clone(),

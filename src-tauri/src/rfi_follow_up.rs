@@ -26,9 +26,10 @@ use crate::{
     journal::FilesystemObjectIdentity,
     ooxml::{
         CellData, CellUpdate, GuardedCellUpdate, OoxmlError, OoxmlErrorKind,
-        OrderedWorkbookDiscovery, WorkbookData, WorksheetData, WorksheetDescriptor,
-        WorksheetVisibility, package_has_signature, patch_workbook_sheets_guarded_text,
-        read_workbook_and_discovery, verify_guarded_workbook_delta_text,
+        OrderedWorkbookDiscovery, RichRun, RowOp, WorkbookData, WorksheetData, WorksheetDescriptor,
+        WorksheetVisibility, apply_row_ops, package_has_signature,
+        patch_workbook_sheets_guarded_text_recalc, read_workbook_and_discovery,
+        verify_guarded_workbook_delta_text_recalc,
     },
     rfi_code::normalize_candidate_number,
     rfi_log::status_columns,
@@ -41,11 +42,14 @@ const MAX_SOURCE_DATA_ROWS_PER_SHEET: u32 = 20_000;
 const MAX_HEADER_ROWS: u32 = 32;
 const MAX_HEADER_COLUMNS: u32 = 64;
 const MAX_FOLLOW_UP_DATA_ROWS: u32 = 20_000;
-const MAX_PREVIEW_ROWS: usize = 5_000;
+const MAX_PREVIEW_ROWS: usize = 20_000;
 const MAX_SOURCE_EVIDENCE_PER_RFI: usize = 500;
 const MAX_PREVIEW_AUTHORITY_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_FOLLOW_UP_MERGE_COMPARISONS: u64 = 20_000_000;
 const MAX_CELL_TEXT_CHARS: usize = 20_000;
+/// More than this many absent RFIs, and more than 1/5 of Follow Up's RFIs, pauses removal.
+const MASS_DELETION_FLOOR: usize = 50;
+const MASS_DELETION_DENOMINATOR: usize = 5;
 const FULL_RFI_PREFIX: &str = "AZE-SUN-INT-QMS-RFI-";
 const WORLEY_SIGNED_MARKER: &str = "Signed by Worley";
 
@@ -159,6 +163,13 @@ pub(crate) struct FollowUpStepMeta {
     #[serde(default)]
     layouts: Vec<FollowUpLayout>,
     updates: Vec<FollowUpApprovedUpdate>,
+    #[serde(default)]
+    remarks: Vec<FollowUpApprovedRemark>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    formulas: Vec<FollowUpApprovedFormula>,
+    /// Road part rows to add or relabel before the cell updates; applied in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    structure: Vec<RowOp>,
 }
 
 impl FollowUpStepMeta {
@@ -182,6 +193,8 @@ struct FollowUpPlanMeta {
     layout: FollowUpLayout,
     #[serde(default)]
     layouts: Vec<FollowUpLayout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    structure: Vec<RowOp>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -207,6 +220,52 @@ struct FollowUpRow {
     source_evidence: Vec<SourceStatusEvidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mapping_details: Option<String>,
+    /// Present only on remark review rows; they write no RFI or status cell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    remark: Option<FollowUpRemarkChange>,
+    /// Present only on formula repair rows: empty formula cells to fill.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    formula_fixes: Vec<FollowUpFormulaFix>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpFormulaFix {
+    column: u32,
+    formula: String,
+    style: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpApprovedFormula {
+    row_id: String,
+    worksheet: WorksheetDescriptor,
+    row: u32,
+    column: u32,
+    formula: String,
+    style: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpRemarkChange {
+    column: u32,
+    /// `None` when the remark cell is absent from the worksheet XML.
+    expected: Option<CellSnapshot>,
+    /// Empty clears a generated remark.
+    runs: Vec<RemarkRun>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpApprovedRemark {
+    row_id: String,
+    worksheet: WorksheetDescriptor,
+    row: u32,
+    column: u32,
+    expected: Option<CellSnapshot>,
+    runs: Vec<RemarkRun>,
 }
 
 #[derive(Clone, Debug)]
@@ -334,7 +393,7 @@ impl MergeQueryBudget {
         self.remaining = self
             .remaining
             .checked_sub(worksheet.merged_ranges.len() as u64)
-            .ok_or_else(limit_exceeded)?;
+            .ok_or_else(|| limit_exceeded_for("merged-cell comparison budget"))?;
         Ok(worksheet.merged_ranges.iter().any(|range| {
             range.first_row <= row
                 && row <= range.last_row
@@ -347,17 +406,29 @@ impl MergeQueryBudget {
 mod apply;
 mod classify;
 mod codes;
+mod formula_rows;
 mod preview;
+mod remark;
+mod remark_rows;
+mod road;
+mod road_structure;
 mod routing;
 mod scan;
 mod source;
+mod structure_rows;
 pub use apply::*;
 pub use classify::*;
 pub use codes::*;
+use formula_rows::*;
 pub use preview::*;
+use remark::*;
+use remark_rows::*;
+use road::*;
+use road_structure::*;
 use routing::*;
 use scan::*;
 use source::*;
+use structure_rows::*;
 
 #[cfg(test)]
 mod tests;

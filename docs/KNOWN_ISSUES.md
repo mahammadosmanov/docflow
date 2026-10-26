@@ -6,6 +6,19 @@ These are not silently waived by passing local tests.
 
 - Replica publication is not exposed as an active operation; its internal implementation is unavailable to operators. The accepted design documents do not mean the feature is shipped. If it is enabled in a future release, require native Windows acceptance on isolated non-sensitive copies of the actual SharePoint/OneDrive, GlobalProtect/network, and local roots. Verify long paths, locks, offline/reconnect states, interruption, retained backups, target-only warnings, cadence, settle behavior, circuit breakers, Apply, restart, and Undo. macOS tests and Windows cross-compile do not certify these external systems.
 
+- The Action Queue inbox watcher (ADR 0039) requires native Windows/OneDrive
+  acceptance on a copy of the real folders: metadata listing speed on the
+  mapped drive, the 60-second settle delay against in-progress OneDrive and
+  scanner writes, Office lock files, pause while an operator task runs, stale
+  marking after a source change, and source-tree immutability across a full
+  cycle. macOS tests do not certify these.
+
+- Cover-first identity reading and the OCR page cache (ADR 0040) need
+  measurement on real signed cover scans on Windows: the share of pages the
+  fast read confirms, per-page time against 1.21.x, correct fallback for stamped
+  or hand-annotated covers, cache reuse after a restart, and that a replaced
+  file is always read again. No timing claim is made from macOS fixtures.
+
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy

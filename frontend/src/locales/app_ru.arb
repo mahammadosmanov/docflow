@@ -1027,5 +1027,89 @@
   "param.rfi.documents.rfis.help": "Введите полные номера RFI или серийные номера CIV через запятую или с новой строки.",
   "param.rfi.documents.waterRatios.help": "Необязательно: по одной строке «номер RFI = коэффициент». Для отсутствующего значения ячейка остаётся пустой.",
   "param.rfi.documents.ambientGroups.help": "Необязательно, одна строка на группу: RFI[, RFI...]=MIN-MAX. Границы диапазона включены; для неуказанных RFI используются значения по умолчанию Минимальная/Максимальная температура воздуха.",
-  "step.rfi.generatedConcreteDocument": "Создание документа по бетону"
+  "step.rfi.generatedConcreteDocument": "Создание документа по бетону",
+  "queue.title": "Очередь действий",
+  "queue.help": "DocFlow проверяет сохранённые папки и готовит предпросмотры. Ничего не меняется, пока вы не откроете предпросмотр и не примените его.",
+  "queue.checkNow": "Проверить сейчас",
+  "queue.watch": "Готовить предпросмотры автоматически",
+  "queue.empty": "Нет готовых предпросмотров",
+  "queue.empty.help": "Включите проверку ниже. Новые файлы появятся здесь после завершения копирования.",
+  "queue.status.preparing": "Подготовка…",
+  "queue.status.ready": "Готово",
+  "queue.status.stale": "Устарело",
+  "queue.status.failed": "Не удалось подготовить",
+  "queue.summary": "Запланировано изменений: {steps} · предупреждений: {warnings}",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Открыть предпросмотр",
+  "queue.dismiss": "Скрыть",
+  "queue.reprepare": "Подготовить снова",
+  "queue.paused": "Приостановлено, пока выполняется другая операция.",
+  "queue.badge": "Готовых предпросмотров: {count}",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "Не удалось подготовить предпросмотр ({code}).",
+  "error.watch.notReady": "Этот предпросмотр больше недоступен. Подготовьте его снова.",
+  "error.watch.tooManyEntries": "В папке слишком много файлов для автоматической проверки.",
+  "error.watch.unreadable": "Папку сейчас не удаётся прочитать.",
+  "queue.setup": "Выбрать папки",
+  "queue.needsFolders": "Папки ещё не выбраны",
+  "op.rfi.publish_status.title": "Подготовить RFI к публикации (Ongoing)",
+  "op.rfi.publish_status.desc": "Сопоставляет пары PDF + DOCX из папки с RFI Log и предлагает Ongoing только для пустых ячеек Inspection Status.",
+  "param.rfi.publishStatus.stagingFolder": "Папка входящих файлов",
+  "param.rfi.publishStatus.stagingFolder.help": "Папка, куда сохранены вложения письма. Читаются только файлы верхнего уровня, только для чтения.",
+  "param.rfi.publishStatus.rfiLogWorkbook": "Книга RFI Log",
+  "param.rfi.publishStatus.rfiLogWorkbook.help": "RFI Log .xlsm или .xlsx, безопасные пустые ячейки Inspection Status которого можно установить в Ongoing после проверки.",
+  "error.param.required.staging_folder": "Требуется папка входящих файлов",
+  "error.rfi.publishStatus.stagingInvalid": "Выберите доступную для чтения папку входящих файлов.",
+  "error.rfi.publishStatus.stagingTooLarge": "В папке слишком много файлов.",
+  "error.rfi.publishStatus.workbookInvalid": "Выберите допустимую книгу RFI Log .xlsm или .xlsx.",
+  "error.rfi.publishStatus.workbookLocked": "Закройте выбранный RFI Log в Excel или другом приложении и повторите.",
+  "error.rfi.publishStatus.approvedUpdateInvalid": "Утверждённое обновление статуса публикации недопустимо; повторите предпросмотр.",
+  "warn.rfi.publishStatus.noChangesNeeded": "Нет готовых безопасных изменений статуса RFI Log.",
+  "warn.rfi.publishStatus.noRowsSelected": "Выберите хотя бы один RFI для подготовки к публикации.",
+  "warn.rfi.publishStatus.ambiguousName": "Имя файла содержит несколько кодов RFI и не использовано.",
+  "note.rfi.publishStatus.rfiLog": "Установить утверждённые ячейки Inspection Status в RFI Log в Ongoing",
+  "rfi.publishStatus.editor.title": "Проверьте входящие файлы и обновления статуса",
+  "rfi.publishStatus.editor.rowCount": "Найдено RFI: {count}",
+  "rfi.publishStatus.column.enabled": "Применить",
+  "rfi.publishStatus.column.discipline": "Дисциплина",
+  "rfi.publishStatus.column.rfiNo": "RFI No.",
+  "rfi.publishStatus.column.pdfName": "PDF",
+  "rfi.publishStatus.column.docxName": "Word",
+  "rfi.publishStatus.column.currentStatus": "Текущий статус",
+  "rfi.publishStatus.column.proposedStatus": "Новый статус",
+  "rfi.publishStatus.column.disposition": "Решение",
+  "rfi.publishStatus.column.action": "Действие",
+  "rfi.publishStatus.disposition.ready": "Готово",
+  "rfi.publishStatus.disposition.statusNotBlank": "Статус уже заполнен",
+  "rfi.publishStatus.disposition.incompleteFiles": "Нет PDF или Word",
+  "rfi.publishStatus.disposition.notInLog": "Нет в Log",
+  "rfi.publishStatus.disposition.unsafeCell": "Ячейку нельзя безопасно менять",
+  "progress.phase.publish_workbook_read": "Чтение ячеек статуса RFI Log",
+  "prefs.support.activityLog": "Сохранить журнал действий",
+  "prefs.support.activityLogSaved": "Журнал действий сохранён. Файлом можно поделиться для поддержки; пути, содержимое документов и токены скрыты.",
+  "warn.rfi.followUp.reason.readyDeleted": "Этого RFI больше нет нигде в RFI Log, поэтому он считается удалённым и будет убран из ячейки.",
+  "warn.rfi.followUp.reason.readyRemark": "Будет записан сформированный текст Remarks для строки (сначала Completed).",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Все RFI Completed, поэтому сформированный текст Remarks будет удалён.",
+  "warn.rfi.followUp.reason.remarkManual": "В ячейке Remarks текст, написанный вручную; DocFlow его не изменил.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Ячейка Remarks содержит формулу или объединена; не изменена.",
+  "warn.rfi.followUp.massDeletionBrake": "Большинства RFI из Follow Up нет в выбранном RFI Log, поэтому удаление приостановлено. Убедитесь, что выбран правильный и актуальный RFI Log.",
+  "warn.rfi.followUp.reason.structureInsert": "Будет добавлена строка части Road (формат и формулы копируются из соседней строки).",
+  "warn.rfi.followUp.reason.structureRename": "Строка Road без части будет переименована в «Part 1», так как в Log указаны её части.",
+  "warn.rfi.followUp.reason.readyFormulaRepair": "Отсутствующая формула будет добавлена по образцу остальных строк столбца.",
+  "warn.rfi.followUp.reason.structureZone": "Пустая ячейка ZONE будет заполнена по номеру Road (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }

@@ -1,3 +1,4 @@
+pub(crate) mod activity_log;
 pub mod auth;
 mod backend;
 mod cap_fs;
@@ -18,6 +19,7 @@ mod leaf_transaction;
 pub mod naming;
 mod native;
 pub mod ocr;
+pub mod ocr_cache;
 pub mod ooxml;
 pub mod operations;
 pub mod outlook_reply_draft;
@@ -31,6 +33,7 @@ pub mod plan_store;
 pub mod platform;
 pub mod print_queue;
 pub mod progress;
+pub mod publish_intake;
 pub mod registry;
 pub mod review;
 pub mod rfi_code;
@@ -41,6 +44,7 @@ pub mod scan_index;
 pub mod settings;
 pub mod smoke;
 pub mod undo;
+pub mod watch;
 #[cfg(target_os = "windows")]
 mod windows_pdf;
 
@@ -54,6 +58,7 @@ pub fn run() {
         .setup(|app| {
             let router = backend::BackendRouter::new(app.handle().clone())
                 .map_err(|error| std::io::Error::other(error.message))?;
+            router.start_watch();
             app.manage(router);
             Ok(())
         })

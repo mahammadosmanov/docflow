@@ -142,6 +142,9 @@ fn step_meta(updates: Vec<FollowUpApprovedUpdate>) -> FollowUpStepMeta {
         },
         layouts: Vec::new(),
         updates,
+        remarks: Vec::new(),
+        formulas: Vec::new(),
+        structure: Vec::new(),
     }
 }
 
@@ -225,6 +228,8 @@ fn plan_from_classification_emits_one_exact_workbook_step_for_enabled_rows() {
         },
         source_evidence: Vec::new(),
         mapping_details: None,
+        remark: None,
+        formula_fixes: Vec::new(),
     };
     let columns = editor_columns();
     let classification = json!({
@@ -241,6 +246,7 @@ fn plan_from_classification_emits_one_exact_workbook_step_for_enabled_rows() {
         fingerprint(),
         fingerprint(),
         classification,
+        Vec::new(),
     )
     .unwrap();
 
@@ -379,7 +385,13 @@ fn merge_query_budget_fails_at_the_first_comparison_over_limit() {
     let mut budget = MergeQueryBudget { remaining: 1 };
     assert!(budget.contains(&worksheet, 1, 1).unwrap());
     assert_eq!(
-        budget.contains(&worksheet, 1, 1).unwrap_err().message,
+        budget
+            .contains(&worksheet, 1, 1)
+            .unwrap_err()
+            .message
+            .split(':')
+            .next()
+            .unwrap(),
         "error.rfi.followUp.limitExceeded"
     );
 }

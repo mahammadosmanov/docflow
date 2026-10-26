@@ -1027,5 +1027,89 @@
   "param.rfi.documents.rfis.help": "Tam RFI nömrələrini və ya CIV seriya nömrələrini vergüllə və ya yeni sətirlə daxil edin.",
   "param.rfi.documents.waterRatios.help": "İstəyə bağlı: hər sətirdə RFI nömrəsi = nisbət. Göstərilməyən RFI üçün xana boş qalır.",
   "param.rfi.documents.ambientGroups.help": "İstəyə bağlı, hər qrup üçün bir sətir: RFI[, RFI...]=MIN-MAX. Diapazonun hər iki sərhədi daxildir; göstərilməyən RFI-lər üçün standart Minimum/Maksimum mühit temperaturu istifadə olunur.",
-  "step.rfi.generatedConcreteDocument": "Beton sənədini yarat"
+  "step.rfi.generatedConcreteDocument": "Beton sənədini yarat",
+  "queue.title": "Əməliyyat növbəsi",
+  "queue.help": "DocFlow yadda saxlanmış qovluqları yoxlayır və öncədən baxışları hazırlayır. Öncədən baxışı açıb tətbiq etməyincə heç nə dəyişmir.",
+  "queue.checkNow": "İndi yoxla",
+  "queue.watch": "Öncədən baxışları avtomatik hazırla",
+  "queue.empty": "Gözləyən öncədən baxış yoxdur",
+  "queue.empty.help": "Aşağıdan yoxlamanı aktiv edin. Yeni fayllar köçürülməsi bitdikdən sonra burada görünür.",
+  "queue.status.preparing": "Hazırlanır…",
+  "queue.status.ready": "Hazırdır",
+  "queue.status.stale": "Köhnəlib",
+  "queue.status.failed": "Hazırlanmadı",
+  "queue.summary": "{steps} planlaşdırılmış dəyişiklik · {warnings} xəbərdarlıq",
+  "@queue.summary": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.open": "Öncədən baxışı aç",
+  "queue.dismiss": "Gizlət",
+  "queue.reprepare": "Yenidən hazırla",
+  "queue.paused": "Başqa əməliyyat işləyərkən dayandırılıb.",
+  "queue.badge": "{count} öncədən baxış hazırdır",
+  "@queue.badge": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queue.failed.generic": "Öncədən baxış hazırlanmadı ({code}).",
+  "error.watch.notReady": "Bu öncədən baxış artıq əlçatan deyil. Yenidən hazırlayın.",
+  "error.watch.tooManyEntries": "Qovluqda avtomatik yoxlama üçün çox fayl var.",
+  "error.watch.unreadable": "Qovluq hazırda oxunmur.",
+  "queue.setup": "Qovluqları seç",
+  "queue.needsFolders": "Qovluqlar hələ seçilməyib",
+  "op.rfi.publish_status.title": "RFI-ları yayıma hazırla (Ongoing)",
+  "op.rfi.publish_status.desc": "Qovluqdakı PDF + DOCX cütlərini RFI Log ilə uyğunlaşdırır və yalnız boş Inspection Status xanalarına Ongoing təklif edir.",
+  "param.rfi.publishStatus.stagingFolder": "Gələn faylların qovluğu",
+  "param.rfi.publishStatus.stagingFolder.help": "Mail qoşmalarını saxladığınız qovluq. Yalnız üst səviyyə fayllar yalnız oxu rejimində oxunur.",
+  "param.rfi.publishStatus.rfiLogWorkbook": "RFI Log iş kitabı",
+  "param.rfi.publishStatus.rfiLogWorkbook.help": "Təhlükəsiz boş Inspection Status xanalarının yoxlamadan sonra Ongoing edilə biləcəyi .xlsm və ya .xlsx RFI Log.",
+  "error.param.required.staging_folder": "Gələn faylların qovluğu mütləqdir",
+  "error.rfi.publishStatus.stagingInvalid": "Oxuna bilən gələn fayllar qovluğu seçin.",
+  "error.rfi.publishStatus.stagingTooLarge": "Qovluqda çox fayl var.",
+  "error.rfi.publishStatus.workbookInvalid": "Etibarlı RFI Log .xlsm və ya .xlsx seçin.",
+  "error.rfi.publishStatus.workbookLocked": "Seçilmiş RFI Log-u Excel-də və ya başqa tətbiqdə bağlayıb yenidən cəhd edin.",
+  "error.rfi.publishStatus.approvedUpdateInvalid": "Təsdiqlənmiş yayım statusu yeniləməsi etibarsızdır; yenidən önbaxış edin.",
+  "warn.rfi.publishStatus.noChangesNeeded": "Hazır təhlükəsiz RFI Log status dəyişikliyi yoxdur.",
+  "warn.rfi.publishStatus.noRowsSelected": "Yayıma hazırlamaq üçün ən azı bir RFI seçin.",
+  "warn.rfi.publishStatus.ambiguousName": "Fayl adında birdən çox RFI kodu var; istifadə edilmədi.",
+  "note.rfi.publishStatus.rfiLog": "Təsdiqlənmiş RFI Log Inspection Status xanalarını Ongoing et",
+  "rfi.publishStatus.editor.title": "Gələn faylları və status yeniləmələrini yoxlayın",
+  "rfi.publishStatus.editor.rowCount": "{count} RFI tapıldı",
+  "rfi.publishStatus.column.enabled": "Tətbiq et",
+  "rfi.publishStatus.column.discipline": "Fənn",
+  "rfi.publishStatus.column.rfiNo": "RFI No.",
+  "rfi.publishStatus.column.pdfName": "PDF",
+  "rfi.publishStatus.column.docxName": "Word",
+  "rfi.publishStatus.column.currentStatus": "Cari status",
+  "rfi.publishStatus.column.proposedStatus": "Yeni status",
+  "rfi.publishStatus.column.disposition": "Qərar",
+  "rfi.publishStatus.column.action": "Əməliyyat",
+  "rfi.publishStatus.disposition.ready": "Hazır",
+  "rfi.publishStatus.disposition.statusNotBlank": "Status artıq doludur",
+  "rfi.publishStatus.disposition.incompleteFiles": "PDF və ya Word çatışmır",
+  "rfi.publishStatus.disposition.notInLog": "Log-da yoxdur",
+  "rfi.publishStatus.disposition.unsafeCell": "Xana təhlükəsiz deyil",
+  "progress.phase.publish_workbook_read": "RFI Log status xanaları oxunur",
+  "prefs.support.activityLog": "Fəaliyyət jurnalını saxla",
+  "prefs.support.activityLogSaved": "Fəaliyyət jurnalı saxlanıldı. Faylı dəstək üçün paylaşa bilərsiniz; fayl yolları, sənəd məzmunu və tokenlər gizlədilir.",
+  "warn.rfi.followUp.reason.readyDeleted": "Bu RFI RFI Log-da heç yerdə yoxdur, ona görə silinmiş sayılır və xanadan çıxarılacaq.",
+  "warn.rfi.followUp.reason.readyRemark": "Sətir üçün yaradılmış Remarks mətni (əvvəlcə Completed) yazılacaq.",
+  "warn.rfi.followUp.reason.readyRemarkClear": "Bütün RFI-lar Completed olduğundan yaradılmış Remarks mətni silinəcək.",
+  "warn.rfi.followUp.reason.remarkManual": "Remarks xanasında əllə yazılmış mətn var; DocFlow toxunmadı.",
+  "warn.rfi.followUp.reason.remarkUnsafe": "Remarks xanası düstur ehtiva edir və ya birləşdirilib; dəyişdirilmədi.",
+  "warn.rfi.followUp.massDeletionBrake": "Follow Up-dakı RFI-ların böyük hissəsi seçilmiş RFI Log-da yoxdur, ona görə silmə dayandırıldı. Düzgün və cari RFI Log seçdiyinizdən əmin olun.",
+  "warn.rfi.followUp.reason.structureInsert": "Road hissə sətri əlavə ediləcək (format və düsturlar qonşu sətirdən köçürülür).",
+  "warn.rfi.followUp.reason.structureRename": "Hissəsiz Road sətri, Log-da hissələri göstərildiyi üçün 'Part 1' adlandırılacaq.",
+  "warn.rfi.followUp.reason.readyFormulaRepair": "Çatışmayan düstur sütunun digər sətirlərindəki düsturdan köçürülərək əlavə ediləcək.",
+  "warn.rfi.followUp.reason.structureZone": "Boş ZONE xanası Road nömrəsinə görə doldurulacaq (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }
