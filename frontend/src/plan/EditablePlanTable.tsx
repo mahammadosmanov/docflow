@@ -34,6 +34,7 @@ import {
   type EditorColumn,
   displayEditorValue,
   editorColumnDefaultWidth,
+  applyEditorValue,
   editorColumnMinWidth,
   isRfiCodeCandidate,
 } from "./editorRules";
@@ -187,39 +188,7 @@ export function EditablePlanTable({
     row: Record<string, unknown>,
     key: string,
     value: string | boolean,
-  ) => {
-    row[key] = value;
-
-    const autoFill = editor.autoFill;
-    if (autoFill && typeof autoFill === "object") {
-      const config = autoFill as Record<string, unknown>;
-      if (
-        config.field === key &&
-        config.values &&
-        typeof config.values === "object"
-      ) {
-        const preset = (config.values as Record<string, unknown>)[
-          String(value)
-        ];
-        if (preset && typeof preset === "object") Object.assign(row, preset);
-      }
-    }
-
-    if (Array.isArray(editor.regexFill)) {
-      for (const rawRule of editor.regexFill) {
-        if (!rawRule || typeof rawRule !== "object") continue;
-        const rule = rawRule as Record<string, unknown>;
-        if (rule.source !== key) continue;
-        try {
-          if (new RegExp(String(rule.pattern), "i").test(String(value))) {
-            row[String(rule.target)] = String(rule.value ?? "");
-          }
-        } catch {
-          // Invalid server-side presentation hints never block row editing.
-        }
-      }
-    }
-  };
+  ) => applyEditorValue(editor, row, key, value);
 
   const update = (index: number, key: string, value: string | boolean) => {
     const next = rows.map((row) => ({ ...row }));
