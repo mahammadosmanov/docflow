@@ -242,9 +242,11 @@ impl NativeBackend {
             &target_path,
             &mut source,
             &mut target,
-            Some(&self.scan_index),
-            &caller.owner_id,
-            request.values.force_rescan,
+            rfi_system_sync::SystemSyncScan {
+                index: Some(&self.scan_index),
+                owner_id: &caller.owner_id,
+                force_rescan: request.values.force_rescan,
+            },
             &mut progress,
         )?;
         drop(source);

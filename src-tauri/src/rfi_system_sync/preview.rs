@@ -307,28 +307,38 @@ pub fn preview_system_sync(
         follow_up_path,
         rfi_log_file,
         follow_up_file,
-        None,
-        "local",
-        false,
+        SystemSyncScan {
+            index: None,
+            owner_id: "local",
+            force_rescan: false,
+        },
         |_| {},
     )
 }
+/// Scan-cache options for system-sync preview; `index: None` disables reuse.
+pub struct SystemSyncScan<'a> {
+    pub index: Option<&'a ScanIndex>,
+    pub owner_id: &'a str,
+    pub force_rescan: bool,
+}
 
-#[allow(clippy::too_many_arguments)]
 pub fn preview_system_sync_indexed<P>(
     system_root: &Path,
     rfi_log_path: &Path,
     follow_up_path: &Path,
     rfi_log_file: &mut File,
     follow_up_file: &mut File,
-    scan_index: Option<&ScanIndex>,
-    owner_id: &str,
-    force_rescan: bool,
+    scan: SystemSyncScan<'_>,
     mut progress: P,
 ) -> Result<Plan, BackendError>
 where
     P: FnMut(ProgressEvent),
 {
+    let SystemSyncScan {
+        index: scan_index,
+        owner_id,
+        force_rescan,
+    } = scan;
     let (scanned_rfis, scan_stats) = scan_system_root_indexed(
         system_root,
         scan_index,

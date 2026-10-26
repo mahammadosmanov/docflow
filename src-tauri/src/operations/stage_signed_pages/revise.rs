@@ -125,19 +125,31 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The signed page being matched: its row identity, facts, hash, and root.
+#[derive(Clone, Copy)]
+pub(super) struct SignedSource<'a> {
+    pub(super) code: &'a str,
+    pub(super) row_id: &'a str,
+    pub(super) facts: &'a PdfInspection,
+    pub(super) hash: &'a str,
+    pub(super) root: &'a Path,
+}
+
 pub(super) fn prepare_archive_candidate(
-    code: &str,
-    row_id: &str,
+    signed: &SignedSource<'_>,
     candidate: &Candidate,
     archive_pdf: &Path,
-    signed_facts: &PdfInspection,
-    signed_hash: &str,
-    signed_root: &Path,
     archive_root: &Path,
     review_root: &Path,
     plan: &mut Plan,
 ) -> Result<Option<PreparedArchive>, BackendError> {
+    let SignedSource {
+        code,
+        row_id,
+        facts: signed_facts,
+        hash: signed_hash,
+        root: signed_root,
+    } = *signed;
     let relative = archive_pdf
         .strip_prefix(archive_root)
         .map_err(|_| BackendError::path_invalid("archive match escaped the selected root"))?

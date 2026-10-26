@@ -351,7 +351,6 @@ fn shift_sheet_attributes(nodes: &mut [XmlNode], sheet: &str, shift: &RowShift) 
     });
 }
 
-#[allow(clippy::too_many_arguments)]
 fn insert_row(
     editor: &mut Editor<'_, impl Read + Seek>,
     sheets: &BTreeMap<String, SheetInfo>,

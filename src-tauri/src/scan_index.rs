@@ -79,20 +79,31 @@ pub struct ScanRun<'a> {
     completed: bool,
 }
 
+/// Identifies one scan namespace inside the index.
+#[derive(Clone, Copy)]
+struct ScanScope<'a> {
+    owner_id: &'a str,
+    operation_id: &'a str,
+    profile: &'a str,
+    root: &'a str,
+}
+
 impl ScanRun<'_> {
+    fn scope(&self) -> ScanScope<'_> {
+        ScanScope {
+            owner_id: &self.owner_id,
+            operation_id: &self.operation_id,
+            profile: &self.profile,
+            root: &self.root,
+        }
+    }
+
     pub fn lookup<T: DeserializeOwned>(
         &self,
         relative_path: &Path,
         fingerprint: &FileFingerprint,
     ) -> Result<Option<T>, String> {
-        self.index.lookup(
-            &self.owner_id,
-            &self.operation_id,
-            &self.profile,
-            &self.root,
-            relative_path,
-            fingerprint,
-        )
+        self.index.lookup(&self.scope(), relative_path, fingerprint)
     }
 
     pub fn record_success<T: Serialize>(
@@ -101,28 +112,13 @@ impl ScanRun<'_> {
         fingerprint: &FileFingerprint,
         outcome: &T,
     ) -> Result<(), String> {
-        self.index.record_success(
-            &self.id,
-            &self.owner_id,
-            &self.operation_id,
-            &self.profile,
-            &self.root,
-            relative_path,
-            fingerprint,
-            outcome,
-        )
+        self.index
+            .record_success(&self.id, &self.scope(), relative_path, fingerprint, outcome)
     }
 
     pub fn record_failure(&self, relative_path: &Path, message: &str) -> Result<(), String> {
-        self.index.record_failure(
-            &self.id,
-            &self.owner_id,
-            &self.operation_id,
-            &self.profile,
-            &self.root,
-            relative_path,
-            message,
-        )
+        self.index
+            .record_failure(&self.id, &self.scope(), relative_path, message)
     }
 
     pub fn complete(mut self, stats: &ScanIndexStats) -> Result<(), String> {
@@ -309,16 +305,18 @@ impl ScanIndex {
         ))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn lookup<T: DeserializeOwned>(
         &self,
-        owner_id: &str,
-        operation_id: &str,
-        profile: &str,
-        root: &str,
+        scope: &ScanScope,
         relative_path: &Path,
         fingerprint: &FileFingerprint,
     ) -> Result<Option<T>, String> {
+        let ScanScope {
+            owner_id,
+            operation_id,
+            profile,
+            root,
+        } = *scope;
         let relative = normalized_relative(relative_path)?;
         let fingerprint_json = encode_bounded(fingerprint)?;
         let connection = self.lock()?;
@@ -347,18 +345,20 @@ impl ScanIndex {
             .transpose()
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn record_success<T: Serialize>(
         &self,
         run_id: &str,
-        owner_id: &str,
-        operation_id: &str,
-        profile: &str,
-        root: &str,
+        scope: &ScanScope,
         relative_path: &Path,
         fingerprint: &FileFingerprint,
         outcome: &T,
     ) -> Result<(), String> {
+        let ScanScope {
+            owner_id,
+            operation_id,
+            profile,
+            root,
+        } = *scope;
         let relative = normalized_relative(relative_path)?;
         let fingerprint_json = encode_bounded(fingerprint)?;
         let outcome_json = encode_bounded(outcome)?;
@@ -393,17 +393,19 @@ impl ScanIndex {
             .map_err(|error| format!("commit scan checkpoint: {error}"))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn record_failure(
         &self,
         run_id: &str,
-        owner_id: &str,
-        operation_id: &str,
-        profile: &str,
-        root: &str,
+        scope: &ScanScope,
         relative_path: &Path,
         message: &str,
     ) -> Result<(), String> {
+        let ScanScope {
+            owner_id,
+            operation_id,
+            profile,
+            root,
+        } = *scope;
         let relative = normalized_relative(relative_path)?;
         let detail = message.chars().take(2048).collect::<String>();
         let connection = self.lock()?;
