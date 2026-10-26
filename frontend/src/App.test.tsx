@@ -10,19 +10,13 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useState } from "react";
-import {
-  App,
-  canonicalRfiInText,
-  formatConfidencePercent,
-  humanError,
-  isPlanEditorReady,
-  PlanWarnings,
-  PlanView,
-  safePngThumbnail,
-  summarizePlanImpact,
-  summarizeWorkbookCellChanges,
-} from "./App";
+import { App } from "./App";
 import { makeStrings } from "./i18n";
+import { humanError } from "./helpers";
+import { formatConfidencePercent, isPlanEditorReady } from "./plan/EditablePlanTable";
+import { PlanView } from "./plan/PlanView";
+import { PlanWarnings, canonicalRfiInText, summarizePlanImpact, summarizeWorkbookCellChanges } from "./plan/PlanSummaries";
+import { safePngThumbnail } from "./plan/SignedPageComparison";
 import { MockBridge, resetBridgeForTests } from "./lib/bridge";
 import type { Plan } from "./types";
 import {

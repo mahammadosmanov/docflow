@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.26 - 2026-10-27
+
+### Changed
+
+- `frontend/src/App.tsx` no longer re-exports helpers and components (`humanError`, `formatConfidencePercent`, `isPlanEditorReady`, `PlanView`, `PlanWarnings`, `summarizePlanImpact`, `canonicalRfiInText`, `summarizeWorkbookCellChanges`, `safePngThumbnail`). `App.test.tsx` imports each from its own module. The app's runtime imports are unchanged.
+
 ## 1.33.25 - 2026-10-27
 
 ### Changed
