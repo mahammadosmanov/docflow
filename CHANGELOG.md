@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.47 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `support/diagnostics` handler moves out of the `MockBridge.call` dispatch switch in `frontend/src/lib/mockBridge.ts` into the private `diagnosticsOperation` method. No operator-facing behavior changes.
+
 ## 1.33.46 - 2026-10-27
 
 ### Changed

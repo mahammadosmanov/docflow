@@ -756,6 +756,45 @@ export class MockBridge implements Bridge {
     return result;
   }
 
+  private diagnosticsOperation(
+    params: Record<string, unknown>,
+    onProgress?: ProgressHandler,
+  ): unknown {
+    let result: unknown;
+    const content = `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        docflow: { version: __DOCFLOW_VERSION__ },
+        platform: { arch: "demo", os: "browser-preview" },
+        components: {
+          ocr: {
+            engine: "tesseract",
+            languageDataAvailable: false,
+            status: "missing",
+          },
+          sidecar: { required: false, status: "retired" },
+          printer: {
+            inventoryStatus: "available",
+            printerCount: 1,
+            defaultPrinterAvailable: true,
+            latestQueue: null,
+          },
+        },
+        recentErrorCodes: [],
+        privacy: { delivery: "local-only", redaction: "recursive" },
+      },
+      null,
+      2,
+    )}\n`;
+    result = {
+      fileName: "docflow-support-diagnostics-v1.json",
+      mediaType: "application/json",
+      byteLength: new TextEncoder().encode(content).byteLength,
+      content,
+    } satisfies SupportBundlePreview;
+    return result;
+  }
+
   async call<Method extends FrontendMethod>(
     method: Method,
     ...args: CommandArgs<Method>
@@ -845,40 +884,9 @@ export class MockBridge implements Bridge {
         this.params = (params.values as Record<string, unknown>) ?? {};
         result = { ok: true };
         break;
-      case "support/diagnostics": {
-        const content = `${JSON.stringify(
-          {
-            schemaVersion: 1,
-            docflow: { version: __DOCFLOW_VERSION__ },
-            platform: { arch: "demo", os: "browser-preview" },
-            components: {
-              ocr: {
-                engine: "tesseract",
-                languageDataAvailable: false,
-                status: "missing",
-              },
-              sidecar: { required: false, status: "retired" },
-              printer: {
-                inventoryStatus: "available",
-                printerCount: 1,
-                defaultPrinterAvailable: true,
-                latestQueue: null,
-              },
-            },
-            recentErrorCodes: [],
-            privacy: { delivery: "local-only", redaction: "recursive" },
-          },
-          null,
-          2,
-        )}\n`;
-        result = {
-          fileName: "docflow-support-diagnostics-v1.json",
-          mediaType: "application/json",
-          byteLength: new TextEncoder().encode(content).byteLength,
-          content,
-        } satisfies SupportBundlePreview;
+      case "support/diagnostics":
+        result = this.diagnosticsOperation(params, onProgress);
         break;
-      }
       case "support/copyDiagnostics":
         result = { ok: true };
         break;
