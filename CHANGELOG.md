@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.58 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `engine/preview` and `engine/revise` handlers move from `MockBridge` in `frontend/src/lib/mockBridge.ts` into `frontend/src/lib/mockHandlers.ts`. The four plan fields they share (print, file-group, complete-status, and fast-scan plans) become one `MockPlanState` object that the bridge owns and passes in. Unused imports are removed, and `mockBridge.ts` drops from 1,093 to 364 lines. The 177 frontend tests pass, including the App tests that drive these handlers. No operator-facing behavior changes.
+
 ## 1.33.57 - 2026-10-27
 
 ### Changed
