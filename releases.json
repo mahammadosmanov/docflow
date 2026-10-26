@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.41",
+  "currentVersion": "1.33.42",
   "releases": [
+    {
+      "version": "1.33.42",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.42",
+      "summary": "The check that sends a revised plan with new warnings back to review moves into a tested helper, hasNewWarnings."
+    },
     {
       "version": "1.33.41",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.41",
       "summary": "Duplicate-preset detection and date formatting gain direct tests."
     },

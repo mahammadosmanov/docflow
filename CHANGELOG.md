@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.42 - 2026-10-27
+
+### Changed
+
+- The check that sends a revised plan back to review when the revision adds a warning moves from `OperationScreen.tsx` into `hasNewWarnings` in `frontend/src/plan/revisionWarnings.ts`. A warning counts as new when its key and subject pair was not in the previous plan. `revisionWarnings.test.ts` covers unchanged, added-key, added-subject, and empty plans. Behavior is unchanged.
+
 ## 1.33.41 - 2026-10-27
 
 ### Changed
