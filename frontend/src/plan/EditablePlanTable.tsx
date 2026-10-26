@@ -6,7 +6,6 @@ import {
 import {
   ArrowDown,
   ArrowUp,
-  CalendarDays,
   Copy,
   Eye,
   EyeOff,
@@ -29,6 +28,9 @@ import {
   type EditorMetadata,
   type Plan,
 } from "../types";
+import {
+  CompactDateInput,
+} from "./CompactDateInput";
 
 export function copySheetsFromPlan(plan: Plan | null): string[] {
   const editor = plan?.meta?.editor;
@@ -50,46 +52,6 @@ export type EditorColumn = {
   display?: string;
   disabledWhen?: { field: string; equals: string | number | boolean };
 };
-
-export const EDITOR_DATE_MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
-
-export type EditorDateParts = {
-  day: number;
-  month: number;
-  year: number;
-};
-
-export function parseEditorDate(value: string): EditorDateParts | null {
-  const match = value.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month =
-    EDITOR_DATE_MONTHS.findIndex(
-      (name) => name.toLowerCase() === match[2].toLowerCase(),
-    ) + 1;
-  const rawYear = Number(match[3]);
-  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
-  if (!month || year < 2000 || year > 2068) return null;
-  const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return day >= 1 && day <= maxDay ? { day, month, year } : null;
-}
-
-export function formatEditorDate({ day, month, year }: EditorDateParts): string {
-  return `${String(day).padStart(2, "0")}-${EDITOR_DATE_MONTHS[month - 1]}-${String(year).slice(-2)}`;
-}
 
 export function displayEditorValue(column: EditorColumn, value: string): string {
   if (column.display === "suffix") {
@@ -121,119 +83,6 @@ export function formatConfidencePercent(
   }
   const percent = scale === "fraction" ? numeric * 100 : numeric;
   return `${Math.round(Math.min(100, Math.max(0, percent)))}%`;
-}
-
-export function CompactDateInput({
-  value,
-  label,
-  s,
-  onChange,
-}: {
-  value: string;
-  label: string;
-  s: Strings;
-  onChange: (value: string) => void;
-}) {
-  const currentYear = new Date().getFullYear();
-  const parsed = parseEditorDate(value);
-  const [draft, setDraft] = useState<{
-    day: number | "";
-    month: number | "";
-    year: number;
-  }>(() => parsed ?? { day: "", month: "", year: currentYear });
-  const [yearVisible, setYearVisible] = useState(false);
-
-  useEffect(() => {
-    const next = parseEditorDate(value);
-    setDraft(next ?? { day: "", month: "", year: currentYear });
-  }, [value, currentYear]);
-
-  const commit = (next: typeof draft) => {
-    let normalized = next;
-    if (next.day && next.month) {
-      const maxDay = new Date(Date.UTC(next.year, next.month, 0)).getUTCDate();
-      normalized = { ...next, day: Math.min(next.day, maxDay) };
-      onChange(formatEditorDate(normalized as EditorDateParts));
-    }
-    setDraft(normalized);
-  };
-  const maxDay = draft.month
-    ? new Date(Date.UTC(draft.year, draft.month, 0)).getUTCDate()
-    : 31;
-  const monthLabels = useMemo(
-    () =>
-      EDITOR_DATE_MONTHS.map((_, index) =>
-        new Intl.DateTimeFormat(s.locale, { month: "short" }).format(
-          new Date(Date.UTC(2024, index, 1)),
-        ),
-      ),
-    [s.locale],
-  );
-
-  return (
-    <div className="compact-date-cell" title={value || undefined}>
-      <select
-        className="compact-date-day"
-        aria-label={`${label} — ${s.t("rfi.date.day")}`}
-        value={draft.day}
-        onChange={(event) =>
-          commit({ ...draft, day: Number(event.target.value) || "" })
-        }
-      >
-        <option value="">--</option>
-        {Array.from({ length: maxDay }, (_, index) => index + 1).map((day) => (
-          <option key={day} value={day}>
-            {String(day).padStart(2, "0")}
-          </option>
-        ))}
-      </select>
-      <select
-        className="compact-date-month"
-        aria-label={`${label} — ${s.t("rfi.date.month")}`}
-        value={draft.month}
-        onChange={(event) =>
-          commit({ ...draft, month: Number(event.target.value) || "" })
-        }
-      >
-        <option value="">---</option>
-        {monthLabels.map((month, index) => (
-          <option key={EDITOR_DATE_MONTHS[index]} value={index + 1}>
-            {month.replace(".", "")}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        className={yearVisible ? "active" : ""}
-        aria-label={`${label} — ${s.t("rfi.date.changeYear")}`}
-        title={s.t("rfi.date.changeYear")}
-        onClick={() => setYearVisible((visible) => !visible)}
-      >
-        <CalendarDays />
-      </button>
-      {yearVisible && (
-        <select
-          autoFocus
-          className="compact-date-year"
-          aria-label={`${label} — ${s.t("rfi.date.year")}`}
-          value={draft.year}
-          onBlur={() => setYearVisible(false)}
-          onChange={(event) => {
-            commit({ ...draft, year: Number(event.target.value) });
-            setYearVisible(false);
-          }}
-        >
-          {Array.from({ length: 69 }, (_, index) => 2000 + index).map(
-            (year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ),
-          )}
-        </select>
-      )}
-    </div>
-  );
 }
 
 export function editorColumnDefaultWidth(column: EditorColumn) {

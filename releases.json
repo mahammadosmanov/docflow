@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.5",
+  "currentVersion": "1.33.6",
   "releases": [
+    {
+      "version": "1.33.6",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.6",
+      "summary": "Plan editor date helpers and the compact date input move into their own modules."
+    },
     {
       "version": "1.33.5",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.5",
       "summary": "Scan OCR adapter types and scan-editor revision logic move into their own process_scans modules."
     },
