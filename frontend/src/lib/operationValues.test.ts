@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ParamDef } from "../types";
-import { persistableValues } from "./operationValues";
+import { persistableValues, previewValuesFor } from "./operationValues";
 
 const param = (name: string, extra: Partial<ParamDef> = {}): ParamDef => ({
   name,
@@ -33,5 +33,45 @@ describe("persistableValues", () => {
         undeclared: true,
       }),
     ).toEqual({ copies: 2, undeclared: true });
+  });
+});
+
+describe("previewValuesFor", () => {
+  it("leaves other operations untouched", () => {
+    expect(
+      previewValuesFor("rfi.log_add", { workbook: "a.xlsx" }, { ran: true, candidates: [] }),
+    ).toEqual({ workbook: "a.xlsx" });
+  });
+
+  it("drops finder-only inputs and takes files from selected candidates", () => {
+    const result = previewValuesFor(
+      "files.batch_print",
+      {
+        files: [],
+        printer: "P1",
+        rfi_system_root: "/r",
+        rfi_numbers: "1",
+        include_first_page: true,
+        include_sketch: false,
+      },
+      {
+        ran: true,
+        candidates: [
+          { selected: true, selection: "sel-a" },
+          { selected: false, selection: "sel-b" },
+        ],
+      },
+    );
+    expect(result).toEqual({ files: ["sel-a"], printer: "P1" });
+  });
+
+  it("keeps typed files when the finder did not run", () => {
+    expect(
+      previewValuesFor(
+        "files.batch_print",
+        { files: ["typed"], rfi_numbers: "1" },
+        { ran: false, candidates: [] },
+      ),
+    ).toEqual({ files: ["typed"] });
   });
 });
