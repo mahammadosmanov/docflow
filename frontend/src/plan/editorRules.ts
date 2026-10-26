@@ -158,3 +158,49 @@ export function applyEditorValue(
     }
   }
 }
+
+/** Copies a row after its group. Returns a new list; the source list is untouched. */
+export function duplicateRowAt(
+  rows: Record<string, unknown>[],
+  index: number,
+  groupField: string,
+  stamp: number = Date.now(),
+): Record<string, unknown>[] {
+  const source = rows[index];
+  const group = source[groupField];
+  let insertAt = index + 1;
+  while (insertAt < rows.length && rows[insertAt][groupField] === group) {
+    insertAt += 1;
+  }
+  const clone = {
+    ...source,
+    _rowId: `${String(source._rowId ?? group)}-copy-${stamp}`,
+  };
+  const next = [...rows];
+  next.splice(insertAt, 0, clone);
+  return next;
+}
+
+/** Drops a row unless it is the last one in its group. Null means refused. */
+export function removeRowAt(
+  rows: Record<string, unknown>[],
+  index: number,
+  groupField: string,
+): Record<string, unknown>[] | null {
+  const group = rows[index][groupField];
+  if (rows.filter((row) => row[groupField] === group).length <= 1) return null;
+  return rows.filter((_, rowIndex) => rowIndex !== index);
+}
+
+/** Swaps a row with its neighbour. Null when the move would leave the list. */
+export function moveRowAt(
+  rows: Record<string, unknown>[],
+  index: number,
+  direction: -1 | 1,
+): Record<string, unknown>[] | null {
+  const target = index + direction;
+  if (target < 0 || target >= rows.length) return null;
+  const next = [...rows];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}

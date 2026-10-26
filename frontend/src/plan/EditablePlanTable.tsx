@@ -35,6 +35,9 @@ import {
   displayEditorValue,
   editorColumnDefaultWidth,
   applyEditorValue,
+  duplicateRowAt,
+  moveRowAt,
+  removeRowAt,
   editorColumnMinWidth,
   isRfiCodeCandidate,
 } from "./editorRules";
@@ -234,34 +237,17 @@ export function EditablePlanTable({
       ),
     );
 
-  const duplicate = (index: number) => {
-    const source = rows[index];
-    const group = source[groupField];
-    let insertAt = index + 1;
-    while (insertAt < rows.length && rows[insertAt][groupField] === group) {
-      insertAt += 1;
-    }
-    const clone = {
-      ...source,
-      _rowId: `${String(source._rowId ?? group)}-copy-${Date.now()}`,
-    };
-    const next = [...rows];
-    next.splice(insertAt, 0, clone);
-    onChange(next);
-  };
+  const duplicate = (index: number) =>
+    onChange(duplicateRowAt(rows, index, groupField));
 
   const remove = (index: number) => {
-    const group = rows[index][groupField];
-    if (rows.filter((row) => row[groupField] === group).length <= 1) return;
-    onChange(rows.filter((_, rowIndex) => rowIndex !== index));
+    const next = removeRowAt(rows, index, groupField);
+    if (next) onChange(next);
   };
 
   const move = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= rows.length) return;
-    const next = [...rows];
-    [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
+    const next = moveRowAt(rows, index, direction);
+    if (next) onChange(next);
   };
 
   const selectionGroupFields = Array.isArray(editor.selectionGroupFields)
