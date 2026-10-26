@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.37 - 2026-10-27
+
+### Changed
+
+- `frontend/src/helpers.test.ts` covers `parseRfiInputs`, `isPathSelection`, and `humanError`. The `humanError` tests check a bare localized key, a keyed error with detail, the auth and rate-limit mappings, and the raw fallback. No application code changes.
+
 ## 1.33.36 - 2026-10-27
 
 ### Changed
