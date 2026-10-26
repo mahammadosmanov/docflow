@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.55",
+  "currentVersion": "1.33.56",
   "releases": [
+    {
+      "version": "1.33.56",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.56",
+      "summary": "The preview run, which saves parameters and requests the engine preview, moves from OperationScreen.tsx into a usePreviewRun hook with direct tests."
+    },
     {
       "version": "1.33.55",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.55",
       "summary": "The apply run, including the revise-then-apply path and the new-warning stop, moves from OperationScreen.tsx into a useApplyRun hook with direct tests."
     },

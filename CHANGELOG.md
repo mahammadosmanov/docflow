@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.56 - 2026-10-27
+
+### Changed
+
+- The preview run moves from `frontend/src/screens/OperationScreen.tsx` into the `usePreviewRun` hook in `frontend/src/screens/usePreviewRun.ts`. It saves the parameters, updates the last-saved reference, requests the engine preview, and returns to the form with the error on failure. `usePreviewRun.test.ts` covers the save-then-preview order with the plan installed, and the failure path back to the form. Behavior is unchanged.
+
 ## 1.33.55 - 2026-10-27
 
 ### Changed

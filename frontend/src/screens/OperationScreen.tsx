@@ -35,7 +35,6 @@ import {
   type RfiPrintResolution,
 } from "../types";
 import {
-  humanError,
   isPathSelection,
   parseRfiInputs,
 } from "../helpers";
@@ -58,7 +57,7 @@ import { BusyStage } from "./BusyStage";
 import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
-import { persistableValues, previewValuesFor } from "../lib/operationValues";
+import { persistableValues } from "../lib/operationValues";
 import { editorRowsOf, rememberedParams } from "./operationState";
 import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
@@ -67,6 +66,7 @@ import { useRunCancel } from "./useRunCancel";
 import { useCopyTable } from "./useCopyTable";
 import { useResultActions } from "./useResultActions";
 import { useApplyRun } from "./useApplyRun";
+import { usePreviewRun } from "./usePreviewRun";
 
 export function OperationScreen({
   bridge,
@@ -193,36 +193,16 @@ export function OperationScreen({
     setStage("preview");
   };
 
-  const preview = async () => {
-    setError("");
-    const preparing = { phase: "preparing", done: 0, total: 0 };
-    startProgress(preparing);
-    setStage("previewing");
-    try {
-      const sanitized = persistableValues(operation.schema, values);
-      lastSaved.current = JSON.stringify(sanitized);
-      await bridge.call("settings/saveParams", {
-        opId: operation.id,
-        values: sanitized,
-      });
-      if (operation.supportsPresets && Object.keys(sanitized).length > 0) {
-        setPreviousValues(sanitized);
-      }
-      const previewValues = previewValuesFor(operation.id, values, {
-        ran: rfiFinderWasRun,
-        candidates: rfiPrintCandidates,
-      });
-      const next = await bridge.call(
-        "engine/preview",
-        { opId: operation.id, values: previewValues },
-        receiveProgress,
-      );
-      installPlan(next);
-    } catch (reason) {
-      setError(humanError(reason, s));
-      setStage("form");
-    }
-  };
+  const { preview } = usePreviewRun({
+    bridge,
+    operation,
+    values,
+    lastSaved,
+    finder: { ran: rfiFinderWasRun, candidates: rfiPrintCandidates },
+    s,
+    screen: { setError, setStage, setPreviousValues, installPlan },
+    progress: { startProgress, receiveProgress },
+  });
   const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
     bridge,
     operationId: operation.id,
