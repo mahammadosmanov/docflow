@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.27 - 2026-10-27
+
+### Removed
+
+- Dead frontend code with no callers: the `listOperationPresets`, `saveOperationPreset`, and `deleteOperationPreset` wrappers in `frontend/src/lib/platform.ts`, and the `demoOutlookReplyOperation` and `demoReplicaPublishOperation` demo definitions in `frontend/src/lib/demoOperations.ts`. The preset toolbar and the mock bridge use their own paths, so no operator-facing behavior changes.
+
 ## 1.33.26 - 2026-10-27
 
 ### Changed

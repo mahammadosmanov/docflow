@@ -1,4 +1,4 @@
-import type { OperationPreset, PathSelection } from "../types";
+import type { PathSelection } from "../types";
 import type { Bridge } from "./bridge";
 
 async function selectPaths(
@@ -48,31 +48,4 @@ export async function revealPath(
   selectionId: string,
 ): Promise<void> {
   await bridge.call("paths/reveal", { selectionId });
-}
-
-export async function listOperationPresets(
-  bridge: Bridge,
-  opId: string,
-): Promise<OperationPreset[]> {
-  return bridge.call("settings/presets", { opId });
-}
-
-export async function saveOperationPreset(
-  bridge: Bridge,
-  params: {
-    opId: string;
-    name: string;
-    values: Record<string, unknown>;
-    replace?: boolean;
-  },
-): Promise<OperationPreset> {
-  return bridge.call("settings/savePreset", params);
-}
-
-export async function deleteOperationPreset(
-  bridge: Bridge,
-  opId: string,
-  presetId: string,
-): Promise<void> {
-  await bridge.call("settings/deletePreset", { opId, presetId });
 }
