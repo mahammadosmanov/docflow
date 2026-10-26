@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.28 - 2026-10-27
+
+### Changed
+
+- Twelve frontend helpers and components that no other file imports are no longer exported: `AppFrame` and `Splash` in `App.tsx`, `SettingsGroup` and `ChoiceGrid` in `SettingsScreen.tsx`, `presetCapableValues` and `presetCommandError` in `PresetToolbar.tsx`, `getOperationCategory` and `getOperationIcon` in `HomeScreen.tsx`, `recordValue`, `previewText`, and `excelCell` in `workbookCellChanges.ts`, and `isCanonicalRfiCode` in `editorRules.ts`. They stay as module-private functions. Behavior is unchanged.
+
 ## 1.33.27 - 2026-10-27
 
 ### Removed

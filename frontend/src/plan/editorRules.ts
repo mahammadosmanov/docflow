@@ -75,7 +75,7 @@ export function editorColumnMinWidth(column: EditorColumn) {
   return column.kind === "compactDate" ? 136 : 48;
 }
 
-export function isCanonicalRfiCode(value: unknown): value is string {
+function isCanonicalRfiCode(value: unknown): value is string {
   return (
     typeof value === "string" &&
     /^AZE-SUN-INT-QMS-RFI-(?:CIV|MEC|ELE|PRC)-\d{4}$/.test(value)

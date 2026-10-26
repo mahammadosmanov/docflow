@@ -401,7 +401,7 @@ export function SettingsScreen({
   );
 }
 
-export function SettingsGroup({
+function SettingsGroup({
   title,
   icon,
   help,
@@ -426,7 +426,7 @@ export function SettingsGroup({
   );
 }
 
-export function ChoiceGrid({
+function ChoiceGrid({
   value,
   options,
   onChange,

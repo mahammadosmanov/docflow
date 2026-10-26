@@ -35,7 +35,7 @@ export type PresetToolbarProps = {
   onError: (message: string) => void;
 };
 
-export function presetCapableValues(
+function presetCapableValues(
   operation: OperationDef,
   values: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -55,7 +55,7 @@ export function presetCapableValues(
   );
 }
 
-export function presetCommandError(error: unknown, s: Strings): string {
+function presetCommandError(error: unknown, s: Strings): string {
   if (
     error &&
     typeof error === "object" &&
