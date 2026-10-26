@@ -1,4 +1,5 @@
 import type { Bridge, ProgressHandler } from "./bridge";
+import { BridgeError } from "./bridge";
 import type {
   CommandArgs,
   CommandParams,
@@ -11,6 +12,7 @@ import type {
   AuthState,
   Bootstrap,
   HistoryPayload,
+  OperationDef,
   OperationResult,
   PathSelection,
   Plan,
@@ -82,6 +84,28 @@ function normalizeMockRfiCode(value: unknown): string | null {
     : null;
 }
 
+const demoOperationList: OperationDef[] = [
+  demoFastCoverOperation,
+  demoFileGroupOperation,
+  demoRfiOperation,
+  demoRfiFollowUpOperation,
+  demoConcreteDocumentsOperation,
+  demoPrintOperation,
+  demoSignedPagesOperation,
+  demoPdfOrientationOperation,
+  demoRfiSystemSyncOperation,
+  demoRfiCompleteStatusOperation,
+];
+
+function isEmptyValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
 /** Browser-only bridge used by component tests and visual development. */
 export class MockBridge implements Bridge {
   private auth: AuthState = signedOut;
@@ -130,18 +154,7 @@ export class MockBridge implements Bridge {
           version: `${__DOCFLOW_VERSION__}-demo`,
           auth: this.auth,
           prefs: this.prefs,
-          operations: [
-            demoFastCoverOperation,
-            demoFileGroupOperation,
-            demoRfiOperation,
-            demoRfiFollowUpOperation,
-            demoConcreteDocumentsOperation,
-            demoPrintOperation,
-            demoSignedPagesOperation,
-            demoPdfOrientationOperation,
-            demoRfiSystemSyncOperation,
-            demoRfiCompleteStatusOperation,
-          ],
+          operations: demoOperationList,
         } satisfies Bootstrap;
         break;
       case "auth/signIn":
@@ -259,6 +272,13 @@ export class MockBridge implements Bridge {
       case "engine/preview": {
         onProgress?.({ phase: "scan", done: 1, total: 1 });
         const values = params.values as Record<string, unknown>;
+        // Mirror the Rust engine: a missing required value fails before any work.
+        const missing = demoOperationList
+          .find((operation) => operation.id === params.opId)
+          ?.schema.find((param) => param.required && isEmptyValue(values[param.name]));
+        if (missing) {
+          throw new BridgeError("validation", `error.param.required.${missing.name}`);
+        }
         if (params.opId === "rfi.complete_status_sync") {
           const code = "AZE-SUN-INT-QMS-RFI-MEC-0700";
           const workbook = mockPath(

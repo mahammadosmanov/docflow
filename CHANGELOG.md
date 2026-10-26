@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.12 - 2026-10-26
+
+### Changed
+
+- The browser mock bridge rejects a preview that omits a required parameter, with the same `error.param.required.<name>` key the engine uses. Previously the browser demo accepted empty values the real app would refuse.
+- Three App tests and one direct-call fixture now supply the values the real app sends: they wait for the picked workbook path, and the fast-scan fixture sets `scan_mode`.
+
 ## 1.33.11 - 2026-10-26
 
 ### Fixed
