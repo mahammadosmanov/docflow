@@ -48,7 +48,7 @@ import {
 
 export type OperationCategory = "all" | "scans" | "excel" | "mail" | "system";
 
-export function getOperationCategory(id: string): OperationCategory {
+function getOperationCategory(id: string): OperationCategory {
   if (
     id === "rfi.process_scans_fast_covers" ||
     id === "rfi.normalize_pdf_orientation" ||
@@ -71,7 +71,7 @@ export function getOperationCategory(id: string): OperationCategory {
   return "system";
 }
 
-export function getOperationIcon(id: string) {
+function getOperationIcon(id: string) {
   switch (id) {
     case "files.batch_print":
       return <Printer />;

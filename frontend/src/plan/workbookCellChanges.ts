@@ -19,17 +19,17 @@ export type WorkbookCellChange = {
 
 export const MAX_WORKBOOK_CELL_PREVIEWS = 1_000;
 
-export function recordValue(value: unknown): Record<string, unknown> | null {
+function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 }
 
-export function previewText(value: unknown): string | null {
+function previewText(value: unknown): string | null {
   return typeof value === "string" && value.length <= 500 ? value : null;
 }
 
-export function excelCell(row: unknown, column: unknown): string | null {
+function excelCell(row: unknown, column: unknown): string | null {
   if (
     typeof row !== "number" ||
     typeof column !== "number" ||

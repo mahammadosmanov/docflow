@@ -287,7 +287,7 @@ export function App() {
   );
 }
 
-export function AppFrame({
+function AppFrame({
   bridge,
   routeName,
   isAdmin,
@@ -473,7 +473,7 @@ export function AppFrame({
   );
 }
 
-export function Splash() {
+function Splash() {
   return (
     <div className="splash">
       <div className="brand-mark">
