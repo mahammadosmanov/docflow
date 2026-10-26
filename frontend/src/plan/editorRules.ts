@@ -204,3 +204,37 @@ export function moveRowAt(
   [next[index], next[target]] = [next[target], next[index]];
   return next;
 }
+
+export type PlanRowFilter = "all" | "changes" | "review";
+
+/** Indices of rows that pass the filter. `normalizedSearch` is trimmed and lowercased by the caller. */
+export function filterRowIndices(
+  rows: Record<string, unknown>[],
+  filterMode: PlanRowFilter,
+  normalizedSearch: string,
+): number[] {
+  return rows.flatMap((row, index) => {
+    if (filterMode === "changes") {
+      const isChange =
+        (row.proposedStatus && row.proposedStatus !== row.currentStatus) ||
+        row.enabled === true;
+      if (!isChange) return [];
+    } else if (filterMode === "review") {
+      const isReview =
+        row.disposition === "manual_review" ||
+        Boolean(row.reasonKey) ||
+        row.selectable === false ||
+        row.enabled === false;
+      if (!isReview) return [];
+    }
+    if (normalizedSearch) {
+      const matches = Object.values(row).some((val) =>
+        typeof val === "string" || typeof val === "number"
+          ? String(val).toLowerCase().includes(normalizedSearch)
+          : false,
+      );
+      if (!matches) return [];
+    }
+    return [index];
+  });
+}

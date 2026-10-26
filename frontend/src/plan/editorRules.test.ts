@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyEditorValue,
+  filterRowIndices,
   duplicateRowAt,
   moveRowAt,
   removeRowAt,
@@ -75,5 +76,38 @@ describe("row operations", () => {
     expect(moveRowAt(rows, 1, -1)?.map((row) => row._rowId)).toEqual(["b", "a", "c"]);
     expect(moveRowAt(rows, 0, -1)).toBeNull();
     expect(moveRowAt(rows, 2, 1)).toBeNull();
+  });
+});
+
+describe("filterRowIndices", () => {
+  const rows = [
+    { currentStatus: "open", proposedStatus: "open", note: "Alpha" },
+    { currentStatus: "open", proposedStatus: "closed", note: "Beta" },
+    { currentStatus: "open", proposedStatus: "open", enabled: true, note: "Gamma" },
+    { disposition: "manual_review", note: "Delta" },
+    { reasonKey: "reason.x", note: "Epsilon", code: 42 },
+  ];
+
+  it("returns every index in all mode without a search", () => {
+    expect(filterRowIndices(rows, "all", "")).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("keeps rows whose proposed status differs or that are enabled in changes mode", () => {
+    expect(filterRowIndices(rows, "changes", "")).toEqual([1, 2]);
+  });
+
+  it("keeps manual-review, reason-coded, unselectable, or disabled rows in review mode", () => {
+    expect(filterRowIndices(rows, "review", "")).toEqual([3, 4]);
+  });
+
+  it("matches the search against string and number fields only", () => {
+    expect(filterRowIndices(rows, "all", "beta")).toEqual([1]);
+    expect(filterRowIndices(rows, "all", "42")).toEqual([4]);
+    expect(filterRowIndices(rows, "all", "true")).toEqual([]);
+  });
+
+  it("applies the mode and the search together", () => {
+    expect(filterRowIndices(rows, "changes", "gamma")).toEqual([2]);
+    expect(filterRowIndices(rows, "review", "beta")).toEqual([]);
   });
 });
