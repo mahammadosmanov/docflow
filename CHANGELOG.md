@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.8 - 2026-10-26
+
+### Fixed
+
+- The S5 journal's cross-process mutation lock no longer fails spuriously in two cases. A store that already holds the lock on a thread can take it again on that thread, so nested journal writes inside one apply do not contend with themselves. Other store instances on the same thread still contend, as before. A contended acquire also waits up to about 200 ms before reporting `operation_in_progress`, which covers a lock file descriptor a child process inherited while it was still being spawned. Real holders still fail after that window.
+- Regression coverage: `journal::tests` covers same-store re-entry, exclusion from other threads, release after the last permit, and a short hold being waited out. The full Rust suite passed 150 consecutive runs, where the flake had failed about 4–6% of runs.
+
 ## 1.33.7 - 2026-10-26
 
 ### Changed

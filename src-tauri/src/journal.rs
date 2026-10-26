@@ -1,7 +1,9 @@
 use std::{
-    collections::VecDeque,
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
     fs::{self, File, OpenOptions},
     io::{self, BufWriter, Read, Write},
+    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
@@ -492,9 +494,67 @@ fn is_zero(value: &u64) -> bool {
     *value == 0
 }
 
+/// Key for a lock held on this thread: the store instance and its lock path.
+type HeldKey = (u64, PathBuf);
+
+thread_local! {
+    /// Interprocess lock files this thread holds, with a re-entry count.
+    static INTERPROCESS_HELD: RefCell<HashMap<HeldKey, (File, usize)>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Holds the cross-process S5 journal lock. A store re-entering its own held lock
+/// on the holding thread counts up instead of re-locking, so nested journal writes
+/// inside one apply do not contend with themselves. A different store instance on
+/// the same thread still contends. The permit is `!Send`, so its count always
+/// drops on the thread that took it.
 #[derive(Debug)]
 pub(crate) struct InterprocessMutationPermit {
-    _file: File,
+    key: HeldKey,
+    _thread_bound: PhantomData<*const ()>,
+}
+
+impl InterprocessMutationPermit {
+    /// Re-enters a lock this store already holds on this thread; `None` otherwise.
+    pub(crate) fn reenter(instance: u64, path: &Path) -> Option<Self> {
+        let key = (instance, path.to_path_buf());
+        INTERPROCESS_HELD.with(|held| {
+            let mut held = held.borrow_mut();
+            let (_, count) = held.get_mut(&key)?;
+            *count += 1;
+            Some(Self::new(key))
+        })
+    }
+
+    /// Records a freshly locked file as held by this store on this thread.
+    pub(crate) fn hold(instance: u64, path: &Path, file: File) -> Self {
+        let key = (instance, path.to_path_buf());
+        INTERPROCESS_HELD.with(|held| {
+            held.borrow_mut().insert(key.clone(), (file, 1));
+        });
+        Self::new(key)
+    }
+
+    fn new(key: HeldKey) -> Self {
+        Self {
+            key,
+            _thread_bound: PhantomData,
+        }
+    }
+}
+
+impl Drop for InterprocessMutationPermit {
+    fn drop(&mut self) {
+        INTERPROCESS_HELD.with(|held| {
+            let mut held = held.borrow_mut();
+            if let Some((_, count)) = held.get_mut(&self.key) {
+                *count -= 1;
+                if *count == 0 {
+                    held.remove(&self.key);
+                }
+            }
+        });
+    }
 }
 
 #[derive(Debug)]

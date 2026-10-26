@@ -1,9 +1,13 @@
 use super::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_STORE_INSTANCE: AtomicU64 = AtomicU64::new(1);
 
 impl JournalStore {
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self {
             root: root.as_ref().to_path_buf(),
+            instance: NEXT_STORE_INSTANCE.fetch_add(1, Ordering::Relaxed),
         }
     }
 
@@ -17,10 +21,17 @@ impl JournalStore {
         fs::create_dir_all(&self.root)
             .map_err(|error| journal_io("journal directory could not be created", error))?;
         let lock_path = self.root.join(".docflow-s5-mutation.lock");
+        if let Some(permit) = InterprocessMutationPermit::reenter(self.instance, &lock_path) {
+            return Ok(permit);
+        }
         let file = open_mutation_lock_file(&lock_path)
             .map_err(|error| journal_io("S5 mutation lock could not be opened", error))?;
-        match try_lock_mutation_file(&file) {
-            Ok(()) => Ok(InterprocessMutationPermit { _file: file }),
+        match try_lock_mutation_file_briefly(&file) {
+            Ok(()) => Ok(InterprocessMutationPermit::hold(
+                self.instance,
+                &lock_path,
+                file,
+            )),
             Err(error) if mutation_lock_contended(&error) => {
                 Err(BackendError::operation_in_progress())
             }

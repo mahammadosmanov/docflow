@@ -45,6 +45,24 @@ pub(super) fn mutation_lock_contended(error: &io::Error) -> bool {
         .is_some_and(|code| code == libc::EWOULDBLOCK || code == libc::EAGAIN)
 }
 
+/// Tries the lock for up to about 200 ms before reporting contention. A child
+/// process spawned by another thread can hold a copy of the lock file descriptor
+/// until it execs, which keeps the `flock` alive for a few milliseconds after
+/// this process has released it. Real holders still fail after the window.
+pub(super) fn try_lock_mutation_file_briefly(file: &File) -> io::Result<()> {
+    const ATTEMPTS: u32 = 200;
+    let mut result = try_lock_mutation_file(file);
+    for _ in 1..ATTEMPTS {
+        match &result {
+            Err(error) if mutation_lock_contended(error) => {}
+            _ => break,
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        result = try_lock_mutation_file(file);
+    }
+    result
+}
+
 #[cfg(windows)]
 pub(super) fn mutation_lock_contended(error: &io::Error) -> bool {
     matches!(error.raw_os_error(), Some(32 | 33 | 158))
