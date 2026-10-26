@@ -64,6 +64,7 @@ import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
 import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
 import { useRunCancel } from "./useRunCancel";
+import { useCopyTable } from "./useCopyTable";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -120,7 +121,6 @@ export function OperationScreen({
     setRfiCandidateGroup,
   } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
-  const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
   const [previousValues, setPreviousValues] = useState<Record<
     string,
     unknown
@@ -298,22 +298,7 @@ export function OperationScreen({
       setStage("preview");
     }
   };
-  const copyTable = async (sheet?: string) => {
-    if (!plan || copyingSheet !== null) return;
-    setCopyingSheet(sheet ?? "");
-    setError("");
-    try {
-      const payload = await bridge.call("engine/copyTable", {
-        planId: plan.planId,
-        sheet,
-      });
-      setError(s.t("rfi.editor.copied", { count: payload.count }));
-    } catch (reason) {
-      setError(humanError(reason, s));
-    } finally {
-      setCopyingSheet(null);
-    }
-  };
+  const { copyingSheet, copyTable } = useCopyTable({ bridge, plan, s, setError });
   const prepareRfiReply = async () => {
     if (!plan || !result?.journalId) return;
     setError("");
