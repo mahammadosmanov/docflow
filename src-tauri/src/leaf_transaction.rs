@@ -452,6 +452,9 @@ static LAST_FAILURE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(No
 /// Records which publication step failed and the OS cause, for the activity
 /// log only. Never feeds journal state, authority, or user-visible messages.
 pub(crate) fn note_failure(step: &str, detail: &str) {
+    if std::env::var_os("DOCFLOW_DEBUG_S5").is_some() {
+        eprintln!("S5FAIL {step}: {detail}");
+    }
     *LAST_FAILURE.lock().unwrap_or_else(|e| e.into_inner()) = Some(format!("{step}: {detail}"));
 }
 

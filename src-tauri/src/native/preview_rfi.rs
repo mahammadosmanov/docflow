@@ -35,13 +35,26 @@ impl NativeBackend {
             uuid::Uuid::new_v4().to_string(),
             &request.op_id,
         );
-        let provisional = self.filesystem.issue_provisional_grants(
-            &scope,
-            &[
-                (source_root, GrantAccess::Read),
-                (target_root, GrantAccess::ReadWrite),
-            ],
-        )?;
+        let backup_directory = request
+            .values
+            .backup_directory
+            .as_ref()
+            .map(fs::canonicalize)
+            .transpose()
+            .map_err(|_| BackendError::validation("error.rfi.followUp.backupDirectoryInvalid"))?;
+        let mut roots = vec![
+            (source_root, GrantAccess::Read),
+            (target_root, GrantAccess::ReadWrite),
+        ];
+        if let Some(directory) = &backup_directory {
+            if !directory.is_dir() {
+                return Err(BackendError::validation(
+                    "error.rfi.followUp.backupDirectoryInvalid",
+                ));
+            }
+            roots.push((directory.clone(), GrantAccess::ReadWrite));
+        }
+        let provisional = self.filesystem.issue_provisional_grants(&scope, &roots)?;
         let source_grant = &provisional.grants()[0];
         let target_grant = &provisional.grants()[1];
         let source_anchor = self.filesystem.anchor_granted_path(
@@ -81,9 +94,10 @@ impl NativeBackend {
                 .to_string_lossy()
                 .into_owned(),
         });
-        let mut plan = rfi_follow_up::preview_from_open_files(
+        let mut plan = rfi_follow_up::preview_from_open_files_with_backup(
             &request.values.rfi_log_workbook,
             &request.values.follow_up_workbook,
+            backup_directory.as_deref(),
             &mut source,
             &mut target,
         )?;

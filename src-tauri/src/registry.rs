@@ -228,6 +228,17 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 Map::new(),
                 Some("param.rfi.followUp.followUpWorkbook.help"),
             ),
+            parameter(
+                "backup_directory",
+                ParamKind::Folder,
+                "param.rfi.followUp.backupDirectory",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.followUp.backupDirectory.help"),
+            ),
         ],
     );
     let concrete_documents = operation(

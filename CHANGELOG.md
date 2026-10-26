@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.31.0 - 2026-10-26
+
+### Added
+
+- Follow Up sync accepts an optional backup folder; the backup copy is written there (granted read-write, recorded in the journal) instead of beside the workbook. Journal recovery accepts a backup in a recorded read-write root. `DOCFLOW_DEBUG_S5` prints publication-step failures to stderr.
+
 ## 1.30.0 - 2026-10-26
 
 ### Added
