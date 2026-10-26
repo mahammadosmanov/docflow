@@ -11,6 +11,8 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   type ReactNode,
   useCallback,
   useEffect,
@@ -57,23 +59,25 @@ import {
   OperationScreen,
 } from "./screens/OperationScreen";
 import {
-  ReviewScreen,
-} from "./screens/ReviewScreen";
-import {
-  HistoryScreen,
-} from "./screens/HistoryScreen";
-import {
-  QueueScreen,
-} from "./screens/QueueScreen";
-import {
-  RecoveryScreen,
-} from "./screens/RecoveryScreen";
-import {
-  AdminScreen,
-} from "./screens/AdminScreen";
-import {
   SettingsScreen,
 } from "./screens/SettingsScreen";
+
+// Rarely opened routes load on first visit to keep the initial bundle smaller.
+const ReviewScreen = lazy(() =>
+  import("./screens/ReviewScreen").then((module) => ({ default: module.ReviewScreen })),
+);
+const QueueScreen = lazy(() =>
+  import("./screens/QueueScreen").then((module) => ({ default: module.QueueScreen })),
+);
+const HistoryScreen = lazy(() =>
+  import("./screens/HistoryScreen").then((module) => ({ default: module.HistoryScreen })),
+);
+const RecoveryScreen = lazy(() =>
+  import("./screens/RecoveryScreen").then((module) => ({ default: module.RecoveryScreen })),
+);
+const AdminScreen = lazy(() =>
+  import("./screens/AdminScreen").then((module) => ({ default: module.AdminScreen })),
+);
 
 export function App() {
   const bridge = useMemo(() => getBridge(), []);
@@ -278,7 +282,7 @@ export function App() {
       s={s}
       onNavigate={setRoute}
     >
-      {page}
+      <Suspense fallback={null}>{page}</Suspense>
     </AppFrame>
   );
 }

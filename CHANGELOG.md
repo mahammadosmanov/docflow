@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.2 - 2026-10-26
+
+### Changed
+
+- The Review, Queue, History, Recovery, and Admin screens are loaded with `React.lazy` on first visit. The main frontend chunk drops from about 351 kB to 337 kB (minified). Login, Home, Operation, and Settings stay in the main chunk.
+
 ## 1.33.1 - 2026-10-26
 
 ### Removed

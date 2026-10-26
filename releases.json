@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.1",
+  "currentVersion": "1.33.2",
   "releases": [
+    {
+      "version": "1.33.2",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.2",
+      "summary": "Review, Queue, History, Recovery, and Admin screens load on first visit, trimming the startup bundle."
+    },
     {
       "version": "1.33.1",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.1",
       "summary": "Two unused Follow Up helper functions are removed."
     },
