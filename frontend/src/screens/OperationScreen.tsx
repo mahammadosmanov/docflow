@@ -31,7 +31,6 @@ import {
   type OperationResult,
   type PathSelection,
   type Plan,
-  type PrintQueueSummary,
   type RfiPrintCandidate,
   type RfiPrintResolution,
 } from "../types";
@@ -62,6 +61,7 @@ import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 import { editorRowsOf, rememberedParams } from "./operationState";
 import { useProgressTrail } from "./useProgressTrail";
+import { usePrintQueue } from "./usePrintQueue";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -120,8 +120,6 @@ export function OperationScreen({
   const [isUpdatingScanPreview, setIsUpdatingScanPreview] = useState(false);
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
-  const [latestPrintQueue, setLatestPrintQueue] =
-    useState<PrintQueueSummary | null>(null);
   const [previousValues, setPreviousValues] = useState<Record<
     string,
     unknown
@@ -186,14 +184,6 @@ export function OperationScreen({
     return () => clearTimeout(timer);
   }, [bridge, operation, values, hydrated]);
 
-  useEffect(() => {
-    if (operation.id !== "files.batch_print") return;
-    void bridge
-      .call("engine/printQueueLatest")
-      .then(setLatestPrintQueue)
-      .catch(() => setLatestPrintQueue(null));
-  }, [bridge, operation.id]);
-
   const installPlan = (next: Plan) => {
     setPlan(next);
     setEditorRows(editorRowsOf(next).map((row) => ({ ...row })));
@@ -244,25 +234,15 @@ export function OperationScreen({
       setStage("form");
     }
   };
-  const resumePrintQueue = async (queueId: string) => {
-    setError("");
-    setStage("previewing");
-    try {
-      installPlan(await bridge.call("engine/printQueueResume", { queueId }));
-    } catch (reason) {
-      setError(humanError(reason, s));
-      setStage("form");
-    }
-  };
-  const discardPrintQueue = async (queueId: string) => {
-    setError("");
-    try {
-      await bridge.call("engine/printQueueDiscard", { queueId });
-      setLatestPrintQueue(null);
-    } catch (reason) {
-      setError(humanError(reason, s));
-    }
-  };
+  const { latestPrintQueue, resumePrintQueue, discardPrintQueue } =
+    usePrintQueue({
+      bridge,
+      operationId: operation.id,
+      s,
+      setError,
+      setStage,
+      installPlan,
+    });
   const cancelApply = async () => {
     if (!plan || cancelling) return;
     setCancelling(true);
