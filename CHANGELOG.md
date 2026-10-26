@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.53 - 2026-10-27
+
+### Changed
+
+- The table copy action and its in-flight sheet state move from `frontend/src/screens/OperationScreen.tsx` into the `useCopyTable` hook in `frontend/src/screens/useCopyTable.ts`. `useCopyTable.test.ts` covers the copy by plan and sheet with the row count reported, the no-plan no-op, and a failed copy that clears the in-flight sheet. Behavior is unchanged.
+
 ## 1.33.52 - 2026-10-27
 
 ### Changed
