@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.14",
+  "currentVersion": "1.33.15",
   "releases": [
+    {
+      "version": "1.33.15",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.15",
+      "summary": "At phone width the bottom bar names the current section; the other sections stay icon-only."
+    },
     {
       "version": "1.33.14",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.14",
       "summary": "Batch print preview values come from a tested helper instead of inline reshaping in the operation screen."
     },

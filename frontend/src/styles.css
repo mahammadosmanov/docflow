@@ -3960,11 +3960,32 @@ textarea:focus-visible {
   .app-navigation {
     width: min(100%, 520px);
   }
+  .app-navigation {
+    gap: 0;
+  }
   .app-nav-item {
-    width: 46px;
+    width: 34px;
     height: 46px;
     min-height: 46px;
+    padding: 0;
     border-radius: 8px;
+  }
+  /* The current section names itself; the others stay icon-only to fit the bar. */
+  .app-nav-item.active {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 148px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+  .app-nav-item.active > span {
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .app-rail {
     height: calc(64px + env(safe-area-inset-bottom));

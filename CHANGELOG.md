@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.15 - 2026-10-26
+
+### Changed
+
+- At phone width (620px and narrower), the bottom navigation shows the label of the current section next to its icon, so operators can tell the seven sections apart. The other sections stay icon-only. The longest label, Kurtarma merkezi, fits at 320px and 375px (checked in the browser; 390px not checked). Inactive icon targets shrink to about 26px at 320px, below the usual 44px touch size; this is the trade-off for naming the current section.
+
 ## 1.33.14 - 2026-10-26
 
 ### Changed
