@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.59 - 2026-10-27
+
+### Changed
+
+- The browser demo's plan handlers move into `frontend/src/lib/mockPlanHandlers.ts`: `MockPlanState`, `previewOperation`, and `reviseOperation`. `frontend/src/lib/mockHandlers.ts` keeps the print finder and diagnostics handlers and drops from 756 to 108 lines. Unused imports are removed from both modules. The 177 frontend tests pass. No operator-facing behavior changes.
+
 ## 1.33.58 - 2026-10-27
 
 ### Changed
