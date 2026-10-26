@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.16 - 2026-10-26
+
+### Changed
+
+- The preview and apply progress views of the operation screen are one `BusyStage` component in `frontend/src/screens/BusyStage.tsx`. The labels, cancel handlers, and cancel-button wording are unchanged.
+
 ## 1.33.15 - 2026-10-26
 
 ### Changed
