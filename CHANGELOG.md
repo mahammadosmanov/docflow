@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.0 - 2026-10-26
+
+### Added
+
+- `tools/dto_contract.test.mjs` compares the top-level fields of the Rust serde camelCase DTOs the webview receives with the matching TypeScript interfaces in `frontend/src/types.ts`. It runs in `npm test` and fails on any missing, extra, or renamed field.
+
 ## 1.32.3 - 2026-10-26
 
 ### Changed
