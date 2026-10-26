@@ -4293,3 +4293,21 @@ textarea:focus-visible {
   flex: 1;
   cursor: pointer;
 }
+
+/* Under 360px the active label no longer fits beside seven icon targets, so the
+   bar is icon-only with 40px targets. */
+@media (max-width: 359px) {
+  .app-navigation {
+    width: 100%;
+  }
+  .app-nav-item,
+  .app-nav-item.active {
+    width: 40px;
+    max-width: 40px;
+    padding: 0;
+    gap: 0;
+  }
+  .app-nav-item.active > span {
+    display: none;
+  }
+}
