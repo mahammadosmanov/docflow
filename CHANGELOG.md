@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.52 - 2026-10-27
+
+### Changed
+
+- The preview and apply cancel handlers and their shared `cancelling` flag move from `frontend/src/screens/OperationScreen.tsx` into the `useRunCancel` hook in `frontend/src/screens/useRunCancel.ts`. The screen passes an `onPreviewCancelled` callback that returns it to the form. `useRunCancel.test.ts` covers preview cancel by operation, the return to the form after an error, apply cancel by plan, the no-plan no-op, and a failed apply cancel. Behavior is unchanged.
+
 ## 1.33.51 - 2026-10-27
 
 ### Changed

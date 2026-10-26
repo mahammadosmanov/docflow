@@ -63,6 +63,7 @@ import { editorRowsOf, rememberedParams } from "./operationState";
 import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
 import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
+import { useRunCancel } from "./useRunCancel";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -124,7 +125,6 @@ export function OperationScreen({
     string,
     unknown
   > | null>(null);
-  const [cancelling, setCancelling] = useState(false);
   useEffect(() => {
     setHydrated(false);
     setPreviousValues(null);
@@ -222,18 +222,14 @@ export function OperationScreen({
       setStage("form");
     }
   };
-  const cancelPreview = async () => {
-    if (cancelling) return;
-    setCancelling(true);
-    try {
-      await bridge.call("engine/cancel", { opId: operation.id });
-    } catch {
-      // Ignored if preview already completed or errored
-    } finally {
-      setCancelling(false);
-      setStage("form");
-    }
-  };
+  const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
+    bridge,
+    operationId: operation.id,
+    plan,
+    s,
+    setError,
+    onPreviewCancelled: () => setStage("form"),
+  });
   const { latestPrintQueue, resumePrintQueue, discardPrintQueue } =
     usePrintQueue({
       bridge,
@@ -243,15 +239,6 @@ export function OperationScreen({
       setStage,
       installPlan,
     });
-  const cancelApply = async () => {
-    if (!plan || cancelling) return;
-    setCancelling(true);
-    try {
-      await bridge.call("engine/cancel", { planId: plan.planId });
-    } catch (reason) {
-      setError(humanError(reason, s));
-    }
-  };
   const { isUpdatingScanPreview, updateScanPreview } = useScanPreviewUpdate({
     bridge,
     plan,
