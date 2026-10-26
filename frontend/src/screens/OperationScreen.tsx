@@ -58,6 +58,7 @@ import {
   ResultView,
 } from "./ResultView";
 import { BusyStage } from "./BusyStage";
+import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 
@@ -615,48 +616,27 @@ export function OperationScreen({
                 {operation.id === "files.batch_print" && (
                   <section className="rfi-print-finder" aria-labelledby="rfi-print-title">
                     <h3 id="rfi-print-title">{s.t("print.rfi.title")}</h3>
-                    {rfiInputs.length > 0 && (
-                      <fieldset className="rfi-print-inputs">
-                        <legend>{s.t("print.rfi.inputs")}</legend>
-                        <div className="rfi-print-actions">
-                          <Button
-                            variant="ghost"
-                            onClick={() => {
-                              invalidateRfiFinder();
-                              setExcludedRfiInputs([]);
-                            }}
-                          >
-                            {s.t("action.selectAll")}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            onClick={() => {
-                              invalidateRfiFinder();
-                              setExcludedRfiInputs(rfiInputs);
-                            }}
-                          >
-                            {s.t("action.selectNone")}
-                          </Button>
-                        </div>
-                        {rfiInputs.map((input) => (
-                          <label className="rfi-print-row" key={input}>
-                            <input
-                              type="checkbox"
-                              checked={!excludedRfiInputs.includes(input)}
-                              onChange={(event) => {
-                                invalidateRfiFinder();
-                                setExcludedRfiInputs((current) =>
-                                  event.target.checked
-                                    ? current.filter((value) => value !== input)
-                                    : [...current, input],
-                                );
-                              }}
-                            />
-                            <span>{input}</span>
-                          </label>
-                        ))}
-                      </fieldset>
-                    )}
+                    <RfiInputChooser
+                      inputs={rfiInputs}
+                      excluded={excludedRfiInputs}
+                      s={s}
+                      onSelectAll={() => {
+                        invalidateRfiFinder();
+                        setExcludedRfiInputs([]);
+                      }}
+                      onSelectNone={() => {
+                        invalidateRfiFinder();
+                        setExcludedRfiInputs(rfiInputs);
+                      }}
+                      onToggle={(input, checked) => {
+                        invalidateRfiFinder();
+                        setExcludedRfiInputs((current) =>
+                          checked
+                            ? current.filter((value) => value !== input)
+                            : [...current, input],
+                        );
+                      }}
+                    />
                     <Button
                       variant="secondary"
                       disabled={rfiFinderBusy || !rfiInputs.length}

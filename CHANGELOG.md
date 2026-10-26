@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.19 - 2026-10-26
+
+### Changed
+
+- The batch-print RFI number checkboxes and their select-all and select-none buttons move from `OperationScreen.tsx` into `frontend/src/screens/RfiInputChooser.tsx`. The parent still owns the finder invalidation, so behavior is unchanged.
+
 ## 1.33.18 - 2026-10-26
 
 ### Changed
