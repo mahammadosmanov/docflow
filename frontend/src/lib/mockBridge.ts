@@ -542,6 +542,158 @@ export class MockBridge implements Bridge {
   }
 
 
+  private reviseOperation(
+    params: Record<string, unknown>,
+    onProgress?: ProgressHandler,
+  ): unknown {
+    let result: unknown;
+    if (this.fastScanPlan && params.planId === this.fastScanPlan.planId) {
+      const editor = this.fastScanPlan.meta.editor as Record<
+        string,
+        unknown
+      >;
+      const originalRows = Array.isArray(editor.rows)
+        ? (editor.rows as Record<string, unknown>[])
+        : [];
+      const submittedRows = Array.isArray(params.rows)
+        ? (params.rows as Record<string, unknown>[])
+        : [];
+      const edit = this.fastScanPlan.meta.scanEdit as Record<
+        string,
+        unknown
+      >;
+      const destination = String(edit.destinationRoot ?? "");
+      const organize = edit.organizeIntoRfiFolders === true;
+      const seenCodes = new Set<string>();
+      if (submittedRows.length !== originalRows.length) {
+        throw new Error("error.rfi.fastScan.revisionInvalid");
+      }
+      const rows = submittedRows.map<Record<string, unknown>>(
+        (submitted, index) => {
+          const original = originalRows[index];
+          const inputCode = submitted.code;
+          const expected = { ...original, code: inputCode };
+          if (JSON.stringify(submitted) !== JSON.stringify(expected)) {
+            throw new Error("error.rfi.fastScan.revisionInvalid");
+          }
+          const code = normalizeMockRfiCode(inputCode);
+          if (!code) {
+            throw new Error("error.rfi.fastScan.codeInvalid");
+          }
+          if (seenCodes.has(code)) {
+            throw new Error("error.rfi.fastScan.targetExists");
+          }
+          seenCodes.add(code);
+          const discipline = code.split("-")[5];
+          const target = `${destination}${
+            organize ? `/${discipline}` : ""
+          }/RFI No. ${code}.pdf`;
+          return { ...expected, code, target };
+        },
+      );
+      const steps = this.fastScanPlan.steps.map((step) => {
+        const rowId = step.meta.scanEditRowId;
+        const row = rows.find((candidate) => candidate._rowId === rowId);
+        return row
+          ? {
+              ...step,
+              dst: String(row.target),
+              meta: { ...step.meta, code: row.code },
+            }
+          : step;
+      });
+      const revised = {
+        ...this.fastScanPlan,
+        planId: `${this.fastScanPlan.planId}-revised`,
+        meta: {
+          ...this.fastScanPlan.meta,
+          editor: { ...editor, rows },
+        },
+        steps,
+      } satisfies Plan;
+      this.fastScanPlan = revised;
+      result = revised;
+      return result;
+    }
+    if (
+      this.completeStatusPlan &&
+      params.planId === this.completeStatusPlan.planId
+    ) {
+      const rows = Array.isArray(params.rows)
+        ? params.rows.map((row) => ({ ...row }))
+        : [];
+      const editor = this.completeStatusPlan.meta.editor as Record<
+        string,
+        unknown
+      >;
+      const revised = {
+        ...this.completeStatusPlan,
+        planId: "demo-complete-status-plan-revised",
+        meta: {
+          ...this.completeStatusPlan.meta,
+          editor: { ...editor, rows },
+        },
+        steps: rows.some((row) => row.enabled !== false)
+          ? this.completeStatusPlan.steps
+          : [],
+      } satisfies Plan;
+      this.completeStatusPlan = revised;
+      result = revised;
+      return result;
+    }
+    if (this.fileGroupPlan && params.planId === this.fileGroupPlan.planId) {
+      const rows = Array.isArray(params.rows)
+        ? params.rows.map((row) => ({ ...row }))
+        : [];
+      const editor = this.fileGroupPlan.meta.editor as Record<string, unknown>;
+      const enabledRows = rows.filter((row) => row.enabled !== false);
+      const revised = {
+        ...this.fileGroupPlan,
+        planId: "demo-file-group-plan-revised",
+        meta: {
+          ...this.fileGroupPlan.meta,
+          editor: { ...editor, rows },
+        },
+        steps: this.fileGroupPlan.steps.filter((step) => {
+          const rowId = String(step.meta.rowId ?? "");
+          if (rowId) return enabledRows.some((row) => row._rowId === rowId);
+          const code = String(step.meta.code ?? "");
+          return !code || enabledRows.some((row) => row.rfiCode === code);
+        }),
+      } satisfies Plan;
+      this.fileGroupPlan = revised;
+      result = revised;
+      return result;
+    }
+    if (!this.printPlan || params.planId !== this.printPlan.planId) {
+      throw new Error("Unknown demo print plan");
+    }
+    const rows = Array.isArray(params.rows)
+      ? params.rows.map((row) => ({ ...row }))
+      : [];
+    const editor = this.printPlan.meta.editor as Record<string, unknown>;
+    const revised = {
+      ...this.printPlan,
+      planId: "demo-print-plan-revised",
+      meta: {
+        ...this.printPlan.meta,
+        editor: { ...editor, rows },
+      },
+      steps: rows
+        .filter((row) => row.enabled !== false)
+        .map((row) => ({
+          kind: "print" as const,
+          src: String(row.path),
+          dst: String(row.path),
+          noteKey: "note.print.queued",
+          meta: {},
+        })),
+    } satisfies Plan;
+    this.printPlan = revised;
+    result = revised;
+    return result;
+  }
+
   async call<Method extends FrontendMethod>(
     method: Method,
     ...args: CommandArgs<Method>
@@ -678,153 +830,9 @@ export class MockBridge implements Bridge {
       case "engine/preview":
         result = this.previewOperation(params, onProgress);
         break;
-      case "engine/revise": {
-        if (this.fastScanPlan && params.planId === this.fastScanPlan.planId) {
-          const editor = this.fastScanPlan.meta.editor as Record<
-            string,
-            unknown
-          >;
-          const originalRows = Array.isArray(editor.rows)
-            ? (editor.rows as Record<string, unknown>[])
-            : [];
-          const submittedRows = Array.isArray(params.rows)
-            ? (params.rows as Record<string, unknown>[])
-            : [];
-          const edit = this.fastScanPlan.meta.scanEdit as Record<
-            string,
-            unknown
-          >;
-          const destination = String(edit.destinationRoot ?? "");
-          const organize = edit.organizeIntoRfiFolders === true;
-          const seenCodes = new Set<string>();
-          if (submittedRows.length !== originalRows.length) {
-            throw new Error("error.rfi.fastScan.revisionInvalid");
-          }
-          const rows = submittedRows.map<Record<string, unknown>>(
-            (submitted, index) => {
-              const original = originalRows[index];
-              const inputCode = submitted.code;
-              const expected = { ...original, code: inputCode };
-              if (JSON.stringify(submitted) !== JSON.stringify(expected)) {
-                throw new Error("error.rfi.fastScan.revisionInvalid");
-              }
-              const code = normalizeMockRfiCode(inputCode);
-              if (!code) {
-                throw new Error("error.rfi.fastScan.codeInvalid");
-              }
-              if (seenCodes.has(code)) {
-                throw new Error("error.rfi.fastScan.targetExists");
-              }
-              seenCodes.add(code);
-              const discipline = code.split("-")[5];
-              const target = `${destination}${
-                organize ? `/${discipline}` : ""
-              }/RFI No. ${code}.pdf`;
-              return { ...expected, code, target };
-            },
-          );
-          const steps = this.fastScanPlan.steps.map((step) => {
-            const rowId = step.meta.scanEditRowId;
-            const row = rows.find((candidate) => candidate._rowId === rowId);
-            return row
-              ? {
-                  ...step,
-                  dst: String(row.target),
-                  meta: { ...step.meta, code: row.code },
-                }
-              : step;
-          });
-          const revised = {
-            ...this.fastScanPlan,
-            planId: `${this.fastScanPlan.planId}-revised`,
-            meta: {
-              ...this.fastScanPlan.meta,
-              editor: { ...editor, rows },
-            },
-            steps,
-          } satisfies Plan;
-          this.fastScanPlan = revised;
-          result = revised;
-          break;
-        }
-        if (
-          this.completeStatusPlan &&
-          params.planId === this.completeStatusPlan.planId
-        ) {
-          const rows = Array.isArray(params.rows)
-            ? params.rows.map((row) => ({ ...row }))
-            : [];
-          const editor = this.completeStatusPlan.meta.editor as Record<
-            string,
-            unknown
-          >;
-          const revised = {
-            ...this.completeStatusPlan,
-            planId: "demo-complete-status-plan-revised",
-            meta: {
-              ...this.completeStatusPlan.meta,
-              editor: { ...editor, rows },
-            },
-            steps: rows.some((row) => row.enabled !== false)
-              ? this.completeStatusPlan.steps
-              : [],
-          } satisfies Plan;
-          this.completeStatusPlan = revised;
-          result = revised;
-          break;
-        }
-        if (this.fileGroupPlan && params.planId === this.fileGroupPlan.planId) {
-          const rows = Array.isArray(params.rows)
-            ? params.rows.map((row) => ({ ...row }))
-            : [];
-          const editor = this.fileGroupPlan.meta.editor as Record<string, unknown>;
-          const enabledRows = rows.filter((row) => row.enabled !== false);
-          const revised = {
-            ...this.fileGroupPlan,
-            planId: "demo-file-group-plan-revised",
-            meta: {
-              ...this.fileGroupPlan.meta,
-              editor: { ...editor, rows },
-            },
-            steps: this.fileGroupPlan.steps.filter((step) => {
-              const rowId = String(step.meta.rowId ?? "");
-              if (rowId) return enabledRows.some((row) => row._rowId === rowId);
-              const code = String(step.meta.code ?? "");
-              return !code || enabledRows.some((row) => row.rfiCode === code);
-            }),
-          } satisfies Plan;
-          this.fileGroupPlan = revised;
-          result = revised;
-          break;
-        }
-        if (!this.printPlan || params.planId !== this.printPlan.planId) {
-          throw new Error("Unknown demo print plan");
-        }
-        const rows = Array.isArray(params.rows)
-          ? params.rows.map((row) => ({ ...row }))
-          : [];
-        const editor = this.printPlan.meta.editor as Record<string, unknown>;
-        const revised = {
-          ...this.printPlan,
-          planId: "demo-print-plan-revised",
-          meta: {
-            ...this.printPlan.meta,
-            editor: { ...editor, rows },
-          },
-          steps: rows
-            .filter((row) => row.enabled !== false)
-            .map((row) => ({
-              kind: "print" as const,
-              src: String(row.path),
-              dst: String(row.path),
-              noteKey: "note.print.queued",
-              meta: {},
-            })),
-        } satisfies Plan;
-        this.printPlan = revised;
-        result = revised;
+      case "engine/revise":
+        result = this.reviseOperation(params, onProgress);
         break;
-      }
       case "engine/rfiReplyPreview":
         result = {
           planId: "demo-rfi-reply-plan",

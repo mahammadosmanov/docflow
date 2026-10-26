@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.44 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `engine/revise` handler moves out of the `MockBridge.call` dispatch switch in `frontend/src/lib/mockBridge.ts` into the private `reviseOperation` method, matching the `engine/preview` split in 1.33.43. Early exits return the result the switch would have returned. The App tests drive this path and pass unchanged. No operator-facing behavior changes.
+
 ## 1.33.43 - 2026-10-27
 
 ### Changed
