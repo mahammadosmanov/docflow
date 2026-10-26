@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.29 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's fixtures move from `frontend/src/lib/mockBridge.ts` into `frontend/src/lib/mockFixtures.ts`: the signed-out and demo-admin users, default preferences, the demo operation list, the path and RFI-code normalizers, and the empty-value check. `MockBridge` imports them. Behavior is unchanged; the 95 frontend tests use the bridge.
+
 ## 1.33.28 - 2026-10-27
 
 ### Changed
