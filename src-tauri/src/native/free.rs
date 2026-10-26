@@ -275,13 +275,7 @@ pub(super) struct RfiCompleteStatusPreviewValues {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
-#[serde(deny_unknown_fields)]
-pub(super) struct OutlookReplyDraftValues {
-    pub(super) reply_text: String,
-}
-
-#[derive(Deserialize)]
+// Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
 #[allow(dead_code)]
 #[serde(deny_unknown_fields)]
 pub(super) struct OutlookArchiveValues {

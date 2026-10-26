@@ -467,38 +467,7 @@ impl NativeBackend {
         provisional.commit();
         encode(cached)
     }
-    #[allow(dead_code)]
-    pub(crate) fn preview_outlook_reply_draft<F>(
-        &self,
-        params: Value,
-        mut progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<OutlookReplyDraftValues> = decode(params)?;
-        if request.op_id != outlook_reply_draft::OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust Outlook draft backend",
-            ));
-        }
-        progress(ProgressEvent {
-            phase: "outlook_selection".to_string(),
-            done: 0,
-            total: 1,
-            subject: String::new(),
-        });
-        let plan = self
-            .outlook
-            .preview(&self.caller_identity()?, &request.values.reply_text)?;
-        progress(ProgressEvent {
-            phase: "preview_ready".to_string(),
-            done: 1,
-            total: 1,
-            subject: String::new(),
-        });
-        encode(plan)
-    }
+    // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
     #[allow(dead_code)]
     pub(crate) fn preview_outlook_archive<F>(
         &self,
