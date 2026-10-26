@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { humanError, isPathSelection, parseRfiInputs } from "./helpers";
+import {
+  formatDate,
+  humanError,
+  isDuplicatePresetError,
+  isPathSelection,
+  parseRfiInputs,
+} from "./helpers";
 import { makeStrings } from "./i18n";
 
 const s = makeStrings("en");
@@ -46,5 +52,32 @@ describe("humanError", () => {
 
   it("falls back to the raw message without the Error prefix", () => {
     expect(humanError(new Error("Error: something else"), s)).toBe("something else");
+  });
+});
+
+describe("isDuplicatePresetError", () => {
+  it("recognises duplicate-preset messages in their known forms", () => {
+    expect(isDuplicatePresetError(new Error("error.preset.duplicate"))).toBe(true);
+    expect(isDuplicatePresetError("duplicate preset")).toBe(true);
+    expect(isDuplicatePresetError("that preset already exists")).toBe(true);
+  });
+
+  it("does not match unrelated errors", () => {
+    expect(isDuplicatePresetError("disk full")).toBe(false);
+  });
+});
+
+describe("formatDate", () => {
+  it("returns an unparseable value unchanged", () => {
+    expect(formatDate("not a date", "en")).toBe("not a date");
+  });
+
+  it("formats a valid timestamp with the requested locale", () => {
+    const value = "2026-03-05T12:00:00Z";
+    const expected = new Intl.DateTimeFormat("en", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+    expect(formatDate(value, "en")).toBe(expected);
   });
 });

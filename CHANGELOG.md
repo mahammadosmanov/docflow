@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.41 - 2026-10-27
+
+### Changed
+
+- `helpers.test.ts` now covers `isDuplicatePresetError`, which recognises duplicate-preset messages in their known forms and ignores unrelated errors, and `formatDate`, which returns an unparseable value unchanged and formats a valid timestamp with the requested locale. No application code changes.
+
 ## 1.33.40 - 2026-10-27
 
 ### Changed
