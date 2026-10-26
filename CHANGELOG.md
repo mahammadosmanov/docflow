@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.32.2 - 2026-10-26
+
+### Fixed
+
+- The frontend `RecoveryEntry` type lists the optional `warningKey` and `locator` fields that the Rust journal recovery DTO already sends.
+
 ## 1.32.1 - 2026-10-26
 
 ### Fixed
