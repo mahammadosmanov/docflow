@@ -13,6 +13,7 @@ use crate::{
     errors::BackendError,
     native::{NativeBackend, PathSelectionMode},
     ocr::NativeOcr,
+    registry::first_missing_required,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -571,6 +572,16 @@ impl BackendRouter {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
+        // Required flags come from the registry schema, so every preview enforces
+        // them before any operation-specific work starts.
+        let values = object
+            .get("values")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(missing) = first_missing_required(&operation_id, &values) {
+            return Err(BackendError::validation(missing));
+        }
         let native = Arc::clone(&self.native);
         let progress_channel = progress.clone();
         tauri::async_runtime::spawn_blocking(move || {

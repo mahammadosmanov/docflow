@@ -5,6 +5,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.11 - 2026-10-26
+
+### Fixed
+
+- Required operation parameters were checked only by unit tests. `engine/preview` now rejects a request that omits a required value, using the registry schema, before any operation-specific work starts. The error key is `error.param.required.<name>`, the same key the operation form already localizes.
+- Nine required parameters that had no message in any catalog (`color`, `duplex`, `on_error`, `orientation`, `paper`, `retries`, `scaling`, `scan_mode`, `timeout_minutes`) now have one in Turkish, English, Russian, and Azerbaijani.
+
+### Notes
+
+- The browser mock bridge still does not run this check. Its demo flows intentionally fall back to sample paths for empty values, so a mock-side check needs those tests updated first.
+
 ## 1.33.10 - 2026-10-26
 
 ### Documented

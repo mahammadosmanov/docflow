@@ -94,3 +94,36 @@ fn publish_status_requires_staging_folder_and_log_workbook() {
         ]
     );
 }
+
+#[test]
+fn preview_reports_the_first_missing_required_value() {
+    let operation = operation_registry(RegistryFacts::default())
+        .into_iter()
+        .find(|operation| operation.id == "files.batch_print")
+        .expect("batch print is registered");
+    let required: Vec<&str> = operation
+        .schema
+        .params
+        .iter()
+        .filter(|param| param.required)
+        .map(|param| param.name.as_str())
+        .collect();
+    assert!(
+        required.len() >= 2,
+        "batch print needs several required values"
+    );
+
+    let mut values = Map::new();
+    assert_eq!(
+        first_missing_required("files.batch_print", &values),
+        Some(format!("error.param.required.{}", required[0]))
+    );
+    for name in &required {
+        values.insert((*name).to_string(), json!("present"));
+    }
+    assert_eq!(first_missing_required("files.batch_print", &values), None);
+    assert_eq!(
+        first_missing_required("no.such.operation", &Map::new()),
+        None
+    );
+}

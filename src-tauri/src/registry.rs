@@ -867,5 +867,17 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     ]
 }
 
+/// Returns the first required-parameter error key for an operation's values, or
+/// `None` when the operation is unknown or every required value is present.
+pub fn first_missing_required(operation_id: &str, values: &Map<String, Value>) -> Option<String> {
+    operation_registry(RegistryFacts::default())
+        .into_iter()
+        .find(|operation| operation.id == operation_id)?
+        .schema
+        .validate(values)
+        .into_iter()
+        .next()
+}
+
 #[cfg(test)]
 mod tests;
