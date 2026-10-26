@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.40 - 2026-10-27
+
+### Changed
+
+- `frontend/src/locales/catalogs.test.ts` guards the ARB catalogs. Each of az, ru, and tr must have exactly the English message keys, ignoring `@` metadata, and each message must use the same `{placeholder}` names as English. The check passes on the current catalogs. No application code changes.
+
 ## 1.33.39 - 2026-10-27
 
 ### Changed
