@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.32.3 - 2026-10-26
+
+### Changed
+
+- Browser-only demo operation definitions moved from `frontend/src/lib/bridge.ts` to `frontend/src/lib/demoOperations.ts`. The bridge drops from about 1900 to 1190 lines. Behavior is unchanged.
+
 ## 1.32.2 - 2026-10-26
 
 ### Fixed
