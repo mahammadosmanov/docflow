@@ -843,6 +843,7 @@ describe("DocFlow shell", () => {
         source: { displayPath: "/isolated/scans" },
         dest: { displayPath: "/isolated/output" },
         organize_into_rfi_folders: true,
+        scan_mode: "multi_rfi",
       },
     });
     const editor = plan.meta.editor as Record<string, unknown>;
@@ -1935,6 +1936,9 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    expect(
+      await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx"),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     expect(
@@ -2524,6 +2528,7 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx");
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     expect(
@@ -2559,6 +2564,7 @@ describe("DocFlow shell", () => {
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx");
 
     // Press Ctrl+Enter to trigger preview
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });

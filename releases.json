@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.11",
+  "currentVersion": "1.33.12",
   "releases": [
+    {
+      "version": "1.33.12",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.12",
+      "summary": "The browser mock enforces required parameters like the engine, and its UI tests wait for picked paths."
+    },
     {
       "version": "1.33.11",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.11",
       "summary": "Engine previews reject a missing required parameter before any operation work, with messages in all four languages."
     },
