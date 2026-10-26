@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.55 - 2026-10-27
+
+### Changed
+
+- The apply run moves from `frontend/src/screens/OperationScreen.tsx` into the `useApplyRun` hook in `frontend/src/screens/useApplyRun.ts`. The hook keeps the revise-then-apply path for an edited plan, the stop back at preview when a revision adds a warning, the hand-off of fast-scan edits to the preview re-run, and the return to preview on failure. The screen's setters and progress handlers are passed in as grouped objects. `useApplyRun.test.ts` covers each path. Behavior is unchanged.
+
 ## 1.33.54 - 2026-10-27
 
 ### Changed
