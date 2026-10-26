@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.24 - 2026-10-27
+
+### Changed
+
+- The plan impact summary (`PlanImpact` and `summarizePlanImpact`) moves from `frontend/src/plan/PlanSummaries.tsx` into `frontend/src/plan/planImpact.ts`. `PlanSummaries.tsx` re-exports the module, so existing imports are unchanged. Behavior is unchanged; the App tests cover `summarizePlanImpact`.
+
 ## 1.33.23 - 2026-10-27
 
 ### Changed
