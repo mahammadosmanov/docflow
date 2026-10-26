@@ -2,11 +2,13 @@ import type { Bridge, ProgressHandler } from "./bridge";
 import { demoFastCoverOperation } from "./demoOperations";
 import {
   diagnosticsOperation,
+  printFindOperation,
+} from "./mockHandlers";
+import {
   type MockPlanState,
   previewOperation,
-  printFindOperation,
   reviseOperation,
-} from "./mockHandlers";
+} from "./mockPlanHandlers";
 import {
   defaultPrefs,
   demoAdmin,
