@@ -499,14 +499,17 @@ where
         let candidate_warning_start = plan.warnings.len();
         let mut prepared = Vec::new();
         for archive_pdf in &matches {
+            let signed = SignedSource {
+                code: &code,
+                row_id: &row_id,
+                facts: &signed_facts,
+                hash: &signed_hash,
+                root: &signed_root,
+            };
             if let Some(candidate_plan) = prepare_archive_candidate(
-                &code,
-                &row_id,
+                &signed,
                 &candidate,
                 archive_pdf,
-                &signed_facts,
-                &signed_hash,
-                &signed_root,
                 &archive_root,
                 &review_root,
                 &mut plan,

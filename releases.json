@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.2",
+  "currentVersion": "1.33.3",
   "releases": [
+    {
+      "version": "1.33.3",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.3",
+      "summary": "Scan-index, system-sync, and signed-page archive helpers take grouped arguments instead of long parameter lists."
+    },
     {
       "version": "1.33.2",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.2",
       "summary": "Review, Queue, History, Recovery, and Admin screens load on first visit, trimming the startup bundle."
     },

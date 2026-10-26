@@ -118,7 +118,6 @@ where
     preview_indexed(params, detector, progress, cancelled, None, "local", false)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn preview_indexed<D, P, C>(
     params: &PdfOrientationParams,
     detector: &D,

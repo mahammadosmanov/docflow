@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.3 - 2026-10-26
+
+### Changed
+
+- Scan-index lookup, record, and failure methods take one `ScanScope` instead of four identity strings. System-sync preview takes a `SystemSyncScan` options struct, and signed-page archive matching takes a `SignedSource` struct. Three functions keep `clippy::too_many_arguments` allows on purpose: `registry::parameter` (about 64 call sites), `push_warning_review` (12), and `execute_retained_publication`, which is a publication safety boundary.
+
 ## 1.33.2 - 2026-10-26
 
 ### Changed
