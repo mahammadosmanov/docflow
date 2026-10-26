@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.31.1",
+  "currentVersion": "1.32.0",
   "releases": [
+    {
+      "version": "1.32.0",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.32.0",
+      "summary": "npm run gate runs every repository verification gate in one command."
+    },
     {
       "version": "1.31.1",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.31.1",
       "summary": "Quality CI also runs on pushes to main; a pre-commit hook enforces the version and source checks."
     },

@@ -1,6 +1,6 @@
 {
   "name": "docflow-desktop",
-  "version": "1.31.1",
+  "version": "1.32.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "audit:docs": "node tools/docs_audit.mjs",
     "audit:source": "node tools/package_audit.mjs source",
     "audit:licenses": "node tools/license_audit.mjs",
+    "gate": "npm run version:check && npm run audit:docs && npm run audit:source && npm test && npm run build && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --manifest-path src-tauri/Cargo.toml && npm run audit:licenses",
     "tauri": "tauri"
   },
   "dependencies": {

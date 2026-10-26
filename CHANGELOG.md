@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.32.0 - 2026-10-26
+
+### Added
+
+- `npm run gate` runs every verification gate listed in `AGENTS.md` in order and stops at the first failure: version contract, docs audit, source audit, Node and React tests, build, Rust format, clippy, tests, check, and license audit.
+
 ## 1.31.1 - 2026-10-26
 
 ### Fixed
