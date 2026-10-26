@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.21 - 2026-10-27
+
+### Changed
+
+- The pure editor rules move from `frontend/src/plan/EditablePlanTable.tsx` into `frontend/src/plan/editorRules.ts`: column default and minimum widths, cell display formatting, confidence percentages, RFI code checks, and plan readiness. `EditablePlanTable.tsx` re-exports the module, so existing imports are unchanged. Behavior is unchanged; the 91 frontend tests cover these helpers.
+
 ## 1.33.20 - 2026-10-26
 
 ### Changed
