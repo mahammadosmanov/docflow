@@ -28,7 +28,7 @@ import { humanError } from "../helpers";
 
 const PREPARING_REFRESH_MS = 5000;
 
-function failureMessage(item: WatchItem, s: Strings): string {
+export function failureMessage(item: WatchItem, s: Strings): string {
   const code = item.errorCode ?? "";
   if (code.startsWith("watch.")) return s.t(`error.${code}`);
   return s.t("queue.failed.generic", { code });
