@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.37",
+  "currentVersion": "1.33.38",
   "releases": [
+    {
+      "version": "1.33.38",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.38",
+      "summary": "Signed-warning review items gain direct tests for status allow-listing, reason filtering, and page-number sanitizing."
+    },
     {
       "version": "1.33.37",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.37",
       "summary": "The shared helpers gain direct tests for RFI input parsing, path selection, and human-readable error mapping."
     },
