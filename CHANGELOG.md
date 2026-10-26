@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.36 - 2026-10-27
+
+### Changed
+
+- `failureMessage` in `frontend/src/screens/QueueScreen.tsx` is exported, and `QueueScreen.test.ts` covers its three paths: a known `watch.*` code uses its own text, an unknown code falls back to the generic text naming the code, and a missing code falls back to the generic text. No behavior changes.
+
 ## 1.33.35 - 2026-10-27
 
 ### Changed
