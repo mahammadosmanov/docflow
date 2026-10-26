@@ -1,10 +1,8 @@
 import {
   Eye,
   FolderOpen,
-  LoaderCircle,
   RotateCcw,
   SlidersHorizontal,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -14,7 +12,6 @@ import {
 } from "react";
 import {
   ActionBar,
-  BusyState,
   Button,
   Header,
   Notice,
@@ -60,6 +57,7 @@ import {
 import {
   ResultView,
 } from "./ResultView";
+import { BusyStage } from "./BusyStage";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 
 export function OperationScreen({
@@ -835,27 +833,15 @@ export function OperationScreen({
           </div>
         )}
         {stage === "previewing" && (
-          <div className="flow-layout">
-            <BusyState
-              label={s.t("action.preview")}
-              progress={progress}
-              progressTrail={progressTrail}
-              s={s}
-            />
-            <ActionBar
-              left={
-                <Button
-                  variant="danger"
-                  icon={cancelling ? <LoaderCircle className="spin" /> : <X />}
-                  disabled={cancelling}
-                  onClick={() => void cancelPreview()}
-                >
-                  {s.t(cancelling ? "operation.cancelling" : "action.cancel")}
-                </Button>
-              }
-              right={null}
-            />
-          </div>
+          <BusyStage
+            label={s.t("action.preview")}
+            progress={progress}
+            progressTrail={progressTrail}
+            s={s}
+            cancelling={cancelling}
+            cancelLabel={s.t(cancelling ? "operation.cancelling" : "action.cancel")}
+            onCancel={() => void cancelPreview()}
+          />
         )}
         {stage === "preview" && plan && (
           <PlanView
@@ -876,33 +862,21 @@ export function OperationScreen({
           />
         )}
         {stage === "applying" && (
-          <div className="flow-layout">
-            <BusyState
-              label={s.t("plan.applying")}
-              progress={progress}
-              progressTrail={progressTrail}
-              s={s}
-            />
-            <ActionBar
-              left={
-                <Button
-                  variant="danger"
-                  icon={cancelling ? <LoaderCircle className="spin" /> : <X />}
-                  disabled={cancelling}
-                  onClick={() => void cancelApply()}
-                >
-                  {s.t(
-                    cancelling
-                      ? "operation.cancelling"
-                      : operation.id === "files.batch_print"
-                        ? "print.cancelQueue"
-                        : "operation.cancel",
-                  )}
-                </Button>
-              }
-              right={null}
-            />
-          </div>
+          <BusyStage
+            label={s.t("plan.applying")}
+            progress={progress}
+            progressTrail={progressTrail}
+            s={s}
+            cancelling={cancelling}
+            cancelLabel={s.t(
+              cancelling
+                ? "operation.cancelling"
+                : operation.id === "files.batch_print"
+                  ? "print.cancelQueue"
+                  : "operation.cancel",
+            )}
+            onCancel={() => void cancelApply()}
+          />
         )}
         {stage === "result" && result && (
           <ResultView
