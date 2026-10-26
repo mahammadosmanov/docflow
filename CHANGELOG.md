@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.20 - 2026-10-26
+
+### Changed
+
+- The batch-print RFI finder's state, invalidation, search, and selection logic move from `OperationScreen.tsx` into the `useRfiPrintFinder` hook in `frontend/src/screens/useRfiPrintFinder.ts`. The hook keeps the stale-response guard, so an older search cannot overwrite a newer one.
+
 ## 1.33.19 - 2026-10-26
 
 ### Changed

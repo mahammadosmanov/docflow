@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.19",
+  "currentVersion": "1.33.20",
   "releases": [
+    {
+      "version": "1.33.20",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.20",
+      "summary": "The batch-print RFI finder state and search logic move into a useRfiPrintFinder hook."
+    },
     {
       "version": "1.33.19",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.19",
       "summary": "Batch-print RFI number checkboxes render in their own component."
     },

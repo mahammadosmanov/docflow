@@ -60,6 +60,7 @@ import {
 import { BusyStage } from "./BusyStage";
 import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";
+import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 
 export function OperationScreen({
@@ -101,24 +102,20 @@ export function OperationScreen({
   const [error, setError] = useState("");
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
-  const [rfiPrintCandidates, setRfiPrintCandidates] = useState<RfiPrintCandidate[]>([]);
-  const [rfiPrintResolutions, setRfiPrintResolutions] = useState<RfiPrintResolution[]>([]);
-  const [rfiFinderBusy, setRfiFinderBusy] = useState(false);
-  const [rfiFinderError, setRfiFinderError] = useState("");
-  const [excludedRfiInputs, setExcludedRfiInputs] = useState<string[]>([]);
-  const [rfiFinderWasRun, setRfiFinderWasRun] = useState(false);
-  const rfiSearchRevision = useRef(0);
-  const [rfiSearchTruncated, setRfiSearchTruncated] = useState(false);
-  const invalidateRfiFinder = () => {
-    rfiSearchRevision.current += 1;
-    setRfiFinderBusy(false);
-    setRfiFinderError("");
-    setRfiFinderWasRun(false);
-    setRfiSearchTruncated(false);
-    setRfiPrintCandidates([]);
-    setRfiPrintResolutions([]);
-  };
   const rfiInputs = operation.id === "files.batch_print" ? parseRfiInputs(values.rfi_numbers) : [];
+  const {
+    rfiPrintCandidates,
+    rfiPrintResolutions,
+    rfiFinderBusy,
+    rfiFinderError,
+    excludedRfiInputs,
+    setExcludedRfiInputs,
+    rfiFinderWasRun,
+    rfiSearchTruncated,
+    invalidateRfiFinder,
+    searchRfiDocuments,
+    setRfiCandidateGroup,
+  } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
   const [isUpdatingScanPreview, setIsUpdatingScanPreview] = useState(false);
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
   const [copyingSheet, setCopyingSheet] = useState<string | null>(null);
@@ -231,59 +228,6 @@ export function OperationScreen({
     setEditorDirty(false);
     setScanPreviewUpdated(false);
     setStage("preview");
-  };
-
-  const searchRfiDocuments = async () => {
-    setRfiFinderError("");
-    setRfiFinderWasRun(false);
-    setRfiPrintCandidates([]);
-    setRfiPrintResolutions([]);
-    setRfiSearchTruncated(false);
-    const root = values.rfi_system_root;
-    const requestRevision = ++rfiSearchRevision.current;
-    if (!isPathSelection(root)) {
-      setRfiFinderError(s.t("print.rfi.rootRequired"));
-      return;
-    }
-    const numbers = rfiInputs.filter((input) => !excludedRfiInputs.includes(input));
-    if (numbers.length === 0) {
-      setRfiFinderError(s.t("print.rfi.inputRequired"));
-      return;
-    }
-    if (values.include_first_page !== true && values.include_sketch !== true) {
-      setRfiFinderError(s.t("print.rfi.typesRequired"));
-      return;
-    }
-    setRfiFinderBusy(true);
-    try {
-      const result = await bridge.call("rfi/printFind", {
-        root,
-        numbers,
-        firstPage: values.include_first_page === true,
-        sketch: values.include_sketch === true,
-      });
-      if (requestRevision !== rfiSearchRevision.current) return;
-      setRfiPrintCandidates(result.candidates);
-      setRfiPrintResolutions(result.resolutions);
-      setRfiFinderWasRun(true);
-      setRfiSearchTruncated(result.truncated);
-    } catch (reason) {
-      if (requestRevision === rfiSearchRevision.current) {
-        setRfiFinderError(humanError(reason, s));
-      }
-    } finally {
-      if (requestRevision === rfiSearchRevision.current) setRfiFinderBusy(false);
-    }
-  };
-  const setRfiCandidateGroup = (
-    predicate: (candidate: RfiPrintCandidate) => boolean,
-    selected: boolean,
-  ) => {
-    setRfiPrintCandidates((current) =>
-      current.map((candidate) =>
-        predicate(candidate) ? { ...candidate, selected } : candidate,
-      ),
-    );
   };
 
   const preview = async () => {
