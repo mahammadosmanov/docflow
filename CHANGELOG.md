@@ -5,6 +5,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.29.0 - 2026-10-26
+
+### Fixed
+
+- Rewritten worksheets are now checked before anything is published: parseable XML, ascending unique rows and cells whose references match their position, no empty formula, no duplicated attributes, no forbidden characters. A rewrite that fails is refused instead of producing a file Excel must repair.
+- Road part rows are shown as ticked rows that are applied together with the sync, instead of unselectable rows that looked like manual review.
+
+### Added
+
+- The activity log's cover-page trace also records the identity-looking line the OCR read, to diagnose scans whose RFI number is not confirmed.
+
 ## 1.28.0 - 2026-10-25
 
 ### Fixed

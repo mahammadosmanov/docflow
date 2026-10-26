@@ -4757,7 +4757,9 @@ fn road_rows(review: &Value) -> Vec<(u64, String)> {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|row| row["_sheet"] == "Road" && row["selectable"] == true)
+        .filter(|row| {
+            row["_sheet"] == "Road" && row["selectable"] == true && row["proposedRfiNo"].is_string()
+        })
         .map(|row| {
             (
                 row["_row"].as_u64().unwrap(),

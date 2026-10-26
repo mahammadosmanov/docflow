@@ -6,6 +6,7 @@ use std::io::Cursor;
 
 use super::*;
 
+pub(super) const STRUCTURE_ROW_PREFIX: &str = "rfi-follow-up-structure:";
 pub(super) const ROAD_SHEET: &str = "Road";
 const MAX_STRUCTURE_OPS: usize = 500;
 
@@ -192,7 +193,7 @@ pub(super) fn structure_review_rows(ops: &[RowOp], layouts: &[FollowUpLayout]) -
                 ),
             };
             FollowUpRow {
-                row_id: format!("rfi-follow-up-structure:{index}"),
+                row_id: format!("{STRUCTURE_ROW_PREFIX}{index}"),
                 sheet: ROAD_SHEET.to_string(),
                 row,
                 rfi_no: label.clone(),
@@ -202,8 +203,10 @@ pub(super) fn structure_review_rows(ops: &[RowOp], layouts: &[FollowUpLayout]) -
                 proposed_rfi_no: None,
                 disposition: FollowUpDisposition::Ready,
                 reason_key: reason.to_string(),
-                selectable: false,
-                enabled: false,
+                // Part rows are applied together with the rest of the sync; the box is
+                // shown ticked and cannot be cleared separately (see `revise`).
+                selectable: true,
+                enabled: true,
                 remark: None,
                 formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {

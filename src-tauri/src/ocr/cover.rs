@@ -175,8 +175,14 @@ const MAX_COVER_TRACE: usize = 40;
 fn trace_cover(page_index: usize, direction: i64, text: &str, signals: CoverSignals) {
     let mut trace = COVER_TRACE.lock().unwrap_or_else(|e| e.into_inner());
     if trace.len() < MAX_COVER_TRACE {
+        // Only the identity-looking line is kept: it is the thing being diagnosed.
+        let identity_line = text
+            .lines()
+            .find(|line| line.to_ascii_uppercase().contains("RFI-"))
+            .map(|line| line.trim().chars().take(70).collect::<String>())
+            .unwrap_or_default();
         trace.push(format!(
-            "page={page_index} dir={direction} chars={} heading={} mark={} strict={} hint={}",
+            "page={page_index} dir={direction} chars={} heading={} mark={} strict={} hint={} identity=[{identity_line}]",
             text.chars().count(),
             signals.request_heading,
             signals.template_mark,

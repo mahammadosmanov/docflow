@@ -188,7 +188,9 @@ fn set_text(
         .children
         .retain(|node| !matches!(node, XmlNode::Element(child) if has_local_name(child, b"v") || has_local_name(child, b"is")));
     set_inline_text(target, text);
-    editor.put(&path, serialize_document(&document)?);
+    let bytes = serialize_document(&document)?;
+    validate_worksheet_structure(&bytes)?;
+    editor.put(&path, bytes);
     Ok(())
 }
 
@@ -423,7 +425,9 @@ fn insert_row(
     sheet_data
         .children
         .insert(position, XmlNode::Element(template));
-    editor.put(&path, serialize_document(&document)?);
+    let bytes = serialize_document(&document)?;
+    validate_worksheet_structure(&bytes)?;
+    editor.put(&path, bytes);
 
     // Other worksheets, charts and the workbook's defined names.
     let names = editor.names();
@@ -433,7 +437,9 @@ fn insert_row(
         }
         let mut other = parse_document(&editor.read(&info.path)?)?;
         if rewrite_formulas(&mut other.nodes, other_name, &shift, true)? {
-            editor.put(&info.path, serialize_document(&other)?);
+            let bytes = serialize_document(&other)?;
+            validate_worksheet_structure(&bytes)?;
+            editor.put(&info.path, bytes);
         }
     }
     for name in names {

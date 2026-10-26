@@ -242,6 +242,10 @@ pub fn revise_from_open_files(
     }
     for (revised, fresh) in revised_rows.iter_mut().zip(fresh_rows) {
         revised.enabled = revised.enabled && fresh.selectable;
+        // Part rows cannot be deselected on their own: later rows may sit in them.
+        if revised.row_id.starts_with(STRUCTURE_ROW_PREFIX) {
+            revised.enabled = true;
+        }
     }
     let mut warnings = fresh.warnings;
     warnings.retain(|warning| warning.key != "warn.rfi.followUp.noRowsSelected");
@@ -390,7 +394,12 @@ pub(super) fn plan_from_classification(
         .collect::<Vec<_>>();
     let updates = rows
         .iter()
-        .filter(|row| row.enabled && row.remark.is_none() && row.formula_fixes.is_empty())
+        .filter(|row| {
+            row.enabled
+                && row.remark.is_none()
+                && row.formula_fixes.is_empty()
+                && !row.row_id.starts_with(STRUCTURE_ROW_PREFIX)
+        })
         .map(|row| {
             if !row.selectable || row.disposition != FollowUpDisposition::Ready {
                 return Err(workbook_invalid());

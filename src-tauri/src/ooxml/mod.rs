@@ -358,6 +358,7 @@ mod relationships;
 mod rich;
 mod rows;
 mod sheet_patch;
+mod validate;
 mod worksheet;
 mod xml;
 use archive::*;
@@ -368,6 +369,7 @@ use relationships::*;
 use rich::*;
 pub use rows::{CellText, RowOp, apply_row_ops};
 use sheet_patch::*;
+use validate::*;
 use worksheet::*;
 use xml::*;
 

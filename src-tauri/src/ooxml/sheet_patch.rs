@@ -107,7 +107,9 @@ pub(super) fn patch_sheet_xml_guarded(
             fonts,
         )?;
     }
-    serialize_document(&document)
+    let bytes = serialize_document(&document)?;
+    validate_worksheet_structure(&bytes)?;
+    Ok(bytes)
 }
 
 pub(super) fn patch_guarded_cell_value(
