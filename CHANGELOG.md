@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.18 - 2026-10-26
+
+### Changed
+
+- The RFI finder results for batch print (per-request notes, bulk-select controls, and the file list) moved from `OperationScreen.tsx` into `frontend/src/screens/RfiPrintResults.tsx`. Behavior and labels are unchanged; the 91 frontend tests cover the batch-print flow.
+
 ## 1.33.17 - 2026-10-26
 
 ### Fixed

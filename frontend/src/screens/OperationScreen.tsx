@@ -58,6 +58,7 @@ import {
   ResultView,
 } from "./ResultView";
 import { BusyStage } from "./BusyStage";
+import { RfiPrintResults } from "./RfiPrintResults";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 
 export function OperationScreen({
@@ -664,110 +665,14 @@ export function OperationScreen({
                       {s.t(rfiFinderBusy ? "print.rfi.searching" : "print.rfi.search")}
                     </Button>
                     {rfiFinderError && <Notice kind="error">{rfiFinderError}</Notice>}
-                    {rfiPrintResolutions.length > 0 && (
-                      <div className="rfi-print-results">
-                        <p>{s.t("print.rfi.found", { count: rfiPrintCandidates.length })}</p>
-                        {rfiSearchTruncated && <Notice kind="warning">{s.t("print.rfi.truncated")}</Notice>}
-                        {rfiPrintResolutions.map((resolution, index) => (
-                          <div className="rfi-print-resolution" key={`${resolution.requested}-${index}`}>
-                            <strong>{resolution.requested}</strong>
-                            {resolution.ambiguous && (
-                              <p role="status">
-                                {s.t("print.rfi.ambiguous")}
-                                {resolution.rfiCodes.length > 0 && ` — ${resolution.rfiCodes.join(", ")}`}
-                              </p>
-                            )}
-                            {resolution.missingFirstPage && <p>{s.t("print.rfi.missingFirstPage")}</p>}
-                            {resolution.missingSketch && <p>{s.t("print.rfi.missingSketch")}</p>}
-                            <Button
-                              variant="ghost"
-                              onClick={() =>
-                                setRfiCandidateGroup(
-                                  (candidate) => candidate.requested === resolution.requested,
-                                  !rfiPrintCandidates
-                                    .filter((candidate) => candidate.requested === resolution.requested)
-                                    .every((candidate) => candidate.selected),
-                                )
-                              }
-                            >
-                              {s.t("print.rfi.toggleRequest")}
-                            </Button>
-                          </div>
-                        ))}
-                        {rfiFinderWasRun && (
-                          <>
-                            <div className="rfi-print-actions">
-                              <Button variant="ghost" onClick={() => setRfiCandidateGroup(() => true, true)}>
-                                {s.t("action.selectAll")}
-                              </Button>
-                              <Button variant="ghost" onClick={() => setRfiCandidateGroup(() => true, false)}>
-                                {s.t("action.selectNone")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "firstPage", true)}
-                              >
-                                {s.t("print.rfi.selectTypeFirstPage")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "sketch", true)}
-                              >
-                                {s.t("print.rfi.selectTypeSketch")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "firstPage", false)}
-                              >
-                                {s.t("print.rfi.clearTypeFirstPage")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => setRfiCandidateGroup((candidate) => candidate.documentType === "sketch", false)}
-                              >
-                                {s.t("print.rfi.clearTypeSketch")}
-                              </Button>
-                            </div>
-                            {[...new Set(rfiPrintCandidates.map((candidate) => candidate.rfiCode.match(/-RFI-([A-Z0-9]+)-/)?.[1]).filter((discipline): discipline is string => Boolean(discipline)))].map((discipline) => (
-                              <Button
-                                key={discipline}
-                                variant="ghost"
-                                onClick={() => setRfiCandidateGroup((candidate) => candidate.rfiCode.includes(`-RFI-${discipline}-`), true)}
-                              >
-                                {s.t("print.rfi.selectDiscipline", { discipline })}
-                              </Button>
-                            ))}
-                          </>
-                        )}
-                        {rfiPrintCandidates.map((candidate) => (
-                          <label
-                            className="rfi-print-row"
-                            key={`${candidate.requested}|${candidate.rfiCode}|${candidate.documentType}|${candidate.displayPath}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={candidate.selected}
-                              aria-label={`${candidate.rfiCode} ${s.t(`print.rfi.type.${candidate.documentType}`)} ${candidate.displayPath}`}
-                              onChange={(event) =>
-                                setRfiCandidateGroup(
-                                  (row) =>
-                                    row.requested === candidate.requested &&
-                                    row.rfiCode === candidate.rfiCode &&
-                                    row.documentType === candidate.documentType &&
-                                    row.displayPath === candidate.displayPath,
-                                  event.target.checked,
-                                )
-                              }
-                            />
-                            <span>
-                              <strong>{candidate.rfiCode}</strong> — {s.t(`print.rfi.type.${candidate.documentType}`)}
-                              <small>{candidate.displayPath}</small>
-                            </span>
-                          </label>
-                        ))}
-                        {rfiPrintCandidates.length === 0 && <p>{s.t("print.rfi.noMatches")}</p>}
-                      </div>
-                    )}
+                    <RfiPrintResults
+                      resolutions={rfiPrintResolutions}
+                      candidates={rfiPrintCandidates}
+                      truncated={rfiSearchTruncated}
+                      wasRun={rfiFinderWasRun}
+                      onSetGroup={setRfiCandidateGroup}
+                      s={s}
+                    />
                   </section>
                 )}
                 {latestPrintQueue && (
