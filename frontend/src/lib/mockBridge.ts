@@ -1,0 +1,1114 @@
+import type { Bridge, ProgressHandler } from "./bridge";
+import type {
+  CommandArgs,
+  CommandParams,
+  CommandResult,
+  FrontendMethod,
+} from "./commands";
+import type {
+  AppPrefs,
+  AppUser,
+  AuthState,
+  Bootstrap,
+  HistoryPayload,
+  OperationResult,
+  PathSelection,
+  Plan,
+  RecoveryPayload,
+  ReplicaAutomationStatus,
+  ReviewItem,
+  RfiPrintFindResult,
+  SupportBundlePreview,
+  WatchStatus,
+} from "../types";
+import {
+  demoConcreteDocumentsOperation,
+  demoFastCoverOperation,
+  demoFileGroupOperation,
+  demoPdfOrientationOperation,
+  demoPrintOperation,
+  demoRfiCompleteStatusOperation,
+  demoRfiFollowUpOperation,
+  demoRfiOperation,
+  demoRfiSystemSyncOperation,
+  demoSignedPagesOperation,
+} from "./demoOperations";
+
+const signedOut: AuthState = {
+  signedIn: false,
+  allowed: false,
+  isAdmin: false,
+  session: null,
+  user: null,
+};
+
+const demoAdmin: AppUser = {
+  id: "demo-user",
+  email: "demo@docflow.local",
+  username: "demo",
+  display: "demo",
+  allowed: true,
+  isAdmin: true,
+  createdAt: new Date().toISOString(),
+};
+
+const defaultPrefs: AppPrefs = {
+  locale: "tr",
+  theme: "system",
+  font: "system",
+  fontScale: 1,
+  compact: false,
+  startWithWindows: false,
+  replicaSyncEnabled: false,
+};
+
+function mockPath(value: unknown, fallback: string): string {
+  return value &&
+    typeof value === "object" &&
+    "displayPath" in value &&
+    typeof value.displayPath === "string"
+    ? value.displayPath
+    : fallback;
+}
+
+function normalizeMockRfiCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const captures =
+    /^AZE-SUN-INT-QMS-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})(?![\s\S])/.exec(
+      value,
+    );
+  return captures
+    ? `AZE-SUN-INT-QMS-RFI-${captures[1]}-${captures[2].padStart(4, "0")}`
+    : null;
+}
+
+/** Browser-only bridge used by component tests and visual development. */
+export class MockBridge implements Bridge {
+  private auth: AuthState = signedOut;
+  private prefs: AppPrefs = { ...defaultPrefs };
+  private params: Record<string, unknown> = {};
+  private printPlan: Plan | null = null;
+  private fileGroupPlan: Plan | null = null;
+  private completeStatusPlan: Plan | null = null;
+  private fastScanPlan: Plan | null = null;
+  private watchEnabled: string[] = [];
+
+  private watchStatus(): WatchStatus {
+    return {
+      operations: [
+        "rfi.process_scans_fast_covers",
+        "rfi.group_files",
+        "rfi.stage_signed_first_pages",
+        "rfi.complete_status_sync",
+      ],
+      enabled: this.watchEnabled,
+      configured: [],
+      pollSeconds: 300,
+      paused: false,
+      items: [],
+    };
+  }
+
+  async start(): Promise<void> {}
+  async stop(): Promise<void> {}
+
+  async call<Method extends FrontendMethod>(
+    method: Method,
+    ...args: CommandArgs<Method>
+  ): Promise<CommandResult<Method>> {
+    const [rawParams, onProgress] = args as [
+      CommandParams<Method> | undefined,
+      ProgressHandler | undefined,
+    ];
+    const params = (rawParams ?? {}) as Record<string, unknown>;
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+    let result: unknown;
+    switch (method) {
+      case "app/bootstrap":
+        result = {
+          protocol: 1,
+          version: `${__DOCFLOW_VERSION__}-demo`,
+          auth: this.auth,
+          prefs: this.prefs,
+          operations: [
+            demoFastCoverOperation,
+            demoFileGroupOperation,
+            demoRfiOperation,
+            demoRfiFollowUpOperation,
+            demoConcreteDocumentsOperation,
+            demoPrintOperation,
+            demoSignedPagesOperation,
+            demoPdfOrientationOperation,
+            demoRfiSystemSyncOperation,
+            demoRfiCompleteStatusOperation,
+          ],
+        } satisfies Bootstrap;
+        break;
+      case "auth/signIn":
+        this.auth = {
+          signedIn: true,
+          allowed: true,
+          isAdmin: true,
+          session: {
+            userId: demoAdmin.id,
+            email: demoAdmin.email,
+            expiresAt: Date.now() / 1000 + 3600,
+          },
+          user: demoAdmin,
+        };
+        result = this.auth;
+        break;
+      case "auth/signUp":
+        result = { ok: true };
+        break;
+      case "auth/signOut":
+        this.auth = signedOut;
+        result = this.auth;
+        break;
+      case "auth/loadMe":
+      case "auth/setUsername":
+        result = this.auth;
+        break;
+      case "auth/usernameAvailable":
+        result = true;
+        break;
+      case "auth/listUsers":
+        result = [
+          demoAdmin,
+          {
+            ...demoAdmin,
+            id: "demo-user-2",
+            email: "operator@docflow.local",
+            username: "operator",
+            display: "operator",
+            isAdmin: false,
+          },
+        ] satisfies AppUser[];
+        break;
+      case "auth/setFlags":
+        result = { ok: true };
+        break;
+      case "settings/update":
+        this.prefs = { ...this.prefs, ...params } as AppPrefs;
+        result = this.prefs;
+        break;
+      case "settings/reset":
+        this.prefs = { ...defaultPrefs };
+        result = this.prefs;
+        break;
+      case "settings/replicaStatus":
+        result = {
+          enabled: this.prefs.replicaSyncEnabled,
+          configured: false,
+          status: "idle",
+          lastSuccessUnix: null,
+          lastErrorCode: null,
+        } satisfies ReplicaAutomationStatus;
+        break;
+      case "settings/params":
+        result = this.params;
+        break;
+      case "settings/saveParams":
+        this.params = (params.values as Record<string, unknown>) ?? {};
+        result = { ok: true };
+        break;
+      case "support/diagnostics": {
+        const content = `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            docflow: { version: __DOCFLOW_VERSION__ },
+            platform: { arch: "demo", os: "browser-preview" },
+            components: {
+              ocr: {
+                engine: "tesseract",
+                languageDataAvailable: false,
+                status: "missing",
+              },
+              sidecar: { required: false, status: "retired" },
+              printer: {
+                inventoryStatus: "available",
+                printerCount: 1,
+                defaultPrinterAvailable: true,
+                latestQueue: null,
+              },
+            },
+            recentErrorCodes: [],
+            privacy: { delivery: "local-only", redaction: "recursive" },
+          },
+          null,
+          2,
+        )}\n`;
+        result = {
+          fileName: "docflow-support-diagnostics-v1.json",
+          mediaType: "application/json",
+          byteLength: new TextEncoder().encode(content).byteLength,
+          content,
+        } satisfies SupportBundlePreview;
+        break;
+      }
+      case "support/copyDiagnostics":
+        result = { ok: true };
+        break;
+      case "support/activityLog":
+        result = {
+          fileName: "docflow-activity-log.jsonl",
+          mediaType: "application/x-ndjson",
+          content: "",
+        };
+        break;
+      case "engine/preview": {
+        onProgress?.({ phase: "scan", done: 1, total: 1 });
+        const values = params.values as Record<string, unknown>;
+        if (params.opId === "rfi.complete_status_sync") {
+          const code = "AZE-SUN-INT-QMS-RFI-MEC-0700";
+          const workbook = mockPath(
+            values.rfi_log_workbook,
+            "/Users/demo/Documents/RFI Log.xlsm",
+          );
+          const row = {
+            _rowId: "complete-row-1",
+            enabled: true,
+            selectable: true,
+            discipline: "MEC",
+            rfiNo: "MEC-0700",
+            canonicalRfi: code,
+            pdfPath: `MEC/${code}/RFI No. ${code}.pdf`,
+            pdfCount: 1,
+            pdfPaths: `MEC/${code}/RFI No. ${code}.pdf`,
+            currentStatus: "Ongoing",
+            proposedStatus: "Completed",
+            action: "Set matching Inspection Status cell(s) to Completed",
+            disposition: "rfi.completeStatus.disposition.ready",
+            reasonKey: "Exact completed RFI PDF and safe RFI Log mapping found",
+          };
+          const plan = {
+            planId: "demo-complete-status-plan",
+            opId: "rfi.complete_status_sync",
+            warnings: [],
+            meta: {
+              workerCount: 4,
+              directoriesScanned: 42,
+              entriesScanned: 500,
+              exactPdfCount: 1,
+              editor: {
+                kind: "recordTable",
+                layout: "compact",
+                titleKey: "rfi.completeStatus.editor.title",
+                rowCountKey: "rfi.completeStatus.editor.rowCount",
+                groupField: "discipline",
+                selectionGroupFields: [],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                detailsEnabled: true,
+                detailsDefaultVisible: false,
+                duplicateEnabled: false,
+                requiredFields: ["enabled"],
+                columns: [
+                  { key: "enabled", labelKey: "rfi.completeStatus.column.enabled", kind: "bool" },
+                  { key: "discipline", labelKey: "rfi.completeStatus.column.discipline", kind: "readonly" },
+                  { key: "rfiNo", labelKey: "rfi.completeStatus.column.rfiNo", kind: "readonly" },
+                  { key: "pdfPath", labelKey: "rfi.completeStatus.column.pdfPath", kind: "readonly" },
+                  { key: "currentStatus", labelKey: "rfi.completeStatus.column.currentStatus", kind: "readonly" },
+                  { key: "proposedStatus", labelKey: "rfi.completeStatus.column.proposedStatus", kind: "readonly" },
+                  { key: "disposition", labelKey: "rfi.completeStatus.column.disposition", kind: "readonly", display: "localizedKey" },
+                ],
+                rows: [row],
+              },
+            },
+            steps: [
+              {
+                kind: "workbook_update" as const,
+                src: workbook,
+                dst: `${workbook}.completion-backup`,
+                noteKey: "note.rfi.completeStatus.rfiLog",
+                meta: {
+                  syncStep: {
+                    workbookKind: "rfiLogStatus",
+                    updates: {
+                      MEC: {
+                        "10:16": {
+                          rowId: row._rowId,
+                          expectedValue: "Ongoing",
+                          replacementValue: "Completed",
+                          row: 10,
+                          col: 16,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          } satisfies Plan;
+          this.completeStatusPlan = plan;
+          result = plan;
+          break;
+        }
+        if (params.opId === "rfi.group_files") {
+          const source = mockPath(values.source, "/Incoming");
+          const destination = mockPath(values.destination, "/Grouped");
+          const rows = [
+            {
+              _rowId: "file-group-0-0",
+              enabled: true,
+              rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1260",
+              sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260 SKETCH.pdf",
+              method: "rfi.fileGroup.method.filename",
+              confidence: 1,
+            },
+            {
+              _rowId: "file-group-1-0",
+              enabled: true,
+              rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1261",
+              sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260_1261.eml",
+              method: "rfi.fileGroup.method.mail",
+              confidence: 1,
+            },
+          ];
+          const plan = {
+            planId: "demo-file-group-plan",
+            opId: "rfi.group_files",
+            warnings: [],
+            meta: {
+              sourceReadOnly: true,
+              workerCount: 4,
+              editor: {
+                kind: "recordTable",
+                layout: "compact",
+                titleKey: "rfi.fileGroup.editor.title",
+                rowCountKey: "rfi.fileGroup.editor.rowCount",
+                groupField: "rfiCode",
+                selectionGroupFields: ["rfiCode", "sourceFile"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                requiredFields: ["enabled"],
+                columns: [
+                  { key: "enabled", labelKey: "rfi.fileGroup.column.enabled", kind: "bool", width: 64 },
+                  { key: "rfiCode", labelKey: "rfi.fileGroup.column.rfiCode", kind: "readonly", width: 260, bulk: false },
+                  { key: "sourceFile", labelKey: "rfi.fileGroup.column.sourceFile", kind: "readonly", width: 300, bulk: false },
+                  { key: "method", labelKey: "rfi.fileGroup.column.method", kind: "readonly", display: "localizedKey", width: 120, bulk: false },
+                  { key: "confidence", labelKey: "ocr.confidence", kind: "readonly", display: "percent", width: 112, bulk: false },
+                ],
+                rows,
+              },
+            },
+            steps: rows.flatMap((row) => [
+              {
+                kind: "mkdir" as const,
+                src: null,
+                dst: `${destination}/${row.rfiCode}`,
+                noteKey: "note.rfi.fileGroup.folderCreated",
+                meta: { code: row.rfiCode },
+              },
+              {
+                kind: "copy" as const,
+                src: `${source}/${row.sourceFile}`,
+                dst: `${destination}/${row.rfiCode}/${row.sourceFile}`,
+                noteKey: "note.rfi.fileGroup.copy",
+                meta: { rowId: row._rowId, code: row.rfiCode },
+              },
+            ]),
+          } satisfies Plan;
+          this.fileGroupPlan = plan;
+          result = plan;
+          break;
+        }
+        if (params.opId === "files.batch_print") {
+          const files = Array.isArray(values.files)
+            ? values.files.map((value) => mockPath(value, ""))
+            : ["/Users/demo/Documents/first.pdf"];
+          const rows = files.map((path, index) => ({
+            _rowId: `file-${index + 1}`,
+            enabled: true,
+            status: "ready",
+            file: path.split(/[\\/]/).pop() ?? path,
+            path,
+            format: path.split(".").pop()?.toUpperCase() ?? "FILE",
+            pageRange: "all",
+            printer: "Office Printer",
+            paper: index ? "A3" : "A4",
+            orientation: "auto",
+            scaling: "fit",
+            color: "printer",
+            duplex: "printer",
+            copies: 1,
+          }));
+          const plan = {
+            planId: "demo-print-plan",
+            opId: "files.batch_print",
+            warnings: [],
+            meta: {
+              editor: {
+                kind: "recordTable",
+                titleKey: "print.editor.title",
+                rowCountKey: "print.editor.rowCount",
+                groupField: "format",
+                selectionGroupFields: ["format"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                columns: [
+                  { key: "enabled", labelKey: "print.col.include", kind: "bool", width: 64 },
+                  { key: "status", labelKey: "print.col.status", kind: "readonly", width: 90, bulk: false },
+                  { key: "file", labelKey: "print.col.file", kind: "readonly", width: 260, bulk: false },
+                  { key: "format", labelKey: "print.col.format", kind: "readonly", width: 76, bulk: false },
+                  { key: "pageRange", labelKey: "print.col.pageRange", helpKey: "print.col.pageRange.help", kind: "text", width: 112, bulk: false },
+                  { key: "printer", labelKey: "print.col.printer", kind: "choice", width: 180 },
+                  { key: "paper", labelKey: "print.col.paper", kind: "choice", width: 88 },
+                  { key: "orientation", labelKey: "print.col.orientation", kind: "choice", width: 110 },
+                  { key: "scaling", labelKey: "print.col.scaling", kind: "choice", width: 110 },
+                  { key: "color", labelKey: "print.col.color", kind: "choice", width: 100 },
+                  { key: "duplex", labelKey: "print.col.duplex", kind: "choice", width: 116 },
+                  { key: "copies", labelKey: "print.col.copies", kind: "int", width: 76 },
+                ],
+                choices: {
+                  printer: ["Office Printer"],
+                  paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+                  orientation: ["auto", "portrait", "landscape"],
+                  scaling: ["fit", "actual", "shrink"],
+                  color: ["printer", "color", "grayscale"],
+                  duplex: ["printer", "simplex", "long", "short"],
+                },
+                choiceLabels: {},
+                rows,
+              },
+            },
+            steps: rows.map((row) => ({
+              kind: "print" as const,
+              src: row.path,
+              dst: row.path,
+              noteKey: "note.print.queued",
+              meta: {},
+            })),
+          } satisfies Plan;
+          this.printPlan = plan;
+          result = plan;
+          break;
+        }
+        if (params.opId === "rfi.normalize_pdf_orientation") {
+          result = {
+            planId: "demo-orientation-plan",
+            opId: "rfi.normalize_pdf_orientation",
+            warnings: [],
+            meta: {
+              sourceReadOnly: true,
+              workerCount: 4,
+              verifiedPages: 24,
+              rotatedPages: 3,
+              actionableFiles: 2,
+              manualReviewFiles: 0,
+              scanIndex: {
+                discovered: 8,
+                reused: 6,
+                analyzed: 2,
+                failed: 0,
+                priorInterruptedRuns: 0,
+                forceRescan: Boolean(values.force_rescan),
+              },
+            },
+            steps: [
+              {
+                kind: "pdf_page_rotate",
+                src: `${mockPath(values.rfi_system_root, "/RFI System")}/MEC/RFI-0001/document.pdf`,
+                dst: `${mockPath(values.review_root, "/Orientation Review")}/MEC/RFI-0001/document.pdf`,
+                noteKey: "note.rfi.pdfOrientationNormalized",
+                meta: {
+                  rotations: [
+                    { pageIndex: 1, fromRotation: 0, targetRotation: 90 },
+                  ],
+                },
+              },
+            ],
+          } satisfies Plan;
+          break;
+        }
+        if (params.opId === "rfi.log_add") {
+          const rows = [
+            {
+              _rowId: "CIV-g1-r1",
+              _sheet: "CIV",
+              rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0008",
+              itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+              itemNo: "CIV-5.2.1",
+              description: "Civil inspection description",
+              forms: "CON-CIV-001",
+              tagNo: "N12",
+              area: "North Site",
+              rowNo: "",
+              dateOfIssue: "15-Aug-26",
+              inspectionDate: "16-Aug-26",
+              startTime: "09:00",
+              azfenType: "H",
+              intecType: "W",
+              location: "N3",
+              subcontractor: "AZFEN",
+            },
+            {
+              _rowId: "CIV-g2-r1",
+              _sheet: "CIV",
+              rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0009",
+              itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+              itemNo: "CIV-5.2.1",
+              description: "Civil inspection description",
+              forms: "CON-CIV-001",
+              tagNo: "N18",
+              area: "North Site",
+              rowNo: "",
+              dateOfIssue: "15-Aug-26",
+              inspectionDate: "16-Aug-26",
+              startTime: "09:30",
+              azfenType: "H",
+              intecType: "W",
+              location: "N3",
+              subcontractor: "PDL",
+            },
+          ];
+          result = {
+            planId: "demo-rfi-plan",
+            opId: "rfi.log_add",
+            warnings: [],
+            meta: {
+              editor: {
+                kind: "recordTable",
+                layout: "compact",
+                titleKey: "rfi.editor.title",
+                groupField: "rfiNo",
+                selectionGroupFields: ["_sheet", "rfiNo"],
+                selectionEnabled: true,
+                bulkEnabled: true,
+                detailsEnabled: true,
+                detailsDefaultVisible: false,
+                duplicateEnabled: true,
+                columns: [
+                  { key: "_sheet", labelKey: "rfi.col.sheet", kind: "readonly", width: 42 },
+                  { key: "rfiNo", labelKey: "rfi.col.rfiNo", kind: "readonly", width: 54, display: "suffix" },
+                  { key: "itpNo", labelKey: "rfi.col.itpNo", kind: "choice", width: 50, display: "shortNumber" },
+                  { key: "itemNo", labelKey: "rfi.col.itemNo", kind: "choice", width: 62, display: "itemSuffix" },
+                  { key: "description", labelKey: "rfi.col.description", kind: "multiline", width: 360, detail: true },
+                  { key: "forms", labelKey: "rfi.col.forms", kind: "multiline", width: 280, detail: true },
+                  { key: "tagNo", labelKey: "rfi.col.tagNo", kind: "autocomplete", width: 92 },
+                  { key: "area", labelKey: "rfi.col.area", kind: "autocomplete", width: 94 },
+                  { key: "dateOfIssue", labelKey: "rfi.col.issueDate", kind: "compactDate", width: 116 },
+                  { key: "inspectionDate", labelKey: "rfi.col.inspectionDate", kind: "compactDate", width: 116 },
+                  { key: "startTime", labelKey: "rfi.col.startTime", kind: "text", width: 58 },
+                  { key: "azfenType", labelKey: "rfi.col.azfenType", kind: "text", width: 130, detail: true },
+                  { key: "intecType", labelKey: "rfi.col.intecType", kind: "text", width: 130, detail: true },
+                  { key: "location", labelKey: "rfi.col.location", kind: "autocomplete", width: 104 },
+                  { key: "subcontractor", labelKey: "rfi.col.subcontractor", kind: "autocomplete", width: 88 },
+                ],
+                choices: {
+                  itpNo: ["AZE-SUN-INT-QMS-ITP-CIV-0005"],
+                  itemNo: ["CIV-5.2.1"],
+                },
+                autocomplete: {
+                  tagNo: ["N12", "N18"],
+                  area: ["North Site", "South Site"],
+                  location: ["N3"],
+                  subcontractor: ["AZFEN", "PDL"],
+                },
+                rows,
+              },
+            },
+            steps: [
+              {
+                kind: "workbook_update",
+                src: mockPath(
+                  values.workbook,
+                  "/Users/demo/Documents/RFI Log.xlsx",
+                ),
+                dst: "/Users/demo/Documents/.docflow-backups/RFI Log.xlsx",
+                noteKey: "note.rfi.workbookUpdate",
+                meta: {},
+              },
+            ],
+          } satisfies Plan;
+          break;
+        }
+        if (params.opId === demoFastCoverOperation.id) {
+          const destination = mockPath(values.dest, "/RFI");
+          const organize = values.organize_into_rfi_folders !== false;
+          const code = "AZE-SUN-INT-QMS-RFI-CIV-0064";
+          const discipline = code.split("-")[5];
+          const target = `${destination}${
+            organize ? `/${discipline}` : ""
+          }/RFI No. ${code}.pdf`;
+          const sourceFile = "combined_scan.pdf";
+          const sourcePath = `${mockPath(values.source, "/Scans")}/${sourceFile}`;
+          const row = {
+            _rowId: "scan-output-0",
+            sourceFile,
+            evidenceKey: "rfi.fastScan.evidence.confirmed",
+            detectedCode: code,
+            code,
+            target,
+          };
+          const plan = {
+            planId: "demo-fast-scan-plan",
+            opId: demoFastCoverOperation.id,
+            warnings: [],
+            meta: {
+              scanEdit: {
+                destinationRoot: destination,
+                organizeIntoRfiFolders: organize,
+              },
+              editor: {
+                kind: "rfiScan",
+                titleKey: "rfi.fastScan.editor.title",
+                rowCountKey: "rfi.fastScan.editor.rowCount",
+                groupField: "_rowId",
+                requiredFields: ["code"],
+                columns: [
+                  {
+                    key: "sourceFile",
+                    labelKey: "rfi.fastScan.column.sourceFile",
+                    kind: "readonly",
+                    width: 170,
+                  },
+                  {
+                    key: "evidenceKey",
+                    labelKey: "rfi.fastScan.column.evidence",
+                    kind: "readonly",
+                    display: "localizedKey",
+                    width: 170,
+                  },
+                  {
+                    key: "detectedCode",
+                    labelKey: "rfi.fastScan.column.detectedCode",
+                    kind: "readonly",
+                    width: 270,
+                  },
+                  {
+                    key: "code",
+                    labelKey: "rfi.fastScan.column.code",
+                    kind: "text",
+                    width: 310,
+                  },
+                  {
+                    key: "target",
+                    labelKey: "rfi.fastScan.column.target",
+                    kind: "readonly",
+                    width: 360,
+                  },
+                ],
+                rows: [row],
+              },
+            },
+            steps: [
+              {
+                kind: "copy",
+                src: sourcePath,
+                dst: target,
+                noteKey: "note.renamed",
+                meta: { code, scanEditRowId: row._rowId },
+              },
+            ],
+          } satisfies Plan;
+          this.fastScanPlan = plan;
+          result = plan;
+          break;
+        }
+        result = {
+          planId: "demo-plan",
+          opId: String(params.opId),
+          warnings: [],
+          meta: {},
+          steps: [
+            {
+              kind: "move",
+              src: `${mockPath(values.source, "/Scans")}/20260718_163146.PDF`,
+              dst: `${mockPath(values.dest, "/RFI")}/RFI-CIV-0064/RFI-CIV-0064-R0.pdf`,
+              noteKey: "note.renamed",
+              meta: { confidence: 1 },
+            },
+          ],
+        } satisfies Plan;
+        break;
+      }
+      case "engine/revise": {
+        if (this.fastScanPlan && params.planId === this.fastScanPlan.planId) {
+          const editor = this.fastScanPlan.meta.editor as Record<
+            string,
+            unknown
+          >;
+          const originalRows = Array.isArray(editor.rows)
+            ? (editor.rows as Record<string, unknown>[])
+            : [];
+          const submittedRows = Array.isArray(params.rows)
+            ? (params.rows as Record<string, unknown>[])
+            : [];
+          const edit = this.fastScanPlan.meta.scanEdit as Record<
+            string,
+            unknown
+          >;
+          const destination = String(edit.destinationRoot ?? "");
+          const organize = edit.organizeIntoRfiFolders === true;
+          const seenCodes = new Set<string>();
+          if (submittedRows.length !== originalRows.length) {
+            throw new Error("error.rfi.fastScan.revisionInvalid");
+          }
+          const rows = submittedRows.map<Record<string, unknown>>(
+            (submitted, index) => {
+              const original = originalRows[index];
+              const inputCode = submitted.code;
+              const expected = { ...original, code: inputCode };
+              if (JSON.stringify(submitted) !== JSON.stringify(expected)) {
+                throw new Error("error.rfi.fastScan.revisionInvalid");
+              }
+              const code = normalizeMockRfiCode(inputCode);
+              if (!code) {
+                throw new Error("error.rfi.fastScan.codeInvalid");
+              }
+              if (seenCodes.has(code)) {
+                throw new Error("error.rfi.fastScan.targetExists");
+              }
+              seenCodes.add(code);
+              const discipline = code.split("-")[5];
+              const target = `${destination}${
+                organize ? `/${discipline}` : ""
+              }/RFI No. ${code}.pdf`;
+              return { ...expected, code, target };
+            },
+          );
+          const steps = this.fastScanPlan.steps.map((step) => {
+            const rowId = step.meta.scanEditRowId;
+            const row = rows.find((candidate) => candidate._rowId === rowId);
+            return row
+              ? {
+                  ...step,
+                  dst: String(row.target),
+                  meta: { ...step.meta, code: row.code },
+                }
+              : step;
+          });
+          const revised = {
+            ...this.fastScanPlan,
+            planId: `${this.fastScanPlan.planId}-revised`,
+            meta: {
+              ...this.fastScanPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps,
+          } satisfies Plan;
+          this.fastScanPlan = revised;
+          result = revised;
+          break;
+        }
+        if (
+          this.completeStatusPlan &&
+          params.planId === this.completeStatusPlan.planId
+        ) {
+          const rows = Array.isArray(params.rows)
+            ? params.rows.map((row) => ({ ...row }))
+            : [];
+          const editor = this.completeStatusPlan.meta.editor as Record<
+            string,
+            unknown
+          >;
+          const revised = {
+            ...this.completeStatusPlan,
+            planId: "demo-complete-status-plan-revised",
+            meta: {
+              ...this.completeStatusPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps: rows.some((row) => row.enabled !== false)
+              ? this.completeStatusPlan.steps
+              : [],
+          } satisfies Plan;
+          this.completeStatusPlan = revised;
+          result = revised;
+          break;
+        }
+        if (this.fileGroupPlan && params.planId === this.fileGroupPlan.planId) {
+          const rows = Array.isArray(params.rows)
+            ? params.rows.map((row) => ({ ...row }))
+            : [];
+          const editor = this.fileGroupPlan.meta.editor as Record<string, unknown>;
+          const enabledRows = rows.filter((row) => row.enabled !== false);
+          const revised = {
+            ...this.fileGroupPlan,
+            planId: "demo-file-group-plan-revised",
+            meta: {
+              ...this.fileGroupPlan.meta,
+              editor: { ...editor, rows },
+            },
+            steps: this.fileGroupPlan.steps.filter((step) => {
+              const rowId = String(step.meta.rowId ?? "");
+              if (rowId) return enabledRows.some((row) => row._rowId === rowId);
+              const code = String(step.meta.code ?? "");
+              return !code || enabledRows.some((row) => row.rfiCode === code);
+            }),
+          } satisfies Plan;
+          this.fileGroupPlan = revised;
+          result = revised;
+          break;
+        }
+        if (!this.printPlan || params.planId !== this.printPlan.planId) {
+          throw new Error("Unknown demo print plan");
+        }
+        const rows = Array.isArray(params.rows)
+          ? params.rows.map((row) => ({ ...row }))
+          : [];
+        const editor = this.printPlan.meta.editor as Record<string, unknown>;
+        const revised = {
+          ...this.printPlan,
+          planId: "demo-print-plan-revised",
+          meta: {
+            ...this.printPlan.meta,
+            editor: { ...editor, rows },
+          },
+          steps: rows
+            .filter((row) => row.enabled !== false)
+            .map((row) => ({
+              kind: "print" as const,
+              src: String(row.path),
+              dst: String(row.path),
+              noteKey: "note.print.queued",
+              meta: {},
+            })),
+        } satisfies Plan;
+        this.printPlan = revised;
+        result = revised;
+        break;
+      }
+      case "engine/rfiReplyPreview":
+        result = {
+          planId: "demo-rfi-reply-plan",
+          opId: "rfi.outlook_reply_draft",
+          steps: [
+            {
+              kind: "outlook_reply_draft",
+              src: "RFI number request",
+              dst: null,
+              noteKey: "step.rfi.outlookReplyDraft",
+              meta: { displayOnly: true, sendAllowed: false },
+            },
+          ],
+          warnings: [],
+          meta: {
+            replyPreview: {
+              subject: "RFI number request",
+              plainText:
+                "RFI No.\tITP No.\r\nAZE-SUN-INT-QMS-RFI-CIV-0008\tCIV-0005",
+              html: "<table><tr><td>AZE-SUN-INT-QMS-RFI-CIV-0008</td></tr></table><br><br>",
+            },
+          },
+        } satisfies Plan;
+        break;
+      case "engine/apply":
+        onProgress?.({ phase: "apply", done: 1, total: 1 });
+        result = {
+          applied: 1,
+          failed: 0,
+          journalId: "demo-journal",
+          errors: [],
+          cloudSynced: true,
+        } satisfies OperationResult;
+        break;
+      case "engine/printQueueLatest":
+        result = null;
+        break;
+      case "engine/printQueueDiscard":
+        result = { status: "abandoned" };
+        break;
+      case "engine/cancel":
+        result = { accepted: true };
+        break;
+      case "engine/reviewScan":
+        result = [
+          {
+            selectionId: "demo-review-item-1",
+            path: "/RFI/_review/scan-01.pdf",
+            name: "scan-01.pdf",
+            code: "RFI-CIV-0064",
+            confidence: 0.9,
+            targetExists: false,
+          },
+          {
+            selectionId: "demo-review-item-2",
+            path: "/RFI/_review/scan-02.pdf",
+            name: "scan-02.pdf",
+            code: "",
+            confidence: 0,
+            targetExists: false,
+          },
+        ] satisfies ReviewItem[];
+        break;
+      case "engine/reviewPreview":
+        result = {
+          planId: "demo-review-plan",
+          opId: "rfi.review",
+          warnings: [],
+          meta: {},
+          steps: [
+            {
+              kind: "move",
+              src: "/RFI/_review/scan-01.pdf",
+              dst: "/RFI/RFI-CIV-0064/RFI-CIV-0064-R0.pdf",
+              noteKey: "note.renamed",
+              meta: {},
+            },
+          ],
+        } satisfies Plan;
+        break;
+      case "engine/undo":
+        result = {
+          applied: 1,
+          failed: 0,
+          journalId: "",
+          errors: [],
+        } satisfies OperationResult;
+        break;
+      case "rfi/printFind": {
+        const requests = Array.isArray(params.numbers) ? (params.numbers as string[]) : [];
+        const candidates = requests.flatMap((requested, requestIndex) => {
+          const normalized = requested.toUpperCase();
+          const codes = /^\d{4}$/.test(normalized)
+            ? ["CIV", "MEC"].map((discipline) => `AZE-SUN-INT-QMS-RFI-${discipline}-${normalized}`)
+            : [
+                normalized.startsWith("AZE-SUN-INT-QMS-RFI-")
+                  ? normalized
+                  : `AZE-SUN-INT-QMS-RFI-${normalized}`,
+              ];
+          const types: Array<"firstPage" | "sketch"> = [];
+          if (params.firstPage) types.push("firstPage");
+          if (params.sketch) types.push("sketch");
+          return codes.flatMap((code, codeIndex) =>
+            types.map((documentType, typeIndex) => {
+              const extension = documentType === "firstPage" ? ".docx" : " Sketch.pdf";
+              const displayPath = `${code}${extension}`;
+              return {
+                requested,
+                rfiCode: code,
+                documentType,
+                displayPath,
+                selection: {
+                  selectionId: `demo-rfi-print-${requestIndex}-${codeIndex}-${typeIndex}`,
+                  displayPath: `/Users/demo/Documents/DocFlow/${displayPath}`,
+                  name: displayPath,
+                },
+                selected: codes.length === 1,
+              };
+            }),
+          );
+        });
+        result = {
+          candidates,
+          resolutions: requests.map((requested) => {
+            const matching = candidates.filter((candidate) => candidate.requested === requested);
+            const codes = matching
+              .map((candidate) => candidate.rfiCode)
+              .filter((code, index, all) => all.indexOf(code) === index);
+            return {
+              requested,
+              rfiCodes: codes,
+              missingFirstPage: Boolean(params.firstPage) && !matching.some(
+                (candidate) => candidate.documentType === "firstPage",
+              ),
+              missingSketch: Boolean(params.sketch) && !matching.some(
+                (candidate) => candidate.documentType === "sketch",
+              ),
+              ambiguous: codes.length > 1,
+            };
+          }),
+          visited: candidates.length,
+          truncated: false,
+        } satisfies RfiPrintFindResult;
+        break;
+      }
+      case "history/list":
+        result = {
+          online: true,
+          rows: [
+            {
+              when: "2026-08-24T00:00:00Z",
+              opId: demoFastCoverOperation.id,
+              moves: 4,
+              failed: 0,
+              journalId: "local-1",
+              steps: null,
+              cloudId: "cloud-1",
+              undone: false,
+              undoAvailable: true,
+              fromCloud: true,
+              userEmail: demoAdmin.email,
+            },
+            {
+              when: "2026-08-23T00:00:00Z",
+              opId: demoFastCoverOperation.id,
+              moves: 1,
+              failed: 0,
+              journalId: "remote-only",
+              steps: null,
+              cloudId: "cloud-2",
+              undone: false,
+              undoAvailable: false,
+              fromCloud: true,
+              userEmail: "other@docflow.local",
+            },
+          ],
+        } satisfies HistoryPayload;
+        break;
+      case "paths/select": {
+        const multiple = params.paramName === "files";
+        const paths = multiple
+          ? [
+              "/Users/demo/Documents/first.pdf",
+              "/Users/demo/Documents/second.docx",
+            ]
+          : [
+              params.paramName === "workbook"
+                ? "/Users/demo/Documents/RFI Log.xlsx"
+                : "/Users/demo/Documents/DocFlow",
+            ];
+        result = paths.map((displayPath, index) => ({
+          selectionId: `demo-selection-${String(params.paramName)}-${index}`,
+          displayPath,
+          name: displayPath.split(/[\\/]/).pop() ?? displayPath,
+        })) satisfies PathSelection[];
+        break;
+      }
+      case "paths/reveal":
+        result = { ok: true };
+        break;
+      case "recovery/list":
+        result = {
+          journals: [
+            {
+              journalId: "demo-recovery-journal",
+              disposition: "outcome_unknown",
+            },
+          ],
+          printQueue: {
+            queueId: "demo-recovery-queue",
+            status: "paused",
+            createdAt: "2026-08-24T00:00:00Z",
+            updatedAt: "2026-08-24T00:01:00Z",
+            counts: { uncertain: 1 },
+            resumable: 1,
+            fileCount: 1,
+          },
+        } satisfies RecoveryPayload;
+        break;
+      case "watch/status":
+        result = this.watchStatus();
+        break;
+      case "watch/update": {
+        const opId = String(params.opId);
+        if (typeof params.enabled === "boolean") {
+          this.watchEnabled = params.enabled
+            ? [...new Set([...this.watchEnabled, opId])]
+            : this.watchEnabled.filter((id) => id !== opId);
+        }
+        result = this.watchStatus();
+        break;
+      }
+      case "watch/open":
+        throw new Error("error.watch.notReady");
+      default:
+        throw new Error(`Mock method not implemented: ${String(method)}`);
+    }
+    return result as CommandResult<Method>;
+  }
+}
+
+let sharedBridge: Bridge | null = null;

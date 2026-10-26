@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.6",
+  "currentVersion": "1.33.7",
   "releases": [
+    {
+      "version": "1.33.7",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.7",
+      "summary": "The browser mock bridge moves out of the Tauri bridge into its own module."
+    },
     {
       "version": "1.33.6",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.6",
       "summary": "Plan editor date helpers and the compact date input move into their own modules."
     },
