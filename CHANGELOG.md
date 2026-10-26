@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.50 - 2026-10-27
+
+### Changed
+
+- The batch print queue's state, its load on mount for `files.batch_print`, and the resume and discard actions move from `frontend/src/screens/OperationScreen.tsx` into the `usePrintQueue` hook in `frontend/src/screens/usePrintQueue.ts`. The hook reports errors and stage changes through the callbacks the screen passes in. `usePrintQueue.test.ts` covers the batch-only load, clearing after discard, and the return to the form when resume fails. Behavior is unchanged.
+
 ## 1.33.49 - 2026-10-27
 
 ### Changed
