@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.45 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `rfi/printFind` handler moves out of the `MockBridge.call` dispatch switch in `frontend/src/lib/mockBridge.ts` into the private `printFindOperation` method. `mockBridge.test.ts` adds the first direct check of this route: a full RFI number resolves to its first-page candidate with the expected code, selection, and missing-first-page flag. No operator-facing behavior changes.
+
 ## 1.33.44 - 2026-10-27
 
 ### Changed
