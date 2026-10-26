@@ -118,3 +118,43 @@ export function isPlanEditorReady(
     codes.every(isRfiCodeCandidate) && new Set(codes).size === codes.length
   );
 }
+
+/** Writes one cell, then applies the editor's auto-fill and regex-fill presets. */
+export function applyEditorValue(
+  editor: Record<string, unknown>,
+  row: Record<string, unknown>,
+  key: string,
+  value: string | boolean,
+) {
+  row[key] = value;
+
+  const autoFill = editor.autoFill;
+  if (autoFill && typeof autoFill === "object") {
+    const config = autoFill as Record<string, unknown>;
+    if (
+      config.field === key &&
+      config.values &&
+      typeof config.values === "object"
+    ) {
+      const preset = (config.values as Record<string, unknown>)[
+        String(value)
+      ];
+      if (preset && typeof preset === "object") Object.assign(row, preset);
+    }
+  }
+
+  if (Array.isArray(editor.regexFill)) {
+    for (const rawRule of editor.regexFill) {
+      if (!rawRule || typeof rawRule !== "object") continue;
+      const rule = rawRule as Record<string, unknown>;
+      if (rule.source !== key) continue;
+      try {
+        if (new RegExp(String(rule.pattern), "i").test(String(value))) {
+          row[String(rule.target)] = String(rule.value ?? "");
+        }
+      } catch {
+        // Invalid server-side presentation hints never block row editing.
+      }
+    }
+  }
+}

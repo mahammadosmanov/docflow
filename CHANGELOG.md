@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.30 - 2026-10-27
+
+### Changed
+
+- The plan editor's cell write (`applyEditorValue`) moves from `frontend/src/plan/EditablePlanTable.tsx` into `frontend/src/plan/editorRules.ts`. It writes the value, then applies the editor's auto-fill and regex-fill presets. The table keeps a one-line wrapper. `editorRules.test.ts` now covers the auto-fill match and miss, a case-insensitive regex match, and a non-matching or invalid regex being ignored. Behavior is unchanged.
+
 ## 1.33.29 - 2026-10-27
 
 ### Changed
