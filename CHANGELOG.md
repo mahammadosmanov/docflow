@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.30.0 - 2026-10-26
+
+### Added
+
+- Follow Up keeps all 21 planned Roads on the Road sheet even when no RFI names them yet, and fills each ZONE (Roads 1-5 North, 6-13 Center, 14-20 South, 21 North), including empty ZONE cells of existing rows (ADR 0050).
+
 ## 1.29.1 - 2026-10-26
 
 ### Fixed

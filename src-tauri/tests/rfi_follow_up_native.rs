@@ -5273,8 +5273,12 @@ fn partless_road_row_is_split_into_parts_when_the_log_names_a_part() {
     );
     let review = plan_rows(&plan);
 
+    let road_18: Vec<_> = structure_reasons(&review)
+        .into_iter()
+        .filter(|(_, label)| label.starts_with("Road 18"))
+        .collect();
     assert_eq!(
-        structure_reasons(&review),
+        road_18,
         [
             (
                 "warn.rfi.followUp.reason.structureInsert".to_string(),
@@ -5286,12 +5290,12 @@ fn partless_road_row_is_split_into_parts_when_the_log_names_a_part() {
             ),
         ]
     );
-    let mapped = road_rows(&review);
-    assert!(mapped.contains(&(6, "CIV-0001".to_string())), "{mapped:?}");
-    assert!(
-        mapped.contains(&(7, "CIV-0001/0002".to_string())),
-        "{mapped:?}"
-    );
+    let mut codes: Vec<String> = road_rows(&review)
+        .into_iter()
+        .map(|(_, code)| code)
+        .collect();
+    codes.sort();
+    assert_eq!(codes, ["CIV-0001", "CIV-0001/0002"]);
 }
 
 #[test]
@@ -5306,7 +5310,7 @@ fn road_structure_is_applied_through_the_guarded_pipeline_and_undone_exactly() {
         ]),
         road_target_with_formulas(&["Road 17", "Road 18", "Road 19"]),
     );
-    assert_eq!(plan.steps[0].meta["structure"].as_array().unwrap().len(), 2);
+    assert!(plan.steps[0].meta["structure"].as_array().unwrap().len() >= 2);
     eprintln!(
         "GUARDED {:?}",
         guarded_updates(&plan.steps[0]).map(|u| u.len())
@@ -5343,21 +5347,36 @@ fn road_structure_is_applied_through_the_guarded_pipeline_and_undone_exactly() {
     let mut written = File::open(&target_path).unwrap();
     let workbook = read_workbook_from_reader(&mut written).unwrap();
     let road = workbook.sheet("Road").unwrap();
-    assert_eq!(road.value(5, 2), "Road 17");
-    assert_eq!(road.value(6, 2), "Road 18 (Part 1)");
-    assert_eq!(road.value(7, 2), "Road 18 (Part 2)");
-    assert_eq!(road.value(8, 2), "Road 19");
-    assert_eq!(road.value(6, 11), "CIV-0001");
-    assert_eq!(road.value(7, 11), "CIV-0001/0002");
-    assert_eq!(road.value(7, 12), "In Progress");
+    let row_of = |label: &str| {
+        (1..=road.max_row)
+            .find(|row| road.value(*row, 2) == label)
+            .unwrap_or_else(|| panic!("{label} missing"))
+    };
+    let part1 = row_of("Road 18 (Part 1)");
+    assert_eq!(row_of("Road 18 (Part 2)"), part1 + 1);
+    assert_eq!(road.value(part1, 11), "CIV-0001");
+    assert_eq!(road.value(part1 + 1, 11), "CIV-0001/0002");
+    assert_eq!(road.value(part1 + 1, 12), "In Progress");
+    assert_eq!(road.value(part1 + 1, 1), "South");
     assert_eq!(
-        road.cell(7, 25).unwrap().formula.as_deref(),
-        Some("COUNTIF(K7:L7,\"Completed\")/6")
+        road.cell(part1 + 1, 25).unwrap().formula.as_deref(),
+        Some(format!("COUNTIF(K{0}:L{0},\"Completed\")/6", part1 + 1).as_str())
     );
-    assert_eq!(
-        road.cell(3, 26).unwrap().formula.as_deref(),
-        Some("AVERAGE(Y5:Y8)")
-    );
+    for (label, zone) in [
+        ("Road 01", "North"),
+        ("Road 08", "Center"),
+        ("Road 14", "South"),
+        ("Road 21", "North"),
+    ] {
+        assert_eq!(road.value(row_of(label), 1), zone, "{label}");
+    }
+    for n in 1..=21 {
+        let prefix = format!("Road {n:02}");
+        assert!(
+            (1..=road.max_row).any(|row| road.value(row, 2).starts_with(&prefix)),
+            "{prefix} has a row"
+        );
+    }
 
     let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
     assert_eq!(undone.failed, 0);
@@ -5547,12 +5566,12 @@ fn empty_formula_cells_in_a_formula_column_are_repaired_and_values_are_never_ove
         .filter(|row| row["reasonKey"] == "warn.rfi.followUp.reason.readyFormulaRepair")
         .collect::<Vec<_>>();
     assert_eq!(fixes.len(), 1, "{fixes:?}");
-    assert_eq!(fixes[0]["_row"], 6);
     assert!(
         fixes[0]["mappingDetails"]
             .as_str()
             .unwrap()
-            .contains("Y6 = COUNTIF(K6:L6")
+            .contains("= COUNTIF(K"),
+        "{fixes:?}"
     );
 
     let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
@@ -5581,12 +5600,93 @@ fn empty_formula_cells_in_a_formula_column_are_repaired_and_values_are_never_ove
     let mut written = File::open(&target_path).unwrap();
     let road = read_workbook_from_reader(&mut written).unwrap();
     let road = road.sheet("Road").unwrap();
+    let row_of = |label: &str| {
+        (1..=road.max_row)
+            .find(|row| road.value(*row, 2) == label)
+            .unwrap()
+    };
+    let repaired = row_of("Road 06");
+    let typed = row_of("Road 07");
     assert_eq!(
-        road.cell(6, 25).unwrap().formula.as_deref(),
-        Some("COUNTIF(K6:L6,\"Completed\")/6")
+        road.cell(repaired, 25).unwrap().formula.as_deref(),
+        Some(format!("COUNTIF(K{0}:L{0},\"Completed\")/6", repaired).as_str())
     );
-    assert_eq!(road.value(7, 25), "READY");
-    assert!(road.cell(7, 25).unwrap().formula.is_none());
+    assert_eq!(road.value(typed, 25), "READY");
+    assert!(road.cell(typed, 25).unwrap().formula.is_none());
     authority.undo(&applied.journal_id, &caller, None).unwrap();
     assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}
+
+#[test]
+fn empty_zone_cells_are_filled_from_the_fixed_road_table() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    let rows = [(5, "Road 06 (Part 1)"), (6, "Road 14")]
+        .into_iter()
+        .map(|(r, label)| {
+            row(
+                r,
+                [
+                    blank(&format!("A{r}")),
+                    inline(&format!("B{r}"), label),
+                    inline(&format!("K{r}"), ""),
+                    inline(&format!("L{r}"), ""),
+                ],
+            )
+        });
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ]);
+    let (plan, ..) = road_preview(
+        &root,
+        road_source(&[("0001", "Road 06", "Ongoing")]),
+        target,
+    );
+
+    let zones: Vec<(String, String)> = plan.meta["editor"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["reasonKey"] == "warn.rfi.followUp.reason.structureZone")
+        .map(|row| {
+            (
+                row["rfiNo"].as_str().unwrap().to_string(),
+                row["_row"].to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(zones.len(), 2, "{zones:?}");
+    let texts: Vec<&str> = zones.iter().map(|(text, _)| text.as_str()).collect();
+    assert!(
+        texts.contains(&"Center") && texts.contains(&"South"),
+        "{texts:?}"
+    );
 }

@@ -1138,5 +1138,6 @@
   "warn.rfi.followUp.massDeletionBrake": "Most RFIs in Follow Up are missing from the selected RFI Log, so removal was paused. Make sure you selected the correct, current RFI Log.",
   "warn.rfi.followUp.reason.structureInsert": "A Road part row will be added (format and formulas are copied from the neighbouring row).",
   "warn.rfi.followUp.reason.structureRename": "The partless Road row will be renamed 'Part 1' because the Log names parts of it.",
-  "warn.rfi.followUp.reason.readyFormulaRepair": "The missing formula will be filled in from the formula used by the rest of the column."
+  "warn.rfi.followUp.reason.readyFormulaRepair": "The missing formula will be filled in from the formula used by the rest of the column.",
+  "warn.rfi.followUp.reason.structureZone": "The empty ZONE cell will be filled from the Road number (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }

@@ -39,6 +39,9 @@ fn road_rows(sheet: &WorksheetData) -> Vec<RoadRow> {
                 row,
                 road: reference.road,
                 part: reference.part,
+                zone_blank: sheet
+                    .cell(row, 1)
+                    .is_some_and(|zone| zone.formula.is_none() && zone.value.trim().is_empty()),
             });
         }
     }
@@ -80,11 +83,14 @@ pub(super) fn plan_structure(
         return Ok(none);
     }
     let records = scan_source_records(source_discovery, source_workbook)?;
-    let ops = plan_road_structure(
-        &sheet_name_of(target_workbook, sheet),
-        &rows,
-        &road_needs(&records),
-    );
+    // Every planned Road keeps a row even before any RFI names it.
+    let mut needs = road_needs(&records);
+    for road in PLANNED_ROADS {
+        needs.entry(road).or_default();
+    }
+    let sheet_name = sheet_name_of(target_workbook, sheet);
+    let mut ops = plan_road_structure(&sheet_name, &rows, &needs);
+    ops.extend(plan_zone_ops(&sheet_name, &rows));
     if ops.len() > MAX_STRUCTURE_OPS {
         return Err(limit_exceeded_for(format!(
             "{} Road structure changes; at most {MAX_STRUCTURE_OPS}",
@@ -135,7 +141,10 @@ pub(super) fn validate_structure(ops: &[RowOp]) -> Result<(), BackendError> {
                 column,
                 text,
             } => {
-                sheet.eq_ignore_ascii_case(ROAD_SHEET) && *row > 0 && *column == 2 && label_ok(text)
+                sheet.eq_ignore_ascii_case(ROAD_SHEET)
+                    && *row > 0
+                    && ((*column == 2 && label_ok(text))
+                        || (*column == 1 && ZONES.contains(&text.as_str())))
             }
             RowOp::InsertRow {
                 sheet,
@@ -148,10 +157,12 @@ pub(super) fn validate_structure(ops: &[RowOp]) -> Result<(), BackendError> {
                     && *template_row > 0
                     && *template_row <= *after_row + 1
                     && copy_columns.iter().all(|column| *column == 1)
-                    && texts.len() == 1
-                    && texts
-                        .first()
-                        .is_some_and(|entry| entry.column == 2 && label_ok(&entry.text))
+                    && matches!(texts.len(), 1 | 2)
+                    && texts.iter().all(|entry| {
+                        (entry.column == 2 && label_ok(&entry.text))
+                            || (entry.column == 1 && ZONES.contains(&entry.text.as_str()))
+                    })
+                    && texts.iter().filter(|entry| entry.column == 2).count() == 1
             }
         };
         if !valid {
@@ -176,17 +187,24 @@ pub(super) fn structure_review_rows(ops: &[RowOp], layouts: &[FollowUpLayout]) -
         .enumerate()
         .map(|(index, op)| {
             let (row, label, reason) = match op {
-                RowOp::SetText { row, text, .. } => (
+                RowOp::SetText {
+                    row, text, column, ..
+                } => (
                     *row,
                     text.clone(),
-                    "warn.rfi.followUp.reason.structureRename",
+                    if *column == 1 {
+                        "warn.rfi.followUp.reason.structureZone"
+                    } else {
+                        "warn.rfi.followUp.reason.structureRename"
+                    },
                 ),
                 RowOp::InsertRow {
                     after_row, texts, ..
                 } => (
                     *after_row + 1,
                     texts
-                        .first()
+                        .iter()
+                        .find(|entry| entry.column == 2)
                         .map(|entry| entry.text.clone())
                         .unwrap_or_default(),
                     "warn.rfi.followUp.reason.structureInsert",

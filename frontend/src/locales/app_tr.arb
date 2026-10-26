@@ -1110,5 +1110,6 @@
   "warn.rfi.followUp.massDeletionBrake": "Follow Up'taki RFI'ların büyük bölümü seçilen RFI Log'da yok; silme duraklatıldı. Doğru ve güncel RFI Log'u seçtiğinizden emin olun.",
   "warn.rfi.followUp.reason.structureInsert": "Road part satırı eklenecek (biçim ve formüller komşu satırdan kopyalanır).",
   "warn.rfi.followUp.reason.structureRename": "Parçasız Road satırı, Log'daki parçalar için 'Part 1' olarak yeniden adlandırılacak.",
-  "warn.rfi.followUp.reason.readyFormulaRepair": "Eksik formül, sütunun diğer satırlarındaki formülden kopyalanarak eklenecek."
+  "warn.rfi.followUp.reason.readyFormulaRepair": "Eksik formül, sütunun diğer satırlarındaki formülden kopyalanarak eklenecek.",
+  "warn.rfi.followUp.reason.structureZone": "Boş ZONE hücresi Road numarasına göre doldurulacak (1-5 North, 6-13 Center, 14-20 South, 21 North)."
 }

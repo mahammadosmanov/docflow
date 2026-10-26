@@ -27,7 +27,24 @@ pub(super) struct RoadRow {
     pub(super) row: u32,
     pub(super) road: u32,
     pub(super) part: Option<u32>,
+    /// The ZONE cell (column A) exists but holds nothing.
+    pub(super) zone_blank: bool,
 }
+
+/// The project's Roads, all of which must have a Follow Up row even before any RFI exists.
+pub(super) const PLANNED_ROADS: std::ops::RangeInclusive<u32> = 1..=21;
+
+/// Fixed zone of each planned Road (owner decision, 2026-10-26).
+pub(super) fn zone_for_road(road: u32) -> Option<&'static str> {
+    match road {
+        1..=5 | 21 => Some("North"),
+        6..=13 => Some("Center"),
+        14..=20 => Some("South"),
+        _ => None,
+    }
+}
+
+pub(super) const ZONES: [&str; 3] = ["North", "Center", "South"];
 
 pub(super) fn road_label(road: u32, part: Option<u32>) -> String {
     match part {
@@ -37,10 +54,33 @@ pub(super) fn road_label(road: u32, part: Option<u32>) -> String {
 }
 
 fn label_text(road: u32, part: Option<u32>) -> Vec<CellText> {
-    vec![CellText {
+    let mut texts = Vec::new();
+    if let Some(zone) = zone_for_road(road) {
+        texts.push(CellText {
+            column: 1,
+            text: zone.to_string(),
+        });
+    }
+    texts.push(CellText {
         column: 2,
         text: road_label(road, part),
-    }]
+    });
+    texts
+}
+
+/// Fills ZONE cells that exist but are empty.
+pub(super) fn plan_zone_ops(sheet: &str, rows: &[RoadRow]) -> Vec<RowOp> {
+    rows.iter()
+        .filter(|row| row.zone_blank)
+        .filter_map(|row| {
+            Some(RowOp::SetText {
+                sheet: sheet.to_string(),
+                row: row.row,
+                column: 1,
+                text: zone_for_road(row.road)?.to_string(),
+            })
+        })
+        .collect()
 }
 
 /// Merges the Road references of Log tags into per-Road needs.
@@ -154,7 +194,7 @@ pub(super) fn plan_road_structure(
                     sheet: sheet.to_string(),
                     after_row,
                     template_row,
-                    copy_columns: vec![1],
+                    copy_columns: Vec::new(),
                     texts: label_text(road, Some(part)),
                 },
             ));
@@ -189,7 +229,12 @@ mod tests {
     use super::*;
 
     fn row(row: u32, road: u32, part: Option<u32>) -> RoadRow {
-        RoadRow { row, road, part }
+        RoadRow {
+            row,
+            road,
+            part,
+            zone_blank: false,
+        }
     }
 
     fn need(parts: &[u32], partless: bool) -> RoadNeed {
@@ -217,7 +262,11 @@ mod tests {
                 template_row,
                 texts,
                 ..
-            } => (*after_row, *template_row, texts[0].text.clone()),
+            } => (
+                *after_row,
+                *template_row,
+                texts.last().expect("label text").text.clone(),
+            ),
             RowOp::SetText { row, text, .. } => (*row, 0, text.clone()),
         }
     }
@@ -292,10 +341,11 @@ mod tests {
             ]
         );
         for op in &ops {
-            let RowOp::InsertRow { copy_columns, .. } = op else {
+            let RowOp::InsertRow { texts, .. } = op else {
                 panic!("insert expected");
             };
-            assert!(copy_columns.is_empty(), "zone is unknown for a new Road");
+            assert_eq!(texts.len(), 2, "zone and label");
+            assert_eq!(texts[0].column, 1);
         }
     }
 
@@ -313,6 +363,46 @@ mod tests {
         let ops = plan_road_structure("Road", &sheet(), &needs);
         let texts: Vec<String> = ops.iter().map(|op| insert_text(op).2).collect();
         assert_eq!(texts, ["Road 07", "Road 06"]);
+    }
+
+    #[test]
+    fn zones_follow_the_fixed_road_table() {
+        for (road, zone) in [
+            (1, "North"),
+            (5, "North"),
+            (6, "Center"),
+            (13, "Center"),
+            (14, "South"),
+            (20, "South"),
+            (21, "North"),
+        ] {
+            assert_eq!(zone_for_road(road), Some(zone), "Road {road}");
+        }
+        assert_eq!(zone_for_road(22), None);
+    }
+
+    #[test]
+    fn blank_zone_cells_are_filled_from_the_table() {
+        let mut rows = sheet();
+        rows[2].zone_blank = true; // Road 02
+        rows[5].zone_blank = true; // Road 05
+        let ops = plan_zone_ops("Road", &rows);
+        let described: Vec<(u32, String)> = ops
+            .iter()
+            .map(|op| match op {
+                RowOp::SetText {
+                    row, text, column, ..
+                } => {
+                    assert_eq!(*column, 1);
+                    (*row, text.clone())
+                }
+                RowOp::InsertRow { .. } => panic!("set text expected"),
+            })
+            .collect();
+        assert_eq!(
+            described,
+            [(7, "North".to_string()), (10, "North".to_string())]
+        );
     }
 
     #[test]
