@@ -244,6 +244,8 @@ export interface HistoryPayload {
 export interface RecoveryEntry {
   journalId: string;
   disposition: "no_effect" | "outcome_unknown";
+  warningKey?: string;
+  locator?: string;
   restoreOriginalAvailable?: boolean;
 }
 
