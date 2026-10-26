@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.31.1 - 2026-10-26
+
+### Fixed
+
+- The Quality workflow also runs on pushes to `main`, so version, source, frontend, and Rust gates check direct commits as well as pull requests.
+- A tracked `.githooks/pre-commit` runs the version contract and source audit before each commit. Enable it once with `git config core.hooksPath .githooks`.
+
 ## 1.31.0 - 2026-10-26
 
 ### Added
