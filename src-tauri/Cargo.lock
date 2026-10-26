@@ -836,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "docflow"
-version = "1.33.50"
+version = "1.33.51"
 dependencies = [
  "base64 0.22.1",
  "cc",
