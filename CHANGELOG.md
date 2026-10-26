@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.6 - 2026-10-26
+
+### Changed
+
+- `plan/EditablePlanTable.tsx` (1104 lines) moves its date helpers to `plan/editorDates.ts` and the `CompactDateInput` component to `plan/CompactDateInput.tsx`. The table file drops to 960 lines. Exports used by other screens are unchanged.
+
 ## 1.33.5 - 2026-10-26
 
 ### Changed
