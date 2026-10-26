@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.1 - 2026-10-26
+
+### Removed
+
+- Two never-called helpers marked `#[allow(dead_code)]` are gone: `discover_layout` in `rfi_follow_up/scan.rs` and `signed_route_key` in `rfi_follow_up/routing.rs`. Other retained `dead_code` items are deliberate scaffolding for accepted or staged features and stay.
+
 ## 1.33.0 - 2026-10-26
 
 ### Added
