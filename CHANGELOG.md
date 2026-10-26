@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.17 - 2026-10-26
+
+### Fixed
+
+- Below 360px the phone bottom bar shows icons only, with 40px targets, instead of shrinking the active label's neighbours to about 26px. The named current section is kept at 360px, 375px, and 390px, each checked in the browser with the longest label, Kurtarma merkezi, fully visible and every item inside the viewport.
+
 ## 1.33.16 - 2026-10-26
 
 ### Changed
