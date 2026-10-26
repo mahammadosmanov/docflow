@@ -5,7 +5,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -33,7 +32,6 @@ import {
   type PathSelection,
   type Plan,
   type PrintQueueSummary,
-  type ProgressEvent,
   type RfiPrintCandidate,
   type RfiPrintResolution,
 } from "../types";
@@ -62,7 +60,8 @@ import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
-import { editorRowsOf, nextProgressTrail, rememberedParams } from "./operationState";
+import { editorRowsOf, rememberedParams } from "./operationState";
+import { useProgressTrail } from "./useProgressTrail";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -99,8 +98,8 @@ export function OperationScreen({
   >(initialPlan ? "preview" : "form");
   const [plan, setPlan] = useState<Plan | null>(initialPlan ?? null);
   const [result, setResult] = useState<OperationResult | null>(null);
-  const [progress, setProgress] = useState<ProgressEvent | null>(null);
-  const [progressTrail, setProgressTrail] = useState<ProgressEvent[]>([]);
+  const { progress, progressTrail, receiveProgress, startProgress } =
+    useProgressTrail();
   const [error, setError] = useState("");
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
@@ -128,11 +127,6 @@ export function OperationScreen({
     unknown
   > | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const receiveProgress = useCallback((event: ProgressEvent) => {
-    setProgress(event);
-    setProgressTrail((current) => nextProgressTrail(current, event));
-  }, []);
-
   useEffect(() => {
     setHydrated(false);
     setPreviousValues(null);
@@ -211,8 +205,7 @@ export function OperationScreen({
   const preview = async () => {
     setError("");
     const preparing = { phase: "preparing", done: 0, total: 0 };
-    setProgress(preparing);
-    setProgressTrail([preparing]);
+    startProgress(preparing);
     setStage("previewing");
     try {
       const sanitized = persistableValues(operation.schema, values);
@@ -311,8 +304,7 @@ export function OperationScreen({
     if (!plan) return;
     setError("");
     const applying = { phase: "apply", done: 0, total: 0 };
-    setProgress(applying);
-    setProgressTrail([applying]);
+    startProgress(applying);
     try {
       let approvedPlan = plan;
       if (editorDirty) {

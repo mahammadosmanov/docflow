@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.49 - 2026-10-27
+
+### Changed
+
+- The operation run's progress state (the latest event, the phase trail, and the receive and start handlers) moves from `frontend/src/screens/OperationScreen.tsx` into the `useProgressTrail` hook in `frontend/src/screens/useProgressTrail.ts`. The trail keeps its eight-entry limit and collapses repeated phases. `useProgressTrail.test.ts` covers both behaviors. Behavior is unchanged.
+
 ## 1.33.48 - 2026-10-27
 
 ### Changed
