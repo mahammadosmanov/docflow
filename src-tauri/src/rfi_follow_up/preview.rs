@@ -374,9 +374,23 @@ pub(super) fn plan_from_classification(
             )
         })
         .collect::<Result<Vec<_>, BackendError>>()?;
+    let formulas = rows
+        .iter()
+        .filter(|row| row.enabled && !row.formula_fixes.is_empty())
+        .flat_map(|row| {
+            row.formula_fixes.iter().map(|fix| FollowUpApprovedFormula {
+                row_id: row.row_id.clone(),
+                worksheet: row.target.worksheet.clone(),
+                row: row.row,
+                column: fix.column,
+                formula: fix.formula.clone(),
+                style: fix.style.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
     let updates = rows
         .iter()
-        .filter(|row| row.enabled && row.remark.is_none())
+        .filter(|row| row.enabled && row.remark.is_none() && row.formula_fixes.is_empty())
         .map(|row| {
             if !row.selectable || row.disposition != FollowUpDisposition::Ready {
                 return Err(workbook_invalid());
@@ -426,7 +440,7 @@ pub(super) fn plan_from_classification(
         "rfiFollowUp".to_string(),
         serde_json::to_value(plan_meta).map_err(|_| workbook_invalid())?,
     );
-    let steps = if updates.is_empty() && remarks.is_empty() {
+    let steps = if updates.is_empty() && remarks.is_empty() && formulas.is_empty() {
         Vec::new()
     } else {
         let step_meta = FollowUpStepMeta {
@@ -437,6 +451,7 @@ pub(super) fn plan_from_classification(
             layouts,
             updates,
             remarks,
+            formulas,
             structure,
         };
         let step_meta = serde_json::to_value(step_meta)

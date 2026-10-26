@@ -5,6 +5,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.28.0 - 2026-10-25
+
+### Fixed
+
+- Follow Up remarks are decided cell by cell: only RFI cells holding several RFIs with at least one not Completed contribute, and only their RFIs are listed. A remark no longer lists Completed RFIs from unrelated cells of the row (ADR 0049).
+
+### Added
+
+- Follow Up maintenance: empty formula cells in a formula-driven column of CIV, PCU, or Road (for example missing `Y`/`Z` on Road rows) are filled from the column's formula as reviewable rows. Typed values and existing formulas are never changed.
+- The activity log records why a scanned cover page was not confirmed (cue flags and text length only), to diagnose unreadable scans.
+
 ## 1.27.0 - 2026-10-24
 
 ### Added

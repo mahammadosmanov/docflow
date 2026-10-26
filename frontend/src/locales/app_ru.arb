@@ -1109,5 +1109,6 @@
   "warn.rfi.followUp.reason.remarkUnsafe": "Ячейка Remarks содержит формулу или объединена; не изменена.",
   "warn.rfi.followUp.massDeletionBrake": "Большинства RFI из Follow Up нет в выбранном RFI Log, поэтому удаление приостановлено. Убедитесь, что выбран правильный и актуальный RFI Log.",
   "warn.rfi.followUp.reason.structureInsert": "Будет добавлена строка части Road (формат и формулы копируются из соседней строки).",
-  "warn.rfi.followUp.reason.structureRename": "Строка Road без части будет переименована в «Part 1», так как в Log указаны её части."
+  "warn.rfi.followUp.reason.structureRename": "Строка Road без части будет переименована в «Part 1», так как в Log указаны её части.",
+  "warn.rfi.followUp.reason.readyFormulaRepair": "Отсутствующая формула будет добавлена по образцу остальных строк столбца."
 }

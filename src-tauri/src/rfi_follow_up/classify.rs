@@ -166,6 +166,7 @@ pub(super) fn classify_workbooks_full(
                     selectable: false,
                     enabled: false,
                     remark: None,
+                    formula_fixes: Vec::new(),
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -233,6 +234,7 @@ pub(super) fn classify_workbooks_full(
                     selectable: false,
                     enabled: false,
                     remark: None,
+                    formula_fixes: Vec::new(),
                     target: FollowUpReviewTarget {
                         worksheet: layout.worksheet.clone(),
                         row: 0,
@@ -354,6 +356,7 @@ pub(super) fn classify_workbooks_full(
                 selectable: false,
                 enabled: false,
                 remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -393,6 +396,7 @@ pub(super) fn classify_workbooks_full(
                 selectable: false,
                 enabled: false,
                 remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -438,6 +442,7 @@ pub(super) fn classify_workbooks_full(
                 selectable: false,
                 enabled: false,
                 remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet,
                     row: 0,
@@ -525,6 +530,7 @@ pub(super) fn classify_workbooks_full(
                 selectable: false,
                 enabled: false,
                 remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: slot.layout.worksheet.clone(),
                     row: slot.row,
@@ -709,6 +715,7 @@ pub(super) fn classify_workbooks_full(
                         selectable: false,
                         enabled: false,
                         remark: None,
+                        formula_fixes: Vec::new(),
                         target: FollowUpReviewTarget {
                             worksheet: slot.layout.worksheet.clone(),
                             row: slot.row,
@@ -802,6 +809,7 @@ pub(super) fn classify_workbooks_full(
             selectable: false,
             enabled: false,
             remark: None,
+            formula_fixes: Vec::new(),
             target: FollowUpReviewTarget {
                 worksheet: layout.worksheet,
                 row: 0,
@@ -909,6 +917,7 @@ pub(super) fn classify_workbooks_full(
         target_workbook,
         &mut merge_budget,
     )?);
+    rows.extend(formula_repair_rows(&layouts, target_workbook));
 
     if rows.len() > MAX_PREVIEW_ROWS {
         return Err(limit_exceeded_for(format!(

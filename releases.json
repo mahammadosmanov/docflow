@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.27.0",
+  "currentVersion": "1.28.0",
   "releases": [
+    {
+      "version": "1.28.0",
+      "date": "2026-10-25",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.28.0",
+      "summary": "Per-cell Follow Up remarks and automatic repair of empty formula cells."
+    },
     {
       "version": "1.27.0",
       "date": "2026-10-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.27.0",
       "summary": "Follow Up manages Road part rows from the Log and pauses mass removals."
     },

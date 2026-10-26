@@ -5427,3 +5427,164 @@ fn a_log_missing_most_follow_up_rfis_pauses_deletion_and_warns() {
             .all(|row| row["reasonKey"] != "warn.rfi.followUp.reason.readyDeleted")
     );
 }
+
+#[test]
+fn remark_lists_only_the_rfis_of_cells_that_need_it() {
+    // Row has a mixed two-RFI cell and, in another cell pair, one single Completed RFI.
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                        inline("E1", "RFI No."),
+                        inline("F1", "STATUS"),
+                        inline("Q1", "Remarks"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", "CIV-1222/1223"),
+                        inline("D2", "In Progress"),
+                        inline("E2", "CIV-1300"),
+                        inline("F2", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+    let review = classify(
+        remark_source(&[
+            ("1222", "Completed"),
+            ("1223", "Ongoing"),
+            ("1300", "Completed"),
+        ]),
+        target,
+    )
+    .unwrap();
+
+    let row = remark_row(&review).expect("remark row");
+    assert_eq!(remark_text(row), "CIV-1222 Completed CIV-1223 In Progress");
+}
+
+#[test]
+fn empty_formula_cells_in_a_formula_column_are_repaired_and_values_are_never_overwritten() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    // Rows 5-8: Y is formula-driven; row 6 has an empty Y, row 7 holds a typed value.
+    let rows = (5..=8).map(|r| {
+        let y = match r {
+            6 => blank(&format!("Y{r}")),
+            7 => inline(&format!("Y{r}"), "READY"),
+            _ => formula(
+                &format!("Y{r}"),
+                &format!("COUNTIF(K{r}:L{r},\"Completed\")/6"),
+                "0",
+            ),
+        };
+        row(
+            r,
+            [
+                inline(&format!("A{r}"), "South"),
+                inline(&format!("B{r}"), &format!("Road {r:02}")),
+                inline(&format!("K{r}"), ""),
+                inline(&format!("L{r}"), ""),
+                y,
+            ],
+        )
+    });
+    let header = row(
+        4,
+        [
+            inline("B4", "ROAD No."),
+            inline("K4", "RFI No."),
+            inline("L4", "STATUS"),
+        ],
+    );
+    let target = package(&[
+        (
+            "CIV",
+            None,
+            worksheet(
+                [row(4, [inline("C4", "RFI No."), inline("D4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "MEC",
+            None,
+            worksheet(
+                [row(4, [inline("H4", "RFI No."), inline("I4", "STATUS")])],
+                &[],
+            ),
+        ),
+        (
+            "Road",
+            None,
+            worksheet(std::iter::once(header).chain(rows), &[]),
+        ),
+    ]);
+    let (plan, _, target_path, original) = road_preview(
+        &root,
+        road_source(&[("0001", "Road 99", "Completed")]),
+        target,
+    );
+
+    let fixes = plan.meta["editor"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["reasonKey"] == "warn.rfi.followUp.reason.readyFormulaRepair")
+        .collect::<Vec<_>>();
+    assert_eq!(fixes.len(), 1, "{fixes:?}");
+    assert_eq!(fixes[0]["_row"], 6);
+    assert!(
+        fixes[0]["mappingDetails"]
+            .as_str()
+            .unwrap()
+            .contains("Y6 = COUNTIF(K6:L6")
+    );
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let g1 = authority
+        .issue_grant(&scope, &root, GrantAccess::Read)
+        .unwrap();
+    let g2 = authority
+        .issue_grant(&scope, &root, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![g1.grant_id, g2.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+    let mut written = File::open(&target_path).unwrap();
+    let road = read_workbook_from_reader(&mut written).unwrap();
+    let road = road.sheet("Road").unwrap();
+    assert_eq!(
+        road.cell(6, 25).unwrap().formula.as_deref(),
+        Some("COUNTIF(K6:L6,\"Completed\")/6")
+    );
+    assert_eq!(road.value(7, 25), "READY");
+    assert!(road.cell(7, 25).unwrap().formula.is_none());
+    authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}

@@ -205,6 +205,7 @@ pub(super) fn structure_review_rows(ops: &[RowOp], layouts: &[FollowUpLayout]) -
                 selectable: false,
                 enabled: false,
                 remark: None,
+                formula_fixes: Vec::new(),
                 target: FollowUpReviewTarget {
                     worksheet: layout.worksheet.clone(),
                     row,

@@ -54,36 +54,37 @@ pub(super) fn remark_review_rows(
         if row_slots.iter().any(|slot| slot.unsafe_reason.is_some()) {
             continue;
         }
-        let mut cells = Vec::<Vec<RemarkState>>::new();
+        // Cell by cell: only a cell that holds several RFIs, not all Completed, takes
+        // part. Its RFIs alone are listed; other cells of the row are not mentioned.
         let mut entries = Vec::<(String, RemarkState)>::new();
         let mut row_is_provable = true;
         for slot in &row_slots {
-            let mut states = Vec::new();
+            let mut cell = Vec::<(String, RemarkState)>::new();
             for code in slot.codes.iter().filter(|code| !is_placeholder_rfi(code)) {
                 let Some(state) = state_of(records, code) else {
                     row_is_provable = false;
                     continue;
                 };
-                states.push(state);
                 let short = code
                     .strip_prefix(FULL_RFI_PREFIX)
                     .unwrap_or(code)
                     .to_string();
-                if !entries.iter().any(|(existing, _)| *existing == short) {
-                    entries.push((short, state));
+                cell.push((short, state));
+            }
+            let states = cell.iter().map(|(_, state)| *state).collect::<Vec<_>>();
+            if needs_remark(&[states]) {
+                for (short, state) in cell {
+                    if !entries.iter().any(|(existing, _)| *existing == short) {
+                        entries.push((short, state));
+                    }
                 }
             }
-            cells.push(states);
         }
         if !row_is_provable {
             continue;
         }
 
-        let desired = if needs_remark(&cells) {
-            build_remark(&entries)
-        } else {
-            Vec::new()
-        };
+        let desired = build_remark(&entries);
         let current = sheet.cell(row, column);
         let current_text = current
             .map(|cell| cell.value.trim().to_string())
@@ -139,6 +140,7 @@ pub(super) fn remark_review_rows(
             reason_key: reason_key.to_string(),
             selectable,
             enabled: selectable,
+            formula_fixes: Vec::new(),
             remark: selectable.then(|| FollowUpRemarkChange {
                 column,
                 expected: current.map(Into::into),

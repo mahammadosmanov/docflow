@@ -106,6 +106,7 @@ mod orientation;
 mod render;
 mod session;
 mod tesseract;
+pub use cover::take_cover_trace;
 use cover::*;
 pub use image::*;
 use orientation::*;

@@ -165,6 +165,8 @@ pub(crate) struct FollowUpStepMeta {
     updates: Vec<FollowUpApprovedUpdate>,
     #[serde(default)]
     remarks: Vec<FollowUpApprovedRemark>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    formulas: Vec<FollowUpApprovedFormula>,
     /// Road part rows to add or relabel before the cell updates; applied in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     structure: Vec<RowOp>,
@@ -221,6 +223,28 @@ struct FollowUpRow {
     /// Present only on remark review rows; they write no RFI or status cell.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     remark: Option<FollowUpRemarkChange>,
+    /// Present only on formula repair rows: empty formula cells to fill.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    formula_fixes: Vec<FollowUpFormulaFix>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpFormulaFix {
+    column: u32,
+    formula: String,
+    style: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FollowUpApprovedFormula {
+    row_id: String,
+    worksheet: WorksheetDescriptor,
+    row: u32,
+    column: u32,
+    formula: String,
+    style: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -382,6 +406,7 @@ impl MergeQueryBudget {
 mod apply;
 mod classify;
 mod codes;
+mod formula_rows;
 mod preview;
 mod remark;
 mod remark_rows;
@@ -394,6 +419,7 @@ mod structure_rows;
 pub use apply::*;
 pub use classify::*;
 pub use codes::*;
+use formula_rows::*;
 pub use preview::*;
 use remark::*;
 use remark_rows::*;

@@ -297,13 +297,17 @@ where
                 .cells
                 .get(&coordinate)
                 .ok_or_else(|| OoxmlError::invalid("guarded target cell is missing"))?;
-            let replacement = match &update.replacement {
-                CellUpdate::Text(replacement) => replacement.clone(),
-                CellUpdate::Rich(runs) => rich_plain_text(runs),
+            let (replacement, formula) = match &update.replacement {
+                CellUpdate::Text(replacement) => (replacement.clone(), None),
+                CellUpdate::Rich(runs) => (rich_plain_text(runs), None),
+                CellUpdate::Formula {
+                    formula,
+                    cached: None,
+                } => (String::new(), Some(formula.as_str())),
                 _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
             };
             if cell.value != replacement
-                || cell.formula.is_some()
+                || cell.formula.as_deref() != formula
                 || cell.style != update.expected.style
             {
                 return Err(OoxmlError::invalid(
@@ -339,9 +343,12 @@ pub(super) fn validate_guarded_update_set(
             }
             if !matches!(
                 &update.replacement,
-                CellUpdate::Text(_) | CellUpdate::Rich(_)
+                CellUpdate::Text(_)
+                    | CellUpdate::Rich(_)
+                    | CellUpdate::Formula { cached: None, .. }
             ) || matches!(&update.replacement, CellUpdate::Rich(runs) if runs.is_empty())
-                || status_values_only && matches!(&update.replacement, CellUpdate::Rich(_))
+                || matches!(&update.replacement, CellUpdate::Formula { formula, .. } if formula.is_empty())
+                || status_values_only && !matches!(&update.replacement, CellUpdate::Text(_))
                 || status_values_only
                     && !matches!(
                         &update.replacement,

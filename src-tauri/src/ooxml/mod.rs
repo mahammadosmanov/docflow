@@ -363,7 +363,7 @@ mod xml;
 use archive::*;
 pub use patch::*;
 pub use read::*;
-pub use refs::RowShift;
+pub use refs::{RowShift, translate_formula};
 use relationships::*;
 use rich::*;
 pub use rows::{CellText, RowOp, apply_row_ops};

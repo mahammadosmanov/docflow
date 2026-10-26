@@ -546,6 +546,7 @@ impl BorrowedFollowUpRow<'_> {
             selectable: self.selectable,
             enabled: self.enabled,
             remark: None,
+            formula_fixes: Vec::new(),
             target: FollowUpReviewTarget {
                 worksheet: self.target.worksheet.clone(),
                 row: self.target.row,

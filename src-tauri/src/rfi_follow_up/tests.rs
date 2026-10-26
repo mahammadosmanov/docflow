@@ -143,6 +143,7 @@ fn step_meta(updates: Vec<FollowUpApprovedUpdate>) -> FollowUpStepMeta {
         layouts: Vec::new(),
         updates,
         remarks: Vec::new(),
+        formulas: Vec::new(),
         structure: Vec::new(),
     }
 }
@@ -228,6 +229,7 @@ fn plan_from_classification_emits_one_exact_workbook_step_for_enabled_rows() {
         source_evidence: Vec::new(),
         mapping_details: None,
         remark: None,
+        formula_fixes: Vec::new(),
     };
     let columns = editor_columns();
     let classification = json!({

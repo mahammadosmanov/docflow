@@ -737,6 +737,7 @@ pub(super) fn row_from_slot(
         selectable: true,
         enabled: true,
         remark: None,
+        formula_fixes: Vec::new(),
         target: FollowUpReviewTarget {
             worksheet: slot.layout.worksheet,
             row: slot.row,
@@ -776,6 +777,7 @@ pub(super) fn unsafe_slot_review(
         selectable: false,
         enabled: false,
         remark: None,
+        formula_fixes: Vec::new(),
         target: FollowUpReviewTarget {
             worksheet: slot.layout.worksheet.clone(),
             row: slot.row,
@@ -816,6 +818,7 @@ pub(super) fn missing_final_review(
         selectable: false,
         enabled: false,
         remark: None,
+        formula_fixes: Vec::new(),
         target: FollowUpReviewTarget {
             worksheet: layout.worksheet.clone(),
             row: 0,

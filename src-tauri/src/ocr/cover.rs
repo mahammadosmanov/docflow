@@ -167,6 +167,29 @@ pub(super) fn read_cover_band_text(
     )
 }
 
+static COVER_TRACE: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+const MAX_COVER_TRACE: usize = 40;
+
+/// Records why a cover page was not confirmed (cue flags and text length only, never the
+/// text) for the activity log, so an unreadable scan can be diagnosed from one export.
+fn trace_cover(page_index: usize, direction: i64, text: &str, signals: CoverSignals) {
+    let mut trace = COVER_TRACE.lock().unwrap_or_else(|e| e.into_inner());
+    if trace.len() < MAX_COVER_TRACE {
+        trace.push(format!(
+            "page={page_index} dir={direction} chars={} heading={} mark={} strict={} hint={}",
+            text.chars().count(),
+            signals.request_heading,
+            signals.template_mark,
+            signals.strict_identity,
+            signals.identity_hint
+        ));
+    }
+}
+
+pub fn take_cover_trace() -> Vec<String> {
+    std::mem::take(&mut *COVER_TRACE.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
 pub(super) fn read_fast_cover_page(
     ocr: &NativeOcr,
     source: &Path,
@@ -208,6 +231,7 @@ pub(super) fn read_fast_cover_page(
             return Ok(read);
         }
         let mut signals = cover_signals(&text, true);
+        trace_cover(page_index, direction, &text, signals);
         possible_cover |= signals.request_heading;
         let promising = u8::from(signals.request_heading)
             + u8::from(signals.template_mark)

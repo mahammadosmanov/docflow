@@ -2752,3 +2752,94 @@ fn insert_row_can_precede_the_first_data_row_using_the_row_below_as_template() {
         "{road}"
     );
 }
+
+fn formula_fixture(cell_xml: &str) -> (Cursor<Vec<u8>>, GuardedUpdates) {
+    let workbook = format!(
+        r#"<workbook xmlns="{MAIN}" xmlns:r="urn:r"><sheets><sheet name="Road" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
+    let relationships = format!(
+        r#"<Relationships><Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let worksheet = format!(
+        r#"<worksheet xmlns="{MAIN}"><sheetData><row r="5"><c r="C5" t="inlineStr"><is><t>Completed</t></is></c>{cell_xml}</row></sheetData></worksheet>"#
+    );
+    let source = fixture(
+        &workbook,
+        &relationships,
+        &[("xl/worksheets/sheet1.xml", worksheet.as_bytes())],
+    );
+    let updates = BTreeMap::from([(
+        "Road".to_string(),
+        BTreeMap::from([(
+            (5, 25),
+            GuardedCellUpdate {
+                expected: CellData {
+                    value: String::new(),
+                    formula: None,
+                    style: Some("34".to_string()),
+                },
+                replacement: CellUpdate::Formula {
+                    formula: "COUNTIF(C5:P5,\"Completed\")/6".to_string(),
+                    cached: None,
+                },
+                create_if_absent: false,
+            },
+        )]),
+    )]);
+    (source, updates)
+}
+
+#[test]
+fn guarded_formula_fills_an_empty_styled_cell_and_verifies() {
+    let (mut source, updates) = formula_fixture(r#"<c r="Y5" s="34"/>"#);
+    let mut destination = Cursor::new(Vec::new());
+
+    patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).unwrap();
+    source.set_position(0);
+    destination.set_position(0);
+    verify_guarded_workbook_delta_text(&mut source, &mut destination, &updates).unwrap();
+
+    let xml = sheet_xml(&mut destination);
+    assert!(
+        xml.contains(r#"<c r="Y5" s="34"><f>COUNTIF(C5:P5,&quot;Completed&quot;)/6</f></c>"#),
+        "{xml}"
+    );
+    destination.set_position(0);
+    let workbook = read_workbook_from_reader(&mut destination).unwrap();
+    assert_eq!(
+        workbook
+            .sheet("Road")
+            .unwrap()
+            .cell(5, 25)
+            .unwrap()
+            .formula
+            .as_deref(),
+        Some("COUNTIF(C5:P5,\"Completed\")/6")
+    );
+}
+
+#[test]
+fn guarded_formula_never_overwrites_a_value_or_an_existing_formula() {
+    for cell in [
+        r#"<c r="Y5" s="34" t="inlineStr"><is><t>READY</t></is></c>"#,
+        r#"<c r="Y5" s="34"><f>1+1</f><v>2</v></c>"#,
+    ] {
+        let (mut source, mut updates) = formula_fixture(cell);
+        // The preview would have recorded the real content; the engine must still refuse.
+        updates
+            .get_mut("Road")
+            .unwrap()
+            .get_mut(&(5, 25))
+            .unwrap()
+            .expected = CellData {
+            value: String::new(),
+            formula: None,
+            style: Some("34".to_string()),
+        };
+        let mut destination = Cursor::new(Vec::new());
+        assert!(
+            patch_workbook_sheets_guarded_text(&mut source, &mut destination, &updates).is_err(),
+            "{cell}"
+        );
+    }
+}

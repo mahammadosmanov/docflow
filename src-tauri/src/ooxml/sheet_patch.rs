@@ -118,6 +118,15 @@ pub(super) fn patch_guarded_cell_value(
     status_values_only: bool,
     fonts: &FontTable,
 ) -> Result<(), OoxmlError> {
+    if let CellUpdate::Formula {
+        formula,
+        cached: None,
+    } = update
+        && !status_values_only
+        && !formula.is_empty()
+    {
+        return patch_guarded_formula(cell, namespace, prefix, formula);
+    }
     let (value, runs) = match update {
         CellUpdate::Text(value) => (value.as_str(), None),
         CellUpdate::Rich(runs) if !status_values_only && !runs.is_empty() => ("", Some(runs)),
@@ -191,6 +200,55 @@ pub(super) fn patch_guarded_cell_value(
         inline
     };
     cell.children.insert(insert_at, XmlNode::Element(inline));
+    cell.empty = false;
+    Ok(())
+}
+
+/// Writes a plain formula (no cached value, so Excel computes it on open) into a cell
+/// that currently holds neither a formula nor a value.
+fn patch_guarded_formula(
+    cell: &mut XmlElement,
+    namespace: &[u8],
+    prefix: Option<&str>,
+    formula: &str,
+) -> Result<(), OoxmlError> {
+    // Only a truly empty cell qualifies: no formula, and a value representation that is
+    // absent or an empty string.
+    let holds_content = cell.children.iter().any(|node| {
+        matches!(node, XmlNode::Element(child)
+            if child.namespace.as_deref() == Some(namespace)
+                && (has_local_name(child, b"f")
+                    || ((has_local_name(child, b"v") || has_local_name(child, b"is"))
+                        && !element_text(child).trim().is_empty())))
+    });
+    if holds_content {
+        return Err(OoxmlError::invalid(
+            "guarded formula target cell is not empty",
+        ));
+    }
+    cell.children.retain(|node| {
+        !matches!(node, XmlNode::Element(child)
+            if child.namespace.as_deref() == Some(namespace)
+                && (has_local_name(child, b"v") || has_local_name(child, b"is")))
+    });
+    remove_attribute(cell, b"t");
+    let qualify = |local: &str| match prefix {
+        Some(prefix) => format!("{prefix}:{local}"),
+        None => local.to_string(),
+    };
+    let mut element = XmlElement::new(&qualify("f"));
+    element.namespace = Some(namespace.to_vec());
+    set_element_text(&mut element, formula);
+    let insert_at = cell
+        .children
+        .iter()
+        .position(|node| {
+            matches!(node, XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace)
+                    && has_local_name(child, b"extLst"))
+        })
+        .unwrap_or(cell.children.len());
+    cell.children.insert(insert_at, XmlNode::Element(element));
     cell.empty = false;
     Ok(())
 }
@@ -293,12 +351,20 @@ pub(super) fn normalize_guarded_cell_for_tokens(
     let replacement = match &update.replacement {
         CellUpdate::Text(replacement) => replacement.clone(),
         CellUpdate::Rich(runs) if !runs.is_empty() => format!("rich:{}", rich_marker(runs)),
+        CellUpdate::Formula {
+            formula,
+            cached: None,
+        } if !formula.is_empty() => format!("formula:{formula}"),
         _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
     };
+    let formula_update = matches!(update.replacement, CellUpdate::Formula { .. });
     if output {
         match &update.replacement {
             CellUpdate::Rich(runs) => {
                 validate_exact_rich_output(cell, namespace, prefix, runs, fonts)?;
+            }
+            CellUpdate::Formula { formula, .. } => {
+                validate_exact_formula_output(cell, namespace, formula)?;
             }
             _ => validate_exact_guarded_output_value(cell, namespace, &replacement)?,
         }
@@ -309,6 +375,12 @@ pub(super) fn normalize_guarded_cell_for_tokens(
         return Err(OoxmlError::invalid(
             "guarded source cell contains a formula",
         ));
+    }
+    if formula_update {
+        cell.children.retain(|node| {
+            !matches!(node, XmlNode::Element(child)
+                if child.namespace.as_deref() == Some(namespace) && has_local_name(child, b"f"))
+        });
     }
 
     cell.attributes.retain(|attribute| {
@@ -582,4 +654,32 @@ pub(super) fn optional_unique_direct_child_by_attribute_mut<'a>(
         },
         _ => Err(OoxmlError::invalid(error)),
     }
+}
+
+fn validate_exact_formula_output(
+    cell: &XmlElement,
+    namespace: &[u8],
+    expected: &str,
+) -> Result<(), OoxmlError> {
+    let invalid = || OoxmlError::invalid("guarded output formula is not the approved formula");
+    if bounded_unqualified_attribute(cell, b"t", 32, "guarded cell type")?.is_some()
+        || child_elements_in_namespace(cell, b"v", namespace)
+            .next()
+            .is_some()
+        || child_elements_in_namespace(cell, b"is", namespace)
+            .next()
+            .is_some()
+    {
+        return Err(invalid());
+    }
+    let formula = single_child_element_in_namespace(
+        cell,
+        b"f",
+        namespace,
+        "guarded output formula is invalid",
+    )?;
+    if !formula.attributes.is_empty() || element_text(formula) != expected {
+        return Err(invalid());
+    }
+    Ok(())
 }

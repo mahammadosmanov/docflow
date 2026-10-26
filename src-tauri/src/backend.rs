@@ -710,6 +710,10 @@ pub(crate) async fn frontend_call(
                 entry["error"] = Value::String(error.message.clone());
             }
         }
+        let trace = crate::ocr::take_cover_trace();
+        if !trace.is_empty() {
+            entry["ocrCoverTrace"] = serde_json::json!(trace);
+        }
         if let Some(failure) = crate::leaf_transaction::take_last_failure() {
             entry["publicationFailure"] = Value::String(failure);
         }

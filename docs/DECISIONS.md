@@ -47,6 +47,7 @@ and versioned with the code they govern.
 | Follow Up Road parts and deleted RFIs | Accepted | [`adr/0046-follow-up-road-parts-and-deleted-rfis.md`](adr/0046-follow-up-road-parts-and-deleted-rfis.md) |
 | Follow Up generated row remarks | Accepted | [`adr/0047-follow-up-generated-row-remarks.md`](adr/0047-follow-up-generated-row-remarks.md) |
 | Follow Up Road part rows | Accepted | [`adr/0048-follow-up-road-part-rows.md`](adr/0048-follow-up-road-part-rows.md) |
+| Follow Up formula maintenance and per-cell remarks | Accepted | [`adr/0049-follow-up-formula-maintenance.md`](adr/0049-follow-up-formula-maintenance.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

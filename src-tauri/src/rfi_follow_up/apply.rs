@@ -6,13 +6,14 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
     }
     let meta: FollowUpStepMeta =
         serde_json::from_value(Value::Object(step.meta.clone())).map_err(|_| workbook_invalid())?;
-    if (meta.updates.is_empty() && meta.remarks.is_empty())
-        || meta.updates.len() + meta.remarks.len() > MAX_PREVIEW_ROWS
+    if (meta.updates.is_empty() && meta.remarks.is_empty() && meta.formulas.is_empty())
+        || meta.updates.len() + meta.remarks.len() + meta.formulas.len() > MAX_PREVIEW_ROWS
     {
         return Err(workbook_invalid());
     }
     validate_remarks(&meta)?;
     validate_structure(&meta.structure)?;
+    validate_formulas(&meta)?;
     let mut row_ids = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for update in &meta.updates {
@@ -128,7 +129,62 @@ pub fn guarded_updates(step: &Step) -> Result<FollowUpGuardedUpdates, BackendErr
             return Err(workbook_invalid());
         }
     }
+    for fix in meta.formulas {
+        let guarded = GuardedCellUpdate {
+            expected: CellData {
+                value: String::new(),
+                formula: None,
+                style: fix.style,
+            },
+            replacement: CellUpdate::Formula {
+                formula: fix.formula,
+                cached: None,
+            },
+            create_if_absent: false,
+        };
+        if updates_by_sheet
+            .entry(fix.worksheet.name)
+            .or_default()
+            .insert((fix.row, fix.column), guarded)
+            .is_some()
+        {
+            return Err(workbook_invalid());
+        }
+    }
     Ok(updates_by_sheet)
+}
+
+/// Formula repairs fill only empty cells of the lifecycle sheets with plain formulas.
+fn validate_formulas(meta: &FollowUpStepMeta) -> Result<(), BackendError> {
+    let mut targets = BTreeSet::new();
+    for fix in &meta.formulas {
+        let sheet = fix.worksheet.name.trim().to_uppercase();
+        if !matches!(sheet.as_str(), "CIV" | "PCU" | "ROAD")
+            || !meta
+                .all_layouts()
+                .any(|layout| layout.worksheet == fix.worksheet)
+            || fix.row == 0
+            || fix.column == 0
+            || fix.formula.trim().is_empty()
+            || fix.formula.chars().count() > MAX_CELL_TEXT_CHARS
+            || fix.formula.contains(['[', '\n'])
+            || !targets.insert((fix.worksheet.part_path.as_str(), fix.row, fix.column))
+            || meta.updates.iter().any(|update| {
+                update.target.worksheet == fix.worksheet
+                    && update.target.row == fix.row
+                    && (update.target.rfi_column == fix.column
+                        || update.target.status_column == fix.column)
+            })
+            || meta.remarks.iter().any(|remark| {
+                remark.worksheet == fix.worksheet
+                    && remark.row == fix.row
+                    && remark.column == fix.column
+            })
+        {
+            return Err(workbook_invalid());
+        }
+    }
+    Ok(())
 }
 
 /// Remark updates may only add, replace, or clear text DocFlow generated.
