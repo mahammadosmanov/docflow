@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.10 - 2026-10-26
+
+### Documented
+
+- `docs/KNOWN_ISSUES.md` records that the Outlook selected-message archive preview has no operator route or roster entry. The code stays as roadmap scaffolding.
+
 ## 1.33.9 - 2026-10-26
 
 ### Removed
