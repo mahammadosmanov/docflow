@@ -122,5 +122,3 @@ jobs:
           CARGO_BUILD_JOBS: "1"
         run: |
           cargo test --manifest-path src-tauri/Cargo.toml
-          cargo clean --manifest-path src-tauri/Cargo.toml
-          cargo check --manifest-path src-tauri/Cargo.toml

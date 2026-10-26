@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.32.1 - 2026-10-26
+
+### Fixed
+
+- The Rust test CI job no longer runs `cargo clean` and `cargo check` after `cargo test`, which had forced a full rebuild for no added coverage. The clippy job still covers all targets.
+
 ## 1.32.0 - 2026-10-26
 
 ### Added
