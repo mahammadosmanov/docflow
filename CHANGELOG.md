@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.38 - 2026-10-27
+
+### Changed
+
+- `frontend/src/plan/signedWarnings.test.ts` covers `signedWarningReviewItems`, the check on backend review items. The tests cover the three-value status allow-list, dropped items with a missing file name or malformed reason list, dropped reasons without a key or detail, and page-number sanitizing (only positive safe integers survive). No application code changes.
+
 ## 1.33.37 - 2026-10-27
 
 ### Changed
