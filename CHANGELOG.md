@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.23 - 2026-10-27
+
+### Changed
+
+- The workbook cell change summary moves from `frontend/src/plan/PlanSummaries.tsx` into `frontend/src/plan/workbookCellChanges.ts`: `summarizeWorkbookCellChanges`, `canonicalRfiInText`, the Excel cell address helper, and the preview cap. `PlanSummaries.tsx` re-exports the module, so existing imports are unchanged. Behavior is unchanged; the App tests cover these helpers.
+
 ## 1.33.22 - 2026-10-27
 
 ### Changed
