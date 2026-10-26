@@ -5,6 +5,17 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.9 - 2026-10-26
+
+### Removed
+
+- Stale `#[allow(dead_code)]` attributes on items that are now used in the non-test build; the attributes were no longer needed.
+- `preview_outlook_reply_draft` and its `OutlookReplyDraftValues` value type, which the live reply path (`preview_rfi_reply`) superseded.
+
+### Documented
+
+- The nine remaining `dead_code` allows cover replica publication (accepted design, not active) and the Outlook archive preview (no dispatch route yet). Each carries a one-line reason above it.
+
 ## 1.33.8 - 2026-10-26
 
 ### Fixed

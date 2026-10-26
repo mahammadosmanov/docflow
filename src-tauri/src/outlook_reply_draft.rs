@@ -194,6 +194,7 @@ struct OutlookArchiveAuthority {
     fingerprint: String,
 }
 
+// Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
 #[allow(dead_code)]
 pub(crate) struct PreparedArchive {
     pub plan: Plan,
@@ -228,6 +229,7 @@ impl OutlookDraftService {
         }
     }
 
+    // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
     #[allow(dead_code)]
     pub(crate) fn prepare_archive(
         &self,
@@ -277,6 +279,7 @@ impl OutlookDraftService {
         })
     }
 
+    // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
     #[allow(dead_code)]
     pub(crate) fn bind_archive(&self, plan_id: &str, prepared: PreparedArchive) {
         lock_archive_authorities(&self.archive_authorities)

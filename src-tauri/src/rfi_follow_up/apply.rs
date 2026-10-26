@@ -232,7 +232,6 @@ fn validate_remarks(meta: &FollowUpStepMeta) -> Result<(), BackendError> {
     Ok(())
 }
 
-#[allow(dead_code)]
 pub(crate) fn verify_patched_output<R1, R2>(
     step: &Step,
     source: &mut R1,
@@ -259,7 +258,6 @@ where
         .map_err(map_error)
 }
 
-#[allow(dead_code)]
 pub(crate) fn changed_cell_count(step: &Step) -> Result<u64, BackendError> {
     u64::try_from(
         guarded_updates(step)?
@@ -401,7 +399,6 @@ pub(super) fn signed_package() -> BackendError {
     BackendError::validation("error.rfi.followUp.signedPackage")
 }
 
-#[allow(dead_code)]
 pub(crate) fn map_follow_up_ooxml_error(error: OoxmlError) -> BackendError {
     match error.kind() {
         OoxmlErrorKind::LimitExceeded => {

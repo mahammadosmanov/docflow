@@ -1017,7 +1017,6 @@ pub fn classify_workbooks(
     }
 }
 
-#[allow(dead_code)]
 pub(super) fn classify_workbooks_legacy(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,

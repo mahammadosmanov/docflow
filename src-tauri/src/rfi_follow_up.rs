@@ -35,7 +35,6 @@ use crate::{
     rfi_log::status_columns,
 };
 
-#[allow(dead_code)]
 pub(crate) const OPERATION_ID: &str = "rfi.follow_up_sync";
 const SOURCE_FIRST_DATA_ROW: u32 = 10;
 const MAX_SOURCE_DATA_ROWS_PER_SHEET: u32 = 20_000;
@@ -119,7 +118,6 @@ struct FollowUpReviewTarget {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[allow(dead_code)]
 pub(crate) struct WorkbookFingerprint {
     identity: FilesystemObjectIdentity,
     size: u64,
@@ -129,7 +127,6 @@ pub(crate) struct WorkbookFingerprint {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[allow(dead_code)]
 struct FollowUpCellTarget {
     worksheet: WorksheetDescriptor,
     row: u32,
@@ -141,7 +138,6 @@ struct FollowUpCellTarget {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[allow(dead_code)]
 struct FollowUpApprovedUpdate {
     row_id: String,
     canonical_rfi: String,
@@ -154,7 +150,6 @@ struct FollowUpApprovedUpdate {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[allow(dead_code)]
 pub(crate) struct FollowUpStepMeta {
     rfi_log_workbook: String,
     rfi_log_fingerprint: WorkbookFingerprint,

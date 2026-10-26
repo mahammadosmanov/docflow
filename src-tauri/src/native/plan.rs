@@ -104,6 +104,7 @@ impl NativeBackend {
                 .preview(&self.caller_identity()?, request.values, progress)?,
         )
     }
+    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     pub(crate) fn preview_replica_publish<F>(
         &self,
@@ -123,6 +124,7 @@ impl NativeBackend {
         let caller = self.caller_identity()?;
         encode(self.cache_replica_plan(request.values, &caller, false, progress)?)
     }
+    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     pub(super) fn cache_replica_plan<F>(
         &self,

@@ -545,6 +545,7 @@ impl NativeBackend {
             },
         );
     }
+    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     pub(crate) fn automatic_replica_tick(&self) {
         if !self.settings.preferences().replica_sync_enabled {
@@ -645,6 +646,7 @@ impl NativeBackend {
             Err(error) => self.pause_replica_automation(error.message.as_str()),
         }
     }
+    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     fn pause_replica_automation(&self, error_code: &str) {
         if let Some(mut section) = self.settings.section("replicaAutomation") {

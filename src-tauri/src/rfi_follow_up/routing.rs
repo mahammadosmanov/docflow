@@ -59,7 +59,6 @@ pub(super) fn default_signed_col(sheet: &str, clause: &str) -> (u32, u32) {
     }
 }
 
-#[allow(dead_code)]
 pub(super) fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
     let (sheet, clause) = route_clause(record)?;
     Some((sheet, default_route_col(sheet, clause)))

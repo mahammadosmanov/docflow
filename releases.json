@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.8",
+  "currentVersion": "1.33.9",
   "releases": [
+    {
+      "version": "1.33.9",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.9",
+      "summary": "Stale dead_code allows and a superseded Outlook reply preview are removed; the remaining allows name their reason."
+    },
     {
       "version": "1.33.8",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.8",
       "summary": "Journal lock re-enters for the same store on the same thread and waits briefly for short holds, fixing intermittent operation_in_progress failures."
     },
