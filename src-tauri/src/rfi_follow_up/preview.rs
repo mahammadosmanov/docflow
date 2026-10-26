@@ -6,6 +6,18 @@ pub fn preview_from_open_files(
     rfi_log: &mut File,
     follow_up: &mut File,
 ) -> Result<Plan, BackendError> {
+    preview_from_open_files_with_backup(rfi_log_path, follow_up_path, None, rfi_log, follow_up)
+}
+
+/// `backup_directory` moves the backup copy out of the workbook's folder (for example
+/// to a fast local disk). The directory must be covered by the plan's write grant.
+pub fn preview_from_open_files_with_backup(
+    rfi_log_path: &Path,
+    follow_up_path: &Path,
+    backup_directory: Option<&Path>,
+    rfi_log: &mut File,
+    follow_up: &mut File,
+) -> Result<Plan, BackendError> {
     let rfi_log_display = rfi_log_path.to_str().ok_or_else(|| {
         BackendError::validation(
             "error.rfi.followUp.workbookInvalid: RFI Log path contains invalid UTF-8",
@@ -90,8 +102,8 @@ pub fn preview_from_open_files(
                 "error.rfi.followUp.workbookInvalid: Follow Up workbook must have .xlsx or .xlsm extension",
             )
         })?;
-    let backup = follow_up_path
-        .parent()
+    let backup = backup_directory
+        .or_else(|| follow_up_path.parent())
         .ok_or_else(|| {
             BackendError::validation(
                 "error.rfi.followUp.workbookInvalid: Follow Up workbook parent directory missing",

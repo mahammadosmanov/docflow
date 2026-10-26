@@ -205,8 +205,16 @@ pub(super) fn validate_s5_fields(record: &JournalRecord) -> Result<(), BackendEr
         .parent()
         .ok_or_else(invalid)?;
     let backup = Path::new(authority.initial_step.dst.as_deref().ok_or_else(invalid)?);
-    if backup.parent() != Some(target_parent)
-        || !path_in_recorded_roots(backup.to_string_lossy().as_ref(), &record.grant_roots)
+    // The backup normally sits beside the workbook; the operator may place it in another
+    // folder, which must then be a recorded root with write access.
+    let backup_text = backup.to_string_lossy();
+    if (backup.parent() != Some(target_parent)
+        && !path_has_access(
+            backup_text.as_ref(),
+            &record.grant_root_accesses,
+            PersistedRootAccess::ReadWrite,
+        ))
+        || !path_in_recorded_roots(backup_text.as_ref(), &record.grant_roots)
     {
         return Err(BackendError::journal_invalid(
             "S5 backup authority is invalid",
@@ -288,7 +296,13 @@ pub(super) fn validate_s5_fields(record: &JournalRecord) -> Result<(), BackendEr
                 != Some(publication.expected_canonical_logical_charge_bytes)
             || Path::new(&publication.canonical).parent()
                 != Path::new(&publication.retained).parent()
-            || Path::new(&publication.canonical).parent() != Path::new(&publication.backup).parent()
+            || (Path::new(&publication.canonical).parent()
+                != Path::new(&publication.backup).parent()
+                && !path_has_access(
+                    &publication.backup,
+                    &record.grant_root_accesses,
+                    PersistedRootAccess::ReadWrite,
+                ))
             || [
                 publication.canonical.as_str(),
                 publication.retained.as_str(),

@@ -5690,3 +5690,90 @@ fn empty_zone_cells_are_filled_from_the_fixed_road_table() {
         "{texts:?}"
     );
 }
+
+#[test]
+fn backup_copy_can_live_in_a_separate_folder_and_undo_still_restores_exactly() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    let work = root.join("work");
+    let backups = root.join("backups");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(&backups).unwrap();
+    let rfi = "AZE-SUN-INT-QMS-RFI-CIV-0006";
+    let source_path = work.join("RFI Log.xlsx");
+    let target_path = work.join("Follow Up.xlsx");
+    std::fs::write(
+        &source_path,
+        source_package(
+            worksheet(
+                [row(10, [inline("A10", rfi), inline("T10", "Completed")])],
+                &[],
+            ),
+            worksheet(Vec::<String>::new(), &[]),
+        )
+        .into_inner(),
+    )
+    .unwrap();
+    let original = target_with_rows([row(2, [inline("A2", rfi), blank("B2")])], &[]).into_inner();
+    std::fs::write(&target_path, &original).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let plan = docflow_lib::rfi_follow_up::preview_from_open_files_with_backup(
+        &source_path,
+        &target_path,
+        Some(&backups),
+        &mut source,
+        &mut target,
+    )
+    .unwrap();
+
+    let authority = FilesystemAuthority::new(root.join("journals"), Duration::from_secs(300));
+    let caller = CallerIdentity::new("owner", "session");
+    let scope = GrantScope::new("owner", "session", "request", "rfi.follow_up_sync");
+    let read = authority
+        .issue_grant(&scope, &work, GrantAccess::Read)
+        .unwrap();
+    let write = authority
+        .issue_grant(&scope, &work, GrantAccess::ReadWrite)
+        .unwrap();
+    let backup = authority
+        .issue_grant(&scope, &backups, GrantAccess::ReadWrite)
+        .unwrap();
+    let plan = authority
+        .cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                "owner",
+                "session",
+                "rfi.follow_up_sync",
+                vec![read.grant_id, write.grant_id, backup.grant_id],
+            ),
+            plan,
+        )
+        .unwrap();
+    let applied = authority.apply(&plan.plan_id, &caller).unwrap();
+    assert_eq!(applied.failed, 0, "{:?}", applied.errors);
+
+    let count = |dir: &std::path::Path| {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".docflow-s5-backup-")
+            })
+            .count()
+    };
+    assert_eq!(count(&backups), 1);
+    assert_eq!(count(&work), 0);
+
+    let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
+    assert_eq!(undone.failed, 0);
+    assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}

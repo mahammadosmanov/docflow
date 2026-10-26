@@ -238,6 +238,9 @@ pub(super) struct RfiFollowUpPreviewValues {
     pub(super) rfi_log_workbook: PathBuf,
     #[serde(rename = "follow_up_workbook")]
     pub(super) follow_up_workbook: PathBuf,
+    /// Where the backup copy is written; beside the workbook when absent.
+    #[serde(default, rename = "backup_directory")]
+    pub(super) backup_directory: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
