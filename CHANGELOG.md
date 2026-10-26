@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.5 - 2026-10-26
+
+### Changed
+
+- `operations/process_scans.rs` (1697 lines) splits into `process_scans/ocr.rs` (OCR read types and the `OcrAdapter` trait) and `process_scans/editor.rs` (scan-editor attachment and `revise`). Public paths such as `process_scans::OcrRead` and `process_scans::revise` are unchanged, and the parent file shrinks to 1328 lines.
+
 ## 1.33.4 - 2026-10-26
 
 ### Fixed
