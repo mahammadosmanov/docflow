@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.7 - 2026-10-26
+
+### Changed
+
+- The browser-only `MockBridge` and its helpers move from `frontend/src/lib/bridge.ts` to `frontend/src/lib/mockBridge.ts`. `bridge.ts` drops to about 115 lines and still re-exports `MockBridge`, so existing imports are unchanged.
+
 ## 1.33.6 - 2026-10-26
 
 ### Changed
