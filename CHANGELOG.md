@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.13 - 2026-10-26
+
+### Changed
+
+- The rule for which operation values are remembered (skip `remember: false`, never store long text or secrets) lives in `frontend/src/lib/operationValues.ts` as `persistableValues`. `OperationScreen.tsx` uses it in its three former copies, and a unit test covers the rule.
+
 ## 1.33.12 - 2026-10-26
 
 ### Changed

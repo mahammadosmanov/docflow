@@ -60,6 +60,7 @@ import {
 import {
   ResultView,
 } from "./ResultView";
+import { persistableValues } from "../lib/operationValues";
 
 export function OperationScreen({
   bridge,
@@ -172,20 +173,11 @@ export function OperationScreen({
           ...(initialValues ?? {}),
         }));
         lastSaved.current = JSON.stringify(
-          Object.fromEntries(
-            Object.entries({
-              ...defaults,
-              ...filtered,
-              ...(initialValues ?? {}),
-            }).filter(([name]) => {
-              const param = operation.schema.find((item) => item.name === name);
-              return (
-                param?.remember !== false &&
-                param?.kind !== "longText" &&
-                param?.kind !== "secret"
-              );
-            }),
-          ),
+          persistableValues(operation.schema, {
+            ...defaults,
+            ...filtered,
+            ...(initialValues ?? {}),
+          }),
         );
         setHydrated(true);
       })
@@ -199,16 +191,7 @@ export function OperationScreen({
     // settings are captured only when Preview is requested and are restored
     // later solely through the explicit previous-settings action.
     if (!hydrated || operation.supportsPresets) return;
-    const sanitized = Object.fromEntries(
-      Object.entries(values).filter(([name]) => {
-        const param = operation.schema.find((item) => item.name === name);
-        return (
-          param?.remember !== false &&
-          param?.kind !== "longText" &&
-          param?.kind !== "secret"
-        );
-      }),
-    );
+    const sanitized = persistableValues(operation.schema, values);
     const serialized = JSON.stringify(sanitized);
     if (serialized === lastSaved.current) return;
 
@@ -310,16 +293,7 @@ export function OperationScreen({
     setProgressTrail([preparing]);
     setStage("previewing");
     try {
-      const sanitized = Object.fromEntries(
-        Object.entries(values).filter(([name]) => {
-          const param = operation.schema.find((item) => item.name === name);
-          return (
-            param?.remember !== false &&
-            param?.kind !== "longText" &&
-            param?.kind !== "secret"
-          );
-        }),
-      );
+      const sanitized = persistableValues(operation.schema, values);
       lastSaved.current = JSON.stringify(sanitized);
       await bridge.call("settings/saveParams", {
         opId: operation.id,
