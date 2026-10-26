@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.43 - 2026-10-27
+
+### Changed
+
+- The browser demo bridge's `engine/preview` handler moves out of the `MockBridge.call` dispatch switch in `frontend/src/lib/mockBridge.ts` into the private `previewOperation` method. The switch now holds a one-line call for that case. Early exits inside the handler return the same result the switch would have returned. The App tests drive this path, and they pass unchanged. No operator-facing behavior changes.
+
 ## 1.33.42 - 2026-10-27
 
 ### Changed
