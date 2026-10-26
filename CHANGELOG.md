@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.35 - 2026-10-27
+
+### Changed
+
+- `ResultView.test.ts` covers `outlookReplyPreview`, the check that accepts a backend reply preview only when subject, plain text, and HTML are all strings. The test confirms extra fields are dropped and malformed previews are rejected. No application code changes.
+
 ## 1.33.34 - 2026-10-27
 
 ### Changed
