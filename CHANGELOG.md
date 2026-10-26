@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.32 - 2026-10-27
+
+### Changed
+
+- The plan table's row filter moves from a `useMemo` in `frontend/src/plan/EditablePlanTable.tsx` into `filterRowIndices` in `frontend/src/plan/editorRules.ts`. It keeps the changes and review modes and the case-insensitive search over string and number fields. `editorRules.test.ts` covers each mode, the search rules, and their combination. Behavior is unchanged.
+
 ## 1.33.31 - 2026-10-27
 
 ### Changed

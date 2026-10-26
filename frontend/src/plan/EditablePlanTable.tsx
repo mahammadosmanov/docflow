@@ -35,6 +35,7 @@ import {
   displayEditorValue,
   editorColumnDefaultWidth,
   applyEditorValue,
+  filterRowIndices,
   duplicateRowAt,
   moveRowAt,
   removeRowAt,
@@ -117,34 +118,10 @@ export function EditablePlanTable({
   );
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredRowIndices = useMemo(() => {
-    return rows
-      .map((row, index) => {
-        if (filterMode === "changes") {
-          const isChange =
-            (row.proposedStatus && row.proposedStatus !== row.currentStatus) ||
-            row.enabled === true;
-          if (!isChange) return -1;
-        } else if (filterMode === "review") {
-          const isReview =
-            row.disposition === "manual_review" ||
-            Boolean(row.reasonKey) ||
-            row.selectable === false ||
-            row.enabled === false;
-          if (!isReview) return -1;
-        }
-        if (normalizedSearch) {
-          const matches = Object.values(row).some((val) =>
-            typeof val === "string" || typeof val === "number"
-              ? String(val).toLowerCase().includes(normalizedSearch)
-              : false,
-          );
-          if (!matches) return -1;
-        }
-        return index;
-      })
-      .filter((index) => index !== -1);
-  }, [rows, filterMode, normalizedSearch]);
+  const filteredRowIndices = useMemo(
+    () => filterRowIndices(rows, filterMode, normalizedSearch),
+    [rows, filterMode, normalizedSearch],
+  );
 
   useEffect(() => {
     const validIds = new Set(rows.map((row, index) => rowId(row, index)));
