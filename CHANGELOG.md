@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.31 - 2026-10-27
+
+### Changed
+
+- The plan editor's row duplicate, remove, and move rules move from `frontend/src/plan/EditablePlanTable.tsx` into `frontend/src/plan/editorRules.ts` as `duplicateRowAt`, `removeRowAt`, and `moveRowAt`. Each returns a new list, or `null` when the operation is refused, so the table only calls `onChange` when it changes rows. `editorRules.test.ts` covers the copy position and new id, the rule that the last row of a group cannot be removed, and the move bounds. Behavior is unchanged.
+
 ## 1.33.30 - 2026-10-27
 
 ### Changed
