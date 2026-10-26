@@ -66,7 +66,7 @@ import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
 import { useRunCancel } from "./useRunCancel";
 import { useCopyTable } from "./useCopyTable";
 import { useResultActions } from "./useResultActions";
-import { hasNewWarnings } from "../plan/revisionWarnings";
+import { useApplyRun } from "./useApplyRun";
 
 export function OperationScreen({
   bridge,
@@ -252,53 +252,25 @@ export function OperationScreen({
       setScanPreviewUpdated(true);
     },
   });
-  const apply = async () => {
-    if (editorDirty && plan?.opId === "rfi.process_scans_fast_covers") {
-      await updateScanPreview();
-      return;
-    }
-    if (!plan) return;
-    setError("");
-    const applying = { phase: "apply", done: 0, total: 0 };
-    startProgress(applying);
-    try {
-      let approvedPlan = plan;
-      if (editorDirty) {
-        const revised = await bridge.call("engine/revise", {
-          planId: plan.planId,
-          rows: editorRows,
-        });
-        setPlan(revised);
-        const revisedEditor = revised.meta?.editor as
-          Record<string, unknown> | undefined;
-        const revisedRows = Array.isArray(revisedEditor?.rows)
-          ? (revisedEditor.rows as Record<string, unknown>[])
-          : editorRows;
-        setEditorRows(revisedRows.map((row) => ({ ...row })));
-        setEditorDirty(false);
-        approvedPlan = revised;
-        if (hasNewWarnings(plan, revised)) {
-          setError(s.t("rfi.editor.reviewWarnings"));
-          setStage("preview");
-          return;
-        }
-      }
-      setStage("applying");
-      setResult(
-        await bridge.call(
-          "engine/apply",
-          { opId: operation.id, planId: approvedPlan.planId },
-          receiveProgress,
-        ),
-      );
-      setCancelling(false);
-      setStage("result");
-    } catch (reason) {
-      setCancelling(false);
-      setError(humanError(reason, s));
-      setStage("preview");
-    }
-  };
+  const { apply } = useApplyRun({
+    bridge,
+    operationId: operation.id,
+    plan,
+    editorDirty,
+    editorRows,
+    s,
+    screen: {
+      setError,
+      setPlan,
+      setEditorRows,
+      setEditorDirty,
+      setStage,
+      setResult,
+      setCancelling,
+    },
+    progress: { startProgress, receiveProgress },
+    updateScanPreview,
+  });
   const { copyingSheet, copyTable } = useCopyTable({ bridge, plan, s, setError });
   const { prepareRfiReply, undo } = useResultActions({
     bridge,
