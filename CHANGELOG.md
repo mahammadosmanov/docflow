@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.54 - 2026-10-27
+
+### Changed
+
+- The RFI reply preview and undo actions move from `frontend/src/screens/OperationScreen.tsx` into the `useResultActions` hook in `frontend/src/screens/useResultActions.ts`. `useResultActions.test.ts` covers the reply preview by plan and journal, the no-journal no-op, undo by journal with return to the previous screen, and a failed undo that stays put. Behavior is unchanged.
+
 ## 1.33.53 - 2026-10-27
 
 ### Changed

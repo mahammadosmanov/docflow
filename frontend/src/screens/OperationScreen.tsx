@@ -65,6 +65,7 @@ import { usePrintQueue } from "./usePrintQueue";
 import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
 import { useRunCancel } from "./useRunCancel";
 import { useCopyTable } from "./useCopyTable";
+import { useResultActions } from "./useResultActions";
 import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
@@ -299,31 +300,15 @@ export function OperationScreen({
     }
   };
   const { copyingSheet, copyTable } = useCopyTable({ bridge, plan, s, setError });
-  const prepareRfiReply = async () => {
-    if (!plan || !result?.journalId) return;
-    setError("");
-    try {
-      onPrepareRfiReply(
-        await bridge.call("engine/rfiReplyPreview", {
-          planId: plan.planId,
-          journalId: result.journalId,
-        }),
-      );
-    } catch (reason) {
-      setError(humanError(reason, s));
-    }
-  };
-  const undo = async () => {
-    if (!result?.journalId) return;
-    try {
-      await bridge.call("engine/undo", {
-        journalId: result.journalId,
-      });
-      onBack();
-    } catch (reason) {
-      setError(humanError(reason, s));
-    }
-  };
+  const { prepareRfiReply, undo } = useResultActions({
+    bridge,
+    plan,
+    result,
+    s,
+    setError,
+    onBack,
+    onPrepareRfiReply,
+  });
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
