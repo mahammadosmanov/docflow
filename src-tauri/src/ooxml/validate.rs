@@ -27,6 +27,29 @@ fn has_duplicate_attributes(element: &XmlElement) -> bool {
         .any(|attribute| !seen.insert(attribute.key.as_ref().to_vec()))
 }
 
+/// Cell references in `ref`/`sqref` attributes and `sqref` text must stay inside the
+/// worksheet grid, or Excel repairs the sheet.
+fn reference_outside_grid(element: &XmlElement) -> bool {
+    let outside = |text: &str| {
+        text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '$'))
+            .filter(|token| !token.is_empty())
+            .any(|token| {
+                let token = token.replace('$', "");
+                let split = token.find(|c: char| c.is_ascii_digit());
+                let Some(split) = split else { return false };
+                let (letters, digits) = token.split_at(split);
+                (column_number(letters).is_none()
+                    && letters.bytes().all(|b| b.is_ascii_uppercase()))
+                    || digits.parse::<u32>().is_ok_and(|row| row > 1_048_576)
+            })
+    };
+    ["ref", "sqref", "topLeftCell", "activeCell"]
+        .iter()
+        .filter_map(|name| attribute(element, name.as_bytes()))
+        .any(|value| outside(&value))
+        || (has_local_name(element, b"sqref") && outside(&element_text(element)))
+}
+
 fn has_illegal_character(text: &str) -> bool {
     text.chars().any(|c| {
         (c < ' ' && !matches!(c, '\t' | '\n' | '\r')) || matches!(c, '\u{FFFE}' | '\u{FFFF}')
@@ -46,6 +69,9 @@ pub(super) fn validate_worksheet_structure(raw: &[u8]) -> Result<(), OoxmlError>
     for element in descendants(&document.nodes) {
         if has_duplicate_attributes(element) {
             problem = Some("duplicate attribute");
+        }
+        if reference_outside_grid(element) {
+            problem = Some("reference outside the worksheet grid");
         }
         if has_local_name(element, b"f") && element_text(element).trim().is_empty() {
             let shared_child = attribute(element, b"t").as_deref() == Some("shared")
@@ -134,6 +160,14 @@ mod tests {
                 "{why} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn rejects_references_past_the_last_row() {
+        let raw = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/><conditionalFormatting sqref="P1:P1048577"/></worksheet>"#;
+        assert!(validate_worksheet_structure(raw.as_bytes()).is_err());
+        let ok = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/><conditionalFormatting sqref="P1:P1048576 A5"/></worksheet>"#;
+        validate_worksheet_structure(ok.as_bytes()).unwrap();
     }
 
     #[test]

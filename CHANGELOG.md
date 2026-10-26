@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.29.1 - 2026-10-26
+
+### Fixed
+
+- Follow Up row insertion no longer writes references past Excel's last worksheet row (a whole-column conditional-format or data-validation range such as `P1:P1048576` became `P1:P1048577`), which made Excel report a sheet XML error and repair the Road sheet. References are clamped, and the pre-publish check now rejects any reference outside the grid.
+- Fast RFI Scan confirms a cover whose identity line `RFI No: <code>` is the only labeled code even when other RFI codes (references, remarks) also appear on the page. Several unlabeled codes, or several labeled ones, still stay unconfirmed.
+
 ## 1.29.0 - 2026-10-26
 
 ### Fixed

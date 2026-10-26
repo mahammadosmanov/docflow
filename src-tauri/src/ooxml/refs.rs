@@ -15,10 +15,13 @@ pub struct RowShift {
     pub count: u32,
 }
 
+/// Excel's last worksheet row; a reference past it makes Excel repair the sheet.
+const MAX_ROW: u32 = 1_048_576;
+
 impl RowShift {
     fn shift_start(&self, row: u32) -> u32 {
         if row >= self.at {
-            row + self.count
+            (row + self.count).min(MAX_ROW)
         } else {
             row
         }
@@ -29,7 +32,7 @@ impl RowShift {
     /// appended under a data range join it, row-local ranges (`C5:P5`) do not.
     fn shift_end(&self, start: u32, end: u32) -> u32 {
         if end >= self.at || (end + 1 == self.at && start < end) {
-            end + self.count
+            (end + self.count).min(MAX_ROW)
         } else {
             end
         }
@@ -317,6 +320,23 @@ mod tests {
             at: 10,
             count: 1,
         }
+    }
+
+    #[test]
+    fn references_never_pass_the_last_worksheet_row() {
+        let s = shift();
+        assert_eq!(
+            shift_reference_list("P1:P1048576", "Road", &s),
+            "P1:P1048576"
+        );
+        assert_eq!(
+            shift_formula("SUM(A5:A1048576)", "Road", &s),
+            "SUM(A5:A1048576)"
+        );
+        assert_eq!(
+            shift_reference_list("A10:A1048575", "Road", &s),
+            "A11:A1048576"
+        );
     }
 
     #[test]
