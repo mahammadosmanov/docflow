@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.33 - 2026-10-27
+
+### Changed
+
+- The plan table's option lookup moves from a closure in `frontend/src/plan/EditablePlanTable.tsx` into `choicesForRow` in `frontend/src/plan/editorRules.ts`. A direct option list wins; otherwise the options depend on another field of the row. `editorRules.test.ts` covers both paths and a column with no configuration. Behavior is unchanged.
+
 ## 1.33.32 - 2026-10-27
 
 ### Changed

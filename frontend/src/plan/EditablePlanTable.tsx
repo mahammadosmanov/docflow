@@ -35,6 +35,7 @@ import {
   displayEditorValue,
   editorColumnDefaultWidth,
   applyEditorValue,
+  choicesForRow,
   filterRowIndices,
   duplicateRowAt,
   moveRowAt,
@@ -69,14 +70,6 @@ export function EditablePlanTable({
       editorColumnMinWidth(column),
     );
   const groupField = String(editor.groupField ?? "rfiNo");
-  const directChoices =
-    editor.choices && typeof editor.choices === "object"
-      ? (editor.choices as Record<string, unknown>)
-      : {};
-  const dependentChoices =
-    editor.choicesByValue && typeof editor.choicesByValue === "object"
-      ? (editor.choicesByValue as Record<string, unknown>)
-      : {};
   const autocomplete =
     editor.autocomplete && typeof editor.autocomplete === "object"
       ? (editor.autocomplete as Record<string, unknown>)
@@ -146,23 +139,8 @@ export function EditablePlanTable({
     return column ? displayEditorValue(column, value) : value;
   };
 
-  const choicesFor = (
-    column: EditorColumn,
-    row: Record<string, unknown>,
-  ): string[] => {
-    const direct = directChoices[column.key];
-    if (Array.isArray(direct)) return direct.map(String);
-    const config = dependentChoices[column.key];
-    if (!config || typeof config !== "object") return [];
-    const typed = config as Record<string, unknown>;
-    const values = typed.values;
-    const dependency = String(typed.dependsOn ?? "");
-    if (!values || typeof values !== "object") return [];
-    const options = (values as Record<string, unknown>)[
-      String(row[dependency] ?? "")
-    ];
-    return Array.isArray(options) ? options.map(String) : [];
-  };
+  const choicesFor = (column: EditorColumn, row: Record<string, unknown>) =>
+    choicesForRow(editor, column, row);
 
   const applyValue = (
     row: Record<string, unknown>,
