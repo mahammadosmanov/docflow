@@ -45,31 +45,7 @@ import {
 import {
   Route,
 } from "../helpers";
-
-export type OperationCategory = "all" | "scans" | "excel" | "mail" | "system";
-
-function getOperationCategory(id: string): OperationCategory {
-  if (
-    id === "rfi.process_scans_fast_covers" ||
-    id === "rfi.normalize_pdf_orientation" ||
-    id === "rfi.stage_signed_first_pages"
-  ) {
-    return "scans";
-  }
-  if (
-    id === "rfi.log_add" ||
-    id === "rfi.follow_up_sync" ||
-    id === "rfi.complete_status_sync" ||
-    id === "rfi.publish_status" ||
-    id === "rfi.system_sync"
-  ) {
-    return "excel";
-  }
-  if (id === "rfi.group_files") {
-    return "mail";
-  }
-  return "system";
-}
+import { getOperationCategory, type OperationCategory } from "../lib/operationCategory";
 
 function getOperationIcon(id: string) {
   switch (id) {

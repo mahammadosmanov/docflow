@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.34 - 2026-10-27
+
+### Changed
+
+- The home screen's operation category lookup (`getOperationCategory` and the `OperationCategory` type) moves from `frontend/src/screens/HomeScreen.tsx` into `frontend/src/lib/operationCategory.ts`. The scan and Excel groups are sets. `operationCategory.test.ts` covers each group and the system fallback. Behavior is unchanged.
+
 ## 1.33.33 - 2026-10-27
 
 ### Changed

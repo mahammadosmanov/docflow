@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.33",
+  "currentVersion": "1.33.34",
   "releases": [
+    {
+      "version": "1.33.34",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.34",
+      "summary": "The home screen's operation category lookup moves into lib/operationCategory.ts with a test."
+    },
     {
       "version": "1.33.33",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.33",
       "summary": "The plan table's option lookup, direct or dependent on another field, moves into editorRules.ts with direct tests."
     },
