@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.25 - 2026-10-27
+
+### Changed
+
+- The signed-warning review types, `signedWarningReviewItems`, and `scrollToSignedSection` move from `frontend/src/plan/PlanSummaries.tsx` into `frontend/src/plan/signedWarnings.ts`. The components in `PlanSummaries.tsx` import them from there. Behavior is unchanged. The App tests reach the signed plan path indirectly; no test calls these helpers directly.
+
 ## 1.33.24 - 2026-10-27
 
 ### Changed
