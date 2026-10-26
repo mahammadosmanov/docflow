@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.22 - 2026-10-27
+
+### Changed
+
+- Three pure helpers move from `frontend/src/screens/OperationScreen.tsx` into `frontend/src/screens/operationState.ts`: the progress-trail update (`nextProgressTrail`), editor row extraction from a plan (`editorRowsOf`), and the saved-parameter filter used on hydrate (`rememberedParams`). Behavior is unchanged; `operationState.test.ts` covers the trail limit, phase replacement, row extraction, and remember opt-out.
+
 ## 1.33.21 - 2026-10-27
 
 ### Changed

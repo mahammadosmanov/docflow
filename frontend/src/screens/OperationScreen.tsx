@@ -62,6 +62,7 @@ import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
+import { editorRowsOf, nextProgressTrail, rememberedParams } from "./operationState";
 
 export function OperationScreen({
   bridge,
@@ -128,13 +129,7 @@ export function OperationScreen({
   const [cancelling, setCancelling] = useState(false);
   const receiveProgress = useCallback((event: ProgressEvent) => {
     setProgress(event);
-    setProgressTrail((current) => {
-      const next = [...current];
-      const last = next.at(-1);
-      if (last?.phase === event.phase) next[next.length - 1] = event;
-      else next.push(event);
-      return next.slice(-8);
-    });
+    setProgressTrail((current) => nextProgressTrail(current, event));
   }, []);
 
   useEffect(() => {
@@ -150,15 +145,7 @@ export function OperationScreen({
           setHydrated(true);
           return;
         }
-        const known = new Set(operation.schema.map((item) => item.name));
-        const filtered = Object.fromEntries(
-          Object.entries(saved).filter(([key]) => {
-            const parameter = operation.schema.find(
-              (item) => item.name === key,
-            );
-            return known.has(key) && parameter?.remember !== false;
-          }),
-        );
+        const filtered = rememberedParams(operation, saved);
         setPreviousValues(
           operation.supportsPresets && Object.keys(filtered).length > 0
             ? filtered
@@ -214,17 +201,7 @@ export function OperationScreen({
 
   const installPlan = (next: Plan) => {
     setPlan(next);
-    const editor = next.meta?.editor;
-    const rows =
-      editor &&
-      typeof editor === "object" &&
-      Array.isArray((editor as Record<string, unknown>).rows)
-        ? ((editor as Record<string, unknown>).rows as Record<
-            string,
-            unknown
-          >[])
-        : [];
-    setEditorRows(rows.map((row) => ({ ...row })));
+    setEditorRows(editorRowsOf(next).map((row) => ({ ...row })));
     setEditorDirty(false);
     setScanPreviewUpdated(false);
     setStage("preview");
