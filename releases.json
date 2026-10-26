@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.3",
+  "currentVersion": "1.33.4",
   "releases": [
+    {
+      "version": "1.33.4",
+      "date": "2026-10-26",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.4",
+      "summary": "Sign-in and sign-up email fields show a mail icon and the password field a lock icon."
+    },
     {
       "version": "1.33.3",
       "date": "2026-10-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.3",
       "summary": "Scan-index, system-sync, and signed-page archive helpers take grouped arguments instead of long parameter lists."
     },

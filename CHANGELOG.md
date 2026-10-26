@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.4 - 2026-10-26
+
+### Fixed
+
+- The sign-in and sign-up email fields show a mail icon instead of a user icon, and the password field shows a lock icon instead of a shield. Labels and behavior are unchanged.
+
 ## 1.33.3 - 2026-10-26
 
 ### Changed
