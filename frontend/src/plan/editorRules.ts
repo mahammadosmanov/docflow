@@ -238,3 +238,31 @@ export function filterRowIndices(
     return [index];
   });
 }
+
+/** Options for one column. A direct list wins; otherwise the list depends on another field of the row. */
+export function choicesForRow(
+  editor: Record<string, unknown>,
+  column: EditorColumn,
+  row: Record<string, unknown>,
+): string[] {
+  const directChoices =
+    editor.choices && typeof editor.choices === "object"
+      ? (editor.choices as Record<string, unknown>)
+      : {};
+  const dependentChoices =
+    editor.choicesByValue && typeof editor.choicesByValue === "object"
+      ? (editor.choicesByValue as Record<string, unknown>)
+      : {};
+  const direct = directChoices[column.key];
+  if (Array.isArray(direct)) return direct.map(String);
+  const config = dependentChoices[column.key];
+  if (!config || typeof config !== "object") return [];
+  const typed = config as Record<string, unknown>;
+  const values = typed.values;
+  const dependency = String(typed.dependsOn ?? "");
+  if (!values || typeof values !== "object") return [];
+  const options = (values as Record<string, unknown>)[
+    String(row[dependency] ?? "")
+  ];
+  return Array.isArray(options) ? options.map(String) : [];
+}

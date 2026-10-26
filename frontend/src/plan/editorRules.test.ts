@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyEditorValue,
+  choicesForRow,
   filterRowIndices,
   duplicateRowAt,
   moveRowAt,
@@ -109,5 +110,28 @@ describe("filterRowIndices", () => {
   it("applies the mode and the search together", () => {
     expect(filterRowIndices(rows, "changes", "gamma")).toEqual([2]);
     expect(filterRowIndices(rows, "review", "beta")).toEqual([]);
+  });
+});
+
+describe("choicesForRow", () => {
+  const editor = {
+    choices: { reviewer: ["Ali", "Vali"] },
+    choicesByValue: {
+      status: { dependsOn: "kind", values: { civ: ["open", "closed"] } },
+    },
+  };
+
+  it("returns a direct choice list as strings", () => {
+    expect(choicesForRow(editor, { key: "reviewer", labelKey: "r" }, {})).toEqual(["Ali", "Vali"]);
+  });
+
+  it("looks up a dependent list by the row's dependency value", () => {
+    const column = { key: "status", labelKey: "s" };
+    expect(choicesForRow(editor, column, { kind: "civ" })).toEqual(["open", "closed"]);
+    expect(choicesForRow(editor, column, { kind: "mec" })).toEqual([]);
+  });
+
+  it("returns no choices for a column without configuration", () => {
+    expect(choicesForRow(editor, { key: "note", labelKey: "n" }, {})).toEqual([]);
   });
 });
