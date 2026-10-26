@@ -379,17 +379,6 @@ pub(super) fn discover_layouts(
     ))
 }
 
-#[allow(dead_code)]
-pub(super) fn discover_layout(
-    discovery: &OrderedWorkbookDiscovery,
-    workbook: &WorkbookData,
-    has_signature: bool,
-    merge_budget: &mut MergeQueryBudget,
-) -> Result<FollowUpLayout, BackendError> {
-    let layouts = discover_layouts(discovery, workbook, has_signature, merge_budget)?;
-    layouts.into_iter().next().ok_or_else(workbook_invalid)
-}
-
 pub(super) fn scan_target_rows(
     worksheet: &WorksheetData,
     layout: &FollowUpLayout,

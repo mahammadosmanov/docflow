@@ -65,15 +65,6 @@ pub(super) fn route_key(record: &SourceRecord) -> Option<(&'static str, u32)> {
     Some((sheet, default_route_col(sheet, clause)))
 }
 
-#[allow(dead_code)]
-pub(super) fn signed_route_key(
-    record: &SourceRecord,
-) -> Option<(&'static str, u32, u32, &'static str)> {
-    let (sheet, clause, match_layout) = signed_route_clause(record)?;
-    let (rfi, st) = default_signed_col(sheet, clause);
-    Some((sheet, rfi, st, match_layout))
-}
-
 pub(super) fn is_signed_layout(layout: &FollowUpLayout) -> bool {
     layout
         .worksheet
