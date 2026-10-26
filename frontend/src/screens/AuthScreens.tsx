@@ -7,10 +7,11 @@ import {
   Files,
   LoaderCircle,
   LogOut,
+  Lock,
+  Mail,
   RefreshCw,
   Settings,
   Shield,
-  User,
 } from "lucide-react";
 import {
   type FormEvent,
@@ -156,7 +157,7 @@ export function LoginScreen({
                 autoComplete="email"
                 value={identifier}
                 onChange={setIdentifier}
-                icon={<User />}
+                icon={<Mail />}
               />
             ) : (
               <>
@@ -167,7 +168,7 @@ export function LoginScreen({
                   label={s.t("auth.email")}
                   value={email}
                   onChange={setEmail}
-                  icon={<User />}
+                  icon={<Mail />}
                 />
                 <Field
                   label={s.t("auth.username")}
@@ -198,7 +199,7 @@ export function LoginScreen({
               help={s.t("auth.passwordHint")}
               value={password}
               onChange={setPassword}
-              icon={<Shield />}
+              icon={<Lock />}
               suffix={
                 <button
                   className="field-action"
