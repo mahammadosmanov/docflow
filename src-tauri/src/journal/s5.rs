@@ -744,4 +744,6 @@ pub(super) fn recovered_restore_step(
 #[derive(Clone, Debug)]
 pub struct JournalStore {
     pub(super) root: PathBuf,
+    /// Identifies this store (clones share it) for lock re-entry.
+    pub(super) instance: u64,
 }
