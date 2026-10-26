@@ -63,6 +63,7 @@ import { RfiPrintResults } from "./RfiPrintResults";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 import { editorRowsOf, nextProgressTrail, rememberedParams } from "./operationState";
+import { hasNewWarnings } from "../plan/revisionWarnings";
 
 export function OperationScreen({
   bridge,
@@ -315,11 +316,6 @@ export function OperationScreen({
     try {
       let approvedPlan = plan;
       if (editorDirty) {
-        const previousWarnings = new Set(
-          plan.warnings.map(
-            (warning) => `${warning.key}\u0000${warning.subject}`,
-          ),
-        );
         const revised = await bridge.call("engine/revise", {
           planId: plan.planId,
           rows: editorRows,
@@ -333,12 +329,7 @@ export function OperationScreen({
         setEditorRows(revisedRows.map((row) => ({ ...row })));
         setEditorDirty(false);
         approvedPlan = revised;
-        if (
-          revised.warnings.some(
-            (warning) =>
-              !previousWarnings.has(`${warning.key}\u0000${warning.subject}`),
-          )
-        ) {
+        if (hasNewWarnings(plan, revised)) {
           setError(s.t("rfi.editor.reviewWarnings"));
           setStage("preview");
           return;
