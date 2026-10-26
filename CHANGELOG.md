@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.39 - 2026-10-27
+
+### Changed
+
+- `frontend/src/plan/editorDates.test.ts` covers the plan editor's date parser and formatter. The tests check two- and four-digit years, the leap day, month-length limits, the 2000–2068 year window, and a parse-format round trip. No application code changes.
+
 ## 1.33.38 - 2026-10-27
 
 ### Changed
