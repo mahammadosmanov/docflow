@@ -1118,5 +1118,16 @@
   "error.rfi.systemEntryLimit": "В RFI System слишком много записей для обработки.",
   "error.rfi.followUp.noParent": "Книга Follow Up находится не в папке.",
   "error.rfi.fileGroup.rowInvalid": "Строку группы файлов не удалось определить. Обновите предпросмотр.",
-  "error.rfi.workbookUnreadable": "Книгу RFI Log не удалось прочитать. Проверьте, что файл на месте."
+  "error.rfi.workbookUnreadable": "Книгу RFI Log не удалось прочитать. Проверьте, что файл на месте.",
+  "error.print.queueSaveFailed": "Очередь печати не удалось сохранить. Попробуйте снова.",
+  "error.print.queueEncodeFailed": "Очередь печати не удалось подготовить к сохранению.",
+  "error.print.jobInvalid": "Одно из сохранённых заданий печати повреждено. Удалите его и добавьте снова.",
+  "error.path.notAbsolute": "Путь должен быть полным адресом на этом компьютере.",
+  "error.path.selectionFailed": "Не удалось завершить выбор файла. Попробуйте снова.",
+  "error.path.revealFailed": "Не удалось показать файл в файловом менеджере.",
+  "error.path.openUnsafe": "Выбранный файл нельзя безопасно открыть.",
+  "error.operation.previewFailed": "Не удалось подготовить предпросмотр. Попробуйте снова.",
+  "error.operation.undoFailed": "Отмену не удалось выполнить. Проверьте результат, прежде чем повторять.",
+  "error.scan.sourceUnreadable": "Не удалось прочитать отсканированный файл.",
+  "error.review.directoryUnreadable": "Не удалось прочитать папку проверки."
 }

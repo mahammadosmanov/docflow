@@ -1118,5 +1118,16 @@
   "error.rfi.systemEntryLimit": "RFI System işlənə bilməyəcək qədər çox qeyd ehtiva edir.",
   "error.rfi.followUp.noParent": "Follow Up iş kitabı qovluqda deyil.",
   "error.rfi.fileGroup.rowInvalid": "Fayl qrupu sətri müəyyən edilmədi. Önizləməni yeniləyin.",
-  "error.rfi.workbookUnreadable": "RFI Log iş kitabı oxuna bilmədi. Faylın yerində olduğunu yoxlayın."
+  "error.rfi.workbookUnreadable": "RFI Log iş kitabı oxuna bilmədi. Faylın yerində olduğunu yoxlayın.",
+  "error.print.queueSaveFailed": "Çap növbəsi saxlanıla bilmədi. Yenidən cəhd edin.",
+  "error.print.queueEncodeFailed": "Çap növbəsi saxlanmaq üçün hazırlana bilmədi.",
+  "error.print.jobInvalid": "Saxlanılmış çap işlərindən biri zədələnib. Silib yenidən əlavə edin.",
+  "error.path.notAbsolute": "Yol bu kompüterdə tam yer olmalıdır.",
+  "error.path.selectionFailed": "Fayl seçimi tamamlana bilmədi. Yenidən cəhd edin.",
+  "error.path.revealFailed": "Fayl fayl menecerində göstərilə bilmədi.",
+  "error.path.openUnsafe": "Seçilmiş fayl təhlükəsiz şəkildə açıla bilmir.",
+  "error.operation.previewFailed": "Önizləmə hazırlana bilmədi. Yenidən cəhd edin.",
+  "error.operation.undoFailed": "Geri alma tamamlana bilmədi. Yenidən cəhd etməzdən əvvəl nəticəni yoxlayın.",
+  "error.scan.sourceUnreadable": "Skan edilmiş fayl oxuna bilmədi.",
+  "error.review.directoryUnreadable": "Yoxlama qovluğu oxuna bilmədi."
 }
