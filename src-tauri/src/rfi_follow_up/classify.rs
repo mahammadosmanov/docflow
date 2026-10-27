@@ -787,45 +787,30 @@ pub(super) fn classify_workbooks_full(
             unmapped_count -= 1;
             continue;
         };
-        manual_rows.push(FollowUpRow {
-            row_id: format!("rfi-follow-up-signed-unmapped:{}", record.canonical_rfi),
-            sheet: sheet_name.to_string(),
-            row: 0,
-            rfi_no: record.short_rfi.clone(),
-            source_statuses: vec![if record.worley_signed {
-                "Signed".to_string()
-            } else {
-                "Not Signed".to_string()
-            }],
-            current_status: String::new(),
-            proposed_status: None,
-            proposed_rfi_no: None,
-            disposition: FollowUpDisposition::ManualReview,
-            reason_key: if candidate_count == 0 {
-                "warn.rfi.followUp.reason.mappingMissing".to_string()
-            } else {
-                "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
-            },
-            selectable: false,
-            enabled: false,
-            remark: None,
-            formula_fixes: Vec::new(),
-            target: FollowUpReviewTarget {
-                worksheet: layout.worksheet,
-                row: 0,
-                rfi_column: layout.rfi_column,
-                status_column: layout.status_column,
-                rfi_cell: None,
-                status_cell: None,
-            },
-            source_evidence: record.evidence.clone(),
-            mapping_details: Some(mapping_details(
+        let reason_key = if candidate_count == 0 {
+            "warn.rfi.followUp.reason.mappingMissing"
+        } else {
+            "warn.rfi.followUp.reason.mappingAmbiguous"
+        };
+        let mut row = manual_review_row(
+            format!("rfi-follow-up-signed-unmapped:{}", record.canonical_rfi),
+            sheet_name,
+            &layout,
+            record,
+            reason_key.to_string(),
+            Some(mapping_details(
                 record,
                 Some((target_sheet, target_clause)),
                 target_workbook,
                 &candidate_keys,
             )),
-        });
+        );
+        row.source_statuses = vec![if record.worley_signed {
+            "Signed".to_string()
+        } else {
+            "Not Signed".to_string()
+        }];
+        manual_rows.push(row);
     }
 
     for slot in slots

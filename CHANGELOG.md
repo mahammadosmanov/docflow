@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.90 - 2026-10-27
+
+### Changed
+
+- The signed-unmapped manual-review row in `rfi_follow_up/classify.rs` now comes from `manual_review_row` too. Its signed status labels and `signed-unmapped` row id are set on the helper's result. Same fields and output. Clippy is clean with `-D warnings` and the 33 rfi_follow_up tests pass.
+
 ## 1.36.89 - 2026-10-27
 
 ### Changed
