@@ -1166,5 +1166,7 @@
   "error.rfi.sourceChanged": "Bir kaynak dosya önizlemeden sonra değişti. Yeniden önizleyin.",
   "error.support.bundleInvalid": "Tanılama dosyası geçersiz ya da değiştirilmiş. Yeniden oluşturun.",
   "error.path.generatedMissing": "Oluşturulan dosya artık hedefinde yok. Yeniden oluşturun.",
-  "error.print.queueIdInvalid": "Yazdırma kuyruğu tanımlanamadı. Kuyruğu yeniden önizleyin."
+  "error.print.queueIdInvalid": "Yazdırma kuyruğu tanımlanamadı. Kuyruğu yeniden önizleyin.",
+  "error.unexpected": "DocFlow beklenmedik bir sorunla karşılaştı. Devam etmek için yeniden yükleyin.",
+  "action.reload": "Yeniden yükle"
 }

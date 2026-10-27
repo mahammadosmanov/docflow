@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.35.14",
+  "currentVersion": "1.35.15",
   "releases": [
+    {
+      "version": "1.35.15",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.35.15",
+      "summary": "An unexpected screen error shows a message and a reload button instead of a blank window."
+    },
     {
       "version": "1.35.14",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.35.14",
       "summary": "Filter tabs and category chips announce whether they are selected to screen readers."
     },
