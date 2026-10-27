@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.71",
+  "currentVersion": "1.36.72",
   "releases": [
+    {
+      "version": "1.36.72",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.72",
+      "summary": "Modularity: the coverage helpers for signed-destination and CIV matching (SignedDestinationCoverage, signed_destination_coverage, civ_tag_coverage, distinct CIV area and zone-area row counting, mec_context_coverage) moved out of rfi_follow_up/routing.rs into rfi_follow_up/routing/coverage.rs. No behavior change; routing and classify tests and clippy pass."
+    },
     {
       "version": "1.36.71",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.71",
       "summary": "Modularity: the XML cell-patching helpers for concrete documents (CIV-010 numeric and row patching, numeric and text cell setters, row shifting) moved out of concrete_documents.rs into concrete_documents/cells.rs. No behavior change; concrete-document tests and clippy pass."
     },

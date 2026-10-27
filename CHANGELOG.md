@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.72 - 2026-10-27
+
+### Changed
+
+- Moved the coverage helpers (`SignedDestinationCoverage`, `signed_destination_coverage`, `civ_tag_coverage`, `distinct_civ_area_rows`, `distinct_civ_zone_area_rows`, `mec_context_coverage`) out of `rfi_follow_up/routing.rs` into `rfi_follow_up/routing/coverage.rs`. Visibility and imports only; the parent re-exports them to `classify.rs`. Routing tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.71 - 2026-10-27
 
 ### Changed
