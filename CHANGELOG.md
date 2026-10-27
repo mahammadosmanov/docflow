@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.69 - 2026-10-27
+
+### Changed
+
+- Added unit tests for `summarizePlanImpact`, which counts outputs, updates, moves, print jobs, drafts, and cleanup steps. No application behavior changes.
+
 ## 1.33.68 - 2026-10-27
 
 ### Changed
