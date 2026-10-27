@@ -504,6 +504,7 @@ pub(super) fn atomic_replace_platform(source: &Path, destination: &Path) -> io::
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
+    // SAFETY: source and destination are NUL-terminated UTF-16 paths that live across the call.
     let result = unsafe {
         MoveFileExW(
             source.as_ptr(),
@@ -552,6 +553,7 @@ pub(super) fn rename_no_replace(source: &Path, destination: &Path) -> io::Result
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "source contains NUL"))?;
     let destination = CString::new(destination.as_os_str().as_bytes())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "destination contains NUL"))?;
+    // SAFETY: source and destination are NUL-terminated paths that live across the call.
     let result =
         unsafe { libc::renamex_np(source.as_ptr(), destination.as_ptr(), libc::RENAME_EXCL) };
     if result == 0 {
@@ -569,6 +571,7 @@ pub(super) fn rename_no_replace(source: &Path, destination: &Path) -> io::Result
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "source contains NUL"))?;
     let destination = CString::new(destination.as_os_str().as_bytes())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "destination contains NUL"))?;
+    // SAFETY: source and destination are NUL-terminated paths that live across the call.
     let result = unsafe {
         libc::syscall(
             libc::SYS_renameat2,
@@ -601,6 +604,7 @@ pub(super) fn rename_no_replace(source: &Path, destination: &Path) -> io::Result
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
+    // SAFETY: source and destination are NUL-terminated UTF-16 paths that live across the call.
     let result = unsafe {
         MoveFileExW(
             source.as_ptr(),

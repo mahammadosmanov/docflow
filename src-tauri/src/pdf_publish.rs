@@ -107,6 +107,7 @@ fn windows_file_identity(path: &Path) -> io::Result<(u32, u64)> {
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
+    // SAFETY: path is a NUL-terminated UTF-16 string that lives across the call; the handle is checked against INVALID_HANDLE_VALUE below.
     let handle = unsafe {
         CreateFileW(
             path.as_ptr(),
@@ -122,12 +123,15 @@ fn windows_file_identity(path: &Path) -> io::Result<(u32, u64)> {
         return Err(io::Error::last_os_error());
     }
     let mut information = MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
+    // SAFETY: handle is a valid open handle, and information points to writable storage for the result.
     let result = unsafe { GetFileInformationByHandle(handle, information.as_mut_ptr()) };
     let error = (result == 0).then(io::Error::last_os_error);
+    // SAFETY: handle was opened above and is closed exactly once, after the query.
     unsafe { CloseHandle(handle) };
     if let Some(error) = error {
         return Err(error);
     }
+    // SAFETY: GetFileInformationByHandle succeeded above, so information is fully initialized.
     let information = unsafe { information.assume_init() };
     Ok((
         information.dwVolumeSerialNumber,

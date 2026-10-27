@@ -113,6 +113,7 @@ fn write_platform(payload: &ClipboardPayload) -> io::Result<()> {
 
     let mut opened = false;
     for _ in 0..10 {
+        // SAFETY: a null owner window is accepted by OpenClipboard; the open is paired with CloseClipboard below.
         if unsafe { OpenClipboard(ptr::null_mut()) } != 0 {
             opened = true;
             break;
@@ -123,9 +124,11 @@ fn write_platform(payload: &ClipboardPayload) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     let result = (|| {
+        // SAFETY: the clipboard was opened on this thread just above, so EmptyClipboard runs while it is open.
         if unsafe { EmptyClipboard() } == 0 {
             return Err(io::Error::last_os_error());
         }
+        // SAFETY: format is a NUL-terminated UTF-16 name that lives across the call.
         let html_format = unsafe { RegisterClipboardFormatW(format.as_ptr()) };
         if html_format == 0 {
             return Err(io::Error::last_os_error());
@@ -133,6 +136,7 @@ fn write_platform(payload: &ClipboardPayload) -> io::Result<()> {
         put_windows_clipboard(html_format, &html)?;
         put_windows_clipboard(u32::from(CF_UNICODETEXT), &plain)
     })();
+    // SAFETY: closes the clipboard that the loop above opened on this thread.
     unsafe { CloseClipboard() };
     result
 }
@@ -148,20 +152,26 @@ fn put_windows_clipboard(format: u32, data: &[u8]) -> io::Result<()> {
         },
     };
 
+    // SAFETY: GlobalAlloc takes only a flag and a size; a null result is checked below.
     let handle = unsafe { GlobalAlloc(GMEM_MOVEABLE, data.len()) };
     if handle.is_null() {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: handle is the non-null movable block from GlobalAlloc, checked above.
     let pointer = unsafe { GlobalLock(handle) };
     if pointer.is_null() {
+        // SAFETY: locking failed, so this code still owns handle and frees it exactly once.
         unsafe { GlobalFree(handle) };
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: pointer addresses a locked block of at least data.len() bytes; the block is unlocked before the scope ends.
     unsafe {
         ptr::copy_nonoverlapping(data.as_ptr(), pointer.cast::<u8>(), data.len());
         GlobalUnlock(handle);
     }
+    // SAFETY: the clipboard is open on this thread, and on success SetClipboardData takes ownership of handle.
     if unsafe { SetClipboardData(format, handle) }.is_null() {
+        // SAFETY: SetClipboardData failed, so the clipboard does not own handle and it is freed exactly once.
         unsafe { GlobalFree(handle) };
         return Err(io::Error::last_os_error());
     }

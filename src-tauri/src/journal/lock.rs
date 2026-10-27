@@ -4,6 +4,7 @@ use super::*;
 pub(super) fn try_lock_mutation_file(file: &File) -> io::Result<()> {
     use std::os::fd::AsRawFd;
 
+    // SAFETY: the descriptor belongs to file, which is borrowed for this call; flock only sets or clears a lock on it.
     if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
         Ok(())
     } else {
@@ -20,7 +21,9 @@ pub(super) fn try_lock_mutation_file(file: &File) -> io::Result<()> {
         System::IO::OVERLAPPED,
     };
 
+    // SAFETY: OVERLAPPED is a plain C struct for which all-zero bytes are a valid value.
     let mut overlapped: OVERLAPPED = unsafe { zeroed() };
+    // SAFETY: the handle is borrowed from file, and overlapped is a live OVERLAPPED that outlives the call.
     if unsafe {
         LockFileEx(
             file.as_raw_handle() as HANDLE,
