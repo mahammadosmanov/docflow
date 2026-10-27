@@ -31,6 +31,7 @@ import {
   CompactDateInput,
 } from "./CompactDateInput";
 import { PlanFilterBar } from "./PlanFilterBar";
+import { PlanSelectionBar } from "./PlanSelectionBar";
 import {
   type EditorColumn,
   displayEditorValue,
@@ -280,33 +281,16 @@ export function EditablePlanTable({
       />
       {editor.bulkEnabled === true && (
         <div className="bulk-editor" aria-label={s.t("editor.bulk.title")}>
-          <div className="bulk-selection">
-            <strong>
-              {s.t("editor.selectedCount", { count: selectedIds.size })}
-            </strong>
-            <button type="button" onClick={selectAll}>
-              {s.t("editor.selectAll")}
-            </button>
-            <button type="button" onClick={selectNone}>
-              {s.t("editor.selectNone")}
-            </button>
-            {groupChoices.map(({ field, value }) => (
-              <button
-                type="button"
-                key={`${field}-${value}`}
-                title={
-                  editor.layout === "compact" && field === groupField
-                    ? value
-                    : undefined
-                }
-                onClick={() => selectGroup(field, value)}
-              >
-                {editor.layout === "compact" && field === groupField
-                  ? (value.match(/(\d+)\s*$/)?.[1] ?? value)
-                  : value}
-              </button>
-            ))}
-          </div>
+          <PlanSelectionBar
+            selectedCount={selectedIds.size}
+            onSelectAll={selectAll}
+            onSelectNone={selectNone}
+            groupChoices={groupChoices}
+            compact={editor.layout === "compact"}
+            groupField={groupField}
+            onSelectGroup={selectGroup}
+            s={s}
+          />
           <div className="bulk-fields">
             <select
               aria-label={s.t("editor.bulk.field")}

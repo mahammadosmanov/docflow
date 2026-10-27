@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.63 - 2026-10-27
+
+### Changed
+
+- The bulk selection controls (selected count, select all, select none, and per-group picks) move from `frontend/src/plan/EditablePlanTable.tsx` into the `PlanSelectionBar` component in `frontend/src/plan/PlanSelectionBar.tsx`. The compact-layout group labels stay as they were. `PlanSelectionBar.test.tsx` covers the count, the select-all and select-none callbacks, and a group pick. `EditablePlanTable.tsx` drops from 720 to 704 lines. Behavior is unchanged.
+
 ## 1.33.62 - 2026-10-27
 
 ### Changed
