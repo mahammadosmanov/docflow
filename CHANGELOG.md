@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.20 - 2026-10-27
+
+### Fixed
+
+- The README said nine registered workflows and left out two: concrete document generation and RFI publish status. It now says eleven and lists both.
+
 ## 1.36.19 - 2026-10-27
 
 ### Changed
