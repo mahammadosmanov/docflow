@@ -19,7 +19,30 @@ const sourceFiles = (dir: string): string[] =>
     return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
   });
 
+const rustSourceFiles = (dir: string): string[] =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return rustSourceFiles(path);
+    return name.endsWith(".rs") && name !== "tests.rs" && !name.endsWith("_tests.rs")
+      ? [path]
+      : [];
+  });
+
 describe("ARB catalogs", () => {
+  it("defines every error, note, and watch key the backend emits", () => {
+    const emitted = new Set(
+      rustSourceFiles(resolve(process.cwd(), "src-tauri/src")).flatMap((file) =>
+        [
+          ...readFileSync(file, "utf8")
+            .split("#[cfg(test)]")[0]
+            .matchAll(/"((?:error|note|watch)\.[A-Za-z0-9_.]*[A-Za-z0-9_])"/g),
+        ].map((match) => match[1]),
+      ),
+    );
+    const missing = [...emitted].filter((key) => !(key in en)).sort();
+    expect(missing).toEqual([]);
+  });
+
   it("defines every literal s.t() key the frontend uses", () => {
     const used = new Set(
       sourceFiles(resolve(process.cwd(), "frontend/src")).flatMap((file) =>
