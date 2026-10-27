@@ -169,6 +169,7 @@ fn enumerate_printers() -> Result<Vec<String>, PrintFailure> {
     let flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
     let mut needed = 0;
     let mut returned = 0;
+    // SAFETY: a null buffer with size zero only asks EnumPrintersW for the required size; nothing is written.
     unsafe {
         EnumPrintersW(flags, null(), 4, null_mut(), 0, &mut needed, &mut returned);
     }
@@ -176,6 +177,7 @@ fn enumerate_printers() -> Result<Vec<String>, PrintFailure> {
         return Ok(Vec::new());
     }
     let mut buffer = AlignedBuffer::new(needed as usize);
+    // SAFETY: buffer holds needed bytes, the size reported by the query above, and the count outputs are live locals.
     let ok = unsafe {
         EnumPrintersW(
             flags,
@@ -190,17 +192,20 @@ fn enumerate_printers() -> Result<Vec<String>, PrintFailure> {
     if ok == 0 {
         return Err(PrintFailure::failed("Windows printer enumeration failed"));
     }
+    // SAFETY: EnumPrintersW succeeded and wrote `returned` PRINTER_INFO_4W records into buffer, which lives for this scope.
     let entries = unsafe {
         std::slice::from_raw_parts(buffer.as_ptr::<PRINTER_INFO_4W>(), returned as usize)
     };
     Ok(entries
         .iter()
+        // SAFETY: pPrinterName points into the buffer that the call above filled; wide_ptr_to_string accepts null and NUL-terminated UTF-16.
         .filter_map(|entry| unsafe { wide_ptr_to_string(entry.pPrinterName) })
         .collect())
 }
 
 fn default_printer() -> Option<String> {
     let mut length = 0;
+    // SAFETY: a null buffer with length zero only asks GetDefaultPrinterW for the required length.
     unsafe {
         GetDefaultPrinterW(null_mut(), &mut length);
     }
@@ -208,6 +213,7 @@ fn default_printer() -> Option<String> {
         return None;
     }
     let mut buffer = vec![0_u16; length as usize];
+    // SAFETY: buffer has length u16 units, the length reported by the query above.
     let ok = unsafe { GetDefaultPrinterW(buffer.as_mut_ptr(), &mut length) };
     if ok == 0 {
         None
@@ -222,6 +228,7 @@ impl PrinterHandle {
     fn open(printer: &str) -> Result<Self, PrintFailure> {
         let printer = wide(printer);
         let mut handle = PRINTER_HANDLE::default();
+        // SAFETY: printer is a NUL-terminated UTF-16 name that lives across the call, and handle is a live out-parameter.
         if unsafe { OpenPrinterW(printer.as_ptr(), &mut handle, null()) } == 0 {
             return Err(PrintFailure::failed("Windows could not open the printer"));
         }
@@ -231,6 +238,7 @@ impl PrinterHandle {
 
 impl Drop for PrinterHandle {
     fn drop(&mut self) {
+        // SAFETY: self.0 came from a successful OpenPrinterW and is closed exactly once, here.
         unsafe {
             ClosePrinter(self.0);
         }
@@ -241,6 +249,7 @@ struct DeviceContext(windows_sys::Win32::Graphics::Gdi::HDC);
 
 impl Drop for DeviceContext {
     fn drop(&mut self) {
+        // SAFETY: the context came from CreateDCW and is deleted exactly once, here.
         unsafe {
             DeleteDC(self.0);
         }
@@ -320,6 +329,7 @@ fn validated_devmode(
     let requested = requested_devmode(settings)?;
     let printer_name = wide(printer);
     let handle = PrinterHandle::open(printer)?;
+    // SAFETY: a null output buffer with size zero only asks DocumentPropertiesW for the required size; the handle is open.
     let size = unsafe {
         DocumentPropertiesW(
             null_mut(),
@@ -337,6 +347,7 @@ fn validated_devmode(
     }
     let mut buffer = AlignedBuffer::new(size as usize);
     let devmode = buffer.as_mut_ptr::<DEVMODEW>();
+    // SAFETY: devmode points into buffer, which has size bytes allocated, and DM_OUT_BUFFER asks the driver to fill it.
     if unsafe {
         DocumentPropertiesW(
             null_mut(),
@@ -352,9 +363,11 @@ fn validated_devmode(
             "Windows printer defaults could not be read",
         ));
     }
+    // SAFETY: devmode is the buffer that the successful query above filled, and it is borrowed exclusively here.
     unsafe {
         apply_requested_devmode(&mut *devmode, requested);
     }
+    // SAFETY: devmode is the same filled buffer, passed as input and output, so the driver validates the requested options.
     if unsafe {
         DocumentPropertiesW(
             null_mut(),
@@ -370,6 +383,7 @@ fn validated_devmode(
             "the printer rejected the selected options",
         ));
     }
+    // SAFETY: devmode still points into buffer, which lives while buffer is in scope, and was validated above.
     if unsafe { !devmode_matches(&*devmode, requested) } {
         return Err(PrintFailure::unsupported_options(
             "the printer changed an unsupported selected option",
@@ -400,9 +414,11 @@ unsafe fn apply_requested_devmode(devmode: &mut DEVMODEW, requested: RequestedDe
 unsafe fn devmode_matches(devmode: &DEVMODEW, requested: RequestedDevMode) -> bool {
     requested
         .paper
+        // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
         .is_none_or(|value| unsafe { devmode.Anonymous1.Anonymous1.dmPaperSize == value })
         && requested
             .orientation
+            // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
             .is_none_or(|value| unsafe { devmode.Anonymous1.Anonymous1.dmOrientation == value })
         && requested.color.is_none_or(|value| devmode.dmColor == value)
         && requested
@@ -414,6 +430,7 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;
     let printer = wide(&job.printer);
     let driver = wide("WINSPOOL");
+    // SAFETY: driver and printer are NUL-terminated names that live across the call, and devmode points to a buffer the driver filled.
     let hdc = unsafe {
         CreateDCW(
             driver.as_ptr(),
@@ -436,6 +453,7 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
         lpszDatatype: null(),
         fwType: 0,
     };
+    // SAFETY: context.0 is a valid device context from CreateDCW, and document is a live DOCINFOW whose title outlives the call.
     let job_id = unsafe { StartDocW(context.0, &document) };
     if job_id <= 0 {
         return Err(PrintFailure::failed("Windows rejected the PDF print job"));
@@ -450,9 +468,11 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
         cancelled,
     );
     if let Err(error) = result {
+        // SAFETY: context.0 is the device context whose document was started above.
         let _abort_requested = unsafe { AbortDoc(context.0) } > 0;
         return Err(windows_post_submission_failure(error));
     }
+    // SAFETY: context.0 is the device context whose document was started above, and EndDoc runs only after a successful print.
     if unsafe { EndDoc(context.0) } <= 0 {
         return Err(PrintFailure::uncertain(
             "Windows could not confirm completion of the PDF spool submission",
@@ -501,6 +521,7 @@ impl ControlledSubmitEffects for WindowsControlledSubmitEffects<'_> {
     type JobId = u32;
 
     fn start_doc(&mut self) -> Result<Self::JobId, PrintFailure> {
+        // SAFETY: self.context is the device context for this submission, and document_info points to a DOCINFOW that the caller keeps alive for the call.
         let job_id = unsafe { StartDocW(self.context.0, self.document_info) };
         if job_id <= 0 {
             Err(PrintFailure::failed("error.print.excelPrintJobRejected"))
@@ -511,6 +532,7 @@ impl ControlledSubmitEffects for WindowsControlledSubmitEffects<'_> {
     }
 
     fn abort_doc(&mut self) -> bool {
+        // SAFETY: self.context is the device context whose document start_doc began.
         (unsafe { AbortDoc(self.context.0) }) > 0
     }
 
@@ -529,6 +551,7 @@ impl ControlledSubmitEffects for WindowsControlledSubmitEffects<'_> {
     }
 
     fn end_doc(&mut self) -> Result<(), PrintFailure> {
+        // SAFETY: self.context is the device context whose document start_doc began, and EndDoc runs only after the pages were rendered.
         if unsafe { EndDoc(self.context.0) } > 0 {
             Ok(())
         } else {
@@ -570,6 +593,7 @@ fn submit_controlled_pdf_inner(
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;
     let printer = wide(&job.printer);
     let driver = wide("WINSPOOL");
+    // SAFETY: driver and printer are NUL-terminated names, and devmode points to a buffer that the driver filled and validated.
     let hdc = unsafe {
         CreateDCW(
             driver.as_ptr(),
@@ -622,6 +646,7 @@ impl GdiPlusRuntime {
             SuppressExternalCodecs: 1,
         };
         let mut token = 0;
+        // SAFETY: input is a live GdiplusStartupInput, and a null optional output pointer is accepted by GdiplusStartup.
         if unsafe { GdiplusStartup(&mut token, &input, null_mut()) } != GDI_PLUS_OK || token == 0 {
             return Err(PrintFailure::unsupported(
                 "Windows image codecs are unavailable",
@@ -633,6 +658,7 @@ impl GdiPlusRuntime {
 
 impl Drop for GdiPlusRuntime {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the token returned by a successful GdiplusStartup, and it is shut down exactly once, in drop.
         unsafe {
             GdiplusShutdown(self.0);
         }
@@ -645,6 +671,7 @@ impl GdiPlusImage {
     fn load(path: &Path) -> Result<Self, PrintFailure> {
         let path = wide_os(path.as_os_str());
         let mut image = null_mut();
+        // SAFETY: path is a NUL-terminated UTF-16 string that lives across the call, and image is a live out-pointer; the result is null-checked.
         if unsafe { GdipLoadImageFromFile(path.as_ptr(), &mut image) } != GDI_PLUS_OK
             || image.is_null()
         {
@@ -657,6 +684,7 @@ impl GdiPlusImage {
 
     fn frame_dimension(&self) -> Result<(Option<windows_sys::core::GUID>, u32), PrintFailure> {
         let mut dimension_count = 0;
+        // SAFETY: self.0 is the image that load() created and that this wrapper owns until drop; dimension_count is a live out-parameter.
         if unsafe { GdipImageGetFrameDimensionsCount(self.0, &mut dimension_count) } != GDI_PLUS_OK
         {
             return Err(PrintFailure::failed(
@@ -672,6 +700,7 @@ impl GdiPlusImage {
             ));
         }
         let mut dimensions = vec![windows_sys::core::GUID::from_u128(0); dimension_count as usize];
+        // SAFETY: dimensions has dimension_count GUID slots, the count reported by the query above.
         if unsafe {
             GdipImageGetFrameDimensionsList(self.0, dimensions.as_mut_ptr(), dimension_count)
         } != GDI_PLUS_OK
@@ -684,6 +713,7 @@ impl GdiPlusImage {
         let mut selected_count = 0;
         for dimension in dimensions {
             let mut count = 0;
+            // SAFETY: dimension is a GUID from the list above, and count is a live out-parameter.
             if unsafe { GdipImageGetFrameCount(self.0, &dimension, &mut count) } != GDI_PLUS_OK {
                 return Err(PrintFailure::failed("Windows could not count image frames"));
             }
@@ -701,6 +731,7 @@ impl GdiPlusImage {
         frame: u32,
     ) -> Result<(), PrintFailure> {
         if let Some(dimension) = dimension
+            // SAFETY: self.0 is the image that this wrapper owns, and dimension came from the frame list above.
             && unsafe { GdipImageSelectActiveFrame(self.0, dimension, frame) } != GDI_PLUS_OK
         {
             return Err(PrintFailure::failed(
@@ -715,9 +746,13 @@ impl GdiPlusImage {
         let mut height = 0;
         let mut dpi_x = 0.0;
         let mut dpi_y = 0.0;
+        // SAFETY: self.0 is a live image owned by this wrapper, and each out-parameter is a live local.
         if unsafe { GdipGetImageWidth(self.0, &mut width) } != GDI_PLUS_OK
+            // SAFETY: self.0 is a live image owned by this wrapper, and each out-parameter is a live local.
             || unsafe { GdipGetImageHeight(self.0, &mut height) } != GDI_PLUS_OK
+            // SAFETY: self.0 is a live image owned by this wrapper, and each out-parameter is a live local.
             || unsafe { GdipGetImageHorizontalResolution(self.0, &mut dpi_x) } != GDI_PLUS_OK
+            // SAFETY: self.0 is a live image owned by this wrapper, and each out-parameter is a live local.
             || unsafe { GdipGetImageVerticalResolution(self.0, &mut dpi_y) } != GDI_PLUS_OK
             || width == 0
             || height == 0
@@ -746,6 +781,7 @@ impl GdiPlusImage {
 
 impl Drop for GdiPlusImage {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the image that load() created, and it is disposed exactly once, in drop.
         unsafe {
             GdipDisposeImage(self.0);
         }
@@ -766,6 +802,7 @@ fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), Print
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;
     let printer = wide(&job.printer);
     let driver = wide("WINSPOOL");
+    // SAFETY: driver and printer are NUL-terminated names, and devmode points to a buffer that the driver filled and validated.
     let hdc = unsafe {
         CreateDCW(
             driver.as_ptr(),
@@ -788,6 +825,7 @@ fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), Print
         lpszDatatype: null(),
         fwType: 0,
     };
+    // SAFETY: context is the device context from CreateDCW, and document is a live DOCINFOW whose title outlives the call.
     let job_id = unsafe { StartDocW(context.0, &document) };
     if job_id <= 0 {
         return Err(PrintFailure::failed("Windows rejected the image print job"));
@@ -804,9 +842,11 @@ fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), Print
         cancelled,
     );
     if let Err(error) = result {
+        // SAFETY: context is the device context whose document was started above.
         let _abort_requested = unsafe { AbortDoc(context.0) } > 0;
         return Err(windows_post_submission_failure(error));
     }
+    // SAFETY: context is the device context whose document was started above, and EndDoc runs only after all frames were drawn.
     if unsafe { EndDoc(context.0) } <= 0 {
         return Err(PrintFailure::uncertain(
             "Windows could not confirm completion of the image spool submission",
@@ -841,9 +881,13 @@ fn draw_image_frames(
         image.select_frame(dimension, frame)?;
         let (width, height, image_dpi_x, image_dpi_y) = image.metrics()?;
         reset_auto_orientation(context, devmode, settings, width, height)?;
+        // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printable_width = unsafe { GetDeviceCaps(context.0, HORZRES as i32) };
+        // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printable_height = unsafe { GetDeviceCaps(context.0, VERTRES as i32) };
+        // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printer_dpi_x = unsafe { GetDeviceCaps(context.0, LOGPIXELSX as i32) };
+        // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printer_dpi_y = unsafe { GetDeviceCaps(context.0, LOGPIXELSY as i32) };
         let (destination_width, destination_height) = image_destination(
             width,
@@ -858,21 +902,25 @@ fn draw_image_frames(
         )?;
         let x = (printable_width - destination_width) / 2;
         let y = (printable_height - destination_height) / 2;
+        // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
         if unsafe { StartPage(context.0) } <= 0 {
             return Err(PrintFailure::failed(
                 "Windows could not start an image page",
             ));
         }
         let mut graphics: *mut GpGraphics = null_mut();
+        // SAFETY: context.0 is a live device context, and graphics is a live out-pointer that is null-checked.
         let drawn = if unsafe { GdipCreateFromHDC(context.0, &mut graphics) } != GDI_PLUS_OK
             || graphics.is_null()
         {
             false
         } else {
+            // SAFETY: graphics was created above and is non-null, so this call only changes its interpolation mode.
             let interpolation =
                 unsafe { GdipSetInterpolationMode(graphics, InterpolationModeHighQualityBicubic) }
                     == GDI_PLUS_OK;
             let result = interpolation
+                // SAFETY: graphics and image.0 are live objects, and the destination rectangle is computed from the printable area above.
                 && unsafe {
                     GdipDrawImageRectI(
                         graphics,
@@ -883,11 +931,13 @@ fn draw_image_frames(
                         destination_height,
                     )
                 } == GDI_PLUS_OK;
+            // SAFETY: graphics was created above and is deleted exactly once, here.
             unsafe {
                 GdipDeleteGraphics(graphics);
             }
             result
         };
+        // SAFETY: context.0 is the device context whose page StartPage began above.
         let ended = unsafe { EndPage(context.0) } > 0;
         if !drawn || !ended {
             return Err(PrintFailure::failed("Windows could not draw an image page"));
@@ -928,10 +978,12 @@ fn render_pdf_pages(
             .map_err(PrintFailure::failed)?;
         let bitmap = decode_png(&image_path)?;
         reset_auto_orientation(context, devmode, settings, bitmap.width, bitmap.height)?;
+        // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
         if unsafe { StartPage(context.0) } <= 0 {
             return Err(PrintFailure::failed("Windows could not start a PDF page"));
         }
         let printed = draw_bitmap(context.0, &bitmap, &settings.scaling);
+        // SAFETY: context.0 is the device context whose page StartPage began above.
         let ended = unsafe { EndPage(context.0) } > 0;
         printed?;
         if !ended {
@@ -982,10 +1034,12 @@ fn render_in_memory_pdf_pages(
             bitmap.width,
             bitmap.height,
         )?;
+        // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
         if unsafe { StartPage(context.0) } <= 0 {
             return Err(PrintFailure::failed("Windows could not start a PDF page"));
         }
         let printed = draw_bitmap(context.0, &bitmap, &request.settings.scaling);
+        // SAFETY: context.0 is the device context whose page StartPage began above.
         let ended = unsafe { EndPage(context.0) } > 0;
         printed?;
         if !ended {
@@ -1010,10 +1064,12 @@ fn reset_auto_orientation(
     } else {
         DMORIENT_PORTRAIT as i16
     };
+    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and only its orientation fields change.
     unsafe {
         (*devmode).dmFields |= DM_ORIENTATION;
         (*devmode).Anonymous1.Anonymous1.dmOrientation = orientation;
     }
+    // SAFETY: context.0 is a live device context, and devmode is the buffer whose orientation was just updated.
     let reset = unsafe { ResetDCW(context.0, devmode) };
     if reset.is_null() {
         Err(PrintFailure::unsupported_options(
@@ -1101,9 +1157,13 @@ fn draw_bitmap(
     bitmap: &Bitmap,
     scaling: &str,
 ) -> Result<(), PrintFailure> {
+    // SAFETY: hdc is a live device context from the caller, and the index constant is a valid GetDeviceCaps argument.
     let printable_width = unsafe { GetDeviceCaps(hdc, HORZRES as i32) };
+    // SAFETY: hdc is a live device context from the caller, and the index constant is a valid GetDeviceCaps argument.
     let printable_height = unsafe { GetDeviceCaps(hdc, VERTRES as i32) };
+    // SAFETY: hdc is a live device context from the caller, and the index constant is a valid GetDeviceCaps argument.
     let dpi_x = unsafe { GetDeviceCaps(hdc, LOGPIXELSX as i32) };
+    // SAFETY: hdc is a live device context from the caller, and the index constant is a valid GetDeviceCaps argument.
     let dpi_y = unsafe { GetDeviceCaps(hdc, LOGPIXELSY as i32) };
     if printable_width <= 0 || printable_height <= 0 {
         return Err(PrintFailure::unsupported_options(
@@ -1130,9 +1190,11 @@ fn draw_bitmap(
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 24;
     info.bmiHeader.biCompression = BI_RGB;
+    // SAFETY: hdc is a live device context, and the mode constant is a valid SetStretchBltMode argument.
     unsafe {
         SetStretchBltMode(hdc, if scale < 1.0 { HALFTONE } else { COLORONCOLOR });
     }
+    // SAFETY: hdc is a live device context, and bgr holds the pixel rows that info describes.
     let copied = unsafe {
         StretchDIBits(
             hdc,
@@ -1257,6 +1319,7 @@ fn print_with_native_application(
     let verb = wide(&job.verb);
     let file = wide_os(Path::new(&job.path).as_os_str());
     let parameters = (job.verb == "printto").then(|| wide(&format!("\"{}\"", job.printer)));
+    // SAFETY: verb, file, and parameters are NUL-terminated strings that outlive the call, and a null window handle is allowed.
     let result = unsafe {
         ShellExecuteW(
             null_mut(),
@@ -1320,6 +1383,7 @@ fn has_print_handler(extension: &str, action: &str) -> bool {
     let verb = wide(action);
     let mut length = 32_768;
     let mut command = vec![0_u16; length as usize];
+    // SAFETY: association and verb are NUL-terminated strings, and command has the length passed in.
     (unsafe {
         AssocQueryStringW(
             ASSOCF_INIT_IGNOREUNKNOWN,
@@ -1348,6 +1412,7 @@ fn jobs(printer: &str) -> Result<Vec<SpoolJob>, PrintFailure> {
     let handle = PrinterHandle::open(printer)?;
     let mut needed = 0;
     let mut returned = 0;
+    // SAFETY: a null buffer with size zero only asks EnumJobsW for the required size; handle is an open printer handle.
     unsafe {
         EnumJobsW(
             handle.0,
@@ -1364,6 +1429,7 @@ fn jobs(printer: &str) -> Result<Vec<SpoolJob>, PrintFailure> {
         return Ok(Vec::new());
     }
     let mut buffer = AlignedBuffer::new(needed as usize);
+    // SAFETY: buffer holds needed bytes, the size reported by the query above, and the count outputs are live locals.
     if unsafe {
         EnumJobsW(
             handle.0,
@@ -1381,12 +1447,14 @@ fn jobs(printer: &str) -> Result<Vec<SpoolJob>, PrintFailure> {
             "Windows print queue could not be enumerated",
         ));
     }
+    // SAFETY: EnumJobsW succeeded and wrote returned JOB_INFO_1W records into buffer, which lives for this scope.
     let entries =
         unsafe { std::slice::from_raw_parts(buffer.as_ptr::<JOB_INFO_1W>(), returned as usize) };
     Ok(entries
         .iter()
         .map(|entry| SpoolJob {
             id: entry.JobId,
+            // SAFETY: pDocument points into the buffer that the call above filled; wide_ptr_to_string accepts null.
             document: unsafe { wide_ptr_to_string(entry.pDocument) }.unwrap_or_default(),
         })
         .collect())
@@ -1423,11 +1491,13 @@ fn wait_for_job(
     let mut read_error_since = None;
     loop {
         if cancelled() {
+            // SAFETY: handle is an open printer handle, and job_id is a job observed in this queue.
             let cancel_requested =
                 unsafe { SetJobW(handle.0, job_id, 0, null(), JOB_CONTROL_CANCEL) } != 0;
             return Err(windows_post_submission_cancellation(cancel_requested));
         }
         if Instant::now() >= deadline {
+            // SAFETY: handle is an open printer handle, and job_id is a job observed in this queue.
             let _ = unsafe { SetJobW(handle.0, job_id, 0, null(), JOB_CONTROL_CANCEL) };
             return Err(PrintFailure::uncertain(
                 "Windows spool job did not finish before its timeout",
@@ -1465,10 +1535,12 @@ fn wait_for_job(
 fn job_status(handle: PRINTER_HANDLE, job_id: u32) -> Result<Option<u32>, PrintFailure> {
     for _ in 0..3 {
         let mut needed = 0;
+        // SAFETY: a null buffer with length zero only asks GetJobW for the required length; handle is an open printer handle.
         unsafe {
             GetJobW(handle, job_id, 1, null_mut(), 0, &mut needed);
         }
         if needed == 0 {
+            // SAFETY: GetJobW just failed on this thread, so GetLastError returns its error code.
             return match classify_windows_job_query_error(unsafe { GetLastError() }) {
                 WindowsJobQueryError::Released => Ok(None),
                 WindowsJobQueryError::RetryWithLargerBuffer | WindowsJobQueryError::Uncertain => {
@@ -1479,6 +1551,7 @@ fn job_status(handle: PRINTER_HANDLE, job_id: u32) -> Result<Option<u32>, PrintF
             };
         }
         let mut buffer = AlignedBuffer::new(needed as usize);
+        // SAFETY: buffer holds needed bytes, the size from the query above, and the output counter is a live local.
         if unsafe {
             GetJobW(
                 handle,
@@ -1490,8 +1563,10 @@ fn job_status(handle: PRINTER_HANDLE, job_id: u32) -> Result<Option<u32>, PrintF
             )
         } != 0
         {
+            // SAFETY: GetJobW succeeded and wrote a JOB_INFO_1W at the start of buffer, which is at least that large.
             return Ok(Some(unsafe { (*buffer.as_ptr::<JOB_INFO_1W>()).Status }));
         }
+        // SAFETY: the buffered GetJobW call just failed on this thread, so GetLastError returns its error code.
         match classify_windows_job_query_error(unsafe { GetLastError() }) {
             // EPSON and other fast-purging drivers can release the record
             // between the sizing call and the buffered GetJob call.
@@ -1574,12 +1649,14 @@ unsafe fn wide_ptr_to_string(pointer: *const u16) -> Option<String> {
         return None;
     }
     let mut length = 0;
+    // SAFETY: the caller guarantees pointer is readable up to a NUL terminator, and the loop stops at 32_768 units.
     while length < 32_768 && unsafe { *pointer.add(length) } != 0 {
         length += 1;
     }
     if length == 0 || length == 32_768 {
         None
     } else {
+        // SAFETY: the first length units were read above and stay within the same allocation.
         Some(String::from_utf16_lossy(unsafe {
             std::slice::from_raw_parts(pointer, length)
         }))
