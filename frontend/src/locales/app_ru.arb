@@ -1055,5 +1055,15 @@
   "error.path.escape": "Путь находится за пределами выбранной папки.",
   "error.path.accessDenied": "Для этого действия эта папка не разрешена.",
   "error.path.grantExpired": "Срок доступа к папке истёк. Выберите папку снова.",
-  "error.path.grantMismatch": "Эта папка выбрана для другого действия. Выберите её снова."
+  "error.path.grantMismatch": "Эта папка выбрана для другого действия. Выберите её снова.",
+  "error.print.fileUnavailable": "Файл для печати больше недоступен.",
+  "error.operation.unknown": "Эта операция не распознана.",
+  "error.print.queueInvalid": "Сохранённая очередь печати недействительна.",
+  "error.print.planEmpty": "В плане печати нет строк.",
+  "error.review.destinationMissing": "Папка назначения проверки не существует.",
+  "error.path.sourceMissing": "Исходный путь не существует.",
+  "error.path.selectedMissing": "Выбранный путь не существует.",
+  "error.print.jobMissing": "Сохранённое задание печати больше не существует.",
+  "error.trash.missing": "Элемент восстановимой корзины не существует.",
+  "error.path.canonicalize": "Путь не удаётся определить."
 }

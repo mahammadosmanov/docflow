@@ -52,6 +52,20 @@ const PATH_ERROR_KEYS: Record<string, string> = {
   path_grant_scope_mismatch: "error.path.grantMismatch",
 };
 
+/** Backend messages that are shown as plain English text today, keyed by their exact text. */
+export const BACKEND_MESSAGE_KEYS: Record<string, string> = {
+  "print file is unavailable": "error.print.fileUnavailable",
+  "unknown operation ID": "error.operation.unknown",
+  "invalid saved print queue": "error.print.queueInvalid",
+  "print plan has no rows": "error.print.planEmpty",
+  "review destination does not exist": "error.review.destinationMissing",
+  "source path does not exist": "error.path.sourceMissing",
+  "selected path does not exist": "error.path.selectedMissing",
+  "saved print job no longer exists": "error.print.jobMissing",
+  "recoverable trash does not exist": "error.trash.missing",
+  "path cannot be canonicalized": "error.path.canonicalize",
+};
+
 export function humanError(error: unknown, s: Strings): string {
   const code =
     typeof error === "object" && error !== null && "code" in error
@@ -60,6 +74,8 @@ export function humanError(error: unknown, s: Strings): string {
   const pathKey = PATH_ERROR_KEYS[code];
   if (pathKey) return s.t(pathKey);
   const raw = error instanceof Error ? error.message : String(error);
+  const backendKey = BACKEND_MESSAGE_KEYS[raw.replace(/^Error:\s*/, "")];
+  if (backendKey) return s.t(backendKey);
   const localizedKey = raw.match(
     /^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+)$/,
   )?.[1];
