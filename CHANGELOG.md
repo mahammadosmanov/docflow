@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.79 - 2026-10-27
+
+### Changed
+
+- Moved the rfi-log operation definition out of `operation_registry` in `registry.rs` into `registry/rfi_log.rs`. The default-workbook parameter and provider visibility are unchanged. The 8 registry tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.78 - 2026-10-27
 
 ### Changed
