@@ -246,7 +246,7 @@
   "prefs.support.download": "Download support bundle",
   "prefs.support.downloaded": "Support bundle downloaded.",
   "action.toggleTheme": "Toggle theme (Light / Dark / System)",
-  "filter.searchPlaceholder": "Search (RFI no, status, description)...",
+  "filter.searchPlaceholder": "Search (RFI no, status, description)…",
   "filter.all": "All",
   "filter.changes": "Changes",
   "filter.manualReview": "Manual Review",

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.24 - 2026-10-27
+
+### Fixed
+
+- The English search placeholder used three periods while other text uses the single ellipsis character. It now matches.
+
 ## 1.35.23 - 2026-10-27
 
 ### Fixed
