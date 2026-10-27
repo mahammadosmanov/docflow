@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.26 - 2026-10-27
+
+### Changed
+
+- The path and output helpers of Process Scans (destination checks, review paths, page ranges, candidate output, PDF hashing, and plan steps) now live in their own module, `operations/process_scans/output.rs`. That cuts the main file from 1,321 to 1,110 lines. Behavior is unchanged.
+
 ## 1.36.25 - 2026-10-27
 
 ### Fixed
