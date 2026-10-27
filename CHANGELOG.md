@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.92 - 2026-10-27
+
+### Changed
+
+- The routed-signed-target loop in `classify_workbooks_full` (`rfi_follow_up/classify.rs`) now lives in `place_signed_record`, next to `place_record`. Both take the shared `RecordIndex` and `&mut` state. The loop body is unchanged: body-level `continue` became `return Ok(())`, and the candidate-slot `continue`s stay in their inner loop. Clippy is clean with `-D warnings` and the 33 rfi_follow_up tests pass.
+
 ## 1.36.91 - 2026-10-27
 
 ### Changed
