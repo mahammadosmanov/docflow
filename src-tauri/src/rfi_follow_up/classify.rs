@@ -40,26 +40,15 @@ fn manual_review_row(
     }
 }
 
-pub(super) fn classify_workbooks_full(
-    source_discovery: &OrderedWorkbookDiscovery,
-    source_workbook: &WorkbookData,
-    target_discovery: &OrderedWorkbookDiscovery,
+type SlotMap = BTreeMap<(String, u32, u32, u32), SlotWork>;
+
+fn build_slots(
+    layouts: &[FollowUpLayout],
     target_workbook: &WorkbookData,
-    target_has_signature: bool,
-) -> Result<Value, BackendError> {
-    let records = scan_source_records(source_discovery, source_workbook)?;
-    let logged_numbers = scan_logged_rfi_numbers(source_discovery, source_workbook);
-    let mut merge_budget = MergeQueryBudget {
-        remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
-    };
-    let layouts = discover_approved_layouts(
-        target_discovery,
-        target_workbook,
-        target_has_signature,
-        &mut merge_budget,
-    )?;
-    let mut slots = BTreeMap::<(String, u32, u32, u32), SlotWork>::new();
-    for layout in &layouts {
+    merge_budget: &mut MergeQueryBudget,
+) -> Result<SlotMap, BackendError> {
+    let mut slots = SlotMap::new();
+    for layout in layouts {
         let sheet = target_workbook
             .sheet(&layout.worksheet.name)
             .ok_or_else(workbook_invalid)?;
@@ -67,7 +56,7 @@ pub(super) fn classify_workbooks_full(
             .max_row
             .min(layout.header_row + MAX_FOLLOW_UP_DATA_ROWS);
         for row in (layout.header_row + 1)..=last {
-            if let Some(slot) = safe_slot(layout, sheet, row, &mut merge_budget)? {
+            if let Some(slot) = safe_slot(layout, sheet, row, merge_budget)? {
                 slots.insert(
                     (
                         layout.worksheet.name.clone(),
@@ -80,7 +69,14 @@ pub(super) fn classify_workbooks_full(
             }
         }
     }
+    Ok(slots)
+}
 
+fn deletion_evidence(
+    slots: &SlotMap,
+    records: &BTreeMap<String, SourceRecord>,
+    logged_numbers: &BTreeSet<String>,
+) -> (usize, bool) {
     let deleted_count = slots
         .values()
         .flat_map(|slot| slot.codes.iter())
@@ -99,6 +95,29 @@ pub(super) fn classify_workbooks_full(
     // was selected; refuse to remove anything on that evidence.
     let mass_deletion = deleted_count > MASS_DELETION_FLOOR
         && deleted_count * MASS_DELETION_DENOMINATOR > total_codes;
+    (deleted_count, mass_deletion)
+}
+
+pub(super) fn classify_workbooks_full(
+    source_discovery: &OrderedWorkbookDiscovery,
+    source_workbook: &WorkbookData,
+    target_discovery: &OrderedWorkbookDiscovery,
+    target_workbook: &WorkbookData,
+    target_has_signature: bool,
+) -> Result<Value, BackendError> {
+    let records = scan_source_records(source_discovery, source_workbook)?;
+    let logged_numbers = scan_logged_rfi_numbers(source_discovery, source_workbook);
+    let mut merge_budget = MergeQueryBudget {
+        remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
+    };
+    let layouts = discover_approved_layouts(
+        target_discovery,
+        target_workbook,
+        target_has_signature,
+        &mut merge_budget,
+    )?;
+    let mut slots = build_slots(&layouts, target_workbook, &mut merge_budget)?;
+    let (deleted_count, mass_deletion) = deletion_evidence(&slots, &records, &logged_numbers);
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {
         let removed = slot
