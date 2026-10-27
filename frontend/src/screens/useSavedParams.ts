@@ -56,11 +56,18 @@ export function useSavedParams({
             ? filtered
             : null,
         );
-        setValues((current) => ({
-          ...current,
-          ...(operation.supportsPresets ? {} : filtered),
-          ...(initialValues ?? {}),
-        }));
+        setValues((current) => {
+          // A value the user already changed while the restore was in flight
+          // (for example a file picked with Browse) must not be overwritten.
+          const restored = Object.fromEntries(
+            Object.entries(operation.supportsPresets ? {} : filtered).filter(
+              ([name]) =>
+                JSON.stringify(current[name] ?? defaults[name]) ===
+                JSON.stringify(defaults[name]),
+            ),
+          );
+          return { ...current, ...restored, ...(initialValues ?? {}) };
+        });
         lastSaved.current = JSON.stringify(
           persistableValues(operation.schema, {
             ...defaults,

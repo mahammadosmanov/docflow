@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.18 - 2026-10-27
+
+### Fixed
+
+- If you picked a file before the remembered settings finished loading, the restore could overwrite your choice with the saved one. The restore now skips any value you already changed. This is also a likely cause of the intermittent shortcut test failure.
+
 ## 1.35.17 - 2026-10-27
 
 ### Fixed
