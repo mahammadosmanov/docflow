@@ -729,6 +729,107 @@ fn place_signed_record<'a>(
     Ok(())
 }
 
+fn refresh_signed_slots(
+    slots: &mut SlotMap,
+    records: &BTreeMap<String, SourceRecord>,
+    routed_signed_targets: &BTreeMap<&str, BTreeSet<(u32, u32, u32, u32)>>,
+) {
+    for slot in slots
+        .values_mut()
+        .filter(|slot| is_signed_layout(&slot.layout))
+    {
+        let original = slot.codes.clone();
+        slot.codes.retain(|code| {
+            if is_placeholder_rfi(code) {
+                return true;
+            }
+            !records
+                .get(code)
+                .is_some_and(|record| record.state == Some(LogState::Remove))
+        });
+        if slot.codes != original {
+            slot.changed_rfis.extend(
+                original
+                    .into_iter()
+                    .filter(|code| !slot.codes.contains(code)),
+            );
+        }
+        for code in &slot.codes {
+            if let Some(record) = records.get(code)
+                && routed_signed_targets
+                    .get(code.as_str())
+                    .is_some_and(|targets| {
+                        targets.contains(&(
+                            slot.layout.worksheet.sheet_id,
+                            slot.row,
+                            slot.layout.rfi_column,
+                            slot.layout.status_column,
+                        ))
+                    })
+            {
+                let proposed = if record.worley_signed {
+                    "Signed"
+                } else {
+                    "Not Signed"
+                };
+                if proposed != slot.current_status {
+                    slot.changed_rfis.insert(code.clone());
+                }
+            }
+        }
+    }
+}
+
+/// Rows for signed-by slots whose sources were all placed on their routed targets.
+fn signed_slot_rows(
+    slots: &SlotMap,
+    records: &BTreeMap<String, SourceRecord>,
+    routed_signed_targets: &BTreeMap<&str, BTreeSet<(u32, u32, u32, u32)>>,
+    manual_rows: &mut Vec<FollowUpRow>,
+    unmapped_count: &mut usize,
+) -> Vec<FollowUpRow> {
+    let mut rows = Vec::new();
+    for slot in slots
+        .values()
+        .filter(|slot| is_signed_layout(&slot.layout))
+        .cloned()
+    {
+        let has_unmatched_source = slot
+            .codes
+            .iter()
+            .filter(|code| !is_placeholder_rfi(code))
+            .any(|code| {
+                records.get(code).is_some_and(|record| {
+                    record.state.is_none()
+                        || !routed_signed_targets
+                            .get(code.as_str())
+                            .is_some_and(|targets| {
+                                targets.contains(&(
+                                    slot.layout.worksheet.sheet_id,
+                                    slot.row,
+                                    slot.layout.rfi_column,
+                                    slot.layout.status_column,
+                                ))
+                            })
+                })
+            });
+        if has_unmatched_source {
+            continue;
+        }
+        if slot.unsafe_reason.is_some() && !slot.changed_rfis.is_empty() {
+            if let Some(row) = unsafe_slot_review(&slot, records) {
+                *unmapped_count += 1;
+                manual_rows.push(row);
+            }
+            continue;
+        }
+        if let Some(row) = row_from_slot(slot, records, true) {
+            rows.push(row);
+        }
+    }
+    rows
+}
+
 pub(super) fn classify_workbooks_full(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,
@@ -874,88 +975,14 @@ pub(super) fn classify_workbooks_full(
         )?;
     }
 
-    for slot in slots
-        .values_mut()
-        .filter(|slot| is_signed_layout(&slot.layout))
-    {
-        let original = slot.codes.clone();
-        slot.codes.retain(|code| {
-            if is_placeholder_rfi(code) {
-                return true;
-            }
-            !records
-                .get(code)
-                .is_some_and(|record| record.state == Some(LogState::Remove))
-        });
-        if slot.codes != original {
-            slot.changed_rfis.extend(
-                original
-                    .into_iter()
-                    .filter(|code| !slot.codes.contains(code)),
-            );
-        }
-        for code in &slot.codes {
-            if let Some(record) = records.get(code)
-                && routed_signed_targets
-                    .get(code.as_str())
-                    .is_some_and(|targets| {
-                        targets.contains(&(
-                            slot.layout.worksheet.sheet_id,
-                            slot.row,
-                            slot.layout.rfi_column,
-                            slot.layout.status_column,
-                        ))
-                    })
-            {
-                let proposed = if record.worley_signed {
-                    "Signed"
-                } else {
-                    "Not Signed"
-                };
-                if proposed != slot.current_status {
-                    slot.changed_rfis.insert(code.clone());
-                }
-            }
-        }
-    }
-    for slot in slots
-        .values()
-        .filter(|slot| is_signed_layout(&slot.layout))
-        .cloned()
-    {
-        let has_unmatched_source = slot
-            .codes
-            .iter()
-            .filter(|code| !is_placeholder_rfi(code))
-            .any(|code| {
-                records.get(code).is_some_and(|record| {
-                    record.state.is_none()
-                        || !routed_signed_targets
-                            .get(code.as_str())
-                            .is_some_and(|targets| {
-                                targets.contains(&(
-                                    slot.layout.worksheet.sheet_id,
-                                    slot.row,
-                                    slot.layout.rfi_column,
-                                    slot.layout.status_column,
-                                ))
-                            })
-                })
-            });
-        if has_unmatched_source {
-            continue;
-        }
-        if slot.unsafe_reason.is_some() && !slot.changed_rfis.is_empty() {
-            if let Some(row) = unsafe_slot_review(&slot, &records) {
-                unmapped_count += 1;
-                manual_rows.push(row);
-            }
-            continue;
-        }
-        if let Some(row) = row_from_slot(slot, &records, true) {
-            rows.push(row);
-        }
-    }
+    refresh_signed_slots(&mut slots, &records, &routed_signed_targets);
+    rows.extend(signed_slot_rows(
+        &slots,
+        &records,
+        &routed_signed_targets,
+        &mut manual_rows,
+        &mut unmapped_count,
+    ));
     rows.extend(manual_rows);
     rows.extend(remark_review_rows(
         &slots,

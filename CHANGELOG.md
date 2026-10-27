@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.93 - 2026-10-27
+
+### Changed
+
+- The signed-by slot passes in `classify_workbooks_full` (`rfi_follow_up/classify.rs`) moved out: the change-marking pass into `refresh_signed_slots`, and the row-emitting pass into `signed_slot_rows`. Same loops, same order; the emitted rows are appended to `rows` exactly as before. Clippy is clean with `-D warnings` and the 33 rfi_follow_up tests pass.
+
 ## 1.36.92 - 2026-10-27
 
 ### Changed
