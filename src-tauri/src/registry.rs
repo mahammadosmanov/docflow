@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value, json};
 
 use crate::contracts::{OperationDef, ParamDef, ParamKind, ParamSchema};
-use crate::operations::process_scans::FAST_COVER_OPERATION_ID;
+use crate::operations::{batch_print, process_scans::FAST_COVER_OPERATION_ID};
 
 const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
@@ -59,6 +59,8 @@ fn parameter(
         visible_when,
         help_key: help_key.map(str::to_string),
         remember: true,
+        min: None,
+        max: None,
     }
 }
 
@@ -691,6 +693,21 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
     batch_print.supports_presets = true;
+    for param in &mut batch_print.schema.params {
+        let range = match param.name.as_str() {
+            "copies" => Some((1, i64::from(batch_print::MAX_COPIES))),
+            "retries" => Some((0, i64::from(batch_print::MAX_RETRIES))),
+            "timeout_minutes" => Some((
+                i64::from(batch_print::MIN_TIMEOUT_MINUTES),
+                i64::from(batch_print::MAX_TIMEOUT_MINUTES),
+            )),
+            _ => None,
+        };
+        if let Some((min, max)) = range {
+            param.min = Some(min);
+            param.max = Some(max);
+        }
+    }
 
     let stage_signed_pages = operation(
         "rfi.stage_signed_first_pages",

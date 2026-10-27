@@ -305,6 +305,8 @@ export function SchemaField({
                 : "text"
           }
           value={browse ? pathValue : String(value ?? "")}
+          min={param.kind === "int" ? param.min : undefined}
+          max={param.kind === "int" ? param.max : undefined}
           placeholder={browse ? s.t(`param.hint.${param.kind}`) : ""}
           readOnly={browse}
           onChange={(event) =>
