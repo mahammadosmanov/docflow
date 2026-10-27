@@ -8,9 +8,11 @@ use crate::operations::{batch_print, process_scans::FAST_COVER_OPERATION_ID};
 mod concrete_documents;
 mod print_batch;
 mod rfi_log;
+mod rfi_sync;
 use concrete_documents::concrete_documents_operation;
 use print_batch::batch_print_operation;
 use rfi_log::rfi_log_operation;
+use rfi_sync::*;
 
 const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
@@ -143,147 +145,14 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     );
 
     let rfi_log = rfi_log_operation(&facts);
-    let rfi_follow_up = operation(
-        "rfi.follow_up_sync",
-        vec![
-            parameter(
-                "rfi_log_workbook",
-                ParamKind::File,
-                "param.rfi.followUp.rfiLogWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.followUp.rfiLogWorkbook.help"),
-            ),
-            parameter(
-                "follow_up_workbook",
-                ParamKind::File,
-                "param.rfi.followUp.followUpWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.followUp.followUpWorkbook.help"),
-            ),
-            parameter(
-                "backup_directory",
-                ParamKind::Folder,
-                "param.rfi.followUp.backupDirectory",
-                Value::Null,
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.followUp.backupDirectory.help"),
-            ),
-        ],
-    );
+    let rfi_follow_up = rfi_follow_up_operation();
     let concrete_documents = concrete_documents_operation();
 
-    let rfi_system_sync = operation(
-        "rfi.system_sync",
-        vec![
-            parameter(
-                "rfi_system_root",
-                ParamKind::Folder,
-                "param.rfi.systemSync.rfiSystemRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.systemSync.rfiSystemRoot.help"),
-            ),
-            parameter(
-                "rfi_log_workbook",
-                ParamKind::File,
-                "param.rfi.systemSync.rfiLogWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.systemSync.rfiLogWorkbook.help"),
-            ),
-            parameter(
-                "follow_up_workbook",
-                ParamKind::File,
-                "param.rfi.systemSync.followUpWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.systemSync.followUpWorkbook.help"),
-            ),
-            transient_parameter(
-                "force_rescan",
-                ParamKind::Bool,
-                "param.scanIndex.forceRescan",
-                json!(false),
-                Some("param.scanIndex.forceRescan.help"),
-            ),
-        ],
-    );
+    let rfi_system_sync = rfi_system_sync_operation();
 
-    let rfi_complete_status_sync = operation(
-        "rfi.complete_status_sync",
-        vec![
-            parameter(
-                "rfi_system_root",
-                ParamKind::Folder,
-                "param.rfi.completeStatus.rfiSystemRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.completeStatus.rfiSystemRoot.help"),
-            ),
-            parameter(
-                "rfi_log_workbook",
-                ParamKind::File,
-                "param.rfi.completeStatus.rfiLogWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.completeStatus.rfiLogWorkbook.help"),
-            ),
-        ],
-    );
+    let rfi_complete_status_sync = rfi_complete_status_sync_operation();
 
-    let rfi_publish_status = operation(
-        "rfi.publish_status",
-        vec![
-            parameter(
-                "staging_folder",
-                ParamKind::Folder,
-                "param.rfi.publishStatus.stagingFolder",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.publishStatus.stagingFolder.help"),
-            ),
-            parameter(
-                "rfi_log_workbook",
-                ParamKind::File,
-                "param.rfi.publishStatus.rfiLogWorkbook",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.publishStatus.rfiLogWorkbook.help"),
-            ),
-        ],
-    );
+    let rfi_publish_status = rfi_publish_status_operation();
 
     let batch_print = batch_print_operation(facts);
 
