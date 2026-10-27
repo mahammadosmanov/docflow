@@ -1377,7 +1377,7 @@ describe("DocFlow shell", () => {
     ).toBeVisible();
     expect(screen.getByText("Onaylanan RFI'lar")).toBeVisible();
     expect(screen.getByText("Sayfaları karşılaştır")).toBeVisible();
-    expect(screen.getByText("Review kopyaları")).toBeVisible();
+    expect(screen.getByText("İnceleme kopyaları")).toBeVisible();
     expect(screen.getByText("ÖNCE")).toBeVisible();
     expect(screen.getByText("SONRA")).toBeVisible();
     expect(
@@ -1386,7 +1386,7 @@ describe("DocFlow shell", () => {
       ),
     ).toBeVisible();
     expect(
-      screen.getByText("Warning veren PDF'ler Review'a gönderilecek"),
+      screen.getByText("Uyarı veren PDF'ler İnceleme'a gönderilecek"),
     ).toBeVisible();
     expect(screen.getByText("Incoming/unmatched.pdf")).toBeVisible();
     expect(screen.getByText("Sayfa 2 · AZE-SUN-INT-QMS-RFI-MEC-0999")).toBeVisible();
@@ -1916,7 +1916,7 @@ describe("DocFlow shell", () => {
       await screen.findByText("Yeni imzalı taramalar klasörü"),
     ).toBeVisible();
     expect(screen.getByText("Mevcut RFI arşivinin kökü")).toBeVisible();
-    expect(screen.getByText("Review çıktı klasörü")).toBeVisible();
+    expect(screen.getByText("İnceleme çıktı klasörü")).toBeVisible();
     expect(
       screen.getByText("Yeni taramaların alt klasörlerini de tara"),
     ).toBeVisible();
