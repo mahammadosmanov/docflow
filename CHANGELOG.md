@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.79 - 2026-10-27
+
+### Fixed
+
+- Labels that stayed in English in the Turkish, Russian, and Azerbaijani catalogs are now translated: plan and print column headers (area, description, forms, item, row, sheet, format, status, printer), the sketch and first-page document types, and the printer parameter. Workbook names, paper sizes, and codes such as Tag No. and AZFEN/INTEC are unchanged.
+
 ## 1.33.78 - 2026-10-27
 
 ### Fixed
