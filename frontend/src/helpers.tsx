@@ -74,6 +74,13 @@ export const BACKEND_MESSAGE_KEYS: Record<string, string> = {
   "diagnostics bundle encoding failed": "error.support.encodingFailed",
   "granted root identity is unavailable": "error.path.rootUnavailable",
   "invalid print row identity": "error.print.rowInvalid",
+  "No write grant covering RFI Log": "error.rfi.writeGrantMissing",
+  "RFI Log workbook has no parent": "error.rfi.workbookNoFolder",
+  "gecersiz sheet plani": "error.rfi.sheetPlanInvalid",
+  "gecersiz coklu-sheet RFI plani": "error.rfi.multiSheetPlanInvalid",
+  "gecersiz RFI satiri": "error.rfi.rowInvalid",
+  "mail tablosu kaynagi gecersiz": "error.mail.tableSourceInvalid",
+  "bu planda kopyalanabilir tablo yok": "error.plan.noCopyableTable",
 };
 
 export function humanError(error: unknown, s: Strings): string {

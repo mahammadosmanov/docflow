@@ -1075,5 +1075,12 @@
   "error.watch.unsupported": "Bu işlem otomatik izlenemez.",
   "error.support.encodingFailed": "Tanılama dosyası oluşturulamadı.",
   "error.path.rootUnavailable": "Seçilen klasöre artık erişilemiyor. Yeniden seçin.",
-  "error.print.rowInvalid": "Bir yazdırma satırı tanımlanamadı. Kuyruğu yeniden önizleyin."
+  "error.print.rowInvalid": "Bir yazdırma satırı tanımlanamadı. Kuyruğu yeniden önizleyin.",
+  "error.rfi.writeGrantMissing": "DocFlow'un RFI Log klasörüne yazma izni yok. Klasörü yeniden seçin.",
+  "error.rfi.workbookNoFolder": "RFI Log çalışma kitabı bir klasörün içinde değil.",
+  "error.rfi.sheetPlanInvalid": "Sayfa planı geçersiz.",
+  "error.rfi.multiSheetPlanInvalid": "Çoklu sayfa RFI planı geçersiz.",
+  "error.rfi.rowInvalid": "Bir RFI satırı geçersiz.",
+  "error.mail.tableSourceInvalid": "Mail tablosu kaynağı geçersiz.",
+  "error.plan.noCopyableTable": "Bu planda kopyalanabilir tablo yok."
 }

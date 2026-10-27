@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.89 - 2026-10-27
+
+### Fixed
+
+- Seven more backend messages were shown raw: a missing RFI Log write permission, a workbook outside any folder, invalid sheet, multi-sheet and RFI row plans, an invalid mail table source, and a plan with no copyable table. The English and unaccented Turkish text now shows as translated messages in all four languages.
+
 ## 1.33.88 - 2026-10-27
 
 ### Fixed

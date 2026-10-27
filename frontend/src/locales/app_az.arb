@@ -1075,5 +1075,12 @@
   "error.watch.unsupported": "Bu əməliyyat avtomatik izlənilə bilməz.",
   "error.support.encodingFailed": "Diaqnostika faylı yaradıla bilmədi.",
   "error.path.rootUnavailable": "Seçilmiş qovluğa artıq giriş yoxdur. Yenidən seçin.",
-  "error.print.rowInvalid": "Çap sətri müəyyən edilmədi. Növbəni yenidən önizləyin."
+  "error.print.rowInvalid": "Çap sətri müəyyən edilmədi. Növbəni yenidən önizləyin.",
+  "error.rfi.writeGrantMissing": "DocFlow-un RFI Log qovluğuna yazma icazəsi yoxdur. Qovluğu yenidən seçin.",
+  "error.rfi.workbookNoFolder": "RFI Log iş kitabı qovluqda deyil.",
+  "error.rfi.sheetPlanInvalid": "Vərəq planı etibarsızdır.",
+  "error.rfi.multiSheetPlanInvalid": "Çoxvərəqli RFI planı etibarsızdır.",
+  "error.rfi.rowInvalid": "RFI sətri etibarsızdır.",
+  "error.mail.tableSourceInvalid": "Məktub cədvəlinin mənbəyi etibarsızdır.",
+  "error.plan.noCopyableTable": "Bu planda kopyalana bilən cədvəl yoxdur."
 }
