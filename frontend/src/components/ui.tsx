@@ -6,7 +6,7 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -318,13 +318,16 @@ export function Centered({ children }: { children: ReactNode }) {
 
 export function Modal({
   title,
+  closeLabel,
   onClose,
   children,
 }: {
   title: string;
+  closeLabel: string;
   onClose: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -343,10 +346,15 @@ export function Modal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true">
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="modal-header">
-          <h2>{title}</h2>
-          <IconButton label="Close" onClick={onClose}>
+          <h2 id={titleId}>{title}</h2>
+          <IconButton label={closeLabel} onClick={onClose}>
             <X />
           </IconButton>
         </div>

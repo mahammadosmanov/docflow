@@ -246,6 +246,7 @@ export function SignedPageComparison({
               ? "rfi.signed.previewArchive"
               : "rfi.signed.previewSigned",
           )}`}
+          closeLabel={s.t("action.close")}
           onClose={() => setExpanded(null)}
         >
           <div className="signed-page-preview-modal">

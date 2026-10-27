@@ -172,7 +172,11 @@ export function HistoryScreen({
         {error && <Notice kind="error">{error}</Notice>}
       </main>
       {undoRow && (
-        <Modal title={s.t("action.undo")} onClose={() => setUndoRow(null)}>
+        <Modal
+          title={s.t("action.undo")}
+          closeLabel={s.t("action.close")}
+          onClose={() => setUndoRow(null)}
+        >
           <p className="muted">
             {s.t("history.moves", { count: undoRow.moves })}
           </p>

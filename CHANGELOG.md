@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.85 - 2026-10-27
+
+### Fixed
+
+- Modal dialogs had no accessible name, so screen readers did not announce their title. The dialog is now labelled by its title.
+- The modal close button was labelled with the hardcoded English word "Close" in every language. It now uses the translated `action.close` text.
+
 ## 1.33.84 - 2026-10-27
 
 ### Fixed
