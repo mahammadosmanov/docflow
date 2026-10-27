@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.97 - 2026-10-27
+
+### Changed
+
+- `paths.rs` (854 lines) keeps its types and moves the `PathGrantStore` methods into three files under `paths/`: `issuing.rs` (grant creation), `authorization.rs` (authorize, plan and root lookups, reopen), and `revocation.rs` (revoke and capability checks). Methods are unchanged; `revoke_grant_ids` is `pub(super)` so the sibling modules can call it. Clippy is clean with `-D warnings` and the 542 lib tests pass.
+
 ## 1.36.96 - 2026-10-27
 
 ### Changed
