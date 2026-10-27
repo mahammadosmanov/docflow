@@ -86,6 +86,16 @@ fn transient_parameter(
     parameter
 }
 
+/// Sets the integer bounds the backend enforces on the named parameters.
+fn apply_int_ranges(operation: &mut OperationDef, ranges: &[(&str, i64, i64)]) {
+    for param in &mut operation.schema.params {
+        if let Some(&(_, min, max)) = ranges.iter().find(|(name, _, _)| *name == param.name) {
+            param.min = Some(min);
+            param.max = Some(max);
+        }
+    }
+}
+
 fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
     OperationDef {
         id: id.to_string(),
@@ -243,7 +253,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
             ),
         ],
     );
-    let concrete_documents = operation(
+    let mut concrete_documents = operation(
         "rfi.generate_concrete_documents",
         vec![
             parameter(
@@ -412,6 +422,10 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
                 None,
             ),
         ],
+    );
+    apply_int_ranges(
+        &mut concrete_documents,
+        &[("ambient_min", 0, 100), ("ambient_max", 0, 100)],
     );
 
     let rfi_system_sync = operation(
@@ -693,21 +707,18 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
     batch_print.supports_presets = true;
-    for param in &mut batch_print.schema.params {
-        let range = match param.name.as_str() {
-            "copies" => Some((1, i64::from(batch_print::MAX_COPIES))),
-            "retries" => Some((0, i64::from(batch_print::MAX_RETRIES))),
-            "timeout_minutes" => Some((
+    apply_int_ranges(
+        &mut batch_print,
+        &[
+            ("copies", 1, i64::from(batch_print::MAX_COPIES)),
+            ("retries", 0, i64::from(batch_print::MAX_RETRIES)),
+            (
+                "timeout_minutes",
                 i64::from(batch_print::MIN_TIMEOUT_MINUTES),
                 i64::from(batch_print::MAX_TIMEOUT_MINUTES),
-            )),
-            _ => None,
-        };
-        if let Some((min, max)) = range {
-            param.min = Some(min);
-            param.max = Some(max);
-        }
-    }
+            ),
+        ],
+    );
 
     let stage_signed_pages = operation(
         "rfi.stage_signed_first_pages",
