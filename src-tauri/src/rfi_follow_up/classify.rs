@@ -266,41 +266,27 @@ pub(super) fn classify_workbooks_full(
                     .trim()
                     .eq_ignore_ascii_case(target_sheet)
             }) {
-                manual_rows.push(FollowUpRow {
-                    row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
-                    sheet: target_sheet.to_string(),
-                    row: 0,
-                    rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![record.inspection_status_for_ui()],
-                    current_status: String::new(),
-                    proposed_status: None,
-                    proposed_rfi_no: None,
-                    disposition: FollowUpDisposition::ManualReview,
-                    reason_key: if record.state.is_none() {
-                        "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
-                    } else {
-                        "warn.rfi.followUp.reason.mappingMissing".to_string()
-                    },
-                    selectable: false,
-                    enabled: false,
-                    remark: None,
-                    formula_fixes: Vec::new(),
-                    target: FollowUpReviewTarget {
-                        worksheet: layout.worksheet.clone(),
-                        row: 0,
-                        rfi_column: default_route_col(target_sheet, target_clause),
-                        status_column: default_route_col(target_sheet, target_clause) + 1,
-                        rfi_cell: None,
-                        status_cell: None,
-                    },
-                    source_evidence: record.evidence.clone(),
-                    mapping_details: Some(mapping_details(
+                let reason_key = if record.state.is_none() {
+                    "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
+                } else {
+                    "warn.rfi.followUp.reason.mappingMissing".to_string()
+                };
+                let mut row = manual_review_row(
+                    format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                    target_sheet,
+                    layout,
+                    record,
+                    reason_key,
+                    Some(mapping_details(
                         record,
                         Some((target_sheet, target_clause)),
                         target_workbook,
                         &[],
                     )),
-                });
+                );
+                row.target.rfi_column = default_route_col(target_sheet, target_clause);
+                row.target.status_column = default_route_col(target_sheet, target_clause) + 1;
+                manual_rows.push(row);
             }
             continue;
         };
