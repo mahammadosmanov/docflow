@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.77 - 2026-10-27
+
+### Changed
+
+- Added a unit test that the backend timestamp keeps its `unix:` prefix and whole-second format. No application behavior changes.
+
 ## 1.33.76 - 2026-10-27
 
 ### Changed
