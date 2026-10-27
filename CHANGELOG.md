@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.21 - 2026-10-27
+
+### Removed
+
+- Three stray backup copies of test files (`cap_fs/tests.rs-E`, `fs_ops/tests.rs-E`, `platform/excel/tests.rs-E`) were committed by mistake. Nothing compiled or referenced them, so no behavior changes.
+
 ## 1.36.20 - 2026-10-27
 
 ### Fixed
