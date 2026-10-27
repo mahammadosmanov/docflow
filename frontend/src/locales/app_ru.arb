@@ -1109,5 +1109,14 @@
   "error.rfi.rowRequired": "Нужна хотя бы одна строка RFI.",
   "error.rfi.rowLimit": "В одном плане может быть не более 500 физических строк.",
   "error.rfi.sheetGroupsLocked": "Группы листов RFI здесь нельзя добавлять или удалять.",
-  "params.saveFailed": "Не удалось сохранить настройки."
+  "params.saveFailed": "Не удалось сохранить настройки.",
+  "error.path.noAncestor": "Папка для этого пути больше не существует.",
+  "error.path.noParent": "Выбранный файл находится не в папке.",
+  "error.clipboard.encodeFailed": "Не удалось подготовить таблицу для копирования.",
+  "error.watch.updateFailed": "Автоматическую проверку не удалось завершить. Попробуйте снова.",
+  "error.rfi.scheduleDateRange": "Дата графика RFI находится вне допустимого диапазона.",
+  "error.rfi.systemEntryLimit": "В RFI System слишком много записей для обработки.",
+  "error.rfi.followUp.noParent": "Книга Follow Up находится не в папке.",
+  "error.rfi.fileGroup.rowInvalid": "Строку группы файлов не удалось определить. Обновите предпросмотр.",
+  "error.rfi.workbookUnreadable": "Книгу RFI Log не удалось прочитать. Проверьте, что файл на месте."
 }

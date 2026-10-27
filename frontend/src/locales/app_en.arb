@@ -1137,5 +1137,14 @@
   "error.rfi.rowRequired": "At least one RFI row is required.",
   "error.rfi.rowLimit": "A single plan can have at most 500 physical rows.",
   "error.rfi.sheetGroupsLocked": "RFI sheet groups cannot be added or removed here.",
-  "params.saveFailed": "Settings could not be saved."
+  "params.saveFailed": "Settings could not be saved.",
+  "error.path.noAncestor": "The folder for this path no longer exists.",
+  "error.path.noParent": "The selected file is not inside a folder.",
+  "error.clipboard.encodeFailed": "The table could not be prepared for copying.",
+  "error.watch.updateFailed": "The automatic check could not finish. Try again.",
+  "error.rfi.scheduleDateRange": "The RFI schedule date is outside the supported range.",
+  "error.rfi.systemEntryLimit": "The RFI System has too many entries to process.",
+  "error.rfi.followUp.noParent": "The Follow Up workbook is not inside a folder.",
+  "error.rfi.fileGroup.rowInvalid": "A file group row could not be identified. Refresh the preview.",
+  "error.rfi.workbookUnreadable": "The RFI Log workbook could not be read. Check that it is still in place."
 }
