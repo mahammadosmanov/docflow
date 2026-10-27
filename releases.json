@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.76",
+  "currentVersion": "1.36.77",
   "releases": [
+    {
+      "version": "1.36.77",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.77",
+      "summary": "Modularity: ExcelExportPipeline and its orchestration (staging, worker wait, cleanup, and quarantine handling) moved out of platform/excel.rs into platform/excel/pipeline.rs. No behavior change; 66 Excel tests, print-queue tests and clippy pass."
+    },
     {
       "version": "1.36.76",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.76",
       "summary": "Modularity: the Excel worker runtime (ExcelWorkerRuntime and ExcelWorkerHandle traits, WorkerPoll and WorkerJoin, and the thread-backed implementations) moved out of platform/excel.rs into platform/excel/worker.rs. No behavior change; 66 Excel tests and clippy pass."
     },

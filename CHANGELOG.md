@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.77 - 2026-10-27
+
+### Changed
+
+- Moved `ExcelExportPipeline` and its impl out of `platform/excel.rs` (821 lines) into `platform/excel/pipeline.rs`. Methods used by the sibling test module are widened to `pub(in crate::platform::excel)`. The 66 Excel tests and 6 print-queue tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.76 - 2026-10-27
 
 ### Changed
