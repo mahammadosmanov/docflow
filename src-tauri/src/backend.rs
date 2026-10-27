@@ -979,3 +979,20 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod empty_params_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_an_empty_object() {
+        assert!(validate_empty_params(&serde_json::json!({})).is_ok());
+    }
+
+    #[test]
+    fn rejects_extra_fields_null_and_non_object_params() {
+        assert!(validate_empty_params(&serde_json::json!({ "extra": 1 })).is_err());
+        assert!(validate_empty_params(&Value::Null).is_err());
+        assert!(validate_empty_params(&serde_json::json!([])).is_err());
+    }
+}
