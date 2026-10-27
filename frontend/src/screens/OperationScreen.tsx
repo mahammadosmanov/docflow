@@ -65,6 +65,7 @@ import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
 import { useRunCancel } from "./useRunCancel";
 import { useCopyTable } from "./useCopyTable";
 import { useResultActions } from "./useResultActions";
+import { useSavedParams } from "./useSavedParams";
 import { useApplyRun } from "./useApplyRun";
 import { useOperationShortcuts } from "./useOperationShortcuts";
 import { usePreviewRun } from "./usePreviewRun";
@@ -95,9 +96,6 @@ export function OperationScreen({
     ...defaults,
     ...(initialValues ?? {}),
   });
-  const valuesRevision = useRef(0);
-  const [hydrated, setHydrated] = useState(false);
-  const lastSaved = useRef("");
   const [stage, setStage] = useState<
     "form" | "previewing" | "preview" | "applying" | "result"
   >(initialPlan ? "preview" : "form");
@@ -123,68 +121,16 @@ export function OperationScreen({
     setRfiCandidateGroup,
   } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
-  const [previousValues, setPreviousValues] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
-  useEffect(() => {
-    setHydrated(false);
-    setPreviousValues(null);
-    const hydrationRevision = ++valuesRevision.current;
-    void bridge
-      .call("settings/params", {
-        opId: operation.id,
-      })
-      .then((saved) => {
-        if (valuesRevision.current !== hydrationRevision) {
-          setHydrated(true);
-          return;
-        }
-        const filtered = rememberedParams(operation, saved);
-        setPreviousValues(
-          operation.supportsPresets && Object.keys(filtered).length > 0
-            ? filtered
-            : null,
-        );
-        setValues((current) => ({
-          ...current,
-          ...(operation.supportsPresets ? {} : filtered),
-          ...(initialValues ?? {}),
-        }));
-        lastSaved.current = JSON.stringify(
-          persistableValues(operation.schema, {
-            ...defaults,
-            ...filtered,
-            ...(initialValues ?? {}),
-          }),
-        );
-        setHydrated(true);
-      })
-      .catch(() => {
-        setHydrated(true);
-      });
-  }, [bridge, operation, initialValues]);
+  const { valuesRevision, lastSaved, previousValues, setPreviousValues } =
+    useSavedParams({
+      bridge,
+      operation,
+      initialValues,
+      values,
+      defaults,
+      setValues,
+    });
 
-  useEffect(() => {
-    // Preset-capable procedures start from clean defaults. Their safe scalar
-    // settings are captured only when Preview is requested and are restored
-    // later solely through the explicit previous-settings action.
-    if (!hydrated || operation.supportsPresets) return;
-    const sanitized = persistableValues(operation.schema, values);
-    const serialized = JSON.stringify(sanitized);
-    if (serialized === lastSaved.current) return;
-
-    const timer = setTimeout(() => {
-      lastSaved.current = serialized;
-      void bridge
-        .call("settings/saveParams", {
-          opId: operation.id,
-          values: sanitized,
-        })
-        .catch(() => {});
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [bridge, operation, values, hydrated]);
 
   const installPlan = (next: Plan) => {
     setPlan(next);
