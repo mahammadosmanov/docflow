@@ -8,8 +8,9 @@ on:
         required: false
         type: string
   push:
+    # Minor and major tags only (v1.34.0, v2.0.0). Patch tags skip the Windows build.
     tags:
-      - "v*"
+      - "v*.*.0"
 
 permissions:
   contents: write
