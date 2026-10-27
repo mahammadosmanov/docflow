@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.2 - 2026-10-27
+
+### Changed
+
+- Remembered-settings restore and debounced autosave moved from `OperationScreen` into `useSavedParams`, with tests. No application behavior changes.
+
 ## 1.34.1 - 2026-10-27
 
 ### Changed
