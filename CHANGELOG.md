@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.10 - 2026-10-27
+
+### Fixed
+
+- Text fields, selects, and the table search box used a faint border (1.4 to 1.7 to 1, below the 3 to 1 non-text contrast minimum), so their edges were hard to see. They now use the strong border color, which is 4.6 to 1 on light and 3.4 to 1 on dark.
+
 ## 1.35.9 - 2026-10-27
 
 ### Fixed

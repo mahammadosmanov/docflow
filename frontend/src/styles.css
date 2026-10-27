@@ -789,7 +789,7 @@ h2 {
   padding: 0 12px;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   outline: 0;
 }
@@ -821,7 +821,7 @@ h2 {
 .input-shell {
   height: 38px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: var(--surface);
 }
@@ -844,7 +844,7 @@ select {
   padding: 0 12px;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   outline: 0;
 }
@@ -871,7 +871,7 @@ textarea:focus {
   resize: vertical;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   outline: 0;
 }
@@ -2075,7 +2075,7 @@ textarea:focus {
   width: 100%;
   padding: 6px 12px;
   border-radius: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
@@ -2169,7 +2169,7 @@ textarea:focus {
   flex: 0 1 220px;
   min-height: 34px;
   padding: 6px 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--text);
   background: var(--surface-2);

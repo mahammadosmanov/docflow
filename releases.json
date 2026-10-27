@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.35.9",
+  "currentVersion": "1.35.10",
   "releases": [
+    {
+      "version": "1.35.10",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.35.10",
+      "summary": "Text fields, selects, and the table search box have a darker border that meets the 3 to 1 contrast minimum in light and dark themes."
+    },
     {
       "version": "1.35.9",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.35.9",
       "summary": "The table search box shows the same keyboard focus outline as other inputs."
     },
