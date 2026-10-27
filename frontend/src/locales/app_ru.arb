@@ -1157,5 +1157,14 @@
   "error.rfi.pdfUnresolved": "PDF RFI не удалось безопасно найти.",
   "error.rfi.sourceUnreadable": "Не удалось прочитать исходный файл RFI.",
   "error.rfi.fileNameInvalid": "Не удалось прочитать имя файла RFI. Переименуйте файл и попробуйте снова.",
-  "error.rfi.pdfOutsideRoot": "PDF находится вне выбранной папки RFI."
+  "error.rfi.pdfOutsideRoot": "PDF находится вне выбранной папки RFI.",
+  "error.rfi.rowsEncodeFailed": "Строки RFI не удалось подготовить. Попробуйте снова.",
+  "error.rfi.fileGroup.rowsMissing": "В группе файлов нет строк для применения. Обновите предпросмотр.",
+  "error.rfi.fileGroup.rowsInvalid": "Строки группы файлов недействительны. Обновите предпросмотр.",
+  "error.rfi.fileGroup.stateInvalid": "Состояние одной из строк группы файлов недействительно. Обновите предпросмотр.",
+  "error.rfi.fileGroup.notApproved": "Эта строка группы файлов не утверждена.",
+  "error.rfi.sourceChanged": "Исходный файл изменился после предпросмотра. Повторите предпросмотр.",
+  "error.support.bundleInvalid": "Файл диагностики недействителен или был изменён. Создайте его снова.",
+  "error.path.generatedMissing": "Созданного файла больше нет в месте назначения. Создайте его снова.",
+  "error.print.queueIdInvalid": "Очередь печати не удалось определить. Повторите предпросмотр очереди."
 }

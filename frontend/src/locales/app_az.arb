@@ -1157,5 +1157,14 @@
   "error.rfi.pdfUnresolved": "RFI PDF-i təhlükəsiz şəkildə tapılmadı.",
   "error.rfi.sourceUnreadable": "RFI mənbə faylı oxuna bilmədi.",
   "error.rfi.fileNameInvalid": "RFI fayl adı oxuna bilmədi. Faylı adını dəyişib yenidən cəhd edin.",
-  "error.rfi.pdfOutsideRoot": "PDF seçilmiş RFI qovluğunun xaricindədir."
+  "error.rfi.pdfOutsideRoot": "PDF seçilmiş RFI qovluğunun xaricindədir.",
+  "error.rfi.rowsEncodeFailed": "RFI sətirləri hazırlana bilmədi. Yenidən cəhd edin.",
+  "error.rfi.fileGroup.rowsMissing": "Fayl qrupunda tətbiq ediləcək sətir yoxdur. Önizləməni yeniləyin.",
+  "error.rfi.fileGroup.rowsInvalid": "Fayl qrupunun sətirləri etibarsızdır. Önizləməni yeniləyin.",
+  "error.rfi.fileGroup.stateInvalid": "Fayl qrupu sətirlərindən birinin vəziyyəti etibarsızdır. Önizləməni yeniləyin.",
+  "error.rfi.fileGroup.notApproved": "Bu fayl qrupu sətri təsdiqlənməyib.",
+  "error.rfi.sourceChanged": "Mənbə fayl önizləmədən sonra dəyişdi. Yenidən önizləyin.",
+  "error.support.bundleInvalid": "Diaqnostika faylı etibarsızdır və ya dəyişdirilib. Yenidən yaradın.",
+  "error.path.generatedMissing": "Yaradılmış fayl artıq təyinatında yoxdur. Yenidən yaradın.",
+  "error.print.queueIdInvalid": "Çap növbəsi müəyyən edilmədi. Növbəni yenidən önizləyin."
 }
