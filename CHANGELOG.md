@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.9 - 2026-10-27
+
+### Changed
+
+- The release gate drops `cargo check`: clippy with all targets already type-checks the same code, and the crate defines no Cargo features. The gate, AGENTS.md, RELEASE_SAFETY.md, and TASKS.md are updated to match.
+
 ## 1.36.8 - 2026-10-27
 
 ### Changed
