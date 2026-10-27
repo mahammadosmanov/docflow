@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.90 - 2026-10-27
+
+### Fixed
+
+- Twenty-six user-facing backend messages were shown as raw English or unaccented Turkish. They now use translated text in all four languages: AI extraction and service errors, printer unavailable, copy-count range, empty print queue or plan, selected and dropped path errors, RFI System folder errors, clipboard table size, history limit, and RFI row rules.
+- Internal consistency messages (journal and S5 recovery checks) are not translated; users see them only in rare recovery cases.
+
 ## 1.33.89 - 2026-10-27
 
 ### Fixed
