@@ -253,6 +253,7 @@
   "table.filterCount": "Showing {filtered} of {total} rows",
   "prefs.reset": "Reset to defaults",
   "review.help": "Decide what happens to each file. Nothing is changed until you approve the plan.",
+  "review.batch.label": "For all files",
   "review.empty.help": "No files are waiting for review.",
   "review.noChanges": "Nothing selected",
   "review.selected": "{count} selected",

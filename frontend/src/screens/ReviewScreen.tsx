@@ -192,7 +192,7 @@ export function ReviewScreen({
               {items.length ? (
                 <>
                   <div className="review-batch-bar">
-                    <span className="batch-label">{s.t("review.help")}</span>
+                    <span className="batch-label">{s.t("review.batch.label")}</span>
                     <div className="batch-actions">
                       <Button
                         variant="secondary"
