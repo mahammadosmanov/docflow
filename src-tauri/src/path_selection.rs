@@ -9,7 +9,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{errors::BackendError, paths::CallerIdentity};
+use crate::{
+    errors::BackendError,
+    paths::{CallerIdentity, expired},
+};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -207,10 +210,6 @@ fn validate_scope(operation_id: &str, parameter_name: &str) -> Result<(), Backen
         return Err(BackendError::invalid_params());
     }
     Ok(())
-}
-
-fn expired(created_at: SystemTime, now: SystemTime, ttl: Duration) -> bool {
-    now.duration_since(created_at).is_ok_and(|age| age >= ttl)
 }
 
 fn lock(

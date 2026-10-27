@@ -956,7 +956,7 @@ fn is_link_or_reparse(metadata: &fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
-fn expired(created_at: SystemTime, now: SystemTime, ttl: Duration) -> bool {
+pub(crate) fn expired(created_at: SystemTime, now: SystemTime, ttl: Duration) -> bool {
     now.duration_since(created_at).is_ok_and(|age| age >= ttl)
 }
 
@@ -1055,5 +1055,43 @@ mod provisional_tests {
             ),
             "{outcome:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod lexical_guard_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_relative_paths() {
+        assert!(reject_lexical_escape(Path::new("relative/dir")).is_err());
+    }
+
+    #[test]
+    fn rejects_parent_directory_components() {
+        assert!(reject_lexical_escape(Path::new("/root/../etc")).is_err());
+    }
+
+    #[test]
+    fn accepts_plain_absolute_paths() {
+        assert!(reject_lexical_escape(Path::new("/root/dir/file.pdf")).is_ok());
+    }
+
+    #[test]
+    fn expiry_starts_at_the_ttl_boundary() {
+        let created = SystemTime::UNIX_EPOCH;
+        let ttl = Duration::from_secs(60);
+        assert!(!expired(created, created + Duration::from_secs(59), ttl));
+        assert!(expired(created, created + ttl, ttl));
+    }
+
+    #[test]
+    fn a_creation_time_in_the_future_is_not_expired() {
+        let now = SystemTime::UNIX_EPOCH;
+        assert!(!expired(
+            now + Duration::from_secs(5),
+            now,
+            Duration::from_secs(1)
+        ));
     }
 }
