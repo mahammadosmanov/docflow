@@ -264,9 +264,10 @@ impl NativeBackend {
         let settings = Arc::new(
             SettingsStore::new(settings_path).map_err(|_| BackendError::settings_write())?,
         );
-        let supabase_http: Arc<dyn JsonHttp> = Arc::new(
-            HttpClient::new(HttpConfig::default()).expect("valid Supabase HTTP configuration"),
-        );
+        let supabase_http: Arc<dyn JsonHttp> =
+            Arc::new(HttpClient::new(HttpConfig::default()).map_err(|error| {
+                BackendError::protocol(format!("Supabase HTTP initialization: {error}"))
+            })?);
         let auth_config = AuthConfig::new(SUPABASE_URL, SUPABASE_KEY);
         let auth = Arc::new(AuthService::new(
             settings.clone(),
@@ -286,7 +287,9 @@ impl NativeBackend {
                 request_timeout: Duration::from_secs(45),
                 ..HttpConfig::default()
             })
-            .expect("valid Gemini HTTP configuration"),
+            .map_err(|error| {
+                BackendError::protocol(format!("Gemini HTTP initialization: {error}"))
+            })?,
         );
         let gemini = Arc::new(GeminiClient::new(
             gemini_http,
