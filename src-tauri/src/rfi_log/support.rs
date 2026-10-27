@@ -406,40 +406,53 @@ pub(super) fn document_error(error: impl std::fmt::Display) -> BackendError {
 
 pub(super) fn rfi_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})$").unwrap())
+    VALUE.get_or_init(|| {
+        Regex::new(r"(?i)-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})$")
+            .expect("static RFI log regex is valid")
+    })
 }
 
 pub(super) fn item_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)^(CIV|MEC|ELE|PRC)-(\d+)\.").unwrap())
+    VALUE.get_or_init(|| {
+        Regex::new(r"(?i)^(CIV|MEC|ELE|PRC)-(\d+)\.").expect("static RFI log regex is valid")
+    })
 }
 
 pub(super) fn trailing_digits_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(\d{4})$").unwrap())
+    VALUE.get_or_init(|| Regex::new(r"(\d{4})$").expect("static RFI log regex is valid"))
 }
 
 pub(super) fn token_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"[A-Z]+|\d+").unwrap())
+    VALUE.get_or_init(|| Regex::new(r"[A-Z]+|\d+").expect("static RFI log regex is valid"))
 }
 
 pub(super) fn natural_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"\d+|\D+").unwrap())
+    VALUE.get_or_init(|| Regex::new(r"\d+|\D+").expect("static RFI log regex is valid"))
 }
 
 pub(super) fn leading_site_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)^\s*([NS])\d{1,3}(?:[^A-Z0-9]|$)").unwrap())
+    VALUE.get_or_init(|| {
+        Regex::new(r"(?i)^\s*([NS])\d{1,3}(?:[^A-Z0-9]|$)").expect("static RFI log regex is valid")
+    })
 }
 
 pub(super) fn north_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)(?:^|[^A-Z0-9])N\d{1,3}(?:[^A-Z0-9]|$)").unwrap())
+    VALUE.get_or_init(|| {
+        Regex::new(r"(?i)(?:^|[^A-Z0-9])N\d{1,3}(?:[^A-Z0-9]|$)")
+            .expect("static RFI log regex is valid")
+    })
 }
 
 pub(super) fn south_pattern() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
-    VALUE.get_or_init(|| Regex::new(r"(?i)(?:^|[^A-Z0-9])S\d{1,3}(?:[^A-Z0-9]|$)").unwrap())
+    VALUE.get_or_init(|| {
+        Regex::new(r"(?i)(?:^|[^A-Z0-9])S\d{1,3}(?:[^A-Z0-9]|$)")
+            .expect("static RFI log regex is valid")
+    })
 }
