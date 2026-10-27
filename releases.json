@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.35.1",
+  "currentVersion": "1.35.2",
   "releases": [
+    {
+      "version": "1.35.2",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.35.2",
+      "summary": "Light-theme muted text is darker, so category chips and small grey labels meet the 4.5:1 contrast minimum. Measured on every screen in light and dark."
+    },
     {
       "version": "1.35.1",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.35.1",
       "summary": "When remembered settings fail to save, the operation screen shows a message instead of failing silently. The message clears after the next successful save."
     },

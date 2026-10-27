@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.2 - 2026-10-27
+
+### Fixed
+
+- Light-theme muted text (category chips and counts, small grey labels) measured 4.06:1 on its chip background, below the 4.5:1 minimum for small text. The light muted colour is darker now (4.96:1 on the same background). Dark theme is unchanged and already passes.
+
 ## 1.35.1 - 2026-10-27
 
 ### Fixed
