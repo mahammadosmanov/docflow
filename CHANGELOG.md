@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.66 - 2026-10-27
+
+### Changed
+
+- Moved `capture_unix_xattrs` and `replay_unix_xattrs` out of `cap_fs.rs` (962 lines) into `cap_fs/unix_xattrs.rs`. The module and its import are gated with `cfg(unix)`, matching the functions. Code is otherwise unchanged. cap_fs tests pass and clippy is clean with `-D warnings` on macOS. The Windows build is not verified here.
+
 ## 1.36.65 - 2026-10-27
 
 ### Changed
