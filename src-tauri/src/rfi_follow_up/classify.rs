@@ -216,36 +216,18 @@ pub(super) fn classify_workbooks_full(
                     )
                 })
             {
-                manual_rows.push(FollowUpRow {
-                    row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
-                    sheet: layout.worksheet.name.clone(),
-                    row: 0,
-                    rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![record.inspection_status_for_ui()],
-                    current_status: String::new(),
-                    proposed_status: None,
-                    proposed_rfi_no: None,
-                    disposition: FollowUpDisposition::ManualReview,
-                    reason_key: if record.state.is_none() {
+                manual_rows.push(manual_review_row(
+                    format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                    &layout.worksheet.name,
+                    layout,
+                    record,
+                    if record.state.is_none() {
                         "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
                     } else {
                         "warn.rfi.followUp.reason.mappingUnsupported".to_string()
                     },
-                    selectable: false,
-                    enabled: false,
-                    remark: None,
-                    formula_fixes: Vec::new(),
-                    target: FollowUpReviewTarget {
-                        worksheet: layout.worksheet.clone(),
-                        row: 0,
-                        rfi_column: layout.rfi_column,
-                        status_column: layout.status_column,
-                        rfi_cell: None,
-                        status_cell: None,
-                    },
-                    source_evidence: record.evidence.clone(),
-                    mapping_details: Some(mapping_details(record, None, target_workbook, &[])),
-                });
+                    Some(mapping_details(record, None, target_workbook, &[])),
+                ));
             }
             continue;
         };
