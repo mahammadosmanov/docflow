@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.28 - 2026-10-27
+
+### Changed
+
+- The three PDF file-effect steps (first-page replace, page rotate, and page extract) move from `fs_ops/effects.rs` into `fs_ops/effects_pdf.rs`. The effects file shrinks from 1,173 to 584 lines. Behavior is unchanged.
+
 ## 1.36.27 - 2026-10-27
 
 ### Changed
