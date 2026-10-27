@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.65 - 2026-10-27
+
+### Changed
+
+- Moved the row-building helpers (`plan_from_rows`, `jobs_from_rows`, `job_from_row`, `NormalizedSettings`, `rows_from_workbook`, `row_from_file`, and related) out of `operations/batch_print.rs` (961 lines) into `operations/batch_print/rows.rs`. Visibility and imports only. Batch-print and print tests pass; clippy is clean with `-D warnings`.
+
 ## 1.36.64 - 2026-10-27
 
 ### Changed
