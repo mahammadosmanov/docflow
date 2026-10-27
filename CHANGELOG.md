@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.61 - 2026-10-27
+
+### Changed
+
+- The replica automation status read and its five-second refresh move from `frontend/src/screens/SettingsScreen.tsx` into the `useReplicaStatus` hook in `frontend/src/screens/useReplicaStatus.ts`. The settings screen still calls the refresh after a preference change. `useReplicaStatus.test.ts` covers the load on mount, the five-second poll, and keeping the last good status when a refresh fails.
+- The `useSupportDiagnostics` hook body, added in 1.33.60, is re-indented to match the surrounding code. No behavior changes.
+
 ## 1.33.60 - 2026-10-27
 
 ### Changed
