@@ -30,6 +30,7 @@ import {
 import {
   CompactDateInput,
 } from "./CompactDateInput";
+import { PlanFilterBar } from "./PlanFilterBar";
 import {
   type EditorColumn,
   displayEditorValue,
@@ -268,48 +269,15 @@ export function EditablePlanTable({
           )}
         </div>
       </div>
-      <div className="table-filter-bar">
-        <div className="table-search-box">
-          <input
-            type="search"
-            aria-label={s.t("filter.searchPlaceholder")}
-            placeholder={s.t("filter.searchPlaceholder")}
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-        </div>
-        <div className="table-filter-tabs">
-          <button
-            type="button"
-            className={`filter-tab ${filterMode === "all" ? "filter-tab--active" : ""}`}
-            onClick={() => setFilterMode("all")}
-          >
-            {s.t("filter.all")}
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${filterMode === "changes" ? "filter-tab--active" : ""}`}
-            onClick={() => setFilterMode("changes")}
-          >
-            {s.t("filter.changes")}
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${filterMode === "review" ? "filter-tab--active" : ""}`}
-            onClick={() => setFilterMode("review")}
-          >
-            {s.t("filter.manualReview")}
-          </button>
-        </div>
-        {(searchTerm !== "" || filterMode !== "all") && (
-          <span className="table-filter-count">
-            {s.t("table.filterCount", {
-              filtered: filteredRowIndices.length,
-              total: rows.length,
-            })}
-          </span>
-        )}
-      </div>
+      <PlanFilterBar
+        searchTerm={searchTerm}
+        filterMode={filterMode}
+        onSearchTermChange={setSearchTerm}
+        onFilterModeChange={setFilterMode}
+        filteredCount={filteredRowIndices.length}
+        totalCount={rows.length}
+        s={s}
+      />
       {editor.bulkEnabled === true && (
         <div className="bulk-editor" aria-label={s.t("editor.bulk.title")}>
           <div className="bulk-selection">

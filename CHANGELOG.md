@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.62 - 2026-10-27
+
+### Changed
+
+- The plan table's search box, filter tabs, and filtered-row count move from `frontend/src/plan/EditablePlanTable.tsx` into the `PlanFilterBar` component in `frontend/src/plan/PlanFilterBar.tsx`. The table passes the search and filter values with their setters and the two row counts. `PlanFilterBar.test.tsx` covers the search callback, the filter-tab callback, and the count shown only while a filter is active. `EditablePlanTable.tsx` drops from 752 to 720 lines. Behavior is unchanged.
+
 ## 1.33.61 - 2026-10-27
 
 ### Changed
