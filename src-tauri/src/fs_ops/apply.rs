@@ -423,7 +423,6 @@ impl FilesystemAuthority {
         let inspected = self.plans.resolve_bound(plan_id, caller)?;
         let binding = inspected
             .binding
-            .clone()
             .ok_or_else(BackendError::plan_unavailable)?;
         let process = self.mutation_lock.try_acquire()?;
         let interprocess = self.journals.try_acquire_mutation_lock()?;

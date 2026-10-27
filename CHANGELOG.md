@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.56 - 2026-10-27
+
+### Changed
+
+- Eight library call sites no longer clone a value that is not used afterward: the replica binding lookup (`fs_ops/apply.rs`), the retained-locator and recovery-locator records (`fs_ops/follow_up.rs`, `leaf_transaction.rs`), three RFI number lists in the preview (`native/preview.rs`), a grant root (`native/preview_rfi.rs`), an output folder (`operations/process_scans/output.rs`), and a JSON source value (`rfi_log/email.rs`). The compiler confirms each value is moved, not reused. No behavior change.
+
 ## 1.36.55 - 2026-10-27
 
 ### Tests

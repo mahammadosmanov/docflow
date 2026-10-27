@@ -48,7 +48,7 @@ pub(super) fn process_scan_targets(
     let root = discipline_root.as_deref().unwrap_or(destination);
     if organize {
         let folder = folder_for(root, code);
-        (Some(folder.clone()), target_for(root, code))
+        (Some(folder), target_for(root, code))
     } else {
         let target = flat_target_for(root, code);
         (discipline_root, target)

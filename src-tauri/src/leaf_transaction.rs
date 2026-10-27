@@ -240,7 +240,7 @@ pub(crate) fn reconcile_retained_publication(
     if publication.phase == RetainedPublicationPhase::RestoringOriginal {
         let notice = RecoveryNotice {
             warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
-            locator: locator.clone(),
+            locator,
         };
         let restored = canonical.matches(
             &publication.expected_canonical_identity,
