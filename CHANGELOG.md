@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.54 - 2026-10-27
+
+### Fixed
+
+- The group-select button in the editable plan table (`plan/EditablePlanTable.tsx`) shows only the group's row count. Its accessible name was that number, so a screen reader announced a bare digit. It now has `aria-label` "Select this group"; the visible count is unchanged. No automated test covers this button yet.
+
 ## 1.36.53 - 2026-10-27
 
 ### Fixed

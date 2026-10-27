@@ -372,6 +372,7 @@ export function EditablePlanTable({
                       {groupCount > 1 && (
                         <button
                           type="button"
+                          aria-label={s.t("editor.selectGroup")}
                           title={s.t("editor.selectGroup")}
                           onClick={() =>
                             selectGroup(groupField, row[groupField])
