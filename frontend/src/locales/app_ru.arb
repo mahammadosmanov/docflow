@@ -1065,5 +1065,15 @@
   "error.path.selectedMissing": "Выбранный путь не существует.",
   "error.print.jobMissing": "Сохранённое задание печати больше не существует.",
   "error.trash.missing": "Элемент восстановимой корзины не существует.",
-  "error.path.canonicalize": "Путь не удаётся определить."
+  "error.path.canonicalize": "Путь не удаётся определить.",
+  "error.print.timestampMissing": "Не удалось прочитать дату файла для печати.",
+  "error.review.sourceNotPdf": "Проверять можно только PDF-файлы.",
+  "error.review.sourceMissing": "Файл для проверки не существует.",
+  "error.review.directoryMissing": "Папка проверки не существует.",
+  "error.review.sourceNameInvalid": "Имя файла нельзя использовать для проверки.",
+  "error.review.sourceUnresolved": "Файл для проверки не удаётся безопасно найти.",
+  "error.watch.unsupported": "Эту операцию нельзя отслеживать автоматически.",
+  "error.support.encodingFailed": "Не удалось создать файл диагностики.",
+  "error.path.rootUnavailable": "Выбранная папка больше недоступна. Выберите её снова.",
+  "error.print.rowInvalid": "Строку печати не удалось определить. Повторите предпросмотр очереди."
 }

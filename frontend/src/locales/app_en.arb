@@ -1093,5 +1093,15 @@
   "error.path.selectedMissing": "The selected path does not exist.",
   "error.print.jobMissing": "The saved print job no longer exists.",
   "error.trash.missing": "The recoverable trash item does not exist.",
-  "error.path.canonicalize": "The path cannot be resolved."
+  "error.path.canonicalize": "The path cannot be resolved.",
+  "error.print.timestampMissing": "The print file's date could not be read.",
+  "error.review.sourceNotPdf": "Only PDF files can be reviewed.",
+  "error.review.sourceMissing": "The file to review does not exist.",
+  "error.review.directoryMissing": "The review folder does not exist.",
+  "error.review.sourceNameInvalid": "The file name cannot be used for review.",
+  "error.review.sourceUnresolved": "The file to review cannot be found safely.",
+  "error.watch.unsupported": "This operation cannot be watched automatically.",
+  "error.support.encodingFailed": "The diagnostics file could not be created.",
+  "error.path.rootUnavailable": "The selected folder is no longer accessible. Select it again.",
+  "error.print.rowInvalid": "A print row could not be identified. Preview the queue again."
 }
