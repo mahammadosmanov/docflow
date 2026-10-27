@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.35.5",
+  "currentVersion": "1.35.6",
   "releases": [
+    {
+      "version": "1.35.6",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.35.6",
+      "summary": "Fourteen more backend error messages (review locations, print file and queue folders, saved print jobs, preset values, scan destinations, and deletion) now show translated text."
+    },
     {
       "version": "1.35.5",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.35.5",
       "summary": "Thirteen more backend error messages (print queue, saved print jobs, file selection, file reveal, preview, undo, scan and review reads) now show translated text."
     },

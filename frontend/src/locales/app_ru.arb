@@ -1129,5 +1129,18 @@
   "error.operation.previewFailed": "Не удалось подготовить предпросмотр. Попробуйте снова.",
   "error.operation.undoFailed": "Отмену не удалось выполнить. Проверьте результат, прежде чем повторять.",
   "error.scan.sourceUnreadable": "Не удалось прочитать отсканированный файл.",
-  "error.review.directoryUnreadable": "Не удалось прочитать папку проверки."
+  "error.review.directoryUnreadable": "Не удалось прочитать папку проверки.",
+  "error.review.pathBlocked": "Место для проверки заблокировано. Выберите другую папку.",
+  "error.review.destinationNoParent": "Место назначения проверки находится не в папке.",
+  "error.review.pdfNoParent": "PDF для проверки находится не в папке.",
+  "error.print.fileIdentityUnavailable": "Файл для печати не удалось определить. Добавьте его снова.",
+  "error.print.fileDirectoryUnavailable": "Папка файла для печати больше недоступна.",
+  "error.print.queueDirectoryUnavailable": "Папка очереди печати больше недоступна.",
+  "error.print.jobNotResumable": "Это сохранённое задание печати нельзя продолжить. Удалите его и добавьте снова.",
+  "error.print.jobSetChanged": "Сохранённые задания печати изменились. Повторите предпросмотр очереди.",
+  "error.path.inspectFailed": "Не удалось проверить выбранный элемент. Выберите его снова.",
+  "error.backend.encodeFailed": "DocFlow не смог подготовить ответ. Попробуйте снова.",
+  "error.preset.valueInvalid": "Одно из сохранённых значений пресета недействительно. Выберите пресет снова.",
+  "error.scan.destinationChanged": "Место назначения сканирования изменилось во время пересмотра предпросмотра. Повторите предпросмотр.",
+  "error.scan.trashUnavailable": "Восстанавливаемое удаление недоступно для этих сканов."
 }
