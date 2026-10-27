@@ -243,6 +243,7 @@ export function OperationScreen({
     <div className="screen">
       <Header
         title={s.t(operation.titleKey)}
+        titleAs="h1"
         onBack={onBack}
         backLabel={s.t("action.back")}
       >

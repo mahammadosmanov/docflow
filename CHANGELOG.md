@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.40 - 2026-10-27
+
+### Fixed
+
+- Heading structure for screen readers: the home screen had an empty first heading, and most other screens had two level-1 headings (the top bar title plus the page title). The top bar title is now a paragraph by default, so every screen has exactly one level-1 heading. Settings and the workflow screen keep their top bar title as the heading, since nothing else names them. Appearance is unchanged.
+
 ## 1.36.39 - 2026-10-27
 
 ### Fixed
