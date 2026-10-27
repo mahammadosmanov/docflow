@@ -34,6 +34,7 @@ export function PlanFilterBar({
         <button
           type="button"
           className={`filter-tab ${filterMode === "all" ? "filter-tab--active" : ""}`}
+          aria-pressed={filterMode === "all"}
           onClick={() => onFilterModeChange("all")}
         >
           {s.t("filter.all")}
@@ -41,6 +42,7 @@ export function PlanFilterBar({
         <button
           type="button"
           className={`filter-tab ${filterMode === "changes" ? "filter-tab--active" : ""}`}
+          aria-pressed={filterMode === "changes"}
           onClick={() => onFilterModeChange("changes")}
         >
           {s.t("filter.changes")}
@@ -48,6 +50,7 @@ export function PlanFilterBar({
         <button
           type="button"
           className={`filter-tab ${filterMode === "review" ? "filter-tab--active" : ""}`}
+          aria-pressed={filterMode === "review"}
           onClick={() => onFilterModeChange("review")}
         >
           {s.t("filter.manualReview")}

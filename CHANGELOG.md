@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.14 - 2026-10-27
+
+### Fixed
+
+- The filter tabs (All, Changes, Manual review) and the category chips on the home screen showed their selected state only by color. They now set aria-pressed, so screen readers announce which filter is active.
+
 ## 1.35.13 - 2026-10-27
 
 ### Fixed
