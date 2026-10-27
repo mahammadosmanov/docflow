@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.21 - 2026-10-27
+
+### Fixed
+
+- The Turkish PDF rotation form said "review klasörü" and "Görevden çıkınca". It now says "inceleme klasörü" and "İş tamamlanınca".
+
 ## 1.35.20 - 2026-10-27
 
 ### Fixed
