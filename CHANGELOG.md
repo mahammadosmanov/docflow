@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.23 - 2026-10-27
+
+### Fixed
+
+- Four Turkish Follow Up and status messages still had the English word "Exact" in capitals, and one said "tam tam-değer". They now say Tam or tam değer.
+
 ## 1.35.22 - 2026-10-27
 
 ### Fixed
