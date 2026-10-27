@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.23 - 2026-10-27
+
+### Changed
+
+- Patch updates of Rust dependencies: the ICU text-internationalization crates (2.3 to 2.4), zerovec, yoke, tinystr, and erased-serde. Clippy with warnings denied and all Rust tests pass. Crates with unclear benefit or native build risk (cc, uuid, brotli) stay where they are.
+
 ## 1.36.22 - 2026-10-27
 
 ### Security
