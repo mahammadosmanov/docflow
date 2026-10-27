@@ -1069,12 +1069,16 @@ mod lexical_guard_tests {
 
     #[test]
     fn rejects_parent_directory_components() {
-        assert!(reject_lexical_escape(Path::new("/root/../etc")).is_err());
+        let escaping = std::env::temp_dir().join("..").join("etc");
+        assert!(reject_lexical_escape(&escaping).is_err());
     }
 
     #[test]
     fn accepts_plain_absolute_paths() {
-        assert!(reject_lexical_escape(Path::new("/root/dir/file.pdf")).is_ok());
+        // `/root/...` is not absolute on Windows, so build the path from the
+        // platform's own absolute temp directory.
+        let plain = std::env::temp_dir().join("dir").join("file.pdf");
+        assert!(reject_lexical_escape(&plain).is_ok());
     }
 
     #[test]
