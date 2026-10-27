@@ -26,6 +26,7 @@ import {
   CompactDateInput,
 } from "./CompactDateInput";
 import { PlanFilterBar } from "./PlanFilterBar";
+import { usePlanSelection } from "./usePlanSelection";
 import { PlanSelectionBar } from "./PlanSelectionBar";
 import { PlanBulkFields } from "./PlanBulkFields";
 import { PlanTableHead } from "./PlanTableHead";
@@ -78,9 +79,6 @@ export function EditablePlanTable({
     editor.choiceLabels && typeof editor.choiceLabels === "object"
       ? (editor.choiceLabels as Record<string, unknown>)
       : {};
-  const rowId = (row: Record<string, unknown>, index: number) =>
-    String(row._rowId ?? `${row[groupField] ?? "row"}-${index}`);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailsVisible, setDetailsVisible] = useState(
     editor.detailsDefaultVisible === true,
   );
@@ -101,9 +99,6 @@ export function EditablePlanTable({
     (editor.selectionEnabled === true ? 52 : 0) +
     visibleColumns.reduce((total, column) => total + columnWidth(column), 0) +
     (hasRowActions ? 132 : 0);
-  const selectedRows = rows.filter((row, index) =>
-    selectedIds.has(rowId(row, index)),
-  );
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "changes" | "review">(
@@ -115,14 +110,15 @@ export function EditablePlanTable({
     () => filterRowIndices(rows, filterMode, normalizedSearch),
     [rows, filterMode, normalizedSearch],
   );
-
-  useEffect(() => {
-    const validIds = new Set(rows.map((row, index) => rowId(row, index)));
-    setSelectedIds((current) => {
-      const next = new Set([...current].filter((id) => validIds.has(id)));
-      return next.size === current.size ? current : next;
-    });
-  }, [rows, groupField]);
+  const {
+    rowId,
+    selectedIds,
+    selectedRows,
+    selectAll,
+    selectNone,
+    toggleRow,
+    selectGroup,
+  } = usePlanSelection({ rows, groupField, filteredRowIndices });
 
   useEffect(() => {
     if (bulkColumns.some((column) => column.key === bulkField)) return;
@@ -169,28 +165,6 @@ export function EditablePlanTable({
     });
     onChange(next);
   };
-
-  const selectAll = () =>
-    setSelectedIds(
-      new Set(filteredRowIndices.map((index) => rowId(rows[index], index))),
-    );
-  const selectNone = () => setSelectedIds(new Set());
-  const toggleRow = (id: string) =>
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const selectGroup = (field: string, value: unknown) =>
-    setSelectedIds(
-      new Set(
-        rows
-          .map((row, index) => ({ row, id: rowId(row, index) }))
-          .filter(({ row }) => row[field] === value)
-          .map(({ id }) => id),
-      ),
-    );
 
   const duplicate = (index: number) =>
     onChange(duplicateRowAt(rows, index, groupField));
