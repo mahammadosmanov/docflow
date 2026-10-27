@@ -60,11 +60,11 @@ impl<R: Read + Seek> Editor<'_, R> {
         self.overlay.insert(name.to_string(), bytes);
     }
 
-    fn names(&self) -> Vec<String> {
+    fn names(&self) -> Result<Vec<String>, OoxmlError> {
         self.archive
             .file_names()
-            .map(str::to_string)
-            .collect::<Vec<_>>()
+            .map(|name| Ok(name.map_err(OoxmlError::from)?.into_owned()))
+            .collect()
     }
 }
 
@@ -119,7 +119,7 @@ fn write_package_edited<R: Read + Seek>(
     writer.set_raw_comment(comment.into_boxed_slice())?;
     for index in 0..editor.archive.len() {
         let entry = editor.archive.by_index(index)?;
-        let name = entry.name().to_string();
+        let name = entry.name()?.into_owned();
         if editor.removed.contains(&name) {
             continue;
         }
@@ -429,7 +429,7 @@ fn insert_row(
     editor.put(&path, bytes);
 
     // Other worksheets, charts and the workbook's defined names.
-    let names = editor.names();
+    let names = editor.names()?;
     for (other_name, info) in sheets {
         if other_name == sheet {
             continue;
@@ -516,7 +516,11 @@ fn build_new_row(
 }
 
 fn drop_calc_chain<R: Read + Seek>(editor: &mut Editor<'_, R>) -> Result<(), OoxmlError> {
-    if !editor.names().iter().any(|name| name == "xl/calcChain.xml") {
+    if !editor
+        .names()?
+        .iter()
+        .any(|name| name == "xl/calcChain.xml")
+    {
         return Ok(());
     }
     editor.removed.insert("xl/calcChain.xml".to_string());

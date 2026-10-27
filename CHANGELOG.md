@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.22 - 2026-10-27
+
+### Security
+
+- The zip library moves from 8.6.0 to 9.0.0. The old version had three advisories (RUSTSEC-2026-0367, -0368, -0369) about ZIP extraction: setuid/setgid bits kept, symlinks pointing outside the destination, and permissions applied through symlinks. The app only reads and writes ZIP packages and never calls `extract()`, so the exposure was not reachable here.
+- Office package code now treats an entry name that is not valid UTF-8 as an error. Before, it was read leniently. Affected: workbook and document reads, the signature check, guarded patches, and the RFI file-group scan. Packages with such names now fail with a clear message instead of being rewritten.
+
 ## 1.36.21 - 2026-10-27
 
 ### Removed

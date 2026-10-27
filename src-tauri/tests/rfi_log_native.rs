@@ -251,7 +251,7 @@ fn members(path: &Path) -> BTreeMap<String, Vec<u8>> {
     (0..archive.len())
         .map(|index| {
             let mut entry = archive.by_index(index).unwrap();
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap().into_owned();
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes).unwrap();
             (name, bytes)

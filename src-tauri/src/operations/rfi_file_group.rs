@@ -580,7 +580,10 @@ fn package_codes(path: &Path) -> Result<BTreeSet<String>, String> {
         let mut entry = archive
             .by_index(index)
             .map_err(|error| format!("Office package entry: {error}"))?;
-        if !entry.name().to_ascii_lowercase().ends_with(".xml") {
+        let name = entry
+            .name()
+            .map_err(|error| format!("Office package entry name: {error}"))?;
+        if !name.to_ascii_lowercase().ends_with(".xml") {
             continue;
         }
         total = total

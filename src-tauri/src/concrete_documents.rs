@@ -103,7 +103,10 @@ pub(crate) fn generate(
         let mut entry = archive
             .by_index(index)
             .map_err(|error| format!("Invalid Office package entry: {error}"))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|error| format!("Invalid Office package entry name: {error}"))?
+            .into_owned();
         let entry_size = entry.size();
         total_uncompressed = total_uncompressed
             .checked_add(entry_size)
@@ -273,7 +276,10 @@ fn patch_civ010_numeric_cells(
         let mut entry = archive
             .by_index(index)
             .map_err(|error| format!("Invalid generated workbook entry: {error}"))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|error| format!("Invalid generated workbook entry name: {error}"))?
+            .into_owned();
         let (options, comment) = (
             entry.options().into_full_options(),
             entry.comment().to_string(),
