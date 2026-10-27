@@ -28,6 +28,21 @@ import {
 import {
   isPathSelection,
 } from "../helpers";
+import {
+  type PathSelection,
+} from "../types";
+
+/** Adds newly chosen files, replacing any already selected file with the same id. */
+function mergeSelections(
+  current: PathSelection[],
+  added: PathSelection[],
+): PathSelection[] {
+  return [
+    ...new Map(
+      [...current, ...added].map((item) => [item.selectionId, item]),
+    ).values(),
+  ];
+}
 
 export function SchemaField({
   bridge,
@@ -120,13 +135,7 @@ export function SchemaField({
           if (dropped.length > 0) {
             void dropPaths(bridge, operationId, param.name, dropped).then(
               (selected) => {
-                const merged = new Map(
-                  [...paths, ...selected].map((item) => [
-                    item.selectionId,
-                    item,
-                  ]),
-                );
-                onChange([...merged.values()]);
+                onChange(mergeSelections(paths, selected));
               },
             );
           }
@@ -141,13 +150,7 @@ export function SchemaField({
             onClick={() =>
               void chooseFiles(bridge, operationId, param.name).then(
                 (selected) => {
-                  const merged = new Map(
-                    [...paths, ...selected].map((item) => [
-                      item.selectionId,
-                      item,
-                    ]),
-                  );
-                  onChange([...merged.values()]);
+                  onChange(mergeSelections(paths, selected));
                 },
               )
             }
