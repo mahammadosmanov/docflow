@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.58 - 2026-10-27
+
+### Changed
+
+- On touch screens (`pointer: coarse`), the mobile navigation items (`.app-nav-item`) and the switch controls (`.switch`) get an invisible pseudo-element that enlarges their tap area to about 44 px. The visible size is unchanged, so the bottom bar keeps its layout. Desktop pointers are not affected. Checked in the browser preview at 375 px width: the nav tap area measures 127 x 58 px and the page has no horizontal scroll. Not checked on a physical touch device.
+
 ## 1.36.57 - 2026-10-27
 
 ### Fixed
