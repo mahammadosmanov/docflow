@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.32 - 2026-10-27
+
+### Fixed
+
+- Every folder or file Browse button now carries its field name in its accessible name (for example, "Gözat: Gelen dosyalar klasörü"). Before, screen readers announced several identical "Gözat" buttons with no way to tell them apart. Visible text is unchanged.
+
 ## 1.36.31 - 2026-10-27
 
 ### Changed

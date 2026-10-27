@@ -1929,7 +1929,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Gözat/ }));
     expect(
       await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx"),
     ).toBeVisible();
@@ -2045,7 +2045,7 @@ describe("DocFlow shell", () => {
         target: { value: "CIV-1319\nCIV-1320" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Gözat" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Gözat/ }));
     await screen.findByDisplayValue("/Users/demo/Documents/DocFlow");
     fireEvent.click(screen.getByRole("button", { name: "Hiçbirini seçme" }));
     fireEvent.click(screen.getByLabelText("CIV-1319"));
@@ -2093,7 +2093,7 @@ describe("DocFlow shell", () => {
         target: { value: "1319" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Gözat" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Gözat/ }));
     await screen.findByDisplayValue("/Users/demo/Documents/DocFlow");
     fireEvent.click(screen.getByRole("button", { name: "RFI Sisteminde ara" }));
     expect(await screen.findByText("AZE-SUN-INT-QMS-RFI-CIV-1319.docx")).toBeVisible();
@@ -2521,7 +2521,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Gözat/ }));
     await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx");
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
@@ -2557,7 +2557,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Gözat" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Gözat/ }));
     await screen.findByDisplayValue("/Users/demo/Documents/RFI Log.xlsx");
 
     // Press Ctrl+Enter to trigger preview
@@ -2629,7 +2629,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /RFI Günlüğüne Çoklu Kayıt Ekle/ }),
     );
-    const browseBtn = await screen.findByRole("button", { name: "Gözat" });
+    const browseBtn = await screen.findByRole("button", { name: /^Gözat/ });
     fireEvent.click(browseBtn);
 
     // Verify clear button appears

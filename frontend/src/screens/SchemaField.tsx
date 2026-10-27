@@ -326,6 +326,7 @@ export function SchemaField({
             type="button"
             variant="secondary"
             icon={<FolderOpen />}
+            aria-label={`${s.t("action.browse")}: ${s.t(param.labelKey)}`}
             onClick={() =>
               void (
                 param.kind === "folder"
