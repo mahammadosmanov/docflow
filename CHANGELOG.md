@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.92 - 2026-10-27
+
+### Fixed
+
+- Turkish labels used the English word "Sheet" for sheet selection and the follow-up sheet column while other labels used "Sayfa". They now consistently say Sayfa. Workbook column headers such as Inspection Status are unchanged because they must match the workbook text.
+
 ## 1.33.91 - 2026-10-27
 
 ### Changed

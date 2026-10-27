@@ -1888,7 +1888,7 @@ describe("DocFlow shell", () => {
     );
     expect(await screen.findByText("RFI Log Excel dosyası")).toBeVisible();
     expect(screen.getByText(/\.xlsm.*\.xlsx/)).toBeVisible();
-    expect(screen.getByText("Sheet'ler ve RFI adetleri")).toBeVisible();
+    expect(screen.getByText("Sayfalar ve RFI adetleri")).toBeVisible();
     expect(screen.getByText("Talep mailini buraya yapıştır")).toBeVisible();
     expect(
       screen.queryByText("Gemini API anahtarı (yalnız Gemini için)"),
