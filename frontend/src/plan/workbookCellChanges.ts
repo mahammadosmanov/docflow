@@ -8,7 +8,7 @@ export function canonicalRfiInText(value: string): string | null {
   );
 }
 
-export type WorkbookCellChange = {
+type WorkbookCellChange = {
   workbook: string;
   sheet: string;
   cell: string;

@@ -1,6 +1,6 @@
 import { type Plan } from "../types";
 
-export interface PlanImpact {
+interface PlanImpact {
   outputs: number;
   updates: number;
   moves: number;

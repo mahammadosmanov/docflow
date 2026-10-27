@@ -7,7 +7,7 @@ import { type OperationResult, type Plan, type ProgressEvent } from "../types";
 export type RunStage = "form" | "previewing" | "preview" | "applying" | "result";
 
 /** Screen state the apply run writes to. */
-export type ApplyScreenState = {
+type ApplyScreenState = {
   setError: (message: string) => void;
   setPlan: (plan: Plan) => void;
   setEditorRows: (rows: Record<string, unknown>[]) => void;
