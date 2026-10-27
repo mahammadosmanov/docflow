@@ -1170,5 +1170,20 @@
   "error.backend.encodeFailed": "DocFlow could not prepare the response. Try again.",
   "error.preset.valueInvalid": "A saved preset value is invalid. Choose the preset again.",
   "error.scan.destinationChanged": "The scan destination changed while the preview was being revised. Preview again.",
-  "error.scan.trashUnavailable": "Recoverable deletion is not available for these scans."
+  "error.scan.trashUnavailable": "Recoverable deletion is not available for these scans.",
+  "error.operation.backendFailed": "The operation could not finish. Try again.",
+  "error.operation.applyFailed": "Applying the changes could not finish. Check the result before trying again.",
+  "error.support.previewFailed": "The diagnostics preview could not be prepared.",
+  "error.support.collectFailed": "Diagnostics could not be collected. Try again.",
+  "error.support.clipboardFailed": "Diagnostics could not be copied. Try again.",
+  "error.clipboard.writeFailed": "The text could not be copied to the clipboard.",
+  "error.path.createdDirUnavailable": "The folder created for this operation is no longer available.",
+  "error.path.createdDirNotEmpty": "The folder created for this operation is not empty, so it was not removed.",
+  "error.rfi.scheduleTimeInvalid": "The RFI schedule time is invalid.",
+  "error.rfi.folderReadFailed": "An RFI folder could not be read.",
+  "error.rfi.discoveryFailed": "The RFI documents could not be searched. Try again.",
+  "error.rfi.pdfUnresolved": "An RFI PDF could not be found safely.",
+  "error.rfi.sourceUnreadable": "An RFI source file could not be read.",
+  "error.rfi.fileNameInvalid": "An RFI file name could not be read. Rename the file and try again.",
+  "error.rfi.pdfOutsideRoot": "A PDF is outside the selected RFI folder."
 }

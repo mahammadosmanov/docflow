@@ -1142,5 +1142,20 @@
   "error.backend.encodeFailed": "DocFlow cavabı hazırlaya bilmədi. Yenidən cəhd edin.",
   "error.preset.valueInvalid": "Saxlanılmış preset dəyəri etibarsızdır. Preseti yenidən seçin.",
   "error.scan.destinationChanged": "Önizləmə yenilənərkən skan təyinatı dəyişdi. Yenidən önizləyin.",
-  "error.scan.trashUnavailable": "Bu skanlar üçün bərpa edilə bilən silmə əlçatan deyil."
+  "error.scan.trashUnavailable": "Bu skanlar üçün bərpa edilə bilən silmə əlçatan deyil.",
+  "error.operation.backendFailed": "Əməliyyat tamamlana bilmədi. Yenidən cəhd edin.",
+  "error.operation.applyFailed": "Dəyişikliklər tətbiq edilə bilmədi. Yenidən cəhd etməzdən əvvəl nəticəni yoxlayın.",
+  "error.support.previewFailed": "Diaqnostika önizləməsi hazırlana bilmədi.",
+  "error.support.collectFailed": "Diaqnostika məlumatları toplana bilmədi. Yenidən cəhd edin.",
+  "error.support.clipboardFailed": "Diaqnostika məlumatları kopyalana bilmədi. Yenidən cəhd edin.",
+  "error.clipboard.writeFailed": "Mətn buferə kopyalana bilmədi.",
+  "error.path.createdDirUnavailable": "Bu əməliyyat üçün yaradılmış qovluğa artıq giriş yoxdur.",
+  "error.path.createdDirNotEmpty": "Bu əməliyyat üçün yaradılmış qovluq boş deyil, ona görə silinmədi.",
+  "error.rfi.scheduleTimeInvalid": "RFI qrafik vaxtı etibarsızdır.",
+  "error.rfi.folderReadFailed": "RFI qovluqlarından biri oxuna bilmədi.",
+  "error.rfi.discoveryFailed": "RFI sənədləri axtarıla bilmədi. Yenidən cəhd edin.",
+  "error.rfi.pdfUnresolved": "RFI PDF-i təhlükəsiz şəkildə tapılmadı.",
+  "error.rfi.sourceUnreadable": "RFI mənbə faylı oxuna bilmədi.",
+  "error.rfi.fileNameInvalid": "RFI fayl adı oxuna bilmədi. Faylı adını dəyişib yenidən cəhd edin.",
+  "error.rfi.pdfOutsideRoot": "PDF seçilmiş RFI qovluğunun xaricindədir."
 }

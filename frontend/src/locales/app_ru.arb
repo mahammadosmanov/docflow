@@ -1142,5 +1142,20 @@
   "error.backend.encodeFailed": "DocFlow не смог подготовить ответ. Попробуйте снова.",
   "error.preset.valueInvalid": "Одно из сохранённых значений пресета недействительно. Выберите пресет снова.",
   "error.scan.destinationChanged": "Место назначения сканирования изменилось во время пересмотра предпросмотра. Повторите предпросмотр.",
-  "error.scan.trashUnavailable": "Восстанавливаемое удаление недоступно для этих сканов."
+  "error.scan.trashUnavailable": "Восстанавливаемое удаление недоступно для этих сканов.",
+  "error.operation.backendFailed": "Операцию не удалось завершить. Попробуйте снова.",
+  "error.operation.applyFailed": "Не удалось применить изменения. Проверьте результат, прежде чем повторять.",
+  "error.support.previewFailed": "Не удалось подготовить предпросмотр диагностики.",
+  "error.support.collectFailed": "Не удалось собрать данные диагностики. Попробуйте снова.",
+  "error.support.clipboardFailed": "Не удалось скопировать данные диагностики. Попробуйте снова.",
+  "error.clipboard.writeFailed": "Не удалось скопировать текст в буфер обмена.",
+  "error.path.createdDirUnavailable": "Папка, созданная для этой операции, больше недоступна.",
+  "error.path.createdDirNotEmpty": "Папка, созданная для этой операции, не пуста, поэтому она не удалена.",
+  "error.rfi.scheduleTimeInvalid": "Время графика RFI недействительно.",
+  "error.rfi.folderReadFailed": "Не удалось прочитать папку RFI.",
+  "error.rfi.discoveryFailed": "Не удалось найти документы RFI. Попробуйте снова.",
+  "error.rfi.pdfUnresolved": "PDF RFI не удалось безопасно найти.",
+  "error.rfi.sourceUnreadable": "Не удалось прочитать исходный файл RFI.",
+  "error.rfi.fileNameInvalid": "Не удалось прочитать имя файла RFI. Переименуйте файл и попробуйте снова.",
+  "error.rfi.pdfOutsideRoot": "PDF находится вне выбранной папки RFI."
 }

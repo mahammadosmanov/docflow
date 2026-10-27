@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.7 - 2026-10-27
+
+### Fixed
+
+- Twenty-five more backend error messages reached the UI as raw English text: diagnostics collection and copy, clipboard writes, created and authorized folders, RFI folder, document, PDF and file-name reads, RFI schedule time, and AI extraction responses. They now have translations in all four languages.
+
 ## 1.35.6 - 2026-10-27
 
 ### Fixed

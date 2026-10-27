@@ -1142,5 +1142,20 @@
   "error.backend.encodeFailed": "DocFlow yanıtı hazırlayamadı. Yeniden deneyin.",
   "error.preset.valueInvalid": "Kayıtlı bir hazır ayar değeri geçersiz. Hazır ayarı yeniden seçin.",
   "error.scan.destinationChanged": "Önizleme düzenlenirken tarama hedefi değişti. Yeniden önizleyin.",
-  "error.scan.trashUnavailable": "Bu taramalar için geri alınabilir silme kullanılamıyor."
+  "error.scan.trashUnavailable": "Bu taramalar için geri alınabilir silme kullanılamıyor.",
+  "error.operation.backendFailed": "İşlem tamamlanamadı. Yeniden deneyin.",
+  "error.operation.applyFailed": "Değişiklikler uygulanamadı. Yeniden denemeden önce sonucu kontrol edin.",
+  "error.support.previewFailed": "Tanılama önizlemesi hazırlanamadı.",
+  "error.support.collectFailed": "Tanılama bilgileri toplanamadı. Yeniden deneyin.",
+  "error.support.clipboardFailed": "Tanılama bilgileri kopyalanamadı. Yeniden deneyin.",
+  "error.clipboard.writeFailed": "Metin panoya kopyalanamadı.",
+  "error.path.createdDirUnavailable": "Bu işlem için oluşturulan klasöre artık erişilemiyor.",
+  "error.path.createdDirNotEmpty": "Bu işlem için oluşturulan klasör boş değil, bu yüzden silinmedi.",
+  "error.rfi.scheduleTimeInvalid": "RFI program saati geçersiz.",
+  "error.rfi.folderReadFailed": "Bir RFI klasörü okunamadı.",
+  "error.rfi.discoveryFailed": "RFI belgeleri taranamadı. Yeniden deneyin.",
+  "error.rfi.pdfUnresolved": "Bir RFI PDF'i güvenli şekilde bulunamadı.",
+  "error.rfi.sourceUnreadable": "Bir RFI kaynak dosyası okunamadı.",
+  "error.rfi.fileNameInvalid": "Bir RFI dosya adı okunamadı. Dosyayı yeniden adlandırıp tekrar deneyin.",
+  "error.rfi.pdfOutsideRoot": "Bir PDF seçilen RFI klasörünün dışında."
 }
