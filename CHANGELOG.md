@@ -5,6 +5,28 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.0 - 2026-10-27
+
+### Added
+
+- Windows installer for this minor release, built by the Windows release workflow.
+
+### Changed
+
+- Dialogs move keyboard focus inside on open, keep Tab inside, and return focus to the opener when closed.
+- Errors and warnings are announced to screen readers; filter tabs and category chips report their selected state.
+- The page language follows the selected interface language.
+- Startup returns an error instead of crashing if the sign-in or AI-service HTTP client cannot be created.
+- A window-level error boundary shows a translated message and a Reload button instead of a blank window.
+
+### Fixed
+
+- About 60 backend error messages that appeared as raw English are translated in Turkish, English, Russian, and Azerbaijani (1.35.4 to 1.35.8).
+- Form field borders, the table search box, and keyboard focus outlines meet WCAG contrast and focus requirements (1.35.9, 1.35.10).
+- Touch targets for the search box, switches, and sliders are at least 24 px (1.35.3).
+- Saved settings no longer overwrite a value picked before they finished loading (1.35.18).
+- Remaining English words in Turkish, Azerbaijani, and Russian screens are replaced with local wording (1.35.19 to 1.35.23).
+
 ## 1.35.24 - 2026-10-27
 
 ### Fixed
