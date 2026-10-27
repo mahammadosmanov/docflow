@@ -1157,5 +1157,14 @@
   "error.rfi.pdfUnresolved": "Bir RFI PDF'i güvenli şekilde bulunamadı.",
   "error.rfi.sourceUnreadable": "Bir RFI kaynak dosyası okunamadı.",
   "error.rfi.fileNameInvalid": "Bir RFI dosya adı okunamadı. Dosyayı yeniden adlandırıp tekrar deneyin.",
-  "error.rfi.pdfOutsideRoot": "Bir PDF seçilen RFI klasörünün dışında."
+  "error.rfi.pdfOutsideRoot": "Bir PDF seçilen RFI klasörünün dışında.",
+  "error.rfi.rowsEncodeFailed": "RFI satırları hazırlanamadı. Yeniden deneyin.",
+  "error.rfi.fileGroup.rowsMissing": "Dosya grubunda uygulanacak satır yok. Önizlemeyi yenileyin.",
+  "error.rfi.fileGroup.rowsInvalid": "Dosya grubu satırları geçersiz. Önizlemeyi yenileyin.",
+  "error.rfi.fileGroup.stateInvalid": "Bir dosya grubu satırının durumu geçersiz. Önizlemeyi yenileyin.",
+  "error.rfi.fileGroup.notApproved": "Bu dosya grubu satırı onaylanmadı.",
+  "error.rfi.sourceChanged": "Bir kaynak dosya önizlemeden sonra değişti. Yeniden önizleyin.",
+  "error.support.bundleInvalid": "Tanılama dosyası geçersiz ya da değiştirilmiş. Yeniden oluşturun.",
+  "error.path.generatedMissing": "Oluşturulan dosya artık hedefinde yok. Yeniden oluşturun.",
+  "error.print.queueIdInvalid": "Yazdırma kuyruğu tanımlanamadı. Kuyruğu yeniden önizleyin."
 }

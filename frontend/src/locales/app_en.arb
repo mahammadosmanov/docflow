@@ -1185,5 +1185,14 @@
   "error.rfi.pdfUnresolved": "An RFI PDF could not be found safely.",
   "error.rfi.sourceUnreadable": "An RFI source file could not be read.",
   "error.rfi.fileNameInvalid": "An RFI file name could not be read. Rename the file and try again.",
-  "error.rfi.pdfOutsideRoot": "A PDF is outside the selected RFI folder."
+  "error.rfi.pdfOutsideRoot": "A PDF is outside the selected RFI folder.",
+  "error.rfi.rowsEncodeFailed": "The RFI rows could not be prepared. Try again.",
+  "error.rfi.fileGroup.rowsMissing": "The file group has no rows to apply. Refresh the preview.",
+  "error.rfi.fileGroup.rowsInvalid": "The file group rows are invalid. Refresh the preview.",
+  "error.rfi.fileGroup.stateInvalid": "A file group row has an invalid state. Refresh the preview.",
+  "error.rfi.fileGroup.notApproved": "This file group row has not been approved.",
+  "error.rfi.sourceChanged": "A source file changed after preview. Preview again.",
+  "error.support.bundleInvalid": "The diagnostics file is invalid or was changed. Create it again.",
+  "error.path.generatedMissing": "The generated file is no longer in its destination. Create it again.",
+  "error.print.queueIdInvalid": "The print queue could not be identified. Preview the queue again."
 }
