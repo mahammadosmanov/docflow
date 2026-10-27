@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.27 - 2026-10-27
+
+### Changed
+
+- Print failure classification (failure kinds, retry rules, and submission outcomes) moves out of `print_queue.rs` into `print_queue/failure.rs`. The public types keep their paths. Behavior is unchanged.
+
 ## 1.36.26 - 2026-10-27
 
 ### Changed
