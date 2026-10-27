@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.83 - 2026-10-27
+
+### Changed
+
+- Split two sections out of `classify_workbooks_full` in `rfi_follow_up/classify.rs`: `build_slots` (approved-layout row scan into the `SlotMap` alias) and `deletion_evidence` (deleted-RFI count and the mass-deletion guard). The mass-deletion comment moved with its logic. The orchestrating function shrinks by about 40 lines; the file grows slightly from the helper signatures. The 33 rfi_follow_up tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.82 - 2026-10-27
 
 ### Changed
