@@ -104,10 +104,12 @@ These are not silently waived by passing local tests.
   consensus still fail closed on sparse or drawing-only pages without one exact
   canonical ID/direction or when evidence conflicts. The affected PDF remains
   unchanged for manual review.
-- The Outlook selected-message archive (`rfi.outlook_archive_selected`) has a Rust
-  preview function (`preview_outlook_archive`), but no operator dispatch route
-  or frontend roster entry calls it. The code is kept as roadmap scaffolding.
-  Until a route is added, operators cannot run this archive from the app.
+- The Outlook selected-message archive (`rfi.outlook_archive_selected`) has Rust
+  scaffolding only (`prepare_archive` and `bind_archive` in
+  `outlook_reply_draft.rs`, which the compiler reports as unused), but no
+  operator dispatch route or frontend roster entry calls it. The code is kept as
+  roadmap scaffolding. Until a route is added, operators cannot run this archive
+  from the app.
 
 Resolved defects belong in `CHANGELOG.md`, not here. Never list unverified
 operator data, secrets, private paths, or raw workbook contents.
