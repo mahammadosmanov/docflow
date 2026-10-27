@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.18 - 2026-10-27
+
+### Changed
+
+- Patch updates of the Rust dependencies: Tauri 2.12.4 to 2.12.5 (and its build, codegen, macros, and runtime crates), Tokio 1.54.0 to 1.54.1, and a few small crates (tao, wry, rfd, rustix, smallvec, open, plist, webpki-roots, tinystr). Clippy with warnings denied and all Rust tests pass.
+
 ## 1.36.17 - 2026-10-27
 
 ### Changed
