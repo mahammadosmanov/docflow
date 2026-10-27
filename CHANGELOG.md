@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.10 - 2026-10-27
+
+### Changed
+
+- Correction to the 1.35.18 note. That note called the late-restore fix a likely cause of the intermittent Ctrl+Enter shortcut test failure. A reproduction through the app shows the restore never overwrote a value picked by the user in the test scenario, so the cause of that failure is still unconfirmed. The restore fix stays as a defensive change with its unit test.
+
 ## 1.36.9 - 2026-10-27
 
 ### Changed
