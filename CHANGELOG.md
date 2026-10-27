@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.3 - 2026-10-27
+
+### Changed
+
+- Plan table row selection moved from `EditablePlanTable` into `usePlanSelection`, with tests for select all over the filtered rows, group select, toggling, and dropping selections for removed rows. No application behavior changes.
+
 ## 1.34.2 - 2026-10-27
 
 ### Changed
