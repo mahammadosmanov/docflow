@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.75 - 2026-10-27
+
+### Changed
+
+- Added unit tests for `validate_empty_params`: empty object accepted; extra fields, null, and arrays rejected. No application behavior changes.
+
 ## 1.33.74 - 2026-10-27
 
 ### Changed
