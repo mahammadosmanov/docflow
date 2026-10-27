@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.5 - 2026-10-27
+
+### Fixed
+
+- The Windows installer build for 1.34.0 failed in its test step. A path-guard test used `/root/dir/file.pdf`, which is not absolute on Windows. The test now builds its absolute path from the platform temp directory. No application behavior changes.
+
 ## 1.34.4 - 2026-10-27
 
 ### Fixed
