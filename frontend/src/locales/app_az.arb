@@ -1109,5 +1109,14 @@
   "error.rfi.rowRequired": "Ən azı bir RFI sətri lazımdır.",
   "error.rfi.rowLimit": "Bir planda ən çox 500 fiziki sətir ola bilər.",
   "error.rfi.sheetGroupsLocked": "RFI vərəq qrupları burada əlavə edilə və ya silinə bilməz.",
-  "params.saveFailed": "Ayarlar saxlanıla bilmədi."
+  "params.saveFailed": "Ayarlar saxlanıla bilmədi.",
+  "error.path.noAncestor": "Bu yolun qovluğu artıq mövcud deyil.",
+  "error.path.noParent": "Seçilmiş fayl qovluqda deyil.",
+  "error.clipboard.encodeFailed": "Cədvəl kopyalama üçün hazırlana bilmədi.",
+  "error.watch.updateFailed": "Avtomatik yoxlama tamamlana bilmədi. Yenidən cəhd edin.",
+  "error.rfi.scheduleDateRange": "RFI qrafik tarixi dəstəklənən diapazondan kənardadır.",
+  "error.rfi.systemEntryLimit": "RFI System işlənə bilməyəcək qədər çox qeyd ehtiva edir.",
+  "error.rfi.followUp.noParent": "Follow Up iş kitabı qovluqda deyil.",
+  "error.rfi.fileGroup.rowInvalid": "Fayl qrupu sətri müəyyən edilmədi. Önizləməni yeniləyin.",
+  "error.rfi.workbookUnreadable": "RFI Log iş kitabı oxuna bilmədi. Faylın yerində olduğunu yoxlayın."
 }

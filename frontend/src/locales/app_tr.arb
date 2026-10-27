@@ -1109,5 +1109,14 @@
   "error.rfi.rowRequired": "En az bir RFI satırı gerekli.",
   "error.rfi.rowLimit": "Tek planda en fazla 500 fiziksel satır olabilir.",
   "error.rfi.sheetGroupsLocked": "RFI sayfa grupları burada eklenemez veya silinemez.",
-  "params.saveFailed": "Ayarlar kaydedilemedi."
+  "params.saveFailed": "Ayarlar kaydedilemedi.",
+  "error.path.noAncestor": "Bu yolun klasörü artık yok.",
+  "error.path.noParent": "Seçilen dosya bir klasörün içinde değil.",
+  "error.clipboard.encodeFailed": "Tablo kopyalama için hazırlanamadı.",
+  "error.watch.updateFailed": "Otomatik kontrol tamamlanamadı. Yeniden deneyin.",
+  "error.rfi.scheduleDateRange": "RFI program tarihi desteklenen aralığın dışında.",
+  "error.rfi.systemEntryLimit": "RFI Sistemi işlenemeyecek kadar çok kayıt içeriyor.",
+  "error.rfi.followUp.noParent": "Follow Up çalışma kitabı bir klasörün içinde değil.",
+  "error.rfi.fileGroup.rowInvalid": "Bir dosya grubu satırı tanımlanamadı. Önizlemeyi yenileyin.",
+  "error.rfi.workbookUnreadable": "RFI Log çalışma kitabı okunamadı. Dosyanın hâlâ yerinde olduğunu kontrol edin."
 }

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.4 - 2026-10-27
+
+### Fixed
+
+- Eleven backend error messages (copy encoding, missing folders, RFI schedule range, RFI System entry limit, RFI file-group rows, unreadable RFI Log workbook, Follow Up workbook folder, watch check failure) were shown as raw English. They now have translations in all four languages.
+
 ## 1.35.3 - 2026-10-27
 
 ### Fixed
