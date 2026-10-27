@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.31 - 2026-10-27
+
+### Changed
+
+- The path-grant unit tests move out of `paths.rs` into `paths/provisional_tests.rs` and `paths/lexical_guard_tests.rs`. The security code file shrinks by about 130 lines. The tests are unchanged in content.
+
 ## 1.36.30 - 2026-10-27
 
 ### Changed
