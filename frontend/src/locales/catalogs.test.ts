@@ -39,7 +39,9 @@ describe("ARB catalogs", () => {
         ].map((match) => match[1]),
       ),
     );
-    const missing = [...emitted].filter((key) => !(key in en)).sort();
+    // Watch codes reach the UI as `error.${code}`; see QueueScreen failureMessage.
+    const lookup = (key: string) => (key.startsWith("watch.") ? `error.${key}` : key);
+    const missing = [...emitted].filter((key) => !(lookup(key) in en)).sort();
     expect(missing).toEqual([]);
   });
 

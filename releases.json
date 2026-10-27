@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.81",
+  "currentVersion": "1.33.82",
   "releases": [
+    {
+      "version": "1.33.82",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.82",
+      "summary": "Corrects 1.33.80: removes two watch.* translation keys that were never looked up, and makes the backend key guard resolve watch codes the way the queue screen does."
+    },
     {
       "version": "1.33.81",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.81",
       "summary": "Adds a catalog test that fails when the backend emits an error, note, or watch key missing from the English catalog. No behavior change."
     },

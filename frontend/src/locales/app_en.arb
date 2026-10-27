@@ -1157,7 +1157,5 @@
   "error.preset.missing": "The saved preset no longer exists.",
   "error.rfi.documents.invalidOutput": "The generated document is invalid.",
   "note.create_folder": "Create folder",
-  "note.rfi.followUp.workbookUpdate": "Update the Follow Up workbook",
-  "watch.tooManyEntries": "The folder has too many entries to watch.",
-  "watch.unreadable": "The folder cannot be read."
+  "note.rfi.followUp.workbookUpdate": "Update the Follow Up workbook"
 }

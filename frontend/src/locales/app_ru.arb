@@ -1129,7 +1129,5 @@
   "error.preset.missing": "Сохранённый пресет больше не существует.",
   "error.rfi.documents.invalidOutput": "Созданный документ недействителен.",
   "note.create_folder": "Создать папку",
-  "note.rfi.followUp.workbookUpdate": "Обновить книгу Follow Up",
-  "watch.tooManyEntries": "В папке слишком много элементов для наблюдения.",
-  "watch.unreadable": "Папку не удаётся прочитать."
+  "note.rfi.followUp.workbookUpdate": "Обновить книгу Follow Up"
 }

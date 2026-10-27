@@ -1129,7 +1129,5 @@
   "error.preset.missing": "Kayıtlı ön ayar artık yok.",
   "error.rfi.documents.invalidOutput": "Oluşturulan belge geçersiz.",
   "note.create_folder": "Klasör oluştur",
-  "note.rfi.followUp.workbookUpdate": "Follow Up çalışma kitabını güncelle",
-  "watch.tooManyEntries": "Klasörde izlenecek çok fazla öğe var.",
-  "watch.unreadable": "Klasör okunamıyor."
+  "note.rfi.followUp.workbookUpdate": "Follow Up çalışma kitabını güncelle"
 }
