@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.87 - 2026-10-27
+
+### Changed
+
+- The unknown-route manual-review row in `rfi_follow_up/classify.rs` now calls the existing `manual_review_row` helper instead of building a `FollowUpRow` literal inline. Same fields, same reason keys, same output. The second inline literal uses a different target column, so it stays as is. The 33 rfi_follow_up tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.86 - 2026-10-27
 
 ### Fixed
