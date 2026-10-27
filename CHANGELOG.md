@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.63 - 2026-10-27
+
+### Changed
+
+- Moved `ScanContext`, `ScanState`, and `scan_one_pdf` out of `operations/process_scans.rs` (1,112 lines) into `operations/process_scans/scan_pdf.rs`. Visibility and imports only. Process-scans tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.62 - 2026-10-27
 
 ### Changed
