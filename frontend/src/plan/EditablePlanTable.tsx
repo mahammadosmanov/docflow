@@ -475,6 +475,7 @@ export function EditablePlanTable({
                         ) : column.kind === "multiline" ? (
                           <textarea
                             rows={2}
+                            aria-label={s.t(column.labelKey)}
                             value={text}
                             onChange={(event) =>
                               update(rowIndex, column.key, event.target.value)
