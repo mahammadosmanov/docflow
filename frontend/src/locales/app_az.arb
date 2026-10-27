@@ -482,6 +482,7 @@
   "editor.selectAll": "Hamısını seç",
   "editor.selectNone": "Seçimi təmizlə",
   "editor.selectRow": "{row}-ci sətri seç",
+  "editor.rowActions": "Sətir əməliyyatları",
   "editor.selectGroup": "Bu qrupu seç",
   "editor.bulk.field": "Dəyişdiriləcək sahə",
   "editor.bulk.value": "Yeni dəyər",

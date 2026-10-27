@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.77",
+  "currentVersion": "1.33.78",
   "releases": [
+    {
+      "version": "1.33.78",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.78",
+      "summary": "Fixes the plan table row-actions column label, which showed the raw key editor.rowActions to screen readers in every language. Adds a guard that every literal translation key in the frontend exists in the English catalog."
+    },
     {
       "version": "1.33.77",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.77",
       "summary": "Adds a test for the backend timestamp format. No behavior change."
     },

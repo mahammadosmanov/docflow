@@ -482,6 +482,7 @@
   "editor.selectAll": "Выбрать все",
   "editor.selectNone": "Очистить выбор",
   "editor.selectRow": "Выбрать строку {row}",
+  "editor.rowActions": "Действия со строкой",
   "editor.selectGroup": "Выбрать эту группу",
   "editor.bulk.field": "Изменяемое поле",
   "editor.bulk.value": "Новое значение",

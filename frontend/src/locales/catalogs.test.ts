@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const catalog = (locale: string): Record<string, string> =>
@@ -12,7 +12,26 @@ const placeholders = (text: string) =>
 const en = catalog("en");
 const others = ["az", "ru", "tr"];
 
+const sourceFiles = (dir: string): string[] =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return sourceFiles(path);
+    return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
+  });
+
 describe("ARB catalogs", () => {
+  it("defines every literal s.t() key the frontend uses", () => {
+    const used = new Set(
+      sourceFiles(resolve(process.cwd(), "frontend/src")).flatMap((file) =>
+        [...readFileSync(file, "utf8").matchAll(/\bs\.t\(\s*"([^"]+)"/g)].map(
+          (match) => match[1],
+        ),
+      ),
+    );
+    const missing = [...used].filter((key) => !(key in en)).sort();
+    expect(missing).toEqual([]);
+  });
+
   for (const locale of others) {
     const entries = catalog(locale);
 
