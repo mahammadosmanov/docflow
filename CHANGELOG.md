@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.9 - 2026-10-27
+
+### Fixed
+
+- The table search box removed the browser focus outline and showed only a border color change. Keyboard users now see the same 2px focus outline as other inputs.
+
 ## 1.35.8 - 2026-10-27
 
 ### Fixed
