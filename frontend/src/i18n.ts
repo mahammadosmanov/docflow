@@ -16,6 +16,7 @@ export async function loadLocale(locale: Locale): Promise<void> {
   dictionaries[locale] ??= JSON.parse(
     (await loaders[locale]()).default,
   ) as Dictionary;
+  document.documentElement.lang = locale;
 }
 
 export function systemLocale(): Locale {

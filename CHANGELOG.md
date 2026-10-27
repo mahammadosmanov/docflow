@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.11 - 2026-10-27
+
+### Fixed
+
+- The page language was always set to English, so screen readers read Turkish, Russian, and Azerbaijani text with English pronunciation. It now follows the selected interface language.
+
 ## 1.35.10 - 2026-10-27
 
 ### Fixed
