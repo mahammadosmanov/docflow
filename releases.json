@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.46",
+  "currentVersion": "1.36.47",
   "releases": [
+    {
+      "version": "1.36.47",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.47",
+      "summary": "Test coverage: the batch-print RFI number chooser now has unit tests for default checked state, per-number toggling, and select-all and select-none. No app behavior change."
+    },
     {
       "version": "1.36.46",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.46",
       "summary": "Test coverage: the batch-print RFI results panel now has unit tests for its select-by-request toggle and the ambiguous-request announcement. No app behavior change."
     },
