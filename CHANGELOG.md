@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.4 - 2026-10-27
+
+### Changed
+
+- The two Excel package writers (one for files, one for the size-guarded stream) repeated the same loop that copies or replaces each workbook entry. The loop is one shared helper. No behavior change.
+
 ## 1.36.3 - 2026-10-27
 
 ### Changed
