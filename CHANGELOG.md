@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.49 - 2026-10-27
+
+### Changed
+
+- Every unsafe call in the Windows printing module (`platform/windows/printing.rs`) now has a SAFETY note: printer enumeration and handles, device contexts, GDI+ image loading and frames, job observation, and shell and association calls. The module compiles only on Windows, so these are comments checked for syntax by rustfmt, not by a Windows build. No behavior change.
+
 ## 1.36.48 - 2026-10-27
 
 ### Changed
