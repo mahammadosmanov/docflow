@@ -242,6 +242,7 @@ export function ReviewScreen({
                   {items.map((item) => (
                     <div className="review-row" key={item.selectionId}>
                       <button
+                        type="button"
                         className="file-button"
                         title={item.path}
                         onClick={() =>
