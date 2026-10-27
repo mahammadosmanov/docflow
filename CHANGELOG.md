@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.88 - 2026-10-27
+
+### Fixed
+
+- Ten more backend messages were shown as plain English: review file or folder problems, the file-name and PDF-only checks, an unwatchable operation, a failed diagnostics file, an inaccessible selected folder, an unreadable print date, and an unidentifiable print row. They now use translated text in all four languages.
+
 ## 1.33.87 - 2026-10-27
 
 ### Fixed

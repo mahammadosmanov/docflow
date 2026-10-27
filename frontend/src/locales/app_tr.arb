@@ -1065,5 +1065,15 @@
   "error.path.selectedMissing": "Seçilen yol yok.",
   "error.print.jobMissing": "Kayıtlı yazdırma işi artık yok.",
   "error.trash.missing": "Geri yüklenebilir çöp öğesi yok.",
-  "error.path.canonicalize": "Yol çözümlenemedi."
+  "error.path.canonicalize": "Yol çözümlenemedi.",
+  "error.print.timestampMissing": "Yazdırılacak dosyanın tarihi okunamadı.",
+  "error.review.sourceNotPdf": "Yalnızca PDF dosyaları incelenebilir.",
+  "error.review.sourceMissing": "İncelenecek dosya yok.",
+  "error.review.directoryMissing": "İnceleme klasörü yok.",
+  "error.review.sourceNameInvalid": "Dosya adı incelemede kullanılamaz.",
+  "error.review.sourceUnresolved": "İncelenecek dosya güvenli şekilde bulunamadı.",
+  "error.watch.unsupported": "Bu işlem otomatik izlenemez.",
+  "error.support.encodingFailed": "Tanılama dosyası oluşturulamadı.",
+  "error.path.rootUnavailable": "Seçilen klasöre artık erişilemiyor. Yeniden seçin.",
+  "error.print.rowInvalid": "Bir yazdırma satırı tanımlanamadı. Kuyruğu yeniden önizleyin."
 }

@@ -1065,5 +1065,15 @@
   "error.path.selectedMissing": "Seçilmiş yol mövcud deyil.",
   "error.print.jobMissing": "Saxlanılmış çap işi artıq mövcud deyil.",
   "error.trash.missing": "Bərpa edilə bilən zibil elementi mövcud deyil.",
-  "error.path.canonicalize": "Yolu müəyyən etmək mümkün deyil."
+  "error.path.canonicalize": "Yolu müəyyən etmək mümkün deyil.",
+  "error.print.timestampMissing": "Çap ediləcək faylın tarixi oxuna bilmədi.",
+  "error.review.sourceNotPdf": "Yalnız PDF fayllar yoxlanıla bilər.",
+  "error.review.sourceMissing": "Yoxlanılacaq fayl mövcud deyil.",
+  "error.review.directoryMissing": "Yoxlama qovluğu mövcud deyil.",
+  "error.review.sourceNameInvalid": "Fayl adı yoxlama üçün istifadə edilə bilməz.",
+  "error.review.sourceUnresolved": "Yoxlanılacaq fayl təhlükəsiz şəkildə tapılmadı.",
+  "error.watch.unsupported": "Bu əməliyyat avtomatik izlənilə bilməz.",
+  "error.support.encodingFailed": "Diaqnostika faylı yaradıla bilmədi.",
+  "error.path.rootUnavailable": "Seçilmiş qovluğa artıq giriş yoxdur. Yenidən seçin.",
+  "error.print.rowInvalid": "Çap sətri müəyyən edilmədi. Növbəni yenidən önizləyin."
 }

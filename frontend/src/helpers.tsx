@@ -64,6 +64,16 @@ export const BACKEND_MESSAGE_KEYS: Record<string, string> = {
   "saved print job no longer exists": "error.print.jobMissing",
   "recoverable trash does not exist": "error.trash.missing",
   "path cannot be canonicalized": "error.path.canonicalize",
+  "print file timestamp is unavailable": "error.print.timestampMissing",
+  "review source must be a PDF": "error.review.sourceNotPdf",
+  "review source does not exist": "error.review.sourceMissing",
+  "review directory does not exist": "error.review.directoryMissing",
+  "review source name is invalid": "error.review.sourceNameInvalid",
+  "review source cannot be resolved": "error.review.sourceUnresolved",
+  "operation cannot be watched": "error.watch.unsupported",
+  "diagnostics bundle encoding failed": "error.support.encodingFailed",
+  "granted root identity is unavailable": "error.path.rootUnavailable",
+  "invalid print row identity": "error.print.rowInvalid",
 };
 
 export function humanError(error: unknown, s: Strings): string {
