@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.81 - 2026-10-27
+
+### Changed
+
+- Added a catalog test that scans the backend source for `error.*`, `note.*`, and `watch.*` keys and fails when one has no English translation. No application behavior changes.
+
 ## 1.33.80 - 2026-10-27
 
 ### Fixed
