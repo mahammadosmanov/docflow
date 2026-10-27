@@ -225,6 +225,7 @@
   "table.filterCount": "{filtered} / {total} sətir göstərilir",
   "prefs.reset": "Standartlara qaytar",
   "review.help": "Hər fayla nə olacağını qərarlaşdırın. Siz planı təsdiqləməyincə heç nə dəyişmir.",
+  "review.batch.label": "Bütün fayllar üçün",
   "review.empty.help": "Baxış gözləyən fayl yoxdur.",
   "review.noChanges": "Heç nə seçilməyib",
   "review.selected": "{count} seçildi",

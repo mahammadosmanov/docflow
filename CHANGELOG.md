@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.35 - 2026-10-27
+
+### Changed
+
+- Review screen copy: the Turkish help sentence switches from the informal "Sen" and singular imperative to the formal wording used on the rest of the app. The batch-action bar above the rows gets its own label ("Tüm dosyalar için") instead of repeating the help sentence. The new key is translated in all four languages.
+
 ## 1.36.34 - 2026-10-27
 
 ### Changed

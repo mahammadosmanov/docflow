@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.34",
+  "currentVersion": "1.36.35",
   "releases": [
+    {
+      "version": "1.36.35",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.35",
+      "summary": "Review screen copy: the Turkish help text now uses the formal form used elsewhere in the app, and the batch-action bar has its own label instead of repeating the help sentence."
+    },
     {
       "version": "1.36.34",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.34",
       "summary": "Required-field errors now mark the field they belong to: the input gets aria-invalid and a stronger border, so screen readers and sighted users see which field to fill. The message above the form is unchanged."
     },

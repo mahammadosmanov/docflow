@@ -225,6 +225,7 @@
   "table.filterCount": "Показано {filtered} из {total} строк",
   "prefs.reset": "Сбросить по умолчанию",
   "review.help": "Решите, что сделать с каждым файлом. Ничего не изменится, пока вы не одобрите план.",
+  "review.batch.label": "Для всех файлов",
   "review.empty.help": "Нет файлов, ожидающих проверки.",
   "review.noChanges": "Ничего не выбрано",
   "review.selected": "Выбрано: {count}",
