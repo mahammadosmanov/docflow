@@ -32,6 +32,7 @@ import {
 } from "./CompactDateInput";
 import { PlanFilterBar } from "./PlanFilterBar";
 import { PlanSelectionBar } from "./PlanSelectionBar";
+import { PlanBulkFields } from "./PlanBulkFields";
 import {
   type EditorColumn,
   displayEditorValue,
@@ -291,78 +292,26 @@ export function EditablePlanTable({
             onSelectGroup={selectGroup}
             s={s}
           />
-          <div className="bulk-fields">
-            <select
-              aria-label={s.t("editor.bulk.field")}
-              value={bulkField}
-              onChange={(event) => {
-                setBulkField(event.target.value);
-                setBulkValue("");
-              }}
-            >
-              {bulkColumns.map((column) => (
-                <option key={column.key} value={column.key}>
-                  {s.t(column.labelKey)}
-                </option>
-              ))}
-            </select>
-            {bulkColumn?.kind === "bool" ? (
-              <select
-                aria-label={s.t("editor.bulk.value")}
-                value={bulkValue}
-                onChange={(event) => setBulkValue(event.target.value)}
-              >
-                <option value="">{s.t("editor.bulk.choose")}</option>
-                <option value="true">{s.t("editor.bool.true")}</option>
-                <option value="false">{s.t("editor.bool.false")}</option>
-              </select>
-            ) : bulkColumn?.kind === "choice" ? (
-              <select
-                aria-label={s.t("editor.bulk.value")}
-                value={bulkValue}
-                onChange={(event) => setBulkValue(event.target.value)}
-              >
-                <option value="">{s.t("editor.bulk.choose")}</option>
-                {bulkChoiceValues.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choiceLabel(bulkField, choice, bulkColumn)}
-                  </option>
-                ))}
-              </select>
-            ) : bulkColumn?.kind === "compactDate" ? (
-              <CompactDateInput
-                key={bulkField}
-                value={bulkValue}
-                label={s.t(bulkColumn.labelKey)}
-                s={s}
-                onChange={setBulkValue}
-              />
-            ) : (
-              <>
-                <input
-                  aria-label={s.t("editor.bulk.value")}
-                  type={bulkColumn?.kind === "int" ? "number" : "text"}
-                  value={bulkValue}
-                  list={bulkSuggestions.length ? bulkListId : undefined}
-                  onChange={(event) => setBulkValue(event.target.value)}
-                />
-                {bulkSuggestions.length > 0 && (
-                  <datalist id={bulkListId}>
-                    {bulkSuggestions.map((suggestion) => (
-                      <option key={suggestion} value={suggestion} />
-                    ))}
-                  </datalist>
-                )}
-              </>
-            )}
-            <Button
-              variant="secondary"
-              disabled={!selectedIds.size || !bulkField || bulkValue === ""}
-              onClick={applyBulk}
-            >
-              {s.t("editor.bulk.apply")}
-            </Button>
-          </div>
+          <PlanBulkFields
+            bulkField={bulkField}
+            bulkValue={bulkValue}
+            bulkColumns={bulkColumns}
+            bulkColumn={bulkColumn}
+            bulkChoiceValues={bulkChoiceValues}
+            bulkSuggestions={bulkSuggestions}
+            bulkListId={bulkListId}
+            choiceLabel={choiceLabel}
+            canApply={
+              Boolean(selectedIds.size) && Boolean(bulkField) && bulkValue !== ""
+            }
+            onFieldChange={(field) => {
+              setBulkField(field);
+              setBulkValue("");
+            }}
+            onValueChange={setBulkValue}
+            onApply={applyBulk}
+            s={s}
+          />
         </div>
       )}
       <AdjustableDataRegion
