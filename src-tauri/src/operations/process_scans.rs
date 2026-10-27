@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
-    naming::{flat_target_for, folder_for, target_for},
+    naming::{display_name, flat_target_for, folder_for, target_for},
     parallel::bounded_map_stream,
     rfi_code::{RfiMatch, RfiMethod},
 };
@@ -1299,13 +1299,6 @@ fn step(
         note_key: Some(note_key.to_string()),
         meta,
     }
-}
-
-fn display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_string()
 }
 
 fn method_name(method: RfiMethod) -> &'static str {

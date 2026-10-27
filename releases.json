@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.23",
+  "currentVersion": "1.36.24",
   "releases": [
+    {
+      "version": "1.36.24",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.24",
+      "summary": "Internal cleanup: three identical file-name helpers (display_name) become one shared function in naming.rs. No behavior change."
+    },
     {
       "version": "1.36.23",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.23",
       "summary": "Patch updates of Rust dependencies for ICU text internationalization data, zerovec, yoke, tinystr and erased-serde. Clippy and all tests pass."
     },

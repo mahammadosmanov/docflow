@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
+    naming::display_name,
     ooxml::{
         WorkbookSafetyFacts, WorksheetDescriptor, WorksheetVisibility, ordered_workbook_discovery,
     },
@@ -900,13 +901,6 @@ fn is_excel_workbook(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
         .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "xlsx" | "xlsm"))
-}
-
-fn display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_string()
 }
 
 fn warning_plan(key: &str, subject: &str) -> Plan {

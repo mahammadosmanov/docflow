@@ -10,6 +10,7 @@ use crate::{
     contracts::{JsonObject, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
     fs_ops::file_sha256,
+    naming::display_name,
     ocr::render_page_thumbnail_data_url,
     operations::process_scans::{OcrAdapter, OcrFailure},
     parallel::{bounded_map, bounded_map_stream},

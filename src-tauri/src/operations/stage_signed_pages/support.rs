@@ -37,13 +37,6 @@ pub(super) fn warning(key: &str, subject: &str) -> Warning {
     }
 }
 
-pub(super) fn display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_string()
-}
-
 pub(super) fn candidate_display(path: &Path, page_index: usize) -> String {
     format!("{} — #{}", display_name(path), page_index + 1)
 }
