@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.5",
+  "currentVersion": "1.36.6",
   "releases": [
+    {
+      "version": "1.36.6",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.6",
+      "summary": "Internal cleanup: three manual-review rows in the Follow Up classifier are built by one helper. No behavior change."
+    },
     {
       "version": "1.36.5",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.5",
       "summary": "Internal cleanup: the print-settings columns for file and worksheet print rows are set by one shared helper. No behavior change."
     },

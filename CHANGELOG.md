@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.6 - 2026-10-27
+
+### Changed
+
+- Three places in the RFI Follow Up classifier built the same manual-review row field by field. One helper builds it now. No behavior change.
+
 ## 1.36.5 - 2026-10-27
 
 ### Changed
