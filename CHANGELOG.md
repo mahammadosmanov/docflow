@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.0 - 2026-10-27
+
+### Added
+
+- Parameter schemas can carry optional integer bounds (`min`, `max`). The print operation sets them from the backend limits: copies 1 to 99, retries 0 to 3, timeout 1 to 240 minutes. The form's number inputs enforce those bounds, so out-of-range values are rejected before preview.
+
 ## 1.33.92 - 2026-10-27
 
 ### Fixed

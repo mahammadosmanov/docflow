@@ -127,3 +127,31 @@ fn preview_reports_the_first_missing_required_value() {
         None
     );
 }
+
+#[test]
+fn batch_print_numeric_fields_carry_the_backend_bounds() {
+    let operations = operation_registry(RegistryFacts::default());
+    let batch_print = operations
+        .iter()
+        .find(|operation| operation.id == "files.batch_print")
+        .expect("batch print is registered");
+    let range = |name: &str| {
+        let param = batch_print
+            .schema
+            .params
+            .iter()
+            .find(|param| param.name == name)
+            .expect("parameter exists");
+        (param.min, param.max)
+    };
+    assert_eq!(range("copies"), (Some(1), Some(99)));
+    assert_eq!(range("retries"), (Some(0), Some(3)));
+    assert_eq!(range("timeout_minutes"), (Some(1), Some(240)));
+    let collate = batch_print
+        .schema
+        .params
+        .iter()
+        .find(|param| param.name == "collate")
+        .expect("collate exists");
+    assert_eq!((collate.min, collate.max), (None, None));
+}

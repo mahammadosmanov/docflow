@@ -21,6 +21,8 @@ export interface ParamDef {
   visibleWhen: Record<string, unknown>;
   helpKey: string | null;
   remember?: boolean;
+  min?: number;
+  max?: number;
 }
 
 export interface OperationDef {

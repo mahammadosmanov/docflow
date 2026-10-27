@@ -90,6 +90,10 @@ pub struct ParamDef {
     pub help_key: Option<String>,
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub remember: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<i64>,
 }
 
 fn default_true() -> bool {
@@ -435,6 +439,8 @@ mod tests {
             visible_when: JsonObject::new(),
             help_key: Some("param.source.help".to_string()),
             remember: true,
+            min: None,
+            max: None,
         };
         assert_eq!(
             serde_json::to_value(parameter).expect("parameter should serialize"),
