@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.75 - 2026-10-27
+
+### Changed
+
+- Moved the `rfi.generate_concrete_documents` operation definition out of `operation_registry` in `registry.rs` (911 lines) into `registry/concrete_documents.rs`. Same schema and parameters; the registry now builds it through a helper. The 8 registry tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.74 - 2026-10-27
 
 ### Changed
