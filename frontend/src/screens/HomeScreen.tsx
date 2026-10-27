@@ -225,6 +225,7 @@ export function HomeScreen({
               <input
                 type="text"
                 className="operation-search-input"
+                aria-label={s.t("ops.search.placeholder")}
                 placeholder={s.t("ops.search.placeholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

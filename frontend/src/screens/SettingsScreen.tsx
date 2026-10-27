@@ -116,6 +116,7 @@ export function SettingsScreen({
                   setUsername(event.target.value);
                   setSaved("");
                 }}
+                aria-label={s.t("auth.username")}
                 placeholder={s.t("auth.username")}
               />
               <Button
@@ -180,6 +181,7 @@ export function SettingsScreen({
             <span>80%</span>
             <input
               type="range"
+              aria-label={s.t("prefs.fontSize")}
               min="0.8"
               max="1.6"
               step="0.05"
