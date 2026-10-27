@@ -592,7 +592,7 @@
   "error.rfi.workbookLocked": "RFI Log открыт или доступен только для чтения. Сохраните и закройте его в Excel, затем проверьте доступ на запись.",
   "op.rfi.stage_signed_first_pages.title": "Подготовить подписанные первые страницы RFI",
   "op.rfi.normalize_pdf_orientation.title": "Повернуть страницы PDF RFI",
-  "op.rfi.normalize_pdf_orientation.desc": "Отдельная от Fast RFI Scan операция коррекции поворота и ориентации страниц PDF в CIV, MEC, ELE и PRC. Только уверенно определённые исправления записываются в отдельную копию для проверки; если хотя бы одна страница неоднозначна, PDF остаётся без изменений для ручной проверки.",
+  "op.rfi.normalize_pdf_orientation.desc": "Отдельная от Быстрого сканирования RFI операция коррекции поворота и ориентации страниц PDF в CIV, MEC, ELE и PRC. Только уверенно определённые исправления записываются в отдельную копию для проверки; если хотя бы одна страница неоднозначна, PDF остаётся без изменений для ручной проверки.",
   "param.rfi.orientation.rfiSystemRoot": "Корень системы RFI",
   "param.rfi.orientation.rfiSystemRoot.help": "Источник только для чтения с папками CIV, MEC, ELE и PRC. Исходные файлы не изменяются.",
   "param.rfi.orientation.reviewRoot": "Папка проверки ориентации",
