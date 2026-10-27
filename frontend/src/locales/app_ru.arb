@@ -1124,5 +1124,12 @@
   "warn.rfi.followUp.reason.structureInsert": "Будет добавлена строка части Road (формат и формулы копируются из соседней строки).",
   "warn.rfi.followUp.reason.structureRename": "Строка Road без части будет переименована в «Part 1», так как в Log указаны её части.",
   "warn.rfi.followUp.reason.readyFormulaRepair": "Отсутствующая формула будет добавлена по образцу остальных строк столбца.",
-  "warn.rfi.followUp.reason.structureZone": "Пустая ячейка ZONE будет заполнена по номеру Road (1-5 North, 6-13 Center, 14-20 South, 21 North)."
+  "warn.rfi.followUp.reason.structureZone": "Пустая ячейка ZONE будет заполнена по номеру Road (1-5 North, 6-13 Center, 14-20 South, 21 North).",
+  "error.operation.cancelled": "Операция отменена.",
+  "error.preset.missing": "Сохранённый пресет больше не существует.",
+  "error.rfi.documents.invalidOutput": "Созданный документ недействителен.",
+  "note.create_folder": "Создать папку",
+  "note.rfi.followUp.workbookUpdate": "Обновить книгу Follow Up",
+  "watch.tooManyEntries": "В папке слишком много элементов для наблюдения.",
+  "watch.unreadable": "Папку не удаётся прочитать."
 }

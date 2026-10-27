@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.80 - 2026-10-27
+
+### Fixed
+
+- Backend messages were shown as raw keys when they had no translation. Added translations in all four languages for operation cancelled, missing preset, invalid generated document, the create-folder and Follow Up workbook notes, and the watch-folder limit and unreadable-folder errors.
+
 ## 1.33.79 - 2026-10-27
 
 ### Fixed
