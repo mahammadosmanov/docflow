@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.20",
+  "currentVersion": "1.36.21",
   "releases": [
+    {
+      "version": "1.36.21",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.21",
+      "summary": "Removes three stray backup copies of test files (*.rs-E) that were committed by mistake. They were not compiled or referenced, so no behavior changes."
+    },
     {
       "version": "1.36.20",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.20",
       "summary": "README now lists all eleven registered workflows (it said nine and left out concrete documents and publish status)."
     },
