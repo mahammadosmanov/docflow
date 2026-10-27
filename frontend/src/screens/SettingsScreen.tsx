@@ -99,6 +99,7 @@ export function SettingsScreen({
     <div className="screen">
       <Header
         title={s.t("prefs.title")}
+        titleAs="h1"
         onBack={onBack}
         backLabel={s.t("action.back")}
       />

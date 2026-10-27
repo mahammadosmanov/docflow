@@ -204,8 +204,9 @@ h2 {
   gap: 6px;
   min-width: 0;
 }
-.header-left > h1 {
+.header-left > .header-title {
   margin: 0;
+  font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0;
   line-height: 1.2;
@@ -4008,7 +4009,7 @@ textarea:focus-visible {
   .header-left {
     flex: 1 1 auto;
   }
-  .header-left > h1 {
+  .header-left > .header-title {
     white-space: normal;
     overflow: visible;
     overflow-wrap: anywhere;

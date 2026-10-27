@@ -18,17 +18,20 @@ import type { ProgressEvent } from "../types";
 
 export function Header({
   title,
+  titleAs = "p",
   onBack,
   backLabel,
   trailing,
   children,
 }: {
   title?: string;
+  titleAs?: "h1" | "p";
   onBack?: () => void;
   backLabel?: string;
   trailing?: ReactNode;
   children?: ReactNode;
 }) {
+  const TitleTag = titleAs;
   return (
     <header className={`app-header ${children ? "with-steps" : ""}`}>
       <div className="header-main">
@@ -38,7 +41,7 @@ export function Header({
               <ArrowLeft />
             </IconButton>
           )}
-          <h1>{title}</h1>
+          {title && <TitleTag className="header-title">{title}</TitleTag>}
         </div>
         <div className="header-actions">{trailing}</div>
       </div>
