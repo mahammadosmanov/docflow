@@ -26,7 +26,6 @@ npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
-cargo check --manifest-path src-tauri/Cargo.toml
 npm run audit:licenses
 ```
 
