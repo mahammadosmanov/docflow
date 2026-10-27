@@ -40,7 +40,32 @@ fn manual_review_row(
     }
 }
 
-type SlotMap = BTreeMap<(String, u32, u32, u32), SlotWork>;
+type SlotKey = (String, u32, u32, u32);
+type SlotMap = BTreeMap<SlotKey, SlotWork>;
+type SlotKeysBySheetCol = BTreeMap<(String, u32), Vec<SlotKey>>;
+type SlotKeysByCode = BTreeMap<String, Vec<SlotKey>>;
+
+/// Indexes non-signed slots by code and by (sheet, column) so the record pass can
+/// find candidate slots without rescanning the whole map.
+fn index_slots(slots: &SlotMap) -> (SlotKeysBySheetCol, SlotKeysByCode) {
+    let mut potential_slots_by_sheet_col = SlotKeysBySheetCol::new();
+    let mut existing_slot_keys_by_code = SlotKeysByCode::new();
+    for (key, slot) in slots {
+        if !is_signed_layout(&slot.layout) {
+            for code in &slot.codes {
+                existing_slot_keys_by_code
+                    .entry(code.clone())
+                    .or_default()
+                    .push(key.clone());
+            }
+            potential_slots_by_sheet_col
+                .entry((key.0.clone(), key.2))
+                .or_default()
+                .push(key.clone());
+        }
+    }
+    (potential_slots_by_sheet_col, existing_slot_keys_by_code)
+}
 
 fn build_slots(
     layouts: &[FollowUpLayout],
@@ -168,23 +193,7 @@ pub(super) fn classify_workbooks_full(
         }
     }
 
-    let mut potential_slots_by_sheet_col =
-        BTreeMap::<(String, u32), Vec<(String, u32, u32, u32)>>::new();
-    let mut existing_slot_keys_by_code = BTreeMap::<String, Vec<(String, u32, u32, u32)>>::new();
-    for (key, slot) in &slots {
-        if !is_signed_layout(&slot.layout) {
-            for code in &slot.codes {
-                existing_slot_keys_by_code
-                    .entry(code.clone())
-                    .or_default()
-                    .push(key.clone());
-            }
-            potential_slots_by_sheet_col
-                .entry((key.0.clone(), key.2))
-                .or_default()
-                .push(key.clone());
-        }
-    }
+    let (potential_slots_by_sheet_col, existing_slot_keys_by_code) = index_slots(&slots);
 
     let mut unmapped_count = 0usize;
     for record in records.values().filter(|record| {

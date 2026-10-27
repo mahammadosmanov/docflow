@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.84 - 2026-10-27
+
+### Changed
+
+- Moved the slot index construction in `classify_workbooks_full` into `index_slots` in `rfi_follow_up/classify.rs`. Named aliases (`SlotKey`, `SlotKeysBySheetCol`, `SlotKeysByCode`) replace the repeated tuple types. The record loop itself is unchanged and is still the next candidate. The 33 rfi_follow_up tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.83 - 2026-10-27
 
 ### Changed
