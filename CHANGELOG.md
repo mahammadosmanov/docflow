@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.61 - 2026-10-27
+
+### Changed
+
+- Moved `StagedWorkbook`, `ExportedWorksheetPdf`, and their PDF-validation helpers out of `platform/excel.rs` (1,234 lines) into `platform/excel/staged.rs`. The export pipeline stays in `excel.rs`. Code is unchanged apart from visibility (`pub(super)`) and imports. The 66 excel tests pass.
+
 ## 1.36.60 - 2026-10-27
 
 ### Changed
