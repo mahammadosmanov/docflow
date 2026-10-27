@@ -116,6 +116,7 @@ export function AdminScreen({
                     <Switch
                       checked={user.allowed}
                       disabled={self || busyId === user.id}
+                      ariaLabel={`${s.t("admin.allowed")}: ${user.display}`}
                       onChange={(allowed) => void update(user, { allowed })}
                     />
                   </label>
@@ -124,6 +125,7 @@ export function AdminScreen({
                     <Switch
                       checked={user.isAdmin}
                       disabled={self || busyId === user.id}
+                      ariaLabel={`${s.t("admin.admin")}: ${user.display}`}
                       onChange={(isAdmin) => void update(user, { isAdmin })}
                     />
                   </label>

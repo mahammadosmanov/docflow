@@ -206,6 +206,7 @@ export function SettingsScreen({
             </span>
             <Switch
               checked={prefs.compact}
+              ariaLabel={s.t("prefs.density.compact")}
               onChange={(compact) => void update({ compact })}
             />
           </label>
@@ -221,6 +222,7 @@ export function SettingsScreen({
             </span>
             <Switch
               checked={prefs.startWithWindows}
+              ariaLabel={s.t("prefs.startWithWindows")}
               onChange={(startWithWindows) => void update({ startWithWindows })}
             />
           </label>
@@ -237,6 +239,7 @@ export function SettingsScreen({
             </span>
             <Switch
               checked={replicaStatus?.enabled ?? prefs.replicaSyncEnabled}
+              ariaLabel={s.t("prefs.replicaSyncEnabled")}
               onChange={(replicaSyncEnabled) =>
                 void update({ replicaSyncEnabled })
               }

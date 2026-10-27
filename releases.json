@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.40",
+  "currentVersion": "1.36.41",
   "releases": [
+    {
+      "version": "1.36.41",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.41",
+      "summary": "Accessible names for toggles: the Settings switches and the per-user Admin access and admin switches now have explicit names. Admin switches include the user name, so identical toggles on different rows can be told apart."
+    },
     {
       "version": "1.36.40",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.40",
       "summary": "Heading structure: every screen now has exactly one level-1 heading. The top bar title is a paragraph by default, so it no longer adds a blank or duplicate H1. Settings and the workflow screen keep their bar title as the H1 because nothing else names them. Appearance is unchanged."
     },

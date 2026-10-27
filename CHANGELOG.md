@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.41 - 2026-10-27
+
+### Fixed
+
+- Screen-reader names for toggles: the three Settings switches (compact layout, start with Windows, unattended RFI System sync) now have explicit names. The Admin access and admin switches include the user's name, so identical toggles on different rows can be told apart. Visible text is unchanged.
+
 ## 1.36.40 - 2026-10-27
 
 ### Fixed
