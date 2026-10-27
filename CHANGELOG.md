@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.33 - 2026-10-27
+
+### Fixed
+
+- Segmented option groups (Settings theme and language, and the action choice on each Review row) now mark the selected option as pressed for screen readers. Before, the selection was shown only by color. Each Review row's group is also named after its file, so repeated "Bırak" / "Sil" choices can be told apart.
+
 ## 1.36.32 - 2026-10-27
 
 ### Fixed
