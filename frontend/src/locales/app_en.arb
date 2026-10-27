@@ -1103,5 +1103,12 @@
   "error.watch.unsupported": "This operation cannot be watched automatically.",
   "error.support.encodingFailed": "The diagnostics file could not be created.",
   "error.path.rootUnavailable": "The selected folder is no longer accessible. Select it again.",
-  "error.print.rowInvalid": "A print row could not be identified. Preview the queue again."
+  "error.print.rowInvalid": "A print row could not be identified. Preview the queue again.",
+  "error.rfi.writeGrantMissing": "DocFlow has no write permission for the RFI Log folder. Select the folder again.",
+  "error.rfi.workbookNoFolder": "The RFI Log workbook is not inside a folder.",
+  "error.rfi.sheetPlanInvalid": "The sheet plan is invalid.",
+  "error.rfi.multiSheetPlanInvalid": "The multi-sheet RFI plan is invalid.",
+  "error.rfi.rowInvalid": "An RFI row is invalid.",
+  "error.mail.tableSourceInvalid": "The mail table source is invalid.",
+  "error.plan.noCopyableTable": "This plan has no table that can be copied."
 }

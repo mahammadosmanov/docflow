@@ -1075,5 +1075,12 @@
   "error.watch.unsupported": "Эту операцию нельзя отслеживать автоматически.",
   "error.support.encodingFailed": "Не удалось создать файл диагностики.",
   "error.path.rootUnavailable": "Выбранная папка больше недоступна. Выберите её снова.",
-  "error.print.rowInvalid": "Строку печати не удалось определить. Повторите предпросмотр очереди."
+  "error.print.rowInvalid": "Строку печати не удалось определить. Повторите предпросмотр очереди.",
+  "error.rfi.writeGrantMissing": "У DocFlow нет разрешения на запись в папку RFI Log. Выберите папку снова.",
+  "error.rfi.workbookNoFolder": "Книга RFI Log находится не в папке.",
+  "error.rfi.sheetPlanInvalid": "План листов недействителен.",
+  "error.rfi.multiSheetPlanInvalid": "План RFI для нескольких листов недействителен.",
+  "error.rfi.rowInvalid": "Строка RFI недействительна.",
+  "error.mail.tableSourceInvalid": "Источник таблицы письма недействителен.",
+  "error.plan.noCopyableTable": "В этом плане нет таблицы для копирования."
 }
