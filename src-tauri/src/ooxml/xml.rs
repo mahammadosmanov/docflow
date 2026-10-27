@@ -690,6 +690,25 @@ pub(super) fn bounded_office_relationship_attribute(
     )
 }
 
+/// Checks the raw and unescaped byte lengths of an attribute value against `max_bytes`.
+fn decode_bounded_value(raw: &[u8], max_bytes: usize, field: &str) -> Result<String, OoxmlError> {
+    if raw.len() > max_bytes {
+        return Err(OoxmlError::limit_exceeded(format!(
+            "{field} exceeded the size limit"
+        )));
+    }
+    let encoded =
+        std::str::from_utf8(raw).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
+    let decoded =
+        unescape(encoded).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
+    if decoded.len() > max_bytes {
+        return Err(OoxmlError::limit_exceeded(format!(
+            "{field} exceeded the size limit"
+        )));
+    }
+    Ok(decoded.into_owned())
+}
+
 pub(super) fn bounded_expanded_attribute(
     element: &XmlElement,
     local_name: &[u8],
@@ -706,22 +725,11 @@ pub(super) fn bounded_expanded_attribute(
         if value.is_some() {
             return Err(OoxmlError::invalid(format!("{field} is ambiguous")));
         }
-        let raw = attribute.value.as_slice();
-        if raw.len() > max_bytes {
-            return Err(OoxmlError::limit_exceeded(format!(
-                "{field} exceeded the size limit"
-            )));
-        }
-        let encoded = std::str::from_utf8(raw)
-            .map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
-        let decoded =
-            unescape(encoded).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
-        if decoded.len() > max_bytes {
-            return Err(OoxmlError::limit_exceeded(format!(
-                "{field} exceeded the size limit"
-            )));
-        }
-        value = Some(decoded.into_owned());
+        value = Some(decode_bounded_value(
+            attribute.value.as_slice(),
+            max_bytes,
+            field,
+        )?);
     }
     Ok(value)
 }
@@ -742,22 +750,11 @@ pub(super) fn bounded_qualified_attribute(
         if value.is_some() {
             return Err(OoxmlError::invalid(format!("{field} is ambiguous")));
         }
-        let raw = attribute.value.as_ref();
-        if raw.len() > max_bytes {
-            return Err(OoxmlError::limit_exceeded(format!(
-                "{field} exceeded the size limit"
-            )));
-        }
-        let encoded = std::str::from_utf8(raw)
-            .map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
-        let decoded =
-            unescape(encoded).map_err(|_| OoxmlError::invalid(format!("{field} is invalid")))?;
-        if decoded.len() > max_bytes {
-            return Err(OoxmlError::limit_exceeded(format!(
-                "{field} exceeded the size limit"
-            )));
-        }
-        value = Some(decoded.into_owned());
+        value = Some(decode_bounded_value(
+            attribute.value.as_ref(),
+            max_bytes,
+            field,
+        )?);
     }
     Ok(value)
 }
