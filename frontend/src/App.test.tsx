@@ -1947,7 +1947,7 @@ describe("DocFlow shell", () => {
     expect(
       within(itpSelects[0]).getByRole("option", { name: "5" }),
     ).toBeVisible();
-    const itemSelects = screen.getAllByRole("combobox", { name: "Item" });
+    const itemSelects = screen.getAllByRole("combobox", { name: "Madde No" });
     expect(itemSelects[0]).toHaveValue("CIV-5.2.1");
     expect(
       within(itemSelects[0]).getByRole("option", { name: "5.2.1" }),
@@ -1978,13 +1978,13 @@ describe("DocFlow shell", () => {
     );
 
     expect(
-      screen.queryByRole("columnheader", { name: "Inspection Description" }),
+      screen.queryByRole("columnheader", { name: "Açıklama" }),
     ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Otomatik alanları göster" }),
     );
     expect(
-      screen.getByRole("columnheader", { name: "Inspection Description" }),
+      screen.getByRole("columnheader", { name: "Açıklama" }),
     ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Tümünü seç" }));
