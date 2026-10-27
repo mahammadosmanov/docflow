@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.69 - 2026-10-27
+
+### Changed
+
+- Moved the snapshot and hashing helpers (`snapshot_tree`, `insert_file`, `ensure_source_settled`, `enforce_automatic_change_limit`, `hash_snapshot`, `valid_sha256`, `collect_missing_directories`) out of `operations/replica_publish.rs` (893 lines) into `operations/replica_publish/snapshot.rs`. Visibility and imports only. Replica tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.68 - 2026-10-27
 
 ### Changed
