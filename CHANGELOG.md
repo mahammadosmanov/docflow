@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.80 - 2026-10-27
+
+### Changed
+
+- Moved the `rfi_follow_up`, `rfi_system_sync`, `rfi_complete_status_sync`, and `rfi_publish_status` operation definitions out of `operation_registry` in `registry.rs` into `registry/rfi_sync.rs`. Each is now a plain builder function. The 8 registry tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.79 - 2026-10-27
 
 ### Changed
