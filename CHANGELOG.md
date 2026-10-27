@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.37 - 2026-10-27
+
+### Fixed
+
+- Keyboard and screen-reader focus after a preview: when a preview succeeds, focus now moves to the preview itself. Before, the Önizle button was replaced by the preview and focus fell back to the top of the page, so keyboard and screen-reader users lost their place.
+
 ## 1.36.36 - 2026-10-27
 
 ### Changed

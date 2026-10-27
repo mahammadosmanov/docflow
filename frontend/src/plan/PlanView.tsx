@@ -5,6 +5,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import {
+  type RefObject,
   useState,
 } from "react";
 import {
@@ -83,6 +84,7 @@ export function PlanView({
   onUpdatePreview,
   isUpdatingPreview = false,
   scanPreviewUpdated = false,
+  focusRef,
 }: {
   plan: Plan;
   s: Strings;
@@ -95,6 +97,7 @@ export function PlanView({
   onUpdatePreview?: () => void;
   isUpdatingPreview?: boolean;
   scanPreviewUpdated?: boolean;
+  focusRef?: RefObject<HTMLDivElement | null>;
 }) {
   const [warningFocusCode, setWarningFocusCode] = useState("");
   const moves = plan.steps.filter((step) => step.kind !== "mkdir").length;
@@ -123,7 +126,7 @@ export function PlanView({
       : [];
   const signedStage = plan.opId === "rfi.stage_signed_first_pages";
   return (
-    <div className="flow-layout">
+    <div className="flow-layout" ref={focusRef} tabIndex={-1}>
       <div className="flow-scroll plan-flow-scroll">
         <PlanImpactSummary plan={plan} s={s} />
         {scanPreviewUpdated && !editorDirty && (
