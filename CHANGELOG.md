@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.8 - 2026-10-27
+
+### Changed
+
+- Removed three functions for retired features (replica publish preview, Outlook archive preview, automatic replica tick) that were kept behind allow(dead_code) and had no callers. No behavior change.
+
 ## 1.36.7 - 2026-10-27
 
 ### Changed

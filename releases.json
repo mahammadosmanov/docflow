@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.7",
+  "currentVersion": "1.36.8",
   "releases": [
+    {
+      "version": "1.36.8",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.8",
+      "summary": "Internal cleanup: three retired replica and Outlook functions that were kept behind allow(dead_code) are removed. No behavior change."
+    },
     {
       "version": "1.36.7",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.7",
       "summary": "Internal cleanup: the size-limit and decoding checks for workbook XML attributes are one helper. No behavior change."
     },
