@@ -155,3 +155,27 @@ fn batch_print_numeric_fields_carry_the_backend_bounds() {
         .expect("collate exists");
     assert_eq!((collate.min, collate.max), (None, None));
 }
+
+#[test]
+fn concrete_document_ambient_temperatures_are_bounded_to_zero_through_one_hundred() {
+    let operations = operation_registry(RegistryFacts::default());
+    let concrete = operations
+        .iter()
+        .find(|operation| operation.id == "rfi.generate_concrete_documents")
+        .expect("concrete documents are registered");
+    let range = |name: &str| {
+        let param = concrete
+            .schema
+            .params
+            .iter()
+            .find(|param| param.name == name)
+            .expect("parameter exists");
+        (param.min, param.max)
+    };
+    assert_eq!(range("ambient_min"), (Some(0), Some(100)));
+    assert_eq!(range("ambient_max"), (Some(0), Some(100)));
+    assert_eq!(
+        (concrete.schema.params[0].min, concrete.schema.params[0].max),
+        (None, None)
+    );
+}

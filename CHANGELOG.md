@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.4 - 2026-10-27
+
+### Fixed
+
+- The ambient minimum and maximum temperature fields for concrete documents now carry the backend's 0 to 100 °C bounds, so the form rejects out-of-range values before preview instead of after. The print bounds and these bounds use one helper. The backend check is unchanged.
+
 ## 1.34.3 - 2026-10-27
 
 ### Changed
