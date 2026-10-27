@@ -15,8 +15,6 @@ import {
 } from "lucide-react";
 import {
   type ReactNode,
-  useCallback,
-  useEffect,
   useState,
 } from "react";
 import {
@@ -35,7 +33,6 @@ import {
 import {
   type AppPrefs,
   type AuthState,
-  type ReplicaAutomationStatus,
   type ThemePreference,
 } from "../types";
 import {
@@ -44,6 +41,8 @@ import {
 } from "../helpers";
 
 import { useSupportDiagnostics } from "./useSupportDiagnostics";
+
+import { useReplicaStatus } from "./useReplicaStatus";
 
 export function SettingsScreen({
   bridge,
@@ -65,20 +64,7 @@ export function SettingsScreen({
   const [username, setUsername] = useState(auth.user?.username ?? "");
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
-  const [replicaStatus, setReplicaStatus] =
-    useState<ReplicaAutomationStatus | null>(null);
-  const refreshReplicaStatus = useCallback(async () => {
-    try {
-      setReplicaStatus(await bridge.call("settings/replicaStatus"));
-    } catch {
-      // The preference remains usable when a read-only refresh is unavailable.
-    }
-  }, [bridge]);
-  useEffect(() => {
-    void refreshReplicaStatus();
-    const timer = window.setInterval(() => void refreshReplicaStatus(), 5_000);
-    return () => window.clearInterval(timer);
-  }, [refreshReplicaStatus]);
+  const { replicaStatus, refreshReplicaStatus } = useReplicaStatus(bridge);
   const update = async (patch: Partial<AppPrefs>) => {
     try {
       const next = await bridge.call(
