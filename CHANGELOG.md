@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.22 - 2026-10-27
+
+### Fixed
+
+- Turkish signed-scan, Outlook, and archive forms used the English words "exact", "Review", and "Warning", and wrote RFI with a dotted capital I. They now say tam, İnceleme, Uyarı, and RFI.
+
 ## 1.35.21 - 2026-10-27
 
 ### Fixed
