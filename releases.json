@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.51",
+  "currentVersion": "1.36.52",
   "releases": [
+    {
+      "version": "1.36.52",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.52",
+      "summary": "Maintainability: the RFI log's static regex patterns use expect with a message instead of unwrap, so a failed pattern names its cause. No behavior change."
+    },
     {
       "version": "1.36.51",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.51",
       "summary": "Fix: the Windows directory listing reads its records from an 8-byte-aligned buffer, closing the alignment concern recorded in KNOWN_ISSUES. Not compiled or run on Windows here; the native check remains outstanding."
     },

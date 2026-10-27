@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.52 - 2026-10-27
+
+### Changed
+
+- The RFI log's static regex patterns (`rfi_log/support.rs`) now use `expect` with a message instead of a bare `unwrap`, matching the rest of the crate. A failed pattern now names the cause in the panic. No behavior change.
+
 ## 1.36.51 - 2026-10-27
 
 ### Fixed
