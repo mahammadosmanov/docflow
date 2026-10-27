@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.67 - 2026-10-27
+
+### Changed
+
+- The Windows Release workflow runs only for minor and major tags (`v*.*.0`, such as `v1.34.0` or `v2.0.0`). Patch tags no longer start an installer build, because the build cannot publish an installer to a release that already exists. Patch releases publish release notes without an installer. No application behavior changes.
+
 ## 1.33.66 - 2026-10-27
 
 ### Changed
