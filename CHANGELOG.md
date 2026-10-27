@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.73 - 2026-10-27
+
+### Changed
+
+- Added unit tests for `useRfiPrintFinder`: required-input guards, the search request, stored results, late-result discard after invalidation, and candidate selection. No application behavior changes.
+
 ## 1.33.72 - 2026-10-27
 
 ### Changed
