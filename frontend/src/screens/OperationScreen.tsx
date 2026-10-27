@@ -157,9 +157,11 @@ export function OperationScreen({
     screen: { setError, setStage, setPreviousValues, installPlan, setInvalidField },
     progress: { startProgress, receiveProgress },
   });
-  const planFocusRef = useRef<HTMLDivElement>(null);
+  const stageFocusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (stage === "preview") planFocusRef.current?.focus();
+    if (stage === "preview" || stage === "result") {
+      stageFocusRef.current?.focus();
+    }
   }, [stage]);
   const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
     bridge,
@@ -455,7 +457,7 @@ export function OperationScreen({
         )}
         {stage === "preview" && plan && (
           <PlanView
-            focusRef={planFocusRef}
+            focusRef={stageFocusRef}
             plan={plan}
             s={s}
             error={error}
@@ -492,6 +494,7 @@ export function OperationScreen({
         {stage === "result" && result && (
           <ResultView
             result={result}
+            focusRef={stageFocusRef}
             s={s}
             error={error}
             onDone={onBack}

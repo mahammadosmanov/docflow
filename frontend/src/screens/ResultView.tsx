@@ -1,3 +1,4 @@
+import { type RefObject } from "react";
 import {
   ArrowRight,
   Check,
@@ -155,6 +156,7 @@ export function ResultView({
   result,
   s,
   error,
+  focusRef,
   onDone,
   onUndo,
   copySheets = [],
@@ -168,6 +170,7 @@ export function ResultView({
   result: OperationResult;
   s: Strings;
   error?: string;
+  focusRef?: RefObject<HTMLDivElement | null>;
   onDone: () => void;
   onUndo: () => void;
   copySheets?: string[];
@@ -191,7 +194,7 @@ export function ResultView({
   const success =
     effectState === "committed" && result.meta?.resumeAvailable !== true;
   return (
-    <div className="result-card">
+    <div className="result-card" ref={focusRef} tabIndex={-1}>
       <span className={`result-icon ${success ? "success" : "failure"}`}>
         {success ? <CheckCircle2 /> : <CircleAlert />}
       </span>
