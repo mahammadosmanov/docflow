@@ -59,3 +59,22 @@ describe("SchemaField integer inputs", () => {
     expect(input).not.toHaveAttribute("max");
   });
 });
+
+describe("SchemaField range hint", () => {
+  afterEach(cleanup);
+
+  it("shows the allowed range under a bounded integer field", () => {
+    render(
+      <SchemaField
+        bridge={bridge}
+        operationId="files.batch_print"
+        param={intParam({ min: 1, max: 99 })}
+        value={1}
+        values={{}}
+        s={s}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("1–99")).toBeInTheDocument();
+  });
+});

@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.0 - 2026-10-27
+
+### Added
+
+- Bounded number fields show their allowed range (for example `1–99`) under the input: print copies, retries, timeout, and the concrete document ambient temperatures. The range comes from the same backend bounds the form already enforces.
+
+### Fixed
+
+- Windows installer build for 1.34.0 failed on a Unix-style path test; fixed in 1.34.5. This minor release is the first tag that builds the Windows installer with that fix.
+
 ## 1.34.5 - 2026-10-27
 
 ### Fixed

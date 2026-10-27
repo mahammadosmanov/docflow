@@ -349,6 +349,11 @@ export function SchemaField({
         )}
       </div>
       {param.helpKey && <small>{s.t(param.helpKey)}</small>}
+      {param.kind === "int" &&
+        param.min !== undefined &&
+        param.max !== undefined && (
+          <small>{`${param.min}–${param.max}`}</small>
+        )}
     </label>
   );
 }
