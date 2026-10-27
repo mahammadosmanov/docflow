@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.70 - 2026-10-27
+
+### Changed
+
+- Moved the validation and journal helpers (`archive_filename`-adjacent journal checks, `validate_selected_mail_item`, `validate_undo_record`, `durable_identity_from_step`, `operation_result`, and related) out of `outlook_reply_draft.rs` (852 lines) into `outlook_reply_draft/helpers.rs`. `journal_is_safely_undoable` stays reachable from `undo.rs` through a re-export. Visibility and imports only. Outlook tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.69 - 2026-10-27
 
 ### Changed
