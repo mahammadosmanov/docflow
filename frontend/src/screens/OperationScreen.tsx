@@ -157,6 +157,10 @@ export function OperationScreen({
     screen: { setError, setStage, setPreviousValues, installPlan, setInvalidField },
     progress: { startProgress, receiveProgress },
   });
+  const planFocusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (stage === "preview") planFocusRef.current?.focus();
+  }, [stage]);
   const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
     bridge,
     operationId: operation.id,
@@ -451,6 +455,7 @@ export function OperationScreen({
         )}
         {stage === "preview" && plan && (
           <PlanView
+            focusRef={planFocusRef}
             plan={plan}
             s={s}
             error={error}

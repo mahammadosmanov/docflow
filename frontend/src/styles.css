@@ -4323,3 +4323,7 @@ select[aria-invalid="true"],
 textarea[aria-invalid="true"] {
   border-color: var(--danger);
 }
+
+.flow-layout:focus {
+  outline: none;
+}
