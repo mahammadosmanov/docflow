@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.24 - 2026-10-27
+
+### Changed
+
+- Three identical copies of the file-name helper `display_name` (in batch print, Process Scans, and signed-page staging) are now one shared function in `naming.rs`. No behavior change; the code is smaller to maintain.
+
 ## 1.36.23 - 2026-10-27
 
 ### Changed

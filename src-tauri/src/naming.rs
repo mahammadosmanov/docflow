@@ -17,3 +17,11 @@ pub fn target_for(destination: &Path, code: &str) -> PathBuf {
 pub fn flat_target_for(destination: &Path, code: &str) -> PathBuf {
     destination.join(filename_for(code))
 }
+
+/// Final path component as text, or an empty string when there is none.
+pub fn display_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_string()
+}
