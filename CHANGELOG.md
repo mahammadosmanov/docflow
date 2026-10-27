@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.47 - 2026-10-27
+
+### Changed
+
+- Test coverage: the batch-print RFI number chooser now has unit tests for its default checked state, per-number toggling, and select-all and select-none actions. No app behavior change.
+
 ## 1.36.46 - 2026-10-27
 
 ### Changed
