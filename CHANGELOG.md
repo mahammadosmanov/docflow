@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.16 - 2026-10-27
+
+### Fixed
+
+- Startup panicked if the HTTP client for sign-in or the AI service could not be created. It now returns a startup error instead.
+
 ## 1.35.15 - 2026-10-27
 
 ### Fixed
