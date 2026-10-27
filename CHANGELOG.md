@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.48 - 2026-10-27
+
+### Changed
+
+- Test coverage: the preset helpers (which settings a preset remembers, and the plain-language message for a failed preset write) are now exported and unit-tested. No app behavior change.
+
 ## 1.36.47 - 2026-10-27
 
 ### Changed
