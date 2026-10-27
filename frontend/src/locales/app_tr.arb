@@ -1129,5 +1129,18 @@
   "error.operation.previewFailed": "Önizleme hazırlanamadı. Yeniden deneyin.",
   "error.operation.undoFailed": "Geri alma tamamlanamadı. Yeniden denemeden önce sonucu kontrol edin.",
   "error.scan.sourceUnreadable": "Taranan dosya okunamadı.",
-  "error.review.directoryUnreadable": "İnceleme klasörü okunamadı."
+  "error.review.directoryUnreadable": "İnceleme klasörü okunamadı.",
+  "error.review.pathBlocked": "İnceleme konumu engellenmiş. Başka bir klasör seçin.",
+  "error.review.destinationNoParent": "İnceleme hedefi bir klasörün içinde değil.",
+  "error.review.pdfNoParent": "İncelenecek PDF bir klasörün içinde değil.",
+  "error.print.fileIdentityUnavailable": "Yazdırılacak dosya tanımlanamadı. Dosyayı yeniden ekleyin.",
+  "error.print.fileDirectoryUnavailable": "Yazdırılacak dosyanın klasörüne artık erişilemiyor.",
+  "error.print.queueDirectoryUnavailable": "Yazdırma kuyruğu klasörüne artık erişilemiyor.",
+  "error.print.jobNotResumable": "Bu kayıtlı yazdırma işi devam ettirilemez. Kaldırıp yeniden ekleyin.",
+  "error.print.jobSetChanged": "Kayıtlı yazdırma işleri değişti. Kuyruğu yeniden önizleyin.",
+  "error.path.inspectFailed": "Seçilen öğe kontrol edilemedi. Yeniden seçin.",
+  "error.backend.encodeFailed": "DocFlow yanıtı hazırlayamadı. Yeniden deneyin.",
+  "error.preset.valueInvalid": "Kayıtlı bir hazır ayar değeri geçersiz. Hazır ayarı yeniden seçin.",
+  "error.scan.destinationChanged": "Önizleme düzenlenirken tarama hedefi değişti. Yeniden önizleyin.",
+  "error.scan.trashUnavailable": "Bu taramalar için geri alınabilir silme kullanılamıyor."
 }

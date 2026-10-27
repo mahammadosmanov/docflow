@@ -1129,5 +1129,18 @@
   "error.operation.previewFailed": "Önizləmə hazırlana bilmədi. Yenidən cəhd edin.",
   "error.operation.undoFailed": "Geri alma tamamlana bilmədi. Yenidən cəhd etməzdən əvvəl nəticəni yoxlayın.",
   "error.scan.sourceUnreadable": "Skan edilmiş fayl oxuna bilmədi.",
-  "error.review.directoryUnreadable": "Yoxlama qovluğu oxuna bilmədi."
+  "error.review.directoryUnreadable": "Yoxlama qovluğu oxuna bilmədi.",
+  "error.review.pathBlocked": "Yoxlama yeri bloklanıb. Başqa qovluq seçin.",
+  "error.review.destinationNoParent": "Yoxlama təyinatı qovluqda deyil.",
+  "error.review.pdfNoParent": "Yoxlanılacaq PDF qovluqda deyil.",
+  "error.print.fileIdentityUnavailable": "Çap ediləcək fayl müəyyən edilmədi. Faylı yenidən əlavə edin.",
+  "error.print.fileDirectoryUnavailable": "Çap ediləcək faylın qovluğu artıq əlçatan deyil.",
+  "error.print.queueDirectoryUnavailable": "Çap növbəsinin qovluğu artıq əlçatan deyil.",
+  "error.print.jobNotResumable": "Bu saxlanılmış çap işi davam etdirilə bilməz. Silib yenidən əlavə edin.",
+  "error.print.jobSetChanged": "Saxlanılmış çap işləri dəyişdi. Növbəni yenidən önizləyin.",
+  "error.path.inspectFailed": "Seçilmiş element yoxlanıla bilmədi. Yenidən seçin.",
+  "error.backend.encodeFailed": "DocFlow cavabı hazırlaya bilmədi. Yenidən cəhd edin.",
+  "error.preset.valueInvalid": "Saxlanılmış preset dəyəri etibarsızdır. Preseti yenidən seçin.",
+  "error.scan.destinationChanged": "Önizləmə yenilənərkən skan təyinatı dəyişdi. Yenidən önizləyin.",
+  "error.scan.trashUnavailable": "Bu skanlar üçün bərpa edilə bilən silmə əlçatan deyil."
 }

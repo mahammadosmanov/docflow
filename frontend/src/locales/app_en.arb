@@ -1157,5 +1157,18 @@
   "error.operation.previewFailed": "The preview could not be prepared. Try again.",
   "error.operation.undoFailed": "The undo could not be completed. Check the result before trying again.",
   "error.scan.sourceUnreadable": "The scanned file could not be read.",
-  "error.review.directoryUnreadable": "The review folder could not be read."
+  "error.review.directoryUnreadable": "The review folder could not be read.",
+  "error.review.pathBlocked": "The review location is blocked. Choose another folder.",
+  "error.review.destinationNoParent": "The review destination is not inside a folder.",
+  "error.review.pdfNoParent": "The PDF to review is not inside a folder.",
+  "error.print.fileIdentityUnavailable": "The print file could not be identified. Add it again.",
+  "error.print.fileDirectoryUnavailable": "The folder of the print file is no longer available.",
+  "error.print.queueDirectoryUnavailable": "The print queue folder is no longer available.",
+  "error.print.jobNotResumable": "This saved print job cannot be resumed. Remove it and add it again.",
+  "error.print.jobSetChanged": "The saved print jobs changed. Preview the queue again.",
+  "error.path.inspectFailed": "The selected item could not be checked. Select it again.",
+  "error.backend.encodeFailed": "DocFlow could not prepare the response. Try again.",
+  "error.preset.valueInvalid": "A saved preset value is invalid. Choose the preset again.",
+  "error.scan.destinationChanged": "The scan destination changed while the preview was being revised. Preview again.",
+  "error.scan.trashUnavailable": "Recoverable deletion is not available for these scans."
 }
