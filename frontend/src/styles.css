@@ -2081,7 +2081,6 @@ textarea:focus {
   font-size: 13px;
 }
 .table-search-box input:focus {
-  outline: none;
   border-color: var(--text);
 }
 .table-filter-tabs {
