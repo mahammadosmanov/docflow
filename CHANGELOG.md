@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.30 - 2026-10-27
+
+### Changed
+
+- The backend router's test suite moves from `backend.rs` into `backend/tests.rs`. The router file shrinks by about 250 lines. The tests still run as before.
+
 ## 1.36.29 - 2026-10-27
 
 ### Changed
