@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.60 - 2026-10-27
+
+### Changed
+
+- The support diagnostics state and actions (preview, copy, activity-log save, and download) move from `frontend/src/screens/SettingsScreen.tsx` into the `useSupportDiagnostics` hook in `frontend/src/screens/useSupportDiagnostics.ts`. The screen still owns the shared error line. `useSupportDiagnostics.test.ts` covers the preview, the failed preview, the copy gate before a preview, and the copy with its status. `SettingsScreen.tsx` drops from 453 to 389 lines. Behavior is unchanged.
+
 ## 1.33.59 - 2026-10-27
 
 ### Changed

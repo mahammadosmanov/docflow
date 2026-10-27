@@ -36,13 +36,14 @@ import {
   type AppPrefs,
   type AuthState,
   type ReplicaAutomationStatus,
-  type SupportBundlePreview,
   type ThemePreference,
 } from "../types";
 import {
   humanError,
   usernamePattern,
 } from "../helpers";
+
+import { useSupportDiagnostics } from "./useSupportDiagnostics";
 
 export function SettingsScreen({
   bridge,
@@ -64,11 +65,6 @@ export function SettingsScreen({
   const [username, setUsername] = useState(auth.user?.username ?? "");
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
-  const [diagnostics, setDiagnostics] = useState<SupportBundlePreview | null>(
-    null,
-  );
-  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
-  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [replicaStatus, setReplicaStatus] =
     useState<ReplicaAutomationStatus | null>(null);
   const refreshReplicaStatus = useCallback(async () => {
@@ -104,75 +100,15 @@ export function SettingsScreen({
       setError(humanError(reason, s));
     }
   };
-  const previewDiagnostics = async () => {
-    setError("");
-    setDiagnosticsStatus("");
-    setDiagnosticsBusy(true);
-    try {
-      setDiagnostics(await bridge.call("support/diagnostics"));
-    } catch (reason) {
-      setError(humanError(reason, s));
-    } finally {
-      setDiagnosticsBusy(false);
-    }
-  };
-  const copyDiagnostics = async () => {
-    if (!diagnostics) return;
-    setError("");
-    setDiagnosticsStatus("");
-    setDiagnosticsBusy(true);
-    try {
-      await bridge.call("support/copyDiagnostics", {
-        content: diagnostics.content,
-      });
-      setDiagnosticsStatus(s.t("prefs.support.copied"));
-    } catch (reason) {
-      setError(humanError(reason, s));
-    } finally {
-      setDiagnosticsBusy(false);
-    }
-  };
-  const saveActivityLog = async () => {
-    setError("");
-    setDiagnosticsStatus("");
-    setDiagnosticsBusy(true);
-    try {
-      const log = await bridge.call("support/activityLog");
-      const blob = new Blob([log.content], { type: log.mediaType });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = log.fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      setDiagnosticsStatus(s.t("prefs.support.activityLogSaved"));
-    } catch (reason) {
-      setError(humanError(reason, s));
-    } finally {
-      setDiagnosticsBusy(false);
-    }
-  };
-  const downloadDiagnostics = () => {
-    if (!diagnostics) return;
-    try {
-      const blob = new Blob([diagnostics.content], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = diagnostics.fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      setDiagnosticsStatus(s.t("prefs.support.downloaded"));
-    } catch (reason) {
-      setError(humanError(reason, s));
-    }
-  };
+  const {
+    diagnostics,
+    diagnosticsBusy,
+    diagnosticsStatus,
+    previewDiagnostics,
+    copyDiagnostics,
+    saveActivityLog,
+    downloadDiagnostics,
+  } = useSupportDiagnostics({ bridge, s, setError });
   return (
     <div className="screen">
       <Header
