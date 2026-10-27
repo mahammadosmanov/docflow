@@ -152,6 +152,7 @@ struct ComApartment;
 
 impl ComApartment {
     fn initialize() -> Result<Self, PrintFailure> {
+        // SAFETY: initializes COM on this thread; ComApartment's drop pairs it with CoUninitialize, and a failure returns before the guard exists so nothing is owed.
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
             .ok()
             .map_err(|error| com_failure_at("initialize_sta", &error))?;
@@ -161,6 +162,7 @@ impl ComApartment {
 
 impl Drop for ComApartment {
     fn drop(&mut self) {
+        // SAFETY: the guard exists only after CoInitializeEx succeeded on this thread, so this uninitialize is paired.
         unsafe { CoUninitialize() };
     }
 }
@@ -249,8 +251,10 @@ fn execute_plan(
                 if apartment.is_none() || session.application.is_some() {
                     return Err(contract_failure());
                 }
+                // SAFETY: w! is a static NUL-terminated wide string that lives for the program.
                 let class = unsafe { CLSIDFromProgID(w!("Excel.Application")) }
                     .map_err(|error| unavailable_at("resolve_excel", &error))?;
+                // SAFETY: class is the CLSID just resolved, and the result is checked by map_err before use.
                 let application: IDispatch =
                     unsafe { CoCreateInstance(&class, None, CLSCTX_LOCAL_SERVER) }
                         .map_err(|error| unavailable_at("create_excel", &error))?;
@@ -446,6 +450,7 @@ fn invoke(
     let name_pointer = PCWSTR(wide.as_ptr());
     let iid_null = GUID::from_u128(0);
     let mut dispatch_id = 0;
+    // SAFETY: iid_null is the required null IID, name_pointer points to a NUL-terminated wide name that lives across the call, and dispatch_id is a live out-parameter.
     unsafe { dispatch.GetIDsOfNames(&iid_null, &name_pointer, 1, 0, &mut dispatch_id) }
         .map_err(|error| com_failure_at(&format!("lookup:{name}"), &error))?;
 
@@ -465,6 +470,7 @@ fn invoke(
         cNamedArgs: u32::try_from(named_dispids.len()).map_err(|_| contract_failure())?,
     };
     let mut result = VARIANT::default();
+    // SAFETY: dispatch is a live IDispatch, dispatch_id came from GetIDsOfNames, and the argument arrays live across the call.
     unsafe {
         dispatch.Invoke(
             dispatch_id,
@@ -496,6 +502,7 @@ fn variant_string(value: VARIANT) -> Result<String, PrintFailure> {
     if value.vt() != VT_BSTR {
         return Err(com_failure());
     }
+    // SAFETY: the tag was checked to be VT_BSTR, so bstrVal is the active member; ManuallyDrop<BSTR> and BSTR share a layout, and the borrow does not outlive value.
     let bstr = unsafe {
         &*(&value.Anonymous.Anonymous.Anonymous.bstrVal as *const ManuallyDrop<BSTR> as *const BSTR)
     };
@@ -506,6 +513,7 @@ fn variant_i32(value: VARIANT) -> Result<i32, PrintFailure> {
     if value.vt() != VT_I4 {
         return Err(com_failure());
     }
+    // SAFETY: the tag was checked to be VT_I4, so lVal is the active union member.
     Ok(unsafe { value.Anonymous.Anonymous.Anonymous.lVal })
 }
 

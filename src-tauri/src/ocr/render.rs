@@ -27,6 +27,7 @@ pub(super) fn render_page_png(
         .map_err(|_| "PDF path contains NUL".to_string())?;
     let output = CString::new(output.as_os_str().as_bytes())
         .map_err(|_| "image path contains NUL".to_string())?;
+    // SAFETY: input and output are NUL-terminated C strings that live across the call; the bridge reads them only during the call.
     let status =
         unsafe { docflow_pdf_render_page(input.as_ptr(), output.as_ptr(), dpi, page_index) };
     if status == 0 {

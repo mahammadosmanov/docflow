@@ -76,6 +76,7 @@ impl PlatformDirectory {
                 FileIdBothDirectoryInfo
             };
             restart = false;
+            // SAFETY: the handle is a live directory handle owned by self, and buffer is a writable byte buffer whose length is passed in.
             let ok = unsafe {
                 GetFileInformationByHandleEx(
                     self.0.as_raw_handle() as HANDLE,
@@ -96,6 +97,7 @@ impl PlatformDirectory {
                 if offset + size_of::<FILE_ID_BOTH_DIR_INFO>() > buffer.len() {
                     return Err(io::Error::other("directory enumeration record is invalid"));
                 }
+                // SAFETY: offset plus the record size is checked against buffer.len() just above, so the record lies inside buffer. buffer is a Vec<u8>, so this cast assumes the OS places records on FILE_ID_BOTH_DIR_INFO's alignment; see KNOWN_ISSUES.md.
                 let entry =
                     unsafe { &*buffer.as_ptr().add(offset).cast::<FILE_ID_BOTH_DIR_INFO>() };
                 let name_len = usize::try_from(entry.FileNameLength)
@@ -111,6 +113,7 @@ impl PlatformDirectory {
                         "directory name exceeded the bounded record",
                     ));
                 }
+                // SAFETY: name_len UTF-16 units lie inside buffer, checked above; the same alignment assumption as the record cast applies (KNOWN_ISSUES.md).
                 let name_units =
                     unsafe { std::slice::from_raw_parts(entry.FileName.as_ptr(), name_len) };
                 let name = OsString::from_wide(name_units);
@@ -237,6 +240,7 @@ impl PlatformDirectory {
         use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::{Foundation::HANDLE, Storage::FileSystem::FlushFileBuffers};
 
+        // SAFETY: self.0 is a live directory handle owned by this wrapper.
         if unsafe { FlushFileBuffers(self.0.as_raw_handle() as HANDLE) } == 0 {
             let error = io::Error::last_os_error();
             // Remote shares cannot flush directory handles; the rename itself
@@ -351,6 +355,7 @@ pub(super) fn nt_open_relative(
     };
     let mut handle: HANDLE = std::ptr::null_mut();
     let mut status_block = IO_STATUS_BLOCK::default();
+    // SAFETY: handle, status_block, and attributes are live out-parameters or inputs for the call, and the name in attributes outlives it.
     let status = unsafe {
         NtCreateFile(
             &mut handle,
@@ -375,6 +380,7 @@ pub(super) fn nt_open_relative(
     if handle.is_null() {
         return Err(io::Error::other("NtCreateFile returned an invalid handle"));
     }
+    // SAFETY: the status was successful and handle is non-null, so NtCreateFile transferred a fresh handle that File now owns.
     let file = unsafe { File::from_raw_handle(handle) };
     if matches!(disposition, NtDisposition::Open) {
         use std::os::windows::fs::MetadataExt;
@@ -401,8 +407,10 @@ pub(super) fn duplicate_rename_target_directory(parent: &File) -> io::Result<Fil
         System::Threading::GetCurrentProcess,
     };
 
+    // SAFETY: GetCurrentProcess takes no arguments and returns a pseudo-handle that needs no closing.
     let process = unsafe { GetCurrentProcess() };
     let mut duplicated: HANDLE = std::ptr::null_mut();
+    // SAFETY: process is the current-process pseudo-handle, parent is a live handle, and duplicated is a live out-parameter.
     let ok = unsafe {
         DuplicateHandle(
             process,
@@ -430,6 +438,7 @@ pub(super) fn duplicate_rename_target_directory(parent: &File) -> io::Result<Fil
             "DuplicateHandle returned an invalid rename target",
         ));
     }
+    // SAFETY: DuplicateHandle succeeded and duplicated is non-null, so this File is the only owner of the new handle.
     Ok(unsafe { File::from_raw_handle(duplicated) })
 }
 
@@ -459,6 +468,7 @@ pub(super) fn rename_open_handle(
     let buffer_len = std::mem::size_of::<FILE_RENAME_INFORMATION>() + bytes;
     let mut buffer = vec![0_usize; buffer_len.div_ceil(std::mem::size_of::<usize>())];
     let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
+    // SAFETY: buffer is a Vec<usize>, so the pointer is aligned for FILE_RENAME_INFORMATION, and buffer_len bytes were allocated; the wide name is copied within them.
     unsafe {
         (*info).Anonymous.ReplaceIfExists = replace;
         (*info).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
@@ -466,6 +476,7 @@ pub(super) fn rename_open_handle(
         std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
     }
     let mut status_block = IO_STATUS_BLOCK::default();
+    // SAFETY: source is a live handle, buffer holds buffer_len bytes laid out as FILE_RENAME_INFORMATION, and status_block is a live out-parameter.
     let status = unsafe {
         NtSetInformationFile(
             source.as_raw_handle() as HANDLE,
@@ -496,6 +507,7 @@ pub(super) fn delete_open_handle(file: &File) -> io::Result<()> {
     let disposition = FILE_DISPOSITION_INFO_EX {
         Flags: FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
     };
+    // SAFETY: file is a live handle, and disposition is a live struct of the stated size that is read only during the call.
     if unsafe {
         SetFileInformationByHandle(
             file.as_raw_handle() as HANDLE,
@@ -513,6 +525,7 @@ pub(super) fn delete_open_handle(file: &File) -> io::Result<()> {
 
 #[cfg(windows)]
 pub(super) fn ntstatus_error(status: windows_sys::Win32::Foundation::NTSTATUS) -> io::Error {
+    // SAFETY: RtlNtStatusToDosError takes an NTSTATUS value and has no pointer arguments.
     let code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(status) };
     io::Error::from_raw_os_error(code as i32)
 }
@@ -575,12 +588,14 @@ pub(super) fn windows_file_identity(file: &File) -> io::Result<(u32, u64)> {
     };
 
     let mut information = MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
+    // SAFETY: the handle is live, and information points to writable MaybeUninit storage for the result.
     if unsafe {
         GetFileInformationByHandle(file.as_raw_handle() as HANDLE, information.as_mut_ptr())
     } == 0
     {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: GetFileInformationByHandle succeeded above, so the struct is fully initialized.
     let information = unsafe { information.assume_init() };
     Ok((
         information.dwVolumeSerialNumber,

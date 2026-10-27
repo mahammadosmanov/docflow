@@ -13,6 +13,7 @@ pub(crate) fn set_start_with_windows(enabled: bool) -> io::Result<()> {
     let subkey = wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
     let value_name = wide("DocFlow");
     let mut key: HKEY = std::ptr::null_mut();
+    // SAFETY: subkey is a NUL-terminated UTF-16 string that lives across the call, and key is a live out-parameter whose status is checked below.
     let status = unsafe {
         RegCreateKeyExW(
             HKEY_CURRENT_USER,
@@ -42,6 +43,7 @@ pub(crate) fn set_start_with_windows(enabled: bool) -> io::Result<()> {
             let bytes = command.len().checked_mul(2).ok_or_else(|| {
                 io::Error::new(io::ErrorKind::InvalidInput, "startup command is too long")
             })?;
+            // SAFETY: key is the open key from RegCreateKeyExW, value_name is NUL-terminated, and command holds bytes of UTF-16 data that lives across the call.
             let status = unsafe {
                 RegSetValueExW(
                     key,
@@ -61,6 +63,7 @@ pub(crate) fn set_start_with_windows(enabled: bool) -> io::Result<()> {
             }
         }
     } else {
+        // SAFETY: key is the open key from RegCreateKeyExW, and value_name is NUL-terminated.
         let status = unsafe { RegDeleteValueW(key, value_name.as_ptr()) };
         if status == 0 || status == ERROR_FILE_NOT_FOUND {
             Ok(())
@@ -68,6 +71,7 @@ pub(crate) fn set_start_with_windows(enabled: bool) -> io::Result<()> {
             Err(io::Error::from_raw_os_error(status as i32))
         }
     };
+    // SAFETY: key was opened by RegCreateKeyExW above and is closed exactly once, here.
     unsafe {
         RegCloseKey(key);
     }

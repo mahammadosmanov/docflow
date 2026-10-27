@@ -25,6 +25,7 @@ pub(super) fn atomic_replace(temporary: &Path, target: &Path) -> Result<(), Back
         .collect::<Vec<_>>();
     retry_windows_atomic_replace(
         || {
+            // SAFETY: temporary and target are NUL-terminated UTF-16 paths that live across the call.
             let result = unsafe {
                 MoveFileExW(
                     temporary.as_ptr(),

@@ -28,6 +28,7 @@ struct RuntimeGuard(bool);
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
         if self.0 {
+            // SAFETY: input and output are NUL-terminated C strings that live across the call; the bridge reads them only during the call.
             unsafe { RoUninitialize() };
         }
     }
@@ -46,8 +47,10 @@ impl InMemoryPdf {
             return Err("Windows PDF byte source is empty or oversized".to_string());
         }
         let runtime = initialize_runtime()?;
+        // SAFETY: bytes is a live slice whose length was checked to fit u32 above; SHCreateMemStream copies the bytes, so the slice only needs to live for the call.
         let memory_stream = unsafe { SHCreateMemStream(Some(bytes)) }
             .ok_or_else(|| "Windows could not create the PDF memory stream".to_string())?;
+        // SAFETY: memory_stream is a live IStream owned by this scope, and the returned interface keeps the stream alive.
         let random_access_stream: IRandomAccessStream =
             unsafe { CreateRandomAccessStreamOverStream(&memory_stream, BSOS_DEFAULT) }.map_err(
                 |error| format!("Windows could not adapt the PDF memory stream: {error}"),
@@ -282,6 +285,7 @@ fn render_document_page_png_bytes(
 fn load_document(input: &Path) -> Result<(PdfDocument, IRandomAccessStream), String> {
     const STGM_READ: u32 = 0;
     let input = HSTRING::from_wide(&input.as_os_str().encode_wide().collect::<Vec<_>>());
+    // SAFETY: input is a live HSTRING for the call, and STGM_READ requests read-only access; failures are mapped by map_err.
     let stream: IRandomAccessStream = unsafe { CreateRandomAccessStreamOnFile(&input, STGM_READ) }
         .map_err(|error| format!("Windows could not open the PDF stream: {error}"))?;
     let document = PdfDocument::LoadFromStreamAsync(&stream)
@@ -291,6 +295,7 @@ fn load_document(input: &Path) -> Result<(PdfDocument, IRandomAccessStream), Str
 }
 
 fn initialize_runtime() -> Result<RuntimeGuard, String> {
+    // SAFETY: RoInitialize runs on this thread with the multithreaded flag; RPC_E_CHANGED_MODE means the thread is already initialized in another mode, handled below.
     let initialized = match unsafe { RoInitialize(RO_INIT_MULTITHREADED) } {
         Ok(()) => true,
         Err(error) if error.code() == RPC_E_CHANGED_MODE => false,
