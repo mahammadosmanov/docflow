@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.43 - 2026-10-27
+
+### Changed
+
+- Every unsafe call in the file-security layer (`cap_fs.rs`: owner and mode changes, Windows attribute calls, and extended-attribute capture and replay) now has a SAFETY note. No behavior change.
+
 ## 1.36.42 - 2026-10-27
 
 ### Changed

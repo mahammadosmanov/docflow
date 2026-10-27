@@ -595,7 +595,9 @@ impl CreationSecurityDescriptor {
         #[cfg(unix)]
         let access = PlatformFileAccess::Unix {
             mode,
+            // SAFETY: geteuid takes no arguments and cannot fail.
             uid: unsafe { libc::geteuid() },
+            // SAFETY: getegid takes no arguments and cannot fail.
             gid: unsafe { libc::getegid() },
             links: 1,
         };
@@ -676,12 +678,14 @@ fn apply_creation_security(file: &File, security: &CreationSecurityDescriptor) -
         let descriptor = file.as_raw_fd();
         let metadata = file.metadata()?;
         if (metadata.uid() != uid || metadata.gid() != gid)
+            // SAFETY: descriptor is the live fd of file, which is borrowed for this call.
             && unsafe { libc::fchown(descriptor, uid, gid) } != 0
         {
             return Err(io::Error::last_os_error());
         }
         let permission_mode = libc::mode_t::try_from(mode & 0o7777)
             .map_err(|_| io::Error::other("secured file mode is invalid"))?;
+        // SAFETY: descriptor is the live fd of file, which is borrowed for this call.
         if unsafe { libc::fchmod(descriptor, permission_mode) } != 0 {
             return Err(io::Error::last_os_error());
         }
@@ -698,7 +702,9 @@ fn apply_creation_security(file: &File, security: &CreationSecurityDescriptor) -
             SetFileInformationByHandle,
         };
 
+        // SAFETY: FILE_BASIC_INFO is a plain C struct for which all-zero bytes are a valid value.
         let mut basic: FILE_BASIC_INFO = unsafe { std::mem::zeroed() };
+        // SAFETY: the handle is borrowed from file and the buffer is a live FILE_BASIC_INFO of the stated size.
         if unsafe {
             GetFileInformationByHandleEx(
                 file.as_raw_handle(),
@@ -711,6 +717,7 @@ fn apply_creation_security(file: &File, security: &CreationSecurityDescriptor) -
             return Err(io::Error::last_os_error());
         }
         basic.FileAttributes = attributes;
+        // SAFETY: as for GetFileInformationByHandleEx; the buffer is only read during the call.
         if unsafe {
             SetFileInformationByHandle(
                 file.as_raw_handle(),
@@ -739,8 +746,10 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
 
     let descriptor = file.as_raw_fd();
     #[cfg(target_os = "macos")]
+    // SAFETY: descriptor is the live fd of file; a null list with size 0 only queries the required length.
     let list_size = unsafe { libc::flistxattr(descriptor, std::ptr::null_mut(), 0, 0) };
     #[cfg(not(target_os = "macos"))]
+    // SAFETY: descriptor is the live fd of file; a null list with size 0 only queries the required length.
     let list_size = unsafe { libc::flistxattr(descriptor, std::ptr::null_mut(), 0) };
     if list_size < 0 {
         return Err(io::Error::last_os_error());
@@ -753,9 +762,11 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
     let mut names = vec![0_u8; list_size as usize];
     if list_size > 0 {
         #[cfg(target_os = "macos")]
+        // SAFETY: names holds names.len() bytes, the length reported by the size query above.
         let read =
             unsafe { libc::flistxattr(descriptor, names.as_mut_ptr().cast(), names.len(), 0) };
         #[cfg(not(target_os = "macos"))]
+        // SAFETY: names holds names.len() bytes, the length reported by the size query above.
         let read = unsafe { libc::flistxattr(descriptor, names.as_mut_ptr().cast(), names.len()) };
         if read != list_size {
             return Err(io::Error::other(
@@ -782,9 +793,11 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
         let c_name = std::ffi::CString::new(name.clone())
             .map_err(|_| io::Error::other("file auxiliary metadata name is invalid"))?;
         #[cfg(target_os = "macos")]
+        // SAFETY: descriptor is live and c_name is NUL-terminated; a null buffer with size 0 only queries the value length.
         let value_size =
             unsafe { libc::fgetxattr(descriptor, c_name.as_ptr(), std::ptr::null_mut(), 0, 0, 0) };
         #[cfg(not(target_os = "macos"))]
+        // SAFETY: descriptor is live and c_name is NUL-terminated; a null buffer with size 0 only queries the value length.
         let value_size =
             unsafe { libc::fgetxattr(descriptor, c_name.as_ptr(), std::ptr::null_mut(), 0) };
         if value_size < 0 {
@@ -799,6 +812,7 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
         let mut value = vec![0_u8; value_size as usize];
         if value_size > 0 {
             #[cfg(target_os = "macos")]
+            // SAFETY: value holds value.len() bytes, the length from the size query, and c_name is NUL-terminated.
             let read = unsafe {
                 libc::fgetxattr(
                     descriptor,
@@ -810,6 +824,7 @@ fn capture_unix_xattrs(file: &File) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
                 )
             };
             #[cfg(not(target_os = "macos"))]
+            // SAFETY: value holds value.len() bytes, the length from the size query, and c_name is NUL-terminated.
             let read = unsafe {
                 libc::fgetxattr(
                     descriptor,
@@ -842,6 +857,7 @@ fn replay_unix_xattrs(file: &File, records: &[(Vec<u8>, Vec<u8>)]) -> io::Result
         let c_name = std::ffi::CString::new(name.clone())
             .map_err(|_| io::Error::other("file auxiliary metadata name is invalid"))?;
         #[cfg(target_os = "macos")]
+        // SAFETY: the descriptor is live, c_name is NUL-terminated, and value is a live slice of value.len() bytes.
         let result = unsafe {
             libc::fsetxattr(
                 file.as_raw_fd(),
@@ -853,6 +869,7 @@ fn replay_unix_xattrs(file: &File, records: &[(Vec<u8>, Vec<u8>)]) -> io::Result
             )
         };
         #[cfg(not(target_os = "macos"))]
+        // SAFETY: the descriptor is live, c_name is NUL-terminated, and value is a live slice of value.len() bytes.
         let result = unsafe {
             libc::fsetxattr(
                 file.as_raw_fd(),
