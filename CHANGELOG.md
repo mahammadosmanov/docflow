@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.34.1 - 2026-10-27
+
+### Changed
+
+- Operation keyboard shortcuts moved from `OperationScreen` into `useOperationShortcuts`, with tests for each shortcut and its stage rules. No application behavior changes.
+
 ## 1.34.0 - 2026-10-27
 
 ### Added

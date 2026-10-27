@@ -66,6 +66,7 @@ import { useRunCancel } from "./useRunCancel";
 import { useCopyTable } from "./useCopyTable";
 import { useResultActions } from "./useResultActions";
 import { useApplyRun } from "./useApplyRun";
+import { useOperationShortcuts } from "./useOperationShortcuts";
 import { usePreviewRun } from "./usePreviewRun";
 
 export function OperationScreen({
@@ -262,32 +263,15 @@ export function OperationScreen({
     onPrepareRfiReply,
   });
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        if (stage === "form") {
-          event.preventDefault();
-          void preview();
-        } else if (stage === "preview" && !cancelling) {
-          event.preventDefault();
-          void apply();
-        }
-      } else if (event.key === "Escape") {
-        if (stage === "previewing") {
-          event.preventDefault();
-          void cancelPreview();
-        } else if (stage === "preview" || stage === "result") {
-          event.preventDefault();
-          setStage("form");
-        } else if (stage === "form") {
-          event.preventDefault();
-          onBack();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [stage, cancelling, preview, apply, cancelPreview, onBack]);
+  useOperationShortcuts({
+    stage,
+    cancelling,
+    preview,
+    apply,
+    cancelPreview,
+    setStage,
+    onBack,
+  });
 
   const currentStep =
     stage === "form"
