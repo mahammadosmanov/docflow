@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.72",
+  "currentVersion": "1.33.73",
   "releases": [
+    {
+      "version": "1.33.73",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.73",
+      "summary": "Adds tests for the batch-print RFI finder: input guards, search results, stale-result handling, and candidate selection. No behavior change."
+    },
     {
       "version": "1.33.72",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.72",
       "summary": "Adds tests for locale loading, system locale detection, and string lookup. No behavior change."
     },
