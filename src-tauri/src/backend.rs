@@ -996,3 +996,19 @@ mod empty_params_tests {
         assert!(validate_empty_params(&serde_json::json!([])).is_err());
     }
 }
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::*;
+
+    #[test]
+    fn timestamp_is_unix_seconds_with_a_fixed_prefix() {
+        let stamp = chrono_free_timestamp();
+        let seconds = stamp
+            .strip_prefix("unix:")
+            .expect("timestamp keeps the unix: prefix")
+            .parse::<u64>()
+            .expect("timestamp suffix is whole seconds");
+        assert!(seconds > 1_700_000_000);
+    }
+}
