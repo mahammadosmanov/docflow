@@ -634,6 +634,23 @@ fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
     }
 }
 
+fn insert_print_settings(row: &mut Map<String, Value>, settings: &NormalizedSettings) {
+    row.insert("printer".to_string(), json!(settings.printer));
+    row.insert("paper".to_string(), json!(settings.paper));
+    row.insert("orientation".to_string(), json!(settings.orientation));
+    row.insert("scaling".to_string(), json!(settings.scaling));
+    row.insert("color".to_string(), json!(settings.color));
+    row.insert("duplex".to_string(), json!(settings.duplex));
+    row.insert("pageRange".to_string(), json!("all"));
+    row.insert("copies".to_string(), json!(settings.copies));
+    row.insert("retries".to_string(), json!(settings.retries));
+    row.insert("onError".to_string(), json!(settings.on_error));
+    row.insert(
+        "timeoutMinutes".to_string(),
+        json!(settings.timeout_minutes),
+    );
+}
+
 fn row_from_file(
     path: &Path,
     index: usize,
@@ -649,20 +666,7 @@ fn row_from_file(
     row.insert("file".to_string(), json!(display_name(path)));
     row.insert("path".to_string(), json!(path));
     row.insert("format".to_string(), json!(file_format(path)));
-    row.insert("printer".to_string(), json!(settings.printer));
-    row.insert("paper".to_string(), json!(settings.paper));
-    row.insert("orientation".to_string(), json!(settings.orientation));
-    row.insert("scaling".to_string(), json!(settings.scaling));
-    row.insert("color".to_string(), json!(settings.color));
-    row.insert("duplex".to_string(), json!(settings.duplex));
-    row.insert("pageRange".to_string(), json!("all"));
-    row.insert("copies".to_string(), json!(settings.copies));
-    row.insert("retries".to_string(), json!(settings.retries));
-    row.insert("onError".to_string(), json!(settings.on_error));
-    row.insert(
-        "timeoutMinutes".to_string(),
-        json!(settings.timeout_minutes),
-    );
+    insert_print_settings(&mut row, settings);
     row.insert("verb".to_string(), json!(support.verb));
     row.insert(
         "signature".to_string(),
@@ -722,20 +726,7 @@ fn row_from_worksheet(
     row.insert("worksheet".to_string(), json!(worksheet));
     row.insert("signature".to_string(), json!(signature));
     row.insert("workbookSafety".to_string(), json!(safety));
-    row.insert("printer".to_string(), json!(settings.printer));
-    row.insert("paper".to_string(), json!(settings.paper));
-    row.insert("orientation".to_string(), json!(settings.orientation));
-    row.insert("scaling".to_string(), json!(settings.scaling));
-    row.insert("color".to_string(), json!(settings.color));
-    row.insert("duplex".to_string(), json!(settings.duplex));
-    row.insert("pageRange".to_string(), json!("all"));
-    row.insert("copies".to_string(), json!(settings.copies));
-    row.insert("retries".to_string(), json!(settings.retries));
-    row.insert("onError".to_string(), json!(settings.on_error));
-    row.insert(
-        "timeoutMinutes".to_string(),
-        json!(settings.timeout_minutes),
-    );
+    insert_print_settings(&mut row, settings);
     row.insert("verb".to_string(), json!("docflow"));
     row
 }
