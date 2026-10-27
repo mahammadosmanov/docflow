@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.83 - 2026-10-27
+
+### Changed
+
+- Removed 79 translation keys from all four catalogs that no literal or template in the frontend or backend builds. Most are leftovers of the replica publish feature retired in 1.13.0 (`param.replica.*`, `choice.replica.*`), plus unused print, RFI, and home labels. Keys built from prefixes such as `op.`, `effect.`, `progress.phase.`, and `print.status.` were kept.
+
 ## 1.33.82 - 2026-10-27
 
 ### Fixed
