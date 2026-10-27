@@ -195,7 +195,7 @@ impl NativeBackend {
         let target_covered = (system_needs_write && target_path.starts_with(&system_root))
             || (!source_covered && target_path.starts_with(&source_root));
         if !target_covered {
-            grant_requests.push((target_root.clone(), GrantAccess::ReadWrite));
+            grant_requests.push((target_root, GrantAccess::ReadWrite));
         }
 
         let provisional = self

@@ -258,9 +258,9 @@ impl NativeBackend {
         let mut selections = Vec::<(DocumentType, Vec<String>, PathBuf)>::new();
         for (document_type, numbers, parameter) in [
             (DocumentType::Civ010, rfis_010.clone(), "template_010"),
-            (DocumentType::Civ011, rfis_011.clone(), "template_011"),
-            (DocumentType::Civ013, rfis_013.clone(), "template_013"),
-            (DocumentType::Civ014, rfis_014.clone(), "template_014"),
+            (DocumentType::Civ011, rfis_011, "template_011"),
+            (DocumentType::Civ013, rfis_013, "template_013"),
+            (DocumentType::Civ014, rfis_014, "template_014"),
         ] {
             if numbers.is_empty() {
                 continue;

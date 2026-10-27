@@ -719,7 +719,7 @@ impl FilesystemAuthority {
             S5Transition::SetPendingRetainedArtifact(PendingRetainedArtifact {
                 role: RetainedArtifactRole::DisplacedApplied,
                 path: retained_path.to_string_lossy().into_owned(),
-                locator: retained_locator.clone(),
+                locator: retained_locator,
                 creation_state: PendingArtifactCreationState::Intent,
             }),
         )?;

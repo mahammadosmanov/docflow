@@ -259,7 +259,7 @@ pub(super) fn copy_data(
         ));
     }
     let source_value = select_copy_source(editor, selected_sheet)?;
-    let source: CopySource = serde_json::from_value(source_value.clone())
+    let source: CopySource = serde_json::from_value(source_value)
         .map_err(|_| BackendError::validation("mail tablosu kaynagi gecersiz"))?;
     if source.fields.len() != source.headers.len() || source.fields.len() != source.columns.len() {
         return Err(BackendError::validation("mail tablosu kolonlari gecersiz"));
