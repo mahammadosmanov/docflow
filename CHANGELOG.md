@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.3 - 2026-10-27
+
+### Fixed
+
+- On phone width, three controls were below the 24 by 24 px minimum target size: the operation search box (20 px tall), the on-off switches (23 px), and the font-size slider (16 px). They are now at least 24 px tall. Checkboxes are not changed; their label is the larger clickable target.
+
 ## 1.35.2 - 2026-10-27
 
 ### Fixed

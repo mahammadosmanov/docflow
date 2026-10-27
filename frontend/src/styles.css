@@ -513,6 +513,7 @@ h2 {
 }
 .operation-search-input {
   flex: 1;
+  min-height: 36px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -1287,7 +1288,7 @@ textarea:focus {
 }
 .switch {
   width: 40px;
-  height: 23px;
+  height: 24px;
   flex: 0 0 auto;
   padding: 2px;
   border: 1px solid var(--line-strong);
@@ -2981,6 +2982,9 @@ textarea:focus {
 }
 .choice-grid svg {
   width: 0.85rem;
+}
+.range-row input[type="range"] {
+  min-height: 24px;
 }
 .range-row {
   display: grid;
