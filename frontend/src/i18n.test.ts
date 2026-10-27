@@ -25,6 +25,15 @@ describe("systemLocale", () => {
   });
 });
 
+describe("loadLocale", () => {
+  it("sets the document language so screen readers pronounce the text", async () => {
+    await loadLocale("ru");
+    expect(document.documentElement.lang).toBe("ru");
+    await loadLocale("tr");
+    expect(document.documentElement.lang).toBe("tr");
+  });
+});
+
 describe("makeStrings", () => {
   it("returns the key itself when the catalog has no entry", async () => {
     await loadLocale("en");
