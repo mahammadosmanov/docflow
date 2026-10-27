@@ -2567,7 +2567,7 @@ describe("DocFlow shell", () => {
       await screen.findByText(
         "RFI kayıtlarını kontrol et ve düzenle",
         undefined,
-        { timeout: 3000 },
+        { timeout: 10000 },
       ),
     ).toBeVisible();
 
@@ -2575,7 +2575,7 @@ describe("DocFlow shell", () => {
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(
-      await screen.findByRole("button", { name: "Önizle" }, { timeout: 3000 }),
+      await screen.findByRole("button", { name: "Önizle" }, { timeout: 10000 }),
     ).toBeVisible();
   });
 

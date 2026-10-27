@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.17 - 2026-10-27
+
+### Fixed
+
+- The Ctrl+Enter/Escape shortcut test failed intermittently in the full quality gate (it timed out waiting for the preview), blocking releases. It now waits up to 10 seconds. No app behavior changed. The root cause of the slow preview under load is not confirmed.
+
 ## 1.35.16 - 2026-10-27
 
 ### Fixed
