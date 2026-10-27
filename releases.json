@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.24",
+  "currentVersion": "1.36.25",
   "releases": [
+    {
+      "version": "1.36.25",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.25",
+      "summary": "Docs accuracy: the known-issues note about the Outlook archive described a preview function that was already removed. It now describes the remaining scaffolding."
+    },
     {
       "version": "1.36.24",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.24",
       "summary": "Internal cleanup: three identical file-name helpers (display_name) become one shared function in naming.rs. No behavior change."
     },

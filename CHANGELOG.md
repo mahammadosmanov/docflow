@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.25 - 2026-10-27
+
+### Fixed
+
+- The known-issues note about the Outlook selected-message archive named a preview function that 1.36.8 had already removed. The note now names the code that remains: the unused preparation and binding scaffolding in `outlook_reply_draft.rs`.
+
 ## 1.36.24 - 2026-10-27
 
 ### Changed
