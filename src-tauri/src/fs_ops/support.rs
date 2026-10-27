@@ -637,3 +637,44 @@ pub(super) fn sync_directory(path: &Path) -> io::Result<()> {
 pub(super) fn sync_directory(_path: &Path) -> io::Result<()> {
     Ok(())
 }
+
+#[cfg(test)]
+mod follow_up_failure_tests {
+    use super::*;
+
+    #[test]
+    fn no_effect_and_partial_keep_the_key_with_an_empty_subject() {
+        match follow_up_no_effect("error.key") {
+            FollowUpApplyFailure::NoEffect(warning) => {
+                assert_eq!(warning.key, "error.key");
+                assert_eq!(warning.subject, "");
+            }
+            _ => panic!("expected NoEffect"),
+        }
+        assert!(matches!(
+            follow_up_partial("error.key"),
+            FollowUpApplyFailure::Partial(warning) if warning.key == "error.key"
+        ));
+    }
+
+    #[test]
+    fn backend_errors_use_their_message_as_the_key() {
+        let error = BackendError::path_invalid("bad path");
+        assert!(matches!(
+            follow_up_backend_no_effect(error),
+            FollowUpApplyFailure::NoEffect(warning) if warning.key == "bad path"
+        ));
+        let error = BackendError::path_invalid("bad path");
+        assert!(matches!(
+            follow_up_backend_partial(error),
+            FollowUpApplyFailure::Partial(warning) if warning.key == "bad path"
+        ));
+    }
+
+    #[test]
+    fn warning_subject_is_kept_as_given() {
+        let warning = follow_up_warning("error.key", "subject-1");
+        assert_eq!(warning.key, "error.key");
+        assert_eq!(warning.subject, "subject-1");
+    }
+}

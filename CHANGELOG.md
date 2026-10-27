@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.76 - 2026-10-27
+
+### Changed
+
+- Added unit tests for the follow-up failure helpers in `fs_ops/support.rs`: warning keys, empty subjects, and backend error messages used as keys. No application behavior changes.
+
 ## 1.33.75 - 2026-10-27
 
 ### Changed
