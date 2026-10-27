@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.81 - 2026-10-27
+
+### Changed
+
+- Moved the `stage_signed_pages`, `normalize_pdf_orientation`, and `fast_cover_scans` operation definitions out of `operation_registry` in `registry.rs` (347 lines before) into `registry/signed_scans.rs`. Each is now a builder function. The 8 registry tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.80 - 2026-10-27
 
 ### Changed

@@ -9,10 +9,12 @@ mod concrete_documents;
 mod print_batch;
 mod rfi_log;
 mod rfi_sync;
+mod signed_scans;
 use concrete_documents::concrete_documents_operation;
 use print_batch::batch_print_operation;
 use rfi_log::rfi_log_operation;
 use rfi_sync::*;
+use signed_scans::*;
 
 const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
@@ -156,165 +158,11 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
 
     let batch_print = batch_print_operation(facts);
 
-    let stage_signed_pages = operation(
-        "rfi.stage_signed_first_pages",
-        vec![
-            parameter(
-                "signed_scans",
-                ParamKind::Folder,
-                "param.rfi.signedScans",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.signedScans.help"),
-            ),
-            parameter(
-                "archive_root",
-                ParamKind::Folder,
-                "param.rfi.archiveRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.archiveRoot.help"),
-            ),
-            parameter(
-                "review_root",
-                ParamKind::Folder,
-                "param.rfi.reviewRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.reviewRoot.help"),
-            ),
-            parameter(
-                "scan_subfolders",
-                ParamKind::Bool,
-                "param.rfi.scanSubfolders",
-                json!(true),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.scanSubfolders.help"),
-            ),
-        ],
-    );
+    let stage_signed_pages = stage_signed_pages_operation();
 
-    let normalize_pdf_orientation = operation(
-        "rfi.normalize_pdf_orientation",
-        vec![
-            parameter(
-                "rfi_system_root",
-                ParamKind::Folder,
-                "param.rfi.orientation.rfiSystemRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.orientation.rfiSystemRoot.help"),
-            ),
-            parameter(
-                "review_root",
-                ParamKind::Folder,
-                "param.rfi.orientation.reviewRoot",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.orientation.reviewRoot.help"),
-            ),
-            transient_parameter(
-                "force_rescan",
-                ParamKind::Bool,
-                "param.scanIndex.forceRescan",
-                json!(false),
-                Some("param.scanIndex.forceRescan.help"),
-            ),
-        ],
-    );
+    let normalize_pdf_orientation = normalize_pdf_orientation_operation();
 
-    let fast_cover_scans = operation(
-        FAST_COVER_OPERATION_ID,
-        vec![
-            parameter(
-                "source",
-                ParamKind::Folder,
-                "param.source",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.source.help"),
-            ),
-            parameter(
-                "dest",
-                ParamKind::Folder,
-                "param.dest",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.dest.help"),
-            ),
-            parameter(
-                "scan_mode",
-                ParamKind::Choice,
-                "param.rfi.processScans.scanMode",
-                json!("multi_rfi"),
-                true,
-                strings(&["multi_rfi", "single_rfi"]),
-                labels(&[
-                    ("multi_rfi", "choice.rfi.processScans.scanMode.multiRfi"),
-                    ("single_rfi", "choice.rfi.processScans.scanMode.singleRfi"),
-                ]),
-                Map::new(),
-                Some("param.rfi.processScans.scanMode.help"),
-            ),
-            parameter(
-                "organize_into_rfi_folders",
-                ParamKind::Bool,
-                "param.organize_into_rfi_folders",
-                json!(true),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.organize_into_rfi_folders.help"),
-            ),
-            parameter(
-                "keep_original",
-                ParamKind::Bool,
-                "param.keep_original",
-                json!(false),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                None,
-            ),
-            parameter(
-                "correct_orientation",
-                ParamKind::Bool,
-                "param.rfi.processScans.correctOrientation",
-                json!(false),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::from_iter([("scan_mode".to_string(), json!("multi_rfi"))]),
-                Some("param.rfi.processScans.correctOrientation.help"),
-            ),
-        ],
-    );
+    let fast_cover_scans = fast_cover_scans_operation();
 
     vec![
         file_group,

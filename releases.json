@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.80",
+  "currentVersion": "1.36.81",
   "releases": [
+    {
+      "version": "1.36.81",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.81",
+      "summary": "Modularity: the stage-signed-pages, normalize-PDF-orientation and fast-cover-scan operation definitions moved out of the operation_registry function into registry/signed_scans.rs. No behavior change; registry tests and clippy pass."
+    },
     {
       "version": "1.36.80",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.80",
       "summary": "Modularity: the four RFI follow-up, system-sync, complete-status-sync and publish-status operation definitions moved out of the operation_registry function into registry/rfi_sync.rs. No behavior change; registry tests and clippy pass."
     },
