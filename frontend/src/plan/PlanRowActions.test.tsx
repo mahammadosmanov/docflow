@@ -50,13 +50,15 @@ describe("PlanRowActions", () => {
 
   it("duplicates the row by its index", () => {
     const props = renderActions();
-    fireEvent.click(screen.getByTitle(s.t("rfi.action.duplicate")));
+    fireEvent.click(screen.getByRole("button", { name: s.t("rfi.action.duplicate") }));
     expect(props.onDuplicate).toHaveBeenCalledWith(1);
   });
 
   it("refuses to remove the only row of a group", () => {
     const props = renderActions({ groupCount: 1 });
-    const remove = screen.getByTitle(s.t("rfi.action.removeDuplicate")) as HTMLButtonElement;
+    const remove = screen.getByRole("button", {
+      name: s.t("rfi.action.removeDuplicate"),
+    }) as HTMLButtonElement;
     expect(remove.disabled).toBe(true);
     fireEvent.click(remove);
     expect(props.onRemove).not.toHaveBeenCalled();

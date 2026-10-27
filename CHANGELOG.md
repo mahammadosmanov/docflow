@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.53 - 2026-10-27
+
+### Fixed
+
+- The duplicate and remove-duplicate row buttons in the RFI editor (`plan/PlanRowActions.tsx`) now carry an explicit `aria-label`, like the move buttons beside them. Their names no longer depend on the `title` fallback. The tests query them by role and name.
+
 ## 1.36.52 - 2026-10-27
 
 ### Changed
