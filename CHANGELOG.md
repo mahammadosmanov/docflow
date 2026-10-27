@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.2 - 2026-10-27
+
+### Changed
+
+- The Outlook reply preview on the plan screen is one component instead of two identical copies. No behavior change.
+
 ## 1.36.1 - 2026-10-27
 
 ### Changed

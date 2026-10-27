@@ -40,6 +40,37 @@ import {
   outlookReplyPreview,
 } from "../screens/ResultView";
 
+function OutlookReplyPreview({
+  preview,
+  s,
+}: {
+  preview: NonNullable<ReturnType<typeof outlookReplyPreview>>;
+  s: Strings;
+}) {
+  return (
+    <section
+      className="outlook-reply-preview"
+      aria-labelledby="outlook-reply-preview-title"
+    >
+      <h3 id="outlook-reply-preview-title">
+        {s.t("outlookDraft.previewTitle")}
+      </h3>
+      <div>
+        <strong>{s.t("outlookDraft.subject")}</strong>
+        <pre>{preview.subject}</pre>
+      </div>
+      <div>
+        <strong>{s.t("outlookDraft.plainText")}</strong>
+        <pre>{preview.plainText}</pre>
+      </div>
+      <div>
+        <strong>{s.t("outlookDraft.html")}</strong>
+        <pre>{preview.html}</pre>
+      </div>
+    </section>
+  );
+}
+
 export function PlanView({
   plan,
   s,
@@ -112,28 +143,7 @@ export function PlanView({
               <PlanWarnings warnings={plan.warnings} focusableCodes={[]} s={s} />
             )}
             <WorkbookChangePreview plan={plan} s={s} />
-            {replyPreview && (
-              <section
-                className="outlook-reply-preview"
-                aria-labelledby="outlook-reply-preview-title"
-              >
-                <h3 id="outlook-reply-preview-title">
-                  {s.t("outlookDraft.previewTitle")}
-                </h3>
-                <div>
-                  <strong>{s.t("outlookDraft.subject")}</strong>
-                  <pre>{replyPreview.subject}</pre>
-                </div>
-                <div>
-                  <strong>{s.t("outlookDraft.plainText")}</strong>
-                  <pre>{replyPreview.plainText}</pre>
-                </div>
-                <div>
-                  <strong>{s.t("outlookDraft.html")}</strong>
-                  <pre>{replyPreview.html}</pre>
-                </div>
-              </section>
-            )}
+            {replyPreview && <OutlookReplyPreview preview={replyPreview} s={s} />}
             {signedStage ? (
               <>
                 <div id="signed-approved-records">
@@ -180,28 +190,7 @@ export function PlanView({
               />
             )}
             <WorkbookChangePreview plan={plan} s={s} />
-            {replyPreview && (
-              <section
-                className="outlook-reply-preview"
-                aria-labelledby="outlook-reply-preview-title"
-              >
-                <h3 id="outlook-reply-preview-title">
-                  {s.t("outlookDraft.previewTitle")}
-                </h3>
-                <div>
-                  <strong>{s.t("outlookDraft.subject")}</strong>
-                  <pre>{replyPreview.subject}</pre>
-                </div>
-                <div>
-                  <strong>{s.t("outlookDraft.plainText")}</strong>
-                  <pre>{replyPreview.plainText}</pre>
-                </div>
-                <div>
-                  <strong>{s.t("outlookDraft.html")}</strong>
-                  <pre>{replyPreview.html}</pre>
-                </div>
-              </section>
-            )}
+            {replyPreview && <OutlookReplyPreview preview={replyPreview} s={s} />}
             <section className="plan-section">
               <div className="plan-heading">
                 <strong>{s.t("plan.summary", { count: moves })}</strong>
