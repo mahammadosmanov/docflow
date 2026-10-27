@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.78 - 2026-10-27
+
+### Fixed
+
+- The plan table's row-actions column label showed the raw key `editor.rowActions` to screen readers. It now has translations in Turkish, English, Russian, and Azerbaijani.
+
+### Changed
+
+- Added a catalog test that fails when a literal `s.t()` key used in the frontend is missing from the English catalog.
+
 ## 1.33.77 - 2026-10-27
 
 ### Changed

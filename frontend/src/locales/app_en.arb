@@ -510,6 +510,7 @@
   "editor.selectAll": "Select all",
   "editor.selectNone": "Clear selection",
   "editor.selectRow": "Select row {row}",
+  "editor.rowActions": "Row actions",
   "editor.selectGroup": "Select this group",
   "editor.bulk.field": "Field to change",
   "editor.bulk.value": "New value",
