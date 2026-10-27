@@ -7,7 +7,7 @@ use crate::{
     contracts::{AppUser, AuthSessionView, AuthState},
     credentials::{CredentialStore, StoredSession},
     errors::BackendError,
-    http::{HttpError, HttpResponse, JsonHttp},
+    http::{HttpResponse, JsonHttp},
     settings::SettingsStore,
 };
 
@@ -396,7 +396,7 @@ impl AuthService {
                 &headers,
                 body,
             )
-            .map_err(map_http_error)
+            .map_err(BackendError::from)
     }
 
     fn request_with_session(
@@ -432,7 +432,7 @@ impl AuthService {
                 &headers,
                 body,
             )
-            .map_err(map_http_error)
+            .map_err(BackendError::from)
     }
 
     fn valid_session(&self, now: i64) -> Result<StoredSession, BackendError> {
@@ -600,7 +600,7 @@ fn state_from_runtime(runtime: &AuthRuntime) -> AuthState {
 
 fn require_auth_json(response: HttpResponse) -> Result<Value, BackendError> {
     if (200..300).contains(&response.status) {
-        return response.json().map_err(map_http_error);
+        return response.json().map_err(BackendError::from);
     }
     let raw = response.json().unwrap_or(Value::Null);
     let message = ["error_description", "msg", "message", "error"]
@@ -631,17 +631,6 @@ fn stable_auth_message(message: &str) -> String {
         "username_invalid".to_string()
     } else {
         "auth_request_failed".to_string()
-    }
-}
-
-fn map_http_error(error: HttpError) -> BackendError {
-    match error {
-        HttpError::Timeout => BackendError::network_timeout(),
-        HttpError::ResponseTooLarge => BackendError::response_too_large(),
-        HttpError::Offline => BackendError::offline(),
-        HttpError::InvalidRequest | HttpError::RequestTooLarge | HttpError::InvalidResponse => {
-            BackendError::request_failed(error.to_string())
-        }
     }
 }
 
