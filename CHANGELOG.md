@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.36 - 2026-10-27
+
+### Changed
+
+- Turkish copy consistency: error, warning and help sentences that used the informal singular ("seç", "gir", "aç", "kontrol et") now use the formal plural ("seçin", "girin", "açın", "kontrol edin"), matching the rest of the app. Button labels keep their short form, as in "Önizle" and "Gözat". The admin hint no longer switches to informal wording. Existing tests were updated to the new strings.
+
 ## 1.36.35 - 2026-10-27
 
 ### Changed

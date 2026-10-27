@@ -721,13 +721,13 @@ describe("DocFlow shell", () => {
 
   it("localizes the invalid RFI workbook error in every supported language", () => {
     const expected = {
-      tr: "Geçerli bir makro etkin .xlsm veya standart .xlsx RFI Log dosyası seç.",
+      tr: "Geçerli bir makro etkin .xlsm veya standart .xlsx RFI Log dosyası seçin.",
       en: "Select a valid macro-enabled .xlsm or standard .xlsx RFI Log workbook.",
       az: "Etibarlı makro aktiv .xlsm və ya standart .xlsx RFI Log faylı seçin.",
       ru: "Выберите допустимый RFI Log с поддержкой макросов .xlsm или стандартный .xlsx.",
     } as const;
     const followUpExpected = {
-      tr: "Geçerli RFI Log ve Follow Up .xlsm veya .xlsx çalışma kitapları seç.",
+      tr: "Geçerli RFI Log ve Follow Up .xlsm veya .xlsx çalışma kitapları seçin.",
       en: "Select valid RFI Log and Follow Up .xlsm or .xlsx workbooks.",
       az: "Etibarlı RFI Log və Follow Up .xlsm və ya .xlsx iş kitabları seçin.",
       ru: "Выберите допустимые книги RFI Log и Follow Up в формате .xlsm или .xlsx.",
@@ -754,7 +754,7 @@ describe("DocFlow shell", () => {
 
   it("localizes the legacy print queue reselection migration in every supported language", () => {
     const expected = {
-      tr: "Bu eski yazdırma kuyruğu güvenle devam ettirilemez. Kuyruğu silip dosyaları yeniden seç.",
+      tr: "Bu eski yazdırma kuyruğu güvenle devam ettirilemez. Kuyruğu silip dosyaları yeniden seçin.",
       en: "This older print queue cannot be resumed safely. Discard it, then reselect the files.",
       az: "Bu köhnə çap növbəsini təhlükəsiz davam etdirmək olmur. Növbəni silin, sonra faylları yenidən seçin.",
       ru: "Эту старую очередь печати нельзя безопасно продолжить. Удалите её и заново выберите файлы.",
@@ -1936,7 +1936,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     expect(
-      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+      await screen.findByText("RFI kayıtlarını kontrol edin ve düzenleyin"),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "0008" })).toHaveAttribute(
       "title",
@@ -2019,7 +2019,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     expect(
-      await screen.findByText("Yazdırma kuyruğunu kontrol et ve özelleştir"),
+      await screen.findByText("Yazdırma kuyruğunu kontrol edin ve özelleştirin"),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Tümünü seç" }));
     expect(screen.getByLabelText("Değiştirilecek alan")).toHaveValue("enabled");
@@ -2062,7 +2062,7 @@ describe("DocFlow shell", () => {
     expect(screen.queryByText("AZE-SUN-INT-QMS-RFI-CIV-1320.docx")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sketch'leri temizle" }));
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
-    await screen.findByText("Yazdırma kuyruğunu kontrol et ve özelleştir");
+    await screen.findByText("Yazdırma kuyruğunu kontrol edin ve özelleştirin");
 
     const previewCall = call.mock.calls.find(([method]) => method === "engine/preview");
     const previewParams = previewCall?.[1];
@@ -2526,7 +2526,7 @@ describe("DocFlow shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Önizle" }));
 
     expect(
-      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+      await screen.findByText("RFI kayıtlarını kontrol edin ve düzenleyin"),
     ).toBeVisible();
 
     const searchInput = screen.getByLabelText(
@@ -2565,7 +2565,7 @@ describe("DocFlow shell", () => {
 
     expect(
       await screen.findByText(
-        "RFI kayıtlarını kontrol et ve düzenle",
+        "RFI kayıtlarını kontrol edin ve düzenleyin",
         undefined,
         { timeout: 10000 },
       ),
