@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.19 - 2026-10-27
+
+### Fixed
+
+- Some Turkish, Azerbaijani, and Russian operation descriptions still contained English: "Fast RFI Taraması" (the card is named "Hızlı RFI Taraması"), "(Completed)" in the RFI status sync description, and "Fast RFI Scan" in Russian. They now use the local wording.
+
 ## 1.35.18 - 2026-10-27
 
 ### Fixed

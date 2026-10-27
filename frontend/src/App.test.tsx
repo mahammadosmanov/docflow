@@ -1753,7 +1753,7 @@ describe("DocFlow shell", () => {
 
     expect(
       screen.getByRole("button", {
-        name: /Hızlı RFI Taraması/,
+        name: /^Hızlı RFI Taraması/,
       }),
     ).toBeVisible();
     fireEvent.click(
