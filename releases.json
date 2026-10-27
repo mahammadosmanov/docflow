@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.75",
+  "currentVersion": "1.36.76",
   "releases": [
+    {
+      "version": "1.36.76",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.76",
+      "summary": "Modularity: the Excel worker runtime (ExcelWorkerRuntime and ExcelWorkerHandle traits, WorkerPoll and WorkerJoin, and the thread-backed implementations) moved out of platform/excel.rs into platform/excel/worker.rs. No behavior change; 66 Excel tests and clippy pass."
+    },
     {
       "version": "1.36.75",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.75",
       "summary": "Modularity: the rfi.generate_concrete_documents operation definition moved out of the operation_registry function into registry/concrete_documents.rs. No behavior change; registry tests and clippy pass."
     },

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.76 - 2026-10-27
+
+### Changed
+
+- Moved the Excel worker runtime (`ExcelWorkerRuntime`, `ExcelWorkerHandle`, `WorkerPoll`, `WorkerJoin`, and the thread-backed `ThreadWorkerRuntime` and `ThreadWorkerHandle`) out of `platform/excel.rs` (905 lines) into `platform/excel/worker.rs`. Visibility and imports only. The 66 Excel tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.75 - 2026-10-27
 
 ### Changed
