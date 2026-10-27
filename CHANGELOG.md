@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.1 - 2026-10-27
+
+### Changed
+
+- The file-selection merge used by drag-and-drop and Add Files is one shared helper instead of two copies. No behavior change.
+
 ## 1.36.0 - 2026-10-27
 
 ### Added
