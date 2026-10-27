@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.13 - 2026-10-27
+
+### Fixed
+
+- Dialogs did not move keyboard focus into them, so Tab could reach the page behind an open dialog, and closing one left focus at the top of the page. Focus now moves into the dialog on open, Tab and Shift+Tab stay inside it, and closing returns focus to the control that opened it.
+
 ## 1.35.12 - 2026-10-27
 
 ### Fixed

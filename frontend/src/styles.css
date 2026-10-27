@@ -3015,6 +3015,9 @@ textarea:focus {
   overflow: auto;
   background: rgba(0, 0, 0, 0.58);
 }
+.modal:focus {
+  outline: none;
+}
 .modal {
   width: min(100%, 460px);
   max-height: calc(100dvh - 48px);
