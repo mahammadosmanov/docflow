@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.98 - 2026-10-27
+
+### Changed
+
+- `undo.rs` (823 lines) keeps `undo_journal` and the undo-safety check and moves the rest into three files under `undo/`: `steps.rs` (per-step dispatch, restore-backup and undo planning), `quarantine.rs` (quarantined file recovery, hash verification and recovery phases), and `roots.rs` (capability root opening, root identity checks and path validation). Logic is unchanged; clippy is clean with `-D warnings` and the 542 lib tests pass.
+
 ## 1.36.97 - 2026-10-27
 
 ### Changed
