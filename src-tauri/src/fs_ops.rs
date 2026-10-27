@@ -384,6 +384,7 @@ impl FilesystemAuthority {
 
 mod apply;
 mod effects;
+mod effects_pdf;
 mod follow_up;
 mod steps;
 mod support;
