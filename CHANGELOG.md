@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.39 - 2026-10-27
+
+### Fixed
+
+- Progress during a preview or apply is now readable by screen readers. The progress bar is a labelled progress bar with its current value and maximum when the total is known. The phase text (preparing, scanning, and so on) is announced as a status. Before, the bar was a plain box and phase changes were silent. Visible layout is unchanged.
+
 ## 1.36.38 - 2026-10-27
 
 ### Fixed

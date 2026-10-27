@@ -268,11 +268,18 @@ export function BusyState({
       <LoaderCircle className="spin" />
       <h2>{label}</h2>
       {progress && (
-        <strong className="progress-phase">
+        <strong className="progress-phase" role="status">
           {s.t(`progress.phase.${progress.phase}`)}
         </strong>
       )}
-      <div className="progress">
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={progress?.total || undefined}
+        aria-valuenow={progress && progress.total > 0 ? progress.done : undefined}
+      >
         <span style={{ width: fraction ? `${fraction * 100}%` : "35%" }} />
       </div>
       {progress && (
