@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.7 - 2026-10-27
+
+### Changed
+
+- Two workbook XML attribute readers repeated the same size-limit and decoding checks. One helper does them now. No behavior change.
+
 ## 1.36.6 - 2026-10-27
 
 ### Changed
