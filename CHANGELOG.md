@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.11 - 2026-10-27
+
+### Changed
+
+- The quality workflow's source checkouts no longer keep the access token in the local git config (persist-credentials: false). None of its steps push or fetch, so the build is unchanged.
+
 ## 1.36.10 - 2026-10-27
 
 ### Changed
