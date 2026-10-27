@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.95 - 2026-10-27
+
+### Changed
+
+- The 4,180-line `platform/excel/tests.rs` export-supervisor test module is split by concern into eight files under `platform/excel/tests/export_supervisor/`: constructors and guards, export flow, deadline and worker, cleanup journal, print service, operation fence, cleanup review, and timeouts. Shared fixtures stay in `mod.rs`. All tests are kept unchanged; the lib suite still passes 542 tests and clippy is clean with `-D warnings`.
+
 ## 1.36.94 - 2026-10-27
 
 ### Changed

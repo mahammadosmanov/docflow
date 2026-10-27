@@ -22,7 +22,7 @@ const sourceFiles = (dir: string): string[] =>
 const rustSourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return rustSourceFiles(path);
+    if (statSync(path).isDirectory()) return name === "tests" ? [] : rustSourceFiles(path);
     return name.endsWith(".rs") && name !== "tests.rs" && !name.endsWith("_tests.rs")
       ? [path]
       : [];

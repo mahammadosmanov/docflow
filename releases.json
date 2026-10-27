@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.94",
+  "currentVersion": "1.36.95",
   "releases": [
+    {
+      "version": "1.36.95",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.95",
+      "summary": "Maintainability: the 4,180-line excel export-supervisor test module is split by concern into eight files with shared fixtures in mod.rs. Tests are unchanged; the lib suite (542) and clippy pass."
+    },
     {
       "version": "1.36.94",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.94",
       "summary": "Maintainability: the 2,683-line App.test.tsx is split by area into seven test files with shared helpers in test/appTestSupport.ts. All 55 tests are kept unchanged; the full suite passes."
     },
