@@ -111,5 +111,12 @@ These are not silently waived by passing local tests.
   roadmap scaffolding. Until a route is added, operators cannot run this archive
   from the app.
 
+- Windows directory enumeration (`cap_fs/windows_dir.rs`, `entry_names`) reads
+  `FILE_ID_BOTH_DIR_INFO` records by reference from a `Vec<u8>` buffer. The type
+  does not guarantee the record alignment; the code relies on the OS placing
+  records on 8-byte boundaries. Fix: allocate the buffer as `Vec<u64>` (or read
+  the fields with `read_unaligned`). Verify on native Windows; this Mac cannot
+  compile the file.
+
 Resolved defects belong in `CHANGELOG.md`, not here. Never list unverified
 operator data, secrets, private paths, or raw workbook contents.

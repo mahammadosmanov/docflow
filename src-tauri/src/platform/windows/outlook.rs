@@ -324,6 +324,7 @@ struct ComApartment;
 
 impl ComApartment {
     fn initialize() -> Result<Self, OutlookFailure> {
+        // SAFETY: initializes COM on this thread; ComApartment's drop pairs it with CoUninitialize, and a failure returns before the guard exists so nothing is owed.
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
             .ok()
             .map_err(|_| OutlookFailure::unsupported("error.rfi.outlookDraft.comUnavailable"))?;
@@ -333,14 +334,17 @@ impl ComApartment {
 
 impl Drop for ComApartment {
     fn drop(&mut self) {
+        // SAFETY: the guard exists only after CoInitializeEx succeeded on this thread, so this uninitialize is paired.
         unsafe { CoUninitialize() };
     }
 }
 
 fn active_outlook_application() -> Result<IDispatch, OutlookFailure> {
+    // SAFETY: w! is a static NUL-terminated wide string that lives for the program.
     let class = unsafe { CLSIDFromProgID(w!("Outlook.Application")) }
         .map_err(|_| OutlookFailure::unsupported("error.rfi.outlookDraft.outlookUnavailable"))?;
     let mut unknown: Option<IUnknown> = None;
+    // SAFETY: class is the CLSID just resolved, and unknown is a live out-parameter whose result is checked below.
     unsafe { GetActiveObject(&class, None, &mut unknown) }
         .map_err(|_| OutlookFailure::unsupported("error.rfi.outlookDraft.outlookNotRunning"))?;
     unknown
@@ -423,6 +427,7 @@ fn invoke(
     let name_pointer = PCWSTR(wide.as_ptr());
     let iid_null = GUID::from_u128(0);
     let mut dispatch_id = 0;
+    // SAFETY: iid_null is the required null IID, name_pointer points to a NUL-terminated wide name that lives across the call, and dispatch_id is a live out-parameter.
     unsafe { dispatch.GetIDsOfNames(&iid_null, &name_pointer, 1, 0, &mut dispatch_id) }?;
 
     let mut named = if property_put {
@@ -445,6 +450,7 @@ fn invoke(
         cNamedArgs: u32::try_from(named.len()).unwrap_or(u32::MAX),
     };
     let mut result = VARIANT::default();
+    // SAFETY: dispatch is a live IDispatch, dispatch_id came from GetIDsOfNames, and the argument arrays live across the call; result is a live out-variant.
     unsafe {
         dispatch.Invoke(
             dispatch_id,
@@ -470,6 +476,7 @@ fn variant_string(value: VARIANT) -> windows::core::Result<String> {
             0x8002_0005_u32 as i32,
         )));
     }
+    // SAFETY: the tag was checked to be VT_BSTR, so bstrVal is the active member; ManuallyDrop<BSTR> and BSTR share a layout, and the borrow does not outlive value.
     let bstr = unsafe {
         &*(&value.Anonymous.Anonymous.Anonymous.bstrVal as *const ManuallyDrop<BSTR> as *const BSTR)
     };
@@ -484,6 +491,7 @@ fn variant_i32(value: VARIANT) -> windows::core::Result<i32> {
             0x8002_0005_u32 as i32,
         )));
     }
+    // SAFETY: the tag was checked to be VT_I4, so lVal is the active union member.
     Ok(unsafe { value.Anonymous.Anonymous.Anonymous.lVal })
 }
 
@@ -493,6 +501,7 @@ fn variant_bool(value: VARIANT) -> windows::core::Result<bool> {
             0x8002_0005_u32 as i32,
         )));
     }
+    // SAFETY: the tag was checked to be VT_BOOL, so boolVal is the active union member.
     Ok(unsafe { value.Anonymous.Anonymous.Anonymous.boolVal.0 != 0 })
 }
 
@@ -502,5 +511,6 @@ fn variant_date(value: VARIANT) -> windows::core::Result<f64> {
             0x8002_0005_u32 as i32,
         )));
     }
+    // SAFETY: the tag was checked to be VT_DATE, so date is the active union member.
     Ok(unsafe { value.Anonymous.Anonymous.Anonymous.date })
 }

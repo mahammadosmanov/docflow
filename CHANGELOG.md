@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.50 - 2026-10-27
+
+### Changed
+
+- Every remaining unsafe block in the Windows modules now has a SAFETY note: directory handles, COM and the Excel and Outlook automation layers, the Windows PDF runtime, the startup registry entry, and the file-replace call. These files compile only on Windows, so rustfmt checks their syntax; no Windows build was run.
+- One real concern is recorded in `docs/KNOWN_ISSUES.md`: the Windows directory listing (`cap_fs/windows_dir.rs`) reads records from a byte buffer and assumes an alignment the type does not guarantee. The fix and the Windows check it needs are written there. No behavior change in this release.
+
 ## 1.36.49 - 2026-10-27
 
 ### Changed
