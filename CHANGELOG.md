@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.13 - 2026-10-27
+
+### Changed
+
+- React and React DOM move from 19.2.8 to 19.3.1. The typecheck, all 263 frontend tests, and the production build pass with no new warnings.
+
 ## 1.36.12 - 2026-10-27
 
 ### Changed
