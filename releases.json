@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.35.12",
+  "currentVersion": "1.35.13",
   "releases": [
+    {
+      "version": "1.35.13",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.35.13",
+      "summary": "Dialogs take keyboard focus when they open, keep Tab inside, and return focus to the control that opened them."
+    },
     {
       "version": "1.35.12",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.35.12",
       "summary": "Error and warning messages are announced by screen readers when they appear. A flaky keyboard shortcut test has more time to finish."
     },
