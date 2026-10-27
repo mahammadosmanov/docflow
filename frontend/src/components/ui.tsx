@@ -209,7 +209,10 @@ export function Notice({
   children: ReactNode;
 }) {
   return (
-    <div className={`notice ${kind}`}>
+    <div
+      className={`notice ${kind}`}
+      role={kind === "info" ? "status" : "alert"}
+    >
       {kind === "info" ? <CheckCircle2 /> : <CircleAlert />}
       <div>
         {title && <strong>{title}</strong>}
