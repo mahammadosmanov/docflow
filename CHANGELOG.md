@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.91 - 2026-10-27
+
+### Changed
+
+- The per-record placement loop in `classify_workbooks_full` (`rfi_follow_up/classify.rs`) now lives in `place_record`. It takes a `RecordIndex` of shared inputs plus `&mut` slots, manual rows and the unmapped counter. The loop body is unchanged; `continue` became `return Ok(())`. The routed-signed loop still runs inline. Clippy is clean with `-D warnings` and the 33 rfi_follow_up tests pass.
+
 ## 1.36.90 - 2026-10-27
 
 ### Changed
