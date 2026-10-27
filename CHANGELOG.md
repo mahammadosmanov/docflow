@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.42 - 2026-10-27
+
+### Changed
+
+- Every unsafe call in the Unix directory-handle layer (`cap_fs/unix_dir.rs`) now has a SAFETY note saying why it is sound: live descriptors, NUL-terminated names, and fresh descriptors that are owned exactly once. The codebase has about 205 unsafe sites, and only about 11 had such notes before. No behavior change.
+
 ## 1.36.41 - 2026-10-27
 
 ### Fixed
