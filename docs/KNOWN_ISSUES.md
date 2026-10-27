@@ -34,6 +34,10 @@ These are not silently waived by passing local tests.
   interruption, Apply, and Undo. Source/cross-build evidence cannot certify
   Outlook storage variants or live sync locks.
 
+- Windows directory enumeration (`cap_fs/windows_dir.rs`, `entry_names`) now
+  reads records from a `Vec<u64>` buffer (1.36.51). Compile it and list a real
+  OneDrive/network folder with long names, many entries, and a folder needing a
+  second `GetFileInformationByHandleEx` call. This Mac cannot compile the file.
 - Clean Windows x64 install, normal startup, package smoke, uninstall, and real
   OneDrive-backed path behavior for the exact candidate.
 - Excel open/recalculate/repair-dialog inspection of consented current RFI Log
@@ -110,13 +114,6 @@ These are not silently waived by passing local tests.
   operator dispatch route or frontend roster entry calls it. The code is kept as
   roadmap scaffolding. Until a route is added, operators cannot run this archive
   from the app.
-
-- Windows directory enumeration (`cap_fs/windows_dir.rs`, `entry_names`) reads
-  `FILE_ID_BOTH_DIR_INFO` records by reference from a `Vec<u8>` buffer. The type
-  does not guarantee the record alignment; the code relies on the OS placing
-  records on 8-byte boundaries. Fix: allocate the buffer as `Vec<u64>` (or read
-  the fields with `read_unaligned`). Verify on native Windows; this Mac cannot
-  compile the file.
 
 Resolved defects belong in `CHANGELOG.md`, not here. Never list unverified
 operator data, secrets, private paths, or raw workbook contents.

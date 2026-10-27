@@ -67,7 +67,9 @@ impl PlatformDirectory {
         };
 
         let mut names = Vec::new();
-        let mut buffer = vec![0_u8; 64 * 1024];
+        // u64 backing keeps the buffer 8-byte aligned, which FILE_ID_BOTH_DIR_INFO needs.
+        let mut buffer = vec![0_u64; 8 * 1024];
+        let buffer_len = buffer.len() * size_of::<u64>();
         let mut restart = true;
         loop {
             let information_class = if restart {
@@ -82,7 +84,7 @@ impl PlatformDirectory {
                     self.0.as_raw_handle() as HANDLE,
                     information_class,
                     buffer.as_mut_ptr().cast(),
-                    u32::try_from(buffer.len()).expect("directory buffer fits u32"),
+                    u32::try_from(buffer_len).expect("directory buffer fits u32"),
                 )
             };
             if ok == 0 {
@@ -94,12 +96,17 @@ impl PlatformDirectory {
             }
             let mut offset = 0_usize;
             loop {
-                if offset + size_of::<FILE_ID_BOTH_DIR_INFO>() > buffer.len() {
+                if offset + size_of::<FILE_ID_BOTH_DIR_INFO>() > buffer_len {
                     return Err(io::Error::other("directory enumeration record is invalid"));
                 }
-                // SAFETY: offset plus the record size is checked against buffer.len() just above, so the record lies inside buffer. buffer is a Vec<u8>, so this cast assumes the OS places records on FILE_ID_BOTH_DIR_INFO's alignment; see KNOWN_ISSUES.md.
-                let entry =
-                    unsafe { &*buffer.as_ptr().add(offset).cast::<FILE_ID_BOTH_DIR_INFO>() };
+                // SAFETY: offset plus the record size is checked against buffer_len just above, so the record lies inside buffer. buffer is a Vec<u64>, so its start is aligned for FILE_ID_BOTH_DIR_INFO; later records rely on the OS 8-byte entry padding (see KNOWN_ISSUES.md).
+                let entry = unsafe {
+                    &*buffer
+                        .as_ptr()
+                        .cast::<u8>()
+                        .add(offset)
+                        .cast::<FILE_ID_BOTH_DIR_INFO>()
+                };
                 let name_len = usize::try_from(entry.FileNameLength)
                     .map_err(|_| io::Error::other("directory name is invalid"))?
                     / 2;
@@ -107,13 +114,13 @@ impl PlatformDirectory {
                 if offset
                     .checked_add(name_offset)
                     .and_then(|start| start.checked_add(name_len.saturating_mul(2)))
-                    .is_none_or(|end| end > buffer.len())
+                    .is_none_or(|end| end > buffer_len)
                 {
                     return Err(io::Error::other(
                         "directory name exceeded the bounded record",
                     ));
                 }
-                // SAFETY: name_len UTF-16 units lie inside buffer, checked above; the same alignment assumption as the record cast applies (KNOWN_ISSUES.md).
+                // SAFETY: name_len UTF-16 units lie inside buffer, checked above; the u16 name is 2-byte aligned within the 8-byte-aligned record.
                 let name_units =
                     unsafe { std::slice::from_raw_parts(entry.FileName.as_ptr(), name_len) };
                 let name = OsString::from_wide(name_units);
@@ -125,7 +132,7 @@ impl PlatformDirectory {
                 }
                 offset = offset
                     .checked_add(entry.NextEntryOffset as usize)
-                    .filter(|next| *next < buffer.len())
+                    .filter(|next| *next < buffer_len)
                     .ok_or_else(|| io::Error::other("directory enumeration offset is invalid"))?;
             }
         }
