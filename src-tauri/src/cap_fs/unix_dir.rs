@@ -6,21 +6,25 @@ pub(super) struct PlatformDirectory(File);
 
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
 pub(super) fn unix_errno_pointer() -> *mut libc::c_int {
+    // SAFETY: __error returns this thread's errno location, valid for the thread's lifetime.
     unsafe { libc::__error() }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(super) fn unix_errno_pointer() -> *mut libc::c_int {
+    // SAFETY: __errno_location returns this thread's errno location, valid for the thread's lifetime.
     unsafe { libc::__errno_location() }
 }
 
 #[cfg(unix)]
 pub(super) fn set_unix_errno(value: libc::c_int) {
+    // SAFETY: the pointer addresses this thread's errno slot, which is valid to write.
     unsafe { *unix_errno_pointer() = value };
 }
 
 #[cfg(unix)]
 pub(super) fn unix_errno() -> libc::c_int {
+    // SAFETY: reads the same per-thread errno slot on the calling thread.
     unsafe { *unix_errno_pointer() }
 }
 
@@ -48,6 +52,7 @@ impl PlatformDirectory {
         use std::os::fd::AsRawFd;
 
         let dot = c".";
+        // SAFETY: self.0 is a live directory fd, and dot is a NUL-terminated string that outlives the call.
         let duplicated = unsafe {
             libc::openat(
                 self.0.as_raw_fd(),
@@ -58,14 +63,17 @@ impl PlatformDirectory {
         if duplicated < 0 {
             return Err(io::Error::last_os_error());
         }
+        // SAFETY: duplicated is a fresh directory fd; fdopendir takes ownership of it on success.
         let stream = unsafe { libc::fdopendir(duplicated) };
         if stream.is_null() {
+            // SAFETY: fdopendir failed, so duplicated is still owned here and is closed exactly once.
             unsafe { libc::close(duplicated) };
             return Err(io::Error::last_os_error());
         }
         struct DirectoryStream(*mut libc::DIR);
         impl Drop for DirectoryStream {
             fn drop(&mut self) {
+                // SAFETY: stream came from fdopendir and is closed exactly once, when the wrapper drops.
                 unsafe { libc::closedir(self.0) };
             }
         }
@@ -73,6 +81,7 @@ impl PlatformDirectory {
         let mut names = Vec::new();
         loop {
             set_unix_errno(0);
+            // SAFETY: stream is a live DIR* owned by DirectoryStream and is read only on this thread.
             let entry = unsafe { libc::readdir(stream.0) };
             if entry.is_null() {
                 let errno = unix_errno();
@@ -81,6 +90,7 @@ impl PlatformDirectory {
                 }
                 return Err(io::Error::from_raw_os_error(errno));
             }
+            // SAFETY: readdir returned a non-null entry whose d_name is NUL-terminated; the name is copied before the next readdir.
             let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) };
             if name.to_bytes() == b"." || name.to_bytes() == b".." {
                 continue;
@@ -107,6 +117,7 @@ impl PlatformDirectory {
         _access: DirectoryAccess,
     ) -> io::Result<Self> {
         let name = unix_name(name)?;
+        // SAFETY: self.0 is a live directory fd, and name is a NUL-terminated path checked by unix_name.
         let descriptor = unsafe {
             libc::openat(
                 std::os::fd::AsRawFd::as_raw_fd(&self.0),
@@ -117,6 +128,7 @@ impl PlatformDirectory {
         if descriptor < 0 {
             Err(io::Error::last_os_error())
         } else {
+            // SAFETY: descriptor is a fresh fd this value takes ownership of; the failure branch above handled errors.
             Ok(Self(unsafe {
                 std::os::fd::FromRawFd::from_raw_fd(descriptor)
             }))
@@ -130,6 +142,7 @@ impl PlatformDirectory {
         } else {
             libc::O_RDONLY
         };
+        // SAFETY: self.0 is a live directory fd, and name is a NUL-terminated path checked by unix_name.
         let descriptor = unsafe {
             libc::openat(
                 std::os::fd::AsRawFd::as_raw_fd(&self.0),
@@ -140,12 +153,14 @@ impl PlatformDirectory {
         if descriptor < 0 {
             Err(io::Error::last_os_error())
         } else {
+            // SAFETY: descriptor is a fresh fd this file takes ownership of; the failure branch above handled errors.
             Ok(unsafe { std::os::fd::FromRawFd::from_raw_fd(descriptor) })
         }
     }
 
     pub(super) fn create_file_new(&self, name: &OsStr) -> io::Result<File> {
         let name = unix_name(name)?;
+        // SAFETY: self.0 is a live directory fd, and name is NUL-terminated; O_EXCL makes this open only a newly created file.
         let descriptor = unsafe {
             libc::openat(
                 std::os::fd::AsRawFd::as_raw_fd(&self.0),
@@ -157,12 +172,14 @@ impl PlatformDirectory {
         if descriptor < 0 {
             Err(io::Error::last_os_error())
         } else {
+            // SAFETY: descriptor is a fresh fd this file takes ownership of; the failure branch above handled errors.
             Ok(unsafe { std::os::fd::FromRawFd::from_raw_fd(descriptor) })
         }
     }
 
     pub(super) fn create_dir(&self, name: &OsStr) -> io::Result<()> {
         let name = unix_name(name)?;
+        // SAFETY: self.0 is a live directory fd, and name is NUL-terminated; mkdirat creates only inside that directory.
         if unsafe {
             libc::mkdirat(
                 std::os::fd::AsRawFd::as_raw_fd(&self.0),
@@ -198,6 +215,7 @@ impl PlatformDirectory {
 
     pub(super) fn unlink(&self, name: &OsStr, flags: i32) -> io::Result<()> {
         let name = unix_name(name)?;
+        // SAFETY: self.0 is a live directory fd, and name is NUL-terminated; flags selects file or directory removal.
         if unsafe {
             libc::unlinkat(
                 std::os::fd::AsRawFd::as_raw_fd(&self.0),
@@ -224,6 +242,7 @@ impl PlatformDirectory {
         let source_fd = std::os::fd::AsRawFd::as_raw_fd(&self.0);
         let destination_fd = std::os::fd::AsRawFd::as_raw_fd(&destination_dir.0);
         let result = if replace {
+            // SAFETY: both directory descriptors are live and both names are NUL-terminated; the kernel reads them only during the call.
             unsafe {
                 libc::renameat(
                     source_fd,
@@ -255,6 +274,7 @@ pub(super) fn rename_at_no_replace(
     destination_fd: i32,
     destination: &std::ffi::CString,
 ) -> i32 {
+    // SAFETY: both directory descriptors are live and both names are NUL-terminated, as for renameat.
     unsafe {
         libc::renameatx_np(
             source_fd,
@@ -273,6 +293,7 @@ pub(super) fn rename_at_no_replace(
     destination_fd: i32,
     destination: &std::ffi::CString,
 ) -> i32 {
+    // SAFETY: the syscall reads only the two live descriptors and NUL-terminated names, with the given flags.
     unsafe {
         libc::syscall(
             libc::SYS_renameat2,
@@ -292,6 +313,7 @@ pub(super) fn rename_at_no_replace(
     destination_fd: i32,
     destination: &std::ffi::CString,
 ) -> i32 {
+    // SAFETY: both directory descriptors are live and both names are NUL-terminated, as for renameat.
     let linked = unsafe {
         libc::linkat(
             source_fd,
@@ -304,6 +326,7 @@ pub(super) fn rename_at_no_replace(
     if linked != 0 {
         return linked;
     }
+    // SAFETY: source_fd is still live and source is NUL-terminated.
     unsafe { libc::unlinkat(source_fd, source.as_ptr(), 0) }
 }
 
