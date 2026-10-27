@@ -298,14 +298,15 @@ pub(super) fn has_entry<R: Read + Seek>(
     }
 }
 
-pub(super) fn write_package(
-    archive: &mut ZipArchive<File>,
-    output: File,
+fn copy_package_entries<R, W>(
+    archive: &mut ZipArchive<R>,
+    writer: &mut ZipWriter<W>,
     patched: &BTreeMap<String, Vec<u8>>,
-) -> Result<(), OoxmlError> {
-    let archive_comment = archive.comment().to_vec();
-    let mut writer = ZipWriter::new(output);
-    writer.set_raw_comment(archive_comment.into_boxed_slice())?;
+) -> Result<(), OoxmlError>
+where
+    R: Read + Seek,
+    W: Write + Seek,
+{
     for index in 0..archive.len() {
         let entry = archive.by_index(index)?;
         if let Some(bytes) = patched.get(entry.name()) {
@@ -320,6 +321,18 @@ pub(super) fn write_package(
             writer.raw_copy_file(entry)?;
         }
     }
+    Ok(())
+}
+
+pub(super) fn write_package(
+    archive: &mut ZipArchive<File>,
+    output: File,
+    patched: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), OoxmlError> {
+    let archive_comment = archive.comment().to_vec();
+    let mut writer = ZipWriter::new(output);
+    writer.set_raw_comment(archive_comment.into_boxed_slice())?;
+    copy_package_entries(archive, &mut writer, patched)?;
     let output = writer.finish()?;
     output.sync_all()?;
     Ok(())
@@ -338,20 +351,7 @@ where
     let limited = LimitedWriter::new(output, MAX_PACKAGE_BYTES)?;
     let mut writer = ZipWriter::new(limited);
     writer.set_raw_comment(archive_comment.into_boxed_slice())?;
-    for index in 0..archive.len() {
-        let entry = archive.by_index(index)?;
-        if let Some(bytes) = patched.get(entry.name()) {
-            let name = entry.name().to_string();
-            let mut options = entry.options().into_full_options();
-            if !entry.comment().is_empty() {
-                options = options.with_file_comment(entry.comment());
-            }
-            writer.start_file(name, options)?;
-            writer.write_all(bytes)?;
-        } else {
-            writer.raw_copy_file(entry)?;
-        }
-    }
+    copy_package_entries(archive, &mut writer, patched)?;
     let mut output = writer.finish()?;
     output.flush()?;
     Ok(())
