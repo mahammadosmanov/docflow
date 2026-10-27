@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.17 - 2026-10-27
+
+### Changed
+
+- The frontend test runner vitest (dev only) moves from 4.1.11 to 5.0.5. All 263 frontend tests and the production build pass with no deprecation warnings.
+
 ## 1.36.16 - 2026-10-27
 
 ### Changed
