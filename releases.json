@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.66",
+  "currentVersion": "1.36.67",
   "releases": [
+    {
+      "version": "1.36.67",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.67",
+      "summary": "Modularity: the free path-guard helpers (lexical escape checks, ancestor resolution, revalidation, link detection, grant expiry) moved out of paths.rs into paths/filesystem.rs. No behavior change; path tests and clippy pass."
+    },
     {
       "version": "1.36.66",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.66",
       "summary": "Modularity: the Unix extended-attribute capture and replay helpers moved out of cap_fs.rs into cap_fs/unix_xattrs.rs. No behavior change; Unix-only module is cfg-gated; cap_fs tests and clippy pass. Windows build not verified here."
     },

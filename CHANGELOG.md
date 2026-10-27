@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.67 - 2026-10-27
+
+### Changed
+
+- Moved the free path-guard helpers (`reject_lexical_escape`, `resolve_existing_ancestor`, `revalidate_under_root`, `inspect_ancestor`, the link and reparse checks, `expired`) out of `paths.rs` (974 lines) into `paths/filesystem.rs`. `expired` stays crate-visible through a re-export. Visibility and imports only. Path tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.66 - 2026-10-27
 
 ### Changed
