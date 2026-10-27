@@ -468,67 +468,6 @@ impl NativeBackend {
         encode(cached)
     }
     // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
-    #[allow(dead_code)]
-    pub(crate) fn preview_outlook_archive<F>(
-        &self,
-        params: Value,
-        mut progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<OutlookArchiveValues> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != outlook_reply_draft::ARCHIVE_OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust Outlook archive backend",
-            ));
-        }
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-        let provisional = self.filesystem.issue_provisional_grants(
-            &scope,
-            &[(request.values.destination.clone(), GrantAccess::Write)],
-        )?;
-        progress(ProgressEvent {
-            phase: "outlook_selection".to_string(),
-            done: 0,
-            total: 1,
-            subject: String::new(),
-        });
-        let prepared = self
-            .outlook
-            .prepare_archive(&caller, &request.values.destination)?;
-        let mut plan = prepared.plan.clone();
-        let reservation = self.filesystem.reserve_plan_id();
-        reservation.assign_to_empty(&mut plan)?;
-        let grant_ids = provisional
-            .grants()
-            .iter()
-            .map(|grant| grant.grant_id.clone())
-            .collect();
-        let cached = self.filesystem.cache_reserved_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(caller.owner_id, caller.session_id, request.op_id, grant_ids),
-            reservation,
-            plan,
-        )?;
-        self.outlook.bind_archive(&cached.plan_id, prepared);
-        provisional.commit();
-        progress(ProgressEvent {
-            phase: "preview_ready".to_string(),
-            done: 1,
-            total: 1,
-            subject: String::new(),
-        });
-        encode(cached)
-    }
-
     pub(crate) fn preview_stage_signed_pages<F>(
         &self,
         params: Value,

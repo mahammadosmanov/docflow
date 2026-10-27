@@ -105,25 +105,6 @@ impl NativeBackend {
         )
     }
     // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
-    #[allow(dead_code)]
-    pub(crate) fn preview_replica_publish<F>(
-        &self,
-        params: Value,
-        progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<ReplicaPublishParams> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != replica_publish::OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust replica publication backend",
-            ));
-        }
-        let caller = self.caller_identity()?;
-        encode(self.cache_replica_plan(request.values, &caller, false, progress)?)
-    }
     // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     pub(super) fn cache_replica_plan<F>(
