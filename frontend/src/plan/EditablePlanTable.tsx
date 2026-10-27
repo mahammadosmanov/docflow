@@ -3,13 +3,9 @@ import {
   clampColumnWidth,
 } from "../components/AdjustableDataRegion";
 import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
   Eye,
   EyeOff,
   TableProperties,
-  Trash2,
 } from "lucide-react";
 import {
   useEffect,
@@ -33,6 +29,7 @@ import { PlanFilterBar } from "./PlanFilterBar";
 import { PlanSelectionBar } from "./PlanSelectionBar";
 import { PlanBulkFields } from "./PlanBulkFields";
 import { PlanTableHead } from "./PlanTableHead";
+import { PlanRowActions } from "./PlanRowActions";
 import {
   type EditorColumn,
   displayEditorValue,
@@ -552,49 +549,17 @@ export function EditablePlanTable({
                   })}
                   {(editor.reorderable === true ||
                     editor.duplicateEnabled === true) && (
-                    <td className="editor-row-actions">
-                      {editor.reorderable === true && (
-                        <>
-                          <button
-                            type="button"
-                            aria-label={s.t("action.moveUp")}
-                            title={s.t("action.moveUp")}
-                            disabled={rowIndex === 0}
-                            onClick={() => move(rowIndex, -1)}
-                          >
-                            <ArrowUp />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={s.t("action.moveDown")}
-                            title={s.t("action.moveDown")}
-                            disabled={rowIndex === rows.length - 1}
-                            onClick={() => move(rowIndex, 1)}
-                          >
-                            <ArrowDown />
-                          </button>
-                        </>
-                      )}
-                      {editor.duplicateEnabled === true && (
-                        <>
-                          <button
-                            type="button"
-                            title={s.t("rfi.action.duplicate")}
-                            onClick={() => duplicate(rowIndex)}
-                          >
-                            <Copy />
-                          </button>
-                          <button
-                            type="button"
-                            title={s.t("rfi.action.removeDuplicate")}
-                            disabled={groupCount <= 1}
-                            onClick={() => remove(rowIndex)}
-                          >
-                            <Trash2 />
-                          </button>
-                        </>
-                      )}
-                    </td>
+                    <PlanRowActions
+                      rowIndex={rowIndex}
+                      rowCount={rows.length}
+                      groupCount={groupCount}
+                      reorderable={editor.reorderable === true}
+                      duplicateEnabled={editor.duplicateEnabled === true}
+                      onMove={move}
+                      onDuplicate={duplicate}
+                      onRemove={remove}
+                      s={s}
+                    />
                   )}
                 </tr>
               );

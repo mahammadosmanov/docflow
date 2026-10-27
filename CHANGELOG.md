@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.66 - 2026-10-27
+
+### Changed
+
+- The plan table's row action buttons (move up and down, duplicate, and remove) move from `frontend/src/plan/EditablePlanTable.tsx` into the `PlanRowActions` component in `frontend/src/plan/PlanRowActions.tsx`. The table keeps the enabled-feature check and passes the row index, the row and group counts, and the move, duplicate, and remove handlers. `PlanRowActions.test.tsx` covers the reorder and duplicate callbacks, the edge-row disabled states, the lone-row remove guard, and the omitted buttons. `EditablePlanTable.tsx` drops from 621 to 586 lines. Behavior is unchanged.
+
 ## 1.33.65 - 2026-10-27
 
 ### Changed
