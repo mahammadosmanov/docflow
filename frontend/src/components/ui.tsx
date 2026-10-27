@@ -88,7 +88,11 @@ export function Button({
   wide?: boolean;
 }) {
   return (
-    <button className={`button ${variant} ${wide ? "wide" : ""}`} {...props}>
+    <button
+      type="button"
+      className={`button ${variant} ${wide ? "wide" : ""}`}
+      {...props}
+    >
       {icon}
       {children}
     </button>

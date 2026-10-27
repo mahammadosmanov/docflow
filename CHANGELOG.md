@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.85 - 2026-10-27
+
+### Fixed
+
+- The shared `Button` in `frontend/src/components/ui.tsx` now renders `type="button"` by default. Previously a `Button` inside a `<form>` defaulted to submit. The login form already sets `type="submit"` explicitly, so its behavior is unchanged; callers can still override the type.
+
 ## 1.36.84 - 2026-10-27
 
 ### Changed
