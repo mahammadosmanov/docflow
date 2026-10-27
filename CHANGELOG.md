@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.94 - 2026-10-27
+
+### Changed
+
+- The 2,683-line `frontend/src/App.test.tsx` is split into seven files by area: `App.plan`, and `App.shell-presets`, `App.shell-localization`, `App.shell-workbooks`, `App.shell-flows`, `App.shell-editing`, `App.shell-home`. Shared sign-in, bridge interception and cleanup helpers live in `frontend/src/test/appTestSupport.ts`. All 55 tests moved unchanged; the full suite passes (289 tests) and `tsc` is clean.
+
 ## 1.36.93 - 2026-10-27
 
 ### Changed
