@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.84 - 2026-10-27
+
+### Fixed
+
+- Screen readers announced the operation search box, the font-size slider, and the Settings username field without a name. Each now has an accessible label, reusing the existing translated text.
+
 ## 1.33.83 - 2026-10-27
 
 ### Changed
