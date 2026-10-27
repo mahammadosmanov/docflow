@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.64 - 2026-10-27
+
+### Changed
+
+- Moved the directory-scan helpers (`record_unsupported`, `collect_discipline_pdfs`, `scan_orientation_directory`, `add_directory_steps`) out of `operations/pdf_orientation.rs` (973 lines) into `operations/pdf_orientation/directory.rs`. Visibility and imports only. The 12 orientation tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.63 - 2026-10-27
 
 ### Changed
