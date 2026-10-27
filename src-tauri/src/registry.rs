@@ -7,8 +7,10 @@ use crate::operations::{batch_print, process_scans::FAST_COVER_OPERATION_ID};
 
 mod concrete_documents;
 mod print_batch;
+mod rfi_log;
 use concrete_documents::concrete_documents_operation;
 use print_batch::batch_print_operation;
+use rfi_log::rfi_log_operation;
 
 const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
@@ -140,86 +142,7 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         ],
     );
 
-    let mut provider_visibility = Map::new();
-    provider_visibility.insert("email_provider".to_string(), json!("gemini"));
-    let rfi_log = operation(
-        "rfi.log_add",
-        vec![
-            parameter(
-                "workbook",
-                ParamKind::File,
-                "param.rfi.workbook",
-                facts
-                    .default_workbook
-                    .clone()
-                    .map_or(Value::Null, Value::String),
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.workbook.help"),
-            ),
-            parameter(
-                "email_text",
-                ParamKind::LongText,
-                "param.rfi.emailText",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.emailText.help"),
-            ),
-            parameter(
-                "email_provider",
-                ParamKind::Choice,
-                "param.rfi.emailProvider",
-                json!("offline"),
-                true,
-                strings(&["offline", "gemini"]),
-                labels(&[
-                    ("offline", "choice.rfi.emailProvider.offline"),
-                    ("gemini", "choice.rfi.emailProvider.gemini"),
-                ]),
-                Map::new(),
-                Some("param.rfi.emailProvider.help"),
-            ),
-            parameter(
-                "gemini_api_key",
-                ParamKind::Secret,
-                "param.rfi.geminiApiKey",
-                json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                provider_visibility,
-                Some("param.rfi.geminiApiKey.help"),
-            ),
-            parameter(
-                "sheet_counts",
-                ParamKind::SheetCounts,
-                "param.rfi.sheetCounts",
-                json!({"CIV": 3, "MEC": 0, "ELE": 0, "PRC": 0}),
-                true,
-                strings(&["CIV", "MEC", "ELE", "PRC"]),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.sheetCounts.help"),
-            ),
-            parameter(
-                "overflow_next_day",
-                ParamKind::Bool,
-                "param.rfi.overflowNextDay",
-                json!(true),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.overflowNextDay.help"),
-            ),
-        ],
-    );
-
+    let rfi_log = rfi_log_operation(&facts);
     let rfi_follow_up = operation(
         "rfi.follow_up_sync",
         vec![
