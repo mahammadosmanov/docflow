@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.68 - 2026-10-27
+
+### Changed
+
+- Moved the XML attribute helpers (`attribute`, the bounded attribute readers, `set_attribute`, `set_unqualified_attribute`, `remove_attribute`) out of `ooxml/xml.rs` (930 lines) into `ooxml/xml/attributes.rs`. Visibility is widened to `ooxml`-wide so existing callers resolve unchanged. Visibility and imports only. The 105 ooxml tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.67 - 2026-10-27
 
 ### Changed
