@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.11",
+  "currentVersion": "1.36.12",
   "releases": [
+    {
+      "version": "1.36.12",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.12",
+      "summary": "Build tooling: the Tauri CLI moves to 2.12.4, a patch release of the version already in use."
+    },
     {
       "version": "1.36.11",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.11",
       "summary": "The quality workflow no longer keeps the repository access token in the checkout after fetching the source."
     },

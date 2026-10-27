@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.12 - 2026-10-27
+
+### Changed
+
+- The Tauri CLI build tool moves from 2.12.3 to 2.12.4 (patch release). The app and its tests are unchanged.
+
 ## 1.36.11 - 2026-10-27
 
 ### Changed
