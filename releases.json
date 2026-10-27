@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.53",
+  "currentVersion": "1.36.54",
   "releases": [
+    {
+      "version": "1.36.54",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.54",
+      "summary": "Accessibility: the group-select button in the editable plan table now has an accessible name, so a screen reader no longer announces only its row count."
+    },
     {
       "version": "1.36.53",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.53",
       "summary": "Accessibility: the duplicate and remove-duplicate row buttons in the RFI editor now have explicit accessible names, matching the move buttons beside them."
     },
