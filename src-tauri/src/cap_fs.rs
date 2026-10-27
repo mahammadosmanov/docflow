@@ -634,7 +634,7 @@ impl SecuredCreatedFile {
 
         self.seek(SeekFrom::Start(0))?;
         let mut digest = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
+        let mut buffer = vec![0_u8; 64 * 1024];
         loop {
             let read = self.read(&mut buffer)?;
             if read == 0 {

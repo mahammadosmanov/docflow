@@ -112,7 +112,7 @@ pub fn move_no_clobber(source: &Path, destination: &Path) -> io::Result<()> {
 pub fn file_sha256(path: &Path) -> io::Result<String> {
     let mut file = open_source_no_follow(path)?;
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 1024 * 1024];
+    let mut buffer = vec![0_u8; 1024 * 1024];
     loop {
         let count = file.read(&mut buffer)?;
         if count == 0 {
