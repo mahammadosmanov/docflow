@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.45 - 2026-10-27
+
+### Changed
+
+- Test coverage: the compact date picker (it clamps the day when the month changes and reports only complete dates) and the busy-stage cancel control now have unit tests. No app behavior change.
+
 ## 1.36.44 - 2026-10-27
 
 ### Changed
