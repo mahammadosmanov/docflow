@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.90",
+  "currentVersion": "1.33.91",
   "releases": [
+    {
+      "version": "1.33.91",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.91",
+      "summary": "The browser-only demo bridge and its demo data are removed from the desktop build. Main bundle drops from 345.6 kB to 316.0 kB (gzip 102.0 kB to 94.6 kB)."
+    },
     {
       "version": "1.33.90",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.90",
       "summary": "Twenty-six user-facing backend messages are translated: AI extraction failures, printer and copy-count errors, dropped and selected path errors, RFI System folder errors, and clipboard and row-limit messages."
     },

@@ -103,9 +103,11 @@ let sharedBridge: Bridge | null = null;
 
 export function getBridge(): Bridge {
   if (!sharedBridge) {
-    sharedBridge = window.__TAURI_INTERNALS__
-      ? new TauriBridge()
-      : new MockBridge();
+    // The browser mock only exists for `vite dev`; release builds drop it.
+    sharedBridge =
+      window.__TAURI_INTERNALS__ || !import.meta.env.DEV
+        ? new TauriBridge()
+        : new MockBridge();
   }
   return sharedBridge;
 }

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.91 - 2026-10-27
+
+### Changed
+
+- The browser-only demo bridge and its demo data are no longer in the desktop build. The bridge selection checks `import.meta.env.DEV`, so release builds drop the mock. Main bundle: 345.6 kB to 316.0 kB (gzip 102.0 kB to 94.6 kB). No behavior change in the desktop app; `vite dev` still uses the demo.
+
 ## 1.33.90 - 2026-10-27
 
 ### Fixed
