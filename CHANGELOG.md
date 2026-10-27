@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.5 - 2026-10-27
+
+### Changed
+
+- Batch print rows for files and worksheets set the same printer, paper, and copy settings in two places. One helper sets them now. No behavior change.
+
 ## 1.36.4 - 2026-10-27
 
 ### Changed
