@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.86 - 2026-10-27
+
+### Fixed
+
+- The multiline cell `<textarea>` in `frontend/src/plan/EditablePlanTable.tsx` now has `aria-label` set to its column label. Screen readers previously announced it without a name; the single-line inputs in the same table already had one.
+
 ## 1.36.85 - 2026-10-27
 
 ### Fixed
