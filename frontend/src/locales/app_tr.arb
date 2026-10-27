@@ -1050,5 +1050,10 @@
   "error.preset.missing": "Kayıtlı ön ayar artık yok.",
   "error.rfi.documents.invalidOutput": "Oluşturulan belge geçersiz.",
   "note.create_folder": "Klasör oluştur",
-  "note.rfi.followUp.workbookUpdate": "Follow Up çalışma kitabını güncelle"
+  "note.rfi.followUp.workbookUpdate": "Follow Up çalışma kitabını güncelle",
+  "error.path.traversal": "Yol izin verilen klasörün dışına çıkmaya çalıştığı için işlem reddedildi.",
+  "error.path.escape": "Yol, seçtiğiniz klasörün dışında.",
+  "error.path.accessDenied": "Bu klasör bu işlem için izinli değil.",
+  "error.path.grantExpired": "Klasör erişimi süresi doldu. Klasörü yeniden seçin.",
+  "error.path.grantMismatch": "Bu klasör başka bir işlem için seçilmiş. Yeniden seçin."
 }

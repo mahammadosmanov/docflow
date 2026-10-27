@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   formatDate,
@@ -7,7 +7,7 @@ import {
   isPathSelection,
   parseRfiInputs,
 } from "./helpers";
-import { makeStrings } from "./i18n";
+import { loadLocale, makeStrings } from "./i18n";
 
 const s = makeStrings("en");
 
@@ -35,6 +35,19 @@ describe("isPathSelection", () => {
 });
 
 describe("humanError", () => {
+  beforeAll(async () => {
+    await loadLocale("en");
+  });
+
+  it("translates backend path error codes instead of showing the English message", () => {
+    const error = Object.assign(new Error("path traversal is not allowed"), {
+      code: "path_traversal",
+    });
+    expect(humanError(error, s)).toBe(
+      "The path tries to leave its folder, so the action was refused.",
+    );
+  });
+
   it("returns the localized text for a bare error key", () => {
     expect(humanError(new Error("error.watch.notReady"), s)).toBe(s.t("error.watch.notReady"));
   });

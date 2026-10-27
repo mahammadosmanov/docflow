@@ -44,7 +44,21 @@ export function parseRfiInputs(value: unknown): string[] {
   return [...new Set(value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))];
 }
 
+const PATH_ERROR_KEYS: Record<string, string> = {
+  path_traversal: "error.path.traversal",
+  path_escape: "error.path.escape",
+  path_access_denied: "error.path.accessDenied",
+  path_grant_not_found_or_expired: "error.path.grantExpired",
+  path_grant_scope_mismatch: "error.path.grantMismatch",
+};
+
 export function humanError(error: unknown, s: Strings): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String(error.code)
+      : "";
+  const pathKey = PATH_ERROR_KEYS[code];
+  if (pathKey) return s.t(pathKey);
   const raw = error instanceof Error ? error.message : String(error);
   const localizedKey = raw.match(
     /^(?:Error:\s*)?(error\.[A-Za-z0-9_.]+)$/,

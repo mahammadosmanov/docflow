@@ -1078,5 +1078,10 @@
   "error.preset.missing": "The saved preset no longer exists.",
   "error.rfi.documents.invalidOutput": "The generated document is invalid.",
   "note.create_folder": "Create folder",
-  "note.rfi.followUp.workbookUpdate": "Update the Follow Up workbook"
+  "note.rfi.followUp.workbookUpdate": "Update the Follow Up workbook",
+  "error.path.traversal": "The path tries to leave its folder, so the action was refused.",
+  "error.path.escape": "The path is outside the folder you selected.",
+  "error.path.accessDenied": "This folder was not granted for this action.",
+  "error.path.grantExpired": "Folder access expired. Select the folder again.",
+  "error.path.grantMismatch": "This folder was selected for a different action. Select it again."
 }
