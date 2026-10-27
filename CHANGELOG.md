@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.46 - 2026-10-27
+
+### Changed
+
+- Test coverage: the batch-print RFI results panel now has unit tests for its select-by-request toggle and for the ambiguous-request announcement. No app behavior change.
+
 ## 1.36.45 - 2026-10-27
 
 ### Changed
