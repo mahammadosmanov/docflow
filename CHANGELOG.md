@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.87 - 2026-10-27
+
+### Fixed
+
+- Ten backend messages were shown as plain English: print file unavailable, unknown operation, invalid saved print queue, empty print plan, missing review destination, missing source or selected path, missing saved print job, missing recoverable trash item, and unresolvable path. They now use translated text in all four languages.
+
+### Changed
+
+- A helper test fails when a mapped backend message no longer appears in the Rust source, so the mapping cannot go stale.
+
 ## 1.33.86 - 2026-10-27
 
 ### Fixed

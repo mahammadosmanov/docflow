@@ -1,6 +1,9 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  BACKEND_MESSAGE_KEYS,
   formatDate,
   humanError,
   isDuplicatePresetError,
@@ -37,6 +40,12 @@ describe("isPathSelection", () => {
 describe("humanError", () => {
   beforeAll(async () => {
     await loadLocale("en");
+  });
+
+  it("translates plain backend messages that have a catalog key", () => {
+    expect(humanError(new Error("Error: print plan has no rows"), s)).toBe(
+      "The print plan has no rows.",
+    );
   });
 
   it("translates backend path error codes instead of showing the English message", () => {
@@ -92,5 +101,23 @@ describe("formatDate", () => {
       timeStyle: "short",
     }).format(new Date(value));
     expect(formatDate(value, "en")).toBe(expected);
+  });
+});
+
+describe("BACKEND_MESSAGE_KEYS", () => {
+  it("only maps messages that the backend still emits, so the table cannot go stale", () => {
+    const rustSource = (dir: string): string =>
+      readdirSync(dir)
+        .map((name) => {
+          const path = join(dir, name);
+          if (statSync(path).isDirectory()) return rustSource(path);
+          return name.endsWith(".rs") ? readFileSync(path, "utf8") : "";
+        })
+        .join("\n");
+    const source = rustSource(resolve(process.cwd(), "src-tauri/src"));
+    const stale = Object.keys(BACKEND_MESSAGE_KEYS).filter(
+      (message) => !source.includes(`"${message}"`),
+    );
+    expect(stale).toEqual([]);
   });
 });

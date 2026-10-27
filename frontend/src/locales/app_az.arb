@@ -1055,5 +1055,15 @@
   "error.path.escape": "Yol seçdiyiniz qovluqdan kənardadır.",
   "error.path.accessDenied": "Bu qovluğa bu əməliyyat üçün icazə verilməyib.",
   "error.path.grantExpired": "Qovluğa giriş müddəti bitib. Qovluğu yenidən seçin.",
-  "error.path.grantMismatch": "Bu qovluq başqa əməliyyat üçün seçilib. Yenidən seçin."
+  "error.path.grantMismatch": "Bu qovluq başqa əməliyyat üçün seçilib. Yenidən seçin.",
+  "error.print.fileUnavailable": "Çap ediləcək fayl artıq əlçatan deyil.",
+  "error.operation.unknown": "Bu əməliyyat tanınmır.",
+  "error.print.queueInvalid": "Saxlanılmış çap növbəsi etibarsızdır.",
+  "error.print.planEmpty": "Çap planında sətir yoxdur.",
+  "error.review.destinationMissing": "Yoxlama təyinat qovluğu mövcud deyil.",
+  "error.path.sourceMissing": "Mənbə yolu mövcud deyil.",
+  "error.path.selectedMissing": "Seçilmiş yol mövcud deyil.",
+  "error.print.jobMissing": "Saxlanılmış çap işi artıq mövcud deyil.",
+  "error.trash.missing": "Bərpa edilə bilən zibil elementi mövcud deyil.",
+  "error.path.canonicalize": "Yolu müəyyən etmək mümkün deyil."
 }

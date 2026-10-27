@@ -1083,5 +1083,15 @@
   "error.path.escape": "The path is outside the folder you selected.",
   "error.path.accessDenied": "This folder was not granted for this action.",
   "error.path.grantExpired": "Folder access expired. Select the folder again.",
-  "error.path.grantMismatch": "This folder was selected for a different action. Select it again."
+  "error.path.grantMismatch": "This folder was selected for a different action. Select it again.",
+  "error.print.fileUnavailable": "The print file is no longer available.",
+  "error.operation.unknown": "This operation is not recognized.",
+  "error.print.queueInvalid": "The saved print queue is invalid.",
+  "error.print.planEmpty": "The print plan has no rows.",
+  "error.review.destinationMissing": "The review destination folder does not exist.",
+  "error.path.sourceMissing": "The source path does not exist.",
+  "error.path.selectedMissing": "The selected path does not exist.",
+  "error.print.jobMissing": "The saved print job no longer exists.",
+  "error.trash.missing": "The recoverable trash item does not exist.",
+  "error.path.canonicalize": "The path cannot be resolved."
 }

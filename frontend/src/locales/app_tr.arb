@@ -1055,5 +1055,15 @@
   "error.path.escape": "Yol, seçtiğiniz klasörün dışında.",
   "error.path.accessDenied": "Bu klasör bu işlem için izinli değil.",
   "error.path.grantExpired": "Klasör erişimi süresi doldu. Klasörü yeniden seçin.",
-  "error.path.grantMismatch": "Bu klasör başka bir işlem için seçilmiş. Yeniden seçin."
+  "error.path.grantMismatch": "Bu klasör başka bir işlem için seçilmiş. Yeniden seçin.",
+  "error.print.fileUnavailable": "Yazdırılacak dosya artık kullanılamıyor.",
+  "error.operation.unknown": "Bu işlem tanınmıyor.",
+  "error.print.queueInvalid": "Kayıtlı yazdırma kuyruğu geçersiz.",
+  "error.print.planEmpty": "Yazdırma planında satır yok.",
+  "error.review.destinationMissing": "İnceleme hedef klasörü yok.",
+  "error.path.sourceMissing": "Kaynak yol yok.",
+  "error.path.selectedMissing": "Seçilen yol yok.",
+  "error.print.jobMissing": "Kayıtlı yazdırma işi artık yok.",
+  "error.trash.missing": "Geri yüklenebilir çöp öğesi yok.",
+  "error.path.canonicalize": "Yol çözümlenemedi."
 }
