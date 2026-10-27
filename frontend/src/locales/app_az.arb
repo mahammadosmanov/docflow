@@ -1124,5 +1124,12 @@
   "warn.rfi.followUp.reason.structureInsert": "Road hissə sətri əlavə ediləcək (format və düsturlar qonşu sətirdən köçürülür).",
   "warn.rfi.followUp.reason.structureRename": "Hissəsiz Road sətri, Log-da hissələri göstərildiyi üçün 'Part 1' adlandırılacaq.",
   "warn.rfi.followUp.reason.readyFormulaRepair": "Çatışmayan düstur sütunun digər sətirlərindəki düsturdan köçürülərək əlavə ediləcək.",
-  "warn.rfi.followUp.reason.structureZone": "Boş ZONE xanası Road nömrəsinə görə doldurulacaq (1-5 North, 6-13 Center, 14-20 South, 21 North)."
+  "warn.rfi.followUp.reason.structureZone": "Boş ZONE xanası Road nömrəsinə görə doldurulacaq (1-5 North, 6-13 Center, 14-20 South, 21 North).",
+  "error.operation.cancelled": "Əməliyyat ləğv edildi.",
+  "error.preset.missing": "Saxlanılmış şablon artıq mövcud deyil.",
+  "error.rfi.documents.invalidOutput": "Yaradılan sənəd etibarsızdır.",
+  "note.create_folder": "Qovluq yarat",
+  "note.rfi.followUp.workbookUpdate": "Follow Up iş kitabını yenilə",
+  "watch.tooManyEntries": "Qovluqda izləmək üçün həddən artıq element var.",
+  "watch.unreadable": "Qovluq oxuna bilmir."
 }

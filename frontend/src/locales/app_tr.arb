@@ -1124,5 +1124,12 @@
   "warn.rfi.followUp.reason.structureInsert": "Road part satırı eklenecek (biçim ve formüller komşu satırdan kopyalanır).",
   "warn.rfi.followUp.reason.structureRename": "Parçasız Road satırı, Log'daki parçalar için 'Part 1' olarak yeniden adlandırılacak.",
   "warn.rfi.followUp.reason.readyFormulaRepair": "Eksik formül, sütunun diğer satırlarındaki formülden kopyalanarak eklenecek.",
-  "warn.rfi.followUp.reason.structureZone": "Boş ZONE hücresi Road numarasına göre doldurulacak (1-5 North, 6-13 Center, 14-20 South, 21 North)."
+  "warn.rfi.followUp.reason.structureZone": "Boş ZONE hücresi Road numarasına göre doldurulacak (1-5 North, 6-13 Center, 14-20 South, 21 North).",
+  "error.operation.cancelled": "İşlem iptal edildi.",
+  "error.preset.missing": "Kayıtlı ön ayar artık yok.",
+  "error.rfi.documents.invalidOutput": "Oluşturulan belge geçersiz.",
+  "note.create_folder": "Klasör oluştur",
+  "note.rfi.followUp.workbookUpdate": "Follow Up çalışma kitabını güncelle",
+  "watch.tooManyEntries": "Klasörde izlenecek çok fazla öğe var.",
+  "watch.unreadable": "Klasör okunamıyor."
 }
