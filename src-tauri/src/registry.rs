@@ -6,11 +6,13 @@ use crate::contracts::{OperationDef, ParamDef, ParamKind, ParamSchema};
 use crate::operations::{batch_print, process_scans::FAST_COVER_OPERATION_ID};
 
 mod concrete_documents;
+mod file_group;
 mod print_batch;
 mod rfi_log;
 mod rfi_sync;
 mod signed_scans;
 use concrete_documents::concrete_documents_operation;
+use file_group::file_group_operation;
 use print_batch::batch_print_operation;
 use rfi_log::rfi_log_operation;
 use rfi_sync::*;
@@ -118,35 +120,8 @@ fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
 }
 
 pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
-    let file_group = operation(
-        "rfi.group_files",
-        vec![
-            parameter(
-                "source",
-                ParamKind::Folder,
-                "param.rfi.fileGroup.source",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.fileGroup.source.help"),
-            ),
-            parameter(
-                "destination",
-                ParamKind::Folder,
-                "param.rfi.fileGroup.destination",
-                Value::Null,
-                true,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.fileGroup.destination.help"),
-            ),
-        ],
-    );
-
     let rfi_log = rfi_log_operation(&facts);
+    let file_group = file_group_operation();
     let rfi_follow_up = rfi_follow_up_operation();
     let concrete_documents = concrete_documents_operation();
 
