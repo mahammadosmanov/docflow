@@ -10,6 +10,7 @@ impl PdfOcrSession {
         }
         let path = std::ffi::CString::new(path.as_os_str().as_bytes())
             .map_err(|_| OcrFailure::Document("PDF path contains NUL".to_string()))?;
+        // SAFETY: path is a NUL-terminated C string that lives across the call; a null handle is rejected by NonNull::new below.
         let document = unsafe { docflow_pdf_session_open(path.as_ptr()) };
         Ok(Self {
             document: NonNull::new(document)
@@ -42,6 +43,7 @@ impl PdfOcrSession {
             fn docflow_pdfkit_free(value: *mut c_char);
         }
         let mut output = std::ptr::null_mut();
+        // SAFETY: the document handle is live for this session, and output is a writable out-pointer owned by the bridge.
         let status = unsafe {
             docflow_pdf_session_page_text(self.document.as_ptr(), page_index, &mut output)
         };
@@ -51,9 +53,11 @@ impl PdfOcrSession {
                 page_index + 1
             )));
         }
+        // SAFETY: status was checked above, so output is a NUL-terminated string allocated by the bridge and freed below.
         let text = unsafe { CStr::from_ptr(output) }
             .to_string_lossy()
             .into_owned();
+        // SAFETY: output came from the bridge and is freed exactly once here, after its contents were copied.
         unsafe { docflow_pdfkit_free(output) };
         Ok(text)
     }
@@ -83,6 +87,7 @@ impl PdfOcrSession {
         }
         let output = CString::new(output.as_os_str().as_bytes())
             .map_err(|_| "image path contains NUL".to_string())?;
+        // SAFETY: the document handle is live, and output is a NUL-terminated path that lives across the call.
         let status = unsafe {
             docflow_pdf_session_render_page(
                 self.document.as_ptr(),
@@ -138,6 +143,7 @@ impl Drop for PdfOcrSession {
         unsafe extern "C" {
             fn docflow_pdf_session_close(document: *mut std::ffi::c_void);
         }
+        // SAFETY: the document handle was created by docflow_pdf_session_open and is closed exactly once, in Drop.
         unsafe { docflow_pdf_session_close(self.document.as_ptr()) };
     }
 }

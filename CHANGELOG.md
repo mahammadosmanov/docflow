@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.44 - 2026-10-27
+
+### Changed
+
+- The remaining unsafe calls in the clipboard, PDF OCR bridge, PDF publish, journal lock, and file-rename code now have SAFETY notes stating why each one is sound. The Windows-only files could not be compiled on this Mac; the notes are comments, and formatting checks parse them. No behavior change.
+
 ## 1.36.43 - 2026-10-27
 
 ### Changed
