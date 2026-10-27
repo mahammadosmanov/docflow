@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.82 - 2026-10-27
+
+### Fixed
+
+- Corrects 1.33.80. The watch-folder messages were not shown as raw keys: the queue screen already translates watch codes through `error.<code>`, which had translations. The `watch.tooManyEntries` and `watch.unreadable` keys added in 1.33.80 were never looked up and are removed.
+
+### Changed
+
+- The backend key guard resolves `watch.*` codes through the `error.` prefix, matching the queue screen.
+
 ## 1.33.81 - 2026-10-27
 
 ### Changed

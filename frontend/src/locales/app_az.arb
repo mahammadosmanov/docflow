@@ -1129,7 +1129,5 @@
   "error.preset.missing": "Saxlanılmış şablon artıq mövcud deyil.",
   "error.rfi.documents.invalidOutput": "Yaradılan sənəd etibarsızdır.",
   "note.create_folder": "Qovluq yarat",
-  "note.rfi.followUp.workbookUpdate": "Follow Up iş kitabını yenilə",
-  "watch.tooManyEntries": "Qovluqda izləmək üçün həddən artıq element var.",
-  "watch.unreadable": "Qovluq oxuna bilmir."
+  "note.rfi.followUp.workbookUpdate": "Follow Up iş kitabını yenilə"
 }
