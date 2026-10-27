@@ -10,6 +10,8 @@ fn normalized_source() -> String {
         include_str!("anchored.rs"),
         include_str!("unix_dir.rs"),
         include_str!("windows_dir.rs"),
+        include_str!("security.rs"),
+        include_str!("retained_storage.rs"),
     ]
     .join("\n")
     .replace("\r\n", "\n")

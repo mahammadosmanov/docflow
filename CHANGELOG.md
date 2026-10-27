@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.99 - 2026-10-27
+
+### Changed
+
+- `cap_fs.rs` (820 lines) keeps the capability root, authorization and missing-directory code and moves two groups into child files: `cap_fs/security.rs` (file and parent security snapshots, creation security descriptors, secured created files and the Windows creation-security helpers) and `cap_fs/retained_storage.rs` (the S5 retained-artifact storage scan and reservation types). Logic is unchanged; the source-scan test reads the new files; clippy is clean with `-D warnings` and the 542 lib tests pass.
+
 ## 1.36.98 - 2026-10-27
 
 ### Changed
