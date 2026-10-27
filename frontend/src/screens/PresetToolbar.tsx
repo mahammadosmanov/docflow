@@ -26,7 +26,7 @@ import {
   isDuplicatePresetError,
 } from "../helpers";
 
-export type PresetToolbarProps = {
+type PresetToolbarProps = {
   bridge: Bridge;
   operation: OperationDef;
   values: Record<string, unknown>;

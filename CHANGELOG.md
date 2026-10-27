@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.68 - 2026-10-27
+
+### Changed
+
+- Removed `export` from six frontend types used only in their own file (`PlanImpact`, `SignedWarningReason`, `SignedWarningReviewItem`, `WorkbookCellChange`, `ApplyScreenState`, `PresetToolbarProps`). No application behavior changes.
+
 ## 1.33.67 - 2026-10-27
 
 ### Changed

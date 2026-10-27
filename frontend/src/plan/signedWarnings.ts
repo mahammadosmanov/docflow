@@ -1,13 +1,13 @@
 import { type Plan } from "../types";
 
-export interface SignedWarningReason {
+interface SignedWarningReason {
   key: string;
   pageNumber: number | null;
   code: string;
   detail: string;
 }
 
-export interface SignedWarningReviewItem {
+interface SignedWarningReviewItem {
   sourceFile: string;
   destination: string;
   status: "planned" | "exists" | "blocked";

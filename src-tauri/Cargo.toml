@@ -1,6 +1,6 @@
 [package]
 name = "docflow"
-version = "1.33.67"
+version = "1.33.68"
 description = "Safe desktop document automation"
 authors = ["DocFlow"]
 edition = "2024"
