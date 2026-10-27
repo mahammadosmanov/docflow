@@ -329,7 +329,7 @@ pub(crate) fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerpri
     file.seek(SeekFrom::Start(0))
         .map_err(|_| workbook_invalid())?;
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     loop {
         let read = file.read(&mut buffer).map_err(|_| workbook_invalid())?;
         if read == 0 {

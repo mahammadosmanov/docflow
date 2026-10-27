@@ -109,7 +109,7 @@ pub fn file_signature_from_open_file(
         file.seek(SeekFrom::Start(0))
             .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
         let mut digest = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
+        let mut buffer = vec![0_u8; 64 * 1024];
         loop {
             let read = file
                 .read(&mut buffer)

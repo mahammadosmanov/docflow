@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.57 - 2026-10-27
+
+### Fixed
+
+- Eight streaming copy and hash buffers in the library moved from stack arrays (`[0_u8; N]`) to heap `vec!` buffers. The largest was 1 MiB (`fs_ops.rs`), which can overflow a 1 MB Windows main-thread stack. Behavior is unchanged; the reads are the same size. Clippy's `large_stack_arrays` lint now passes.
+
 ## 1.36.56 - 2026-10-27
 
 ### Changed

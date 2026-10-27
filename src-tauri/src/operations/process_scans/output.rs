@@ -146,7 +146,7 @@ pub(super) fn hash_pdf(path: &Path) -> Result<String, String> {
     }
     let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     loop {
         let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
         if count == 0 {

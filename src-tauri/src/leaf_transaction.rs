@@ -475,7 +475,7 @@ fn recovery_required(locator: &str) -> RetainedPublicationOutcome {
 fn sha256_reader<R: Read + Seek>(mut reader: R) -> std::io::Result<String> {
     reader.seek(SeekFrom::Start(0))?;
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     loop {
         let read = reader.read(&mut buffer)?;
         if read == 0 {
