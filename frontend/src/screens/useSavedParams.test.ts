@@ -56,6 +56,17 @@ describe("useSavedParams", () => {
     expect(hook.result.current.previousValues).toBeNull();
   });
 
+  it("does not overwrite a value the user changed before the restore finished", async () => {
+    const { setValues, hook } = setup({ source: "/a", copies: 3 });
+    await waitFor(() => expect(setValues).toHaveBeenCalled());
+    const update = setValues.mock.calls[0][0] as (current: object) => object;
+    expect(update({ source: "/picked", copies: 1 })).toEqual({
+      source: "/picked",
+      copies: 3,
+    });
+    expect(hook.result.current.previousValues).toBeNull();
+  });
+
   it("keeps remembered values aside for operations that use presets", async () => {
     const { setValues, hook } = setup({ source: "/a" }, {}, presetOperation);
     await waitFor(() => expect(setValues).toHaveBeenCalled());
