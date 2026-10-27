@@ -1050,5 +1050,10 @@
   "error.preset.missing": "Сохранённый пресет больше не существует.",
   "error.rfi.documents.invalidOutput": "Созданный документ недействителен.",
   "note.create_folder": "Создать папку",
-  "note.rfi.followUp.workbookUpdate": "Обновить книгу Follow Up"
+  "note.rfi.followUp.workbookUpdate": "Обновить книгу Follow Up",
+  "error.path.traversal": "Путь выходит за пределы разрешённой папки, поэтому операция отклонена.",
+  "error.path.escape": "Путь находится за пределами выбранной папки.",
+  "error.path.accessDenied": "Для этого действия эта папка не разрешена.",
+  "error.path.grantExpired": "Срок доступа к папке истёк. Выберите папку снова.",
+  "error.path.grantMismatch": "Эта папка выбрана для другого действия. Выберите её снова."
 }

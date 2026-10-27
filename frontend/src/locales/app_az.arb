@@ -1050,5 +1050,10 @@
   "error.preset.missing": "Saxlanılmış şablon artıq mövcud deyil.",
   "error.rfi.documents.invalidOutput": "Yaradılan sənəd etibarsızdır.",
   "note.create_folder": "Qovluq yarat",
-  "note.rfi.followUp.workbookUpdate": "Follow Up iş kitabını yenilə"
+  "note.rfi.followUp.workbookUpdate": "Follow Up iş kitabını yenilə",
+  "error.path.traversal": "Yol icazə verilən qovluqdan kənara çıxdığı üçün əməliyyat rədd edildi.",
+  "error.path.escape": "Yol seçdiyiniz qovluqdan kənardadır.",
+  "error.path.accessDenied": "Bu qovluğa bu əməliyyat üçün icazə verilməyib.",
+  "error.path.grantExpired": "Qovluğa giriş müddəti bitib. Qovluğu yenidən seçin.",
+  "error.path.grantMismatch": "Bu qovluq başqa əməliyyat üçün seçilib. Yenidən seçin."
 }

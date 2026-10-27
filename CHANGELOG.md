@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.86 - 2026-10-27
+
+### Fixed
+
+- Path errors from the backend (traversal, escape, denied access, expired or mismatched folder grants) were shown as raw English text. They now use translated messages in all four languages.
+
 ## 1.33.85 - 2026-10-27
 
 ### Fixed
