@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.73 - 2026-10-27
+
+### Changed
+
+- Moved the undo path (`undo`, `recover_pending`, `undo_follow_up`, and the failed-apply restore helpers) out of `fs_ops/follow_up.rs` (966 lines) into `fs_ops/follow_up/undo.rs`. Visibility widened to `pub(in crate::fs_ops)` only where the parent calls them. The 19 fs_ops tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.72 - 2026-10-27
 
 ### Changed
