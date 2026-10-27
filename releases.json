@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.38",
+  "currentVersion": "1.36.39",
   "releases": [
+    {
+      "version": "1.36.39",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.39",
+      "summary": "Accessibility of progress: the run progress bar is a labelled progressbar with its values when the total is known, and the phase text (preparing, scanning, and so on) is announced as a status."
+    },
     {
       "version": "1.36.38",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.38",
       "summary": "Keyboard and screen-reader focus after Apply: when the result appears, focus moves to it, the same as after a preview. Before, focus fell back to the top of the page."
     },
