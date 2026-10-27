@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.74 - 2026-10-27
+
+### Changed
+
+- Moved `PrintService` and its impl (queue begin, apply, verify, and cancellation wiring) out of `print_queue.rs` (883 lines) into `print_queue/service.rs`. Fields and methods that sibling print-queue modules call are widened to `pub(in crate::print_queue)`. The 6 print-queue tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.73 - 2026-10-27
 
 ### Changed
