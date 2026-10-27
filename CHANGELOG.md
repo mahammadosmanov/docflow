@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.89 - 2026-10-27
+
+### Changed
+
+- The slot-pruning pass at the start of `classify_workbooks_full` (drop RFIs removed by log state or deletion evidence, then flag slots whose lifecycle status changed) now lives in `prune_slot_codes` in `rfi_follow_up/classify.rs`. Same logic and order. Clippy is clean with `-D warnings`, the 33 rfi_follow_up tests and the full 542-test lib suite pass.
+
 ## 1.36.88 - 2026-10-27
 
 ### Changed

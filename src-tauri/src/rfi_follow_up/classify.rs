@@ -123,6 +123,63 @@ fn deletion_evidence(
     (deleted_count, mass_deletion)
 }
 
+/// Drops RFIs whose log state removes them from the slot and marks slots whose
+/// lifecycle status changed.
+fn prune_slot_codes(
+    slot: &mut SlotWork,
+    records: &BTreeMap<String, SourceRecord>,
+    logged_numbers: &BTreeSet<String>,
+    mass_deletion: bool,
+    target_workbook: &WorkbookData,
+) {
+    let removed = slot
+        .codes
+        .iter()
+        .filter(|code| {
+            !is_placeholder_rfi(code)
+                && match records.get(*code) {
+                    Some(record) => {
+                        record.excluded_civ_pcs
+                            || is_confirmed_follow_up_exclusion(record)
+                            || record.state == Some(LogState::Remove)
+                    }
+                    // Deleted from the Log: absent even as a bare number.
+                    None => !mass_deletion && !logged_numbers.contains(*code),
+                }
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if !removed.is_empty() {
+        slot.codes.retain(|code| !removed.contains(code));
+        slot.changed_rfis.extend(removed);
+    }
+    // Signed By layouts show Worley state, not RFI lifecycle state.
+    if !is_signed_layout(&slot.layout)
+        && slot
+            .codes
+            .iter()
+            .filter(|code| !is_placeholder_rfi(code))
+            .all(|code| {
+                records.get(code).is_some_and(|record| {
+                    record_matches_lifecycle_slot(slot, record, target_workbook)
+                })
+            })
+        && slot
+            .codes
+            .iter()
+            .filter(|code| !is_placeholder_rfi(code))
+            .any(|code| records.get(code).and_then(|record| record.state).is_some())
+    {
+        let next = main_status_for_codes(&slot.codes, records);
+        if next
+            .as_deref()
+            .is_some_and(|status| status != slot.current_status)
+        {
+            slot.changed_rfis.extend(slot.codes.iter().cloned());
+        }
+    }
+}
+
 pub(super) fn classify_workbooks_full(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,
@@ -145,52 +202,13 @@ pub(super) fn classify_workbooks_full(
     let (deleted_count, mass_deletion) = deletion_evidence(&slots, &records, &logged_numbers);
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {
-        let removed = slot
-            .codes
-            .iter()
-            .filter(|code| {
-                !is_placeholder_rfi(code)
-                    && match records.get(*code) {
-                        Some(record) => {
-                            record.excluded_civ_pcs
-                                || is_confirmed_follow_up_exclusion(record)
-                                || record.state == Some(LogState::Remove)
-                        }
-                        // Deleted from the Log: absent even as a bare number.
-                        None => !mass_deletion && !logged_numbers.contains(*code),
-                    }
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if !removed.is_empty() {
-            slot.codes.retain(|code| !removed.contains(code));
-            slot.changed_rfis.extend(removed);
-        }
-        // Signed By layouts show Worley state, not RFI lifecycle state.
-        if !is_signed_layout(&slot.layout)
-            && slot
-                .codes
-                .iter()
-                .filter(|code| !is_placeholder_rfi(code))
-                .all(|code| {
-                    records.get(code).is_some_and(|record| {
-                        record_matches_lifecycle_slot(slot, record, target_workbook)
-                    })
-                })
-            && slot
-                .codes
-                .iter()
-                .filter(|code| !is_placeholder_rfi(code))
-                .any(|code| records.get(code).and_then(|record| record.state).is_some())
-        {
-            let next = main_status_for_codes(&slot.codes, &records);
-            if next
-                .as_deref()
-                .is_some_and(|status| status != slot.current_status)
-            {
-                slot.changed_rfis.extend(slot.codes.iter().cloned());
-            }
-        }
+        prune_slot_codes(
+            slot,
+            &records,
+            &logged_numbers,
+            mass_deletion,
+            target_workbook,
+        );
     }
 
     let (potential_slots_by_sheet_col, existing_slot_keys_by_code) = index_slots(&slots);
