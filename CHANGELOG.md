@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.96 - 2026-10-27
+
+### Changed
+
+- The 2,845-line `ooxml/tests.rs` is split into seven concern-based files under `ooxml/tests/`: package and XML limits, sheet projection, namespace and relationship validation, archive preflight, relationships and connections, recalc and rich patches, and row insert and formulas. Shared helpers and fixtures stay in `tests.rs`. All 92 tests are kept unchanged; the lib suite still passes 542 tests and clippy is clean with `-D warnings`.
+
 ## 1.36.95 - 2026-10-27
 
 ### Changed
