@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.71 - 2026-10-27
+
+### Changed
+
+- Added unit tests for the path selection helpers in `lib/platform.ts`: first-selection rules, empty picks, dropped paths, and reveal. No application behavior changes.
+
 ## 1.33.70 - 2026-10-27
 
 ### Changed

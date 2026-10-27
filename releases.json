@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.70",
+  "currentVersion": "1.33.71",
   "releases": [
+    {
+      "version": "1.33.71",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.71",
+      "summary": "Adds tests for the file and folder selection helpers. No behavior change."
+    },
     {
       "version": "1.33.70",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.70",
       "summary": "Adds tests for workbook cell change previews. No behavior change."
     },
