@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.71 - 2026-10-27
+
+### Changed
+
+- Moved the XML cell-patching helpers (`patch_civ010_numeric_cells`, `expand_civ010_batch_rows`, row shifting and cloning, `set_numeric_cell`, `set_text_cell`) out of `concrete_documents.rs` (850 lines) into `concrete_documents/cells.rs`. Visibility and imports only. The 14 concrete-document tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.70 - 2026-10-27
 
 ### Changed
