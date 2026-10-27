@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.15 - 2026-10-27
+
+### Changed
+
+- The Node type definitions (@types/node, dev only) move from 26.2.0 to 26.6.5. Typecheck, all 263 frontend tests, and the production build pass.
+
 ## 1.36.14 - 2026-10-27
 
 ### Changed
