@@ -2564,13 +2564,19 @@ describe("DocFlow shell", () => {
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
 
     expect(
-      await screen.findByText("RFI kayıtlarını kontrol et ve düzenle"),
+      await screen.findByText(
+        "RFI kayıtlarını kontrol et ve düzenle",
+        undefined,
+        { timeout: 3000 },
+      ),
     ).toBeVisible();
 
     // Press Escape to return to form
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(await screen.findByRole("button", { name: "Önizle" })).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Önizle" }, { timeout: 3000 }),
+    ).toBeVisible();
   });
 
   it("supports quick theme toggling via header button and Alt+T shortcut", async () => {

@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.12 - 2026-10-27
+
+### Fixed
+
+- Error, warning, and info messages (notices) had no live-region role, so screen readers did not announce them when they appeared. Errors and warnings now use role="alert"; info messages use role="status".
+- The Ctrl+Enter and Escape keyboard test waited 1 second for the preview, which could fail on a slow run. It now waits up to 3 seconds.
+
 ## 1.35.11 - 2026-10-27
 
 ### Fixed
