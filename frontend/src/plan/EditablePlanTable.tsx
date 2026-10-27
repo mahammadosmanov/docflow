@@ -1,6 +1,5 @@
 import {
   AdjustableDataRegion,
-  ColumnResizeHandle,
   clampColumnWidth,
 } from "../components/AdjustableDataRegion";
 import {
@@ -33,6 +32,7 @@ import {
 import { PlanFilterBar } from "./PlanFilterBar";
 import { PlanSelectionBar } from "./PlanSelectionBar";
 import { PlanBulkFields } from "./PlanBulkFields";
+import { PlanTableHead } from "./PlanTableHead";
 import {
   type EditorColumn,
   displayEditorValue,
@@ -334,62 +334,30 @@ export function EditablePlanTable({
               <col className="editor-actions-column" style={{ width: 132 }} />
             )}
           </colgroup>
-          <thead>
-            <tr>
-              {editor.selectionEnabled === true && (
-                <th className="selection-column">
-                  <input
-                    aria-label={s.t("editor.selectAll")}
-                    type="checkbox"
-                    checked={
-                      filteredRowIndices.length > 0 &&
-                      filteredRowIndices.every((index) =>
-                        selectedIds.has(rowId(rows[index], index)),
-                      )
-                    }
-                    onChange={(event) =>
-                      event.target.checked ? selectAll() : selectNone()
-                    }
-                  />
-                </th>
-              )}
-              {visibleColumns.map((column) => {
-                const label = s.t(column.labelKey);
-                const width = columnWidth(column);
-                return (
-                  <th
-                    key={column.key}
-                    className="adjustable-column-header"
-                    scope="col"
-                    aria-labelledby={`${headerId}-${column.key}`}
-                    style={{ width }}
-                    title={label}
-                  >
-                    <span id={`${headerId}-${column.key}`}>{label}</span>
-                    <ColumnResizeHandle
-                      width={width}
-                      label={label}
-                      minWidth={editorColumnMinWidth(column)}
-                      s={s}
-                      onWidthChange={(nextWidth) =>
-                        setColumnWidths((current) => ({
-                          ...current,
-                          [`${widthScope}:${column.key}`]: nextWidth,
-                        }))
-                      }
-                    />
-                  </th>
-                );
-              })}
-              {(editor.reorderable === true ||
-                editor.duplicateEnabled === true) && (
-                <th
-                  className="editor-actions-header"
-                  aria-label={s.t("editor.rowActions")}
-                />
-              )}
-            </tr>
-          </thead>
+          <PlanTableHead
+            showSelection={editor.selectionEnabled === true}
+            showActions={
+              editor.reorderable === true || editor.duplicateEnabled === true
+            }
+            allSelected={
+              filteredRowIndices.length > 0 &&
+              filteredRowIndices.every((index) =>
+                selectedIds.has(rowId(rows[index], index)),
+              )
+            }
+            onSelectAll={selectAll}
+            onSelectNone={selectNone}
+            visibleColumns={visibleColumns}
+            columnWidth={columnWidth}
+            headerId={headerId}
+            onColumnWidthChange={(columnKey, nextWidth) =>
+              setColumnWidths((current) => ({
+                ...current,
+                [`${widthScope}:${columnKey}`]: nextWidth,
+              }))
+            }
+            s={s}
+          />
           <tbody>
             {filteredRowIndices.map((rowIndex) => {
               const row = rows[rowIndex];
