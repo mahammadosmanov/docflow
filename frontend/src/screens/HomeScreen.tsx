@@ -248,6 +248,7 @@ export function HomeScreen({
                     key={cat}
                     type="button"
                     className={`category-chip ${activeCategory === cat ? "active" : ""}`}
+                    aria-pressed={activeCategory === cat}
                     onClick={() => setActiveCategory(cat)}
                   >
                     {s.t(`ops.category.${cat}`)}
