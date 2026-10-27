@@ -1,5 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 
+import type { Strings } from "../i18n";
 import type { Bridge } from "../lib/bridge";
 import { persistableValues } from "../lib/operationValues";
 import type { OperationDef } from "../types";
@@ -12,6 +13,7 @@ import { rememberedParams } from "./operationState";
  */
 export function useSavedParams({
   bridge,
+  s,
   operation,
   initialValues,
   values,
@@ -19,6 +21,7 @@ export function useSavedParams({
   setValues,
 }: {
   bridge: Bridge;
+  s: Strings;
   operation: OperationDef;
   initialValues?: Record<string, unknown>;
   values: Record<string, unknown>;
@@ -28,6 +31,7 @@ export function useSavedParams({
   const valuesRevision = useRef(0);
   const [hydrated, setHydrated] = useState(false);
   const lastSaved = useRef("");
+  const [saveError, setSaveError] = useState("");
   const [previousValues, setPreviousValues] = useState<Record<
     string,
     unknown
@@ -89,10 +93,11 @@ export function useSavedParams({
           opId: operation.id,
           values: sanitized,
         })
-        .catch(() => {});
+        .then(() => setSaveError(""))
+        .catch(() => setSaveError(s.t("params.saveFailed")));
     }, 200);
     return () => clearTimeout(timer);
-  }, [bridge, operation, values, hydrated]);
+  }, [bridge, operation, values, hydrated, s]);
 
-  return { valuesRevision, lastSaved, previousValues, setPreviousValues };
+  return { valuesRevision, lastSaved, previousValues, setPreviousValues, saveError };
 }
