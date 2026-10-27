@@ -356,7 +356,7 @@ pub fn package_has_signature<R: Read + Seek>(source: &mut R) -> Result<bool, Oox
     let mut has_signature_member = false;
     for index in 0..archive.len() {
         let entry = archive.by_index(index)?;
-        has_signature_member |= is_signature_member(entry.name());
+        has_signature_member |= is_signature_member(&entry.name()?);
     }
     Ok(signature_target.is_some() || has_signature_member)
 }

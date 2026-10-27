@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.21",
+  "currentVersion": "1.36.22",
   "releases": [
+    {
+      "version": "1.36.22",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.22",
+      "summary": "Security: the zip archive library moves from 8.6.0 to 9.0.0, fixing three advisories (RUSTSEC-2026-0367/0368/0369) about unsafe extraction of ZIP entries. The app does not call extract(), so the exposure was not reachable here. Office package code now treats entry names that are not valid UTF-8 as errors instead of reading them lossily."
+    },
     {
       "version": "1.36.21",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.21",
       "summary": "Removes three stray backup copies of test files (*.rs-E) that were committed by mistake. They were not compiled or referenced, so no behavior changes."
     },

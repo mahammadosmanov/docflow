@@ -243,8 +243,8 @@ where
         return Err(OoxmlError::invalid("guarded package member roster changed"));
     }
     for index in 0..source_archive.len() {
-        let source_name = source_archive.by_index(index)?.name().to_string();
-        let destination_name = destination_archive.by_index(index)?.name().to_string();
+        let source_name = source_archive.by_index(index)?.name()?.into_owned();
+        let destination_name = destination_archive.by_index(index)?.name()?.into_owned();
         if source_name != destination_name {
             return Err(OoxmlError::invalid("guarded package member roster changed"));
         }

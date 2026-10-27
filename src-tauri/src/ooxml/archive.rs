@@ -248,7 +248,7 @@ pub(super) fn validate_archive<R: Read + Seek>(
         }
         if entry.encrypted()
             || entry.enclosed_name().is_none()
-            || !names.insert(entry.name().to_string())
+            || !names.insert(entry.name()?.into_owned())
         {
             return Err(OoxmlError::invalid("workbook ZIP entry is invalid"));
         }
@@ -309,8 +309,8 @@ where
 {
     for index in 0..archive.len() {
         let entry = archive.by_index(index)?;
-        if let Some(bytes) = patched.get(entry.name()) {
-            let name = entry.name().to_string();
+        let name = entry.name()?.into_owned();
+        if let Some(bytes) = patched.get(&name) {
             let mut options = entry.options().into_full_options();
             if !entry.comment().is_empty() {
                 options = options.with_file_comment(entry.comment());

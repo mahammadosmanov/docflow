@@ -184,8 +184,8 @@ fn replace_cursor_member(
         .unwrap();
     for index in 0..archive.len() {
         let entry = archive.by_index(index).unwrap();
-        if entry.name() == name {
-            let entry_name = entry.name().to_string();
+        if entry.name().unwrap() == name {
+            let entry_name = entry.name().unwrap().into_owned();
             let mut options = entry.options().into_full_options();
             if !entry.comment().is_empty() {
                 options = options.with_file_comment(entry.comment());
@@ -745,7 +745,14 @@ fn evidence(path: &Path) -> (Vec<String>, Vec<u8>, BTreeMap<String, EntryEvidenc
     let mut archive = ZipArchive::new(file).unwrap();
     let comment = archive.comment().to_vec();
     let names = (0..archive.len())
-        .map(|index| archive.by_index(index).unwrap().name().to_string())
+        .map(|index| {
+            archive
+                .by_index(index)
+                .unwrap()
+                .name()
+                .unwrap()
+                .into_owned()
+        })
         .collect::<Vec<_>>();
     let mut entries = BTreeMap::new();
     for name in &names {
