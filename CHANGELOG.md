@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.15 - 2026-10-27
+
+### Fixed
+
+- An unexpected error while drawing a screen left the whole window blank with no way to recover. The app now shows a translated message and a Reload button, and logs the error to the console.
+
 ## 1.35.14 - 2026-10-27
 
 ### Fixed

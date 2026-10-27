@@ -1166,5 +1166,7 @@
   "error.rfi.sourceChanged": "Mənbə fayl önizləmədən sonra dəyişdi. Yenidən önizləyin.",
   "error.support.bundleInvalid": "Diaqnostika faylı etibarsızdır və ya dəyişdirilib. Yenidən yaradın.",
   "error.path.generatedMissing": "Yaradılmış fayl artıq təyinatında yoxdur. Yenidən yaradın.",
-  "error.print.queueIdInvalid": "Çap növbəsi müəyyən edilmədi. Növbəni yenidən önizləyin."
+  "error.print.queueIdInvalid": "Çap növbəsi müəyyən edilmədi. Növbəni yenidən önizləyin.",
+  "error.unexpected": "DocFlow gözlənilməz problemlə qarşılaşdı. Davam etmək üçün yenidən yükləyin.",
+  "action.reload": "Yenidən yüklə"
 }

@@ -1194,5 +1194,7 @@
   "error.rfi.sourceChanged": "A source file changed after preview. Preview again.",
   "error.support.bundleInvalid": "The diagnostics file is invalid or was changed. Create it again.",
   "error.path.generatedMissing": "The generated file is no longer in its destination. Create it again.",
-  "error.print.queueIdInvalid": "The print queue could not be identified. Preview the queue again."
+  "error.print.queueIdInvalid": "The print queue could not be identified. Preview the queue again.",
+  "error.unexpected": "DocFlow hit an unexpected problem. Reload to continue.",
+  "action.reload": "Reload"
 }
