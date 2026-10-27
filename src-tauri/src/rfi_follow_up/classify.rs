@@ -1,5 +1,42 @@
 use super::*;
 
+/// Builds a manual-review follow-up row that cannot be applied automatically.
+fn manual_review_row(
+    row_id: String,
+    sheet_name: &str,
+    layout: &FollowUpLayout,
+    record: &SourceRecord,
+    reason_key: String,
+    mapping: Option<String>,
+) -> FollowUpRow {
+    FollowUpRow {
+        row_id,
+        sheet: sheet_name.to_string(),
+        row: 0,
+        rfi_no: record.short_rfi.clone(),
+        source_statuses: vec![record.inspection_status_for_ui()],
+        current_status: String::new(),
+        proposed_status: None,
+        proposed_rfi_no: None,
+        disposition: FollowUpDisposition::ManualReview,
+        reason_key,
+        selectable: false,
+        enabled: false,
+        remark: None,
+        formula_fixes: Vec::new(),
+        target: FollowUpReviewTarget {
+            worksheet: layout.worksheet.clone(),
+            row: 0,
+            rfi_column: layout.rfi_column,
+            status_column: layout.status_column,
+            rfi_cell: None,
+            status_cell: None,
+        },
+        source_evidence: record.evidence.clone(),
+        mapping_details: mapping,
+    }
+}
+
 pub(super) fn classify_workbooks_full(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,
@@ -330,17 +367,12 @@ pub(super) fn classify_workbooks_full(
                 unmapped_count -= 1;
                 continue;
             };
-            manual_rows.push(FollowUpRow {
-                row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
-                sheet: sheet_name.to_string(),
-                row: 0,
-                rfi_no: record.short_rfi.clone(),
-                source_statuses: vec![record.inspection_status_for_ui()],
-                current_status: String::new(),
-                proposed_status: None,
-                proposed_rfi_no: None,
-                disposition: FollowUpDisposition::ManualReview,
-                reason_key: if record.state.is_none() {
+            manual_rows.push(manual_review_row(
+                format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                sheet_name,
+                &layout,
+                record,
+                if record.state.is_none() {
                     "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
                 } else if candidate_count == 0 {
                     scope_candidates
@@ -353,26 +385,13 @@ pub(super) fn classify_workbooks_full(
                 } else {
                     "warn.rfi.followUp.reason.mappingAmbiguous".to_string()
                 },
-                selectable: false,
-                enabled: false,
-                remark: None,
-                formula_fixes: Vec::new(),
-                target: FollowUpReviewTarget {
-                    worksheet: layout.worksheet,
-                    row: 0,
-                    rfi_column: layout.rfi_column,
-                    status_column: layout.status_column,
-                    rfi_cell: None,
-                    status_cell: None,
-                },
-                source_evidence: record.evidence.clone(),
-                mapping_details: Some(mapping_details(
+                Some(mapping_details(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
                     &scope_candidates,
                 )),
-            });
+            ));
             continue;
         }
         let already_mapped_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
@@ -382,37 +401,19 @@ pub(super) fn classify_workbooks_full(
                 .get(&candidates[0])
                 .map(|slot| slot.layout.clone())
                 .ok_or_else(workbook_invalid)?;
-            manual_rows.push(FollowUpRow {
-                row_id: format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
-                sheet: sheet_name.to_string(),
-                row: 0,
-                rfi_no: record.short_rfi.clone(),
-                source_statuses: vec![record.inspection_status_for_ui()],
-                current_status: String::new(),
-                proposed_status: None,
-                proposed_rfi_no: None,
-                disposition: FollowUpDisposition::ManualReview,
-                reason_key: "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
-                selectable: false,
-                enabled: false,
-                remark: None,
-                formula_fixes: Vec::new(),
-                target: FollowUpReviewTarget {
-                    worksheet: layout.worksheet,
-                    row: 0,
-                    rfi_column: layout.rfi_column,
-                    status_column: layout.status_column,
-                    rfi_cell: None,
-                    status_cell: None,
-                },
-                source_evidence: record.evidence.clone(),
-                mapping_details: Some(mapping_details(
+            manual_rows.push(manual_review_row(
+                format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+                sheet_name,
+                &layout,
+                record,
+                "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
+                Some(mapping_details(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
                     &scope_candidates,
                 )),
-            });
+            ));
             continue;
         }
         if mec_context_coverage == Some(false) || civ_tag_coverage == Some(false) {
@@ -421,44 +422,26 @@ pub(super) fn classify_workbooks_full(
                 .get(&candidates[0])
                 .map(|slot| slot.layout.clone())
                 .ok_or_else(workbook_invalid)?;
-            manual_rows.push(FollowUpRow {
-                row_id: format!(
+            manual_rows.push(manual_review_row(
+                format!(
                     "rfi-follow-up-unmapped:{}:missing-context",
                     record.canonical_rfi
                 ),
-                sheet: sheet_name.to_string(),
-                row: 0,
-                rfi_no: record.short_rfi.clone(),
-                source_statuses: vec![record.inspection_status_for_ui()],
-                current_status: String::new(),
-                proposed_status: None,
-                proposed_rfi_no: None,
-                disposition: FollowUpDisposition::ManualReview,
-                reason_key: if record.state.is_none() {
+                sheet_name,
+                &layout,
+                record,
+                if record.state.is_none() {
                     "warn.rfi.followUp.reason.sourceStatusUnknown".to_string()
                 } else {
                     "warn.rfi.followUp.reason.partialContext".to_string()
                 },
-                selectable: false,
-                enabled: false,
-                remark: None,
-                formula_fixes: Vec::new(),
-                target: FollowUpReviewTarget {
-                    worksheet: layout.worksheet,
-                    row: 0,
-                    rfi_column: layout.rfi_column,
-                    status_column: layout.status_column,
-                    rfi_cell: None,
-                    status_cell: None,
-                },
-                source_evidence: record.evidence.clone(),
-                mapping_details: Some(mapping_details(
+                Some(mapping_details(
                     record,
                     Some((sheet_name, target_clause)),
                     target_workbook,
                     &scope_candidates,
                 )),
-            });
+            ));
         }
 
         for key in candidates {
