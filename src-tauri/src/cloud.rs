@@ -13,7 +13,7 @@ use crate::{
     contracts::{HistoryPayload, HistoryRow},
     credentials::StoredSession,
     errors::BackendError,
-    http::{HttpError, HttpResponse, JsonHttp},
+    http::{HttpResponse, JsonHttp},
 };
 
 const MAX_HISTORY_LIMIT: usize = 100;
@@ -192,7 +192,7 @@ impl CloudHistory {
                 &headers,
                 body,
             )
-            .map_err(map_http_error)
+            .map_err(BackendError::from)
     }
 }
 
@@ -277,13 +277,4 @@ fn string_value(value: Option<&Value>) -> String {
 
 fn unsigned_value(value: Option<&Value>) -> u64 {
     value.and_then(Value::as_u64).unwrap_or_default()
-}
-
-fn map_http_error(error: HttpError) -> BackendError {
-    match error {
-        HttpError::Timeout => BackendError::network_timeout(),
-        HttpError::ResponseTooLarge => BackendError::response_too_large(),
-        HttpError::Offline => BackendError::offline(),
-        _ => BackendError::request_failed(error.to_string()),
-    }
 }

@@ -3,6 +3,8 @@ use std::{fmt, time::Duration};
 use serde_json::Value;
 use ureq::{Agent, http};
 
+use crate::errors::BackendError;
+
 #[derive(Clone, Copy)]
 pub struct HttpConfig {
     pub connect_timeout: Duration,
@@ -52,6 +54,17 @@ impl fmt::Display for HttpError {
 }
 
 impl std::error::Error for HttpError {}
+
+impl From<HttpError> for BackendError {
+    fn from(error: HttpError) -> Self {
+        match error {
+            HttpError::Timeout => BackendError::network_timeout(),
+            HttpError::ResponseTooLarge => BackendError::response_too_large(),
+            HttpError::Offline => BackendError::offline(),
+            _ => BackendError::request_failed(error.to_string()),
+        }
+    }
+}
 
 pub struct HttpResponse {
     pub status: u16,

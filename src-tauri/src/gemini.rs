@@ -3,10 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use serde_json::{Value, json};
 use zeroize::Zeroize;
 
-use crate::{
-    errors::BackendError,
-    http::{HttpError, JsonHttp},
-};
+use crate::{errors::BackendError, http::JsonHttp};
 
 pub const DEFAULT_MODEL: &str = "gemini-3.1-flash-lite";
 pub const FALLBACK_MODELS: &[&str] = &["gemini-3.5-flash-lite", "gemini-3.5-flash"];
@@ -97,7 +94,7 @@ impl GeminiClient {
                 let response = self
                     .http
                     .send_json("POST", &url, &headers, Some(&body))
-                    .map_err(map_http_error)?;
+                    .map_err(BackendError::from)?;
                 match response.status {
                     200..=299 => {
                         let payload = response.json().map_err(|_| {
@@ -242,13 +239,4 @@ fn valid_model(model: &str) -> bool {
         && model
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-}
-
-fn map_http_error(error: HttpError) -> BackendError {
-    match error {
-        HttpError::Timeout => BackendError::network_timeout(),
-        HttpError::ResponseTooLarge => BackendError::response_too_large(),
-        HttpError::Offline => BackendError::offline(),
-        _ => BackendError::request_failed(error.to_string()),
-    }
 }

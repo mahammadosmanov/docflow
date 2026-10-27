@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.3 - 2026-10-27
+
+### Changed
+
+- Sign-in, cloud history, and AI-service code each had its own copy of the HTTP error mapping. It is now one conversion shared by all three. No behavior change.
+
 ## 1.36.2 - 2026-10-27
 
 ### Changed
