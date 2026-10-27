@@ -177,22 +177,29 @@ export function Segmented({
   options,
   onChange,
   small,
+  label,
 }: {
   value: string;
   options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
   small?: boolean;
+  label?: string;
 }) {
   return (
-    <div className={`segmented ${small ? "small" : ""}`}>
-      {options.map(([key, label]) => (
+    <div
+      className={`segmented ${small ? "small" : ""}`}
+      role="group"
+      aria-label={label}
+    >
+      {options.map(([key, text]) => (
         <button
           type="button"
           className={key === value ? "selected" : ""}
+          aria-pressed={key === value}
           key={key}
           onClick={() => onChange(key)}
         >
-          {label}
+          {text}
         </button>
       ))}
     </div>

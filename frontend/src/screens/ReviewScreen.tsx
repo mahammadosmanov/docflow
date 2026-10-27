@@ -271,6 +271,7 @@ export function ReviewScreen({
                         }
                       />
                       <Segmented
+                        label={item.name}
                         value={actions[item.selectionId] ?? "keep"}
                         options={[
                           ["keep", s.t("review.keep")],
