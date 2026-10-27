@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.33.64",
+  "currentVersion": "1.33.65",
   "releases": [
+    {
+      "version": "1.33.65",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.33.65",
+      "summary": "The plan table's header row, with the select-all checkbox and resizable column headers, moves into a PlanTableHead component with direct tests."
+    },
     {
       "version": "1.33.64",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.33.64",
       "summary": "The plan table's bulk field, value, and apply controls move into a PlanBulkFields component with direct tests."
     },

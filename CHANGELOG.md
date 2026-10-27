@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.65 - 2026-10-27
+
+### Changed
+
+- The plan table's header row (the select-all checkbox, the resizable column headers, and the action column) moves from `frontend/src/plan/EditablePlanTable.tsx` into the `PlanTableHead` component in `frontend/src/plan/PlanTableHead.tsx`. The table computes the select-all state and passes the column-width setter as a callback. `PlanTableHead.test.tsx` covers the select-all callback, the checked state, the optional selection and action columns, and one header per visible column. `EditablePlanTable.tsx` drops from 653 to 621 lines. Behavior is unchanged.
+
 ## 1.33.64 - 2026-10-27
 
 ### Changed
