@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.72 - 2026-10-27
+
+### Changed
+
+- Added unit tests for `frontend/src/i18n.ts`: system locale detection, fallback to Turkish, missing-key fallback, placeholder replacement, and preferred locale selection. No application behavior changes.
+
 ## 1.33.71 - 2026-10-27
 
 ### Changed
