@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.70 - 2026-10-27
+
+### Changed
+
+- Added unit tests for `summarizeWorkbookCellChanges` and `canonicalRfiInText`: cell address mapping, follow-up and status changes, invalid-row skipping, non-canonical code rejection, and the preview cap. No application behavior changes.
+
 ## 1.33.69 - 2026-10-27
 
 ### Changed
