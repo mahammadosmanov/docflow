@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.29 - 2026-10-27
+
+### Changed
+
+- The follow-up classifier's entry points (`classify_workbooks`, its legacy variant) and the sheet and schema helpers move from `rfi_follow_up/classify.rs` into `rfi_follow_up/classify/dispatch.rs`. The main classifier file shrinks from 1,118 to 943 lines. Behavior is unchanged.
+
 ## 1.36.28 - 2026-10-27
 
 ### Changed
