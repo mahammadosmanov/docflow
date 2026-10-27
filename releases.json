@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.97",
+  "currentVersion": "1.36.98",
   "releases": [
+    {
+      "version": "1.36.98",
+      "date": "2026-10-27",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.98",
+      "summary": "Maintainability: undo.rs (823 lines) is split by concern: step dispatch and undo planning in undo/steps.rs, quarantine recovery and hash checks in undo/quarantine.rs, and capability root and path validation in undo/roots.rs. Logic is unchanged; clippy and lib tests (542) pass."
+    },
     {
       "version": "1.36.97",
       "date": "2026-10-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.97",
       "summary": "Maintainability: the PathGrantStore methods in paths.rs move into issuing, authorization, and revocation modules under paths/. Method logic is unchanged; clippy and lib tests (542) pass."
     },
