@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.59 - 2026-10-27
+
+### Changed
+
+- Two plain `<button>` elements in `screens/HomeScreen.tsx` (operation cards) and `screens/ReviewScreen.tsx` (file rows) now set `type="button"`. They are not inside a form today, so nothing changes now; the attribute stops them from submitting a form if one wraps them later. Screen tests pass (23 files, 86 tests).
+
 ## 1.36.58 - 2026-10-27
 
 ### Changed

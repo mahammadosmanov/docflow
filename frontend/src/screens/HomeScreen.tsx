@@ -285,6 +285,7 @@ export function HomeScreen({
               <div className="operation-list">
                 {listedOperations.map((operation) => (
                   <button
+                    type="button"
                     className="operation-card"
                     key={operation.id}
                     onClick={() => navigate({ name: "operation", operation })}
