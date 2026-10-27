@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.14 - 2026-10-27
+
+### Changed
+
+- The icon library lucide-react moves from 1.32.0 to 1.62.0. Typecheck, all 263 frontend tests, and the production build pass; TypeScript confirms every imported icon still exists.
+
 ## 1.36.13 - 2026-10-27
 
 ### Changed
