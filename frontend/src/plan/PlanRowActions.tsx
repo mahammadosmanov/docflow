@@ -51,6 +51,7 @@ export function PlanRowActions({
         <>
           <button
             type="button"
+            aria-label={s.t("rfi.action.duplicate")}
             title={s.t("rfi.action.duplicate")}
             onClick={() => onDuplicate(rowIndex)}
           >
@@ -58,6 +59,7 @@ export function PlanRowActions({
           </button>
           <button
             type="button"
+            aria-label={s.t("rfi.action.removeDuplicate")}
             title={s.t("rfi.action.removeDuplicate")}
             disabled={groupCount <= 1}
             onClick={() => onRemove(rowIndex)}
