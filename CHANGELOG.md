@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.74 - 2026-10-27
+
+### Changed
+
+- `path_selection` now uses the shared `expired` helper from `paths` instead of its own copy.
+- Added unit tests for relative-path and `..` rejection and for grant expiry at the TTL boundary. No application behavior changes.
+
 ## 1.33.73 - 2026-10-27
 
 ### Changed
