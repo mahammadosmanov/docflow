@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.55 - 2026-10-27
+
+### Tests
+
+- New `plan/EditablePlanTable.test.tsx` covers the group-select button added in 1.36.54. It checks the accessible name, the visible row count, and that clicking it selects the group's rows. No app behavior change.
+
 ## 1.36.54 - 2026-10-27
 
 ### Fixed
