@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.16 - 2026-10-27
+
+### Changed
+
+- The test environment jsdom (dev only) moves from 30.0.1 to 30.1.3. All 263 frontend tests and the production build pass.
+
 ## 1.36.15 - 2026-10-27
 
 ### Changed
