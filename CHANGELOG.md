@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.38 - 2026-10-27
+
+### Fixed
+
+- Keyboard and screen-reader focus after Apply: when the result appears, focus moves to it, the same as after a preview (1.36.37). Before, focus fell back to the top of the page.
+
 ## 1.36.37 - 2026-10-27
 
 ### Fixed
