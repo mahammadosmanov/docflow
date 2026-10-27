@@ -8,6 +8,7 @@ import {
   humanError,
   isDuplicatePresetError,
   isPathSelection,
+  missingParamName,
   parseRfiInputs,
 } from "./helpers";
 import { loadLocale, makeStrings } from "./i18n";
@@ -119,5 +120,18 @@ describe("BACKEND_MESSAGE_KEYS", () => {
       (message) => !source.includes(`"${message}"`),
     );
     expect(stale).toEqual([]);
+  });
+});
+
+describe("missingParamName", () => {
+  it("returns the parameter name for a required-parameter error", () => {
+    expect(missingParamName(new Error("error.param.required.source"))).toBe("source");
+    expect(missingParamName(new Error("Error: error.param.required.dest"))).toBe("dest");
+  });
+
+  it("returns null for any other error", () => {
+    expect(missingParamName(new Error("error.rfi.workbookInvalid"))).toBeNull();
+    expect(missingParamName(new Error("error.param.required.source: details"))).toBeNull();
+    expect(missingParamName("not an error")).toBeNull();
   });
 });

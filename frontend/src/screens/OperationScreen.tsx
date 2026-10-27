@@ -104,6 +104,7 @@ export function OperationScreen({
   const { progress, progressTrail, receiveProgress, startProgress } =
     useProgressTrail();
   const [error, setError] = useState("");
+  const [invalidField, setInvalidField] = useState<string | null>(null);
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
   const rfiInputs = operation.id === "files.batch_print" ? parseRfiInputs(values.rfi_numbers) : [];
@@ -153,7 +154,7 @@ export function OperationScreen({
     lastSaved,
     finder: { ran: rfiFinderWasRun, candidates: rfiPrintCandidates },
     s,
-    screen: { setError, setStage, setPreviousValues, installPlan },
+    screen: { setError, setStage, setPreviousValues, installPlan, setInvalidField },
     progress: { startProgress, receiveProgress },
   });
   const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
@@ -310,11 +311,13 @@ export function OperationScreen({
                         bridge={bridge}
                         operationId={operation.id}
                         param={param}
+                        invalid={invalidField === param.name}
                         value={values[param.name]}
                         values={values}
                         s={s}
                         onChange={(value) => {
                           valuesRevision.current += 1;
+                          if (invalidField === param.name) setInvalidField(null);
                           setValues((current) => ({
                             ...current,
                             [param.name]: value,

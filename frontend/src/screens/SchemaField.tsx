@@ -52,6 +52,7 @@ export function SchemaField({
   values,
   s,
   onChange,
+  invalid,
 }: {
   bridge: Bridge;
   operationId: string;
@@ -60,6 +61,7 @@ export function SchemaField({
   values: Record<string, unknown>;
   s: Strings;
   onChange: (value: unknown) => void;
+  invalid?: boolean;
 }) {
   if (
     !Object.entries(param.visibleWhen ?? {}).every(
@@ -91,6 +93,8 @@ export function SchemaField({
       <label className="field">
         <span>{s.t(param.labelKey)}</span>
         <select
+
+          aria-invalid={invalid || undefined}
           value={currentChoice}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -246,6 +250,8 @@ export function SchemaField({
       <label className="field">
         <span>{s.t(param.labelKey)}</span>
         <textarea
+
+          aria-invalid={invalid || undefined}
           aria-label={s.t(param.labelKey)}
           rows={8}
           value={String(value ?? "")}
@@ -300,6 +306,8 @@ export function SchemaField({
         }
       >
         <input
+
+          aria-invalid={invalid || undefined}
           type={
             param.kind === "int"
               ? "number"

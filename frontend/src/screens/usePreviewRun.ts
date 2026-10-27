@@ -2,7 +2,7 @@ import { type MutableRefObject } from "react";
 
 import { type Strings } from "../i18n";
 import { type Bridge } from "../lib/bridge";
-import { humanError } from "../helpers";
+import { humanError, missingParamName } from "../helpers";
 import { persistableValues, previewValuesFor } from "../lib/operationValues";
 import { type OperationDef, type Plan, type ProgressEvent } from "../types";
 import { type RunStage } from "./useApplyRun";
@@ -29,16 +29,19 @@ export function usePreviewRun({
     setStage: (stage: RunStage) => void;
     setPreviousValues: (values: Record<string, unknown>) => void;
     installPlan: (plan: Plan) => void;
+    setInvalidField?: (name: string | null) => void;
   };
   progress: {
     startProgress: (event: ProgressEvent) => void;
     receiveProgress: (event: ProgressEvent) => void;
   };
 }) {
-  const { setError, setStage, setPreviousValues, installPlan } = screen;
+  const { setError, setStage, setPreviousValues, installPlan, setInvalidField } =
+    screen;
 
   const preview = async () => {
     setError("");
+    setInvalidField?.(null);
     const preparing = { phase: "preparing", done: 0, total: 0 };
     progress.startProgress(preparing);
     setStage("previewing");
@@ -61,6 +64,7 @@ export function usePreviewRun({
       installPlan(next);
     } catch (reason) {
       setError(humanError(reason, s));
+      setInvalidField?.(missingParamName(reason));
       setStage("form");
     }
   };

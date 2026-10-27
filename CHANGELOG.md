@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.34 - 2026-10-27
+
+### Changed
+
+- When a preview fails because a required folder or value is missing, the matching field is now marked invalid (`aria-invalid` and a stronger border). Before, only the message above the form said so, with no link to the field. The message is unchanged, and the field clears as soon as it is edited.
+
 ## 1.36.33 - 2026-10-27
 
 ### Fixed
