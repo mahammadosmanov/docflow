@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.100 - 2026-10-27
+
+### Changed
+
+- `operations/rfi_file_group.rs` (831 lines) keeps `preview`, `revise` and the tests and moves two groups into child files: `rfi_file_group/analysis.rs` (file discovery, PDF, package, XML and raw-text RFI code detection, and the `Detection` and `FileAnalysis` types) and `rfi_file_group/steps.rs` (destination directory, copy step and path-overlap checks). Logic is unchanged; clippy is clean with `-D warnings` and the 542 lib tests pass.
+
 ## 1.36.99 - 2026-10-27
 
 ### Changed
