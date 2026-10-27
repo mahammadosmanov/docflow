@@ -4328,3 +4328,21 @@ textarea[aria-invalid="true"] {
 .flow-layout:focus {
   outline: none;
 }
+
+/* Touch screens: grow the tap area of small controls to 44px without changing their look. */
+@media (pointer: coarse) {
+  .app-nav-item,
+  .switch {
+    position: relative;
+  }
+  .app-nav-item::after {
+    content: "";
+    position: absolute;
+    inset: -6px -5px;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+}
