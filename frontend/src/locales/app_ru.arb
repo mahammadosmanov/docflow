@@ -1108,5 +1108,6 @@
   "error.rfi.copySheetRequired": "Выберите лист для копирования.",
   "error.rfi.rowRequired": "Нужна хотя бы одна строка RFI.",
   "error.rfi.rowLimit": "В одном плане может быть не более 500 физических строк.",
-  "error.rfi.sheetGroupsLocked": "Группы листов RFI здесь нельзя добавлять или удалять."
+  "error.rfi.sheetGroupsLocked": "Группы листов RFI здесь нельзя добавлять или удалять.",
+  "params.saveFailed": "Не удалось сохранить настройки."
 }

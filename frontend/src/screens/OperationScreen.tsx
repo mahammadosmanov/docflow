@@ -121,9 +121,15 @@ export function OperationScreen({
     setRfiCandidateGroup,
   } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
-  const { valuesRevision, lastSaved, previousValues, setPreviousValues } =
-    useSavedParams({
+  const {
+    valuesRevision,
+    lastSaved,
+    previousValues,
+    setPreviousValues,
+    saveError,
+  } = useSavedParams({
       bridge,
+      s,
       operation,
       initialValues,
       values,
@@ -399,6 +405,7 @@ export function OperationScreen({
                 )}
               </section>
               {error && <Notice kind="error">{error}</Notice>}
+              {saveError && <Notice kind="error">{saveError}</Notice>}
             </div>
             <ActionBar
               left={

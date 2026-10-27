@@ -1136,5 +1136,6 @@
   "error.rfi.copySheetRequired": "Select the sheet to copy.",
   "error.rfi.rowRequired": "At least one RFI row is required.",
   "error.rfi.rowLimit": "A single plan can have at most 500 physical rows.",
-  "error.rfi.sheetGroupsLocked": "RFI sheet groups cannot be added or removed here."
+  "error.rfi.sheetGroupsLocked": "RFI sheet groups cannot be added or removed here.",
+  "params.saveFailed": "Settings could not be saved."
 }

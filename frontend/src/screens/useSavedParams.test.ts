@@ -1,6 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeStrings } from "../i18n";
 import type { Bridge } from "../lib/bridge";
 import type { OperationDef, ParamDef } from "../types";
 import { useSavedParams } from "./useSavedParams";
@@ -35,6 +36,7 @@ function setup(
     (props: { values: Record<string, unknown> }) =>
       useSavedParams({
         bridge,
+        s: makeStrings("en"),
         operation: op,
         values: props.values,
         defaults: { source: "", copies: 1 },
@@ -78,6 +80,45 @@ describe("useSavedParams", () => {
         opId: "op.test",
         values: { source: "/b", copies: 1 },
       });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a failed autosave and clears the report after the next good save", async () => {
+    vi.useFakeTimers();
+    try {
+      const call = vi.fn(async (method: string) => {
+        if (method === "settings/saveParams") throw new Error("disk full");
+        return {};
+      });
+      const bridge = { call } as unknown as Bridge;
+      const hook = renderHook(
+        (props: { values: Record<string, unknown> }) =>
+          useSavedParams({
+            bridge,
+            s: makeStrings("en"),
+            operation,
+            values: props.values,
+            defaults: { source: "", copies: 1 },
+            setValues: vi.fn(),
+          }),
+        { initialProps: { values: { source: "/a", copies: 1 } } },
+      );
+      await act(async () => {});
+      hook.rerender({ values: { source: "/b", copies: 1 } });
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+      await act(async () => {});
+      expect(hook.result.current.saveError).toBe("Settings could not be saved.");
+      call.mockImplementation(async () => ({}));
+      hook.rerender({ values: { source: "/c", copies: 1 } });
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+      await act(async () => {});
+      expect(hook.result.current.saveError).toBe("");
     } finally {
       vi.useRealTimers();
     }

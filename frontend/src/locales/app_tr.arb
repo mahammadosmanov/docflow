@@ -1108,5 +1108,6 @@
   "error.rfi.copySheetRequired": "Kopyalanacak sayfayı seçin.",
   "error.rfi.rowRequired": "En az bir RFI satırı gerekli.",
   "error.rfi.rowLimit": "Tek planda en fazla 500 fiziksel satır olabilir.",
-  "error.rfi.sheetGroupsLocked": "RFI sayfa grupları burada eklenemez veya silinemez."
+  "error.rfi.sheetGroupsLocked": "RFI sayfa grupları burada eklenemez veya silinemez.",
+  "params.saveFailed": "Ayarlar kaydedilemedi."
 }

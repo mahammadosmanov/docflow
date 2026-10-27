@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.1 - 2026-10-27
+
+### Fixed
+
+- When remembered settings failed to save, the change was dropped without a message. The operation screen now shows "Settings could not be saved." in all four languages. The message clears after the next successful save.
+
 ## 1.35.0 - 2026-10-27
 
 ### Added

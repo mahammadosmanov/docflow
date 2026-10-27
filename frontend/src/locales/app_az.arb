@@ -1108,5 +1108,6 @@
   "error.rfi.copySheetRequired": "Kopyalanacaq vərəqi seçin.",
   "error.rfi.rowRequired": "Ən azı bir RFI sətri lazımdır.",
   "error.rfi.rowLimit": "Bir planda ən çox 500 fiziki sətir ola bilər.",
-  "error.rfi.sheetGroupsLocked": "RFI vərəq qrupları burada əlavə edilə və ya silinə bilməz."
+  "error.rfi.sheetGroupsLocked": "RFI vərəq qrupları burada əlavə edilə və ya silinə bilməz.",
+  "params.saveFailed": "Ayarlar saxlanıla bilmədi."
 }
