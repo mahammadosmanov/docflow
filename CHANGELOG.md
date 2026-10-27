@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.62 - 2026-10-27
+
+### Changed
+
+- Moved `PrintJob`, its legacy-normalization type, and the custom deserializer out of `print_queue.rs` (1,115 lines) into `print_queue/job.rs`. Visibility and imports only. Print queue tests pass and clippy is clean with `-D warnings`.
+
 ## 1.36.61 - 2026-10-27
 
 ### Changed
