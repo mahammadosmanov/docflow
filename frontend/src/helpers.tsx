@@ -271,3 +271,12 @@ export function formatDate(value: string, locale: string): string {
         timeStyle: "short",
       }).format(date);
 }
+
+/** Name of the required parameter a preview rejected, or null when the error is about something else. */
+export function missingParamName(error: unknown): string | null {
+  const raw = error instanceof Error ? error.message : String(error);
+  return (
+    raw.match(/^(?:Error:\s*)?error\.param\.required\.([A-Za-z0-9_]+)$/)?.[1] ??
+    null
+  );
+}

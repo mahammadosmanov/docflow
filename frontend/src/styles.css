@@ -4317,3 +4317,9 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
