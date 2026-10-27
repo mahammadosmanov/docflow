@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.51 - 2026-10-27
+
+### Fixed
+
+- The Windows directory listing (`cap_fs/windows_dir.rs`) now reads `FILE_ID_BOTH_DIR_INFO` records from a `Vec<u64>` buffer instead of a `Vec<u8>`, so the buffer start is aligned for the record type. Bounds checks use the byte length. This closes the alignment item recorded in `docs/KNOWN_ISSUES.md`. The file compiles only on Windows; rustfmt checks its syntax here, but no Windows build or directory listing was run, so the Windows check is still outstanding.
+
 ## 1.36.50 - 2026-10-27
 
 ### Changed
