@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.33.64 - 2026-10-27
+
+### Changed
+
+- The bulk editor's field, value, and apply controls move from `frontend/src/plan/EditablePlanTable.tsx` into the `PlanBulkFields` component in `frontend/src/plan/PlanBulkFields.tsx`. The table passes the bulk state and callbacks, and apply is enabled by a `canApply` flag: a selection, a field, and a value. `PlanBulkFields.test.tsx` covers the field change, the value change, and apply being enabled only when the edit is complete. `EditablePlanTable.tsx` drops from 704 to 653 lines. Behavior is unchanged.
+
 ## 1.33.63 - 2026-10-27
 
 ### Changed
