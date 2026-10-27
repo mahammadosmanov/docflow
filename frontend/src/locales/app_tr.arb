@@ -1118,5 +1118,16 @@
   "error.rfi.systemEntryLimit": "RFI Sistemi işlenemeyecek kadar çok kayıt içeriyor.",
   "error.rfi.followUp.noParent": "Follow Up çalışma kitabı bir klasörün içinde değil.",
   "error.rfi.fileGroup.rowInvalid": "Bir dosya grubu satırı tanımlanamadı. Önizlemeyi yenileyin.",
-  "error.rfi.workbookUnreadable": "RFI Log çalışma kitabı okunamadı. Dosyanın hâlâ yerinde olduğunu kontrol edin."
+  "error.rfi.workbookUnreadable": "RFI Log çalışma kitabı okunamadı. Dosyanın hâlâ yerinde olduğunu kontrol edin.",
+  "error.print.queueSaveFailed": "Yazdırma kuyruğu kaydedilemedi. Yeniden deneyin.",
+  "error.print.queueEncodeFailed": "Yazdırma kuyruğu kaydetmeye hazırlanamadı.",
+  "error.print.jobInvalid": "Kayıtlı bir yazdırma işi bozuk. Kaldırıp yeniden ekleyin.",
+  "error.path.notAbsolute": "Yol bu bilgisayarda tam bir konum olmalı.",
+  "error.path.selectionFailed": "Dosya seçimi tamamlanamadı. Yeniden deneyin.",
+  "error.path.revealFailed": "Dosya, dosya yöneticisinde gösterilemedi.",
+  "error.path.openUnsafe": "Seçilen dosya güvenli şekilde açılamıyor.",
+  "error.operation.previewFailed": "Önizleme hazırlanamadı. Yeniden deneyin.",
+  "error.operation.undoFailed": "Geri alma tamamlanamadı. Yeniden denemeden önce sonucu kontrol edin.",
+  "error.scan.sourceUnreadable": "Taranan dosya okunamadı.",
+  "error.review.directoryUnreadable": "İnceleme klasörü okunamadı."
 }

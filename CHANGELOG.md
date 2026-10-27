@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.5 - 2026-10-27
+
+### Fixed
+
+- Thirteen more backend error messages reached the UI as raw English text: print queue save and encoding, saved print job damage, file selection and reveal failures, unsafe path opens, preview and undo failures, unreadable scanned or review files, and non-absolute paths. They now have translations in all four languages.
+
 ## 1.35.4 - 2026-10-27
 
 ### Fixed

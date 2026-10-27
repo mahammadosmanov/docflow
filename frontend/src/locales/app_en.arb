@@ -1146,5 +1146,16 @@
   "error.rfi.systemEntryLimit": "The RFI System has too many entries to process.",
   "error.rfi.followUp.noParent": "The Follow Up workbook is not inside a folder.",
   "error.rfi.fileGroup.rowInvalid": "A file group row could not be identified. Refresh the preview.",
-  "error.rfi.workbookUnreadable": "The RFI Log workbook could not be read. Check that it is still in place."
+  "error.rfi.workbookUnreadable": "The RFI Log workbook could not be read. Check that it is still in place.",
+  "error.print.queueSaveFailed": "The print queue could not be saved. Try again.",
+  "error.print.queueEncodeFailed": "The print queue could not be prepared for saving.",
+  "error.print.jobInvalid": "A saved print job is damaged. Remove it and add it again.",
+  "error.path.notAbsolute": "The path must be a full location on this computer.",
+  "error.path.selectionFailed": "The file selection could not be completed. Try again.",
+  "error.path.revealFailed": "The file could not be shown in the file manager.",
+  "error.path.openUnsafe": "The selected file cannot be opened safely.",
+  "error.operation.previewFailed": "The preview could not be prepared. Try again.",
+  "error.operation.undoFailed": "The undo could not be completed. Check the result before trying again.",
+  "error.scan.sourceUnreadable": "The scanned file could not be read.",
+  "error.review.directoryUnreadable": "The review folder could not be read."
 }
