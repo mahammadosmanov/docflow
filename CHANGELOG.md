@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.35.20 - 2026-10-27
+
+### Fixed
+
+- Turkish and Azerbaijani settings and automation text used the English word "sync". It now says "eşitleme" (Turkish) and "sinxronizasiya" (Azerbaijani).
+
 ## 1.35.19 - 2026-10-27
 
 ### Fixed

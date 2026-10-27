@@ -2385,7 +2385,7 @@ describe("DocFlow shell", () => {
     expect(
       screen.getByText("Windows açılışında DocFlow'u başlat"),
     ).toBeVisible();
-    expect(screen.getByText("Onaysız RFI Sistem sync aktif")).toBeVisible();
+    expect(screen.getByText("Onaysız RFI Sistemi eşitleme aktif")).toBeVisible();
   });
 
   it("previews and explicitly copies a local redacted support bundle without sending it", async () => {
