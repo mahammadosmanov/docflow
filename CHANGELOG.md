@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.19 - 2026-10-27
+
+### Changed
+
+- The HTTP client ureq moves from 3.4.2 to 3.5.0. It includes TLS dependency security fixes and tighter timeout handling. Behavior change to note: proxy URL credentials are decoded once, so a literal percent sign must be written as %25. Users with a proxy password containing a raw % need to escape it. Clippy and all Rust tests pass; no proxy was available to test here.
+
 ## 1.36.18 - 2026-10-27
 
 ### Changed
