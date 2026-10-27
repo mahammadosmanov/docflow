@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.60 - 2026-10-27
+
+### Changed
+
+- Renamed `backend.rs` helper `chrono_free_timestamp` to `unix_seconds_stamp`. The old name suggested a chrono-based clock; it returns `unix:<seconds>`. Behavior unchanged; backend tests pass.
+
 ## 1.36.59 - 2026-10-27
 
 ### Changed

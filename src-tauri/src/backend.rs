@@ -661,7 +661,7 @@ struct CopyDiagnosticsParams {
     content: String,
 }
 
-fn chrono_free_timestamp() -> String {
+fn unix_seconds_stamp() -> String {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -698,7 +698,7 @@ pub(crate) async fn frontend_call(
     }
     if method != BackendMethod::SupportActivityLog {
         let mut entry = serde_json::json!({
-            "at": chrono_free_timestamp(),
+            "at": unix_seconds_stamp(),
             "version": env!("CARGO_PKG_VERSION"),
             "os": std::env::consts::OS,
             "method": method_name,
@@ -759,7 +759,7 @@ mod timestamp_tests {
 
     #[test]
     fn timestamp_is_unix_seconds_with_a_fixed_prefix() {
-        let stamp = chrono_free_timestamp();
+        let stamp = unix_seconds_stamp();
         let seconds = stamp
             .strip_prefix("unix:")
             .expect("timestamp keeps the unix: prefix")
