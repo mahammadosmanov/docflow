@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.187 - 2026-10-28
+
+### Changed
+
+- Split system-sync workbook reads and workbook update step building out of the indexed preview function.
+
 ## 1.36.186 - 2026-10-28
 
 ### Changed
