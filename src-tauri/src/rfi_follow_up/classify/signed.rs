@@ -236,7 +236,6 @@ pub(super) fn place_signed_record<'a>(
         }
         return Ok(());
     }
-    *unmapped_count += 1;
     let Some(layout) = layouts
         .iter()
         .find(|layout| {
@@ -246,9 +245,9 @@ pub(super) fn place_signed_record<'a>(
         })
         .cloned()
     else {
-        *unmapped_count -= 1;
         return Ok(());
     };
+    *unmapped_count += 1;
     let reason_key = if candidate_count == 0 {
         "warn.rfi.followUp.reason.mappingMissing"
     } else {
