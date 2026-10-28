@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.162 - 2026-10-28
+
+### Changed
+
+- Split OOXML relationship validation and target path normalization out of `ooxml/relationships.rs` into `relationships/validation.rs` and `relationships/paths.rs`; behavior unchanged.
+
 ## 1.36.161 - 2026-10-28
 
 ### Changed
