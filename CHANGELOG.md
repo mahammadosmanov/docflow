@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.129 - 2026-10-28
+
+### Fixed
+
+- `docs/ROADMAP.md` described the selected-message Unicode MSG archive as implemented. The operation has no operator route (`rfi.outlook_archive_selected` appears only in the Rust scaffolding and tests). The roadmap item now adds that route before classic-Outlook certification.
+
 ## 1.36.128 - 2026-10-28
 
 ### Fixed

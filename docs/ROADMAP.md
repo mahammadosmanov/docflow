@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.36.128 reliability and Windows certification
+## Now — 1.36.129 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -34,8 +34,10 @@ the historical tracker.
   Windows and representative combined-scan acceptance evidence.
 - Keep the implemented warning search, type filtering, and exact-RFI page focus
   covered by large combined-scan usability checks.
-- Keep the implemented Outlook Reply All draft and selected-message Unicode MSG
-  archive covered by classic Outlook, destination-collision, and Undo acceptance.
+- Keep the implemented Outlook Reply All draft covered by classic Outlook
+  acceptance. Add an operator route for the selected-message Unicode MSG archive
+  on its existing scaffolding (`outlook_reply_draft.rs`), then certify it on
+  classic Outlook with destination-collision and Undo checks.
 
 ## Later — document automation breadth
 
