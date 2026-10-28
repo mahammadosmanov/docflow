@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.173",
+  "currentVersion": "1.36.174",
   "releases": [
+    {
+      "version": "1.36.174",
+      "tag": "v1.36.174",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move S5 transition application out of journal/s5.rs apply_transition into journal/s5_transition.rs with an explicit lease-flags struct; behavior unchanged."
+    },
     {
       "version": "1.36.173",
       "tag": "v1.36.173",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move per-sheet RFI Log add batch construction (allocation, email rows, cleaning, capacity check) out of the preview loop into rfi_log/preview_steps.rs; behavior unchanged."
     },
     {

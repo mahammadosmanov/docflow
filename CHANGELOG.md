@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.174 - 2026-10-28
+
+### Changed
+
+- Moved the S5 transition state machine out of `journal/s5.rs` into `journal/s5_transition.rs`, with lease facts passed as an explicit struct; behavior unchanged.
+
 ## 1.36.173 - 2026-10-28
 
 ### Changed
