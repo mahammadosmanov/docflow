@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.142 - 2026-10-28
+
+### Changed
+
+- Moved the browser-demo `reviseOperation` from `frontend/src/lib/mockPlanHandlers.ts` into `frontend/src/lib/mockReviseHandler.ts`. `mockPlanHandlers.ts` drops from 653 to about 500 lines; `mockBridge.ts` imports the revise handler from the new module. Browser-only demo data; no runtime behavior change.
+
 ## 1.36.141 - 2026-10-28
 
 ### Changed
