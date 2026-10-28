@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.221",
+  "currentVersion": "1.36.222",
   "releases": [
+    {
+      "version": "1.36.222",
+      "tag": "v1.36.222",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add unit tests for the Worley signed remark marker helper."
+    },
     {
       "version": "1.36.221",
       "tag": "v1.36.221",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add unit tests for RFI discipline selection edge cases."
     },
     {
