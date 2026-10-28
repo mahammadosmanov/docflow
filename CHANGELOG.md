@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.171 - 2026-10-28
+
+### Changed
+
+- Moved parallel signed-page inspection and page OCR prefetch out of the `stage_signed_pages` preview into `operations/stage_signed_pages/parallel.rs`; behavior unchanged.
+
 ## 1.36.170 - 2026-10-28
 
 ### Changed
