@@ -123,6 +123,48 @@ where
     preview_indexed(params, detector, progress, cancelled, None, "local", false)
 }
 
+/// Plan metadata for the orientation preview: worker counts, page totals, and scan-index stats.
+fn orientation_meta<D: OrientationDetector>(
+    detector: &D,
+    stats: &ScanIndexStats,
+    totals: &PlanTotals,
+    worker_count: usize,
+    inspection_workers: usize,
+) -> Result<JsonObject, BackendError> {
+    Ok(JsonObject::from_iter([
+        ("workerCount".to_string(), Value::from(worker_count as u64)),
+        (
+            "inspectionWorkers".to_string(),
+            Value::from(inspection_workers as u64),
+        ),
+        (
+            "verifiedPages".to_string(),
+            Value::from(totals.verified_pages),
+        ),
+        (
+            "rotatedPages".to_string(),
+            Value::from(totals.rotated_pages),
+        ),
+        (
+            "actionableFiles".to_string(),
+            Value::from(totals.actionable_files),
+        ),
+        (
+            "manualReviewFiles".to_string(),
+            Value::from(totals.manual_review_files),
+        ),
+        (
+            "detectorDiagnostics".to_string(),
+            Value::String(detector.diagnostics()),
+        ),
+        (
+            "scanIndex".to_string(),
+            serde_json::to_value(stats)
+                .map_err(|error| BackendError::protocol(error.to_string()))?,
+        ),
+    ]))
+}
+
 pub fn preview_indexed<D, P, C>(
     params: &PdfOrientationParams,
     detector: &D,
@@ -470,41 +512,13 @@ where
     }
     stats.parallel_analysis = !tasks.is_empty();
     stats.analysis_workers = worker_count as u64;
-    plan.meta.extend(JsonObject::from_iter([
-        (
-            "workerCount".to_string(),
-            Value::from(worker_count.max(discovery_workers).max(inspection_workers) as u64),
-        ),
-        (
-            "inspectionWorkers".to_string(),
-            Value::from(inspection_workers as u64),
-        ),
-        (
-            "verifiedPages".to_string(),
-            Value::from(totals.verified_pages),
-        ),
-        (
-            "rotatedPages".to_string(),
-            Value::from(totals.rotated_pages),
-        ),
-        (
-            "actionableFiles".to_string(),
-            Value::from(totals.actionable_files),
-        ),
-        (
-            "manualReviewFiles".to_string(),
-            Value::from(totals.manual_review_files),
-        ),
-        (
-            "detectorDiagnostics".to_string(),
-            Value::String(detector.diagnostics()),
-        ),
-        (
-            "scanIndex".to_string(),
-            serde_json::to_value(&stats)
-                .map_err(|error| BackendError::protocol(error.to_string()))?,
-        ),
-    ]));
+    plan.meta.extend(orientation_meta(
+        detector,
+        &stats,
+        &totals,
+        worker_count.max(discovery_workers).max(inspection_workers),
+        inspection_workers,
+    )?);
     if let Some(run) = run {
         run.complete(&stats).map_err(|error| {
             BackendError::request_failed(format!("scan run completion failed: {error}"))

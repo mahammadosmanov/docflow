@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.184 - 2026-10-28
+
+### Changed
+
+- Moved orientation preview plan metadata construction out of `preview_indexed` into `orientation_meta` in `operations/pdf_orientation.rs`; behavior unchanged.
+
 ## 1.36.183 - 2026-10-28
 
 ### Changed
