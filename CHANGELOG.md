@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.131 - 2026-10-28
+
+### Changed
+
+- Moved the RFI Log column layout tables (`Layout`, `RfiStatusColumns`, `layout`, `status_columns`) from `src-tauri/src/rfi_log.rs` into `rfi_log/column_layout.rs`. `rfi_log.rs` drops from 806 to 707 lines. Behavior is unchanged.
+
 ## 1.36.130 - 2026-10-28
 
 ### Changed
