@@ -67,3 +67,48 @@ fn archive_preflight_rejects_entry_malformed_local_extra() {
         &[0xfe, 0xca, 0x04, 0x00],
     ));
 }
+
+#[test]
+fn ordered_worksheet_discovery_rejects_oversized_source_before_zip_parse() {
+    let error = ordered_workbook_discovery(&mut SparseReader {
+        len: super::super::MAX_PACKAGE_BYTES + 1,
+        position: 0,
+    })
+    .unwrap_err();
+
+    assert_eq!(error.to_string(), "workbook source exceeded the size limit");
+}
+
+#[test]
+fn ordered_worksheet_discovery_rejects_declared_entry_count_before_zip_parse() {
+    let error = ordered_workbook_discovery(&mut declared_entry_count_fixture(
+        u16::try_from(super::super::MAX_ENTRIES + 1).unwrap(),
+    ))
+    .unwrap_err();
+
+    assert_eq!(error.to_string(), "workbook ZIP entry count is invalid");
+}
+
+#[test]
+fn ordered_worksheet_discovery_rejects_decoy_eocd_before_parser_fallback() {
+    let error = ordered_workbook_discovery(&mut append_decoy_eocd(ordered_fixture())).unwrap_err();
+
+    assert_eq!(error.to_string(), "workbook ZIP metadata is invalid");
+}
+
+#[test]
+fn ordered_worksheet_discovery_rejects_inflated_final_eocd_before_parser_fallback() {
+    let error = ordered_workbook_discovery(&mut append_parser_fallback_eocd(ordered_fixture()))
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "workbook ZIP metadata is invalid");
+}
+
+#[test]
+fn ordered_worksheet_discovery_rejects_semantically_invalid_final_directory() {
+    let error =
+        ordered_workbook_discovery(&mut append_semantically_invalid_directory(ordered_fixture()))
+            .unwrap_err();
+
+    assert_eq!(error.to_string(), "workbook ZIP metadata is invalid");
+}

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.277 - 2026-10-28
+
+### Changed
+
+- Moved zip container preflight worksheet discovery tests next to the archive preflight tests in `ooxml`.
+
 ## 1.36.276 - 2026-10-28
 
 ### Changed
