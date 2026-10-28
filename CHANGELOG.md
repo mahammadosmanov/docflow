@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.155 - 2026-10-28
+
+### Changed
+
+- Split RFI code parsing and clause routing out of `rfi_follow_up/source.rs` into `source/rfi_codes.rs` and `source/clause_routing.rs`; behavior unchanged.
+
 ## 1.36.154 - 2026-10-28
 
 ### Changed
