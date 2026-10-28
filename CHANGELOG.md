@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.250 - 2026-10-28
+
+### Changed
+
+- Shared write-path authorization in filesystem effects through one helper.
+
 ## 1.36.249 - 2026-10-28
 
 ### Changed

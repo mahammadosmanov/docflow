@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.249",
+  "currentVersion": "1.36.250",
   "releases": [
+    {
+      "version": "1.36.250",
+      "tag": "v1.36.250",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share write-path authorization in filesystem effects."
+    },
     {
       "version": "1.36.249",
       "tag": "v1.36.249",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract RFI file copy blocker check into a helper."
     },
     {
