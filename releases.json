@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.210",
+  "currentVersion": "1.36.211",
   "releases": [
+    {
+      "version": "1.36.211",
+      "tag": "v1.36.211",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share canonicalize-or-validation error mapping across RFI native preview paths."
+    },
     {
       "version": "1.36.210",
       "tag": "v1.36.210",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share review root canonicalization between review preview and recoverable delete plan."
     },
     {
