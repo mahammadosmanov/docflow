@@ -255,28 +255,15 @@ impl NativeBackend {
         if !output_directory.is_dir() {
             return Err(concrete_documents_error("Output folder is unavailable"));
         }
-        let mut selections = Vec::<(DocumentType, Vec<String>, PathBuf)>::new();
-        for (document_type, numbers, parameter) in [
-            (DocumentType::Civ010, rfis_010.clone(), "template_010"),
-            (DocumentType::Civ011, rfis_011, "template_011"),
-            (DocumentType::Civ013, rfis_013, "template_013"),
-            (DocumentType::Civ014, rfis_014, "template_014"),
-        ] {
-            if numbers.is_empty() {
-                continue;
-            }
-            let template = required_selected_path(&request.values, parameter).map_err(|_| {
-                concrete_documents_error(
-                    "Select an example template for every requested document type",
-                )
-            })?;
-            if !template.is_file() {
-                return Err(concrete_documents_error(
-                    "A selected template file is unavailable",
-                ));
-            }
-            selections.push((document_type, numbers, template));
-        }
+        let selections = selected_templates(
+            &request.values,
+            [
+                (DocumentType::Civ010, rfis_010.clone(), "template_010"),
+                (DocumentType::Civ011, rfis_011, "template_011"),
+                (DocumentType::Civ013, rfis_013, "template_013"),
+                (DocumentType::Civ014, rfis_014, "template_014"),
+            ],
+        )?;
         let needs_follow_up = selections
             .iter()
             .any(|(kind, _, _)| *kind == DocumentType::Civ010);
@@ -515,42 +502,7 @@ impl NativeBackend {
         }
 
         let generated_count = generated.len() as u64;
-        let mut steps = Vec::new();
-        let mut destinations = HashSet::new();
-        for GeneratedFile { filename, bytes } in generated {
-            if Path::new(&filename)
-                .file_name()
-                .and_then(|name| name.to_str())
-                != Some(filename.as_str())
-            {
-                return Err(concrete_documents_error("Generated output name is invalid"));
-            }
-            let destination = output_directory.join(&filename);
-            if !destinations.insert(destination.clone()) {
-                return Err(concrete_documents_error(
-                    "Two selected records produce the same output filename",
-                ));
-            }
-            if destination.exists() {
-                warnings.push(Warning {
-                    key: "warn.rfi.documents.outputExists".to_string(),
-                    subject: filename,
-                });
-                continue;
-            }
-            let mut meta = JsonObject::new();
-            meta.insert(
-                "contentBase64".to_string(),
-                Value::String(base64::engine::general_purpose::STANDARD.encode(bytes)),
-            );
-            steps.push(Step {
-                kind: StepKind::Write,
-                src: None,
-                dst: Some(destination.to_string_lossy().into_owned()),
-                note_key: Some("step.rfi.generatedConcreteDocument".to_string()),
-                meta,
-            });
-        }
+        let steps = output_steps(generated, &output_directory, &mut warnings)?;
         progress(ProgressEvent {
             phase: "concrete_document_generation".to_string(),
             done: steps.len() as u64,
@@ -584,4 +536,70 @@ impl NativeBackend {
         provisional.commit();
         encode(cached)
     }
+}
+
+fn selected_templates(
+    values: &Map<String, Value>,
+    requested: [(DocumentType, Vec<String>, &str); 4],
+) -> Result<Vec<(DocumentType, Vec<String>, PathBuf)>, BackendError> {
+    let mut selections = Vec::new();
+    for (document_type, numbers, parameter) in requested {
+        if numbers.is_empty() {
+            continue;
+        }
+        let template = required_selected_path(values, parameter).map_err(|_| {
+            concrete_documents_error("Select an example template for every requested document type")
+        })?;
+        if !template.is_file() {
+            return Err(concrete_documents_error(
+                "A selected template file is unavailable",
+            ));
+        }
+        selections.push((document_type, numbers, template));
+    }
+    Ok(selections)
+}
+
+fn output_steps(
+    generated: Vec<GeneratedFile>,
+    output_directory: &Path,
+    warnings: &mut Vec<Warning>,
+) -> Result<Vec<Step>, BackendError> {
+    let mut steps = Vec::new();
+    let mut destinations = HashSet::new();
+    for GeneratedFile { filename, bytes } in generated {
+        if Path::new(&filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            != Some(filename.as_str())
+        {
+            return Err(concrete_documents_error("Generated output name is invalid"));
+        }
+        let destination = output_directory.join(&filename);
+        if !destinations.insert(destination.clone()) {
+            return Err(concrete_documents_error(
+                "Two selected records produce the same output filename",
+            ));
+        }
+        if destination.exists() {
+            warnings.push(Warning {
+                key: "warn.rfi.documents.outputExists".to_string(),
+                subject: filename,
+            });
+            continue;
+        }
+        let mut meta = JsonObject::new();
+        meta.insert(
+            "contentBase64".to_string(),
+            Value::String(base64::engine::general_purpose::STANDARD.encode(bytes)),
+        );
+        steps.push(Step {
+            kind: StepKind::Write,
+            src: None,
+            dst: Some(destination.to_string_lossy().into_owned()),
+            note_key: Some("step.rfi.generatedConcreteDocument".to_string()),
+            meta,
+        });
+    }
+    Ok(steps)
 }

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.186 - 2026-10-28
+
+### Changed
+
+- Split concrete document template selection and output step writing out of the preview function.
+
 ## 1.36.185 - 2026-10-28
 
 ### Changed

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.185",
+  "currentVersion": "1.36.186",
   "releases": [
+    {
+      "version": "1.36.186",
+      "tag": "v1.36.186",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract concrete document template selection and output step writing from preview_concrete_documents."
+    },
     {
       "version": "1.36.185",
       "tag": "v1.36.185",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move uncached orientation PDF inspection classification out of preview_indexed into pdf_orientation/uncached.rs with an InspectionAccumulator; behavior unchanged."
     },
     {
