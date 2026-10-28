@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.125 - 2026-10-28
+
+### Changed
+
+- Removed unused imports from `frontend/src/lib/bridge.ts`, `helpers.tsx` and two App test files, plus the unused `sharedBridge` variable in `lib/mockBridge.ts`. `tsc --noUnusedLocals` now reports nothing. No runtime behavior changed.
+
 ## 1.36.124 - 2026-10-28
 
 ### Fixed

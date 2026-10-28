@@ -3,7 +3,6 @@ import {
   fireEvent,
   render,
   screen,
-  within,
 } from "@testing-library/react";
 import { useState } from "react";
 import { makeStrings } from "./i18n";
