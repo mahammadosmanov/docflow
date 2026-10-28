@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.130 - 2026-10-28
+
+### Changed
+
+- Moved the signed-by placement functions (`place_signed_record`, `refresh_signed_slots`, `signed_slot_rows`) from `src-tauri/src/rfi_follow_up/classify.rs` into `classify/signed.rs`. `classify.rs` drops from 1,052 to 690 lines. Behavior is unchanged.
+
 ## 1.36.129 - 2026-10-28
 
 ### Fixed

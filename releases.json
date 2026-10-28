@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.129",
+  "currentVersion": "1.36.130",
   "releases": [
+    {
+      "version": "1.36.130",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.130",
+      "summary": "Changed: RFI Follow Up signed-by placement (place_signed_record, refresh_signed_slots, signed_slot_rows) moved from classify.rs into classify/signed.rs. Behavior unchanged."
+    },
     {
       "version": "1.36.129",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.129",
       "summary": "Docs: ROADMAP.md no longer calls the selected-message MSG archive implemented. It has no operator route yet, so the roadmap item now adds that route before certification."
     },
