@@ -19,6 +19,8 @@ use crate::{
 
 mod directory;
 use directory::*;
+mod uncached;
+use uncached::*;
 mod support;
 use support::*;
 
@@ -234,10 +236,7 @@ where
         .map_err(|error| {
             BackendError::request_failed(format!("scan index unavailable: {error}"))
         })?;
-    let mut work = Vec::new();
-    let mut tasks = Vec::new();
-    let mut initial_fingerprints = BTreeMap::<PathBuf, FileFingerprint>::new();
-    let mut initial_hashes = BTreeMap::<PathBuf, String>::new();
+    let mut acc = InspectionAccumulator::default();
     let mut by_file =
         BTreeMap::<PathBuf, Vec<(PageTask, Result<OrientationDetection, String>)>>::new();
     let total_pdfs = pdfs.len() as u64;
@@ -302,7 +301,7 @@ where
                 }
                 let cached_results = cached_page_results(&path, cached.pages)?;
                 by_file.insert(path.clone(), cached_results);
-                work.push(PdfWork {
+                acc.work.push(PdfWork {
                     path,
                     relative,
                     page_count: cached.page_count,
@@ -311,99 +310,31 @@ where
                 });
                 continue;
             }
-            match inspection.ok_or_else(|| {
+            let inspection = inspection.ok_or_else(|| {
                 BackendError::request_failed("uncached PDF has no inspection result")
-            })? {
-                Ok(facts) if facts.encrypted => record_unsupported(
-                    run.as_ref(),
-                    &relative,
-                    &fingerprint,
-                    &source_sha256,
-                    "encrypted PDF",
-                    &mut stats,
-                    &mut plan,
-                )?,
-                Ok(facts) if facts.signed => record_unsupported(
-                    run.as_ref(),
-                    &relative,
-                    &fingerprint,
-                    &source_sha256,
-                    "digitally signed PDF",
-                    &mut stats,
-                    &mut plan,
-                )?,
-                Ok(facts) if facts.page_count == 0 => record_unsupported(
-                    run.as_ref(),
-                    &relative,
-                    &fingerprint,
-                    &source_sha256,
-                    "PDF has no pages",
-                    &mut stats,
-                    &mut plan,
-                )?,
-                Ok(facts) => {
-                    let current_rotations = facts
-                        .pages
-                        .iter()
-                        .map(|page| normalize_rotation(page.rotation))
-                        .collect::<Result<Vec<_>, _>>();
-                    let current_rotations = match current_rotations {
-                        Ok(rotations) => rotations,
-                        Err(error) => {
-                            record_unsupported(
-                                run.as_ref(),
-                                &relative,
-                                &fingerprint,
-                                &source_sha256,
-                                &error.message,
-                                &mut stats,
-                                &mut plan,
-                            )?;
-                            continue;
-                        }
-                    };
-                    if tasks.len().saturating_add(facts.page_count) > MAX_PAGES {
-                        return Err(BackendError::validation(format!(
-                            "orientation scan exceeds the {MAX_PAGES}-page limit"
-                        )));
-                    }
-                    for (page_index, current_rotation) in current_rotations.into_iter().enumerate()
-                    {
-                        tasks.push(PageTask {
-                            path: path.clone(),
-                            page_index,
-                            current_rotation,
-                        });
-                    }
-                    initial_hashes.insert(path.clone(), source_sha256);
-                    initial_fingerprints.insert(path.clone(), fingerprint);
-                    work.push(PdfWork {
-                        path,
-                        relative,
-                        page_count: facts.page_count,
-                        source_hash: None,
-                        cached: false,
-                    });
-                }
-                Err(error) => {
-                    if let Some(run) = &run {
-                        run.record_failure(&relative, &error.to_string())
-                            .map_err(|failure| {
-                                BackendError::request_failed(format!(
-                                    "scan checkpoint failed: {failure}"
-                                ))
-                            })?;
-                    }
-                    stats.failed += 1;
-                    plan.warnings.push(warning(
-                        "warn.rfi.orientationUnsupported",
-                        &format!("{} — {error}", relative.display()),
-                    ));
-                }
-            }
+            })?;
+            classify_uncached(
+                run.as_ref(),
+                UncachedPdf {
+                    path,
+                    relative,
+                    fingerprint,
+                    source_sha256,
+                    inspection,
+                },
+                &mut acc,
+                &mut stats,
+                &mut plan,
+            )?;
         }
     }
 
+    let InspectionAccumulator {
+        tasks,
+        mut work,
+        initial_hashes,
+        initial_fingerprints,
+    } = acc;
     let cached_pages = by_file.values().map(Vec::len).sum::<usize>();
     let total_pages = cached_pages.saturating_add(tasks.len()) as u64;
     for (index, (task, _)) in by_file.values().flatten().enumerate() {

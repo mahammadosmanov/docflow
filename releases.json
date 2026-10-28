@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.184",
+  "currentVersion": "1.36.185",
   "releases": [
+    {
+      "version": "1.36.185",
+      "tag": "v1.36.185",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move uncached orientation PDF inspection classification out of preview_indexed into pdf_orientation/uncached.rs with an InspectionAccumulator; behavior unchanged."
+    },
     {
       "version": "1.36.184",
       "tag": "v1.36.184",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move the orientation preview plan metadata construction out of preview_indexed into orientation_meta in pdf_orientation.rs; behavior unchanged."
     },
     {

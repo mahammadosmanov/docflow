@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.185 - 2026-10-28
+
+### Changed
+
+- Moved uncached orientation PDF inspection classification out of `preview_indexed` into `operations/pdf_orientation/uncached.rs`; behavior unchanged.
+
 ## 1.36.184 - 2026-10-28
 
 ### Changed
