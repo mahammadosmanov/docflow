@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.119",
+  "currentVersion": "1.36.120",
   "releases": [
+    {
+      "version": "1.36.120",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.120",
+      "summary": "Accuracy: docs/KNOWN_ISSUES.md no longer lists the frontend bundle size advisory as open. The screens are already split on demand; the entry now records the measured sizes. No code change."
+    },
     {
       "version": "1.36.119",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.119",
       "summary": "Maintainability: the saved-parameters resume card moves out of OperationScreen.tsx into PreviousValuesCard.tsx, matching PrintQueueResumeCard. Markup and behavior are unchanged."
     },
