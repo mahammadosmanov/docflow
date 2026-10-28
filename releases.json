@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.273",
+  "currentVersion": "1.36.274",
   "releases": [
+    {
+      "version": "1.36.274",
+      "tag": "v1.36.274",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move native sign-out and re-sign-in tests into a native tests auth module."
+    },
     {
       "version": "1.36.273",
       "tag": "v1.36.273",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move batch print row field helpers into a batch_print fields module."
     },
     {

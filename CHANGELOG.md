@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.274 - 2026-10-28
+
+### Changed
+
+- Moved native sign-out and re-sign-in tests into a `native` tests auth module.
+
 ## 1.36.273 - 2026-10-28
 
 ### Changed
