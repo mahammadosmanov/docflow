@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.189 - 2026-10-28
+
+### Changed
+
+- Moved per-attempt print cleanup review recording out of the print queue apply loop.
+
 ## 1.36.188 - 2026-10-28
 
 ### Changed
