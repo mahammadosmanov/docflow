@@ -31,12 +31,14 @@ import {
   PlanExactEffects,
   PlanImpactSummary,
   ScanIndexSummary,
-  SignedStageNavigator,
-  SignedWarningReviewSummary,
 } from "./PlanSummaries";
 import {
   PlanWarnings,
 } from "./PlanWarnings";
+import {
+  SignedStageNavigator,
+  SignedWarningReviewSummary,
+} from "./PlanSignedSummaries";
 import {
   WorkbookChangePreview,
 } from "./WorkbookChangePreview";

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.116 - 2026-10-28
+
+### Changed
+
+- `plan/PlanSummaries.tsx` moves `SignedStageNavigator` and `SignedWarningReviewSummary` into `plan/PlanSignedSummaries.tsx`, and drops the imports only they used. `PlanView.tsx` imports them from the new file. Markup and behavior are unchanged.
+
 ## 1.36.115 - 2026-10-28
 
 ### Added
