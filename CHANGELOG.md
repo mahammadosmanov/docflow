@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.248 - 2026-10-28
+
+### Changed
+
+- Extracted the print job failure warning into a helper.
+
 ## 1.36.247 - 2026-10-28
 
 ### Changed
