@@ -251,21 +251,6 @@ export function EmptyState({
   );
 }
 
-export function ActionBar({
-  left,
-  right,
-}: {
-  left: ReactNode;
-  right: ReactNode;
-}) {
-  return (
-    <div className="action-bar">
-      <div>{left}</div>
-      <div>{right}</div>
-    </div>
-  );
-}
-
 export function Centered({ children }: { children: ReactNode }) {
   return <main className="centered">{children}</main>;
 }

@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.116",
+  "currentVersion": "1.36.117",
   "releases": [
+    {
+      "version": "1.36.117",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.117",
+      "summary": "Maintainability: the ActionBar layout component moves out of components/ui.tsx into components/ActionBar.tsx, and its five consumers import it from there. Markup and behavior are unchanged; typecheck and the frontend suite pass."
+    },
     {
       "version": "1.36.116",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.116",
       "summary": "Maintainability: the signed-stage navigator and signed warning review summary move out of PlanSummaries.tsx into plan/PlanSignedSummaries.tsx, and PlanView imports them from there. Markup and behavior are unchanged; typecheck and the frontend suite pass."
     },

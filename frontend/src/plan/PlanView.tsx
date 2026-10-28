@@ -9,11 +9,11 @@ import {
   useState,
 } from "react";
 import {
-  ActionBar,
   Button,
   EmptyState,
   Notice,
 } from "../components/ui";
+import { ActionBar } from "../components/ActionBar";
 import {
   type Strings,
 } from "../i18n";
