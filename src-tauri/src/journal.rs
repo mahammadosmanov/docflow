@@ -43,6 +43,7 @@ mod recovery;
 mod s5;
 mod s5_accessors;
 mod s5_session;
+mod s5_transition;
 mod store;
 use fs_io::*;
 use lock::*;
