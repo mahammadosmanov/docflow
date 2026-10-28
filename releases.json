@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.223",
+  "currentVersion": "1.36.224",
   "releases": [
+    {
+      "version": "1.36.224",
+      "tag": "v1.36.224",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract per-candidate Worley signature analysis from system root scan into a helper."
+    },
     {
       "version": "1.36.223",
       "tag": "v1.36.223",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract per-RFI review row mapping from system sync preview into a helper."
     },
     {

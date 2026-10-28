@@ -164,106 +164,14 @@ where
     let (worker_count, analyzed) = bounded_map_stream(
         &candidates,
         |(record, rfi_folder)| {
-            let mut record = record.clone();
-            let Some(pdf_path) = record.pdf_path.as_ref().map(PathBuf::from) else {
-                record.signature_reason = "Exact RFI No. PDF not found in folder".to_string();
-                return Ok(CandidateAnalysis {
-                    record,
-                    relative: None,
-                    fingerprint: None,
-                    detection: None,
-                    reused: false,
-                    transient_failure: false,
-                    subject: rfi_folder.to_string_lossy().into_owned(),
-                });
-            };
-            let relative = pdf_path
-                .strip_prefix(root)
-                .map_err(|_| {
-                    CandidateAnalysisError::new(None, "RFI scan escaped the selected system root")
-                })?
-                .to_path_buf();
-            let fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
-                CandidateAnalysisError::new(
-                    Some(&relative),
-                    format!("RFI scan fingerprint failed: {error}"),
-                )
-            })?;
-            let mut cached = if force_rescan {
-                None
-            } else {
-                run.as_ref()
-                    .map(|run| run.lookup::<CachedWorleyDetection>(&relative, &fingerprint))
-                    .transpose()
-                    .map_err(|error| {
-                        CandidateAnalysisError::new(
-                            Some(&relative),
-                            format!("scan index read failed: {error}"),
-                        )
-                    })?
-                    .flatten()
-            };
-            if cached.as_ref().is_some_and(|value| value.signed_by_worley) {
-                let current_hash = file_sha256(&pdf_path).map_err(|error| {
-                    CandidateAnalysisError::new(
-                        Some(&relative),
-                        format!("signed RFI hash failed: {error}"),
-                    )
-                })?;
-                if cached
-                    .as_ref()
-                    .and_then(|value| value.source_sha256.as_deref())
-                    != Some(current_hash.as_str())
-                {
-                    cached = None;
-                }
-            }
-            let (detection, reused, transient_failure) = if let Some(cached) = cached {
-                (cached, true, false)
-            } else {
-                let (signed_by_worley, signature_reason) =
-                    detect_worley_signature(&pdf_path, temp_dir.path());
-                let current_fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
-                    CandidateAnalysisError::new(
-                        Some(&relative),
-                        format!("RFI scan fingerprint changed: {error}"),
-                    )
-                })?;
-                if current_fingerprint != fingerprint {
-                    return Err(CandidateAnalysisError::new(
-                        Some(&relative),
-                        "RFI PDF changed during system scan; preview again",
-                    ));
-                }
-                let source_sha256 = signed_by_worley
-                    .then(|| file_sha256(&pdf_path))
-                    .transpose()
-                    .map_err(|error| {
-                        CandidateAnalysisError::new(
-                            Some(&relative),
-                            format!("signed RFI hash failed: {error}"),
-                        )
-                    })?;
-                let detection = CachedWorleyDetection {
-                    signed_by_worley,
-                    signature_reason,
-                    source_sha256,
-                };
-                let transient_failure = detection.signature_reason.starts_with("PDF render error:")
-                    || detection.signature_reason.starts_with("Image read error:");
-                (detection, false, transient_failure)
-            };
-            record.signed_by_worley = detection.signed_by_worley;
-            record.signature_reason = detection.signature_reason.clone();
-            Ok(CandidateAnalysis {
+            analyze_candidate(
+                root,
+                run.as_ref(),
+                force_rescan,
+                temp_dir.path(),
                 record,
-                relative: Some(relative.clone()),
-                fingerprint: Some(fingerprint),
-                detection: Some(detection),
-                reused,
-                transient_failure,
-                subject: relative.to_string_lossy().into_owned(),
-            })
+                rfi_folder,
+            )
         },
         |_, result: &Result<CandidateAnalysis, CandidateAnalysisError>| {
             let item = match result {
@@ -326,6 +234,113 @@ where
             .then(left.number.cmp(&right.number))
     });
     Ok((records, stats))
+}
+
+/// Reuses or recomputes the Worley signature for one RFI candidate.
+fn analyze_candidate(
+    root: &Path,
+    run: Option<&crate::scan_index::ScanRun<'_>>,
+    force_rescan: bool,
+    temp_dir: &Path,
+    record: &ScannedRfiRecord,
+    rfi_folder: &Path,
+) -> Result<CandidateAnalysis, CandidateAnalysisError> {
+    let mut record = record.clone();
+    let Some(pdf_path) = record.pdf_path.as_ref().map(PathBuf::from) else {
+        record.signature_reason = "Exact RFI No. PDF not found in folder".to_string();
+        return Ok(CandidateAnalysis {
+            record,
+            relative: None,
+            fingerprint: None,
+            detection: None,
+            reused: false,
+            transient_failure: false,
+            subject: rfi_folder.to_string_lossy().into_owned(),
+        });
+    };
+    let relative = pdf_path
+        .strip_prefix(root)
+        .map_err(|_| {
+            CandidateAnalysisError::new(None, "RFI scan escaped the selected system root")
+        })?
+        .to_path_buf();
+    let fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
+        CandidateAnalysisError::new(
+            Some(&relative),
+            format!("RFI scan fingerprint failed: {error}"),
+        )
+    })?;
+    let mut cached = if force_rescan {
+        None
+    } else {
+        run.as_ref()
+            .map(|run| run.lookup::<CachedWorleyDetection>(&relative, &fingerprint))
+            .transpose()
+            .map_err(|error| {
+                CandidateAnalysisError::new(
+                    Some(&relative),
+                    format!("scan index read failed: {error}"),
+                )
+            })?
+            .flatten()
+    };
+    if cached.as_ref().is_some_and(|value| value.signed_by_worley) {
+        let current_hash = file_sha256(&pdf_path).map_err(|error| {
+            CandidateAnalysisError::new(Some(&relative), format!("signed RFI hash failed: {error}"))
+        })?;
+        if cached
+            .as_ref()
+            .and_then(|value| value.source_sha256.as_deref())
+            != Some(current_hash.as_str())
+        {
+            cached = None;
+        }
+    }
+    let (detection, reused, transient_failure) = if let Some(cached) = cached {
+        (cached, true, false)
+    } else {
+        let (signed_by_worley, signature_reason) = detect_worley_signature(&pdf_path, temp_dir);
+        let current_fingerprint = FileFingerprint::read(&pdf_path).map_err(|error| {
+            CandidateAnalysisError::new(
+                Some(&relative),
+                format!("RFI scan fingerprint changed: {error}"),
+            )
+        })?;
+        if current_fingerprint != fingerprint {
+            return Err(CandidateAnalysisError::new(
+                Some(&relative),
+                "RFI PDF changed during system scan; preview again",
+            ));
+        }
+        let source_sha256 = signed_by_worley
+            .then(|| file_sha256(&pdf_path))
+            .transpose()
+            .map_err(|error| {
+                CandidateAnalysisError::new(
+                    Some(&relative),
+                    format!("signed RFI hash failed: {error}"),
+                )
+            })?;
+        let detection = CachedWorleyDetection {
+            signed_by_worley,
+            signature_reason,
+            source_sha256,
+        };
+        let transient_failure = detection.signature_reason.starts_with("PDF render error:")
+            || detection.signature_reason.starts_with("Image read error:");
+        (detection, false, transient_failure)
+    };
+    record.signed_by_worley = detection.signed_by_worley;
+    record.signature_reason = detection.signature_reason.clone();
+    Ok(CandidateAnalysis {
+        record,
+        relative: Some(relative.clone()),
+        fingerprint: Some(fingerprint),
+        detection: Some(detection),
+        reused,
+        transient_failure,
+        subject: relative.to_string_lossy().into_owned(),
+    })
 }
 
 pub(super) fn scan_system_discipline(
