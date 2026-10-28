@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.163 - 2026-10-28
+
+### Changed
+
+- Split OOXML XML parsing/serialization and cell-reference helpers out of `ooxml/xml.rs` into `xml/parse.rs` and `xml/cell_reference.rs`; behavior unchanged.
+
 ## 1.36.162 - 2026-10-28
 
 ### Changed

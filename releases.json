@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.162",
+  "currentVersion": "1.36.163",
   "releases": [
+    {
+      "version": "1.36.163",
+      "tag": "v1.36.163",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split OOXML XML parsing/serialization and cell-reference helpers out of xml.rs into xml/parse.rs and xml/cell_reference.rs; behavior unchanged."
+    },
     {
       "version": "1.36.162",
       "tag": "v1.36.162",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split OOXML relationship validation and target path normalization out of relationships.rs into submodules; behavior unchanged."
     },
     {
