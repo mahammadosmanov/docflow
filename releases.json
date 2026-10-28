@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.204",
+  "currentVersion": "1.36.205",
   "releases": [
+    {
+      "version": "1.36.205",
+      "tag": "v1.36.205",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract review-page outputs from process scan preview into a helper."
+    },
     {
       "version": "1.36.204",
       "tag": "v1.36.204",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract split-source trash move steps from process scan preview into a helper."
     },
     {

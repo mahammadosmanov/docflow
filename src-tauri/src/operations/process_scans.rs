@@ -257,28 +257,13 @@ where
 
     push_unreadable_outputs(&mut plan, failures, &destination, transfer_kind);
 
-    for review in review_pages {
-        let target = review_target(&destination, &review.path, &review.pages);
-        let candidate = Candidate {
-            path: review.path.clone(),
-            pages: Some(review.pages),
-            source_hash: split_sources.get(&review.path).cloned(),
-            modified: UNIX_EPOCH,
-            confidence: 0.0,
-            source: String::new(),
-            rotations: review.rotations,
-        };
-        let mut meta = JsonObject::new();
-        meta.insert("reason".to_string(), Value::String(review.reason));
-        push_candidate_output(
-            &mut plan,
-            &candidate,
-            &target,
-            "note.needs_review",
-            meta,
-            params.keep_original,
-        );
-    }
+    push_review_outputs(
+        &mut plan,
+        review_pages,
+        &split_sources,
+        &destination,
+        params.keep_original,
+    );
 
     for (code, files) in groups {
         push_group_outputs(
@@ -475,6 +460,37 @@ fn push_split_source_trash(
         ));
     }
     Ok(())
+}
+
+fn push_review_outputs(
+    plan: &mut Plan,
+    review_pages: Vec<ReviewPages>,
+    split_sources: &BTreeMap<PathBuf, String>,
+    destination: &Path,
+    keep_original: bool,
+) {
+    for review in review_pages {
+        let target = review_target(destination, &review.path, &review.pages);
+        let candidate = Candidate {
+            path: review.path.clone(),
+            pages: Some(review.pages),
+            source_hash: split_sources.get(&review.path).cloned(),
+            modified: UNIX_EPOCH,
+            confidence: 0.0,
+            source: String::new(),
+            rotations: review.rotations,
+        };
+        let mut meta = JsonObject::new();
+        meta.insert("reason".to_string(), Value::String(review.reason));
+        push_candidate_output(
+            plan,
+            &candidate,
+            &target,
+            "note.needs_review",
+            meta,
+            keep_original,
+        );
+    }
 }
 
 fn push_unreadable_outputs(
