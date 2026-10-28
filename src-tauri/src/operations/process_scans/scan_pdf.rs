@@ -175,122 +175,10 @@ where
                 "scan source changed during Preview",
             ));
         }
-        let mut local_groups = Vec::<PageGroup>::new();
-        let mut active = None::<PageGroup>;
-        let mut seen_codes = std::collections::BTreeSet::new();
-        for page_index in 0..page_count {
-            if cancelled() {
-                return Err(BackendError::cancelled());
-            }
-            let page_read = if fast_cover_mode {
-                ocr.read_cover_page(pdf, page_index)
-            } else {
-                ocr.read_page(pdf, page_index)
-            };
-            let read = match page_read {
-                Ok(read) => read,
-                Err(OcrFailure::EngineMissing) => {
-                    return Ok(Some(Plan {
-                        warnings: vec![Warning {
-                            key: "warn.no_ocr".to_string(),
-                            subject: ocr.diagnostics(),
-                        }],
-                        ..empty_plan(operation_id)
-                    }));
-                }
-                Err(OcrFailure::Document(error)) => {
-                    if let Some(group) = active.as_mut() {
-                        group.pages.push(page_index);
-                    } else {
-                        active = Some(PageGroup {
-                            code: None,
-                            pages: vec![page_index],
-                            confidence: 0.0,
-                            source: String::new(),
-                            reason: format!("unreadable page: {error}"),
-                        });
-                    }
-                    continue;
-                }
-            };
-            // A strict, high-confidence RFI identity is the only group boundary.
-            // Once a cover starts a group, every page stays with it until another
-            // confirmed cover appears, even when continuation OCR is uncertain.
-            if fast_cover_mode && read.source.starts_with("ocr:fast-cover:uncertain") {
-                flush_page_group(&mut active, &mut local_groups);
-                active = Some(PageGroup {
-                    code: None,
-                    pages: vec![page_index],
-                    confidence: read.matched.confidence,
-                    source: read.source,
-                    reason: "possible RFI cover could not be confirmed".to_string(),
-                });
-            } else if is_confirmed_cover(&read) {
-                let code = read.matched.code.clone();
-                let continues = active
-                    .as_ref()
-                    .is_some_and(|group| group.code.as_ref() == Some(&code));
-                if continues {
-                    active
-                        .as_mut()
-                        .expect("current group exists")
-                        .pages
-                        .push(page_index);
-                    continue;
-                }
-                flush_page_group(&mut active, &mut local_groups);
-                if !seen_codes.insert(code.clone()) {
-                    active = Some(PageGroup {
-                        code: None,
-                        pages: vec![page_index],
-                        confidence: read.matched.confidence,
-                        source: read.source,
-                        reason: format!("duplicate RFI page for {code}"),
-                    });
-                } else {
-                    active = Some(PageGroup {
-                        code: Some(code),
-                        pages: vec![page_index],
-                        confidence: read.matched.confidence,
-                        source: read.source,
-                        reason: String::new(),
-                    });
-                }
-            } else if active.as_ref().is_some_and(|group| group.code.is_some()) {
-                active
-                    .as_mut()
-                    .expect("current RFI group exists")
-                    .pages
-                    .push(page_index);
-            } else if read.matched.method == RfiMethod::Miss
-                && !read.source.starts_with("ocr:ambiguous-or-unconfirmed:")
-            {
-                if let Some(group) = active.as_mut() {
-                    group.pages.push(page_index);
-                } else {
-                    active = Some(PageGroup {
-                        code: None,
-                        pages: vec![page_index],
-                        confidence: 0.0,
-                        source: read.source,
-                        reason: "page precedes the first exact RFI identity".to_string(),
-                    });
-                }
-            } else {
-                flush_page_group(&mut active, &mut local_groups);
-                active = Some(PageGroup {
-                    code: None,
-                    pages: vec![page_index],
-                    confidence: read.matched.confidence,
-                    source: read.source,
-                    reason: format!(
-                        "uncertain RFI evidence: {}",
-                        method_name(read.matched.method)
-                    ),
-                });
-            }
-        }
-        flush_page_group(&mut active, &mut local_groups);
+        let Some(local_groups) = group_pages(ocr, pdf, page_count, fast_cover_mode, cancelled)?
+        else {
+            return Ok(Some(no_ocr_plan(operation_id, ocr)));
+        };
         if hash_pdf(pdf).map_err(BackendError::path_invalid)? != source_hash {
             return Err(BackendError::path_invalid(
                 "scan source changed during Preview",
@@ -356,15 +244,7 @@ where
 
     let read = match ocr.read_page(pdf, 0) {
         Ok(read) => read,
-        Err(OcrFailure::EngineMissing) => {
-            return Ok(Some(Plan {
-                warnings: vec![Warning {
-                    key: "warn.no_ocr".to_string(),
-                    subject: ocr.diagnostics(),
-                }],
-                ..empty_plan(operation_id)
-            }));
-        }
+        Err(OcrFailure::EngineMissing) => return Ok(Some(no_ocr_plan(operation_id, ocr))),
         Err(OcrFailure::Document(error)) => {
             failures.push((pdf.clone(), error));
             return Ok(None);
@@ -434,4 +314,138 @@ where
         groups.push((read.matched.code, vec![candidate]));
     }
     Ok(None)
+}
+
+/// Groups a multi-RFI PDF's pages by exact cover identity; `None` when no OCR engine is available.
+fn group_pages<A, C>(
+    ocr: &A,
+    pdf: &Path,
+    page_count: usize,
+    fast_cover_mode: bool,
+    cancelled: &mut C,
+) -> Result<Option<Vec<PageGroup>>, BackendError>
+where
+    A: OcrAdapter,
+    C: FnMut() -> bool,
+{
+    let mut local_groups = Vec::<PageGroup>::new();
+    let mut active = None::<PageGroup>;
+    let mut seen_codes = std::collections::BTreeSet::new();
+    for page_index in 0..page_count {
+        if cancelled() {
+            return Err(BackendError::cancelled());
+        }
+        let page_read = if fast_cover_mode {
+            ocr.read_cover_page(pdf, page_index)
+        } else {
+            ocr.read_page(pdf, page_index)
+        };
+        let read = match page_read {
+            Ok(read) => read,
+            Err(OcrFailure::EngineMissing) => return Ok(None),
+            Err(OcrFailure::Document(error)) => {
+                if let Some(group) = active.as_mut() {
+                    group.pages.push(page_index);
+                } else {
+                    active = Some(PageGroup {
+                        code: None,
+                        pages: vec![page_index],
+                        confidence: 0.0,
+                        source: String::new(),
+                        reason: format!("unreadable page: {error}"),
+                    });
+                }
+                continue;
+            }
+        };
+        // A strict, high-confidence RFI identity is the only group boundary.
+        // Once a cover starts a group, every page stays with it until another
+        // confirmed cover appears, even when continuation OCR is uncertain.
+        if fast_cover_mode && read.source.starts_with("ocr:fast-cover:uncertain") {
+            flush_page_group(&mut active, &mut local_groups);
+            active = Some(PageGroup {
+                code: None,
+                pages: vec![page_index],
+                confidence: read.matched.confidence,
+                source: read.source,
+                reason: "possible RFI cover could not be confirmed".to_string(),
+            });
+        } else if is_confirmed_cover(&read) {
+            let code = read.matched.code.clone();
+            let continues = active
+                .as_ref()
+                .is_some_and(|group| group.code.as_ref() == Some(&code));
+            if continues {
+                active
+                    .as_mut()
+                    .expect("current group exists")
+                    .pages
+                    .push(page_index);
+                continue;
+            }
+            flush_page_group(&mut active, &mut local_groups);
+            if !seen_codes.insert(code.clone()) {
+                active = Some(PageGroup {
+                    code: None,
+                    pages: vec![page_index],
+                    confidence: read.matched.confidence,
+                    source: read.source,
+                    reason: format!("duplicate RFI page for {code}"),
+                });
+            } else {
+                active = Some(PageGroup {
+                    code: Some(code),
+                    pages: vec![page_index],
+                    confidence: read.matched.confidence,
+                    source: read.source,
+                    reason: String::new(),
+                });
+            }
+        } else if active.as_ref().is_some_and(|group| group.code.is_some()) {
+            active
+                .as_mut()
+                .expect("current RFI group exists")
+                .pages
+                .push(page_index);
+        } else if read.matched.method == RfiMethod::Miss
+            && !read.source.starts_with("ocr:ambiguous-or-unconfirmed:")
+        {
+            if let Some(group) = active.as_mut() {
+                group.pages.push(page_index);
+            } else {
+                active = Some(PageGroup {
+                    code: None,
+                    pages: vec![page_index],
+                    confidence: 0.0,
+                    source: read.source,
+                    reason: "page precedes the first exact RFI identity".to_string(),
+                });
+            }
+        } else {
+            flush_page_group(&mut active, &mut local_groups);
+            active = Some(PageGroup {
+                code: None,
+                pages: vec![page_index],
+                confidence: read.matched.confidence,
+                source: read.source,
+                reason: format!(
+                    "uncertain RFI evidence: {}",
+                    method_name(read.matched.method)
+                ),
+            });
+        }
+    }
+    flush_page_group(&mut active, &mut local_groups);
+    Ok(Some(local_groups))
+}
+
+/// Plan returned when OCR is unavailable, carrying the engine diagnostics.
+fn no_ocr_plan(operation_id: &str, ocr: &impl OcrAdapter) -> Plan {
+    Plan {
+        warnings: vec![Warning {
+            key: "warn.no_ocr".to_string(),
+            subject: ocr.diagnostics(),
+        }],
+        ..empty_plan(operation_id)
+    }
 }
