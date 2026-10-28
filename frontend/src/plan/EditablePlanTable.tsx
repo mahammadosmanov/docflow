@@ -31,6 +31,7 @@ import { PlanTableHead } from "./PlanTableHead";
 import { PlanRowActions } from "./PlanRowActions";
 import {
   type EditorColumn,
+  editorChoiceLabel,
   displayEditorValue,
   applyEditorValue,
   choicesForRow,
@@ -115,14 +116,8 @@ export function EditablePlanTable({
     setBulkValue("");
   }, [bulkField, detailsVisible, editor.columns]);
 
-  const choiceLabel = (field: string, value: string, column?: EditorColumn) => {
-    const fieldLabels = choiceLabels[field];
-    if (fieldLabels && typeof fieldLabels === "object") {
-      const key = (fieldLabels as Record<string, unknown>)[value];
-      if (typeof key === "string") return s.t(key);
-    }
-    return column ? displayEditorValue(column, value) : value;
-  };
+  const choiceLabel = (field: string, value: string, column?: EditorColumn) =>
+    editorChoiceLabel(choiceLabels, s, field, value, column);
 
   const choicesFor = (column: EditorColumn, row: Record<string, unknown>) =>
     choicesForRow(editor, column, row);
