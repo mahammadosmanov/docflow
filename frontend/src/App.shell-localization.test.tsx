@@ -10,10 +10,10 @@ import { humanError } from "./helpers";
 import { isPlanEditorReady } from "./plan/EditablePlanTable";
 import { PlanView } from "./plan/PlanView";
 import {
-  PlanWarnings,
   canonicalRfiInText,
   summarizeWorkbookCellChanges,
 } from "./plan/PlanSummaries";
+import { PlanWarnings } from "./plan/PlanWarnings";
 import { safePngThumbnail } from "./plan/SignedPageComparison";
 import { MockBridge } from "./lib/bridge";
 import type { Plan } from "./types";
