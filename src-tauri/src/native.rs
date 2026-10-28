@@ -549,7 +549,6 @@ impl NativeBackend {
         );
     }
     // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
-    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     fn pause_replica_automation(&self, error_code: &str) {
         if let Some(mut section) = self.settings.section("replicaAutomation") {
