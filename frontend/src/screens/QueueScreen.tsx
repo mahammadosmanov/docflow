@@ -11,10 +11,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
-  EmptyState,
   Header,
-  Notice,
 } from "../components/ui";
+import {
+  EmptyState,
+  Notice,
+} from "../components/feedback";
 import {
   BusyState,
 } from "../components/BusyState";

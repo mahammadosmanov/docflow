@@ -19,8 +19,10 @@ import {
 } from "lucide-react";
 import {
   Button,
-  Notice,
 } from "../components/ui";
+import {
+  Notice,
+} from "../components/feedback";
 import {
   type Strings,
 } from "../i18n";

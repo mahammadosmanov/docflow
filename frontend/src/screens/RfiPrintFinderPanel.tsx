@@ -1,4 +1,5 @@
-import { Button, Notice } from "../components/ui";
+import { Button } from "../components/ui";
+import { Notice } from "../components/feedback";
 import { type Strings } from "../i18n";
 import { RfiInputChooser } from "./RfiInputChooser";
 import { RfiPrintResults } from "./RfiPrintResults";

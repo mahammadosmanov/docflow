@@ -18,10 +18,12 @@ import {
 import {
   Button,
   Header,
-  Notice,
   Segmented,
   Switch,
 } from "../components/ui";
+import {
+  Notice,
+} from "../components/feedback";
 import {
   type Strings,
 } from "../i18n";

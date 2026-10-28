@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.126 - 2026-10-28
+
+### Changed
+
+- Moved the `Notice`, `EmptyState` and `Centered` primitives from `frontend/src/components/ui.tsx` into `frontend/src/components/feedback.tsx`. Importing files now name the module that owns each primitive. Rendering and behavior are unchanged.
+
 ## 1.36.125 - 2026-10-28
 
 ### Changed
