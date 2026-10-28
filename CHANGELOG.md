@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.144 - 2026-10-28
+
+### Changed
+
+- Extracted the `rfi.normalize_pdf_orientation` and `rfi.log_add` browser-demo preview branches from `previewOperation` into `previewPdfOrientation` and `previewLogAdd` in `frontend/src/lib/mockPlanHandlers.ts`. Browser-only demo data; no runtime behavior change; 294 frontend tests pass.
+
 ## 1.36.143 - 2026-10-28
 
 ### Changed
