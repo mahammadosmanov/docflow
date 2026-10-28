@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.101",
+  "currentVersion": "1.36.102",
   "releases": [
+    {
+      "version": "1.36.102",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.102",
+      "summary": "Maintainability: the batch-print RFI document finder section moves out of OperationScreen.tsx into RfiPrintFinderPanel.tsx, and the reveal-destination lookup becomes a named helper. Markup, labels and behavior are unchanged; typecheck and the frontend suite (289) pass."
+    },
     {
       "version": "1.36.101",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.101",
       "summary": "Maintainability: classify_workbooks_full moves the source-missing and unknown-status manual-review row into source_issue_row and the summary warnings into projection_warnings. Logic is unchanged; clippy and lib tests (542) pass."
     },

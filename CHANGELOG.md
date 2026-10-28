@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.102 - 2026-10-28
+
+### Changed
+
+- `screens/OperationScreen.tsx` (544 lines) moves the batch-print RFI document finder section into `screens/RfiPrintFinderPanel.tsx`, which receives the `useRfiPrintFinder` result as one `finder` prop. The reveal-destination lookup is now the named helper `destinationRevealAction` in the same file. Markup, labels and behavior are unchanged; `tsc` is clean and the frontend suite passes (289 tests).
+
 ## 1.36.101 - 2026-10-28
 
 ### Changed

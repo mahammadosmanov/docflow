@@ -54,8 +54,7 @@ import {
   ResultView,
 } from "./ResultView";
 import { BusyStage } from "./BusyStage";
-import { RfiInputChooser } from "./RfiInputChooser";
-import { RfiPrintResults } from "./RfiPrintResults";
+import { RfiPrintFinderPanel } from "./RfiPrintFinderPanel";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { persistableValues } from "../lib/operationValues";
 import { editorRowsOf, rememberedParams } from "./operationState";
@@ -108,19 +107,8 @@ export function OperationScreen({
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
   const rfiInputs = operation.id === "files.batch_print" ? parseRfiInputs(values.rfi_numbers) : [];
-  const {
-    rfiPrintCandidates,
-    rfiPrintResolutions,
-    rfiFinderBusy,
-    rfiFinderError,
-    excludedRfiInputs,
-    setExcludedRfiInputs,
-    rfiFinderWasRun,
-    rfiSearchTruncated,
-    invalidateRfiFinder,
-    searchRfiDocuments,
-    setRfiCandidateGroup,
-  } = useRfiPrintFinder({ bridge, s, values, rfiInputs });
+  const rfiFinder = useRfiPrintFinder({ bridge, s, values, rfiInputs });
+  const { invalidateRfiFinder, setExcludedRfiInputs } = rfiFinder;
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
   const {
     valuesRevision,
@@ -152,7 +140,7 @@ export function OperationScreen({
     operation,
     values,
     lastSaved,
-    finder: { ran: rfiFinderWasRun, candidates: rfiPrintCandidates },
+    finder: { ran: rfiFinder.rfiFinderWasRun, candidates: rfiFinder.rfiPrintCandidates },
     s,
     screen: { setError, setStage, setPreviousValues, installPlan, setInvalidField },
     progress: { startProgress, receiveProgress },
@@ -341,46 +329,7 @@ export function OperationScreen({
                     ))}
                 </div>
                 {operation.id === "files.batch_print" && (
-                  <section className="rfi-print-finder" aria-labelledby="rfi-print-title">
-                    <h3 id="rfi-print-title">{s.t("print.rfi.title")}</h3>
-                    <RfiInputChooser
-                      inputs={rfiInputs}
-                      excluded={excludedRfiInputs}
-                      s={s}
-                      onSelectAll={() => {
-                        invalidateRfiFinder();
-                        setExcludedRfiInputs([]);
-                      }}
-                      onSelectNone={() => {
-                        invalidateRfiFinder();
-                        setExcludedRfiInputs(rfiInputs);
-                      }}
-                      onToggle={(input, checked) => {
-                        invalidateRfiFinder();
-                        setExcludedRfiInputs((current) =>
-                          checked
-                            ? current.filter((value) => value !== input)
-                            : [...current, input],
-                        );
-                      }}
-                    />
-                    <Button
-                      variant="secondary"
-                      disabled={rfiFinderBusy || !rfiInputs.length}
-                      onClick={() => void searchRfiDocuments()}
-                    >
-                      {s.t(rfiFinderBusy ? "print.rfi.searching" : "print.rfi.search")}
-                    </Button>
-                    {rfiFinderError && <Notice kind="error">{rfiFinderError}</Notice>}
-                    <RfiPrintResults
-                      resolutions={rfiPrintResolutions}
-                      candidates={rfiPrintCandidates}
-                      truncated={rfiSearchTruncated}
-                      wasRun={rfiFinderWasRun}
-                      onSetGroup={setRfiCandidateGroup}
-                      s={s}
-                    />
-                  </section>
+                  <RfiPrintFinderPanel s={s} inputs={rfiInputs} finder={rfiFinder} />
                 )}
                 {latestPrintQueue && (
                   <div className="resume-queue-card">
@@ -522,23 +471,20 @@ export function OperationScreen({
                 ? () => void prepareRfiReply()
                 : undefined
             }
-            onOpenDestination={
-              (() => {
-                const dest =
-                  (isPathSelection(values.destination) && values.destination) ||
-                  (isPathSelection(values.dest) && values.dest) ||
-                  (isPathSelection(values.target) && values.target) ||
-                  (isPathSelection(values.output_directory) &&
-                    values.output_directory) ||
-                  (isPathSelection(values.rfi_system) && values.rfi_system);
-                return dest
-                  ? () => void revealPath(bridge, dest.selectionId)
-                  : undefined;
-              })()
-            }
+            onOpenDestination={destinationRevealAction(bridge, values)}
           />
         )}
       </main>
     </div>
   );
+}
+
+function destinationRevealAction(bridge: Bridge, values: Record<string, unknown>) {
+  const dest =
+    (isPathSelection(values.destination) && values.destination) ||
+    (isPathSelection(values.dest) && values.dest) ||
+    (isPathSelection(values.target) && values.target) ||
+    (isPathSelection(values.output_directory) && values.output_directory) ||
+    (isPathSelection(values.rfi_system) && values.rfi_system);
+  return dest ? () => void revealPath(bridge, dest.selectionId) : undefined;
 }
