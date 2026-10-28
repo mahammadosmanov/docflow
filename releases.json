@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.275",
+  "currentVersion": "1.36.276",
   "releases": [
+    {
+      "version": "1.36.276",
+      "tag": "v1.36.276",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move interprocess lock tests into a journal tests submodule."
+    },
     {
       "version": "1.36.275",
       "tag": "v1.36.275",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move PDF publish retry and no-clobber tests into an fs_ops tests submodule."
     },
     {

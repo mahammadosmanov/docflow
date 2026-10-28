@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.276 - 2026-10-28
+
+### Changed
+
+- Moved interprocess lock tests into a `journal` tests submodule.
+
 ## 1.36.275 - 2026-10-28
 
 ### Changed
