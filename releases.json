@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.274",
+  "currentVersion": "1.36.275",
   "releases": [
+    {
+      "version": "1.36.275",
+      "tag": "v1.36.275",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move PDF publish retry and no-clobber tests into an fs_ops tests submodule."
+    },
     {
       "version": "1.36.274",
       "tag": "v1.36.274",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move native sign-out and re-sign-in tests into a native tests auth module."
     },
     {
