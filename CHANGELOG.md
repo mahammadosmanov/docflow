@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.165 - 2026-10-28
+
+### Changed
+
+- Moved the complete-status sync preview out of `rfi_system_sync/preview.rs` into `preview/complete_status.rs`; behavior unchanged.
+
 ## 1.36.164 - 2026-10-28
 
 ### Changed
