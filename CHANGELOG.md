@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.193 - 2026-10-28
+
+### Changed
+
+- Reused the sync workbook reader in completion-status preview and moved its update step building into a helper.
+
 ## 1.36.192 - 2026-10-28
 
 ### Changed
