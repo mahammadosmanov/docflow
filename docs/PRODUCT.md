@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.36.259**. `VERSION` is authoritative.
+Current product version: **1.36.260**. `VERSION` is authoritative.
 
 ## Problem
 
