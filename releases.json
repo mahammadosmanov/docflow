@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.117",
+  "currentVersion": "1.36.118",
   "releases": [
+    {
+      "version": "1.36.118",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.118",
+      "summary": "Maintainability: the schema parameter visibility rule lives in one helper, isParamVisible in lib/operationValues.ts. OperationScreen and SchemaField use it instead of duplicating the visibleWhen check. Behavior is unchanged; a unit test covers the helper."
+    },
     {
       "version": "1.36.117",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.117",
       "summary": "Maintainability: the ActionBar layout component moves out of components/ui.tsx into components/ActionBar.tsx, and its five consumers import it from there. Markup and behavior are unchanged; typecheck and the frontend suite pass."
     },

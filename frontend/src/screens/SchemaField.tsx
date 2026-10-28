@@ -8,6 +8,9 @@ import {
   type Bridge,
 } from "../lib/bridge";
 import {
+  isParamVisible,
+} from "../lib/operationValues";
+import {
   type ParamDef,
 } from "../types";
 import {
@@ -34,13 +37,7 @@ export function SchemaField({
   onChange: (value: unknown) => void;
   invalid?: boolean;
 }) {
-  if (
-    !Object.entries(param.visibleWhen ?? {}).every(
-      ([name, expected]) => values[name] === expected,
-    )
-  ) {
-    return null;
-  }
+  if (!isParamVisible(param, values)) return null;
   if (param.kind === "bool") {
     return (
       <label className="toggle-row">

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { ParamDef } from "../types";
-import { persistableValues, previewValuesFor } from "./operationValues";
+import {
+  isParamVisible,
+  persistableValues,
+  previewValuesFor,
+} from "./operationValues";
 
 const param = (name: string, extra: Partial<ParamDef> = {}): ParamDef => ({
   name,
@@ -73,5 +77,18 @@ describe("previewValuesFor", () => {
         { ran: false, candidates: [] },
       ),
     ).toEqual({ files: ["typed"] });
+  });
+});
+
+describe("isParamVisible", () => {
+  it("shows parameters without conditions", () => {
+    expect(isParamVisible(param("copies"), {})).toBe(true);
+  });
+
+  it("shows a parameter only when every condition matches", () => {
+    const gated = param("batch", { visibleWhen: { mode: "multi", fast: true } });
+    expect(isParamVisible(gated, { mode: "multi", fast: true })).toBe(true);
+    expect(isParamVisible(gated, { mode: "multi", fast: false })).toBe(false);
+    expect(isParamVisible(gated, { mode: "single", fast: true })).toBe(false);
   });
 });
