@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.259 - 2026-10-28
+
+### Changed
+
+- Extracted applied-file verification from the S5 undo path into a helper.
+
 ## 1.36.258 - 2026-10-28
 
 ### Changed

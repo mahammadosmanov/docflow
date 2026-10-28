@@ -82,35 +82,14 @@ impl FilesystemAuthority {
         let backup = authorize_s5_recorded(&record, &backup_path)?
             .anchor()
             .map_err(|_| BackendError::path_invalid("S5 backup cannot be anchored"))?;
-        let mut current_file = canonical
-            .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
-        let mut backup_file = backup
-            .open_read()
-            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
-        let current_identity = crate::cap_fs::file_identity(&current_file)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
-        let backup_identity = crate::cap_fs::file_identity(&backup_file)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
-        let current_hash = sha256_open_file(&mut current_file)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
-        let backup_hash = sha256_open_file(&mut backup_file)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
-        let current_snapshot = FileSecuritySnapshot::capture(&current_file, None)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
-        let backup_snapshot = FileSecuritySnapshot::capture(&backup_file, None)
-            .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
-        if current_identity != expected_applied_identity
-            || current_hash != expected_applied_hash
-            || current_snapshot.sha256() != backup_evidence.security_sha256
-            || backup_identity != backup_evidence.identity
-            || backup_hash != backup_evidence.sha256
-            || backup_snapshot.sha256() != backup_evidence.security_sha256
-        {
-            return Err(BackendError::validation(
-                "error.rfi.followUp.workbookChanged",
-            ));
-        }
+        let (current_file, mut backup_file, current_snapshot, backup_snapshot) =
+            verify_applied_undo_files(
+                &canonical,
+                &backup,
+                &expected_applied_hash,
+                &expected_applied_identity,
+                &backup_evidence,
+            )?;
         let current_len = current_file
             .metadata()
             .map(|metadata| metadata.len())
@@ -171,12 +150,12 @@ impl FilesystemAuthority {
                 retained: retained_path.to_string_lossy().into_owned(),
                 backup: backup_path.to_string_lossy().into_owned(),
                 publication_source: backup_path.to_string_lossy().into_owned(),
-                expected_canonical_identity: current_identity,
-                expected_canonical_sha256: current_hash,
-                expected_backup_identity: backup_identity.clone(),
-                expected_backup_sha256: backup_hash.clone(),
-                publication_source_identity: backup_identity,
-                publication_sha256: backup_hash,
+                expected_canonical_identity: expected_applied_identity,
+                expected_canonical_sha256: expected_applied_hash,
+                expected_backup_identity: backup_evidence.identity.clone(),
+                expected_backup_sha256: backup_evidence.sha256.clone(),
+                publication_source_identity: backup_evidence.identity.clone(),
+                publication_sha256: backup_evidence.sha256.clone(),
                 expected_canonical_security_sha256: current_snapshot.sha256(),
                 expected_backup_security_sha256: backup_snapshot.sha256(),
                 publication_security_sha256: backup_snapshot.sha256(),
@@ -387,6 +366,47 @@ fn s5_undo_paths(
         ));
     }
     Ok((backup_path, canonical_path))
+}
+
+/// Opens the applied canonical workbook and the backup, checks both against S5 evidence, and
+/// returns the canonical handle with both security snapshots.
+fn verify_applied_undo_files(
+    canonical: &AnchoredPath,
+    backup: &AnchoredPath,
+    expected_applied_hash: &str,
+    expected_applied_identity: &crate::journal::FilesystemObjectIdentity,
+    backup_evidence: &RetainedArtifactEvidence,
+) -> Result<(File, File, FileSecuritySnapshot, FileSecuritySnapshot), BackendError> {
+    let mut current_file = canonical
+        .open_mutable()
+        .map_err(|_| BackendError::validation("error.rfi.followUp.workbookLocked"))?;
+    let mut backup_file = backup
+        .open_read()
+        .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+    let current_identity = crate::cap_fs::file_identity(&current_file)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+    let backup_identity = crate::cap_fs::file_identity(&backup_file)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+    let current_hash = sha256_open_file(&mut current_file)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+    let backup_hash = sha256_open_file(&mut backup_file)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+    let current_snapshot = FileSecuritySnapshot::capture(&current_file, None)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
+    let backup_snapshot = FileSecuritySnapshot::capture(&backup_file, None)
+        .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
+    if current_identity != *expected_applied_identity
+        || current_hash != expected_applied_hash
+        || current_snapshot.sha256() != backup_evidence.security_sha256
+        || backup_identity != backup_evidence.identity
+        || backup_hash != backup_evidence.sha256
+        || backup_snapshot.sha256() != backup_evidence.security_sha256
+    {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.workbookChanged",
+        ));
+    }
+    Ok((current_file, backup_file, current_snapshot, backup_snapshot))
 }
 
 fn s5_applied_expectations(

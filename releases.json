@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.258",
+  "currentVersion": "1.36.259",
   "releases": [
+    {
+      "version": "1.36.259",
+      "tag": "v1.36.259",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract applied-file verification from the S5 undo path into a helper."
+    },
     {
       "version": "1.36.258",
       "tag": "v1.36.258",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract workbook signature parsing into a helper."
     },
     {
