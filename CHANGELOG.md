@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.140 - 2026-10-28
+
+### Changed
+
+- Moved the platform unit test module from `src-tauri/src/platform/mod.rs` into `platform/tests.rs`. `mod.rs` drops from 621 to 164 lines. Test bodies and `include_str!` paths are unchanged; all 111 `platform::` tests pass on macOS.
+
 ## 1.36.139 - 2026-10-28
 
 ### Changed
