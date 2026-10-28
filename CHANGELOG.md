@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.173 - 2026-10-28
+
+### Changed
+
+- Moved per-sheet RFI Log add batch construction out of the preview loop into `rfi_log/preview_steps.rs`; behavior unchanged.
+
 ## 1.36.172 - 2026-10-28
 
 ### Changed
