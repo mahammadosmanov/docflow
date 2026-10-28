@@ -18,16 +18,8 @@ where
         total: 1,
         subject: rfi_log_path.to_string_lossy().into_owned(),
     });
-    rfi_log_file
-        .seek(SeekFrom::Start(0))
-        .map_err(|error| BackendError::protocol(error.to_string()))?;
-    let fingerprint = fingerprint_open_file(rfi_log_file)?;
-    rfi_log_file
-        .seek(SeekFrom::Start(0))
-        .map_err(|error| BackendError::protocol(error.to_string()))?;
-    let workbook = read_workbook_from_reader(rfi_log_file).map_err(|error| {
-        BackendError::validation(format!("error.rfi.completeStatus.workbookInvalid: {error}"))
-    })?;
+    let (fingerprint, workbook) =
+        read_sync_workbook(rfi_log_file, "error.rfi.completeStatus.workbookInvalid")?;
     let log_rows = read_rfi_log_status_rows(&workbook)?;
     progress(ProgressEvent {
         phase: "completion_workbook_read".to_string(),
@@ -163,59 +155,7 @@ where
         subject: String::new(),
     });
 
-    let mut steps = Vec::new();
-    let count = updates.values().map(BTreeMap::len).sum::<usize>();
-    if count > 0 {
-        let extension = rfi_log_path
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or("xlsm");
-        let backup_path = rfi_log_path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join(format!(
-                ".docflow-completion-sync-backup-{}.{}",
-                Uuid::new_v4().simple(),
-                extension
-            ));
-        let update_row_ids = updates
-            .values()
-            .flat_map(BTreeMap::values)
-            .map(|update| update.row_id.as_str())
-            .collect::<BTreeSet<_>>();
-        let canonical_rfi_codes = review_rows
-            .iter()
-            .filter(|row| {
-                row.get("_rowId")
-                    .and_then(Value::as_str)
-                    .is_some_and(|row_id| update_row_ids.contains(row_id))
-            })
-            .filter_map(|row| row.get("canonicalRfi").and_then(Value::as_str))
-            .map(str::to_string)
-            .collect();
-        let step_meta = SystemSyncStepMeta {
-            target_path: rfi_log_path.to_string_lossy().into_owned(),
-            backup_path: backup_path.to_string_lossy().into_owned(),
-            source_fingerprint: fingerprint,
-            workbook_kind: SyncWorkbookKind::RfiLogStatus,
-            updates,
-            canonical_rfi_codes,
-            summary: format!("Update {count} RFI Log Inspection Status cell(s)"),
-        };
-        let mut meta = JsonObject::new();
-        meta.insert(
-            "syncStep".to_string(),
-            serde_json::to_value(step_meta)
-                .map_err(|error| BackendError::protocol(error.to_string()))?,
-        );
-        steps.push(Step {
-            kind: StepKind::WorkbookUpdate,
-            src: Some(rfi_log_path.to_string_lossy().into_owned()),
-            dst: Some(backup_path.to_string_lossy().into_owned()),
-            note_key: Some("note.rfi.completeStatus.rfiLog".to_string()),
-            meta,
-        });
-    }
+    let steps = completion_status_step(rfi_log_path, fingerprint, updates, &review_rows)?;
 
     let mut warnings = discovery
         .invalid_names
@@ -292,4 +232,65 @@ where
         warnings,
         meta,
     })
+}
+
+fn completion_status_step(
+    rfi_log_path: &Path,
+    fingerprint: WorkbookFingerprint,
+    updates: BTreeMap<String, BTreeMap<String, GuardedCellUpdateDto>>,
+    review_rows: &[Value],
+) -> Result<Vec<Step>, BackendError> {
+    let count = updates.values().map(BTreeMap::len).sum::<usize>();
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    let extension = rfi_log_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xlsm");
+    let backup_path = rfi_log_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(format!(
+            ".docflow-completion-sync-backup-{}.{}",
+            Uuid::new_v4().simple(),
+            extension
+        ));
+    let update_row_ids = updates
+        .values()
+        .flat_map(BTreeMap::values)
+        .map(|update| update.row_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let canonical_rfi_codes = review_rows
+        .iter()
+        .filter(|row| {
+            row.get("_rowId")
+                .and_then(Value::as_str)
+                .is_some_and(|row_id| update_row_ids.contains(row_id))
+        })
+        .filter_map(|row| row.get("canonicalRfi").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+    let step_meta = SystemSyncStepMeta {
+        target_path: rfi_log_path.to_string_lossy().into_owned(),
+        backup_path: backup_path.to_string_lossy().into_owned(),
+        source_fingerprint: fingerprint,
+        workbook_kind: SyncWorkbookKind::RfiLogStatus,
+        updates,
+        canonical_rfi_codes,
+        summary: format!("Update {count} RFI Log Inspection Status cell(s)"),
+    };
+    let mut meta = JsonObject::new();
+    meta.insert(
+        "syncStep".to_string(),
+        serde_json::to_value(step_meta)
+            .map_err(|error| BackendError::protocol(error.to_string()))?,
+    );
+    Ok(vec![Step {
+        kind: StepKind::WorkbookUpdate,
+        src: Some(rfi_log_path.to_string_lossy().into_owned()),
+        dst: Some(backup_path.to_string_lossy().into_owned()),
+        note_key: Some("note.rfi.completeStatus.rfiLog".to_string()),
+        meta,
+    }])
 }

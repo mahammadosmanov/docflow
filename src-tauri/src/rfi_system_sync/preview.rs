@@ -61,7 +61,8 @@ where
         total: 2,
         subject: rfi_log_path.to_string_lossy().into_owned(),
     });
-    let (rfi_log_fingerprint, rfi_log_workbook) = read_sync_workbook(rfi_log_file)?;
+    let (rfi_log_fingerprint, rfi_log_workbook) =
+        read_sync_workbook(rfi_log_file, "error.rfi.systemSync.workbookInvalid")?;
     let rfi_log_rows = read_rfi_log_rows(&rfi_log_workbook)?;
     progress(ProgressEvent {
         phase: "system_workbook_read".to_string(),
@@ -70,7 +71,8 @@ where
         subject: follow_up_path.to_string_lossy().into_owned(),
     });
 
-    let (follow_up_fingerprint, follow_up_workbook) = read_sync_workbook(follow_up_file)?;
+    let (follow_up_fingerprint, follow_up_workbook) =
+        read_sync_workbook(follow_up_file, "error.rfi.systemSync.workbookInvalid")?;
     let follow_up_targets = read_follow_up_targets(&follow_up_workbook)?;
     progress(ProgressEvent {
         phase: "system_workbook_read".to_string(),
@@ -363,15 +365,15 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<SystemSyncStepMeta, Backen
 
 fn read_sync_workbook(
     file: &mut File,
+    invalid_key: &str,
 ) -> Result<(WorkbookFingerprint, crate::ooxml::WorkbookData), BackendError> {
     file.seek(SeekFrom::Start(0))
         .map_err(|e| BackendError::protocol(e.to_string()))?;
     let fingerprint = fingerprint_open_file(file)?;
     file.seek(SeekFrom::Start(0))
         .map_err(|e| BackendError::protocol(e.to_string()))?;
-    let workbook = read_workbook_from_reader(file).map_err(|e| {
-        BackendError::validation(format!("error.rfi.systemSync.workbookInvalid: {e}"))
-    })?;
+    let workbook = read_workbook_from_reader(file)
+        .map_err(|e| BackendError::validation(format!("{invalid_key}: {e}")))?;
     Ok((fingerprint, workbook))
 }
 
