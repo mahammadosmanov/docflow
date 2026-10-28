@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.207 - 2026-10-28
+
+### Changed
+
+- Shared the S5 retained-storage budget check between follow-up apply and undo.
+
 ## 1.36.206 - 2026-10-28
 
 ### Changed

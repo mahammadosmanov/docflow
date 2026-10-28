@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.206",
+  "currentVersion": "1.36.207",
   "releases": [
+    {
+      "version": "1.36.207",
+      "tag": "v1.36.207",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share the S5 retained-storage budget check between follow-up apply and undo."
+    },
     {
       "version": "1.36.206",
       "tag": "v1.36.206",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract parallel scan OCR task planning into a helper."
     },
     {
