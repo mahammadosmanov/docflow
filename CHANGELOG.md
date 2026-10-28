@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.183 - 2026-10-28
+
+### Changed
+
+- Extracted multi-RFI page grouping into `group_pages` and the duplicated no-OCR plan into `no_ocr_plan` in `process_scans/scan_pdf.rs`; behavior unchanged.
+
 ## 1.36.182 - 2026-10-28
 
 ### Changed
