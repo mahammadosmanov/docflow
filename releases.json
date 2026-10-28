@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.203",
+  "currentVersion": "1.36.204",
   "releases": [
+    {
+      "version": "1.36.204",
+      "tag": "v1.36.204",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract split-source trash move steps from process scan preview into a helper."
+    },
     {
       "version": "1.36.203",
       "tag": "v1.36.203",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract unreadable-PDF note outputs from process scan preview into a helper."
     },
     {
