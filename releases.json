@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.104",
+  "currentVersion": "1.36.105",
   "releases": [
+    {
+      "version": "1.36.105",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.105",
+      "summary": "Maintainability: the OutlookReplyPreview panel moves out of PlanView.tsx into plan/OutlookReplyPreview.tsx. Markup and plan rendering are unchanged; typecheck and the frontend suite pass."
+    },
     {
       "version": "1.36.104",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.104",
       "summary": "Maintainability: the per-cell editor rendering in EditablePlanTable.tsx moves into plan/PlanCell.tsx, which takes the cell's value, choices, suggestions and change handler as props. Markup and editing behavior are unchanged; typecheck and the frontend suite (289) pass."
     },
