@@ -1,3 +1,4 @@
+import { type Strings } from "../i18n";
 import { type Plan } from "../types";
 
 export function copySheetsFromPlan(plan: Plan | null): string[] {
@@ -20,6 +21,21 @@ export type EditorColumn = {
   display?: string;
   disabledWhen?: { field: string; equals: string | number | boolean };
 };
+
+export function editorChoiceLabel(
+  choiceLabels: Record<string, unknown>,
+  s: Strings,
+  field: string,
+  value: string,
+  column?: EditorColumn,
+): string {
+  const fieldLabels = choiceLabels[field];
+  if (fieldLabels && typeof fieldLabels === "object") {
+    const key = (fieldLabels as Record<string, unknown>)[value];
+    if (typeof key === "string") return s.t(key);
+  }
+  return column ? displayEditorValue(column, value) : value;
+}
 
 export function displayEditorValue(column: EditorColumn, value: string): string {
   if (column.display === "suffix") {

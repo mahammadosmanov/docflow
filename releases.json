@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.156",
+  "currentVersion": "1.36.157",
   "releases": [
+    {
+      "version": "1.36.157",
+      "tag": "v1.36.157",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move plan table choice-label lookup into editorChoiceLabel in editorRules.ts with unit tests; behavior unchanged."
+    },
     {
       "version": "1.36.156",
       "tag": "v1.36.156",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move outlook_reply_draft inline unit tests into outlook_reply_draft/tests.rs; behavior unchanged."
     },
     {

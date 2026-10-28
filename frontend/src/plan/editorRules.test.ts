@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { Strings } from "../i18n";
+
 import {
+  type EditorColumn,
   applyEditorValue,
   choicesForRow,
+  editorChoiceLabel,
   filterRowIndices,
   duplicateRowAt,
   moveRowAt,
@@ -133,5 +137,21 @@ describe("choicesForRow", () => {
 
   it("returns no choices for a column without configuration", () => {
     expect(choicesForRow(editor, { key: "note", labelKey: "n" }, {})).toEqual([]);
+  });
+});
+
+describe("editorChoiceLabel", () => {
+  const s = { t: (key: string) => `T:${key}` } as unknown as Strings;
+
+  it("translates a mapped choice key", () => {
+    expect(
+      editorChoiceLabel({ status: { open: "k.open" } }, s, "status", "open"),
+    ).toBe("T:k.open");
+  });
+
+  it("falls back to the column display, then the raw value", () => {
+    const column = { key: "rfiNo", display: "suffix" } as EditorColumn;
+    expect(editorChoiceLabel({}, s, "rfiNo", "CIV-0012", column)).toBe("0012");
+    expect(editorChoiceLabel({}, s, "status", "open")).toBe("open");
   });
 });

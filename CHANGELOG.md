@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.157 - 2026-10-28
+
+### Changed
+
+- Moved the plan table choice-label lookup into `editorChoiceLabel` in `plan/editorRules.ts` with unit tests; behavior unchanged.
+
 ## 1.36.156 - 2026-10-28
 
 ### Changed
