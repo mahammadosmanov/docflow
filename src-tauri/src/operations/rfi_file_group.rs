@@ -158,41 +158,13 @@ where
             .and_then(|value| value.to_str())
             .ok_or_else(|| BackendError::path_invalid("RFI file name is not valid Unicode"))?;
         if analysis.detections.is_empty() {
-            let warning_key = if analysis.issue.is_some() {
-                "warn.rfi.fileGroup.unreadable"
-            } else {
-                "warn.rfi.fileGroup.noCode"
-            };
-            plan.warnings.push(Warning {
-                key: warning_key.to_string(),
-                subject: analysis.issue.as_deref().map_or_else(
-                    || file_name.to_string(),
-                    |issue| format!("{file_name} — {issue}"),
-                ),
-            });
-            let review_directory = destination.join(REVIEW_DIR);
-            let review_target = review_directory.join(file_name);
-            if unsafe_existing_directory(&review_directory) {
-                plan.warnings.push(Warning {
-                    key: "warn.rfi.fileGroup.exists".to_string(),
-                    subject: review_directory.to_string_lossy().into_owned(),
-                });
-                continue;
-            }
-            if review_target.exists() {
-                plan.warnings.push(Warning {
-                    key: "warn.rfi.fileGroup.exists".to_string(),
-                    subject: review_target.to_string_lossy().into_owned(),
-                });
-                continue;
-            }
-            if !review_directory.is_dir() && !review_directory_planned {
-                review_directory_planned = true;
-                plan.steps
-                    .push(directory_step(&review_directory, None, true));
-            }
-            plan.steps
-                .push(copy_step(&analysis.path, &review_target, None, None, true));
+            plan_unmatched_file(
+                &mut plan,
+                &destination,
+                &analysis,
+                file_name,
+                &mut review_directory_planned,
+            );
             continue;
         }
         if let Some(issue) = &analysis.issue {
@@ -429,6 +401,50 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         warnings: plan.warnings.clone(),
         meta,
     })
+}
+
+fn plan_unmatched_file(
+    plan: &mut Plan,
+    destination: &Path,
+    analysis: &FileAnalysis,
+    file_name: &str,
+    review_directory_planned: &mut bool,
+) {
+    let warning_key = if analysis.issue.is_some() {
+        "warn.rfi.fileGroup.unreadable"
+    } else {
+        "warn.rfi.fileGroup.noCode"
+    };
+    plan.warnings.push(Warning {
+        key: warning_key.to_string(),
+        subject: analysis.issue.as_deref().map_or_else(
+            || file_name.to_string(),
+            |issue| format!("{file_name} — {issue}"),
+        ),
+    });
+    let review_directory = destination.join(REVIEW_DIR);
+    let review_target = review_directory.join(file_name);
+    if unsafe_existing_directory(&review_directory) {
+        plan.warnings.push(Warning {
+            key: "warn.rfi.fileGroup.exists".to_string(),
+            subject: review_directory.to_string_lossy().into_owned(),
+        });
+        return;
+    }
+    if review_target.exists() {
+        plan.warnings.push(Warning {
+            key: "warn.rfi.fileGroup.exists".to_string(),
+            subject: review_target.to_string_lossy().into_owned(),
+        });
+        return;
+    }
+    if !review_directory.is_dir() && !*review_directory_planned {
+        *review_directory_planned = true;
+        plan.steps
+            .push(directory_step(&review_directory, None, true));
+    }
+    plan.steps
+        .push(copy_step(&analysis.path, &review_target, None, None, true));
 }
 
 #[cfg(test)]

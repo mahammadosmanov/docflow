@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.190",
+  "currentVersion": "1.36.191",
   "releases": [
+    {
+      "version": "1.36.191",
+      "tag": "v1.36.191",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract unmatched RFI file planning from the file-group preview."
+    },
     {
       "version": "1.36.190",
       "tag": "v1.36.190",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract extra-target warning reporting from replica publish preview."
     },
     {
