@@ -70,25 +70,11 @@ impl FilesystemAuthority {
             .first()
             .cloned()
             .ok_or_else(|| BackendError::journal_invalid("S5 undo step is missing"))?;
-        let backup_path = PathBuf::from(
-            step.src
-                .as_deref()
-                .ok_or_else(|| BackendError::journal_invalid("S5 backup path is missing"))?,
-        );
-        let canonical_path = PathBuf::from(
-            step.dst
-                .as_deref()
-                .ok_or_else(|| BackendError::journal_invalid("S5 canonical path is missing"))?,
-        );
+        let (backup_path, canonical_path) = s5_undo_paths(&step, &record)?;
         let backup_evidence = record
             .retained_evidence_for(RetainedArtifactRole::Backup)
             .cloned()
             .ok_or_else(|| BackendError::journal_invalid("S5 backup evidence is missing"))?;
-        if backup_evidence.path != backup_path.to_string_lossy() {
-            return Err(BackendError::journal_invalid(
-                "S5 backup evidence path is invalid",
-            ));
-        }
         let (expected_applied_hash, expected_applied_identity) = s5_applied_expectations(&step)?;
         let canonical = authorize_s5_recorded(&record, &canonical_path)?
             .anchor()
@@ -367,6 +353,32 @@ fn committed_s5_result(record: &ValidatedS5Record) -> OperationResult {
     insert_effect_state(&mut result, "committed");
     insert_retained_evidence(&mut result, record.retained_evidence());
     result
+}
+
+/// Reads the backup and canonical paths from the S5 step and checks them against the backup evidence.
+fn s5_undo_paths(
+    step: &Step,
+    record: &ValidatedS5Record,
+) -> Result<(PathBuf, PathBuf), BackendError> {
+    let backup_path = PathBuf::from(
+        step.src
+            .as_deref()
+            .ok_or_else(|| BackendError::journal_invalid("S5 backup path is missing"))?,
+    );
+    let canonical_path = PathBuf::from(
+        step.dst
+            .as_deref()
+            .ok_or_else(|| BackendError::journal_invalid("S5 canonical path is missing"))?,
+    );
+    let backup_evidence = record
+        .retained_evidence_for(RetainedArtifactRole::Backup)
+        .ok_or_else(|| BackendError::journal_invalid("S5 backup evidence is missing"))?;
+    if backup_evidence.path != backup_path.to_string_lossy() {
+        return Err(BackendError::journal_invalid(
+            "S5 backup evidence path is invalid",
+        ));
+    }
+    Ok((backup_path, canonical_path))
 }
 
 fn s5_applied_expectations(
