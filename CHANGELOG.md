@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.145 - 2026-10-28
+
+### Changed
+
+- Moved `RecordIndex` and `place_record` from `src-tauri/src/rfi_follow_up/classify.rs` into `classify/placement.rs`. `classify.rs` drops from 690 to 406 lines. Behavior is unchanged; 33 `rfi_follow_up` tests pass.
+
 ## 1.36.144 - 2026-10-28
 
 ### Changed
