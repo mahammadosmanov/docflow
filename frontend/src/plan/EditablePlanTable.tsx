@@ -1,6 +1,5 @@
 import {
   AdjustableDataRegion,
-  clampColumnWidth,
 } from "../components/AdjustableDataRegion";
 import {
   Eye,
@@ -25,6 +24,7 @@ import {
 import { PlanCell } from "./PlanCell";
 import { PlanFilterBar } from "./PlanFilterBar";
 import { usePlanSelection } from "./usePlanSelection";
+import { useEditorColumnWidths } from "./useEditorColumnWidths";
 import { PlanSelectionBar } from "./PlanSelectionBar";
 import { PlanBulkFields } from "./PlanBulkFields";
 import { PlanTableHead } from "./PlanTableHead";
@@ -32,14 +32,12 @@ import { PlanRowActions } from "./PlanRowActions";
 import {
   type EditorColumn,
   displayEditorValue,
-  editorColumnDefaultWidth,
   applyEditorValue,
   choicesForRow,
   filterRowIndices,
   duplicateRowAt,
   moveRowAt,
   removeRowAt,
-  editorColumnMinWidth,
   isRfiCodeCandidate,
 } from "./editorRules";
 
@@ -60,14 +58,7 @@ export function EditablePlanTable({
     ? (editor.columns as EditorColumn[])
     : [];
   const headerId = useId();
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const widthScope = String(editor.titleKey ?? editor.kind ?? "plan-editor");
-  const columnWidth = (column: EditorColumn) =>
-    clampColumnWidth(
-      columnWidths[`${widthScope}:${column.key}`] ??
-        editorColumnDefaultWidth(column),
-      editorColumnMinWidth(column),
-    );
+  const { columnWidth, setColumnWidth } = useEditorColumnWidths(editor);
   const groupField = String(editor.groupField ?? "rfiNo");
   const autocomplete =
     editor.autocomplete && typeof editor.autocomplete === "object"
@@ -319,12 +310,7 @@ export function EditablePlanTable({
             visibleColumns={visibleColumns}
             columnWidth={columnWidth}
             headerId={headerId}
-            onColumnWidthChange={(columnKey, nextWidth) =>
-              setColumnWidths((current) => ({
-                ...current,
-                [`${widthScope}:${columnKey}`]: nextWidth,
-              }))
-            }
+            onColumnWidthChange={setColumnWidth}
             s={s}
           />
           <tbody>

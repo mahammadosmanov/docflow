@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.136 - 2026-10-28
+
+### Changed
+
+- Extracted plan editor column-width state, clamping, and resize setter from `frontend/src/plan/EditablePlanTable.tsx` into `frontend/src/plan/useEditorColumnWidths.ts`. Behavior is unchanged.
+
 ## 1.36.135 - 2026-10-28
 
 ### Changed
