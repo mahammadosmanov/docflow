@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.104 - 2026-10-28
+
+### Changed
+
+- `plan/EditablePlanTable.tsx` (562 lines) moves the per-cell editor rendering (read-only, checkbox, choice, compact date, multiline and text inputs with datalist and scan-code error) into `plan/PlanCell.tsx`. The table keeps row, column and selection state and passes each cell its value, choices, suggestions and change handler. Markup and editing behavior are unchanged; `tsc` is clean and the frontend suite passes (289 tests).
+
 ## 1.36.103 - 2026-10-28
 
 ### Changed

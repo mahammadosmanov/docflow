@@ -22,9 +22,7 @@ import {
 import {
   type EditorMetadata,
 } from "../types";
-import {
-  CompactDateInput,
-} from "./CompactDateInput";
+import { PlanCell } from "./PlanCell";
 import { PlanFilterBar } from "./PlanFilterBar";
 import { usePlanSelection } from "./usePlanSelection";
 import { PlanSelectionBar } from "./PlanSelectionBar";
@@ -427,99 +425,21 @@ export function EditablePlanTable({
                           column.kind === "bool" ? "center" : undefined
                         }
                       >
-                        {column.kind === "readonly" ? (
-                          <span
-                            className="readonly-cell"
-                            title={displayText || text}
-                          >
-                            {displayText}
-                          </span>
-                        ) : column.kind === "bool" ? (
-                          <input
-                            aria-label={s.t(column.labelKey)}
-                            type="checkbox"
-                            checked={Boolean(row[column.key])}
-                            disabled={
-                              column.disabledWhen !== undefined &&
-                              row[column.disabledWhen.field] ===
-                                column.disabledWhen.equals
-                            }
-                            onChange={(event) =>
-                              update(rowIndex, column.key, event.target.checked)
-                            }
-                          />
-                        ) : column.kind === "choice" ? (
-                          <select
-                            aria-label={s.t(column.labelKey)}
-                            title={text}
-                            value={text}
-                            onChange={(event) =>
-                              update(rowIndex, column.key, event.target.value)
-                            }
-                          >
-                            {choices.map((choice) => (
-                              <option key={choice} value={choice}>
-                                {choiceLabel(column.key, choice, column)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : column.kind === "compactDate" ? (
-                          <CompactDateInput
-                            value={text}
-                            label={s.t(column.labelKey)}
-                            s={s}
-                            onChange={(value) =>
-                              update(rowIndex, column.key, value)
-                            }
-                          />
-                        ) : column.kind === "multiline" ? (
-                          <textarea
-                            rows={2}
-                            aria-label={s.t(column.labelKey)}
-                            value={text}
-                            onChange={(event) =>
-                              update(rowIndex, column.key, event.target.value)
-                            }
-                          />
-                        ) : (
-                          <>
-                            <input
-                              aria-label={s.t(column.labelKey)}
-                              aria-invalid={
-                                scanCodeErrorKey ? true : undefined
-                              }
-                              aria-describedby={
-                                scanCodeErrorKey ? `${listId}-error` : undefined
-                              }
-                              type={column.kind === "int" ? "number" : "text"}
-                              name={`${column.key}-${rowIndex}`}
-                              autoComplete={isScanCode ? "off" : undefined}
-                              spellCheck={isScanCode ? false : undefined}
-                              translate={isScanCode ? "no" : undefined}
-                              value={text}
-                              list={suggestions.length ? listId : undefined}
-                              onChange={(event) =>
-                                update(rowIndex, column.key, event.target.value)
-                              }
-                            />
-                            {suggestions.length > 0 && (
-                              <datalist id={listId}>
-                                {suggestions.map((suggestion) => (
-                                  <option key={suggestion} value={suggestion} />
-                                ))}
-                              </datalist>
-                            )}
-                            {scanCodeErrorKey && (
-                              <small
-                                id={`${listId}-error`}
-                                className="editor-field-error"
-                                role="alert"
-                              >
-                                {s.t(scanCodeErrorKey)}
-                              </small>
-                            )}
-                          </>
-                        )}
+                        <PlanCell
+                          column={column}
+                          row={row}
+                          rowIndex={rowIndex}
+                          text={text}
+                          displayText={displayText}
+                          choices={choices}
+                          choiceLabel={choiceLabel}
+                          suggestions={suggestions}
+                          listId={listId}
+                          isScanCode={isScanCode}
+                          scanCodeErrorKey={scanCodeErrorKey}
+                          s={s}
+                          onChange={(value) => update(rowIndex, column.key, value)}
+                        />
                       </td>
                     );
                   })}
