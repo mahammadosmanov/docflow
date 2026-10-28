@@ -229,19 +229,7 @@ impl FilesystemAuthority {
                 "workbook and backup are the same path".to_string(),
             ));
         }
-        let signature = step
-            .meta
-            .get("sourceSignature")
-            .and_then(Value::as_object)
-            .ok_or_else(|| StepFailure::NoEffect("workbook signature is missing".to_string()))?;
-        let expected_size = signature
-            .get("size")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| StepFailure::NoEffect("workbook size is missing".to_string()))?;
-        let expected_hash = signature
-            .get("sha256")
-            .and_then(Value::as_str)
-            .ok_or_else(|| StepFailure::NoEffect("workbook hash is missing".to_string()))?;
+        let (expected_size, expected_hash) = expected_workbook_signature(step)?;
         let workbook_capability = self
             .grants
             .authorize_capability_for_plan(
@@ -544,4 +532,22 @@ impl FilesystemAuthority {
         self.journals.write(record).map_err(step_unknown)?;
         Ok(1)
     }
+}
+
+/// Returns the preview-time size and hash that the workbook must still match.
+fn expected_workbook_signature(step: &Step) -> Result<(u64, &str), StepFailure> {
+    let signature = step
+        .meta
+        .get("sourceSignature")
+        .and_then(Value::as_object)
+        .ok_or_else(|| StepFailure::NoEffect("workbook signature is missing".to_string()))?;
+    let size = signature
+        .get("size")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| StepFailure::NoEffect("workbook size is missing".to_string()))?;
+    let hash = signature
+        .get("sha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| StepFailure::NoEffect("workbook hash is missing".to_string()))?;
+    Ok((size, hash))
 }
