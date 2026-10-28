@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.175 - 2026-10-28
+
+### Changed
+
+- Moved the signed-page archive ambiguity warning and review recording out of the `stage_signed_pages` preview into `stage_signed_pages/warnings.rs`; behavior unchanged.
+
 ## 1.36.174 - 2026-10-28
 
 ### Changed

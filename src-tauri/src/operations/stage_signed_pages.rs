@@ -404,28 +404,12 @@ where
         }
         let ambiguous = prepared.len() > 1;
         if ambiguous {
-            let names = prepared
-                .iter()
-                .map(|item| item.relative.to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join(", ");
-            plan.warnings.push(warning(
-                "warn.rfi.archiveAmbiguous",
-                &truncate(
-                    &format!(
-                        "{} — {code} — {names} — choose the correct archive candidate",
-                        candidate_display(&candidate.path, candidate.page_index)
-                    ),
-                    300,
-                ),
-            ));
-            record_warning_review(
+            record_archive_ambiguity(
+                &mut plan,
                 &mut warning_reviews,
-                &candidate.path,
-                Some(candidate.page_index),
-                Some(&code),
-                "warn.rfi.archiveAmbiguous",
-                "More than one exact archive PDF exists; choose the correct candidate",
+                &candidate,
+                &code,
+                &prepared,
             );
         }
         let mut selected = String::new();
