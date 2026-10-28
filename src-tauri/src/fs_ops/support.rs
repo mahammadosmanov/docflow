@@ -696,3 +696,54 @@ mod follow_up_failure_tests {
         assert_eq!(warning.subject, "subject-1");
     }
 }
+
+#[cfg(test)]
+mod s5_retained_budget_tests {
+    use super::s5_retained_budget_exceeded;
+    use crate::cap_fs::RetainedStorageReservation;
+    use crate::journal::{MAX_S5_RETAINED_BYTES, MAX_S5_RETAINED_FILES};
+
+    fn reservation(file_count: usize, logical_charge_bytes: u64) -> RetainedStorageReservation {
+        RetainedStorageReservation {
+            file_count,
+            logical_charge_bytes,
+        }
+    }
+
+    #[test]
+    fn reservation_within_budget_is_allowed() {
+        assert!(!s5_retained_budget_exceeded((0, 0), &reservation(1, 10)));
+        assert!(!s5_retained_budget_exceeded(
+            (MAX_S5_RETAINED_FILES - 1, MAX_S5_RETAINED_BYTES - 10),
+            &reservation(1, 10),
+        ));
+    }
+
+    #[test]
+    fn file_count_over_limit_is_rejected() {
+        assert!(s5_retained_budget_exceeded(
+            (MAX_S5_RETAINED_FILES, 0),
+            &reservation(1, 0),
+        ));
+    }
+
+    #[test]
+    fn byte_total_over_limit_is_rejected() {
+        assert!(s5_retained_budget_exceeded(
+            (0, MAX_S5_RETAINED_BYTES),
+            &reservation(0, 1),
+        ));
+    }
+
+    #[test]
+    fn arithmetic_overflow_is_rejected() {
+        assert!(s5_retained_budget_exceeded(
+            (usize::MAX, 0),
+            &reservation(1, 0)
+        ));
+        assert!(s5_retained_budget_exceeded(
+            (0, u64::MAX),
+            &reservation(0, 1)
+        ));
+    }
+}

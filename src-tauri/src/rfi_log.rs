@@ -329,3 +329,33 @@ pub(crate) use updates::*;
 
 #[cfg(test)]
 mod rfi_identity_tests;
+
+#[cfg(test)]
+mod detected_discipline_tests {
+    use super::apply_detected_discipline;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn detected_discipline_replaces_default_selection() {
+        let mut counts = BTreeMap::from([("CIV".to_string(), 3)]);
+        apply_detected_discipline(&mut counts, Some("ELE"), false);
+        assert_eq!(counts, BTreeMap::from([("ELE".to_string(), 3)]));
+    }
+
+    #[test]
+    fn detected_discipline_is_added_to_explicit_selection() {
+        let mut counts = BTreeMap::from([("MEC".to_string(), 2)]);
+        apply_detected_discipline(&mut counts, Some("PRC"), true);
+        assert_eq!(counts.get("PRC"), Some(&1));
+        assert_eq!(counts.get("MEC"), Some(&2));
+    }
+
+    #[test]
+    fn unknown_or_missing_discipline_leaves_counts_unchanged() {
+        let before = BTreeMap::from([("MEC".to_string(), 2)]);
+        let mut counts = before.clone();
+        apply_detected_discipline(&mut counts, Some("XYZ"), true);
+        apply_detected_discipline(&mut counts, None, false);
+        assert_eq!(counts, before);
+    }
+}
