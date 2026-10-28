@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.172 - 2026-10-28
+
+### Changed
+
+- Moved signed-candidate page inspection and fidelity/widget rejection out of the `stage_signed_pages` preview into `operations/stage_signed_pages/signed_candidate.rs`; behavior unchanged.
+
 ## 1.36.171 - 2026-10-28
 
 ### Changed
