@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.266 - 2026-10-28
+
+### Changed
+
+- Moved scan group output planning into the `process_scans` output module.
+
 ## 1.36.265 - 2026-10-28
 
 ### Changed
