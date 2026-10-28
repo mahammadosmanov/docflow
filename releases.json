@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.233",
+  "currentVersion": "1.36.234",
   "releases": [
+    {
+      "version": "1.36.234",
+      "tag": "v1.36.234",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share S5 canonical-file matching and committed result construction in follow-up undo."
+    },
     {
       "version": "1.36.233",
       "tag": "v1.36.233",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract workbook backup rollback into a helper."
     },
     {

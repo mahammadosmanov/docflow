@@ -279,15 +279,7 @@ impl FilesystemAuthority {
 
         match canonical.open_read() {
             Ok(mut current) => {
-                let exact_current = crate::cap_fs::file_identity(&current).ok().as_ref()
-                    == Some(&publication.expected_canonical_identity)
-                    && sha256_open_file(&mut current).ok().as_deref()
-                        == Some(publication.expected_canonical_sha256.as_str())
-                    && FileSecuritySnapshot::capture(&current, None)
-                        .ok()
-                        .is_some_and(|snapshot| {
-                            snapshot.sha256() == publication.expected_canonical_security_sha256
-                        });
+                let exact_current = is_expected_canonical_file(&mut current, &publication);
                 let retained_absent = matches!(
                     retained.open_read(),
                     Err(ref error) if error.kind() == io::ErrorKind::NotFound
@@ -310,15 +302,7 @@ impl FilesystemAuthority {
         let mut retained_file = retained
             .open_read()
             .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
-        let retained_exact = crate::cap_fs::file_identity(&retained_file).ok().as_ref()
-            == Some(&publication.expected_canonical_identity)
-            && sha256_open_file(&mut retained_file).ok().as_deref()
-                == Some(publication.expected_canonical_sha256.as_str())
-            && FileSecuritySnapshot::capture(&retained_file, None)
-                .ok()
-                .is_some_and(|snapshot| {
-                    snapshot.sha256() == publication.expected_canonical_security_sha256
-                });
+        let retained_exact = is_expected_canonical_file(&mut retained_file, &publication);
         if !retained_exact {
             return Err(BackendError::validation(
                 "error.rfi.followUp.workbookChanged",
@@ -332,15 +316,7 @@ impl FilesystemAuthority {
         let mut restored = canonical
             .open_read()
             .map_err(|_| BackendError::validation("error.rfi.followUp.recoveryRequired"))?;
-        let restored_exact = crate::cap_fs::file_identity(&restored).ok().as_ref()
-            == Some(&publication.expected_canonical_identity)
-            && sha256_open_file(&mut restored).ok().as_deref()
-                == Some(publication.expected_canonical_sha256.as_str())
-            && FileSecuritySnapshot::capture(&restored, None)
-                .ok()
-                .is_some_and(|snapshot| {
-                    snapshot.sha256() == publication.expected_canonical_security_sha256
-                })
+        let restored_exact = is_expected_canonical_file(&mut restored, &publication)
             && matches!(
                 retained.open_read(),
                 Err(ref error) if error.kind() == io::ErrorKind::NotFound
@@ -362,18 +338,35 @@ impl FilesystemAuthority {
             record,
             S5Transition::FinalizeFailedApplyRestore,
         )?;
-        let mut result = OperationResult {
-            applied: 1,
-            failed: 0,
-            journal_id: record.journal_id().to_string(),
-            errors: Vec::new(),
-            meta: JsonObject::new(),
-            cloud_synced: None,
-        };
-        insert_effect_state(&mut result, "committed");
-        insert_retained_evidence(&mut result, record.retained_evidence());
-        Ok(result)
+        Ok(committed_s5_result(record))
     }
+}
+
+/// True when `file` matches the canonical workbook captured before the failed apply.
+fn is_expected_canonical_file(file: &mut File, publication: &RetainedPublication) -> bool {
+    crate::cap_fs::file_identity(file).ok().as_ref()
+        == Some(&publication.expected_canonical_identity)
+        && sha256_open_file(file).ok().as_deref()
+            == Some(publication.expected_canonical_sha256.as_str())
+        && FileSecuritySnapshot::capture(file, None)
+            .ok()
+            .is_some_and(|snapshot| {
+                snapshot.sha256() == publication.expected_canonical_security_sha256
+            })
+}
+
+fn committed_s5_result(record: &ValidatedS5Record) -> OperationResult {
+    let mut result = OperationResult {
+        applied: 1,
+        failed: 0,
+        journal_id: record.journal_id().to_string(),
+        errors: Vec::new(),
+        meta: JsonObject::new(),
+        cloud_synced: None,
+    };
+    insert_effect_state(&mut result, "committed");
+    insert_retained_evidence(&mut result, record.retained_evidence());
+    result
 }
 
 fn s5_applied_expectations(
@@ -412,17 +405,7 @@ impl FilesystemAuthority {
                         evidence: Vec::new(),
                     },
                 )?;
-                let mut result = OperationResult {
-                    applied: 1,
-                    failed: 0,
-                    journal_id: record.journal_id().to_string(),
-                    errors: Vec::new(),
-                    meta: JsonObject::new(),
-                    cloud_synced: None,
-                };
-                insert_effect_state(&mut result, "committed");
-                insert_retained_evidence(&mut result, record.retained_evidence());
-                Ok(result)
+                Ok(committed_s5_result(record))
             }
             Ok(RetainedPublicationOutcome::CancelledBeforeDisplacement) => {
                 Err(BackendError::journal_invalid("S5 undo cannot be cancelled"))
