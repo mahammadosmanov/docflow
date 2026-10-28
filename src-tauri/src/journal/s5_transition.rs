@@ -29,11 +29,33 @@ pub(super) fn apply_candidate_transition(
     transition: S5Transition,
     leases: S5TransitionLeases,
 ) -> Result<(), BackendError> {
+    if matches!(
+        transition,
+        S5Transition::FinalizeApplySuccess { .. }
+            | S5Transition::FinalizeUndoSuccess { .. }
+            | S5Transition::BeginFailedApplyRestore
+            | S5Transition::FinalizeFailedApplyRestore
+            | S5Transition::FinalizeRecovery { .. }
+            | S5Transition::PrepareFailedPartial(_)
+            | S5Transition::PrepareOutcomeUnknown(_)
+    ) {
+        completion_transition(candidate, transition, leases)
+    } else {
+        staging_transition(candidate, transition, leases)
+    }
+}
+
+/// Artifact-parent, retained-artifact, publication, and canonical-write transitions.
+fn staging_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
     let S5TransitionLeases {
         apply_lease,
         undo_lease,
         undo_mode,
-        recovery_lease,
+        ..
     } = leases;
     match transition {
         S5Transition::SetPendingArtifactParent(pending) => {
@@ -218,6 +240,24 @@ pub(super) fn apply_candidate_transition(
                 .ok_or_else(|| BackendError::journal_invalid("S5 publication is not active"))?
                 .phase = RetainedPublicationPhase::VerifyingCanonical;
         }
+        _ => unreachable!("routed by apply_candidate_transition"),
+    }
+    Ok(())
+}
+
+/// Apply/undo completion, failed-apply restore, recovery, and failure-preparation transitions.
+fn completion_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
+    let S5TransitionLeases {
+        apply_lease,
+        undo_lease,
+        undo_mode,
+        recovery_lease,
+    } = leases;
+    match transition {
         S5Transition::FinalizeApplySuccess {
             completed_step,
             evidence,
@@ -506,6 +546,7 @@ pub(super) fn apply_candidate_transition(
             candidate.recovery_notice = Some(notice);
             candidate.state = Some(JournalState::RecoveryRequired);
         }
+        _ => unreachable!("routed by apply_candidate_transition"),
     }
     Ok(())
 }

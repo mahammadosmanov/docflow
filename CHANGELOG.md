@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.177 - 2026-10-28
+
+### Changed
+
+- Split the S5 transition state machine into staging and completion transition groups in `journal/s5_transition.rs`; behavior unchanged.
+
 ## 1.36.176 - 2026-10-28
 
 ### Changed
