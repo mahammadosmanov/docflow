@@ -276,25 +276,36 @@ impl BackendRouter {
             let send = |event| {
                 let _ = progress_channel.send(event);
             };
-            match operation_id.as_str() {
-                "rfi.process_scans_fast_covers" => native.preview_process_scans(params, send),
-                "rfi.group_files" => native.preview_rfi_file_group(params, send),
-                "rfi.log_add" => native.preview_rfi_log(params, send),
-                "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
-                "rfi.generate_concrete_documents" => {
-                    native.preview_concrete_documents(params, send)
-                }
-                "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
-                "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
-                "rfi.publish_status" => native.preview_rfi_publish_status(params, send),
-                "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
-                "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
-                "files.batch_print" => native.preview_batch_print(params, send),
-                _ => Err(BackendError::validation("unknown operation ID")),
-            }
+            route_preview(&native, &operation_id, params, send)
         })
         .await
         .map_err(|_| BackendError::request_failed("native preview task failed"))?
+    }
+}
+
+/// Routes a preview request to the native operation that owns its operation ID.
+fn route_preview<F>(
+    native: &NativeBackend,
+    operation_id: &str,
+    params: Value,
+    send: F,
+) -> Result<Value, BackendError>
+where
+    F: FnMut(ProgressEvent),
+{
+    match operation_id {
+        "rfi.process_scans_fast_covers" => native.preview_process_scans(params, send),
+        "rfi.group_files" => native.preview_rfi_file_group(params, send),
+        "rfi.log_add" => native.preview_rfi_log(params, send),
+        "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
+        "rfi.generate_concrete_documents" => native.preview_concrete_documents(params, send),
+        "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
+        "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
+        "rfi.publish_status" => native.preview_rfi_publish_status(params, send),
+        "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
+        "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
+        "files.batch_print" => native.preview_batch_print(params, send),
+        _ => Err(BackendError::validation("unknown operation ID")),
     }
 }
 

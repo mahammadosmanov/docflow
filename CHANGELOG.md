@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.232 - 2026-10-28
+
+### Changed
+
+- Extracted backend preview operation routing into a helper.
+
 ## 1.36.231 - 2026-10-28
 
 ### Changed
