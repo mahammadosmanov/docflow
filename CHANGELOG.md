@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.107 - 2026-10-28
+
+### Changed
+
+- `screens/SettingsScreen.tsx` moves the `SettingsGroup` and `ChoiceGrid` layout helpers into `screens/SettingsParts.tsx` and drops the imports only they used. Markup and behavior are unchanged; `tsc` is clean.
+
 ## 1.36.106 - 2026-10-28
 
 ### Changed
