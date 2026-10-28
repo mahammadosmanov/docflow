@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.269 - 2026-10-28
+
+### Changed
+
+- Moved native preview step builders into a `preview_steps` module.
+
 ## 1.36.268 - 2026-10-28
 
 ### Changed
