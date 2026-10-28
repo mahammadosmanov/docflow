@@ -122,22 +122,7 @@ where
         .flat_map(|analysis| analysis.detections.iter())
         .map(|detection| detection.code.clone())
         .collect::<BTreeSet<_>>();
-    let mut files_without_mail = BTreeMap::<String, BTreeSet<String>>::new();
-    for analysis in &analyses {
-        let file_name = analysis
-            .path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("<invalid file name>");
-        for detection in &analysis.detections {
-            if !mail_codes.contains(&detection.code) {
-                files_without_mail
-                    .entry(detection.code.clone())
-                    .or_default()
-                    .insert(file_name.to_string());
-            }
-        }
-    }
+    let files_without_mail = files_lacking_mail(&analyses, &mail_codes);
     for (code, file_names) in &files_without_mail {
         plan.warnings.push(Warning {
             key: "warn.rfi.fileGroup.missingEmail".to_string(),
@@ -254,6 +239,30 @@ where
         subject: String::new(),
     });
     Ok(plan)
+}
+
+/// Groups non-mail file names by the RFI code they were detected under, for codes with no mail file.
+fn files_lacking_mail(
+    analyses: &[FileAnalysis],
+    mail_codes: &BTreeSet<String>,
+) -> BTreeMap<String, BTreeSet<String>> {
+    let mut files_without_mail = BTreeMap::<String, BTreeSet<String>>::new();
+    for analysis in analyses {
+        let file_name = analysis
+            .path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("<invalid file name>");
+        for detection in &analysis.detections {
+            if !mail_codes.contains(&detection.code) {
+                files_without_mail
+                    .entry(detection.code.clone())
+                    .or_default()
+                    .insert(file_name.to_string());
+            }
+        }
+    }
+    files_without_mail
 }
 
 pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
