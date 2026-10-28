@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.230",
+  "currentVersion": "1.36.231",
   "releases": [
+    {
+      "version": "1.36.231",
+      "tag": "v1.36.231",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract RFI file-group missing-email grouping into a helper."
+    },
     {
       "version": "1.36.230",
       "tag": "v1.36.230",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract publish status row disposition mapping and editor assembly into helpers."
     },
     {
