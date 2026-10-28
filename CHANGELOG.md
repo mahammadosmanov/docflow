@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.182 - 2026-10-28
+
+### Changed
+
+- Extracted the repeated plan-bound workbook path authorization in Follow Up apply into `authorize_workbook` in `fs_ops/follow_up.rs`; behavior unchanged.
+
 ## 1.36.181 - 2026-10-28
 
 ### Changed

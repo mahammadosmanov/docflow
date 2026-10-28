@@ -3,6 +3,30 @@ use super::*;
 mod undo;
 
 impl FilesystemAuthority {
+    /// Authorizes one workbook path under the approved plan and anchors it for I/O.
+    fn authorize_workbook(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        path: &Path,
+        intent: PathIntent,
+        unavailable: &str,
+    ) -> Result<AnchoredPath, FollowUpApplyFailure> {
+        self.grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                path,
+                intent,
+            )
+            .and_then(|path| {
+                path.anchor()
+                    .map_err(|_| BackendError::path_invalid(unavailable))
+            })
+            .map_err(follow_up_backend_no_effect)
+    }
+
     pub(super) fn execute_follow_up_workbook_update(
         &self,
         caller: &CallerIdentity,
@@ -25,48 +49,27 @@ impl FilesystemAuthority {
         let source_path = PathBuf::from(source_path);
         let target_path = PathBuf::from(target_path);
         let backup_path = PathBuf::from(backup_path);
-        let source = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &source_path,
-                PathIntent::Read,
-            )
-            .and_then(|path| {
-                path.anchor()
-                    .map_err(|_| BackendError::path_invalid("RFI Log workbook is unavailable"))
-            })
-            .map_err(follow_up_backend_no_effect)?;
-        let canonical = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &target_path,
-                PathIntent::Write,
-            )
-            .and_then(|path| {
-                path.anchor()
-                    .map_err(|_| BackendError::path_invalid("Follow Up workbook is unavailable"))
-            })
-            .map_err(follow_up_backend_no_effect)?;
-        let backup = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &backup_path,
-                PathIntent::Write,
-            )
-            .and_then(|path| {
-                path.anchor()
-                    .map_err(|_| BackendError::path_invalid("Follow Up backup cannot be anchored"))
-            })
-            .map_err(follow_up_backend_no_effect)?;
+        let source = self.authorize_workbook(
+            &binding,
+            caller,
+            &source_path,
+            PathIntent::Read,
+            "RFI Log workbook is unavailable",
+        )?;
+        let canonical = self.authorize_workbook(
+            &binding,
+            caller,
+            &target_path,
+            PathIntent::Write,
+            "Follow Up workbook is unavailable",
+        )?;
+        let backup = self.authorize_workbook(
+            &binding,
+            caller,
+            &backup_path,
+            PathIntent::Write,
+            "Follow Up backup cannot be anchored",
+        )?;
         let mut source_file = source
             .open_read()
             .map_err(|_| follow_up_no_effect("error.rfi.followUp.workbookInvalid"))?;

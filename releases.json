@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.181",
+  "currentVersion": "1.36.182",
   "releases": [
+    {
+      "version": "1.36.182",
+      "tag": "v1.36.182",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract the repeated plan-bound workbook path authorization in Follow Up apply into authorize_workbook in fs_ops/follow_up.rs; behavior unchanged."
+    },
     {
       "version": "1.36.181",
       "tag": "v1.36.181",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split the S5 completion transition match into apply/undo, failed-restore, recovery, and failure-preparation groups in journal/s5_transition.rs; behavior unchanged."
     },
     {
