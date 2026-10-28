@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.146",
+  "currentVersion": "1.36.147",
   "releases": [
+    {
+      "version": "1.36.147",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.147",
+      "summary": "Moved PDF orientation path and rotation helpers into operations/pdf_orientation/support.rs."
+    },
     {
       "version": "1.36.146",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.146",
       "summary": "Moved BackendRouter select_paths and reveal_path into backend/paths.rs."
     },
