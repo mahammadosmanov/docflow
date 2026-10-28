@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.276",
+  "currentVersion": "1.36.277",
   "releases": [
+    {
+      "version": "1.36.277",
+      "tag": "v1.36.277",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move zip container preflight worksheet discovery tests next to archive preflight tests."
+    },
     {
       "version": "1.36.276",
       "tag": "v1.36.276",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move interprocess lock tests into a journal tests submodule."
     },
     {
