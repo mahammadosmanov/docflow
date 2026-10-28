@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.180",
+  "currentVersion": "1.36.181",
   "releases": [
+    {
+      "version": "1.36.181",
+      "tag": "v1.36.181",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split the S5 completion transition match into apply/undo, failed-restore, recovery, and failure-preparation groups in journal/s5_transition.rs; behavior unchanged."
+    },
     {
       "version": "1.36.180",
       "tag": "v1.36.180",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split the S5 staging transition match into artifact-parent, retained-artifact, and publication groups in journal/s5_transition.rs; behavior unchanged."
     },
     {
