@@ -239,32 +239,8 @@ where
         "missingEmailRfiCount".to_string(),
         Value::from(files_without_mail.len() as u64),
     );
-    plan.meta.insert(
-        "editor".to_string(),
-        json!({
-            "kind": "recordTable",
-            "layout": "compact",
-            "titleKey": "rfi.fileGroup.editor.title",
-            "rowCountKey": "rfi.fileGroup.editor.rowCount",
-            "groupField": "rfiCode",
-            "selectionGroupFields": ["rfiCode", "sourceFile"],
-            "selectionEnabled": true,
-            "bulkEnabled": true,
-            "duplicateEnabled": false,
-            "reorderable": false,
-            "detailsEnabled": false,
-            "copyEnabled": false,
-            "requiredFields": ["enabled"],
-            "columns": [
-                {"key": "enabled", "labelKey": "rfi.fileGroup.column.enabled", "kind": "bool", "width": 64},
-                {"key": "rfiCode", "labelKey": "rfi.fileGroup.column.rfiCode", "kind": "readonly", "width": 260, "bulk": false},
-                {"key": "sourceFile", "labelKey": "rfi.fileGroup.column.sourceFile", "kind": "readonly", "width": 300, "bulk": false},
-                {"key": "method", "labelKey": "rfi.fileGroup.column.method", "kind": "readonly", "display": "localizedKey", "width": 120, "bulk": false},
-                {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 112, "bulk": false}
-            ],
-            "rows": rows,
-        }),
-    );
+    plan.meta
+        .insert("editor".to_string(), file_group_editor(rows));
     progress(ProgressEvent {
         phase: "file_group_planning".to_string(),
         done: total,
@@ -400,6 +376,32 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         steps,
         warnings: plan.warnings.clone(),
         meta,
+    })
+}
+
+fn file_group_editor(rows: Vec<Value>) -> Value {
+    json!({
+        "kind": "recordTable",
+        "layout": "compact",
+        "titleKey": "rfi.fileGroup.editor.title",
+        "rowCountKey": "rfi.fileGroup.editor.rowCount",
+        "groupField": "rfiCode",
+        "selectionGroupFields": ["rfiCode", "sourceFile"],
+        "selectionEnabled": true,
+        "bulkEnabled": true,
+        "duplicateEnabled": false,
+        "reorderable": false,
+        "detailsEnabled": false,
+        "copyEnabled": false,
+        "requiredFields": ["enabled"],
+        "columns": [
+            {"key": "enabled", "labelKey": "rfi.fileGroup.column.enabled", "kind": "bool", "width": 64},
+            {"key": "rfiCode", "labelKey": "rfi.fileGroup.column.rfiCode", "kind": "readonly", "width": 260, "bulk": false},
+            {"key": "sourceFile", "labelKey": "rfi.fileGroup.column.sourceFile", "kind": "readonly", "width": 300, "bulk": false},
+            {"key": "method", "labelKey": "rfi.fileGroup.column.method", "kind": "readonly", "display": "localizedKey", "width": 120, "bulk": false},
+            {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 112, "bulk": false}
+        ],
+        "rows": rows,
     })
 }
 

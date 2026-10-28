@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.207",
+  "currentVersion": "1.36.208",
   "releases": [
+    {
+      "version": "1.36.208",
+      "tag": "v1.36.208",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract RFI file-group editor table metadata into a helper."
+    },
     {
       "version": "1.36.207",
       "tag": "v1.36.207",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share the S5 retained-storage budget check between follow-up apply and undo."
     },
     {
