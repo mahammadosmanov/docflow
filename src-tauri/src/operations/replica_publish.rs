@@ -312,23 +312,7 @@ where
                 }
             }
         }
-        let mut omitted_extra_warnings = 0_usize;
-        for relative in target.files.keys() {
-            if !source.files.contains_key(relative) && warnings.len() < MAX_WARNINGS {
-                warnings.push(Warning {
-                    key: "warn.replica.targetExtra".to_string(),
-                    subject: format!("{target_name}: {}", relative.display()),
-                });
-            } else if !source.files.contains_key(relative) {
-                omitted_extra_warnings += 1;
-            }
-        }
-        if omitted_extra_warnings > 0 {
-            warnings.push(Warning {
-                key: "warn.replica.targetExtraOverflow".to_string(),
-                subject: format!("{target_name}: {omitted_extra_warnings}"),
-            });
-        }
+        push_target_extra_warnings(&mut warnings, target_name, &source.files, &target.files);
     }
 
     if steps.is_empty() {
@@ -397,6 +381,31 @@ where
         warnings,
         meta,
     })
+}
+
+fn push_target_extra_warnings<A, B>(
+    warnings: &mut Vec<Warning>,
+    target_name: &str,
+    source_files: &BTreeMap<PathBuf, A>,
+    target_files: &BTreeMap<PathBuf, B>,
+) {
+    let mut omitted_extra_warnings = 0_usize;
+    for relative in target_files.keys() {
+        if !source_files.contains_key(relative) && warnings.len() < MAX_WARNINGS {
+            warnings.push(Warning {
+                key: "warn.replica.targetExtra".to_string(),
+                subject: format!("{target_name}: {}", relative.display()),
+            });
+        } else if !source_files.contains_key(relative) {
+            omitted_extra_warnings += 1;
+        }
+    }
+    if omitted_extra_warnings > 0 {
+        warnings.push(Warning {
+            key: "warn.replica.targetExtraOverflow".to_string(),
+            subject: format!("{target_name}: {omitted_extra_warnings}"),
+        });
+    }
 }
 
 pub(crate) fn decode_step_meta(step: &Step) -> Result<ReplicaStepMeta, BackendError> {
