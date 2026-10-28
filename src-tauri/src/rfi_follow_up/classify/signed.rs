@@ -1,5 +1,14 @@
 use super::*;
 
+/// Status text a signed-by record proposes for its target cell.
+fn signed_status_text(record: &SourceRecord) -> &'static str {
+    if record.worley_signed {
+        "Signed"
+    } else {
+        "Not Signed"
+    }
+}
+
 /// Routes one signed-by record onto its target slots or queues a manual-review row.
 pub(super) fn place_signed_record<'a>(
     record: &'a SourceRecord,
@@ -124,12 +133,7 @@ pub(super) fn place_signed_record<'a>(
             }
             if slot.unsafe_reason == Some("targetFormula")
                 && slot.codes.contains(&record.canonical_rfi)
-                && slot.current_status
-                    == if record.worley_signed {
-                        "Signed"
-                    } else {
-                        "Not Signed"
-                    }
+                && slot.current_status == signed_status_text(record)
             {
                 routed_signed_targets
                     .entry(record.canonical_rfi.as_str())
@@ -152,11 +156,7 @@ pub(super) fn place_signed_record<'a>(
                     sheet: sheet_name.to_string(),
                     row: slot.row,
                     rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![if record.worley_signed {
-                        "Signed".to_string()
-                    } else {
-                        "Not Signed".to_string()
-                    }],
+                    source_statuses: vec![signed_status_text(record).to_string()],
                     current_status: slot.current_status.clone(),
                     proposed_status: None,
                     proposed_rfi_no: None,
@@ -254,11 +254,7 @@ pub(super) fn place_signed_record<'a>(
             &candidate_keys,
         )),
     );
-    row.source_statuses = vec![if record.worley_signed {
-        "Signed".to_string()
-    } else {
-        "Not Signed".to_string()
-    }];
+    row.source_statuses = vec![signed_status_text(record).to_string()];
     manual_rows.push(row);
     Ok(())
 }
