@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.226",
+  "currentVersion": "1.36.227",
   "releases": [
+    {
+      "version": "1.36.227",
+      "tag": "v1.36.227",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract print queue apply result metadata assembly into a helper."
+    },
     {
       "version": "1.36.226",
       "tag": "v1.36.226",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share the modified-time helper and single group candidate construction in PDF scan planning."
     },
     {
