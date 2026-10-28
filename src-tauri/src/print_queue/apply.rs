@@ -396,3 +396,29 @@ fn queue_final_status(
         "completed_with_errors"
     }
 }
+
+#[cfg(test)]
+mod queue_final_status_tests {
+    use super::queue_final_status;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn empty_resumable_queue_is_completed() {
+        assert_eq!(queue_final_status(0, true, &BTreeMap::new()), "completed");
+    }
+
+    #[test]
+    fn paused_or_pending_queue_is_paused() {
+        assert_eq!(queue_final_status(2, true, &BTreeMap::new()), "paused");
+        let pending = BTreeMap::from([("pending".to_string(), 1)]);
+        assert_eq!(queue_final_status(2, false, &pending), "paused");
+    }
+
+    #[test]
+    fn otherwise_queue_completes_with_errors() {
+        assert_eq!(
+            queue_final_status(2, false, &BTreeMap::new()),
+            "completed_with_errors"
+        );
+    }
+}

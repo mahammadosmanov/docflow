@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.214 - 2026-10-28
+
+### Added
+
+- Unit tests for system-sync disposition and print queue final status selection.
+
 ## 1.36.213 - 2026-10-28
 
 ### Changed
