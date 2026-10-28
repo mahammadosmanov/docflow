@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.237",
+  "currentVersion": "1.36.238",
   "releases": [
+    {
+      "version": "1.36.238",
+      "tag": "v1.36.238",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract discipline search directory discovery from system root scan."
+    },
     {
       "version": "1.36.237",
       "tag": "v1.36.237",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share cancelled journal state selection in print queue apply."
     },
     {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.238 - 2026-10-28
+
+### Changed
+
+- Extracted discipline search directory discovery from the system root scan.
+
 ## 1.36.237 - 2026-10-28
 
 ### Changed
