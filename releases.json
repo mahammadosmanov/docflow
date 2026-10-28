@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.228",
+  "currentVersion": "1.36.229",
   "releases": [
+    {
+      "version": "1.36.229",
+      "tag": "v1.36.229",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract replica publish source index and schedule limit validation into helpers."
+    },
     {
       "version": "1.36.228",
       "tag": "v1.36.228",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract ambient range validation and input grant root collection from concrete document preview."
     },
     {
