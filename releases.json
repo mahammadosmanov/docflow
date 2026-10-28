@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.183",
+  "currentVersion": "1.36.184",
   "releases": [
+    {
+      "version": "1.36.184",
+      "tag": "v1.36.184",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move the orientation preview plan metadata construction out of preview_indexed into orientation_meta in pdf_orientation.rs; behavior unchanged."
+    },
     {
       "version": "1.36.183",
       "tag": "v1.36.183",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract multi-RFI page grouping into group_pages and the no-OCR plan into no_ocr_plan in process_scans/scan_pdf.rs; behavior unchanged."
     },
     {
