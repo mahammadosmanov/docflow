@@ -326,6 +326,146 @@ function previewFastCover(state: MockPlanState, values: Record<string, unknown>)
 }
 
 
+function previewPdfOrientation(state: MockPlanState, values: Record<string, unknown>): Plan {
+  return {
+    planId: "demo-orientation-plan",
+    opId: "rfi.normalize_pdf_orientation",
+    warnings: [],
+    meta: {
+      sourceReadOnly: true,
+      workerCount: 4,
+      verifiedPages: 24,
+      rotatedPages: 3,
+      actionableFiles: 2,
+      manualReviewFiles: 0,
+      scanIndex: {
+        discovered: 8,
+        reused: 6,
+        analyzed: 2,
+        failed: 0,
+        priorInterruptedRuns: 0,
+        forceRescan: Boolean(values.force_rescan),
+      },
+    },
+    steps: [
+      {
+        kind: "pdf_page_rotate",
+        src: `${mockPath(values.rfi_system_root, "/RFI System")}/MEC/RFI-0001/document.pdf`,
+        dst: `${mockPath(values.review_root, "/Orientation Review")}/MEC/RFI-0001/document.pdf`,
+        noteKey: "note.rfi.pdfOrientationNormalized",
+        meta: {
+          rotations: [
+            { pageIndex: 1, fromRotation: 0, targetRotation: 90 },
+          ],
+        },
+      },
+    ],
+  } satisfies Plan;
+}
+
+function previewLogAdd(state: MockPlanState, values: Record<string, unknown>): Plan {
+  const rows = [
+    {
+      _rowId: "CIV-g1-r1",
+      _sheet: "CIV",
+      rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0008",
+      itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+      itemNo: "CIV-5.2.1",
+      description: "Civil inspection description",
+      forms: "CON-CIV-001",
+      tagNo: "N12",
+      area: "North Site",
+      rowNo: "",
+      dateOfIssue: "15-Aug-26",
+      inspectionDate: "16-Aug-26",
+      startTime: "09:00",
+      azfenType: "H",
+      intecType: "W",
+      location: "N3",
+      subcontractor: "AZFEN",
+    },
+    {
+      _rowId: "CIV-g2-r1",
+      _sheet: "CIV",
+      rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0009",
+      itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
+      itemNo: "CIV-5.2.1",
+      description: "Civil inspection description",
+      forms: "CON-CIV-001",
+      tagNo: "N18",
+      area: "North Site",
+      rowNo: "",
+      dateOfIssue: "15-Aug-26",
+      inspectionDate: "16-Aug-26",
+      startTime: "09:30",
+      azfenType: "H",
+      intecType: "W",
+      location: "N3",
+      subcontractor: "PDL",
+    },
+  ];
+  return {
+    planId: "demo-rfi-plan",
+    opId: "rfi.log_add",
+    warnings: [],
+    meta: {
+      editor: {
+        kind: "recordTable",
+        layout: "compact",
+        titleKey: "rfi.editor.title",
+        groupField: "rfiNo",
+        selectionGroupFields: ["_sheet", "rfiNo"],
+        selectionEnabled: true,
+        bulkEnabled: true,
+        detailsEnabled: true,
+        detailsDefaultVisible: false,
+        duplicateEnabled: true,
+        columns: [
+          { key: "_sheet", labelKey: "rfi.col.sheet", kind: "readonly", width: 42 },
+          { key: "rfiNo", labelKey: "rfi.col.rfiNo", kind: "readonly", width: 54, display: "suffix" },
+          { key: "itpNo", labelKey: "rfi.col.itpNo", kind: "choice", width: 50, display: "shortNumber" },
+          { key: "itemNo", labelKey: "rfi.col.itemNo", kind: "choice", width: 62, display: "itemSuffix" },
+          { key: "description", labelKey: "rfi.col.description", kind: "multiline", width: 360, detail: true },
+          { key: "forms", labelKey: "rfi.col.forms", kind: "multiline", width: 280, detail: true },
+          { key: "tagNo", labelKey: "rfi.col.tagNo", kind: "autocomplete", width: 92 },
+          { key: "area", labelKey: "rfi.col.area", kind: "autocomplete", width: 94 },
+          { key: "dateOfIssue", labelKey: "rfi.col.issueDate", kind: "compactDate", width: 116 },
+          { key: "inspectionDate", labelKey: "rfi.col.inspectionDate", kind: "compactDate", width: 116 },
+          { key: "startTime", labelKey: "rfi.col.startTime", kind: "text", width: 58 },
+          { key: "azfenType", labelKey: "rfi.col.azfenType", kind: "text", width: 130, detail: true },
+          { key: "intecType", labelKey: "rfi.col.intecType", kind: "text", width: 130, detail: true },
+          { key: "location", labelKey: "rfi.col.location", kind: "autocomplete", width: 104 },
+          { key: "subcontractor", labelKey: "rfi.col.subcontractor", kind: "autocomplete", width: 88 },
+        ],
+        choices: {
+          itpNo: ["AZE-SUN-INT-QMS-ITP-CIV-0005"],
+          itemNo: ["CIV-5.2.1"],
+        },
+        autocomplete: {
+          tagNo: ["N12", "N18"],
+          area: ["North Site", "South Site"],
+          location: ["N3"],
+          subcontractor: ["AZFEN", "PDL"],
+        },
+        rows,
+      },
+    },
+    steps: [
+      {
+        kind: "workbook_update",
+        src: mockPath(
+          values.workbook,
+          "/Users/demo/Documents/RFI Log.xlsx",
+        ),
+        dst: "/Users/demo/Documents/.docflow-backups/RFI Log.xlsx",
+        noteKey: "note.rfi.workbookUpdate",
+        meta: {},
+      },
+    ],
+  } satisfies Plan;
+}
+
+
 export function previewOperation(
   state: MockPlanState,
   params: Record<string, unknown>,
@@ -351,143 +491,10 @@ export function previewOperation(
     return previewBatchPrint(state, values);
   }
   if (params.opId === "rfi.normalize_pdf_orientation") {
-    result = {
-      planId: "demo-orientation-plan",
-      opId: "rfi.normalize_pdf_orientation",
-      warnings: [],
-      meta: {
-        sourceReadOnly: true,
-        workerCount: 4,
-        verifiedPages: 24,
-        rotatedPages: 3,
-        actionableFiles: 2,
-        manualReviewFiles: 0,
-        scanIndex: {
-          discovered: 8,
-          reused: 6,
-          analyzed: 2,
-          failed: 0,
-          priorInterruptedRuns: 0,
-          forceRescan: Boolean(values.force_rescan),
-        },
-      },
-      steps: [
-        {
-          kind: "pdf_page_rotate",
-          src: `${mockPath(values.rfi_system_root, "/RFI System")}/MEC/RFI-0001/document.pdf`,
-          dst: `${mockPath(values.review_root, "/Orientation Review")}/MEC/RFI-0001/document.pdf`,
-          noteKey: "note.rfi.pdfOrientationNormalized",
-          meta: {
-            rotations: [
-              { pageIndex: 1, fromRotation: 0, targetRotation: 90 },
-            ],
-          },
-        },
-      ],
-    } satisfies Plan;
-    return result;
+    return previewPdfOrientation(state, values);
   }
   if (params.opId === "rfi.log_add") {
-    const rows = [
-      {
-        _rowId: "CIV-g1-r1",
-        _sheet: "CIV",
-        rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0008",
-        itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
-        itemNo: "CIV-5.2.1",
-        description: "Civil inspection description",
-        forms: "CON-CIV-001",
-        tagNo: "N12",
-        area: "North Site",
-        rowNo: "",
-        dateOfIssue: "15-Aug-26",
-        inspectionDate: "16-Aug-26",
-        startTime: "09:00",
-        azfenType: "H",
-        intecType: "W",
-        location: "N3",
-        subcontractor: "AZFEN",
-      },
-      {
-        _rowId: "CIV-g2-r1",
-        _sheet: "CIV",
-        rfiNo: "AZE-SUN-INT-QMS-RFI-CIV-0009",
-        itpNo: "AZE-SUN-INT-QMS-ITP-CIV-0005",
-        itemNo: "CIV-5.2.1",
-        description: "Civil inspection description",
-        forms: "CON-CIV-001",
-        tagNo: "N18",
-        area: "North Site",
-        rowNo: "",
-        dateOfIssue: "15-Aug-26",
-        inspectionDate: "16-Aug-26",
-        startTime: "09:30",
-        azfenType: "H",
-        intecType: "W",
-        location: "N3",
-        subcontractor: "PDL",
-      },
-    ];
-    result = {
-      planId: "demo-rfi-plan",
-      opId: "rfi.log_add",
-      warnings: [],
-      meta: {
-        editor: {
-          kind: "recordTable",
-          layout: "compact",
-          titleKey: "rfi.editor.title",
-          groupField: "rfiNo",
-          selectionGroupFields: ["_sheet", "rfiNo"],
-          selectionEnabled: true,
-          bulkEnabled: true,
-          detailsEnabled: true,
-          detailsDefaultVisible: false,
-          duplicateEnabled: true,
-          columns: [
-            { key: "_sheet", labelKey: "rfi.col.sheet", kind: "readonly", width: 42 },
-            { key: "rfiNo", labelKey: "rfi.col.rfiNo", kind: "readonly", width: 54, display: "suffix" },
-            { key: "itpNo", labelKey: "rfi.col.itpNo", kind: "choice", width: 50, display: "shortNumber" },
-            { key: "itemNo", labelKey: "rfi.col.itemNo", kind: "choice", width: 62, display: "itemSuffix" },
-            { key: "description", labelKey: "rfi.col.description", kind: "multiline", width: 360, detail: true },
-            { key: "forms", labelKey: "rfi.col.forms", kind: "multiline", width: 280, detail: true },
-            { key: "tagNo", labelKey: "rfi.col.tagNo", kind: "autocomplete", width: 92 },
-            { key: "area", labelKey: "rfi.col.area", kind: "autocomplete", width: 94 },
-            { key: "dateOfIssue", labelKey: "rfi.col.issueDate", kind: "compactDate", width: 116 },
-            { key: "inspectionDate", labelKey: "rfi.col.inspectionDate", kind: "compactDate", width: 116 },
-            { key: "startTime", labelKey: "rfi.col.startTime", kind: "text", width: 58 },
-            { key: "azfenType", labelKey: "rfi.col.azfenType", kind: "text", width: 130, detail: true },
-            { key: "intecType", labelKey: "rfi.col.intecType", kind: "text", width: 130, detail: true },
-            { key: "location", labelKey: "rfi.col.location", kind: "autocomplete", width: 104 },
-            { key: "subcontractor", labelKey: "rfi.col.subcontractor", kind: "autocomplete", width: 88 },
-          ],
-          choices: {
-            itpNo: ["AZE-SUN-INT-QMS-ITP-CIV-0005"],
-            itemNo: ["CIV-5.2.1"],
-          },
-          autocomplete: {
-            tagNo: ["N12", "N18"],
-            area: ["North Site", "South Site"],
-            location: ["N3"],
-            subcontractor: ["AZFEN", "PDL"],
-          },
-          rows,
-        },
-      },
-      steps: [
-        {
-          kind: "workbook_update",
-          src: mockPath(
-            values.workbook,
-            "/Users/demo/Documents/RFI Log.xlsx",
-          ),
-          dst: "/Users/demo/Documents/.docflow-backups/RFI Log.xlsx",
-          noteKey: "note.rfi.workbookUpdate",
-          meta: {},
-        },
-      ],
-    } satisfies Plan;
-    return result;
+    return previewLogAdd(state, values);
   }
   if (params.opId === demoFastCoverOperation.id) {
     return previewFastCover(state, values);
