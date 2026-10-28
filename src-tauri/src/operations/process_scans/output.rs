@@ -217,3 +217,89 @@ pub(super) fn same_file(left: &Path, right: &Path) -> bool {
         .and_then(|left| fs::canonicalize(right).map(|right| left == right))
         .unwrap_or(false)
 }
+
+pub(super) fn push_split_source_trash(
+    plan: &mut Plan,
+    params: &ProcessScansParams,
+    split_sources: BTreeMap<PathBuf, String>,
+) -> Result<(), BackendError> {
+    let trash_root = params.trash_root.as_deref().ok_or_else(|| {
+        BackendError::path_invalid("recoverable trash is unavailable for batch scans")
+    })?;
+    let trash_root = canonical_directory(trash_root, "recoverable trash")?;
+    for (pdf, source_hash) in split_sources {
+        let trash_name = format!(
+            "process-scans-{}_{}",
+            uuid::Uuid::new_v4(),
+            display_name(&pdf)
+        );
+        let mut meta = JsonObject::new();
+        meta.insert(
+            "expectedSourceSha256".to_string(),
+            Value::String(source_hash),
+        );
+        plan.steps.push(step(
+            StepKind::Move,
+            Some(&pdf),
+            Some(&trash_root.join(trash_name)),
+            "note.deleted",
+            meta,
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn push_review_outputs(
+    plan: &mut Plan,
+    review_pages: Vec<ReviewPages>,
+    split_sources: &BTreeMap<PathBuf, String>,
+    destination: &Path,
+    keep_original: bool,
+) {
+    for review in review_pages {
+        let target = review_target(destination, &review.path, &review.pages);
+        let candidate = Candidate {
+            path: review.path.clone(),
+            pages: Some(review.pages),
+            source_hash: split_sources.get(&review.path).cloned(),
+            modified: UNIX_EPOCH,
+            confidence: 0.0,
+            source: String::new(),
+            rotations: review.rotations,
+        };
+        let mut meta = JsonObject::new();
+        meta.insert("reason".to_string(), Value::String(review.reason));
+        push_candidate_output(
+            plan,
+            &candidate,
+            &target,
+            "note.needs_review",
+            meta,
+            keep_original,
+        );
+    }
+}
+
+pub(super) fn push_unreadable_outputs(
+    plan: &mut Plan,
+    failures: Vec<(PathBuf, String)>,
+    destination: &Path,
+    transfer_kind: StepKind,
+) {
+    for (pdf, error) in failures {
+        let truncated = error.chars().take(200).collect::<String>();
+        plan.warnings.push(Warning {
+            key: "warn.unreadable".to_string(),
+            subject: format!("{} — {truncated}", display_name(&pdf)),
+        });
+        let mut meta = JsonObject::new();
+        meta.insert("error".to_string(), Value::String(error));
+        plan.steps.push(step(
+            transfer_kind,
+            Some(&pdf),
+            Some(&destination.join(REVIEW_DIR).join(display_name(&pdf))),
+            "note.unreadable",
+            meta,
+        ));
+    }
+}
