@@ -144,69 +144,16 @@ where
         }
 
         if !matching_follow_up.is_empty() {
-            if matching_follow_up
-                .iter()
-                .all(|target| safe_cell(&target.status_cell, target.status_merged))
-            {
-                let mut changed = 0usize;
-                for target in matching_follow_up {
-                    let cell = target.status_cell.as_ref().expect("safe cell is present");
-                    let current = cell.value.nfc().collect::<String>().trim().to_string();
-                    if !matches!(current.as_str(), "" | "Signed" | "Not Signed") {
-                        unsafe_target = true;
-                        continue;
-                    }
-                    let desired = if scanned.signed_by_worley {
-                        "Signed"
-                    } else if current == "Signed" {
-                        // A weak/unsigned scan can never revoke a prior signature.
-                        "Signed"
-                    } else {
-                        "Not Signed"
-                    };
-                    if current != desired {
-                        pending_follow_up_updates.push((
-                            target.sheet.clone(),
-                            format!("{}:{}", target.row, target.status_col),
-                            dto(
-                                &row_id,
-                                cell,
-                                desired.to_string(),
-                                target.row,
-                                target.status_col,
-                            ),
-                        ));
-                        changed += 1;
-                    }
-                }
-                follow_up_action = if unsafe_target {
-                    "Manual review: unexpected Follow Up status".to_string()
-                } else if changed == 0 {
-                    format!(
-                        "Already {} in Follow Up",
-                        if scanned.signed_by_worley {
-                            "Signed"
-                        } else {
-                            "Not Signed or preserved Signed"
-                        }
-                    )
-                } else {
-                    format!(
-                        "Set {changed} Follow Up control status cell(s) to {}",
-                        if scanned.signed_by_worley {
-                            "Signed"
-                        } else {
-                            "Not Signed"
-                        }
-                    )
-                };
-                ready |= changed > 0;
-            } else {
-                follow_up_action =
-                    "Manual review: Follow Up status cell missing, merged, or formula-bearing"
-                        .to_string();
-                unsafe_target = true;
-            }
+            let (action, updates, flagged) = follow_up_status_updates(
+                &row_id,
+                matching_follow_up,
+                scanned.signed_by_worley,
+                unsafe_target,
+            );
+            follow_up_action = action;
+            unsafe_target = flagged;
+            ready |= !updates.is_empty();
+            pending_follow_up_updates = updates;
         } else if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
             follow_up_action = "Manual review: no existing Follow Up control row".to_string();
             unsafe_target = true;
@@ -414,6 +361,73 @@ fn sync_workbook_step(
         note_key: Some(note.to_string()),
         meta,
     }))
+}
+
+fn follow_up_status_updates(
+    row_id: &str,
+    targets: &[FollowUpTarget],
+    signed_by_worley: bool,
+    unsafe_target: bool,
+) -> (String, Vec<(String, String, GuardedCellUpdateDto)>, bool) {
+    if !targets
+        .iter()
+        .all(|target| safe_cell(&target.status_cell, target.status_merged))
+    {
+        let action = "Manual review: Follow Up status cell missing, merged, or formula-bearing";
+        return (action.to_string(), Vec::new(), true);
+    }
+    let mut unsafe_target = unsafe_target;
+    let mut updates = Vec::new();
+    for target in targets {
+        let cell = target.status_cell.as_ref().expect("safe cell is present");
+        let current = cell.value.nfc().collect::<String>().trim().to_string();
+        if !matches!(current.as_str(), "" | "Signed" | "Not Signed") {
+            unsafe_target = true;
+            continue;
+        }
+        // A weak/unsigned scan can never revoke a prior signature.
+        let desired = if signed_by_worley || current == "Signed" {
+            "Signed"
+        } else {
+            "Not Signed"
+        };
+        if current != desired {
+            updates.push((
+                target.sheet.clone(),
+                format!("{}:{}", target.row, target.status_col),
+                dto(
+                    row_id,
+                    cell,
+                    desired.to_string(),
+                    target.row,
+                    target.status_col,
+                ),
+            ));
+        }
+    }
+    let changed = updates.len();
+    let action = if unsafe_target {
+        "Manual review: unexpected Follow Up status".to_string()
+    } else if changed == 0 {
+        format!(
+            "Already {} in Follow Up",
+            if signed_by_worley {
+                "Signed"
+            } else {
+                "Not Signed or preserved Signed"
+            }
+        )
+    } else {
+        format!(
+            "Set {changed} Follow Up control status cell(s) to {}",
+            if signed_by_worley {
+                "Signed"
+            } else {
+                "Not Signed"
+            }
+        )
+    };
+    (action, updates, unsafe_target)
 }
 
 fn sync_disposition(

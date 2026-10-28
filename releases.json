@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.200",
+  "currentVersion": "1.36.201",
   "releases": [
+    {
+      "version": "1.36.201",
+      "tag": "v1.36.201",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract system-sync Follow Up status update evaluation into a pure helper."
+    },
     {
       "version": "1.36.200",
       "tag": "v1.36.200",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract follow-up undo applied-state expectations into a pure helper."
     },
     {
