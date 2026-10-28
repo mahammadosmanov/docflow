@@ -101,32 +101,8 @@ where
         total: 0,
         subject: root.to_string_lossy().into_owned(),
     });
-    let mut candidates = Vec::new();
-    let mut seen = BTreeSet::new();
-    let mut discovered_dirs = 0_u64;
-    let (discovery_workers, batches) = bounded_map_stream(
-        &search_dirs,
-        |(discipline, path)| scan_system_discipline(discipline, path),
-        |index, _| {
-            discovered_dirs += 1;
-            progress(ProgressEvent {
-                phase: "system_discovery".to_string(),
-                done: discovered_dirs,
-                total: search_dirs.len() as u64,
-                subject: search_dirs[index].1.to_string_lossy().into_owned(),
-            });
-            Ok(())
-        },
-    )
-    .map_err(BackendError::request_failed)?;
-    for batch in batches {
-        for (record, folder) in batch.map_err(BackendError::path_invalid)? {
-            if !seen.insert(record.canonical_rfi.clone()) {
-                continue;
-            }
-            candidates.push((record, folder));
-        }
-    }
+    let (discovery_workers, mut candidates) =
+        discover_system_candidates(&search_dirs, &mut progress)?;
     let temp_dir = tempfile::tempdir()
         .map_err(|error| BackendError::protocol(format!("temporary directory: {error}")))?;
     candidates.sort_by(|(left, _), (right, _)| {
@@ -239,6 +215,44 @@ where
             .then(left.number.cmp(&right.number))
     });
     Ok((records, stats))
+}
+
+/// Discovers RFI folders across all discipline directories, keeping the first hit per RFI.
+/// Returns the discovery worker count with the deduplicated candidates.
+fn discover_system_candidates<P>(
+    search_dirs: &[(&'static str, PathBuf)],
+    progress: &mut P,
+) -> Result<(usize, Vec<(ScannedRfiRecord, PathBuf)>), BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    let mut candidates = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut discovered_dirs = 0_u64;
+    let (discovery_workers, batches) = bounded_map_stream(
+        search_dirs,
+        |(discipline, path)| scan_system_discipline(discipline, path),
+        |index, _| {
+            discovered_dirs += 1;
+            progress(ProgressEvent {
+                phase: "system_discovery".to_string(),
+                done: discovered_dirs,
+                total: search_dirs.len() as u64,
+                subject: search_dirs[index].1.to_string_lossy().into_owned(),
+            });
+            Ok(())
+        },
+    )
+    .map_err(BackendError::request_failed)?;
+    for batch in batches {
+        for (record, folder) in batch.map_err(BackendError::path_invalid)? {
+            if !seen.insert(record.canonical_rfi.clone()) {
+                continue;
+            }
+            candidates.push((record, folder));
+        }
+    }
+    Ok((discovery_workers, candidates))
 }
 
 /// Reuses or recomputes the Worley signature for one RFI candidate.
