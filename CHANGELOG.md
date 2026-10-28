@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.149 - 2026-10-28
+
+### Changed
+
+- Extracted the cached-page rebuild from `preview_indexed` in `src-tauri/src/operations/pdf_orientation.rs` into `cached_page_results` in `operations/pdf_orientation/support.rs`. Behavior is unchanged; the structural-validity checks remain in the caller.
+
 ## 1.36.148 - 2026-10-28
 
 ### Changed
