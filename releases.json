@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.213",
+  "currentVersion": "1.36.214",
   "releases": [
+    {
+      "version": "1.36.214",
+      "tag": "v1.36.214",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add unit tests for system-sync disposition and print queue final status helpers."
+    },
     {
       "version": "1.36.213",
       "tag": "v1.36.213",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract RFI file-group offered step authorization into a helper."
     },
     {

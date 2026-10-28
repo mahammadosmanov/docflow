@@ -471,3 +471,35 @@ fn sync_disposition(
         )
     }
 }
+
+#[cfg(test)]
+mod sync_disposition_tests {
+    use super::sync_disposition;
+
+    #[test]
+    fn blocked_or_unmatched_rows_need_manual_review() {
+        for (blocked, unmatched) in [(true, false), (false, true), (true, true)] {
+            let (key, _, selectable) = sync_disposition(blocked, unmatched, true, true);
+            assert_eq!(key, "rfi.systemSync.disposition.manualReview");
+            assert!(!selectable);
+        }
+    }
+
+    #[test]
+    fn ready_rows_are_selectable_with_signature_specific_reason() {
+        let (key, reason, selectable) = sync_disposition(false, false, true, true);
+        assert_eq!(key, "rfi.systemSync.disposition.ready");
+        assert!(reason.starts_with("Worley signature detected"));
+        assert!(selectable);
+
+        let (_, reason, _) = sync_disposition(false, false, true, false);
+        assert!(reason.starts_with("No Worley signature detected"));
+    }
+
+    #[test]
+    fn rows_without_pending_changes_are_already_synced() {
+        let (key, _, selectable) = sync_disposition(false, false, false, true);
+        assert_eq!(key, "rfi.systemSync.disposition.alreadySynced");
+        assert!(!selectable);
+    }
+}
