@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.114",
+  "currentVersion": "1.36.115",
   "releases": [
+    {
+      "version": "1.36.115",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.115",
+      "summary": "Tests: the review screen suite now covers a failed undo. It runs preview, apply and undo with a rejecting undo bridge and checks that the error shows and the result stays for retry. The test fails without the 1.36.114 fix and passes with it."
+    },
     {
       "version": "1.36.114",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.114",
       "summary": "Fix: a failed undo on the review screen now shows its error. Before, the undo call had no error handling, so a rejected undo left an unhandled promise rejection and no message on screen."
     },
