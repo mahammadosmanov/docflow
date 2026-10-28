@@ -57,3 +57,35 @@ pub(super) fn truncate(value: &str, max_chars: usize) -> String {
     }
     result
 }
+
+/// Splits one file's page results into approved rotations, uncertain-page reasons,
+/// and the count of pages whose target rotation verified.
+pub(super) fn approve_file_pages(
+    page_results: Vec<(PageTask, Result<OrientationDetection, String>)>,
+) -> (Vec<Value>, Vec<String>, u64) {
+    let mut approved = Vec::new();
+    let mut uncertain = Vec::new();
+    let mut verified = 0_u64;
+    for (task, result) in page_results {
+        match result {
+            Ok(detection) => match orientation_target_rotation(task.current_rotation, &detection) {
+                Ok(target) => {
+                    verified += 1;
+                    if let Some(target) = target {
+                        approved.push(json!({
+                            "pageIndex": task.page_index,
+                            "fromRotation": task.current_rotation,
+                            "targetRotation": target,
+                            "rotateClockwise": detection.rotate_clockwise,
+                            "confidence": detection.confidence,
+                            "method": detection.method,
+                        }));
+                    }
+                }
+                Err(error) => uncertain.push(format!("page {} {error}", task.page_index + 1)),
+            },
+            Err(error) => uncertain.push(format!("page {} {error}", task.page_index + 1)),
+        }
+    }
+    (approved, uncertain, verified)
+}

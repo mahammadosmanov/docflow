@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.148 - 2026-10-28
+
+### Changed
+
+- Extracted the per-file page approval loop from `preview_indexed` in `src-tauri/src/operations/pdf_orientation.rs` into the pure helper `approve_file_pages` in `operations/pdf_orientation/support.rs`. No I/O moved; behavior is unchanged. Gated by the full Rust suite.
+
 ## 1.36.147 - 2026-10-28
 
 ### Changed

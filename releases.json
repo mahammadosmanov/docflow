@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.147",
+  "currentVersion": "1.36.148",
   "releases": [
+    {
+      "version": "1.36.148",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.148",
+      "summary": "Extracted per-file orientation page approval from preview_indexed into pure approve_file_pages helper."
+    },
     {
       "version": "1.36.147",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.147",
       "summary": "Moved PDF orientation path and rotation helpers into operations/pdf_orientation/support.rs."
     },
