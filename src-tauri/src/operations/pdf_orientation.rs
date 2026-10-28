@@ -455,69 +455,18 @@ where
     }
 
     let mut created_directories = BTreeSet::new();
-    let mut verified_pages = 0_u64;
-    let mut rotated_pages = 0_u64;
-    let mut actionable_files = 0_u64;
-    let mut manual_review_files = 0_u64;
+    let mut totals = PlanTotals::default();
     for item in work {
-        if item.cached {
-            let expected = item.source_hash.as_deref().ok_or_else(|| {
-                BackendError::request_failed("cached orientation result has no source hash")
-            })?;
-            let current = file_sha256(&item.path)
-                .map_err(|error| BackendError::path_invalid(error.to_string()))?;
-            if current != expected {
-                return Err(BackendError::path_invalid(
-                    "source PDF content changed during orientation scan",
-                ));
-            }
-        }
         let page_results = by_file.remove(&item.path).unwrap_or_default();
-        let (approved, uncertain, verified) = approve_file_pages(page_results);
-        verified_pages += verified;
-        if !uncertain.is_empty() {
-            manual_review_files += 1;
-            plan.warnings.push(warning(
-                "warn.rfi.orientationNeedsReview",
-                &truncate(
-                    &format!("{} — {}", item.relative.display(), uncertain.join(", ")),
-                    360,
-                ),
-            ));
-            continue;
-        }
-        if approved.is_empty() {
-            continue;
-        }
-        let destination = review_root.join(&item.relative);
-        if destination.exists() {
-            plan.warnings.push(warning(
-                "warn.rfi.orientationReviewExists",
-                &item.relative.to_string_lossy(),
-            ));
-            continue;
-        }
-        add_directory_steps(
-            destination
-                .parent()
-                .ok_or_else(|| BackendError::path_invalid("review PDF has no parent"))?,
-            &review_root,
-            &mut created_directories,
-            &mut plan.steps,
-        )?;
-        let source_hash = item.source_hash.clone().ok_or_else(|| {
-            BackendError::request_failed("orientation scan did not pin a source hash")
-        })?;
-        rotated_pages += approved.len() as u64;
-        actionable_files += 1;
-        plan.steps.push(rotation_step(
+        plan_file(
             &item,
-            &destination,
+            page_results,
             &source_root,
             &review_root,
-            source_hash,
-            approved,
-        ));
+            &mut created_directories,
+            &mut plan,
+            &mut totals,
+        )?;
     }
     stats.parallel_analysis = !tasks.is_empty();
     stats.analysis_workers = worker_count as u64;
@@ -530,12 +479,21 @@ where
             "inspectionWorkers".to_string(),
             Value::from(inspection_workers as u64),
         ),
-        ("verifiedPages".to_string(), Value::from(verified_pages)),
-        ("rotatedPages".to_string(), Value::from(rotated_pages)),
-        ("actionableFiles".to_string(), Value::from(actionable_files)),
+        (
+            "verifiedPages".to_string(),
+            Value::from(totals.verified_pages),
+        ),
+        (
+            "rotatedPages".to_string(),
+            Value::from(totals.rotated_pages),
+        ),
+        (
+            "actionableFiles".to_string(),
+            Value::from(totals.actionable_files),
+        ),
         (
             "manualReviewFiles".to_string(),
-            Value::from(manual_review_files),
+            Value::from(totals.manual_review_files),
         ),
         (
             "detectorDiagnostics".to_string(),

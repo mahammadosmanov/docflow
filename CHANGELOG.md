@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.153 - 2026-10-28
+
+### Changed
+
+- Moved the per-PDF approved-plan loop out of `preview_indexed` into `plan_file` with a `PlanTotals` counter struct; behavior unchanged.
+
 ## 1.36.152 - 2026-10-28
 
 ### Changed
