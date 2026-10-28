@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.269",
+  "currentVersion": "1.36.270",
   "releases": [
+    {
+      "version": "1.36.270",
+      "tag": "v1.36.270",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move support bundle validation into a diagnostics validate module."
+    },
     {
       "version": "1.36.269",
       "tag": "v1.36.269",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move native preview step builders into a preview_steps module."
     },
     {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.270 - 2026-10-28
+
+### Changed
+
+- Moved support bundle validation into a `diagnostics` validate module.
+
 ## 1.36.269 - 2026-10-28
 
 ### Changed
