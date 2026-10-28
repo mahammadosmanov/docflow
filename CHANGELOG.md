@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.218 - 2026-10-28
+
+### Added
+
+- Unit tests for RFI preview path canonicalization error context and existing-path resolution.
+
 ## 1.36.217 - 2026-10-28
 
 ### Added

@@ -604,3 +604,25 @@ impl NativeBackend {
         )?)
     }
 }
+
+#[cfg(test)]
+mod canonicalize_helper_tests {
+    use super::canonicalize_or_validation;
+
+    #[test]
+    fn missing_path_reports_error_key_and_subject() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("absent.xlsx");
+        let error = canonicalize_or_validation(&missing, "error.test.key: cannot resolve RFI Log")
+            .unwrap_err();
+        let message = format!("{error:?}");
+        assert!(message.contains("error.test.key: cannot resolve RFI Log: "));
+    }
+
+    #[test]
+    fn existing_path_is_canonicalized() {
+        let dir = tempfile::tempdir().unwrap();
+        let resolved = canonicalize_or_validation(dir.path(), "error.test.key").unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(dir.path()).unwrap());
+    }
+}
