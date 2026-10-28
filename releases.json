@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.137",
+  "currentVersion": "1.36.138",
   "releases": [
+    {
+      "version": "1.36.138",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.138",
+      "summary": "Moved follow-up apply step out of fs_ops/apply.rs into fs_ops/apply/follow_up_apply.rs."
+    },
     {
       "version": "1.36.137",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.137",
       "summary": "Moved RFI system sync apply step out of fs_ops/apply.rs into fs_ops/apply/rfi_system_apply.rs."
     },
