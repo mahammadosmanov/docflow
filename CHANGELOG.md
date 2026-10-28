@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.132 - 2026-10-28
+
+### Changed
+
+- Moved the support-bundle sanitizer (`sanitize_value` and its key, path and error-code helpers) from `src-tauri/src/diagnostics.rs` into `diagnostics/sanitize.rs`. `diagnostics.rs` drops from 795 to 660 lines. Behavior is unchanged.
+
 ## 1.36.131 - 2026-10-28
 
 ### Changed
