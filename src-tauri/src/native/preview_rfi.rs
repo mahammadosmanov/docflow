@@ -1,5 +1,15 @@
 use super::*;
 
+fn canonicalize_or_validation(
+    path: impl AsRef<Path>,
+    error_key: &str,
+    subject: &str,
+) -> Result<PathBuf, BackendError> {
+    fs::canonicalize(path).map_err(|error| {
+        BackendError::validation(format!("{error_key}: cannot resolve {subject}: {error}"))
+    })
+}
+
 impl NativeBackend {
     pub(crate) fn preview_rfi_follow_up<F>(
         &self,
@@ -145,21 +155,21 @@ impl NativeBackend {
                 "operation is not owned by the Rust RFI System Sync backend",
             ));
         }
-        let system_root = fs::canonicalize(&request.values.rfi_system_root).map_err(|e| {
-            BackendError::validation(format!(
-                "error.rfi.systemSync.systemRootInvalid: cannot resolve root: {e}"
-            ))
-        })?;
-        let source_path = fs::canonicalize(&request.values.rfi_log_workbook).map_err(|e| {
-            BackendError::validation(format!(
-                "error.rfi.systemSync.workbookInvalid: cannot resolve RFI Log: {e}"
-            ))
-        })?;
-        let target_path = fs::canonicalize(&request.values.follow_up_workbook).map_err(|e| {
-            BackendError::validation(format!(
-                "error.rfi.systemSync.workbookInvalid: cannot resolve Follow Up: {e}"
-            ))
-        })?;
+        let system_root = canonicalize_or_validation(
+            &request.values.rfi_system_root,
+            "error.rfi.systemSync.systemRootInvalid",
+            "root",
+        )?;
+        let source_path = canonicalize_or_validation(
+            &request.values.rfi_log_workbook,
+            "error.rfi.systemSync.workbookInvalid",
+            "RFI Log",
+        )?;
+        let target_path = canonicalize_or_validation(
+            &request.values.follow_up_workbook,
+            "error.rfi.systemSync.workbookInvalid",
+            "Follow Up",
+        )?;
         let source_root = source_path
             .parent()
             .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
@@ -288,17 +298,16 @@ impl NativeBackend {
                 "operation is not owned by the Rust RFI completion-status backend",
             ));
         }
-        let system_root = fs::canonicalize(&request.values.rfi_system_root).map_err(|error| {
-            BackendError::validation(format!(
-                "error.rfi.completeStatus.systemRootInvalid: cannot resolve root: {error}"
-            ))
-        })?;
-        let workbook_path =
-            fs::canonicalize(&request.values.rfi_log_workbook).map_err(|error| {
-                BackendError::validation(format!(
-                    "error.rfi.completeStatus.workbookInvalid: cannot resolve RFI Log: {error}"
-                ))
-            })?;
+        let system_root = canonicalize_or_validation(
+            &request.values.rfi_system_root,
+            "error.rfi.completeStatus.systemRootInvalid",
+            "root",
+        )?;
+        let workbook_path = canonicalize_or_validation(
+            &request.values.rfi_log_workbook,
+            "error.rfi.completeStatus.workbookInvalid",
+            "RFI Log",
+        )?;
         let workbook_root = workbook_path
             .parent()
             .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
@@ -385,17 +394,16 @@ impl NativeBackend {
                 "operation is not owned by the Rust RFI publish-status backend",
             ));
         }
-        let staging_root = fs::canonicalize(&request.values.staging_folder).map_err(|error| {
-            BackendError::validation(format!(
-                "error.rfi.publishStatus.stagingInvalid: cannot resolve root: {error}"
-            ))
-        })?;
-        let workbook_path =
-            fs::canonicalize(&request.values.rfi_log_workbook).map_err(|error| {
-                BackendError::validation(format!(
-                    "error.rfi.publishStatus.workbookInvalid: cannot resolve RFI Log: {error}"
-                ))
-            })?;
+        let staging_root = canonicalize_or_validation(
+            &request.values.staging_folder,
+            "error.rfi.publishStatus.stagingInvalid",
+            "root",
+        )?;
+        let workbook_path = canonicalize_or_validation(
+            &request.values.rfi_log_workbook,
+            "error.rfi.publishStatus.workbookInvalid",
+            "RFI Log",
+        )?;
         let workbook_root = workbook_path
             .parent()
             .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
