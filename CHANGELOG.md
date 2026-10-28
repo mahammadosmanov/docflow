@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.118 - 2026-10-28
+
+### Changed
+
+- The schema parameter visibility rule moves into `isParamVisible` in `lib/operationValues.ts`. `OperationScreen` and `SchemaField` call it instead of repeating the `visibleWhen` check. Behavior is unchanged.
+
+### Added
+
+- Unit tests for `isParamVisible` cover unconditioned parameters and multi-condition gating.
+
 ## 1.36.117 - 2026-10-28
 
 ### Changed

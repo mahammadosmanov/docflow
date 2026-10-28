@@ -56,6 +56,7 @@ import { PrintQueueResumeCard } from "./PrintQueueResumeCard";
 import { RfiPrintFinderPanel } from "./RfiPrintFinderPanel";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
 import { editorRowsOf } from "./operationState";
+import { isParamVisible } from "../lib/operationValues";
 import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
 import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
@@ -293,11 +294,7 @@ export function OperationScreen({
                 )}
                 <div className="form-stack schema-form">
                   {operation.schema
-                    .filter((param) =>
-                      Object.entries(param.visibleWhen ?? {}).every(
-                        ([name, expected]) => values[name] === expected,
-                      ),
-                    )
+                    .filter((param) => isParamVisible(param, values))
                     .map((param) => (
                       <SchemaField
                         key={param.name}

@@ -1,6 +1,19 @@
 import type { ParamDef } from "../types";
 
 /**
+ * True when every `visibleWhen` condition of the parameter matches the current
+ * form values. Parameters without conditions are always visible.
+ */
+export function isParamVisible(
+  param: ParamDef,
+  values: Record<string, unknown>,
+): boolean {
+  return Object.entries(param.visibleWhen ?? {}).every(
+    ([name, expected]) => values[name] === expected,
+  );
+}
+
+/**
  * Keeps the values a procedure may remember between sessions: skips parameters
  * marked `remember: false` and never stores long text or secrets. Names that the
  * schema does not declare are kept, matching the form's existing behavior.
