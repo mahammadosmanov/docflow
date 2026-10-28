@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.187",
+  "currentVersion": "1.36.188",
   "releases": [
+    {
+      "version": "1.36.188",
+      "tag": "v1.36.188",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract PDF discovery and per-code group output from process scan cover-mode preview."
+    },
     {
       "version": "1.36.187",
       "tag": "v1.36.187",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract system-sync workbook reads and workbook update step building from preview_system_sync_indexed."
     },
     {
