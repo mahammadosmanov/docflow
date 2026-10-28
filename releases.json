@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.179",
+  "currentVersion": "1.36.180",
   "releases": [
+    {
+      "version": "1.36.180",
+      "tag": "v1.36.180",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split the S5 staging transition match into artifact-parent, retained-artifact, and publication groups in journal/s5_transition.rs; behavior unchanged."
+    },
     {
       "version": "1.36.179",
       "tag": "v1.36.179",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move the RFI email review warning aggregation into rfi_log/preview_steps.rs as email_review_warning; behavior unchanged."
     },
     {
