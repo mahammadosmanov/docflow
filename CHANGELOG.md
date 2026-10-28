@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.134 - 2026-10-28
+
+### Changed
+
+- Moved PDF object serialization from `src-tauri/src/pdf/parser.rs` into `pdf/serialize.rs`, and stream decoding (`decode_stream`, `apply_predictor`) into `pdf/codec.rs`. `parser.rs` drops from 770 to 572 lines. Behavior is unchanged.
+
 ## 1.36.133 - 2026-10-28
 
 ### Changed

@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.133",
+  "currentVersion": "1.36.134",
   "releases": [
+    {
+      "version": "1.36.134",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.134",
+      "summary": "Changed: PDF object serialization moved from pdf/parser.rs to pdf/serialize.rs, and stream decoding (decode_stream, apply_predictor) moved into pdf/codec.rs. Behavior unchanged."
+    },
     {
       "version": "1.36.133",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.133",
       "summary": "Changed: the BackendMethod roster and its authorization table moved from backend.rs into backend/method.rs. Behavior unchanged."
     },
