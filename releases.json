@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.176",
+  "currentVersion": "1.36.177",
   "releases": [
+    {
+      "version": "1.36.177",
+      "tag": "v1.36.177",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split the S5 transition match into staging and completion groups in journal/s5_transition.rs; behavior unchanged."
+    },
     {
       "version": "1.36.176",
       "tag": "v1.36.176",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move signed-page review editor metadata construction out of the stage_signed_pages preview into stage_signed_pages/support.rs; behavior unchanged."
     },
     {
