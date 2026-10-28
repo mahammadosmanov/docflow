@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.244 - 2026-10-28
+
+### Changed
+
+- Counted placement unmapped rows only after a target layout is found, removing the increment-and-undo pattern.
+
 ## 1.36.243 - 2026-10-28
 
 ### Changed

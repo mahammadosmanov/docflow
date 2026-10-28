@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.243",
+  "currentVersion": "1.36.244",
   "releases": [
+    {
+      "version": "1.36.244",
+      "tag": "v1.36.244",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Count placement unmapped rows only after a target layout is found."
+    },
     {
       "version": "1.36.243",
       "tag": "v1.36.243",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Count signed unmapped rows only after a target layout is found."
     },
     {
