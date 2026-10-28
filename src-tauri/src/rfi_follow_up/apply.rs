@@ -31,10 +31,10 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
             ))
             || canonical_rfi(&update.canonical_rfi).as_deref()
                 != Some(update.canonical_rfi.as_str())
-            || !matches!(
+            || (!matches!(
                 update.proposed_status.as_str(),
-                "" | "Pending" | "In Progress" | "Completed" | "Signed" | "Not Signed"
-            )
+                "" | "Pending" | "In Progress" | "Completed"
+            ) && !crate::ooxml::SIGNED_STATUS_VALUES.contains(&update.proposed_status.as_str()))
             || (!update.proposed_rfi.is_empty() && parse_rfi_group(&update.proposed_rfi).is_none())
             || (!update.target.rfi_cell.value.trim().is_empty()
                 && parse_rfi_group(&update.target.rfi_cell.value).is_none())
