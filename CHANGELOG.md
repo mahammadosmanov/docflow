@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.150 - 2026-10-28
+
+### Changed
+
+- Extracted the `PdfPageRotate` step construction from `preview_indexed` in `src-tauri/src/operations/pdf_orientation.rs` into `rotation_step` in `operations/pdf_orientation/support.rs`. The step's fields and metadata are unchanged.
+
 ## 1.36.149 - 2026-10-28
 
 ### Changed
