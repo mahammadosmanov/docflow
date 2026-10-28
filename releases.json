@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.263",
+  "currentVersion": "1.36.264",
   "releases": [
+    {
+      "version": "1.36.264",
+      "tag": "v1.36.264",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move the signed status text helper to the shared follow-up codes and reuse it in routing."
+    },
     {
       "version": "1.36.263",
       "tag": "v1.36.263",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Reuse the shared signed status value set in follow-up apply validation."
     },
     {

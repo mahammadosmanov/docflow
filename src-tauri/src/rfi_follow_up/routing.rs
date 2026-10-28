@@ -414,11 +414,7 @@ pub(super) fn row_from_slot(
         rfi_no: short_rfi,
         source_statuses: record.map_or_else(Vec::new, |record| {
             vec![if signed {
-                if record.worley_signed {
-                    "Signed".to_string()
-                } else {
-                    "Not Signed".to_string()
-                }
+                signed_status_text(record).to_string()
             } else {
                 record.inspection_status_for_ui()
             }]
