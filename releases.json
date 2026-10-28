@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.163",
+  "currentVersion": "1.36.164",
   "releases": [
+    {
+      "version": "1.36.164",
+      "tag": "v1.36.164",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split ParsedPdf object access, inspection, and graph hashing out of pdf/parsed.rs into submodules; behavior unchanged."
+    },
     {
       "version": "1.36.163",
       "tag": "v1.36.163",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split OOXML XML parsing/serialization and cell-reference helpers out of xml.rs into xml/parse.rs and xml/cell_reference.rs; behavior unchanged."
     },
     {

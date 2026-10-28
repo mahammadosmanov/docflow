@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.164 - 2026-10-28
+
+### Changed
+
+- Split `ParsedPdf` object access, inspection, and graph hashing out of `pdf/parsed.rs` into `parsed/objects.rs`, `parsed/inspection.rs`, and `parsed/hashing.rs`; behavior unchanged.
+
 ## 1.36.163 - 2026-10-28
 
 ### Changed
