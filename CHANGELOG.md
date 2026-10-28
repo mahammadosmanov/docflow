@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.103 - 2026-10-28
+
+### Changed
+
+- `App.tsx` (486 lines) moves the `AppFrame` navigation shell and the `Splash` placeholder into `AppFrame.tsx`, and drops imports that only the moved code used. Routing, markup and behavior are unchanged; `tsc` is clean and the frontend suite passes.
+
 ## 1.36.102 - 2026-10-28
 
 ### Changed
