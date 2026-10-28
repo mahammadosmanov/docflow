@@ -8,9 +8,11 @@ import {
   useState,
 } from "react";
 import {
-  Modal,
   Notice,
 } from "../components/ui";
+import {
+  Modal,
+} from "../components/Modal";
 import {
   type Strings,
 } from "../i18n";

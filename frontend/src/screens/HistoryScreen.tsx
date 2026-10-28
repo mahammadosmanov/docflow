@@ -16,9 +16,11 @@ import {
   EmptyState,
   Header,
   IconButton,
-  Modal,
   Notice,
 } from "../components/ui";
+import {
+  Modal,
+} from "../components/Modal";
 import {
   type Strings,
 } from "../i18n";
