@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.222",
+  "currentVersion": "1.36.223",
   "releases": [
+    {
+      "version": "1.36.223",
+      "tag": "v1.36.223",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract per-RFI review row mapping from system sync preview into a helper."
+    },
     {
       "version": "1.36.222",
       "tag": "v1.36.222",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add unit tests for the Worley signed remark marker helper."
     },
     {
