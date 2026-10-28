@@ -149,3 +149,25 @@ pub(super) fn append_signed_marker(value: &str) -> String {
         format!("{value}\n{WORLEY_SIGNED_MARKER}")
     }
 }
+
+#[cfg(test)]
+mod signed_marker_tests {
+    use super::{WORLEY_SIGNED_MARKER, append_signed_marker};
+
+    #[test]
+    fn empty_remark_becomes_exact_marker() {
+        assert_eq!(append_signed_marker(""), WORLEY_SIGNED_MARKER);
+    }
+
+    #[test]
+    fn existing_remark_gets_marker_on_its_own_line() {
+        let remark = format!("Reviewed by site\n{WORLEY_SIGNED_MARKER}");
+        assert_eq!(append_signed_marker("Reviewed by site"), remark);
+    }
+
+    #[test]
+    fn marker_is_not_duplicated_when_already_present() {
+        let remark = format!("  {WORLEY_SIGNED_MARKER}  \nnote");
+        assert_eq!(append_signed_marker(&remark), remark);
+    }
+}
