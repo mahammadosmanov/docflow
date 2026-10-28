@@ -2,12 +2,9 @@ use super::*;
 
 fn canonicalize_or_validation(
     path: impl AsRef<Path>,
-    error_key: &str,
-    subject: &str,
+    context: &str,
 ) -> Result<PathBuf, BackendError> {
-    fs::canonicalize(path).map_err(|error| {
-        BackendError::validation(format!("{error_key}: cannot resolve {subject}: {error}"))
-    })
+    fs::canonicalize(path).map_err(|error| BackendError::validation(format!("{context}: {error}")))
 }
 
 impl NativeBackend {
@@ -157,18 +154,15 @@ impl NativeBackend {
         }
         let system_root = canonicalize_or_validation(
             &request.values.rfi_system_root,
-            "error.rfi.systemSync.systemRootInvalid",
-            "root",
+            "error.rfi.systemSync.systemRootInvalid: cannot resolve root",
         )?;
         let source_path = canonicalize_or_validation(
             &request.values.rfi_log_workbook,
-            "error.rfi.systemSync.workbookInvalid",
-            "RFI Log",
+            "error.rfi.systemSync.workbookInvalid: cannot resolve RFI Log",
         )?;
         let target_path = canonicalize_or_validation(
             &request.values.follow_up_workbook,
-            "error.rfi.systemSync.workbookInvalid",
-            "Follow Up",
+            "error.rfi.systemSync.workbookInvalid: cannot resolve Follow Up",
         )?;
         let source_root = source_path
             .parent()
@@ -300,13 +294,11 @@ impl NativeBackend {
         }
         let system_root = canonicalize_or_validation(
             &request.values.rfi_system_root,
-            "error.rfi.completeStatus.systemRootInvalid",
-            "root",
+            "error.rfi.completeStatus.systemRootInvalid: cannot resolve root",
         )?;
         let workbook_path = canonicalize_or_validation(
             &request.values.rfi_log_workbook,
-            "error.rfi.completeStatus.workbookInvalid",
-            "RFI Log",
+            "error.rfi.completeStatus.workbookInvalid: cannot resolve RFI Log",
         )?;
         let workbook_root = workbook_path
             .parent()
@@ -396,13 +388,11 @@ impl NativeBackend {
         }
         let staging_root = canonicalize_or_validation(
             &request.values.staging_folder,
-            "error.rfi.publishStatus.stagingInvalid",
-            "root",
+            "error.rfi.publishStatus.stagingInvalid: cannot resolve root",
         )?;
         let workbook_path = canonicalize_or_validation(
             &request.values.rfi_log_workbook,
-            "error.rfi.publishStatus.workbookInvalid",
-            "RFI Log",
+            "error.rfi.publishStatus.workbookInvalid: cannot resolve RFI Log",
         )?;
         let workbook_root = workbook_path
             .parent()

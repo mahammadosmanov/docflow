@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.212 - 2026-10-28
+
+### Fixed
+
+- Kept RFI preview error keys as literals so the ARB catalog check passes.
+
 ## 1.36.211 - 2026-10-28
 
 ### Changed
