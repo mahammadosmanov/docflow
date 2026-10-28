@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.251",
+  "currentVersion": "1.36.252",
   "releases": [
+    {
+      "version": "1.36.252",
+      "tag": "v1.36.252",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share private S5 artifact authorization in follow-up apply."
+    },
     {
       "version": "1.36.251",
       "tag": "v1.36.251",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract additional concrete batch row building into a helper."
     },
     {

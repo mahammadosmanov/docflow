@@ -27,6 +27,29 @@ impl FilesystemAuthority {
             .map_err(follow_up_backend_no_effect)
     }
 
+    /// Authorizes a private S5 artifact path for writing and anchors it for I/O.
+    fn authorize_private_artifact(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        path: &Path,
+        unavailable: &str,
+    ) -> Result<AnchoredPath, FollowUpApplyFailure> {
+        self.grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                path,
+                PathIntent::Write,
+            )
+            .and_then(|path| {
+                path.anchor()
+                    .map_err(|_| BackendError::path_invalid(unavailable))
+            })
+            .map_err(follow_up_backend_partial)
+    }
+
     pub(super) fn execute_follow_up_workbook_update(
         &self,
         caller: &CallerIdentity,
@@ -177,21 +200,12 @@ impl FilesystemAuthority {
                 creation_state: PendingArtifactCreationState::Intent,
             }),
         )?;
-        let private = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &private_path,
-                PathIntent::Write,
-            )
-            .and_then(|path| {
-                path.anchor().map_err(|_| {
-                    BackendError::path_invalid("Follow Up private output cannot be anchored")
-                })
-            })
-            .map_err(follow_up_backend_partial)?;
+        let private = self.authorize_private_artifact(
+            &binding,
+            caller,
+            &private_path,
+            "Follow Up private output cannot be anchored",
+        )?;
         let private_creation = CreationSecurityDescriptor::current_owner_only()
             .map_err(|_| follow_up_partial("error.rfi.followUp.workbookInvalid"))?;
         let (mut private_file, private_identity) = match private
@@ -340,21 +354,12 @@ impl FilesystemAuthority {
             extension
         ));
         let retained_locator = s5_locator(record, &retained_path)?;
-        let retained = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &retained_path,
-                PathIntent::Write,
-            )
-            .and_then(|path| {
-                path.anchor().map_err(|_| {
-                    BackendError::path_invalid("Follow Up retained original cannot be anchored")
-                })
-            })
-            .map_err(follow_up_backend_partial)?;
+        let retained = self.authorize_private_artifact(
+            &binding,
+            caller,
+            &retained_path,
+            "Follow Up retained original cannot be anchored",
+        )?;
         s5_transition(
             &self.journals,
             record,

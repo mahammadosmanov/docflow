@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.252 - 2026-10-28
+
+### Changed
+
+- Shared private S5 artifact authorization in the follow-up workbook apply path.
+
 ## 1.36.251 - 2026-10-28
 
 ### Changed
