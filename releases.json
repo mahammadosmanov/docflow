@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.135",
+  "currentVersion": "1.36.136",
   "releases": [
+    {
+      "version": "1.36.136",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.136",
+      "summary": "Moved plan editor column-width state and resize setter into useEditorColumnWidths."
+    },
     {
       "version": "1.36.135",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.135",
       "summary": "Changed: OCR direction scoring (DirectionScore and its selection and summary helpers) moved from ocr/orientation.rs into ocr/orientation/scoring.rs. Behavior unchanged."
     },
