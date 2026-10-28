@@ -70,6 +70,14 @@ import { useApplyRun } from "./useApplyRun";
 import { useOperationShortcuts } from "./useOperationShortcuts";
 import { usePreviewRun } from "./usePreviewRun";
 
+/** Batch-print params whose change invalidates the RFI print finder results. */
+const RFI_FINDER_PARAMS = [
+  "rfi_system_root",
+  "rfi_numbers",
+  "include_first_page",
+  "include_sketch",
+];
+
 export function OperationScreen({
   bridge,
   operation,
@@ -111,6 +119,10 @@ export function OperationScreen({
   const rfiFinder = useRfiPrintFinder({ bridge, s, values, rfiInputs });
   const { invalidateRfiFinder, setExcludedRfiInputs } = rfiFinder;
   const [scanPreviewUpdated, setScanPreviewUpdated] = useState(false);
+  const mergeValues = (patch: Record<string, unknown>) => {
+    valuesRevision.current += 1;
+    setValues((current) => ({ ...current, ...patch }));
+  };
   const {
     valuesRevision,
     lastSaved,
@@ -263,26 +275,14 @@ export function OperationScreen({
                     operation={operation}
                     values={values}
                     s={s}
-                    onApply={(preset) => {
-                      valuesRevision.current += 1;
-                      setValues((current) => ({
-                        ...current,
-                        ...preset.values,
-                      }));
-                    }}
+                    onApply={(preset) => mergeValues(preset.values)}
                     onError={setError}
                   />
                 )}
                 {operation.supportsPresets && previousValues && (
                   <PreviousValuesCard
                     s={s}
-                    onApply={() => {
-                      valuesRevision.current += 1;
-                      setValues((current) => ({
-                        ...current,
-                        ...previousValues,
-                      }));
-                    }}
+                    onApply={() => mergeValues(previousValues)}
                   />
                 )}
                 <div className="form-stack schema-form">
@@ -299,15 +299,11 @@ export function OperationScreen({
                         values={values}
                         s={s}
                         onChange={(value) => {
-                          valuesRevision.current += 1;
                           if (invalidField === param.name) setInvalidField(null);
-                          setValues((current) => ({
-                            ...current,
-                            [param.name]: value,
-                          }));
+                          mergeValues({ [param.name]: value });
                           if (
                             operation.id === "files.batch_print" &&
-                            ["rfi_system_root", "rfi_numbers", "include_first_page", "include_sketch"].includes(param.name)
+                            RFI_FINDER_PARAMS.includes(param.name)
                           ) {
                             invalidateRfiFinder();
                           }

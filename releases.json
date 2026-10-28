@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.126",
+  "currentVersion": "1.36.127",
   "releases": [
+    {
+      "version": "1.36.127",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.127",
+      "summary": "Changed: the operation form merges preset, previous-values and field edits through one mergeValues helper, and the batch-print RFI finder parameters are a named constant. No behavior change."
+    },
     {
       "version": "1.36.126",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.126",
       "summary": "Changed: the Notice, EmptyState and Centered primitives moved from components/ui.tsx to components/feedback.tsx. Importers updated. No rendering or behavior change."
     },
