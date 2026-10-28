@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.127 - 2026-10-28
+
+### Changed
+
+- `OperationScreen` applies preset, previous-value and field edits through one `mergeValues` helper instead of three copies of the revision bump and merge. The batch-print RFI finder parameter list is a named `RFI_FINDER_PARAMS` constant. Behavior is unchanged.
+
 ## 1.36.126 - 2026-10-28
 
 ### Changed
