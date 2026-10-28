@@ -287,8 +287,29 @@ fn publication_transition(
     Ok(())
 }
 
-/// Apply/undo completion, failed-apply restore, recovery, and failure-preparation transitions.
+/// Routes completion transitions to their apply/undo, failed-restore, recovery, or failure group.
 fn completion_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
+    match transition {
+        S5Transition::FinalizeApplySuccess { .. } | S5Transition::FinalizeUndoSuccess { .. } => {
+            apply_undo_completion(candidate, transition, leases)
+        }
+        S5Transition::BeginFailedApplyRestore | S5Transition::FinalizeFailedApplyRestore => {
+            failed_apply_restore(candidate, transition, leases)
+        }
+        S5Transition::FinalizeRecovery { .. } => recovery_completion(candidate, transition, leases),
+        S5Transition::PrepareFailedPartial(_) | S5Transition::PrepareOutcomeUnknown(_) => {
+            failure_preparation(candidate, transition)
+        }
+        _ => unreachable!("routed by apply_candidate_transition"),
+    }
+}
+
+/// Apply and undo success completions.
+fn apply_undo_completion(
     candidate: &mut JournalRecord,
     transition: S5Transition,
     leases: S5TransitionLeases,
@@ -297,7 +318,7 @@ fn completion_transition(
         apply_lease,
         undo_lease,
         undo_mode,
-        recovery_lease,
+        ..
     } = leases;
     match transition {
         S5Transition::FinalizeApplySuccess {
@@ -352,6 +373,19 @@ fn completion_transition(
             candidate.pending_undo = None;
             candidate.state = Some(JournalState::Undone);
         }
+        _ => unreachable!("routed by completion_transition"),
+    }
+    Ok(())
+}
+
+/// Failed-apply restore begin and completion.
+fn failed_apply_restore(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
+    let S5TransitionLeases { undo_mode, .. } = leases;
+    match transition {
         S5Transition::BeginFailedApplyRestore => {
             let first_admission = candidate.state == Some(JournalState::RecoveryRequired)
                 && candidate.recovery_notice.is_some()
@@ -463,6 +497,19 @@ fn completion_transition(
             candidate.recovery_notice = None;
             candidate.state = Some(JournalState::Undone);
         }
+        _ => unreachable!("routed by completion_transition"),
+    }
+    Ok(())
+}
+
+/// Recovery terminal completion.
+fn recovery_completion(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
+    let S5TransitionLeases { recovery_lease, .. } = leases;
+    match transition {
         S5Transition::FinalizeRecovery {
             terminal,
             notice,
@@ -566,6 +613,17 @@ fn completion_transition(
             candidate.follow_up_phase = None;
             candidate.pending_undo = None;
         }
+        _ => unreachable!("routed by completion_transition"),
+    }
+    Ok(())
+}
+
+/// Failure-preparation transitions.
+fn failure_preparation(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+) -> Result<(), BackendError> {
+    match transition {
         S5Transition::PrepareFailedPartial(notice) => {
             candidate.recovery_notice = Some(notice);
             candidate.pending_publication = None;
@@ -588,7 +646,7 @@ fn completion_transition(
             candidate.recovery_notice = Some(notice);
             candidate.state = Some(JournalState::RecoveryRequired);
         }
-        _ => unreachable!("routed by apply_candidate_transition"),
+        _ => unreachable!("routed by completion_transition"),
     }
     Ok(())
 }

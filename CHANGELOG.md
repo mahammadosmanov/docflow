@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.181 - 2026-10-28
+
+### Changed
+
+- Split the S5 completion transition match into apply/undo, failed-restore, recovery, and failure-preparation groups in `journal/s5_transition.rs`; behavior unchanged.
+
 ## 1.36.180 - 2026-10-28
 
 ### Changed
