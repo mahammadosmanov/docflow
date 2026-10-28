@@ -1,14 +1,5 @@
 use super::*;
 
-/// Status text a signed-by record proposes for its target cell.
-fn signed_status_text(record: &SourceRecord) -> &'static str {
-    if record.worley_signed {
-        "Signed"
-    } else {
-        "Not Signed"
-    }
-}
-
 /// Queues one manual-review row for a signed record that has no placement.
 /// Falls back from `preferred` to a sheet-name match, then to the first layout.
 fn queue_unplaced_final_review(

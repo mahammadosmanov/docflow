@@ -52,3 +52,12 @@ pub fn mapped_follow_up_status(remark: &str) -> &'static str {
         "Not Signed"
     }
 }
+
+/// Status text a signed-by record proposes for its target cell.
+pub(super) fn signed_status_text(record: &SourceRecord) -> &'static str {
+    if record.worley_signed {
+        "Signed"
+    } else {
+        "Not Signed"
+    }
+}
