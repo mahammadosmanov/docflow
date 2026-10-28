@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.168 - 2026-10-28
+
+### Changed
+
+- Moved the parallel page OCR cache adapter (`CachedPageOcr`) out of `operations/stage_signed_pages.rs` into `operations/stage_signed_pages/ocr_cache.rs`; behavior unchanged.
+
 ## 1.36.167 - 2026-10-28
 
 ### Changed
