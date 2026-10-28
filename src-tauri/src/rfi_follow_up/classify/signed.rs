@@ -9,6 +9,52 @@ fn signed_status_text(record: &SourceRecord) -> &'static str {
     }
 }
 
+/// Queues one manual-review row for a signed record that has no placement.
+/// Falls back from `preferred` to a sheet-name match, then to the first layout.
+fn queue_unplaced_final_review(
+    record: &SourceRecord,
+    index: &RecordIndex,
+    (target_sheet, target_clause): (&str, &str),
+    preferred: Option<&FollowUpLayout>,
+    manual_rows: &mut Vec<FollowUpRow>,
+    unmapped_count: &mut usize,
+    reason_key: Option<&str>,
+) {
+    let final_review_id = format!("rfi-follow-up-unmapped:{}", record.canonical_rfi);
+    if manual_rows.iter().any(|row| row.row_id == final_review_id) {
+        return;
+    }
+    let Some(layout) = preferred
+        .or_else(|| {
+            index.layouts.iter().find(|layout| {
+                layout
+                    .worksheet
+                    .name
+                    .trim()
+                    .eq_ignore_ascii_case(target_sheet)
+            })
+        })
+        .or_else(|| index.layouts.first())
+    else {
+        return;
+    };
+    *unmapped_count += 1;
+    let (rfi_column, status_column) = default_signed_col(target_sheet, target_clause);
+    let mut review = missing_final_review(
+        record,
+        layout,
+        target_sheet,
+        target_clause,
+        (rfi_column, status_column),
+        &[],
+        index.target_workbook,
+    );
+    if let Some(key) = reason_key {
+        review.reason_key = key.to_string();
+    }
+    manual_rows.push(review);
+}
+
 /// Routes one signed-by record onto its target slots or queues a manual-review row.
 pub(super) fn place_signed_record<'a>(
     record: &'a SourceRecord,
@@ -35,60 +81,27 @@ pub(super) fn place_signed_record<'a>(
     });
     let final_review_id = format!("rfi-follow-up-unmapped:{}", record.canonical_rfi);
     if record.state.is_none() {
-        if !manual_rows.iter().any(|row| row.row_id == final_review_id)
-            && let Some(layout) = matching_layout
-                .or_else(|| {
-                    layouts.iter().find(|layout| {
-                        layout
-                            .worksheet
-                            .name
-                            .trim()
-                            .eq_ignore_ascii_case(target_sheet)
-                    })
-                })
-                .or_else(|| layouts.first())
-        {
-            *unmapped_count += 1;
-            let (rfi_column, status_column) = default_signed_col(target_sheet, target_clause);
-            let mut review = missing_final_review(
-                record,
-                layout,
-                target_sheet,
-                target_clause,
-                (rfi_column, status_column),
-                &[],
-                target_workbook,
-            );
-            review.reason_key = "warn.rfi.followUp.reason.sourceStatusUnknown".to_string();
-            manual_rows.push(review);
-        }
+        queue_unplaced_final_review(
+            record,
+            index,
+            (target_sheet, target_clause),
+            matching_layout,
+            manual_rows,
+            unmapped_count,
+            Some("warn.rfi.followUp.reason.sourceStatusUnknown"),
+        );
         return Ok(());
     }
     let Some(layout) = matching_layout else {
-        if !manual_rows.iter().any(|row| row.row_id == final_review_id)
-            && let Some(layout) = layouts
-                .iter()
-                .find(|layout| {
-                    layout
-                        .worksheet
-                        .name
-                        .trim()
-                        .eq_ignore_ascii_case(target_sheet)
-                })
-                .or_else(|| layouts.first())
-        {
-            *unmapped_count += 1;
-            let (rfi_column, status_column) = default_signed_col(target_sheet, target_clause);
-            manual_rows.push(missing_final_review(
-                record,
-                layout,
-                target_sheet,
-                target_clause,
-                (rfi_column, status_column),
-                &[],
-                target_workbook,
-            ));
-        }
+        queue_unplaced_final_review(
+            record,
+            index,
+            (target_sheet, target_clause),
+            None,
+            manual_rows,
+            unmapped_count,
+            None,
+        );
         return Ok(());
     };
     let sheet_name = layout.worksheet.name.as_str();

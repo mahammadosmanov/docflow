@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.234",
+  "currentVersion": "1.36.235",
   "releases": [
+    {
+      "version": "1.36.235",
+      "tag": "v1.36.235",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract signed-record unplaced final-review queueing into a helper."
+    },
     {
       "version": "1.36.234",
       "tag": "v1.36.234",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share S5 canonical-file matching and committed result construction in follow-up undo."
     },
     {
