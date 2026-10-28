@@ -7,8 +7,8 @@ import {
 import {
   type MockPlanState,
   previewOperation,
-  reviseOperation,
 } from "./mockPlanHandlers";
+import { reviseOperation } from "./mockReviseHandler";
 import {
   defaultPrefs,
   demoAdmin,
