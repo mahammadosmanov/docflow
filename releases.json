@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.107",
+  "currentVersion": "1.36.108",
   "releases": [
+    {
+      "version": "1.36.108",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.108",
+      "summary": "Correctness and maintainability: SchemaField.tsx dispatches to MultiFileField and PathField in SchemaFieldKinds.tsx. Both call useState, which SchemaField previously called after conditional early returns, breaking React's hook-order rule. Markup and behavior are unchanged; typecheck and the frontend suite pass."
+    },
     {
       "version": "1.36.107",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.107",
       "summary": "Maintainability: the SettingsGroup and ChoiceGrid layout helpers move out of SettingsScreen.tsx into screens/SettingsParts.tsx. Markup and behavior are unchanged; typecheck and the frontend suite pass."
     },

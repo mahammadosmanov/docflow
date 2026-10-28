@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.108 - 2026-10-28
+
+### Fixed
+
+- `screens/SchemaField.tsx` called `useState` after conditional early returns (the multi-file and path/browse branches). The multi-file field and the path/browse field move into `screens/SchemaFieldKinds.tsx` as their own components, so each hook runs unconditionally. Markup and behavior are unchanged; `tsc` is clean.
+
 ## 1.36.107 - 2026-10-28
 
 ### Changed
