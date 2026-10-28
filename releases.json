@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.191",
+  "currentVersion": "1.36.192",
   "releases": [
+    {
+      "version": "1.36.192",
+      "tag": "v1.36.192",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract follow-up undo publication outcome handling into its own method."
+    },
     {
       "version": "1.36.191",
       "tag": "v1.36.191",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract unmatched RFI file planning from the file-group preview."
     },
     {
