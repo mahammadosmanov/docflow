@@ -49,23 +49,8 @@ pub(super) fn discover_header(
     Ok(layouts[0])
 }
 
-#[doc(hidden)]
-pub fn scan_system_root_indexed<P>(
-    root: &Path,
-    scan_index: Option<&ScanIndex>,
-    owner_id: &str,
-    force_rescan: bool,
-    mut progress: P,
-) -> Result<(Vec<ScannedRfiRecord>, ScanIndexStats), BackendError>
-where
-    P: FnMut(ProgressEvent),
-{
-    if !root.is_dir() {
-        return Err(BackendError::path_invalid(format!(
-            "RFI system root is not a directory: {}",
-            root.display()
-        )));
-    }
+/// Finds the discipline folders under `root`, or `root` itself when it is a discipline folder.
+fn discipline_search_dirs(root: &Path) -> Result<Vec<(&'static str, PathBuf)>, BackendError> {
     let mut search_dirs = Vec::new();
     for entry in
         fs::read_dir(root).map_err(|error| BackendError::path_invalid(error.to_string()))?
@@ -89,7 +74,27 @@ where
             search_dirs.push((*discipline, root.to_path_buf()));
         }
     }
+    Ok(search_dirs)
+}
 
+#[doc(hidden)]
+pub fn scan_system_root_indexed<P>(
+    root: &Path,
+    scan_index: Option<&ScanIndex>,
+    owner_id: &str,
+    force_rescan: bool,
+    mut progress: P,
+) -> Result<(Vec<ScannedRfiRecord>, ScanIndexStats), BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    if !root.is_dir() {
+        return Err(BackendError::path_invalid(format!(
+            "RFI system root is not a directory: {}",
+            root.display()
+        )));
+    }
+    let search_dirs = discipline_search_dirs(root)?;
     progress(ProgressEvent {
         phase: "system_discovery".to_string(),
         done: 0,
