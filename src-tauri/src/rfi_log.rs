@@ -168,6 +168,22 @@ pub struct ClipboardPayload {
     pub count: usize,
 }
 
+fn apply_detected_discipline(
+    counts: &mut BTreeMap<String, usize>,
+    detected: Option<&str>,
+    has_new_selection: bool,
+) {
+    let Some(discipline) = detected.filter(|discipline| is_discipline(discipline)) else {
+        return;
+    };
+    if !has_new_selection || *counts == BTreeMap::from([("CIV".to_string(), 3)]) {
+        let count = counts.get("CIV").copied().unwrap_or(3);
+        *counts = BTreeMap::from([(discipline.to_string(), count)]);
+    } else if !counts.contains_key(discipline) {
+        counts.insert(discipline.to_string(), 1);
+    }
+}
+
 pub fn preview<F, C>(
     values: &Map<String, Value>,
     today: NaiveDate,
@@ -191,16 +207,7 @@ where
         .then(|| detect_discipline(&email_text))
         .flatten();
     let has_new_selection = values.get("sheet_counts").is_some_and(Value::is_object);
-    if let Some(discipline) = detected.as_deref()
-        && is_discipline(discipline)
-    {
-        if !has_new_selection || counts == BTreeMap::from([("CIV".to_string(), 3)]) {
-            let count = counts.get("CIV").copied().unwrap_or(3);
-            counts = BTreeMap::from([(discipline.to_string(), count)]);
-        } else if !counts.contains_key(discipline) {
-            counts.insert(discipline.to_string(), 1);
-        }
-    }
+    apply_detected_discipline(&mut counts, detected.as_deref(), has_new_selection);
     let requested = DISCIPLINES
         .iter()
         .filter(|discipline| counts.contains_key(**discipline))

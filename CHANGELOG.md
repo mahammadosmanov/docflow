@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.209 - 2026-10-28
+
+### Changed
+
+- Moved detected-discipline sheet count adjustment from RFI log preview into a helper.
+
 ## 1.36.208 - 2026-10-28
 
 ### Changed
