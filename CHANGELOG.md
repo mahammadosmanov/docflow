@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.156 - 2026-10-28
+
+### Changed
+
+- Moved the Outlook reply draft unit tests out of `outlook_reply_draft.rs` into `outlook_reply_draft/tests.rs`; behavior unchanged.
+
 ## 1.36.155 - 2026-10-28
 
 ### Changed
