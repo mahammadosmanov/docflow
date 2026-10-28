@@ -337,33 +337,7 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         .cloned()
         .collect::<Vec<_>>();
     for step in offered {
-        let allowed = match step.kind {
-            StepKind::Mkdir => {
-                let code = step
-                    .meta
-                    .get("code")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| {
-                        BackendError::validation("RFI file-group folder step is invalid")
-                    })?;
-                selected_codes.contains(code)
-            }
-            StepKind::Copy => {
-                let row_id = step
-                    .meta
-                    .get("rowId")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| {
-                        BackendError::validation("RFI file-group copy step is invalid")
-                    })?;
-                enabled.contains(row_id)
-            }
-            _ => {
-                return Err(BackendError::validation(
-                    "RFI file-group offered step is invalid",
-                ));
-            }
-        };
+        let allowed = offered_step_allowed(&step, &enabled, &selected_codes)?;
         if allowed {
             steps.push(step);
         }
@@ -377,6 +351,34 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         warnings: plan.warnings.clone(),
         meta,
     })
+}
+
+fn offered_step_allowed(
+    step: &Step,
+    enabled: &BTreeSet<String>,
+    selected_codes: &BTreeSet<&str>,
+) -> Result<bool, BackendError> {
+    match step.kind {
+        StepKind::Mkdir => {
+            let code = step
+                .meta
+                .get("code")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BackendError::validation("RFI file-group folder step is invalid"))?;
+            Ok(selected_codes.contains(code))
+        }
+        StepKind::Copy => {
+            let row_id = step
+                .meta
+                .get("rowId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BackendError::validation("RFI file-group copy step is invalid"))?;
+            Ok(enabled.contains(row_id))
+        }
+        _ => Err(BackendError::validation(
+            "RFI file-group offered step is invalid",
+        )),
+    }
 }
 
 fn file_group_editor(rows: Vec<Value>) -> Value {
