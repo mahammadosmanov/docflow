@@ -89,22 +89,7 @@ impl FilesystemAuthority {
                 "S5 backup evidence path is invalid",
             ));
         }
-        let expected_applied_hash = step
-            .meta
-            .get("appliedSha256")
-            .and_then(Value::as_str)
-            .ok_or_else(|| BackendError::journal_invalid("S5 applied hash is missing"))?
-            .to_string();
-        let expected_applied_identity: crate::journal::FilesystemObjectIdentity =
-            serde_json::from_value(
-                step.meta
-                    .get("createdCanonicalIdentity")
-                    .cloned()
-                    .ok_or_else(|| {
-                        BackendError::journal_invalid("S5 applied identity is missing")
-                    })?,
-            )
-            .map_err(|_| BackendError::journal_invalid("S5 applied identity is invalid"))?;
+        let (expected_applied_hash, expected_applied_identity) = s5_applied_expectations(&step)?;
         let canonical = authorize_s5_recorded(&record, &canonical_path)?
             .anchor()
             .map_err(|_| BackendError::path_invalid("S5 canonical workbook cannot be anchored"))?;
@@ -397,6 +382,25 @@ impl FilesystemAuthority {
         insert_retained_evidence(&mut result, record.retained_evidence());
         Ok(result)
     }
+}
+
+fn s5_applied_expectations(
+    step: &Step,
+) -> Result<(String, crate::journal::FilesystemObjectIdentity), BackendError> {
+    let hash = step
+        .meta
+        .get("appliedSha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BackendError::journal_invalid("S5 applied hash is missing"))?
+        .to_string();
+    let identity = serde_json::from_value(
+        step.meta
+            .get("createdCanonicalIdentity")
+            .cloned()
+            .ok_or_else(|| BackendError::journal_invalid("S5 applied identity is missing"))?,
+    )
+    .map_err(|_| BackendError::journal_invalid("S5 applied identity is invalid"))?;
+    Ok((hash, identity))
 }
 
 impl FilesystemAuthority {
