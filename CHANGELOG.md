@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.115 - 2026-10-28
+
+### Added
+
+- `screens/ReviewScreen.test.tsx` covers a failed undo: the error shows and the result stays for retry. It fails without the 1.36.114 fix.
+
 ## 1.36.114 - 2026-10-28
 
 ### Fixed
