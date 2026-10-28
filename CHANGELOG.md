@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.217 - 2026-10-28
+
+### Added
+
+- Unit tests for review root canonicalization.
+
 ## 1.36.216 - 2026-10-28
 
 ### Added

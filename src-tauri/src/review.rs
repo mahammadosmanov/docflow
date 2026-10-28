@@ -319,3 +319,28 @@ fn review_step(
         meta,
     }
 }
+
+#[cfg(test)]
+mod review_root_tests {
+    use super::canonical_review_roots;
+
+    #[test]
+    fn missing_review_directory_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let trash = tempfile::tempdir().unwrap();
+        let error = canonical_review_roots(dir.path(), trash.path()).unwrap_err();
+        assert!(format!("{error:?}").contains("review directory does not exist"));
+    }
+
+    #[test]
+    fn existing_roots_are_canonicalized() {
+        let dir = tempfile::tempdir().unwrap();
+        let trash = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("_review")).unwrap();
+        let (destination, review, trash_root) =
+            canonical_review_roots(dir.path(), trash.path()).unwrap();
+        assert_eq!(destination, std::fs::canonicalize(dir.path()).unwrap());
+        assert_eq!(review, destination.join("_review"));
+        assert_eq!(trash_root, std::fs::canonicalize(trash.path()).unwrap());
+    }
+}
