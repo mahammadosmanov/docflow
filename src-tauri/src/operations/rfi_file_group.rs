@@ -470,3 +470,33 @@ mod tests {
         assert!(exact_codes("AZE-SUN-INT-QMS-RFI-CIV-09010").is_empty());
     }
 }
+
+#[cfg(test)]
+mod offered_step_tests {
+    use super::offered_step_allowed;
+    use super::steps::{copy_step, directory_step};
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
+    #[test]
+    fn folder_step_follows_selected_codes() {
+        let step = directory_step(Path::new("/out/CIV-1"), Some("CIV-1"), false);
+        let selected = BTreeSet::from(["CIV-1"]);
+        assert!(offered_step_allowed(&step, &BTreeSet::new(), &selected).unwrap());
+        assert!(!offered_step_allowed(&step, &BTreeSet::new(), &BTreeSet::new()).unwrap());
+    }
+
+    #[test]
+    fn copy_step_follows_enabled_rows() {
+        let step = copy_step(
+            Path::new("/src/a.pdf"),
+            Path::new("/out/a.pdf"),
+            Some("row-1"),
+            Some("CIV-1"),
+            false,
+        );
+        let enabled = BTreeSet::from(["row-1".to_string()]);
+        assert!(offered_step_allowed(&step, &enabled, &BTreeSet::new()).unwrap());
+        assert!(!offered_step_allowed(&step, &BTreeSet::new(), &BTreeSet::new()).unwrap());
+    }
+}
