@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.155",
+  "currentVersion": "1.36.156",
   "releases": [
+    {
+      "version": "1.36.156",
+      "tag": "v1.36.156",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move outlook_reply_draft inline unit tests into outlook_reply_draft/tests.rs; behavior unchanged."
+    },
     {
       "version": "1.36.155",
       "tag": "v1.36.155",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split RFI code parsing and clause routing out of rfi_follow_up/source.rs into submodules; behavior unchanged."
     },
     {
