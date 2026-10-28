@@ -319,6 +319,28 @@ pub(super) fn accept_page_preview(value: String, used: &mut usize) -> Option<Str
     Some(value)
 }
 
+/// Caps embedded page thumbnails by comparison row count and total bytes.
+#[derive(Default)]
+pub(super) struct PreviewBudget {
+    bytes: usize,
+    rows: usize,
+}
+
+impl PreviewBudget {
+    /// Reserves one row when previews are supported and the row cap is not reached.
+    pub(super) fn begin_row(&mut self, previews_supported: bool) -> bool {
+        let allowed = previews_supported && self.rows < MAX_PAGE_COMPARISONS;
+        if allowed {
+            self.rows += 1;
+        }
+        allowed
+    }
+
+    pub(super) fn accept(&mut self, value: String) -> Option<String> {
+        accept_page_preview(value, &mut self.bytes)
+    }
+}
+
 pub(super) fn extend_candidate_steps(target: &mut Vec<Step>, candidate: &[Step]) {
     for step in candidate {
         if step.kind == StepKind::Mkdir
