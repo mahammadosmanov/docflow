@@ -165,17 +165,17 @@ where
             let discipline = detection.code.split('-').nth(5).unwrap();
             let directory = destination.join(discipline).join(&detection.code);
             let target = directory.join(file_name);
-            if unsafe_existing_directory(&directory) {
+            let blocked = if unsafe_existing_directory(&directory) {
+                Some(&directory)
+            } else if target.exists() {
+                Some(&target)
+            } else {
+                None
+            };
+            if let Some(blocked) = blocked {
                 plan.warnings.push(Warning {
                     key: "warn.rfi.fileGroup.exists".to_string(),
-                    subject: directory.to_string_lossy().into_owned(),
-                });
-                continue;
-            }
-            if target.exists() {
-                plan.warnings.push(Warning {
-                    key: "warn.rfi.fileGroup.exists".to_string(),
-                    subject: target.to_string_lossy().into_owned(),
+                    subject: blocked.to_string_lossy().into_owned(),
                 });
                 continue;
             }
