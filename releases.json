@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.254",
+  "currentVersion": "1.36.255",
   "releases": [
+    {
+      "version": "1.36.255",
+      "tag": "v1.36.255",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share blocking native task dispatch in the backend."
+    },
     {
       "version": "1.36.254",
       "tag": "v1.36.254",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract replica target directory planning into a helper."
     },
     {

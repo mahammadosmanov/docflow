@@ -117,32 +117,42 @@ impl BackendRouter {
             BackendMethod::EngineRevise
             | BackendMethod::EngineCopyTable
             | BackendMethod::EngineRfiReplyPreview => {
-                let native = Arc::clone(&self.native);
-                tauri::async_runtime::spawn_blocking(move || match method {
+                self.run_native("native plan task failed", move |native| match method {
                     BackendMethod::EngineRevise => native.revise_native_plan(params),
                     BackendMethod::EngineCopyTable => native.copy_native_table(params),
                     BackendMethod::EngineRfiReplyPreview => native.preview_rfi_reply(params),
                     _ => unreachable!("native plan method checked by caller"),
                 })
                 .await
-                .map_err(|_| BackendError::request_failed("native plan task failed"))?
             }
             BackendMethod::EngineUndo => self.undo(params).await,
             BackendMethod::PathsSelect => self.select_paths(params).await,
             BackendMethod::PathsReveal => self.reveal_path(params).await,
             BackendMethod::RfiPrintFind => {
-                let native = Arc::clone(&self.native);
-                tauri::async_runtime::spawn_blocking(move || native.find_rfi_print_files(params))
-                    .await
-                    .map_err(|_| BackendError::request_failed("RFI document discovery failed"))?
+                self.run_native("RFI document discovery failed", move |native| {
+                    native.find_rfi_print_files(params)
+                })
+                .await
             }
             _ => {
-                let native = Arc::clone(&self.native);
-                tauri::async_runtime::spawn_blocking(move || native.dispatch(method, params))
-                    .await
-                    .map_err(|_| BackendError::request_failed("native backend task failed"))?
+                self.run_native("native backend task failed", move |native| {
+                    native.dispatch(method, params)
+                })
+                .await
             }
         }
+    }
+
+    /// Runs one native backend task on the blocking pool; `label` names a task that failed to join.
+    async fn run_native<T, F>(&self, label: &'static str, task: F) -> Result<T, BackendError>
+    where
+        F: FnOnce(Arc<NativeBackend>) -> Result<T, BackendError> + Send + 'static,
+        T: Send + 'static,
+    {
+        let native = Arc::clone(&self.native);
+        tauri::async_runtime::spawn_blocking(move || task(native))
+            .await
+            .map_err(|_| BackendError::request_failed(label))?
     }
 
     async fn support_diagnostics(&self, params: Value) -> Result<Value, BackendError> {
