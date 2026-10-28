@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.266",
+  "currentVersion": "1.36.267",
   "releases": [
+    {
+      "version": "1.36.267",
+      "tag": "v1.36.267",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move scan cover preview planning into a process_scans preview module."
+    },
     {
       "version": "1.36.266",
       "tag": "v1.36.266",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move scan group output planning into the process_scans output module."
     },
     {
