@@ -326,22 +326,7 @@ where
         enforce_automatic_change_limit(changed_file_count, changed_bytes, params)?;
     }
     let mut meta = JsonObject::new();
-    meta.insert(
-        "editor".to_string(),
-        json!({
-            "kind":"recordTable", "layout":"compact", "titleKey":"replica.editor.title",
-            "rowCountKey":"replica.editor.rowCount", "requiredFields":[], "groupField":"target",
-            "selectionGroupFields":[], "columns":[
-                {"key":"target","labelKey":"replica.column.target","kind":"readonly"},
-                {"key":"relativePath","labelKey":"replica.column.path","kind":"readonly"},
-                {"key":"action","labelKey":"replica.column.action","kind":"readonly","display":"localizedKey"},
-                {"key":"beforeHash","labelKey":"replica.column.beforeHash","kind":"readonly","detail":true},
-                {"key":"afterHash","labelKey":"replica.column.afterHash","kind":"readonly","detail":true}
-            ], "rows":rows, "duplicateEnabled":false, "selectionEnabled":false,
-            "bulkEnabled":false, "reorderable":false, "detailsEnabled":true,
-            "detailsDefaultVisible":false, "copyEnabled":false
-        }),
-    );
+    meta.insert("editor".to_string(), replica_editor(rows));
     meta.insert("sourceRoot".to_string(), json!(source_root));
     meta.insert("backupRoot".to_string(), json!(backup_root));
     meta.insert("unattended".to_string(), Value::Bool(params.unattended));
@@ -406,6 +391,22 @@ fn push_target_extra_warnings<A, B>(
             subject: format!("{target_name}: {omitted_extra_warnings}"),
         });
     }
+}
+
+fn replica_editor(rows: Vec<Value>) -> Value {
+    json!({
+        "kind":"recordTable", "layout":"compact", "titleKey":"replica.editor.title",
+        "rowCountKey":"replica.editor.rowCount", "requiredFields":[], "groupField":"target",
+        "selectionGroupFields":[], "columns":[
+            {"key":"target","labelKey":"replica.column.target","kind":"readonly"},
+            {"key":"relativePath","labelKey":"replica.column.path","kind":"readonly"},
+            {"key":"action","labelKey":"replica.column.action","kind":"readonly","display":"localizedKey"},
+            {"key":"beforeHash","labelKey":"replica.column.beforeHash","kind":"readonly","detail":true},
+            {"key":"afterHash","labelKey":"replica.column.afterHash","kind":"readonly","detail":true}
+        ], "rows":rows, "duplicateEnabled":false, "selectionEnabled":false,
+        "bulkEnabled":false, "reorderable":false, "detailsEnabled":true,
+        "detailsDefaultVisible":false, "copyEnabled":false
+    })
 }
 
 pub(crate) fn decode_step_meta(step: &Step) -> Result<ReplicaStepMeta, BackendError> {

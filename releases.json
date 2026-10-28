@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.198",
+  "currentVersion": "1.36.199",
   "releases": [
+    {
+      "version": "1.36.199",
+      "tag": "v1.36.199",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract replica publish editor table metadata into a pure helper."
+    },
     {
       "version": "1.36.198",
       "tag": "v1.36.198",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract print queue final status selection into a pure helper."
     },
     {
