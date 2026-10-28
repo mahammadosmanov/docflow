@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.122",
+  "currentVersion": "1.36.123",
   "releases": [
+    {
+      "version": "1.36.123",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.123",
+      "summary": "Fixed: the browser demo mock implements settings/presets, savePreset and deletePreset per operation. Batch print no longer shows a 'Mock method not implemented' error. Desktop builds call the Rust backend and are unchanged."
+    },
     {
       "version": "1.36.122",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.122",
       "summary": "Accessibility: the sign-in password visibility toggle gets an explicit aria-label alongside its title, so its accessible name no longer depends on the tooltip fallback. Visual behavior is unchanged."
     },

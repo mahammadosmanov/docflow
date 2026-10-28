@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.123 - 2026-10-28
+
+### Fixed
+
+- The browser demo mock implements `settings/presets`, `settings/savePreset` and `settings/deletePreset`, kept per operation in memory. Batch print no longer shows `Mock method not implemented` on open. A unit test covers save, replace, list and delete. Desktop builds call the Rust backend and are unchanged.
+
 ## 1.36.122 - 2026-10-28
 
 ### Fixed
