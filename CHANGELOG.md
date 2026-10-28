@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.128 - 2026-10-28
+
+### Fixed
+
+- `docs/KNOWN_ISSUES.md` said the compiler reports the Outlook archive scaffolding (`prepare_archive`, `bind_archive`) as unused. Both carry `#[allow(dead_code)]`, so no warning is emitted. The entry now says that.
+
 ## 1.36.127 - 2026-10-28
 
 ### Changed

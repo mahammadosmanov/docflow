@@ -111,7 +111,7 @@ These are not silently waived by passing local tests.
   unchanged for manual review.
 - The Outlook selected-message archive (`rfi.outlook_archive_selected`) has Rust
   scaffolding only (`prepare_archive` and `bind_archive` in
-  `outlook_reply_draft.rs`, which the compiler reports as unused), but no
+  `outlook_reply_draft.rs`, both marked `#[allow(dead_code)]`), but no
   operator dispatch route or frontend roster entry calls it. The code is kept as
   roadmap scaffolding. Until a route is added, operators cannot run this archive
   from the app.
