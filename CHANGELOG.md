@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.111 - 2026-10-28
+
+### Changed
+
+- `plan/PlanSummaries.tsx` moves the `PlanWarnings` list into `plan/PlanWarnings.tsx` and drops the imports only it used. `PlanView.tsx` and `App.shell-localization.test.tsx` import it from the new file. Markup and behavior are unchanged.
+
 ## 1.36.110 - 2026-10-28
 
 ### Changed
