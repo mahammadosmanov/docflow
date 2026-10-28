@@ -185,3 +185,52 @@ pub(super) fn attach_editor_context(
     }
     Ok(())
 }
+
+/// Allocates one sheet's new RFI rows, applies that sheet's email extraction when present,
+/// and returns the batch, its overflow count, and any extraction review notes.
+pub(super) fn sheet_batch(
+    discipline: &str,
+    source: &Source,
+    count: usize,
+    wrap: bool,
+    issue_day: NaiveDate,
+    start_day: NaiveDate,
+    email: Option<&EmailExtraction>,
+) -> Result<(Batch, usize, Vec<String>), BackendError> {
+    let (slots, overflowed) = allocate(&source.occupied, start_day, count, wrap)?;
+    let mut sheet_rows = Vec::new();
+    let mut base_rfis = Vec::new();
+    for (index, slot) in slots.iter().enumerate() {
+        let number = source.max_number + u32::try_from(index).unwrap_or(u32::MAX) + 1;
+        let rfi = format!("AZE-SUN-INT-QMS-RFI-{discipline}-{number:04}");
+        base_rfis.push(rfi.clone());
+        sheet_rows.push(record(index, discipline, &rfi, source, issue_day, *slot));
+    }
+    let mut notes = Vec::new();
+    if let Some(extraction) = email {
+        let (extracted_rows, extracted_notes) = rows_from_email(&sheet_rows, extraction, source);
+        sheet_rows = extracted_rows;
+        notes = extracted_notes;
+    }
+    for row in &mut sheet_rows {
+        clean_record(row);
+    }
+    let start_row = source.last_row + 1;
+    let end_row = start_row + u32::try_from(sheet_rows.len().saturating_sub(1)).unwrap_or(u32::MAX);
+    if end_row > source.data.max_row {
+        return Err(BackendError::validation(format!(
+            "{discipline} sheet'inde yeni satirlar icin ayrilmis kapasite kalmadi"
+        )));
+    }
+    let batch = Batch {
+        discipline: discipline.to_string(),
+        start_row,
+        records: sheet_rows,
+        base_rfis,
+        presets: source.data.presets.clone(),
+        lookup_columns: source.data.lookup_columns.clone(),
+        max_row: source.data.max_row,
+        source_data: source.data.clone(),
+    };
+    Ok((batch, overflowed, notes))
+}

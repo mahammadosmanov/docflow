@@ -244,7 +244,6 @@ where
         requested.len() as u64,
     );
 
-    let issue_day = today;
     let start_day = today
         .checked_add_days(Days::new(1))
         .ok_or_else(|| BackendError::validation("RFI schedule date is out of range"))?;
@@ -253,46 +252,24 @@ where
     let mut overflowed = 0_usize;
     for (discipline_index, discipline) in requested.iter().enumerate() {
         let source = &sources[*discipline];
-        let (slots, sheet_overflowed) =
-            allocate(&source.occupied, start_day, counts[*discipline], wrap)?;
+        let email = if extraction_discipline.as_deref() == Some(*discipline) {
+            extraction.as_ref()
+        } else {
+            None
+        };
+        let (batch, sheet_overflowed, notes) = sheet_batch(
+            discipline,
+            source,
+            counts[*discipline],
+            wrap,
+            today,
+            start_day,
+            email,
+        )?;
         overflowed += sheet_overflowed;
-        let mut sheet_rows = Vec::new();
-        let mut base_rfis = Vec::new();
-        for (index, slot) in slots.iter().enumerate() {
-            let number = source.max_number + u32::try_from(index).unwrap_or(u32::MAX) + 1;
-            let rfi = format!("AZE-SUN-INT-QMS-RFI-{discipline}-{number:04}");
-            base_rfis.push(rfi.clone());
-            sheet_rows.push(record(index, discipline, &rfi, source, issue_day, *slot));
-        }
-        if extraction_discipline.as_deref() == Some(*discipline)
-            && let Some(extraction) = extraction.as_ref()
-        {
-            let (extracted_rows, notes) = rows_from_email(&sheet_rows, extraction, source);
-            sheet_rows = extracted_rows;
-            extraction_notes.extend(notes);
-        }
-        for row in &mut sheet_rows {
-            clean_record(row);
-        }
-        let start_row = source.last_row + 1;
-        let end_row =
-            start_row + u32::try_from(sheet_rows.len().saturating_sub(1)).unwrap_or(u32::MAX);
-        if end_row > source.data.max_row {
-            return Err(BackendError::validation(format!(
-                "{discipline} sheet'inde yeni satirlar icin ayrilmis kapasite kalmadi"
-            )));
-        }
-        batches.push(Batch {
-            discipline: (*discipline).to_string(),
-            start_row,
-            records: sheet_rows.clone(),
-            base_rfis,
-            presets: source.data.presets.clone(),
-            lookup_columns: source.data.lookup_columns.clone(),
-            max_row: source.data.max_row,
-            source_data: source.data.clone(),
-        });
-        rows.extend(sheet_rows);
+        extraction_notes.extend(notes);
+        rows.extend(batch.records.iter().cloned());
+        batches.push(batch);
         progress_event(
             &mut progress,
             "rfi_plan_preparation",

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.172",
+  "currentVersion": "1.36.173",
   "releases": [
+    {
+      "version": "1.36.173",
+      "tag": "v1.36.173",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move per-sheet RFI Log add batch construction (allocation, email rows, cleaning, capacity check) out of the preview loop into rfi_log/preview_steps.rs; behavior unchanged."
+    },
     {
       "version": "1.36.172",
       "tag": "v1.36.172",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move signed-candidate page inspection and fidelity/widget rejection out of stage_signed_pages preview into stage_signed_pages/signed_candidate.rs; behavior unchanged."
     },
     {
