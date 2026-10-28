@@ -148,42 +148,14 @@ impl PrintService {
                 self.write_journal(&record)?;
 
                 let submitted = self.submit_approved_job(job, binding, caller, token.clone());
-                let cleanup_review = match &submitted {
-                    Ok(outcome) => outcome.cleanup_review.as_ref(),
-                    Err(failure) => failure.cleanup_review.as_ref(),
-                };
-                if let Some(review) = cleanup_review {
-                    let primary_classification = submission_primary_classification(&submitted);
-                    result
-                        .errors
-                        .push(warning(review.warning_key, review.locator.clone()));
-                    let appended =
-                        if let Some(evidence) = state.jobs[saved_index].cleanup_review.as_mut() {
-                            evidence
-                                .append(review.warning_key, review.locator.clone())
-                                .unwrap_or(true)
-                        } else {
-                            state.jobs[saved_index].cleanup_review =
-                                Some(CleanupReviewEvidence::single(
-                                    review.warning_key,
-                                    review.locator.clone(),
-                                ));
-                            true
-                        };
-                    if appended {
-                        record.cleanup_reviews.push(JournalCleanupReview {
-                            job_id: job.job_id.clone(),
-                            warning_key: review.warning_key.to_string(),
-                            locator: review.locator.clone(),
-                        });
-                    }
-                    self.persist_cleanup_review(
-                        &mut state,
-                        &record,
-                        primary_classification,
-                        review,
-                    )?;
-                }
+                self.record_attempt_cleanup_review(
+                    &mut state,
+                    &mut record,
+                    &mut result,
+                    saved_index,
+                    job,
+                    &submitted,
+                )?;
                 match submitted {
                     Ok(_outcome) => {
                         let saved = &mut state.jobs[saved_index];
@@ -372,5 +344,48 @@ impl PrintService {
             subject: String::new(),
         });
         Ok(result)
+    }
+}
+
+impl PrintService {
+    fn record_attempt_cleanup_review(
+        &self,
+        state: &mut QueueState,
+        record: &mut JournalRecord,
+        result: &mut OperationResult,
+        saved_index: usize,
+        job: &PrintJob,
+        submitted: &Result<PrintSubmissionOutcome, PrintFailure>,
+    ) -> Result<(), BackendError> {
+        let cleanup_review = match submitted {
+            Ok(outcome) => outcome.cleanup_review.as_ref(),
+            Err(failure) => failure.cleanup_review.as_ref(),
+        };
+        let Some(review) = cleanup_review else {
+            return Ok(());
+        };
+        let primary_classification = submission_primary_classification(submitted);
+        result
+            .errors
+            .push(warning(review.warning_key, review.locator.clone()));
+        let appended = if let Some(evidence) = state.jobs[saved_index].cleanup_review.as_mut() {
+            evidence
+                .append(review.warning_key, review.locator.clone())
+                .unwrap_or(true)
+        } else {
+            state.jobs[saved_index].cleanup_review = Some(CleanupReviewEvidence::single(
+                review.warning_key,
+                review.locator.clone(),
+            ));
+            true
+        };
+        if appended {
+            record.cleanup_reviews.push(JournalCleanupReview {
+                job_id: job.job_id.clone(),
+                warning_key: review.warning_key.to_string(),
+                locator: review.locator.clone(),
+            });
+        }
+        self.persist_cleanup_review(state, record, primary_classification, review)
     }
 }
