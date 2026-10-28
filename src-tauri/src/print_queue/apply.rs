@@ -1,5 +1,29 @@
 use super::*;
 
+fn apply_result_meta(
+    result: &mut OperationResult,
+    state: &QueueState,
+    record: &JournalRecord,
+    resumable: u64,
+) {
+    let summary = state.summary();
+    result.meta = serde_json::to_value(&summary)
+        .ok()
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    result
+        .meta
+        .insert("resumeAvailable".to_string(), json!(resumable > 0));
+    result.meta.insert("nonUndoable".to_string(), json!(true));
+    result
+        .meta
+        .insert("auditJournalId".to_string(), json!(record.journal_id));
+    result.meta.insert(
+        "effectState".to_string(),
+        json!(journal_effect_state(record.state)),
+    );
+}
+
 impl PrintService {
     pub fn apply<F>(
         &self,
@@ -314,22 +338,7 @@ impl PrintService {
             }));
             self.write_journal(&record)?;
         }
-        let summary = state.summary();
-        result.meta = serde_json::to_value(&summary)
-            .ok()
-            .and_then(|value| value.as_object().cloned())
-            .unwrap_or_default();
-        result
-            .meta
-            .insert("resumeAvailable".to_string(), json!(resumable > 0));
-        result.meta.insert("nonUndoable".to_string(), json!(true));
-        result
-            .meta
-            .insert("auditJournalId".to_string(), json!(record.journal_id));
-        result.meta.insert(
-            "effectState".to_string(),
-            json!(journal_effect_state(record.state)),
-        );
+        apply_result_meta(&mut result, &state, &record, resumable);
         progress(ProgressEvent {
             phase: "apply".to_string(),
             done: jobs.len() as u64 - counts.get("pending").copied().unwrap_or_default(),
