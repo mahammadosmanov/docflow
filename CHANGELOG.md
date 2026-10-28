@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.158 - 2026-10-28
+
+### Changed
+
+- Split orientation checkpoint finish and plan-file steps out of `pdf_orientation/support.rs` into `support/checkpoint.rs` and `support/plan_file.rs`; behavior unchanged.
+
 ## 1.36.157 - 2026-10-28
 
 ### Changed
