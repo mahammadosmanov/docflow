@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.256 - 2026-10-28
+
+### Changed
+
+- Extracted the unsafe signed slot manual-review row into a helper.
+
 ## 1.36.255 - 2026-10-28
 
 ### Changed
