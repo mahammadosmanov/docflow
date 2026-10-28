@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.279 - 2026-10-28
+
+### Changed
+
+- Moved native settings and saved operation parameter tests into a `native` tests `settings` module.
+
 ## 1.36.278 - 2026-10-28
 
 ### Changed
