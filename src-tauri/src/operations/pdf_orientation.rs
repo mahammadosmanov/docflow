@@ -398,6 +398,12 @@ where
         })
         .collect::<BTreeMap<_, _>>();
     let mut source_hashes = BTreeMap::<PathBuf, Option<String>>::new();
+    let checkpoint_inputs = CheckpointInputs {
+        source_root: &source_root,
+        initial_fingerprints: &initial_fingerprints,
+        initial_hashes: &initial_hashes,
+        task_rotations: &task_rotations,
+    };
     let (worker_count, results) = bounded_map_stream(
         &tasks,
         |task| detector.detect_page(&task.path, task.page_index),
@@ -419,101 +425,13 @@ where
                 .ok_or_else(|| "orientation checkpoint has no remaining count".to_string())?;
             *remaining_pages = remaining_pages.saturating_sub(1);
             if *remaining_pages == 0 {
-                let initial = initial_fingerprints.get(&task.path).ok_or_else(|| {
-                    "orientation checkpoint has no initial fingerprint".to_string()
-                })?;
-                let current = FileFingerprint::read(&task.path)?;
-                if &current != initial {
-                    if let Some(run) = &run {
-                        let relative = task.path.strip_prefix(&source_root).map_err(|_| {
-                            "orientation checkpoint path escaped its root".to_string()
-                        })?;
-                        run.record_failure(relative, "source changed during orientation scan")?;
-                    }
-                    stats.failed += 1;
-                    return Err("source PDF changed during orientation scan".to_string());
-                }
-                let initial_hash = initial_hashes.get(&task.path).ok_or_else(|| {
-                    "orientation checkpoint has no initial content hash".to_string()
-                })?;
-                let current_hash = file_sha256(&task.path)
-                    .map_err(|error| format!("source PDF could not be hashed: {error}"))?;
-                if &current_hash != initial_hash {
-                    if let Some(run) = &run {
-                        let relative = task.path.strip_prefix(&source_root).map_err(|_| {
-                            "orientation checkpoint path escaped its root".to_string()
-                        })?;
-                        run.record_failure(
-                            relative,
-                            "source content changed during orientation scan",
-                        )?;
-                    }
-                    stats.failed += 1;
-                    return Err("source PDF content changed during orientation scan".to_string());
-                }
-                let cached_pages = pages
-                    .iter()
-                    .enumerate()
-                    .map(|(page_index, result)| {
-                        let result = result.as_ref().ok_or_else(|| {
-                            "orientation checkpoint page is incomplete".to_string()
-                        })?;
-                        let current_rotation = task_rotations
-                            .get(&(task.path.clone(), page_index))
-                            .copied()
-                            .ok_or_else(|| {
-                                "orientation checkpoint page metadata is missing".to_string()
-                            })?;
-                        Ok(match result {
-                            Ok(detection) => CachedPageOrientation {
-                                current_rotation,
-                                detection: Some(detection.clone()),
-                                error: None,
-                            },
-                            Err(error) => CachedPageOrientation {
-                                current_rotation,
-                                detection: None,
-                                error: Some(error.clone()),
-                            },
-                        })
-                    })
-                    .collect::<Result<Vec<_>, String>>()?;
-                let has_detection_error = cached_pages.iter().any(|page| page.error.is_some());
-                let actionable = !has_detection_error
-                    && cached_pages.iter().all(|page| {
-                        page.detection.as_ref().is_some_and(|detection| {
-                            orientation_target_rotation(page.current_rotation, detection).is_ok()
-                        })
-                    })
-                    && cached_pages.iter().any(|page| {
-                        page.detection.as_ref().is_some_and(|detection| {
-                            matches!(
-                                orientation_target_rotation(page.current_rotation, detection),
-                                Ok(Some(_))
-                            )
-                        })
-                    });
-                let source_hash = actionable.then(|| initial_hash.to_owned());
-                if let Some(run) = &run {
-                    let relative = task
-                        .path
-                        .strip_prefix(&source_root)
-                        .map_err(|_| "orientation checkpoint path escaped its root".to_string())?;
-                    if has_detection_error {
-                        run.record_failure(relative, "one or more page detectors failed")?;
-                    } else {
-                        run.record_success(
-                            relative,
-                            initial,
-                            &CachedPdfOrientation {
-                                page_count: pages.len(),
-                                source_sha256: Some(initial_hash.to_owned()),
-                                pages: cached_pages,
-                                unsupported: None,
-                            },
-                        )?;
-                    }
-                }
+                let (source_hash, has_detection_error) = finish_checkpointed_file(
+                    &checkpoint_inputs,
+                    run.as_ref(),
+                    &task.path,
+                    pages,
+                    &mut stats,
+                )?;
                 source_hashes.insert(task.path.clone(), source_hash);
                 if has_detection_error {
                     stats.failed += 1;
