@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.275 - 2026-10-28
+
+### Changed
+
+- Moved PDF publish retry and no-clobber tests into an `fs_ops` tests submodule.
+
 ## 1.36.274 - 2026-10-28
 
 ### Changed
