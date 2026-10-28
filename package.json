@@ -1,6 +1,6 @@
 {
   "name": "docflow-desktop",
-  "version": "1.36.241",
+  "version": "1.36.242",
   "private": true,
   "type": "module",
   "scripts": {
