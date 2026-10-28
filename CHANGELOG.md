@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.260 - 2026-10-28
+
+### Changed
+
+- Reused the signed status helper when refreshing signed slot proposals.
+
 ## 1.36.259 - 2026-10-28
 
 ### Changed

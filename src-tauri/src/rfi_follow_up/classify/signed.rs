@@ -318,15 +318,9 @@ pub(super) fn refresh_signed_slots(
                             slot.layout.status_column,
                         ))
                     })
+                && signed_status_text(record) != slot.current_status
             {
-                let proposed = if record.worley_signed {
-                    "Signed"
-                } else {
-                    "Not Signed"
-                };
-                if proposed != slot.current_status {
-                    slot.changed_rfis.insert(code.clone());
-                }
+                slot.changed_rfis.insert(code.clone());
             }
         }
     }
