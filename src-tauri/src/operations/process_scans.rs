@@ -330,32 +330,8 @@ where
     } else {
         (0, BTreeMap::new())
     };
-    let mut tasks = Vec::new();
-    let mut fast_cover_pdfs = BTreeSet::new();
-    let mut total_pages = 0_usize;
-    for pdf in pdfs {
-        let page_count = inspections
-            .get(pdf)
-            .and_then(|inspection| inspection.as_ref().ok())
-            .map_or(1, |facts| facts.page_count);
-        total_pages = total_pages.saturating_add(page_count);
-        if total_pages > MAX_SCAN_PAGES {
-            return Err(BackendError::validation(format!(
-                "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
-            )));
-        }
-        if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
-            if fast_cover_mode && params.scan_mode == ScanMode::MultiRfi && page_count > 1 {
-                fast_cover_pdfs.insert(pdf.clone());
-            }
-            let ocr_page_count = if params.scan_mode == ScanMode::SingleRfi {
-                1
-            } else {
-                page_count
-            };
-            tasks.extend((0..ocr_page_count).map(|page| (pdf.clone(), page)));
-        }
-    }
+    let (tasks, fast_cover_pdfs) =
+        plan_ocr_tasks(pdfs, &inspections, params.scan_mode, fast_cover_mode)?;
     let (orientation_workers, orientations) = if params.scan_mode == ScanMode::MultiRfi
         && params.correct_orientation
         && ocr.supports_orientation()
@@ -429,6 +405,41 @@ where
         Value::from(orientation_workers as u64),
     );
     Ok(plan)
+}
+
+fn plan_ocr_tasks(
+    pdfs: &[PathBuf],
+    inspections: &PdfInspections,
+    scan_mode: ScanMode,
+    fast_cover_mode: bool,
+) -> Result<(OcrTasks, BTreeSet<PathBuf>), BackendError> {
+    let mut tasks = Vec::new();
+    let mut fast_cover_pdfs = BTreeSet::new();
+    let mut total_pages = 0_usize;
+    for pdf in pdfs {
+        let page_count = inspections
+            .get(pdf)
+            .and_then(|inspection| inspection.as_ref().ok())
+            .map_or(1, |facts| facts.page_count);
+        total_pages = total_pages.saturating_add(page_count);
+        if total_pages > MAX_SCAN_PAGES {
+            return Err(BackendError::validation(format!(
+                "scan source exceeds the {MAX_SCAN_PAGES}-page limit"
+            )));
+        }
+        if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
+            if fast_cover_mode && scan_mode == ScanMode::MultiRfi && page_count > 1 {
+                fast_cover_pdfs.insert(pdf.clone());
+            }
+            let ocr_page_count = if scan_mode == ScanMode::SingleRfi {
+                1
+            } else {
+                page_count
+            };
+            tasks.extend((0..ocr_page_count).map(|page| (pdf.clone(), page)));
+        }
+    }
+    Ok((tasks, fast_cover_pdfs))
 }
 
 fn push_split_source_trash(
@@ -687,6 +698,7 @@ fn push_group_outputs(
     }
 }
 
+type OcrTasks = Vec<(PathBuf, usize)>;
 type PdfInspections = BTreeMap<PathBuf, Result<crate::pdf::PdfInspection, String>>;
 
 fn inspect_pdfs<P>(
