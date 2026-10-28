@@ -341,65 +341,15 @@ where
             );
             continue;
         }
-        let signed_facts = match inspect(&candidate.path) {
-            Ok(facts) if fidelity_supported(&facts, PdfRole::SignedScan) => facts,
-            Ok(facts) => {
-                push_warning_review(
-                    &mut plan,
-                    &mut warning_reviews,
-                    &signed_root,
-                    "warn.rfi.pdfFidelityUnsupported",
-                    &candidate.path,
-                    Some(candidate.page_index),
-                    Some(&code),
-                    fidelity_reason(&facts, PdfRole::SignedScan),
-                );
-                continue;
-            }
-            Err(error) => {
-                push_warning_review(
-                    &mut plan,
-                    &mut warning_reviews,
-                    &signed_root,
-                    "warn.rfi.pdfFidelityUnsupported",
-                    &candidate.path,
-                    Some(candidate.page_index),
-                    Some(&code),
-                    &error.to_string(),
-                );
-                continue;
-            }
+        let Some(signed_facts) = usable_signed_facts(
+            &candidate,
+            &code,
+            &signed_root,
+            &mut plan,
+            &mut warning_reviews,
+        ) else {
+            continue;
         };
-        if signed_facts.page_count == 0 {
-            push_warning_review(
-                &mut plan,
-                &mut warning_reviews,
-                &signed_root,
-                "warn.rfi.pdfFidelityUnsupported",
-                &candidate.path,
-                Some(candidate.page_index),
-                Some(&code),
-                "PDF has no pages",
-            );
-            continue;
-        }
-        if signed_facts
-            .pages
-            .get(candidate.page_index)
-            .is_none_or(|page| page.widgets > 0)
-        {
-            push_warning_review(
-                &mut plan,
-                &mut warning_reviews,
-                &signed_root,
-                "warn.rfi.pdfFidelityUnsupported",
-                &candidate.path,
-                Some(candidate.page_index),
-                Some(&code),
-                "The signed page contains form widgets and requires manual review",
-            );
-            continue;
-        }
         let signed_hash = file_sha256(&candidate.path)
             .map_err(|_| BackendError::path_invalid("signed PDF could not be hashed"))?;
         let row_id = format!("signed-{code}");
@@ -594,11 +544,13 @@ mod ocr_cache;
 mod parallel;
 mod revise;
 mod scan;
+mod signed_candidate;
 mod support;
 mod warnings;
 use ocr_cache::*;
 use parallel::*;
 pub use revise::*;
 use scan::*;
+use signed_candidate::*;
 use support::*;
 use warnings::*;
