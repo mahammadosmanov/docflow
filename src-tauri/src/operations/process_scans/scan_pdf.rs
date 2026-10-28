@@ -39,6 +39,23 @@ fn push_group_candidate(
     }
 }
 
+/// Queues one PDF as a needs-review step under the review directory.
+fn push_review_step(
+    plan: &mut Plan,
+    transfer_kind: StepKind,
+    destination: &Path,
+    pdf: &Path,
+    meta: JsonObject,
+) {
+    plan.steps.push(step(
+        transfer_kind,
+        Some(pdf),
+        Some(&destination.join(REVIEW_DIR).join(display_name(pdf))),
+        "note.needs_review",
+        meta,
+    ));
+}
+
 pub(super) fn scan_one_pdf<A, P, C>(
     ctx: &ScanContext<'_, A>,
     state: &mut ScanState,
@@ -166,13 +183,7 @@ where
                 });
                 let mut meta = JsonObject::new();
                 meta.insert("reason".to_string(), Value::String(reason));
-                plan.steps.push(step(
-                    transfer_kind,
-                    Some(pdf),
-                    Some(&destination.join(REVIEW_DIR).join(display_name(pdf))),
-                    "note.needs_review",
-                    meta,
-                ));
+                push_review_step(plan, transfer_kind, destination, pdf, meta);
                 return Ok(None);
             }
         }
@@ -272,13 +283,7 @@ where
             Value::String(method_name(read.matched.method).to_string()),
         );
         meta.insert("source".to_string(), Value::String(read.source));
-        plan.steps.push(step(
-            transfer_kind,
-            Some(pdf),
-            Some(&destination.join(REVIEW_DIR).join(display_name(pdf))),
-            "note.needs_review",
-            meta,
-        ));
+        push_review_step(plan, transfer_kind, destination, pdf, meta);
         return Ok(None);
     }
 
