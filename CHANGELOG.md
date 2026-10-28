@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.188 - 2026-10-28
+
+### Changed
+
+- Split PDF discovery and per-code output grouping out of the process scans cover-mode preview.
+
 ## 1.36.187 - 2026-10-28
 
 ### Changed

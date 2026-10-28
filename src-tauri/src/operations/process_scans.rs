@@ -178,30 +178,7 @@ where
         total: 0,
         subject: source.to_string_lossy().into_owned(),
     });
-    let mut pdfs = fs::read_dir(&source)
-        .map_err(|_| BackendError::path_invalid("scan source could not be read"))?
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let name = entry.file_name();
-            let name = name.to_str()?;
-            let file_type = entry.file_type().ok()?;
-            (file_type.is_file()
-                && !name.starts_with('.')
-                && entry
-                    .path()
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")))
-            .then_some(entry.path())
-        })
-        .take(MAX_SCAN_PDFS + 1)
-        .collect::<Vec<_>>();
-    if pdfs.len() > MAX_SCAN_PDFS {
-        return Err(BackendError::validation(format!(
-            "scan source exceeds the {MAX_SCAN_PDFS}-PDF limit"
-        )));
-    }
-    pdfs.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+    let pdfs = discover_pdfs(&source)?;
     progress(ProgressEvent {
         phase: "scan_discovery".to_string(),
         done: pdfs.len() as u64,
@@ -318,140 +295,15 @@ where
         );
     }
 
-    for (code, mut files) in groups {
-        files.sort_by_key(|candidate| std::cmp::Reverse(candidate.modified));
-        let winner = files.remove(0);
-        let (folder, target) =
-            process_scan_targets(&destination, &code, params.organize_into_rfi_folders);
-        if same_file(&winner.path, &target) {
-            continue;
-        }
-        if target.exists() {
-            plan.warnings.push(Warning {
-                key: "warn.exists".to_string(),
-                subject: display_name(&winner.path),
-            });
-            let mut meta = JsonObject::new();
-            meta.insert("code".to_string(), Value::String(code.clone()));
-            meta.insert("confidence".to_string(), Value::from(winner.confidence));
-            meta.insert("source".to_string(), Value::String(winner.source.clone()));
-            meta.insert(
-                "reason".to_string(),
-                Value::String("target_exists".to_string()),
-            );
-            meta.insert(
-                "target".to_string(),
-                Value::String(target.to_string_lossy().into_owned()),
-            );
-            let review_target = winner.pages.as_ref().map_or_else(
-                || {
-                    destination
-                        .join(REVIEW_DIR)
-                        .join(display_name(&winner.path))
-                },
-                |pages| review_target(&destination, &winner.path, pages),
-            );
-            push_candidate_output(
-                &mut plan,
-                &winner,
-                &review_target,
-                "note.needs_review",
-                meta,
-                params.keep_original,
-            );
-        } else if requires_existing_rfi_folder
-            && folder.as_ref().is_some_and(|folder| !folder.is_dir())
-        {
-            plan.warnings.push(Warning {
-                key: "warn.unknown_rfi_folder".to_string(),
-                subject: format!("{} — {code}", display_name(&winner.path)),
-            });
-            let mut meta = JsonObject::new();
-            meta.insert("code".to_string(), Value::String(code.clone()));
-            meta.insert("confidence".to_string(), Value::from(winner.confidence));
-            meta.insert("source".to_string(), Value::String(winner.source.clone()));
-            meta.insert(
-                "reason".to_string(),
-                Value::String("unknown_rfi_folder".to_string()),
-            );
-            let review_target = winner.pages.as_ref().map_or_else(
-                || {
-                    destination
-                        .join(REVIEW_DIR)
-                        .join(display_name(&winner.path))
-                },
-                |pages| review_target(&destination, &winner.path, pages),
-            );
-            push_candidate_output(
-                &mut plan,
-                &winner,
-                &review_target,
-                "note.needs_review",
-                meta,
-                params.keep_original,
-            );
-        } else {
-            let folder_created = folder.as_ref().is_some_and(|folder| !folder.is_dir());
-            if let Some(folder) = folder.as_ref().filter(|folder| !folder.is_dir()) {
-                let mut meta = JsonObject::new();
-                meta.insert("code".to_string(), Value::String(code.clone()));
-                plan.steps.push(step(
-                    StepKind::Mkdir,
-                    None,
-                    Some(folder),
-                    "note.folder_created",
-                    meta,
-                ));
-            }
-            let mut meta = JsonObject::new();
-            meta.insert("code".to_string(), Value::String(code.clone()));
-            meta.insert("confidence".to_string(), Value::from(winner.confidence));
-            meta.insert("source".to_string(), Value::String(winner.source.clone()));
-            meta.insert(
-                "intoFolder".to_string(),
-                Value::Bool(params.organize_into_rfi_folders),
-            );
-            meta.insert("folderCreated".to_string(), Value::Bool(folder_created));
-            push_candidate_output(
-                &mut plan,
-                &winner,
-                &target,
-                "note.renamed",
-                meta,
-                params.keep_original,
-            );
-        }
-
-        for older in files {
-            plan.warnings.push(Warning {
-                key: "warn.duplicate".to_string(),
-                subject: display_name(&older.path),
-            });
-            let mut meta = JsonObject::new();
-            meta.insert("code".to_string(), Value::String(code.clone()));
-            meta.insert("confidence".to_string(), Value::from(older.confidence));
-            meta.insert("source".to_string(), Value::String(older.source.clone()));
-            meta.insert(
-                "reason".to_string(),
-                Value::String("older_revision".to_string()),
-            );
-            meta.insert(
-                "kept".to_string(),
-                Value::String(display_name(&winner.path)),
-            );
-            let review_target = older.pages.as_ref().map_or_else(
-                || destination.join(REVIEW_DIR).join(display_name(&older.path)),
-                |pages| review_target(&destination, &older.path, pages),
-            );
-            push_candidate_output(
-                &mut plan,
-                &older,
-                &review_target,
-                "note.needs_review",
-                meta,
-                params.keep_original,
-            );
-        }
+    for (code, files) in groups {
+        push_group_outputs(
+            &mut plan,
+            &destination,
+            params,
+            requires_existing_rfi_folder,
+            code,
+            files,
+        );
     }
 
     if !params.keep_original && !split_sources.is_empty() {
@@ -672,4 +524,174 @@ where
         Value::from(orientation_workers as u64),
     );
     Ok(plan)
+}
+
+fn discover_pdfs(source: &Path) -> Result<Vec<PathBuf>, BackendError> {
+    let mut pdfs = fs::read_dir(source)
+        .map_err(|_| BackendError::path_invalid("scan source could not be read"))?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let name = name.to_str()?;
+            let file_type = entry.file_type().ok()?;
+            (file_type.is_file()
+                && !name.starts_with('.')
+                && entry
+                    .path()
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")))
+            .then_some(entry.path())
+        })
+        .take(MAX_SCAN_PDFS + 1)
+        .collect::<Vec<_>>();
+    if pdfs.len() > MAX_SCAN_PDFS {
+        return Err(BackendError::validation(format!(
+            "scan source exceeds the {MAX_SCAN_PDFS}-PDF limit"
+        )));
+    }
+    pdfs.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+    Ok(pdfs)
+}
+
+fn push_group_outputs(
+    plan: &mut Plan,
+    destination: &Path,
+    params: &ProcessScansParams,
+    requires_existing_rfi_folder: bool,
+    code: String,
+    mut files: Vec<Candidate>,
+) {
+    files.sort_by_key(|candidate| std::cmp::Reverse(candidate.modified));
+    let winner = files.remove(0);
+    let (folder, target) =
+        process_scan_targets(destination, &code, params.organize_into_rfi_folders);
+    if same_file(&winner.path, &target) {
+        return;
+    }
+    if target.exists() {
+        plan.warnings.push(Warning {
+            key: "warn.exists".to_string(),
+            subject: display_name(&winner.path),
+        });
+        let mut meta = JsonObject::new();
+        meta.insert("code".to_string(), Value::String(code.clone()));
+        meta.insert("confidence".to_string(), Value::from(winner.confidence));
+        meta.insert("source".to_string(), Value::String(winner.source.clone()));
+        meta.insert(
+            "reason".to_string(),
+            Value::String("target_exists".to_string()),
+        );
+        meta.insert(
+            "target".to_string(),
+            Value::String(target.to_string_lossy().into_owned()),
+        );
+        let review_target = winner.pages.as_ref().map_or_else(
+            || {
+                destination
+                    .join(REVIEW_DIR)
+                    .join(display_name(&winner.path))
+            },
+            |pages| review_target(destination, &winner.path, pages),
+        );
+        push_candidate_output(
+            plan,
+            &winner,
+            &review_target,
+            "note.needs_review",
+            meta,
+            params.keep_original,
+        );
+    } else if requires_existing_rfi_folder && folder.as_ref().is_some_and(|folder| !folder.is_dir())
+    {
+        plan.warnings.push(Warning {
+            key: "warn.unknown_rfi_folder".to_string(),
+            subject: format!("{} — {code}", display_name(&winner.path)),
+        });
+        let mut meta = JsonObject::new();
+        meta.insert("code".to_string(), Value::String(code.clone()));
+        meta.insert("confidence".to_string(), Value::from(winner.confidence));
+        meta.insert("source".to_string(), Value::String(winner.source.clone()));
+        meta.insert(
+            "reason".to_string(),
+            Value::String("unknown_rfi_folder".to_string()),
+        );
+        let review_target = winner.pages.as_ref().map_or_else(
+            || {
+                destination
+                    .join(REVIEW_DIR)
+                    .join(display_name(&winner.path))
+            },
+            |pages| review_target(destination, &winner.path, pages),
+        );
+        push_candidate_output(
+            plan,
+            &winner,
+            &review_target,
+            "note.needs_review",
+            meta,
+            params.keep_original,
+        );
+    } else {
+        let folder_created = folder.as_ref().is_some_and(|folder| !folder.is_dir());
+        if let Some(folder) = folder.as_ref().filter(|folder| !folder.is_dir()) {
+            let mut meta = JsonObject::new();
+            meta.insert("code".to_string(), Value::String(code.clone()));
+            plan.steps.push(step(
+                StepKind::Mkdir,
+                None,
+                Some(folder),
+                "note.folder_created",
+                meta,
+            ));
+        }
+        let mut meta = JsonObject::new();
+        meta.insert("code".to_string(), Value::String(code.clone()));
+        meta.insert("confidence".to_string(), Value::from(winner.confidence));
+        meta.insert("source".to_string(), Value::String(winner.source.clone()));
+        meta.insert(
+            "intoFolder".to_string(),
+            Value::Bool(params.organize_into_rfi_folders),
+        );
+        meta.insert("folderCreated".to_string(), Value::Bool(folder_created));
+        push_candidate_output(
+            plan,
+            &winner,
+            &target,
+            "note.renamed",
+            meta,
+            params.keep_original,
+        );
+    }
+
+    for older in files {
+        plan.warnings.push(Warning {
+            key: "warn.duplicate".to_string(),
+            subject: display_name(&older.path),
+        });
+        let mut meta = JsonObject::new();
+        meta.insert("code".to_string(), Value::String(code.clone()));
+        meta.insert("confidence".to_string(), Value::from(older.confidence));
+        meta.insert("source".to_string(), Value::String(older.source.clone()));
+        meta.insert(
+            "reason".to_string(),
+            Value::String("older_revision".to_string()),
+        );
+        meta.insert(
+            "kept".to_string(),
+            Value::String(display_name(&winner.path)),
+        );
+        let review_target = older.pages.as_ref().map_or_else(
+            || destination.join(REVIEW_DIR).join(display_name(&older.path)),
+            |pages| review_target(destination, &older.path, pages),
+        );
+        push_candidate_output(
+            plan,
+            &older,
+            &review_target,
+            "note.needs_review",
+            meta,
+            params.keep_original,
+        );
+    }
 }
