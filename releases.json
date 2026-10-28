@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.174",
+  "currentVersion": "1.36.175",
   "releases": [
+    {
+      "version": "1.36.175",
+      "tag": "v1.36.175",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move signed-page archive ambiguity warning and review recording into stage_signed_pages/warnings.rs; behavior unchanged."
+    },
     {
       "version": "1.36.174",
       "tag": "v1.36.174",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move S5 transition application out of journal/s5.rs apply_transition into journal/s5_transition.rs with an explicit lease-flags struct; behavior unchanged."
     },
     {

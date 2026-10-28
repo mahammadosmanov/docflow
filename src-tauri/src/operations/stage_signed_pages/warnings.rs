@@ -140,3 +140,36 @@ pub(super) fn review_destination_blocked(destination: &Path, review_root: &Path)
             Err(error) => error.kind() != std::io::ErrorKind::NotFound,
         })
 }
+
+/// Warns and records a review reason when more than one exact archive PDF matches one signed page.
+pub(super) fn record_archive_ambiguity(
+    plan: &mut Plan,
+    reviews: &mut BTreeMap<PathBuf, Vec<WarningReviewReason>>,
+    candidate: &Candidate,
+    code: &str,
+    prepared: &[PreparedArchive],
+) {
+    let names = prepared
+        .iter()
+        .map(|item| item.relative.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(", ");
+    plan.warnings.push(warning(
+        "warn.rfi.archiveAmbiguous",
+        &truncate(
+            &format!(
+                "{} — {code} — {names} — choose the correct archive candidate",
+                candidate_display(&candidate.path, candidate.page_index)
+            ),
+            300,
+        ),
+    ));
+    record_warning_review(
+        reviews,
+        &candidate.path,
+        Some(candidate.page_index),
+        Some(code),
+        "warn.rfi.archiveAmbiguous",
+        "More than one exact archive PDF exists; choose the correct candidate",
+    );
+}
