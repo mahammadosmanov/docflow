@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.241 - 2026-10-28
+
+### Changed
+
+- Shared the backend-error PDF hash helper across process scans.
+
 ## 1.36.240 - 2026-10-28
 
 ### Changed

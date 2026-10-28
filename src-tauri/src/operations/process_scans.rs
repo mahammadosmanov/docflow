@@ -319,10 +319,7 @@ where
         && ocr.supports_orientation()
     {
         for pdf in pdfs {
-            orientation_source_hashes.insert(
-                pdf.clone(),
-                hash_pdf(pdf).map_err(BackendError::path_invalid)?,
-            );
+            orientation_source_hashes.insert(pdf.clone(), hash_pdf_checked(pdf)?);
         }
     }
     let (inspection_workers, inspections) = if ocr.supports_page_scan() {
@@ -371,7 +368,7 @@ where
         return Err(BackendError::cancelled());
     }
     for (pdf, expected) in &orientation_source_hashes {
-        if hash_pdf(pdf).map_err(BackendError::path_invalid)? != *expected {
+        if hash_pdf_checked(pdf)? != *expected {
             return Err(BackendError::path_invalid(format!(
                 "scan source changed during orientation or OCR analysis: {}",
                 display_name(pdf)
