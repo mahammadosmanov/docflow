@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.135 - 2026-10-28
+
+### Changed
+
+- Moved OCR direction scoring (`DirectionScore` and its selection and summary helpers) from `src-tauri/src/ocr/orientation.rs` into `ocr/orientation/scoring.rs`. `orientation.rs` drops from 767 to 575 lines. Behavior is unchanged.
+
 ## 1.36.134 - 2026-10-28
 
 ### Changed
