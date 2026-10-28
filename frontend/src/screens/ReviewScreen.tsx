@@ -145,7 +145,12 @@ export function ReviewScreen({
   };
   const undo = async () => {
     if (!result?.journalId) return;
-    await bridge.call("engine/undo", { journalId: result.journalId });
+    try {
+      await bridge.call("engine/undo", { journalId: result.journalId });
+    } catch (reason) {
+      setError(humanError(reason, s));
+      return;
+    }
     setResult(null);
     setPlan(null);
     await scan();

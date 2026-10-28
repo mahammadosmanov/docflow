@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.113",
+  "currentVersion": "1.36.114",
   "releases": [
+    {
+      "version": "1.36.114",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.114",
+      "summary": "Fix: a failed undo on the review screen now shows its error. Before, the undo call had no error handling, so a rejected undo left an unhandled promise rejection and no message on screen."
+    },
     {
       "version": "1.36.113",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.113",
       "summary": "Maintainability: the BusyState progress panel moves out of components/ui.tsx into components/BusyState.tsx. Its test is renamed to BusyState.test.tsx, and its five consumers import it from the new file. Markup and behavior are unchanged; typecheck and the frontend suite pass."
     },
