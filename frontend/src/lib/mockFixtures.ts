@@ -4,13 +4,13 @@ import {
   demoFastCoverOperation,
   demoFileGroupOperation,
   demoPdfOrientationOperation,
-  demoPrintOperation,
   demoRfiCompleteStatusOperation,
   demoRfiFollowUpOperation,
   demoRfiOperation,
   demoRfiSystemSyncOperation,
   demoSignedPagesOperation,
 } from "./demoOperations";
+import { demoPrintOperation } from "./demoPrintOperation";
 
 export const signedOut: AuthState = {
   signedIn: false,

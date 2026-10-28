@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.141 - 2026-10-28
+
+### Changed
+
+- Moved the demo print operation definition from `frontend/src/lib/demoOperations.ts` into `frontend/src/lib/demoPrintOperation.ts`; `mockFixtures.ts` imports it from the new module. `demoOperations.ts` drops from 608 to 418 lines. Browser-only demo data; no runtime behavior change.
+
 ## 1.36.140 - 2026-10-28
 
 ### Changed
