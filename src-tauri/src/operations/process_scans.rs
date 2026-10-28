@@ -412,24 +412,7 @@ where
         && params.correct_orientation
         && ocr.supports_orientation()
     {
-        let mut completed = 0_u64;
-        let (workers, results) = bounded_map_stream(
-            &tasks,
-            |(pdf, page)| ocr.detect_orientation(pdf, *page),
-            |index, _| {
-                completed += 1;
-                let (pdf, page) = &tasks[index];
-                progress(ProgressEvent {
-                    phase: "scan_orientation".to_string(),
-                    done: completed,
-                    total: tasks.len() as u64,
-                    subject: format!("{} — #{}", display_name(pdf), page + 1),
-                });
-                Ok(())
-            },
-        )
-        .map_err(BackendError::request_failed)?;
-        (workers, tasks.iter().cloned().zip(results).collect())
+        detect_orientations(ocr, &tasks, &mut progress)?
     } else {
         (0, BTreeMap::new())
     };
@@ -705,4 +688,38 @@ where
         )
         .collect();
     Ok((workers, inspections))
+}
+
+type OrientationDetections = BTreeMap<
+    (PathBuf, usize),
+    Result<crate::operations::pdf_orientation::OrientationDetection, String>,
+>;
+
+fn detect_orientations<A, P>(
+    ocr: &A,
+    tasks: &[(PathBuf, usize)],
+    progress: &mut P,
+) -> Result<(usize, OrientationDetections), BackendError>
+where
+    A: OcrAdapter,
+    P: FnMut(ProgressEvent),
+{
+    let mut completed = 0_u64;
+    let (workers, results) = bounded_map_stream(
+        tasks,
+        |(pdf, page)| ocr.detect_orientation(pdf, *page),
+        |index, _| {
+            completed += 1;
+            let (pdf, page) = &tasks[index];
+            progress(ProgressEvent {
+                phase: "scan_orientation".to_string(),
+                done: completed,
+                total: tasks.len() as u64,
+                subject: format!("{} — #{}", display_name(pdf), page + 1),
+            });
+            Ok(())
+        },
+    )
+    .map_err(BackendError::request_failed)?;
+    Ok((workers, tasks.iter().cloned().zip(results).collect()))
 }

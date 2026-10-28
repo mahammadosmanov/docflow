@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.194",
+  "currentVersion": "1.36.195",
   "releases": [
+    {
+      "version": "1.36.195",
+      "tag": "v1.36.195",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract parallel orientation detection pass from process scan preview into detect_orientations."
+    },
     {
       "version": "1.36.194",
       "tag": "v1.36.194",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract PDF inspection phase from parallel scan preview into inspect_pdfs."
     },
     {

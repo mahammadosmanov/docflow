@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.195 - 2026-10-28
+
+### Changed
+
+- Moved the parallel orientation detection pass out of the process scan preview.
+
 ## 1.36.194 - 2026-10-28
 
 ### Changed
