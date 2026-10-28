@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.236 - 2026-10-28
+
+### Changed
+
+- Shared scan group candidate insertion between multi-RFI and single-RFI PDF scans.
+
 ## 1.36.235 - 2026-10-28
 
 ### Changed

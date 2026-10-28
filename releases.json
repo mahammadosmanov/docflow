@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.235",
+  "currentVersion": "1.36.236",
   "releases": [
+    {
+      "version": "1.36.236",
+      "tag": "v1.36.236",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share scan group candidate insertion between multi-RFI and single-RFI PDF scans."
+    },
     {
       "version": "1.36.235",
       "tag": "v1.36.235",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract signed-record unplaced final-review queueing into a helper."
     },
     {
