@@ -34,8 +34,10 @@ import {
   ScanIndexSummary,
   SignedStageNavigator,
   SignedWarningReviewSummary,
-  WorkbookChangePreview,
 } from "./PlanSummaries";
+import {
+  WorkbookChangePreview,
+} from "./WorkbookChangePreview";
 import {
   SignedPageComparison,
 } from "./SignedPageComparison";

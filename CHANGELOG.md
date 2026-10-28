@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.106 - 2026-10-28
+
+### Changed
+
+- `plan/PlanSummaries.tsx` moves the `WorkbookChangePreview` table into `plan/WorkbookChangePreview.tsx` and drops the imports only it used. `PlanView.tsx` imports it from the new file. Markup and behavior are unchanged; `tsc` is clean.
+
 ## 1.36.105 - 2026-10-28
 
 ### Changed
