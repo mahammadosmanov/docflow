@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.166",
+  "currentVersion": "1.36.167",
   "releases": [
+    {
+      "version": "1.36.167",
+      "tag": "v1.36.167",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move journal record model types and S5 permit/lease types out of journal.rs into journal/model.rs and journal/permits.rs; behavior unchanged."
+    },
     {
       "version": "1.36.166",
       "tag": "v1.36.166",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move RFI Log revise and clipboard/table payload builders out of rfi_log.rs into rfi_log/revise.rs and rfi_log/payloads.rs; behavior unchanged."
     },
     {
