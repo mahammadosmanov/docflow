@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.105 - 2026-10-28
+
+### Changed
+
+- `plan/PlanView.tsx` moves the `OutlookReplyPreview` panel into `plan/OutlookReplyPreview.tsx`. Markup and plan rendering are unchanged; `tsc` is clean and the frontend suite passes.
+
 ## 1.36.104 - 2026-10-28
 
 ### Changed
