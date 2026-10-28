@@ -83,42 +83,12 @@ where
                 }
             }
         }
-        let (disposition, action, reason, selectable) = if matching.is_empty() {
-            (
-                "rfi.completeStatus.disposition.manualReview",
-                "RFI was not found in the RFI Log",
-                "Exact completed PDF exists, but no exact RFI Log row was found",
-                false,
-            )
-        } else if !safe_cells {
-            (
-                "rfi.completeStatus.disposition.manualReview",
-                "Inspection Status cell is missing, merged, or formula-bearing",
-                "No unsafe workbook cell was authorized",
-                false,
-            )
-        } else if !known_values {
-            (
-                "rfi.completeStatus.disposition.manualReview",
-                "Current status conflicts with automatic completion",
-                "Only blank, Ongoing, or Completed status cells may be synchronized automatically",
-                false,
-            )
-        } else if pending.is_empty() {
-            (
-                "rfi.completeStatus.disposition.alreadyCompleted",
-                "Already Completed",
-                "Every matching RFI Log row is already Completed",
-                false,
-            )
-        } else {
-            (
-                "rfi.completeStatus.disposition.ready",
-                "Set matching Inspection Status cell(s) to Completed",
-                "Exact completed RFI PDF and safe RFI Log mapping found",
-                true,
-            )
-        };
+        let (disposition, action, reason, selectable) = completion_disposition(
+            matching.is_empty(),
+            safe_cells,
+            known_values,
+            pending.is_empty(),
+        );
         if selectable {
             for (sheet, key, update) in pending {
                 updates.entry(sheet).or_default().insert(key, update);
@@ -293,4 +263,48 @@ fn completion_status_step(
         note_key: Some("note.rfi.completeStatus.rfiLog".to_string()),
         meta,
     }])
+}
+
+fn completion_disposition(
+    unmatched: bool,
+    safe_cells: bool,
+    known_values: bool,
+    nothing_pending: bool,
+) -> (&'static str, &'static str, &'static str, bool) {
+    if unmatched {
+        (
+            "rfi.completeStatus.disposition.manualReview",
+            "RFI was not found in the RFI Log",
+            "Exact completed PDF exists, but no exact RFI Log row was found",
+            false,
+        )
+    } else if !safe_cells {
+        (
+            "rfi.completeStatus.disposition.manualReview",
+            "Inspection Status cell is missing, merged, or formula-bearing",
+            "No unsafe workbook cell was authorized",
+            false,
+        )
+    } else if !known_values {
+        (
+            "rfi.completeStatus.disposition.manualReview",
+            "Current status conflicts with automatic completion",
+            "Only blank, Ongoing, or Completed status cells may be synchronized automatically",
+            false,
+        )
+    } else if nothing_pending {
+        (
+            "rfi.completeStatus.disposition.alreadyCompleted",
+            "Already Completed",
+            "Every matching RFI Log row is already Completed",
+            false,
+        )
+    } else {
+        (
+            "rfi.completeStatus.disposition.ready",
+            "Set matching Inspection Status cell(s) to Completed",
+            "Exact completed RFI PDF and safe RFI Log mapping found",
+            true,
+        )
+    }
 }
