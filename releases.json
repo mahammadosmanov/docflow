@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.201",
+  "currentVersion": "1.36.202",
   "releases": [
+    {
+      "version": "1.36.202",
+      "tag": "v1.36.202",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract system-sync RFI Log remark update evaluation into a pure helper."
+    },
     {
       "version": "1.36.201",
       "tag": "v1.36.201",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract system-sync Follow Up status update evaluation into a pure helper."
     },
     {
