@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.262",
+  "currentVersion": "1.36.263",
   "releases": [
+    {
+      "version": "1.36.263",
+      "tag": "v1.36.263",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Reuse the shared signed status value set in follow-up apply validation."
+    },
     {
       "version": "1.36.262",
       "tag": "v1.36.262",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Reuse the shared signed status value set in RFI system sync checks."
     },
     {
