@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.196",
+  "currentVersion": "1.36.197",
   "releases": [
+    {
+      "version": "1.36.197",
+      "tag": "v1.36.197",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract completion-status disposition selection into a pure helper."
+    },
     {
       "version": "1.36.196",
       "tag": "v1.36.196",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract system-sync row disposition selection into a pure helper."
     },
     {
