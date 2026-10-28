@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.221 - 2026-10-28
+
+### Added
+
+- Unit tests for RFI discipline selection edge cases.
+
 ## 1.36.220 - 2026-10-28
 
 ### Changed

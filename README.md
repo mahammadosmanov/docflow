@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.36.220 is a Tauri 2 desktop application with eleven registered document
+DocFlow 1.36.221 is a Tauri 2 desktop application with eleven registered document
 workflows:
 
 - Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for

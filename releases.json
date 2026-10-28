@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.220",
+  "currentVersion": "1.36.221",
   "releases": [
+    {
+      "version": "1.36.221",
+      "tag": "v1.36.221",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add unit tests for RFI discipline selection edge cases."
+    },
     {
       "version": "1.36.220",
       "tag": "v1.36.220",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract approved-row validation from RFI file-group revise into a helper."
     },
     {
