@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.268 - 2026-10-28
+
+### Changed
+
+- Moved scan OCR planning and inspection helpers into a `process_scans` inspect module.
+
 ## 1.36.267 - 2026-10-28
 
 ### Changed
