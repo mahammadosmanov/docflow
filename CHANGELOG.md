@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.198 - 2026-10-28
+
+### Changed
+
+- Moved print queue final status selection into a pure helper.
+
 ## 1.36.197 - 2026-10-28
 
 ### Changed

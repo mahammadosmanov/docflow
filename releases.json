@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.197",
+  "currentVersion": "1.36.198",
   "releases": [
+    {
+      "version": "1.36.198",
+      "tag": "v1.36.198",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract print queue final status selection into a pure helper."
+    },
     {
       "version": "1.36.197",
       "tag": "v1.36.197",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract completion-status disposition selection into a pure helper."
     },
     {
