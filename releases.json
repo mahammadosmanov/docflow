@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.211",
+  "currentVersion": "1.36.212",
   "releases": [
+    {
+      "version": "1.36.212",
+      "tag": "v1.36.212",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fix RFI preview canonicalize helper to keep literal error keys visible to the catalog check."
+    },
     {
       "version": "1.36.211",
       "tag": "v1.36.211",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share canonicalize-or-validation error mapping across RFI native preview paths."
     },
     {
