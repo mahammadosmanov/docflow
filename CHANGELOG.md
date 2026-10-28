@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.233 - 2026-10-28
+
+### Changed
+
+- Extracted workbook backup rollback after failed replacement into a helper.
+
 ## 1.36.232 - 2026-10-28
 
 ### Changed
