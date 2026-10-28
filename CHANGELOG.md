@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.159 - 2026-10-28
+
+### Changed
+
+- Split `mapping_details` into named helpers in `rfi_follow_up/source/mapping_details.rs`; detail text unchanged.
+
 ## 1.36.158 - 2026-10-28
 
 ### Changed
