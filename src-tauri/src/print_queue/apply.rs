@@ -299,14 +299,7 @@ impl PrintService {
             .into_iter()
             .map(|status| counts.get(status).copied().unwrap_or_default())
             .sum::<u64>();
-        state.status = if resumable == 0 {
-            "completed"
-        } else if paused || counts.get("pending").copied().unwrap_or_default() > 0 {
-            "paused"
-        } else {
-            "completed_with_errors"
-        }
-        .to_string();
+        state.status = queue_final_status(resumable, paused, &counts).to_string();
         self.queues.save(&mut state)?;
         if record.state != Some(JournalState::RecoveryRequired) {
             record.pending_step = None;
@@ -387,5 +380,19 @@ impl PrintService {
             });
         }
         self.persist_cleanup_review(state, record, primary_classification, review)
+    }
+}
+
+fn queue_final_status(
+    resumable: u64,
+    paused: bool,
+    counts: &BTreeMap<String, u64>,
+) -> &'static str {
+    if resumable == 0 {
+        "completed"
+    } else if paused || counts.get("pending").copied().unwrap_or_default() > 0 {
+        "paused"
+    } else {
+        "completed_with_errors"
     }
 }
