@@ -73,42 +73,10 @@ impl FilesystemAuthority {
             })
             .transpose()?
             .unwrap_or(0);
-        let archive_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &archive,
-                PathIntent::Read,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
-        let signed_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &signed,
-                PathIntent::Read,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
-        let destination_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let archive_anchor = self.anchor_plan_path(binding, caller, &archive, PathIntent::Read)?;
+        let signed_anchor = self.anchor_plan_path(binding, caller, &signed, PathIntent::Read)?;
+        let destination_anchor =
+            self.anchor_plan_path(binding, caller, &destination, PathIntent::Write)?;
         if archive_anchor.sha256().map_err(io_no_effect)? != expected_archive_hash {
             return Err(StepFailure::NoEffect(
                 "archive PDF changed after preview".to_string(),
@@ -285,35 +253,14 @@ impl FilesystemAuthority {
                 "approved PDF rotations are empty".to_string(),
             ));
         }
-        let source_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &source,
-                PathIntent::Read,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let source_anchor = self.anchor_plan_path(binding, caller, &source, PathIntent::Read)?;
         if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
             return Err(StepFailure::NoEffect(
                 "source PDF changed after preview".to_string(),
             ));
         }
-        let destination_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let destination_anchor =
+            self.anchor_plan_path(binding, caller, &destination, PathIntent::Write)?;
         token.checkpoint().map_err(|_| StepFailure::Cancelled)?;
         record.pending_step = Some(step.clone());
         record.state = Some(JournalState::Applying);
@@ -457,18 +404,7 @@ impl FilesystemAuthority {
                 "approved PDF page order is invalid".to_string(),
             ));
         }
-        let source_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &source,
-                PathIntent::Read,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let source_anchor = self.anchor_plan_path(binding, caller, &source, PathIntent::Read)?;
         if source_anchor.sha256().map_err(io_no_effect)? != expected_hash {
             return Err(StepFailure::NoEffect(
                 "batch scan changed after Preview".to_string(),
@@ -538,18 +474,8 @@ impl FilesystemAuthority {
             StepFailure::NoEffect("extracted PDF destination has no parent".to_string())
         })?;
         self.create_missing_directories(destination_parent, step, binding, caller, token, record)?;
-        let destination_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let destination_anchor =
+            self.anchor_plan_path(binding, caller, &destination, PathIntent::Write)?;
         record.pending_step = Some(step.clone());
         record.state = Some(JournalState::Applying);
         self.journals.write(record).map_err(step_unknown)?;

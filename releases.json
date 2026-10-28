@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.256",
+  "currentVersion": "1.36.257",
   "releases": [
+    {
+      "version": "1.36.257",
+      "tag": "v1.36.257",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share capability authorization and anchoring across filesystem effects."
+    },
     {
       "version": "1.36.256",
       "tag": "v1.36.256",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract unsafe signed slot review row into a helper."
     },
     {

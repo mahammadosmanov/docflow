@@ -1,6 +1,27 @@
 use super::*;
 
 impl FilesystemAuthority {
+    /// Authorizes a plan path for I/O and anchors it, mapping failures to no-effect step failures.
+    pub(super) fn anchor_plan_path(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        path: &Path,
+        intent: PathIntent,
+    ) -> Result<AnchoredPath, StepFailure> {
+        self.grants
+            .authorize_capability_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                path,
+                intent,
+            )
+            .map_err(step_no_effect)?
+            .anchor()
+            .map_err(io_no_effect)
+    }
+
     /// Authorizes a plan path for writing, mapping denial to a no-effect step failure.
     fn authorize_write_path(
         &self,
@@ -98,18 +119,8 @@ impl FilesystemAuthority {
                     .map_err(io_no_effect)
             })
             .transpose()?;
-        let destination_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let destination_anchor =
+            self.anchor_plan_path(binding, caller, &destination, PathIntent::Write)?;
         if let Some(source) = source_anchor.as_ref() {
             if let Some(expected) = step
                 .meta
@@ -280,18 +291,7 @@ impl FilesystemAuthority {
         record.pending_step = Some(backup_step.clone());
         record.state = Some(JournalState::Applying);
         self.journals.write(record).map_err(step_unknown)?;
-        let backup_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &backup,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let backup_anchor = self.anchor_plan_path(binding, caller, &backup, PathIntent::Write)?;
         if let Err(error) = backup_anchor.copy_no_clobber_from(&workbook_anchor) {
             if error.kind() != io::ErrorKind::AlreadyExists && backup_anchor.open_read().is_ok() {
                 return Err(StepFailure::OutcomeUnknown(format!(
@@ -490,30 +490,10 @@ impl FilesystemAuthority {
                 "temporary PDF name is outside the cleanup contract".to_string(),
             ));
         }
-        let temporary_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &temporary,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
-        let destination_anchor = self
-            .grants
-            .authorize_capability_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?
-            .anchor()
-            .map_err(io_no_effect)?;
+        let temporary_anchor =
+            self.anchor_plan_path(binding, caller, &temporary, PathIntent::Write)?;
+        let destination_anchor =
+            self.anchor_plan_path(binding, caller, &destination, PathIntent::Write)?;
         if !temporary_anchor
             .same_file_as(&destination_anchor)
             .map_err(io_no_effect)?
