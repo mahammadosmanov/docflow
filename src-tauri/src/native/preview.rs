@@ -1,5 +1,51 @@
 use super::*;
 
+fn ambient_range(values: &Map<String, Value>) -> Result<(i64, i64), BackendError> {
+    let ambient_min = values
+        .get("ambient_min")
+        .and_then(Value::as_i64)
+        .unwrap_or(19);
+    let ambient_max = values
+        .get("ambient_max")
+        .and_then(Value::as_i64)
+        .unwrap_or(24);
+    if !(0..=100).contains(&ambient_min)
+        || !(0..=100).contains(&ambient_max)
+        || ambient_min > ambient_max
+    {
+        return Err(concrete_documents_error(
+            "Ambient temperature range must be between 0 and 100 °C with minimum no greater than maximum",
+        ));
+    }
+    Ok((ambient_min, ambient_max))
+}
+
+fn input_grant_roots(
+    rfi_log: &Path,
+    follow_up: Option<&Path>,
+    selections: &[(DocumentType, Vec<String>, PathBuf)],
+    output_directory: &Path,
+) -> Result<Vec<(PathBuf, GrantAccess)>, BackendError> {
+    let mut roots = Vec::<(PathBuf, GrantAccess)>::new();
+    let follow_up = follow_up.filter(|path| path.is_file());
+    for path in std::iter::once(rfi_log)
+        .chain(follow_up)
+        .chain(selections.iter().map(|(_, _, path)| path.as_path()))
+    {
+        let root = path
+            .parent()
+            .ok_or_else(|| BackendError::path_invalid("Selected input has no parent folder"))?
+            .to_path_buf();
+        add_grant_root(&mut roots, root, GrantAccess::Read);
+    }
+    add_grant_root(
+        &mut roots,
+        output_directory.to_path_buf(),
+        GrantAccess::ReadWrite,
+    );
+    Ok(roots)
+}
+
 impl NativeBackend {
     pub(crate) fn preview_process_scans<F>(
         &self,
@@ -231,24 +277,7 @@ impl NativeBackend {
                 "Enter RFI numbers for at least one CON-CIV type",
             ));
         }
-        let ambient_min = request
-            .values
-            .get("ambient_min")
-            .and_then(Value::as_i64)
-            .unwrap_or(19);
-        let ambient_max = request
-            .values
-            .get("ambient_max")
-            .and_then(Value::as_i64)
-            .unwrap_or(24);
-        if !(0..=100).contains(&ambient_min)
-            || !(0..=100).contains(&ambient_max)
-            || ambient_min > ambient_max
-        {
-            return Err(concrete_documents_error(
-                "Ambient temperature range must be between 0 and 100 °C with minimum no greater than maximum",
-            ));
-        }
+        let (ambient_min, ambient_max) = ambient_range(&request.values)?;
         let ambient_groups = parse_ambient_groups(get_text("ambient_groups"), &rfis_011)?;
         let rfi_log = required_selected_path(&request.values, "rfi_log_workbook")?;
         let output_directory = required_selected_path(&request.values, "output_directory")?;
@@ -284,18 +313,12 @@ impl NativeBackend {
         requested.sort();
         requested.dedup();
 
-        let mut roots = Vec::<(PathBuf, GrantAccess)>::new();
-        for path in std::iter::once(&rfi_log)
-            .chain(follow_up.iter().filter(|path| path.is_file()))
-            .chain(selections.iter().map(|(_, _, path)| path))
-        {
-            let root = path
-                .parent()
-                .ok_or_else(|| BackendError::path_invalid("Selected input has no parent folder"))?
-                .to_path_buf();
-            add_grant_root(&mut roots, root, GrantAccess::Read);
-        }
-        add_grant_root(&mut roots, output_directory.clone(), GrantAccess::ReadWrite);
+        let roots = input_grant_roots(
+            &rfi_log,
+            follow_up.as_deref(),
+            &selections,
+            &output_directory,
+        )?;
         let caller = self.caller_identity()?;
         let scope = GrantScope::new(
             &caller.owner_id,
