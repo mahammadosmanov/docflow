@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.196 - 2026-10-28
+
+### Changed
+
+- Moved system-sync row disposition selection into a pure helper.
+
 ## 1.36.195 - 2026-10-28
 
 ### Changed
