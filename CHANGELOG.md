@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.114 - 2026-10-28
+
+### Fixed
+
+- `screens/ReviewScreen.tsx` undo had no error handling. A rejected undo left an unhandled promise rejection and no message. Undo errors now show through the screen's error notice, and the screen keeps its result so the user can retry.
+
 ## 1.36.113 - 2026-10-28
 
 ### Changed
