@@ -629,34 +629,19 @@ where
             &mut created_directories,
             &mut plan.steps,
         )?;
-        let source_hash = item.source_hash.ok_or_else(|| {
+        let source_hash = item.source_hash.clone().ok_or_else(|| {
             BackendError::request_failed("orientation scan did not pin a source hash")
         })?;
         rotated_pages += approved.len() as u64;
         actionable_files += 1;
-        plan.steps.push(Step {
-            kind: StepKind::PdfPageRotate,
-            src: Some(item.path.to_string_lossy().into_owned()),
-            dst: Some(destination.to_string_lossy().into_owned()),
-            note_key: Some("note.rfi.pdfOrientationNormalized".to_string()),
-            meta: JsonObject::from_iter([
-                ("sourceSha256".to_string(), Value::String(source_hash)),
-                (
-                    "sourceRoot".to_string(),
-                    Value::String(source_root.to_string_lossy().into_owned()),
-                ),
-                (
-                    "reviewRoot".to_string(),
-                    Value::String(review_root.to_string_lossy().into_owned()),
-                ),
-                (
-                    "relativePath".to_string(),
-                    Value::String(item.relative.to_string_lossy().into_owned()),
-                ),
-                ("pageCount".to_string(), Value::from(item.page_count as u64)),
-                ("rotations".to_string(), Value::Array(approved)),
-            ]),
-        });
+        plan.steps.push(rotation_step(
+            &item,
+            &destination,
+            &source_root,
+            &review_root,
+            source_hash,
+            approved,
+        ));
     }
     stats.parallel_analysis = !tasks.is_empty();
     stats.analysis_workers = worker_count as u64;

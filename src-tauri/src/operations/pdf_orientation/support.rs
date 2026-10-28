@@ -123,3 +123,38 @@ pub(super) fn cached_page_results(
     }
     Ok(cached_results)
 }
+
+/// Builds the approved PDF page-rotation step for one source file.
+pub(super) fn rotation_step(
+    item: &PdfWork,
+    destination: &Path,
+    source_root: &Path,
+    review_root: &Path,
+    source_hash: String,
+    approved: Vec<Value>,
+) -> Step {
+    let (source, relative, page_count) = (&item.path, &item.relative, item.page_count);
+    Step {
+        kind: StepKind::PdfPageRotate,
+        src: Some(source.to_string_lossy().into_owned()),
+        dst: Some(destination.to_string_lossy().into_owned()),
+        note_key: Some("note.rfi.pdfOrientationNormalized".to_string()),
+        meta: JsonObject::from_iter([
+            ("sourceSha256".to_string(), Value::String(source_hash)),
+            (
+                "sourceRoot".to_string(),
+                Value::String(source_root.to_string_lossy().into_owned()),
+            ),
+            (
+                "reviewRoot".to_string(),
+                Value::String(review_root.to_string_lossy().into_owned()),
+            ),
+            (
+                "relativePath".to_string(),
+                Value::String(relative.to_string_lossy().into_owned()),
+            ),
+            ("pageCount".to_string(), Value::from(page_count as u64)),
+            ("rotations".to_string(), Value::Array(approved)),
+        ]),
+    }
+}
