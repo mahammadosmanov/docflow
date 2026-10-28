@@ -11,13 +11,15 @@ import {
   useState,
 } from "react";
 import {
-  BusyState,
   Button,
   EmptyState,
   Header,
   IconButton,
   Notice,
 } from "../components/ui";
+import {
+  BusyState,
+} from "../components/BusyState";
 import {
   type Strings,
 } from "../i18n";

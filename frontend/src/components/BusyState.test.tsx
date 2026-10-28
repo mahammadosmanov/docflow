@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { makeStrings } from "../i18n";
-import { BusyState } from "./ui";
+import { BusyState } from "./BusyState";
 
 describe("BusyState progress", () => {
   afterEach(cleanup);

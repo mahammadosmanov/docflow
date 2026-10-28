@@ -15,13 +15,15 @@ import {
 } from "react";
 import {
   ActionBar,
-  BusyState,
   Button,
   EmptyState,
   Header,
   Notice,
   Segmented,
 } from "../components/ui";
+import {
+  BusyState,
+} from "../components/BusyState";
 import {
   type Strings,
 } from "../i18n";

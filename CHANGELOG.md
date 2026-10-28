@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.113 - 2026-10-28
+
+### Changed
+
+- `components/ui.tsx` moves the `BusyState` progress panel into `components/BusyState.tsx`; its test is renamed `components/BusyState.test.tsx`. `BusyStage`, `HistoryScreen`, `QueueScreen`, `RecoveryScreen` and `ReviewScreen` import it from the new file. `ui.tsx` also drops three imports that only `BusyState` used. Markup and behavior are unchanged.
+
 ## 1.36.112 - 2026-10-28
 
 ### Changed
