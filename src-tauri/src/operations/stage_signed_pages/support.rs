@@ -44,3 +44,37 @@ pub(super) fn candidate_display(path: &Path, page_index: usize) -> String {
 pub(super) fn truncate(value: &str, max: usize) -> String {
     value.chars().take(max).collect()
 }
+
+/// Builds the signed-page review editor metadata: archive choices per code and the row list.
+pub(super) fn signed_editor_meta(
+    archive_choices: JsonObject,
+    archive_choice_labels: JsonObject,
+    editor_rows: Vec<Value>,
+) -> Value {
+    json!({
+        "titleKey": "rfi.signed.editor.title",
+        "rowCountKey": "rfi.signed.editor.rowCount",
+        "groupField": "code",
+        "selectionEnabled": false,
+        "bulkEnabled": false,
+        "duplicateEnabled": false,
+        "requiredFields": ["archiveFile"],
+        "choicesByValue": {
+            "archiveFile": {
+                "dependsOn": "code",
+                "values": archive_choices,
+            }
+        },
+        "choiceLabels": {
+            "archiveFile": archive_choice_labels
+        },
+        "columns": [
+            {"key": "enabled", "labelKey": "rfi.signed.column.enabled", "kind": "bool"},
+            {"key": "code", "labelKey": "rfi.signed.column.code", "kind": "readonly"},
+            {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 112},
+            {"key": "signedFile", "labelKey": "rfi.signed.column.scan", "kind": "readonly"},
+            {"key": "archiveFile", "labelKey": "rfi.signed.column.archive", "kind": "choice", "bulk": false}
+        ],
+        "rows": editor_rows,
+    })
+}

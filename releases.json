@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.175",
+  "currentVersion": "1.36.176",
   "releases": [
+    {
+      "version": "1.36.176",
+      "tag": "v1.36.176",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move signed-page review editor metadata construction out of the stage_signed_pages preview into stage_signed_pages/support.rs; behavior unchanged."
+    },
     {
       "version": "1.36.175",
       "tag": "v1.36.175",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move signed-page archive ambiguity warning and review recording into stage_signed_pages/warnings.rs; behavior unchanged."
     },
     {

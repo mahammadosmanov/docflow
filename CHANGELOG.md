@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.176 - 2026-10-28
+
+### Changed
+
+- Moved signed-page review editor metadata construction out of the `stage_signed_pages` preview into `stage_signed_pages/support.rs`; behavior unchanged.
+
 ## 1.36.175 - 2026-10-28
 
 ### Changed
