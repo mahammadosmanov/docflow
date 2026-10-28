@@ -14,13 +14,13 @@ import {
   useState,
 } from "react";
 import {
-  ActionBar,
   Button,
   EmptyState,
   Header,
   Notice,
   Segmented,
 } from "../components/ui";
+import { ActionBar } from "../components/ActionBar";
 import {
   BusyState,
 } from "../components/BusyState";

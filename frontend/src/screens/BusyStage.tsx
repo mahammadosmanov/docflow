@@ -1,7 +1,8 @@
 import { LoaderCircle, X } from "lucide-react";
 import { type ComponentProps } from "react";
 
-import { ActionBar, Button } from "../components/ui";
+import { Button } from "../components/ui";
+import { ActionBar } from "../components/ActionBar";
 import { BusyState } from "../components/BusyState";
 
 type BusyStageProps = Pick<
