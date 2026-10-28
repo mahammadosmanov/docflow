@@ -1,7 +1,6 @@
 import {
   Eye,
   FolderOpen,
-  RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
 import {
@@ -52,6 +51,7 @@ import {
   ResultView,
 } from "./ResultView";
 import { BusyStage } from "./BusyStage";
+import { PreviousValuesCard } from "./PreviousValuesCard";
 import { PrintQueueResumeCard } from "./PrintQueueResumeCard";
 import { RfiPrintFinderPanel } from "./RfiPrintFinderPanel";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
@@ -272,25 +272,16 @@ export function OperationScreen({
                   />
                 )}
                 {operation.supportsPresets && previousValues && (
-                  <div className="resume-queue-card">
-                    <div>
-                      <strong>{s.t("params.previous.title")}</strong>
-                      <small>{s.t("params.previous.help")}</small>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      icon={<RotateCcw />}
-                      onClick={() => {
-                        valuesRevision.current += 1;
-                        setValues((current) => ({
-                          ...current,
-                          ...previousValues,
-                        }));
-                      }}
-                    >
-                      {s.t("params.previous.apply")}
-                    </Button>
-                  </div>
+                  <PreviousValuesCard
+                    s={s}
+                    onApply={() => {
+                      valuesRevision.current += 1;
+                      setValues((current) => ({
+                        ...current,
+                        ...previousValues,
+                      }));
+                    }}
+                  />
                 )}
                 <div className="form-stack schema-form">
                   {operation.schema

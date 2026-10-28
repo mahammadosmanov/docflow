@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.119 - 2026-10-28
+
+### Changed
+
+- The saved-parameters resume card moves out of `OperationScreen.tsx` into `screens/PreviousValuesCard.tsx`, matching `PrintQueueResumeCard`. Markup and behavior are unchanged.
+
 ## 1.36.118 - 2026-10-28
 
 ### Changed
