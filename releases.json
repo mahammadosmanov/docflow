@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.158",
+  "currentVersion": "1.36.159",
   "releases": [
+    {
+      "version": "1.36.159",
+      "tag": "v1.36.159",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split mapping_details into named helpers in rfi_follow_up/source/mapping_details.rs; detail text unchanged."
+    },
     {
       "version": "1.36.158",
       "tag": "v1.36.158",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split orientation checkpoint finish and plan-file steps out of pdf_orientation/support.rs into submodules; behavior unchanged."
     },
     {
