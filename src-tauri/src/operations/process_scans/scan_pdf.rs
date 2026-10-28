@@ -26,6 +26,19 @@ fn modified_time(path: &Path) -> SystemTime {
         .unwrap_or(UNIX_EPOCH)
 }
 
+/// Adds a candidate under its RFI code, opening a new group when the code is unseen.
+fn push_group_candidate(
+    groups: &mut Vec<(String, Vec<Candidate>)>,
+    code: String,
+    candidate: Candidate,
+) {
+    if let Some((_, candidates)) = groups.iter_mut().find(|(value, _)| value == &code) {
+        candidates.push(candidate);
+    } else {
+        groups.push((code, vec![candidate]));
+    }
+}
+
 pub(super) fn scan_one_pdf<A, P, C>(
     ctx: &ScanContext<'_, A>,
     state: &mut ScanState,
@@ -208,11 +221,7 @@ where
                     source: group.source,
                     rotations: group_rotations,
                 };
-                if let Some((_, candidates)) = groups.iter_mut().find(|(value, _)| value == &code) {
-                    candidates.push(candidate);
-                } else {
-                    groups.push((code, vec![candidate]));
-                }
+                push_group_candidate(groups, code, candidate);
             } else {
                 let group_rotations = rotations
                     .iter()
@@ -295,14 +304,7 @@ where
         source: read.source,
         rotations,
     };
-    if let Some((_, files)) = groups
-        .iter_mut()
-        .find(|(code, _)| code == &read.matched.code)
-    {
-        files.push(candidate);
-    } else {
-        groups.push((read.matched.code, vec![candidate]));
-    }
+    push_group_candidate(groups, read.matched.code, candidate);
     Ok(None)
 }
 
