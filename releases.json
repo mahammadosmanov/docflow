@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.153",
+  "currentVersion": "1.36.154",
   "releases": [
+    {
+      "version": "1.36.154",
+      "tag": "v1.36.154",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move S5 journal state accessors and prepare/cancel transitions out of s5.rs into s5_accessors.rs; behavior unchanged."
+    },
     {
       "version": "1.36.153",
       "tag": "v1.36.153",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move the per-file approved-plan loop of preview_indexed into plan_file with PlanTotals; behavior unchanged."
     },
     {

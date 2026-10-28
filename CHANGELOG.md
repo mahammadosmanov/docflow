@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.154 - 2026-10-28
+
+### Changed
+
+- Moved S5 journal accessors and prepare/cancel transitions out of `journal/s5.rs` into `journal/s5_accessors.rs`; behavior unchanged.
+
 ## 1.36.153 - 2026-10-28
 
 ### Changed
