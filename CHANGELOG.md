@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.192 - 2026-10-28
+
+### Changed
+
+- Moved follow-up undo publication outcome handling out of undo_follow_up.
+
 ## 1.36.191 - 2026-10-28
 
 ### Changed

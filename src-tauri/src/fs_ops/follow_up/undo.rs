@@ -247,49 +247,7 @@ impl FilesystemAuthority {
             || Ok(()),
             |_| Ok(()),
         );
-        match outcome {
-            Ok(RetainedPublicationOutcome::Published { .. }) => {
-                transition_s5_backend(
-                    &self.journals,
-                    &mut record,
-                    S5Transition::FinalizeUndoSuccess {
-                        completed_step: step,
-                        evidence: Vec::new(),
-                    },
-                )?;
-                let mut result = OperationResult {
-                    applied: 1,
-                    failed: 0,
-                    journal_id: record.journal_id().to_string(),
-                    errors: Vec::new(),
-                    meta: JsonObject::new(),
-                    cloud_synced: None,
-                };
-                insert_effect_state(&mut result, "committed");
-                insert_retained_evidence(&mut result, record.retained_evidence());
-                Ok(result)
-            }
-            Ok(RetainedPublicationOutcome::CancelledBeforeDisplacement) => {
-                Err(BackendError::journal_invalid("S5 undo cannot be cancelled"))
-            }
-            Ok(RetainedPublicationOutcome::RecoveryRequired(notice)) => {
-                let expected = record.revision();
-                record.prepare_outcome_unknown(notice.clone())?;
-                self.journals.write_s5_cas(&mut record, expected)?;
-                Ok(s5_recovery_result(&record, notice))
-            }
-            Err(_) => {
-                let locator = record.retained_locators()?.first().to_string();
-                let notice = RecoveryNotice {
-                    warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
-                    locator,
-                };
-                let expected = record.revision();
-                record.prepare_outcome_unknown(notice.clone())?;
-                self.journals.write_s5_cas(&mut record, expected)?;
-                Ok(s5_recovery_result(&record, notice))
-            }
-        }
+        self.finish_follow_up_undo(&mut record, step, outcome)
     }
 
     pub(in crate::fs_ops) fn restore_failed_follow_up_apply(
@@ -438,5 +396,58 @@ impl FilesystemAuthority {
         insert_effect_state(&mut result, "committed");
         insert_retained_evidence(&mut result, record.retained_evidence());
         Ok(result)
+    }
+}
+
+impl FilesystemAuthority {
+    fn finish_follow_up_undo(
+        &self,
+        record: &mut ValidatedS5Record,
+        step: Step,
+        outcome: Result<RetainedPublicationOutcome, BackendError>,
+    ) -> Result<OperationResult, BackendError> {
+        match outcome {
+            Ok(RetainedPublicationOutcome::Published { .. }) => {
+                transition_s5_backend(
+                    &self.journals,
+                    record,
+                    S5Transition::FinalizeUndoSuccess {
+                        completed_step: step,
+                        evidence: Vec::new(),
+                    },
+                )?;
+                let mut result = OperationResult {
+                    applied: 1,
+                    failed: 0,
+                    journal_id: record.journal_id().to_string(),
+                    errors: Vec::new(),
+                    meta: JsonObject::new(),
+                    cloud_synced: None,
+                };
+                insert_effect_state(&mut result, "committed");
+                insert_retained_evidence(&mut result, record.retained_evidence());
+                Ok(result)
+            }
+            Ok(RetainedPublicationOutcome::CancelledBeforeDisplacement) => {
+                Err(BackendError::journal_invalid("S5 undo cannot be cancelled"))
+            }
+            Ok(RetainedPublicationOutcome::RecoveryRequired(notice)) => {
+                let expected = record.revision();
+                record.prepare_outcome_unknown(notice.clone())?;
+                self.journals.write_s5_cas(record, expected)?;
+                Ok(s5_recovery_result(record, notice))
+            }
+            Err(_) => {
+                let locator = record.retained_locators()?.first().to_string();
+                let notice = RecoveryNotice {
+                    warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
+                    locator,
+                };
+                let expected = record.revision();
+                record.prepare_outcome_unknown(notice.clone())?;
+                self.journals.write_s5_cas(record, expected)?;
+                Ok(s5_recovery_result(record, notice))
+            }
+        }
     }
 }
