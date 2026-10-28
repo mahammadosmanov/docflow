@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.261",
+  "currentVersion": "1.36.262",
   "releases": [
+    {
+      "version": "1.36.262",
+      "tag": "v1.36.262",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Reuse the shared signed status value set in RFI system sync checks."
+    },
     {
       "version": "1.36.261",
       "tag": "v1.36.261",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share the signed status value set across OOXML guarded patch checks."
     },
     {

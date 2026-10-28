@@ -327,7 +327,7 @@ fn follow_up_status_updates(
     for target in targets {
         let cell = target.status_cell.as_ref().expect("safe cell is present");
         let current = cell.value.nfc().collect::<String>().trim().to_string();
-        if !matches!(current.as_str(), "" | "Signed" | "Not Signed") {
+        if !current.is_empty() && !crate::ooxml::SIGNED_STATUS_VALUES.contains(&current.as_str()) {
             unsafe_target = true;
             continue;
         }
