@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.273 - 2026-10-28
+
+### Changed
+
+- Moved batch print row field helpers into a `batch_print` fields module.
+
 ## 1.36.272 - 2026-10-28
 
 ### Changed
