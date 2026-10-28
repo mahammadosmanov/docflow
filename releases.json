@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.109",
+  "currentVersion": "1.36.110",
   "releases": [
+    {
+      "version": "1.36.110",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.110",
+      "summary": "Maintainability: the Modal dialog moves out of components/ui.tsx into components/Modal.tsx, and its test moves with it. The two modal consumers (plan/SignedPageComparison.tsx and screens/HistoryScreen.tsx) import it from the new file. Markup and behavior are unchanged; typecheck and the frontend suite pass."
+    },
     {
       "version": "1.36.109",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.109",
       "summary": "Fix: the review screen's 'will replace an existing file' warning looked up the action by file path instead of selection id, so it never appeared. It now reads the selection id. The three batch buttons share one helper, and a regression test covers the warning."
     },

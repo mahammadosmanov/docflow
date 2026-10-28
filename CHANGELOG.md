@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.110 - 2026-10-28
+
+### Changed
+
+- `components/ui.tsx` moves the `Modal` dialog into `components/Modal.tsx`; its test is renamed `components/Modal.test.tsx`. `plan/SignedPageComparison.tsx` and `screens/HistoryScreen.tsx` import it from the new file. Markup and behavior are unchanged; `tsc` is clean.
+
 ## 1.36.109 - 2026-10-28
 
 ### Fixed
