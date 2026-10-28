@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.101 - 2026-10-28
+
+### Changed
+
+- `classify_workbooks_full` in `rfi_follow_up/classify.rs` hands two pieces to named helpers: `source_issue_row` builds the manual-review row for a slot whose source record is missing or has an unknown status, and `projection_warnings` builds the unmapped, mass-deletion and no-rows warnings. Logic is unchanged; clippy is clean with `-D warnings` and the 542 lib tests pass.
+
 ## 1.36.100 - 2026-10-27
 
 ### Changed

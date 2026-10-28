@@ -830,6 +830,67 @@ fn signed_slot_rows(
     rows
 }
 
+/// Manual-review row for a slot whose source record is missing or has an unknown status.
+fn source_issue_row(slot: &SlotWork, record: &SourceRecord, reason: &str) -> FollowUpRow {
+    FollowUpRow {
+        row_id: format!(
+            "rfi-follow-up-source-unsafe:{}:{}:{}",
+            slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
+        ),
+        sheet: slot.layout.worksheet.name.clone(),
+        row: slot.row,
+        rfi_no: record.short_rfi.clone(),
+        source_statuses: vec![record.inspection_status_for_ui()],
+        current_status: slot.current_status.clone(),
+        proposed_status: None,
+        proposed_rfi_no: None,
+        disposition: FollowUpDisposition::ManualReview,
+        reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+        selectable: false,
+        enabled: false,
+        remark: None,
+        formula_fixes: Vec::new(),
+        target: FollowUpReviewTarget {
+            worksheet: slot.layout.worksheet.clone(),
+            row: slot.row,
+            rfi_column: slot.layout.rfi_column,
+            status_column: slot.layout.status_column,
+            rfi_cell: Some(slot.rfi_cell.clone()),
+            status_cell: Some(slot.status_cell.clone()),
+        },
+        source_evidence: record.evidence.clone(),
+        mapping_details: None,
+    }
+}
+
+fn projection_warnings(
+    unmapped_count: usize,
+    mass_deletion: bool,
+    deleted_count: usize,
+    no_rows: bool,
+) -> Vec<Warning> {
+    let mut warnings = Vec::new();
+    if unmapped_count > 0 {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.unmappedRecords".to_string(),
+            subject: unmapped_count.to_string(),
+        });
+    }
+    if mass_deletion {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.massDeletionBrake".to_string(),
+            subject: deleted_count.to_string(),
+        });
+    }
+    if no_rows {
+        warnings.push(Warning {
+            key: "warn.rfi.followUp.noRowsSelected".to_string(),
+            subject: String::new(),
+        });
+    }
+    warnings
+}
+
 pub(super) fn classify_workbooks_full(
     source_discovery: &OrderedWorkbookDiscovery,
     source_workbook: &WorkbookData,
@@ -915,35 +976,7 @@ pub(super) fn classify_workbooks_full(
                 .filter(|code| !is_placeholder_rfi(code))
                 .find_map(|code| records.get(code))
         {
-            manual_rows.push(FollowUpRow {
-                row_id: format!(
-                    "rfi-follow-up-source-unsafe:{}:{}:{}",
-                    slot.layout.worksheet.sheet_id, slot.row, slot.layout.rfi_column
-                ),
-                sheet: slot.layout.worksheet.name.clone(),
-                row: slot.row,
-                rfi_no: record.short_rfi.clone(),
-                source_statuses: vec![record.inspection_status_for_ui()],
-                current_status: slot.current_status.clone(),
-                proposed_status: None,
-                proposed_rfi_no: None,
-                disposition: FollowUpDisposition::ManualReview,
-                reason_key: format!("warn.rfi.followUp.reason.{reason}"),
-                selectable: false,
-                enabled: false,
-                remark: None,
-                formula_fixes: Vec::new(),
-                target: FollowUpReviewTarget {
-                    worksheet: slot.layout.worksheet.clone(),
-                    row: slot.row,
-                    rfi_column: slot.layout.rfi_column,
-                    status_column: slot.layout.status_column,
-                    rfi_cell: Some(slot.rfi_cell.clone()),
-                    status_cell: Some(slot.status_cell.clone()),
-                },
-                source_evidence: record.evidence.clone(),
-                mapping_details: None,
-            });
+            manual_rows.push(source_issue_row(&slot, record, reason));
             continue;
         }
         if slot.unsafe_reason.is_some() && !slot.changed_rfis.is_empty() {
@@ -1004,25 +1037,12 @@ pub(super) fn classify_workbooks_full(
             .then(left.row.cmp(&right.row))
             .then(left.target.rfi_column.cmp(&right.target.rfi_column))
     });
-    let mut warnings = Vec::new();
-    if unmapped_count > 0 {
-        warnings.push(Warning {
-            key: "warn.rfi.followUp.unmappedRecords".to_string(),
-            subject: unmapped_count.to_string(),
-        });
-    }
-    if mass_deletion {
-        warnings.push(Warning {
-            key: "warn.rfi.followUp.massDeletionBrake".to_string(),
-            subject: deleted_count.to_string(),
-        });
-    }
-    if rows.is_empty() {
-        warnings.push(Warning {
-            key: "warn.rfi.followUp.noRowsSelected".to_string(),
-            subject: String::new(),
-        });
-    }
+    let warnings = projection_warnings(
+        unmapped_count,
+        mass_deletion,
+        deleted_count,
+        rows.is_empty(),
+    );
     let columns = editor_columns();
     let primary_layout = layouts.first().ok_or_else(workbook_invalid)?.clone();
     let editor = editor_metadata(&rows, columns);
