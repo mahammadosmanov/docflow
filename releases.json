@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.236",
+  "currentVersion": "1.36.237",
   "releases": [
+    {
+      "version": "1.36.237",
+      "tag": "v1.36.237",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share cancelled journal state selection in print queue apply."
+    },
     {
       "version": "1.36.236",
       "tag": "v1.36.236",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share scan group candidate insertion between multi-RFI and single-RFI PDF scans."
     },
     {
