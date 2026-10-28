@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.167 - 2026-10-28
+
+### Changed
+
+- Moved journal record model types and S5 permit/lease types out of `journal.rs` into `journal/model.rs` and `journal/permits.rs`; behavior unchanged.
+
 ## 1.36.166 - 2026-10-28
 
 ### Changed
