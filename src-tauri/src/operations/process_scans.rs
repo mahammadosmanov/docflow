@@ -255,22 +255,7 @@ where
         });
     }
 
-    for (pdf, error) in failures {
-        let truncated = error.chars().take(200).collect::<String>();
-        plan.warnings.push(Warning {
-            key: "warn.unreadable".to_string(),
-            subject: format!("{} — {truncated}", display_name(&pdf)),
-        });
-        let mut meta = JsonObject::new();
-        meta.insert("error".to_string(), Value::String(error));
-        plan.steps.push(step(
-            transfer_kind,
-            Some(&pdf),
-            Some(&destination.join(REVIEW_DIR).join(display_name(&pdf))),
-            "note.unreadable",
-            meta,
-        ));
-    }
+    push_unreadable_outputs(&mut plan, failures, &destination, transfer_kind);
 
     for review in review_pages {
         let target = review_target(&destination, &review.path, &review.pages);
@@ -481,6 +466,30 @@ where
         Value::from(orientation_workers as u64),
     );
     Ok(plan)
+}
+
+fn push_unreadable_outputs(
+    plan: &mut Plan,
+    failures: Vec<(PathBuf, String)>,
+    destination: &Path,
+    transfer_kind: StepKind,
+) {
+    for (pdf, error) in failures {
+        let truncated = error.chars().take(200).collect::<String>();
+        plan.warnings.push(Warning {
+            key: "warn.unreadable".to_string(),
+            subject: format!("{} — {truncated}", display_name(&pdf)),
+        });
+        let mut meta = JsonObject::new();
+        meta.insert("error".to_string(), Value::String(error));
+        plan.steps.push(step(
+            transfer_kind,
+            Some(&pdf),
+            Some(&destination.join(REVIEW_DIR).join(display_name(&pdf))),
+            "note.unreadable",
+            meta,
+        ));
+    }
 }
 
 fn discover_pdfs(source: &Path) -> Result<Vec<PathBuf>, BackendError> {
