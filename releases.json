@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.232",
+  "currentVersion": "1.36.233",
   "releases": [
+    {
+      "version": "1.36.233",
+      "tag": "v1.36.233",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract workbook backup rollback into a helper."
+    },
     {
       "version": "1.36.232",
       "tag": "v1.36.232",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract backend preview operation routing into a helper."
     },
     {

@@ -398,11 +398,12 @@ impl FilesystemAuthority {
         let applied_hash = match workbook_anchor.sha256() {
             Ok(hash) => hash,
             Err(error) => {
-                if rollback_from_backup_capability(&backup_anchor, &workbook_anchor, expected_hash)
-                    .is_ok()
-                {
-                    record.pending_step = None;
-                    self.journals.write(record).map_err(step_unknown)?;
+                if self.rollback_workbook_after_failure(
+                    record,
+                    &backup_anchor,
+                    &workbook_anchor,
+                    expected_hash,
+                )? {
                     return Err(io_no_effect(error));
                 }
                 return Err(StepFailure::OutcomeUnknown(format!(
@@ -412,11 +413,12 @@ impl FilesystemAuthority {
             }
         };
         if applied_hash != output_hash {
-            if rollback_from_backup_capability(&backup_anchor, &workbook_anchor, expected_hash)
-                .is_ok()
-            {
-                record.pending_step = None;
-                self.journals.write(record).map_err(step_unknown)?;
+            if self.rollback_workbook_after_failure(
+                record,
+                &backup_anchor,
+                &workbook_anchor,
+                expected_hash,
+            )? {
                 return Err(StepFailure::NoEffect(
                     "workbook replacement verification failed".to_string(),
                 ));
@@ -432,6 +434,23 @@ impl FilesystemAuthority {
         record.pending_step = None;
         self.journals.write(record).map_err(step_unknown)?;
         workbook_record_count(step).map_err(step_no_effect)
+    }
+
+    /// Restores the backup over the workbook after a failed replacement.
+    /// Returns `Ok(false)` when the restore itself failed, leaving the outcome unknown.
+    fn rollback_workbook_after_failure(
+        &self,
+        record: &mut JournalRecord,
+        backup: &AnchoredPath,
+        workbook: &AnchoredPath,
+        expected_hash: &str,
+    ) -> Result<bool, StepFailure> {
+        if rollback_from_backup_capability(backup, workbook, expected_hash).is_err() {
+            return Ok(false);
+        }
+        record.pending_step = None;
+        self.journals.write(record).map_err(step_unknown)?;
+        Ok(true)
     }
 
     pub(super) fn execute_cleanup_temp(
