@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.152 - 2026-10-28
+
+### Changed
+
+- Moved the per-file checkpoint finish step out of `preview_indexed` into a helper with a typed input struct; behavior unchanged.
+
 ## 1.36.151 - 2026-10-28
 
 ### Changed

@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.151",
+  "currentVersion": "1.36.152",
   "releases": [
+    {
+      "version": "1.36.152",
+      "tag": "v1.36.152",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract the per-file checkpoint finish step from preview_indexed into finish_checkpointed_file with CheckpointInputs; behavior unchanged."
+    },
     {
       "version": "1.36.151",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.151",
       "summary": "Extracted per-PDF fingerprint, hash, and checkpoint-or-inspect step from preview_indexed into prepare_pdf."
     },
