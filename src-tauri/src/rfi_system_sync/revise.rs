@@ -132,7 +132,10 @@ pub fn revise(plan: &Plan, rows: &[Value]) -> Result<Plan, BackendError> {
 pub(super) fn validate_replacement(kind: SyncWorkbookKind, update: &GuardedCellUpdateDto) -> bool {
     match kind {
         SyncWorkbookKind::FollowUp => match update.replacement_value.as_str() {
-            "Signed" => matches!(update.expected_value.trim(), "" | "Signed" | "Not Signed"),
+            "Signed" => {
+                let expected = update.expected_value.trim();
+                expected.is_empty() || crate::ooxml::SIGNED_STATUS_VALUES.contains(&expected)
+            }
             "Not Signed" => matches!(update.expected_value.trim(), "" | "Not Signed"),
             _ => false,
         },
