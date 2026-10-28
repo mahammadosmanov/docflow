@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.265",
+  "currentVersion": "1.36.266",
   "releases": [
+    {
+      "version": "1.36.266",
+      "tag": "v1.36.266",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move scan group output planning into the process_scans output module."
+    },
     {
       "version": "1.36.265",
       "tag": "v1.36.265",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move scan output plan helpers from process_scans into its output module."
     },
     {
