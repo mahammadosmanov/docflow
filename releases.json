@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.219",
+  "currentVersion": "1.36.220",
   "releases": [
+    {
+      "version": "1.36.220",
+      "tag": "v1.36.220",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract approved-row validation from RFI file-group revise into a helper."
+    },
     {
       "version": "1.36.219",
       "tag": "v1.36.219",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add unit tests for Follow Up status signature update decisions."
     },
     {

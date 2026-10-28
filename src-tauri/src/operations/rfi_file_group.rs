@@ -286,38 +286,7 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
                 .ok_or_else(|| BackendError::validation("RFI file-group row identity is invalid"))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
-    let mut enabled = BTreeSet::new();
-    let mut revised_rows = Vec::with_capacity(submitted_rows.len());
-    let mut seen = BTreeSet::new();
-    for submitted in submitted_rows {
-        let row_id = submitted
-            .get("_rowId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| BackendError::validation("RFI file-group row identity is invalid"))?;
-        if !seen.insert(row_id.to_string()) {
-            return Err(BackendError::validation(
-                "RFI file-group row identity is duplicated",
-            ));
-        }
-        let original = originals
-            .get(row_id)
-            .ok_or_else(|| BackendError::validation("RFI file-group row is not approved"))?;
-        let requested = submitted
-            .get("enabled")
-            .and_then(Value::as_bool)
-            .ok_or_else(|| BackendError::validation("RFI file-group row state is invalid"))?;
-        let mut expected = original.clone();
-        expected["enabled"] = Value::Bool(requested);
-        if submitted != &expected {
-            return Err(BackendError::validation(
-                "RFI file-group row fields cannot be changed",
-            ));
-        }
-        if requested {
-            enabled.insert(row_id.to_string());
-        }
-        revised_rows.push(expected);
-    }
+    let (enabled, revised_rows) = validate_submitted_rows(&originals, submitted_rows)?;
     let offered: Vec<Step> = serde_json::from_value(
         plan.meta
             .get("offeredSteps")
@@ -351,6 +320,47 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         warnings: plan.warnings.clone(),
         meta,
     })
+}
+
+/// Accepts only the enabled flag changing on each approved row; returns the
+/// enabled row ids and the rows to store in the revised plan.
+fn validate_submitted_rows(
+    originals: &BTreeMap<String, Value>,
+    submitted_rows: &[Value],
+) -> Result<(BTreeSet<String>, Vec<Value>), BackendError> {
+    let mut enabled = BTreeSet::new();
+    let mut revised_rows = Vec::with_capacity(submitted_rows.len());
+    let mut seen = BTreeSet::new();
+    for submitted in submitted_rows {
+        let row_id = submitted
+            .get("_rowId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| BackendError::validation("RFI file-group row identity is invalid"))?;
+        if !seen.insert(row_id.to_string()) {
+            return Err(BackendError::validation(
+                "RFI file-group row identity is duplicated",
+            ));
+        }
+        let original = originals
+            .get(row_id)
+            .ok_or_else(|| BackendError::validation("RFI file-group row is not approved"))?;
+        let requested = submitted
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| BackendError::validation("RFI file-group row state is invalid"))?;
+        let mut expected = original.clone();
+        expected["enabled"] = Value::Bool(requested);
+        if submitted != &expected {
+            return Err(BackendError::validation(
+                "RFI file-group row fields cannot be changed",
+            ));
+        }
+        if requested {
+            enabled.insert(row_id.to_string());
+        }
+        revised_rows.push(expected);
+    }
+    Ok((enabled, revised_rows))
 }
 
 fn offered_step_allowed(
