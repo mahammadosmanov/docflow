@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.133 - 2026-10-28
+
+### Changed
+
+- Moved the `BackendMethod` roster and its authorization table from `src-tauri/src/backend.rs` into `backend/method.rs`. `backend.rs` drops from 770 to 560 lines. Behavior is unchanged.
+
 ## 1.36.132 - 2026-10-28
 
 ### Changed
