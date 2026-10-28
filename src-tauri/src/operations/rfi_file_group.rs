@@ -165,14 +165,7 @@ where
             let discipline = detection.code.split('-').nth(5).unwrap();
             let directory = destination.join(discipline).join(&detection.code);
             let target = directory.join(file_name);
-            let blocked = if unsafe_existing_directory(&directory) {
-                Some(&directory)
-            } else if target.exists() {
-                Some(&target)
-            } else {
-                None
-            };
-            if let Some(blocked) = blocked {
+            if let Some(blocked) = copy_blocker(&directory, &target) {
                 plan.warnings.push(Warning {
                     key: "warn.rfi.fileGroup.exists".to_string(),
                     subject: blocked.to_string_lossy().into_owned(),
@@ -239,6 +232,17 @@ where
         subject: String::new(),
     });
     Ok(plan)
+}
+
+/// Returns the existing path that blocks copying into `target`, if any.
+fn copy_blocker<'a>(directory: &'a Path, target: &'a Path) -> Option<&'a Path> {
+    if unsafe_existing_directory(directory) {
+        Some(directory)
+    } else if target.exists() {
+        Some(target)
+    } else {
+        None
+    }
 }
 
 /// Groups non-mail file names by the RFI code they were detected under, for codes with no mail file.
