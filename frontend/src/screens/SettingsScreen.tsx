@@ -1,6 +1,5 @@
 import {
   BadgeCheck,
-  Check,
   Copy,
   Download,
   Eye,
@@ -14,7 +13,6 @@ import {
   User,
 } from "lucide-react";
 import {
-  type ReactNode,
   useState,
 } from "react";
 import {
@@ -43,6 +41,8 @@ import {
 import { useSupportDiagnostics } from "./useSupportDiagnostics";
 
 import { useReplicaStatus } from "./useReplicaStatus";
+
+import { ChoiceGrid, SettingsGroup } from "./SettingsParts";
 
 export function SettingsScreen({
   bridge,
@@ -325,57 +325,6 @@ export function SettingsScreen({
           {s.t("prefs.reset")}
         </Button>
       </main>
-    </div>
-  );
-}
-
-function SettingsGroup({
-  title,
-  icon,
-  help,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  help?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="settings-group">
-      <div className="settings-title">
-        <span>{icon}</span>
-        <div>
-          <h2>{title}</h2>
-          {help && <p>{help}</p>}
-        </div>
-      </div>
-      <div className="settings-content">{children}</div>
-    </section>
-  );
-}
-
-function ChoiceGrid({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: readonly (readonly [string, string])[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="choice-grid">
-      {options.map(([key, label]) => (
-        <button
-          type="button"
-          key={key}
-          className={value === key ? "selected" : ""}
-          onClick={() => onChange(key)}
-        >
-          <span>{value === key && <Check />}</span>
-          {label}
-        </button>
-      ))}
     </div>
   );
 }
