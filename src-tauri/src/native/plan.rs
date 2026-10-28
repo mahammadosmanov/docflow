@@ -105,7 +105,6 @@ impl NativeBackend {
         )
     }
     // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
-    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
     #[allow(dead_code)]
     pub(super) fn cache_replica_plan<F>(
         &self,

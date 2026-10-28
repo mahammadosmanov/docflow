@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.121 - 2026-10-28
+
+### Changed
+
+- Remove a duplicated comment line above the paused replica-automation helper in `native.rs` and the replica plan cache helper in `native/plan.rs`. No code change.
+
 ## 1.36.120 - 2026-10-28
 
 ### Fixed
