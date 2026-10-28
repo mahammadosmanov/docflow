@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.151 - 2026-10-28
+
+### Changed
+
+- Extracted the per-PDF prepare step (fingerprint, source hash, checkpoint reuse or inspection) from `preview_indexed` in `src-tauri/src/operations/pdf_orientation.rs` into `prepare_pdf` in `operations/pdf_orientation/support.rs`. Behavior is unchanged; the source is still hashed before and after inspection.
+
 ## 1.36.150 - 2026-10-28
 
 ### Changed
