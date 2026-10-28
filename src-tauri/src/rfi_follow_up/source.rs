@@ -1,5 +1,10 @@
 use super::*;
 
+mod clause_routing;
+mod rfi_codes;
+pub(super) use clause_routing::*;
+pub(super) use rfi_codes::*;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LogState {
     Pending,
@@ -249,112 +254,6 @@ pub(super) fn aggregate_status(states: impl IntoIterator<Item = LogState>) -> Op
     } else {
         Some("In Progress".to_string())
     }
-}
-
-pub(super) fn normalize_code_text(value: &str) -> String {
-    value
-        .nfc()
-        .collect::<String>()
-        .replace(['˗', '‐', '‑', '‒', '–', '—', '−'], "-")
-        .trim()
-        .to_uppercase()
-}
-
-pub(super) fn itp_identity(value: &str) -> Option<(String, String)> {
-    static ITP: OnceLock<Regex> = OnceLock::new();
-    let normalized = normalize_code_text(value);
-    let captures = ITP
-        .get_or_init(|| Regex::new(r"ITP-(CIV|MEC)-([0-9]{4})(?:_[A-Z])?\z").unwrap())
-        .captures(&normalized)?;
-    Some((captures[1].to_string(), captures[2].to_string()))
-}
-
-pub(super) fn item_clause(value: &str) -> Option<String> {
-    static ITEM: OnceLock<Regex> = OnceLock::new();
-    let normalized = normalize_code_text(value);
-    let captures = ITEM
-        .get_or_init(|| Regex::new(r"(?:CIV|MEC)-[0-9]+\.([0-9]+\.[0-9]+)\z").unwrap())
-        .captures(&normalized)?;
-    Some(captures[1].to_string())
-}
-pub(super) fn full_item_identity(value: &str) -> Option<(String, String)> {
-    static ITEM: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\A(CIV|MEC)-([0-9]+(?:\.[0-9]+)+)\z").unwrap());
-    let normalized = normalize_code_text(value);
-    let captures = ITEM.captures(&normalized)?;
-    Some((captures[1].to_string(), captures[2].to_string()))
-}
-pub(super) fn split_values(value: &str) -> Vec<String> {
-    value
-        .split([',', '/', ';', '\n'])
-        .map(normalize_status)
-        .filter(|part| !part.is_empty())
-        .collect()
-}
-
-pub(super) fn parse_rfi_group(value: &str) -> Option<Vec<String>> {
-    static PART: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)[-_]?)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z").unwrap()
-    });
-    let mut normalized = normalize_status(value).to_uppercase().replace(',', "/");
-    if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {
-        normalized = short.to_string();
-    } else if let Some(short) = normalized.strip_prefix("RFI-") {
-        normalized = short.to_string();
-    }
-    let mut discipline: Option<String> = None;
-    let mut numbers = Vec::new();
-    for raw_part in normalized.split('/') {
-        let raw_part = raw_part.trim();
-        if raw_part.is_empty() {
-            return None;
-        }
-        let captures = PART.captures(raw_part)?;
-        if let Some(found) = captures.get(1) {
-            match discipline.as_deref() {
-                Some(existing) if existing != found.as_str() => return None,
-                None => discipline = Some(found.as_str().to_string()),
-                _ => {}
-            }
-        }
-        let start = normalize_candidate_number(&captures[2])?
-            .parse::<u32>()
-            .ok()?;
-        let end = captures
-            .get(3)
-            .and_then(|value| normalize_candidate_number(value.as_str()))
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(start);
-        if end < start || end - start > 500 {
-            return None;
-        }
-        numbers.extend(start..=end);
-    }
-    let discipline = discipline?;
-    let mut seen = BTreeSet::new();
-    let result = numbers
-        .into_iter()
-        .filter(|number| seen.insert(*number))
-        .map(|number| format!("{FULL_RFI_PREFIX}{discipline}-{number:04}"))
-        .collect::<Vec<_>>();
-    (!result.is_empty()).then_some(result)
-}
-
-pub(super) fn format_rfi_group(codes: &[String]) -> Option<String> {
-    let mut discipline: Option<String> = None;
-    let mut numbers = Vec::new();
-    for code in codes {
-        let (_, short) = canonical_follow_up_rfi(code)?;
-        let (found_discipline, number) = short.rsplit_once('-')?;
-        match discipline {
-            Some(ref existing) if existing != found_discipline => return None,
-            None => discipline = Some(found_discipline.to_string()),
-            _ => {}
-        }
-        numbers.push(number.to_string());
-    }
-    let discipline = discipline?;
-    Some(format!("{discipline}-{}", numbers.join("/")))
 }
 
 pub(super) fn find_header_column(sheet: &WorksheetData, names: &[&str]) -> Option<u32> {
@@ -658,95 +557,4 @@ pub(super) fn discover_approved_layouts(
         return Err(BackendError::validation("error.rfi.followUp.layoutMissing"));
     }
     Ok(layouts)
-}
-
-pub(super) fn route_clause(record: &SourceRecord) -> Option<(&'static str, &'static str)> {
-    let (discipline, itp) = itp_identity(&record.itp)?;
-    let clause = item_clause(&record.item)?;
-    let pcu_tag = record.contexts.iter().any(|context| {
-        let tags = normalized_parts(&context.tag);
-        tags.iter().any(|tag| tag.starts_with("PCS-"))
-            || normalize_header(&context.tag).starts_with("PCU-")
-    });
-    match (discipline.as_str(), itp.as_str(), clause.as_str()) {
-        ("CIV", "0002", "1.5") => Some(("CIV", "1.5")),
-        ("CIV", "0002", "1.8") => Some((if pcu_tag { "PCU" } else { "CIV" }, "1.8")),
-        ("CIV", "0002", "2.1") | ("CIV", "0002", "2.2") => Some(("CIV", "2.1")),
-        ("CIV", "0002", "2.4") => Some((if pcu_tag { "PCU" } else { "CIV" }, "2.4")),
-        ("CIV", "0002", "2.5") => Some((if pcu_tag { "PCU" } else { "CIV" }, "2.5")),
-        ("CIV", "0002", "3.1") => Some(("CIV", "3.1")),
-        ("CIV", "0004", "1.7") => Some(("Road", "1.7")),
-        ("CIV", "0004", "2.1") => Some(("Road", "2.1")),
-        ("CIV", "0004", "2.2") => Some(("Road", "2.2")),
-        ("CIV", "0004", "2.3") => Some(("Road", "2.3")),
-        ("CIV", "0004", "2.4") => Some(("Road", "2.4")),
-        ("CIV", "0004", "2.5") => Some(("Road", "2.5")),
-        ("CIV", "0004", "2.6") => Some(("Road", "2.6")),
-        ("CIV", "0004", "2.7") => Some(("Road", "2.7")),
-        ("CIV", "0004", "2.9") => Some(("Road", "2.9")),
-        ("CIV", "0004", "3.2") => Some(("Road", "3.2")),
-        ("CIV", "0005", "2.1") => Some(("PCU", "2.1")),
-        ("CIV", "0005", "2.2") => Some(("PCU", "2.2")),
-        ("CIV", "0005", "2.3") => Some(("PCU", "2.3")),
-        ("CIV", "0005", "3.6") => Some(("PCU", "3.6")),
-        ("MEC", "0001", "1.6") => Some(("MEC", "1.6")),
-        ("MEC", "0001", "2.1") | ("MEC", "0001", "2.2") | ("MEC", "0001", "2.3") => {
-            Some(("MEC", "2.3"))
-        }
-        ("MEC", "0001", "3.3") | ("MEC", "0001", "3.4") => Some(("MEC", "3.4")),
-        ("MEC", "0001", "3.5") => Some(("MEC", "3.5")),
-        ("MEC", "0003", "3.1") => Some(("MEC", "3.1")),
-        ("MEC", "0004", "3.2") => Some(("MEC", "3.2")),
-        _ => None,
-    }
-}
-pub(super) fn intended_lifecycle_route(
-    record: &SourceRecord,
-) -> Option<(&'static str, &'static str)> {
-    let (sheet, clause) = route_clause(record)?;
-    let composite_pcs_route = record.contexts.iter().any(|context| {
-        let tags = normalized_parts(&context.tag);
-        tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
-    });
-    if composite_pcs_route {
-        Some((
-            "CIV",
-            match clause {
-                "1.8" => "1.8",
-                "2.4" => "2.4",
-                _ => "2.5",
-            },
-        ))
-    } else {
-        Some((sheet, clause))
-    }
-}
-
-pub(super) fn is_confirmed_follow_up_exclusion(record: &SourceRecord) -> bool {
-    let Some((discipline, itp)) = itp_identity(&record.itp) else {
-        return false;
-    };
-    let Some((item_discipline, item)) = full_item_identity(&record.item) else {
-        return false;
-    };
-    if discipline != item_discipline {
-        return false;
-    }
-    matches!(
-        (discipline.as_str(), itp.as_str(), item.as_str()),
-        ("CIV", "0002", "2.1.4" | "2.1.6")
-            | (
-                "CIV",
-                "0005",
-                "5.1.4" | "5.1.5" | "5.1.9" | "5.3.4" | "5.3.5"
-            )
-            | (
-                "CIV",
-                "0006",
-                "6.1.8" | "6.2.1" | "6.2.2" | "6.2.3" | "6.2.4" | "6.2.5" | "6.2.9"
-            )
-            | ("CIV", "0007", "7.1.5" | "7.2.3" | "7.2.4" | "7.3.9")
-            | ("MEC", "0001", "1.1.4" | "1.2.5")
-            | ("MEC", "0004", "4.3.1")
-    )
 }
