@@ -20,6 +20,12 @@ pub(super) struct ScanState {
     pub(super) scanned_pages: usize,
 }
 
+fn modified_time(path: &Path) -> SystemTime {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or(UNIX_EPOCH)
+}
+
 pub(super) fn scan_one_pdf<A, P, C>(
     ctx: &ScanContext<'_, A>,
     state: &mut ScanState,
@@ -193,33 +199,19 @@ where
                     .filter(|(page, _, _)| pages.contains(page))
                     .copied()
                     .collect::<Vec<_>>();
+                let candidate = Candidate {
+                    path: pdf.clone(),
+                    pages: Some(pages),
+                    source_hash: Some(source_hash.clone()),
+                    modified: modified_time(pdf),
+                    confidence: group.confidence,
+                    source: group.source,
+                    rotations: group_rotations,
+                };
                 if let Some((_, candidates)) = groups.iter_mut().find(|(value, _)| value == &code) {
-                    candidates.push(Candidate {
-                        path: pdf.clone(),
-                        pages: Some(pages.clone()),
-                        source_hash: Some(source_hash.clone()),
-                        modified: fs::metadata(pdf)
-                            .and_then(|metadata| metadata.modified())
-                            .unwrap_or(UNIX_EPOCH),
-                        confidence: group.confidence,
-                        source: group.source,
-                        rotations: group_rotations.clone(),
-                    });
+                    candidates.push(candidate);
                 } else {
-                    groups.push((
-                        code,
-                        vec![Candidate {
-                            path: pdf.clone(),
-                            pages: Some(pages),
-                            source_hash: Some(source_hash.clone()),
-                            modified: fs::metadata(pdf)
-                                .and_then(|metadata| metadata.modified())
-                                .unwrap_or(UNIX_EPOCH),
-                            confidence: group.confidence,
-                            source: group.source,
-                            rotations: group_rotations,
-                        }],
-                    ));
+                    groups.push((code, vec![candidate]));
                 }
             } else {
                 let group_rotations = rotations
@@ -298,9 +290,7 @@ where
         path: pdf.clone(),
         pages: source_hash.as_ref().map(|_| vec![0]),
         source_hash,
-        modified: fs::metadata(pdf)
-            .and_then(|metadata| metadata.modified())
-            .unwrap_or(UNIX_EPOCH),
+        modified: modified_time(pdf),
         confidence: read.matched.confidence,
         source: read.source,
         rotations,
