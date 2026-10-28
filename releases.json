@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.239",
+  "currentVersion": "1.36.240",
   "releases": [
+    {
+      "version": "1.36.240",
+      "tag": "v1.36.240",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract granted input reading from concrete document preview."
+    },
     {
       "version": "1.36.239",
       "tag": "v1.36.239",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Merge duplicate existing-destination checks in RFI file group preview."
     },
     {
