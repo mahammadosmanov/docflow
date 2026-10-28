@@ -128,26 +128,16 @@ where
     preview_inner(params, Some((owner_id, index)), true, &mut progress)
 }
 
-fn preview_inner<P>(
-    params: &ReplicaPublishParams,
-    cache: Option<(&str, &ScanIndex)>,
-    automatic: bool,
-    progress: &mut P,
-) -> Result<Plan, BackendError>
-where
-    P: FnMut(ProgressEvent),
-{
-    let roots = canonical_roots(params)?;
-    let source_index = match params.source_root.as_str() {
-        "a" => 0,
-        "b" => 1,
-        "c" => 2,
-        _ => return Err(BackendError::validation("error.replica.sourceInvalid")),
-    };
-    let source_root = &roots[source_index];
-    let backup_root = canonical_directory(&params.backup_root, "error.replica.backupInvalid")?;
-    validate_root_topology(&roots, &backup_root)?;
-    let root_files = parse_root_files(&params.root_files)?;
+fn source_root_index(params: &ReplicaPublishParams) -> Result<usize, BackendError> {
+    match params.source_root.as_str() {
+        "a" => Ok(0),
+        "b" => Ok(1),
+        "c" => Ok(2),
+        _ => Err(BackendError::validation("error.replica.sourceInvalid")),
+    }
+}
+
+fn validate_schedule_limits(params: &ReplicaPublishParams) -> Result<(), BackendError> {
     if !(1..=MAX_INTERVAL_MINUTES).contains(&params.interval_minutes) {
         return Err(BackendError::validation("error.replica.intervalInvalid"));
     }
@@ -159,6 +149,25 @@ where
     {
         return Err(BackendError::validation("error.replica.changeLimitInvalid"));
     }
+    Ok(())
+}
+
+fn preview_inner<P>(
+    params: &ReplicaPublishParams,
+    cache: Option<(&str, &ScanIndex)>,
+    automatic: bool,
+    progress: &mut P,
+) -> Result<Plan, BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    let roots = canonical_roots(params)?;
+    let source_index = source_root_index(params)?;
+    let source_root = &roots[source_index];
+    let backup_root = canonical_directory(&params.backup_root, "error.replica.backupInvalid")?;
+    validate_root_topology(&roots, &backup_root)?;
+    let root_files = parse_root_files(&params.root_files)?;
+    validate_schedule_limits(params)?;
 
     progress(ProgressEvent {
         phase: "replica_discovery".to_string(),
