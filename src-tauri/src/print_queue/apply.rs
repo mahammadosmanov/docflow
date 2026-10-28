@@ -33,6 +33,19 @@ fn mark_job_paused(state: &mut QueueState, saved_index: usize, status: &str, err
     state.status = "paused".to_string();
 }
 
+/// Builds the warning for a job that failed after its attempts were spent.
+fn failed_job_warning(error: &PrintFailure, path: &str) -> Warning {
+    let redacted = redact_error(&error.message);
+    if is_localized_print_error(&redacted) {
+        warning(&redacted, display_name(path))
+    } else {
+        warning(
+            "error.print.failed",
+            format!("{}: {redacted}", display_name(path)),
+        )
+    }
+}
+
 fn cancelled_journal_state(record: &JournalRecord) -> JournalState {
     if record.steps.is_empty() {
         JournalState::CancelledClean
@@ -290,15 +303,7 @@ impl PrintService {
                         saved.status = Some("failed".to_string());
                         self.queues.save(&mut state)?;
                         result.failed += 1;
-                        let redacted = redact_error(&error.message);
-                        result.errors.push(if is_localized_print_error(&redacted) {
-                            warning(&redacted, display_name(&job.path))
-                        } else {
-                            warning(
-                                "error.print.failed",
-                                format!("{}: {redacted}", display_name(&job.path)),
-                            )
-                        });
+                        result.errors.push(failed_job_warning(&error, &job.path));
                         if job.on_error == "pause" {
                             result.errors.push(warning(
                                 "error.print.queuePaused",
