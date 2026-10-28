@@ -352,7 +352,7 @@ pub(super) fn validate_guarded_update_set(
                 || status_values_only
                     && !matches!(
                         &update.replacement,
-                        CellUpdate::Text(value) if matches!(value.as_str(), "Signed" | "Not Signed")
+                        CellUpdate::Text(value) if SIGNED_STATUS_VALUES.contains(&value.as_str())
                     )
                 || update.create_if_absent
                     && (status_values_only || update.expected != CellData::default())

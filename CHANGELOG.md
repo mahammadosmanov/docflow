@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.261 - 2026-10-28
+
+### Changed
+
+- Shared the signed status value set across OOXML guarded patch checks.
+
 ## 1.36.260 - 2026-10-28
 
 ### Changed

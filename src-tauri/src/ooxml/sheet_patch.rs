@@ -139,7 +139,7 @@ pub(super) fn patch_guarded_cell_value(
         CellUpdate::Rich(runs) if !status_values_only && !runs.is_empty() => ("", Some(runs)),
         _ => return Err(OoxmlError::invalid("guarded replacement is invalid")),
     };
-    if status_values_only && !matches!(value, "Signed" | "Not Signed") {
+    if status_values_only && !SIGNED_STATUS_VALUES.contains(&value) {
         return Err(OoxmlError::invalid("guarded replacement is invalid"));
     }
     if child_elements_in_namespace(cell, b"f", namespace)

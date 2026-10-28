@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.260",
+  "currentVersion": "1.36.261",
   "releases": [
+    {
+      "version": "1.36.261",
+      "tag": "v1.36.261",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share the signed status value set across OOXML guarded patch checks."
+    },
     {
       "version": "1.36.260",
       "tag": "v1.36.260",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Reuse the signed status helper when refreshing signed slot proposals."
     },
     {
