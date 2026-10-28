@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.148",
+  "currentVersion": "1.36.149",
   "releases": [
+    {
+      "version": "1.36.149",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.149",
+      "summary": "Extracted cached orientation page rebuild from preview_indexed into cached_page_results helper."
+    },
     {
       "version": "1.36.148",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.148",
       "summary": "Extracted per-file orientation page approval from preview_indexed into pure approve_file_pages helper."
     },

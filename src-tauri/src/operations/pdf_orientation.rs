@@ -300,31 +300,7 @@ where
                         "cached orientation result is structurally invalid",
                     ));
                 }
-                let mut cached_results = Vec::with_capacity(cached.page_count);
-                for (page_index, page) in cached.pages.into_iter().enumerate() {
-                    let result = match (page.detection, page.error) {
-                        (Some(detection), None) => Ok(detection),
-                        (None, Some(error)) => Err(error),
-                        _ => {
-                            return Err(BackendError::request_failed(
-                                "cached orientation page is structurally invalid",
-                            ));
-                        }
-                    };
-                    let current_rotation = page.current_rotation;
-                    let (current_rotation, result) = match normalize_rotation(current_rotation) {
-                        Ok(rotation) => (rotation, result),
-                        Err(error) => (current_rotation, Err(error.message)),
-                    };
-                    cached_results.push((
-                        PageTask {
-                            path: path.clone(),
-                            page_index,
-                            current_rotation,
-                        },
-                        result,
-                    ));
-                }
+                let cached_results = cached_page_results(&path, cached.pages)?;
                 by_file.insert(path.clone(), cached_results);
                 work.push(PdfWork {
                     path,

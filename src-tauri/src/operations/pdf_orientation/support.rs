@@ -60,9 +60,7 @@ pub(super) fn truncate(value: &str, max_chars: usize) -> String {
 
 /// Splits one file's page results into approved rotations, uncertain-page reasons,
 /// and the count of pages whose target rotation verified.
-pub(super) fn approve_file_pages(
-    page_results: Vec<(PageTask, Result<OrientationDetection, String>)>,
-) -> (Vec<Value>, Vec<String>, u64) {
+pub(super) fn approve_file_pages(page_results: Vec<PageResult>) -> (Vec<Value>, Vec<String>, u64) {
     let mut approved = Vec::new();
     let mut uncertain = Vec::new();
     let mut verified = 0_u64;
@@ -88,4 +86,40 @@ pub(super) fn approve_file_pages(
         }
     }
     (approved, uncertain, verified)
+}
+
+/// One page's orientation outcome, keyed by the page task it was computed for.
+pub(super) type PageResult = (PageTask, Result<OrientationDetection, String>);
+
+/// Rebuilds per-page orientation results from a reused scan-index entry.
+pub(super) fn cached_page_results(
+    path: &Path,
+    pages: Vec<CachedPageOrientation>,
+) -> Result<Vec<PageResult>, BackendError> {
+    let mut cached_results = Vec::with_capacity(pages.len());
+    for (page_index, page) in pages.into_iter().enumerate() {
+        let result = match (page.detection, page.error) {
+            (Some(detection), None) => Ok(detection),
+            (None, Some(error)) => Err(error),
+            _ => {
+                return Err(BackendError::request_failed(
+                    "cached orientation page is structurally invalid",
+                ));
+            }
+        };
+        let current_rotation = page.current_rotation;
+        let (current_rotation, result) = match normalize_rotation(current_rotation) {
+            Ok(rotation) => (rotation, result),
+            Err(error) => (current_rotation, Err(error.message)),
+        };
+        cached_results.push((
+            PageTask {
+                path: path.to_path_buf(),
+                page_index,
+                current_rotation,
+            },
+            result,
+        ));
+    }
+    Ok(cached_results)
 }
