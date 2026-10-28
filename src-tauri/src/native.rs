@@ -589,6 +589,7 @@ mod params;
 mod plan;
 mod preview;
 mod preview_rfi;
+mod preview_steps;
 mod session;
 mod watch;
 pub(crate) use free::*;
