@@ -113,34 +113,11 @@ where
         let mut pending_follow_up_updates = Vec::new();
 
         if scanned.signed_by_worley && !matching_log.is_empty() {
-            if matching_log
-                .iter()
-                .all(|row| safe_cell(&row.remarks_cell, row.remarks_merged))
-            {
-                let mut changed = 0usize;
-                for row in &matching_log {
-                    let cell = row.remarks_cell.as_ref().expect("safe cell is present");
-                    let replacement = append_signed_marker(&cell.value);
-                    if replacement != cell.value {
-                        pending_log_updates.push((
-                            row.sheet.clone(),
-                            format!("{}:{}", row.row, row.remarks_col),
-                            dto(&row_id, cell, replacement, row.row, row.remarks_col),
-                        ));
-                        changed += 1;
-                    }
-                }
-                log_action = if changed == 0 {
-                    "Already signed in RFI Log".to_string()
-                } else {
-                    format!("Add exact Worley remark to {changed} RFI Log row(s)")
-                };
-                ready |= changed > 0;
-            } else {
-                log_action =
-                    "Manual review: REMARKS cell missing, merged, or formula-bearing".to_string();
-                unsafe_target = true;
-            }
+            let (action, updates, flagged) = rfi_log_remark_updates(&row_id, &matching_log);
+            log_action = action;
+            unsafe_target |= flagged;
+            ready |= !updates.is_empty();
+            pending_log_updates = updates;
         }
 
         if !matching_follow_up.is_empty() {
@@ -361,6 +338,40 @@ fn sync_workbook_step(
         note_key: Some(note.to_string()),
         meta,
     }))
+}
+
+fn rfi_log_remark_updates(
+    row_id: &str,
+    rows: &[&RfiLogRowInfo],
+) -> (String, Vec<(String, String, GuardedCellUpdateDto)>, bool) {
+    if !rows
+        .iter()
+        .all(|row| safe_cell(&row.remarks_cell, row.remarks_merged))
+    {
+        let action = "Manual review: REMARKS cell missing, merged, or formula-bearing";
+        return (action.to_string(), Vec::new(), true);
+    }
+    let mut updates = Vec::new();
+    for row in rows {
+        let cell = row.remarks_cell.as_ref().expect("safe cell is present");
+        let replacement = append_signed_marker(&cell.value);
+        if replacement != cell.value {
+            updates.push((
+                row.sheet.clone(),
+                format!("{}:{}", row.row, row.remarks_col),
+                dto(row_id, cell, replacement, row.row, row.remarks_col),
+            ));
+        }
+    }
+    let action = if updates.is_empty() {
+        "Already signed in RFI Log".to_string()
+    } else {
+        format!(
+            "Add exact Worley remark to {} RFI Log row(s)",
+            updates.len()
+        )
+    };
+    (action, updates, false)
 }
 
 fn follow_up_status_updates(
