@@ -27,6 +27,7 @@ import type {
   AuthState,
   Bootstrap,
   HistoryPayload,
+  OperationPreset,
   OperationResult,
   PathSelection,
   Plan,
@@ -41,6 +42,7 @@ export class MockBridge implements Bridge {
   private auth: AuthState = signedOut;
   private prefs: AppPrefs = { ...defaultPrefs };
   private params: Record<string, unknown> = {};
+  private presets: Record<string, OperationPreset[]> = {};
   private readonly plans: MockPlanState = {
     printPlan: null,
     fileGroupPlan: null,
@@ -155,6 +157,30 @@ export class MockBridge implements Bridge {
         break;
       case "settings/saveParams":
         this.params = (params.values as Record<string, unknown>) ?? {};
+        result = { ok: true };
+        break;
+      case "settings/presets":
+        result = this.presets[String(params.opId)] ?? [];
+        break;
+      case "settings/savePreset": {
+        const opId = String(params.opId);
+        const name = String(params.name);
+        const list = this.presets[opId] ?? [];
+        const saved: OperationPreset = {
+          id: `preset-${list.length + 1}-${name}`,
+          name,
+          values: (params.values as Record<string, unknown>) ?? {},
+        };
+        this.presets[opId] = params.replace
+          ? [...list.filter((preset) => preset.name !== name), saved]
+          : [...list, saved];
+        result = saved;
+        break;
+      }
+      case "settings/deletePreset":
+        this.presets[String(params.opId)] = (
+          this.presets[String(params.opId)] ?? []
+        ).filter((preset) => preset.id !== params.presetId);
         result = { ok: true };
         break;
       case "support/diagnostics":
