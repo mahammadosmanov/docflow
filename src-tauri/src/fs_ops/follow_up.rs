@@ -110,15 +110,7 @@ impl FilesystemAuthority {
             original_snapshot.auxiliary_charge_bytes(),
         )
         .map_err(|_| follow_up_no_effect("error.rfi.followUp.retainedStorageFull"))?;
-        if usage
-            .0
-            .checked_add(reservation.file_count)
-            .is_none_or(|count| count > MAX_S5_RETAINED_FILES)
-            || usage
-                .1
-                .checked_add(reservation.logical_charge_bytes)
-                .is_none_or(|bytes| bytes > MAX_S5_RETAINED_BYTES)
-        {
+        if s5_retained_budget_exceeded(usage, &reservation) {
             return Err(follow_up_no_effect(
                 "error.rfi.followUp.retainedStorageFull",
             ));

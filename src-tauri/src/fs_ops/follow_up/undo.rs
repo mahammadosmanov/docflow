@@ -138,15 +138,7 @@ impl FilesystemAuthority {
             .parent()
             .ok_or_else(|| BackendError::journal_invalid("S5 canonical parent is unavailable"))?;
         let usage = s5_recorded_retained_usage(&record, canonical_parent_path)?;
-        if usage
-            .0
-            .checked_add(reservation.file_count)
-            .is_none_or(|count| count > MAX_S5_RETAINED_FILES)
-            || usage
-                .1
-                .checked_add(reservation.logical_charge_bytes)
-                .is_none_or(|bytes| bytes > MAX_S5_RETAINED_BYTES)
-        {
+        if s5_retained_budget_exceeded(usage, &reservation) {
             return Err(BackendError::validation(
                 "error.rfi.followUp.retainedStorageFull",
             ));
