@@ -292,29 +292,7 @@ where
     }
 
     if !params.keep_original && !split_sources.is_empty() {
-        let trash_root = params.trash_root.as_deref().ok_or_else(|| {
-            BackendError::path_invalid("recoverable trash is unavailable for batch scans")
-        })?;
-        let trash_root = canonical_directory(trash_root, "recoverable trash")?;
-        for (pdf, source_hash) in split_sources {
-            let trash_name = format!(
-                "process-scans-{}_{}",
-                uuid::Uuid::new_v4(),
-                display_name(&pdf)
-            );
-            let mut meta = JsonObject::new();
-            meta.insert(
-                "expectedSourceSha256".to_string(),
-                Value::String(source_hash),
-            );
-            plan.steps.push(step(
-                StepKind::Move,
-                Some(&pdf),
-                Some(&trash_root.join(trash_name)),
-                "note.deleted",
-                meta,
-            ));
-        }
+        push_split_source_trash(&mut plan, params, split_sources)?;
     }
 
     if pdfs.is_empty() {
@@ -466,6 +444,37 @@ where
         Value::from(orientation_workers as u64),
     );
     Ok(plan)
+}
+
+fn push_split_source_trash(
+    plan: &mut Plan,
+    params: &ProcessScansParams,
+    split_sources: BTreeMap<PathBuf, String>,
+) -> Result<(), BackendError> {
+    let trash_root = params.trash_root.as_deref().ok_or_else(|| {
+        BackendError::path_invalid("recoverable trash is unavailable for batch scans")
+    })?;
+    let trash_root = canonical_directory(trash_root, "recoverable trash")?;
+    for (pdf, source_hash) in split_sources {
+        let trash_name = format!(
+            "process-scans-{}_{}",
+            uuid::Uuid::new_v4(),
+            display_name(&pdf)
+        );
+        let mut meta = JsonObject::new();
+        meta.insert(
+            "expectedSourceSha256".to_string(),
+            Value::String(source_hash),
+        );
+        plan.steps.push(step(
+            StepKind::Move,
+            Some(&pdf),
+            Some(&trash_root.join(trash_name)),
+            "note.deleted",
+            meta,
+        ));
+    }
+    Ok(())
 }
 
 fn push_unreadable_outputs(
