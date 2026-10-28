@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 
 /// Reads a selected input through the read grant that covers it, bounded by the package size limit.
 fn read_granted_input(
@@ -444,39 +445,7 @@ impl NativeBackend {
                         .into_iter()
                         .flatten()
                         .skip(1)
-                        .map(|row| {
-                            let value = |key: &str| {
-                                row.get(key)
-                                    .map(String::as_str)
-                                    .filter(|value| !value.trim().is_empty())
-                                    .unwrap_or_else(|| {
-                                        if matches!(key, "location" | "concrete_class" | "supplier")
-                                        {
-                                            field(key)
-                                        } else {
-                                            ""
-                                        }
-                                    })
-                                    .to_string()
-                            };
-                            ConcreteBatch {
-                                tag: value("location"),
-                                concrete_class: value("concrete_class"),
-                                supplier: value("supplier"),
-                                batch_ticket: value("batch_ticket"),
-                                truck: value("truck"),
-                                quantity: value("quantity"),
-                                total_quantity: value("total_quantity"),
-                                batch_time: excel_time_text(&value("batch_time")),
-                                start_time: excel_time_text(&value("start_time")),
-                                end_time: excel_time_text(&value("end_time")),
-                                plant_slump: value("plant_slump"),
-                                in_situ_slump: value("in_situ_slump"),
-                                plant_temp: value("plant_temp"),
-                                in_situ_temp: value("in_situ_temp"),
-                                samples: value("samples"),
-                            }
-                        })
+                        .map(|row| additional_concrete_batch(row, follow))
                         .collect()
                 } else {
                     Vec::new()
@@ -559,6 +528,48 @@ impl NativeBackend {
         )?;
         provisional.commit();
         encode(cached)
+    }
+}
+
+/// Builds one extra batch row; blank location, class or supplier falls back to the first follow-up row.
+fn additional_concrete_batch(
+    row: &BTreeMap<String, String>,
+    first: Option<&BTreeMap<String, String>>,
+) -> ConcreteBatch {
+    let field = |key: &str| {
+        first
+            .and_then(|row| row.get(key))
+            .map_or("", String::as_str)
+    };
+    let value = |key: &str| {
+        row.get(key)
+            .map(String::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| {
+                if matches!(key, "location" | "concrete_class" | "supplier") {
+                    field(key)
+                } else {
+                    ""
+                }
+            })
+            .to_string()
+    };
+    ConcreteBatch {
+        tag: value("location"),
+        concrete_class: value("concrete_class"),
+        supplier: value("supplier"),
+        batch_ticket: value("batch_ticket"),
+        truck: value("truck"),
+        quantity: value("quantity"),
+        total_quantity: value("total_quantity"),
+        batch_time: excel_time_text(&value("batch_time")),
+        start_time: excel_time_text(&value("start_time")),
+        end_time: excel_time_text(&value("end_time")),
+        plant_slump: value("plant_slump"),
+        in_situ_slump: value("in_situ_slump"),
+        plant_temp: value("plant_temp"),
+        in_situ_temp: value("in_situ_temp"),
+        samples: value("samples"),
     }
 }
 
