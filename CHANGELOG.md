@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.210 - 2026-10-28
+
+### Changed
+
+- Shared review root canonicalization between review preview and recoverable delete plan.
+
 ## 1.36.209 - 2026-10-28
 
 ### Changed

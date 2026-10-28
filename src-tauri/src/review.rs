@@ -85,6 +85,19 @@ pub fn scan<A: OcrAdapter>(
         .collect())
 }
 
+fn canonical_review_roots(
+    destination_root: &Path,
+    trash_root: &Path,
+) -> Result<(PathBuf, PathBuf, PathBuf), BackendError> {
+    let destination_root = fs::canonicalize(destination_root)
+        .map_err(|_| BackendError::path_invalid("review destination does not exist"))?;
+    let review_root = fs::canonicalize(destination_root.join("_review"))
+        .map_err(|_| BackendError::path_invalid("review directory does not exist"))?;
+    let trash_root = fs::canonicalize(trash_root)
+        .map_err(|_| BackendError::path_invalid("recoverable trash does not exist"))?;
+    Ok((destination_root, review_root, trash_root))
+}
+
 pub fn preview(
     destination_root: &Path,
     trash_root: &Path,
@@ -93,12 +106,8 @@ pub fn preview(
 ) -> Result<Plan, BackendError> {
     enforce_item_limit(decisions.len())?;
     validate_timestamp(timestamp)?;
-    let destination_root = fs::canonicalize(destination_root)
-        .map_err(|_| BackendError::path_invalid("review destination does not exist"))?;
-    let review_root = fs::canonicalize(destination_root.join("_review"))
-        .map_err(|_| BackendError::path_invalid("review directory does not exist"))?;
-    let trash_root = fs::canonicalize(trash_root)
-        .map_err(|_| BackendError::path_invalid("recoverable trash does not exist"))?;
+    let (destination_root, review_root, trash_root) =
+        canonical_review_roots(destination_root, trash_root)?;
     let mut plan = empty_plan();
 
     for decision in decisions {
@@ -180,12 +189,8 @@ pub fn recoverable_delete_plan(
 ) -> Result<Plan, BackendError> {
     enforce_item_limit(sources.len())?;
     validate_timestamp(timestamp)?;
-    let destination_root = fs::canonicalize(destination_root)
-        .map_err(|_| BackendError::path_invalid("review destination does not exist"))?;
-    let review_root = fs::canonicalize(destination_root.join("_review"))
-        .map_err(|_| BackendError::path_invalid("review directory does not exist"))?;
-    let trash_root = fs::canonicalize(trash_root)
-        .map_err(|_| BackendError::path_invalid("recoverable trash does not exist"))?;
+    let (destination_root, review_root, trash_root) =
+        canonical_review_roots(destination_root, trash_root)?;
     if !review_root.starts_with(&destination_root) {
         return Err(BackendError::path_escape());
     }

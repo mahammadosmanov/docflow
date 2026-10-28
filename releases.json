@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.209",
+  "currentVersion": "1.36.210",
   "releases": [
+    {
+      "version": "1.36.210",
+      "tag": "v1.36.210",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Share review root canonicalization between review preview and recoverable delete plan."
+    },
     {
       "version": "1.36.209",
       "tag": "v1.36.209",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract detected-discipline sheet count adjustment from RFI log preview into a helper."
     },
     {
