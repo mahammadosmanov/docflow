@@ -55,6 +55,44 @@ fn queue_unplaced_final_review(
     manual_rows.push(review);
 }
 
+/// Builds the manual-review row for a signed record whose target slot is unsafe to edit.
+fn unsafe_signed_slot_row(
+    record: &SourceRecord,
+    slot: &SlotWork,
+    sheet: &str,
+    reason: &str,
+) -> FollowUpRow {
+    FollowUpRow {
+        row_id: format!(
+            "rfi-follow-up-signed-unsafe:{}:{}:{}",
+            record.canonical_rfi, slot.row, slot.layout.rfi_column
+        ),
+        sheet: sheet.to_string(),
+        row: slot.row,
+        rfi_no: record.short_rfi.clone(),
+        source_statuses: vec![signed_status_text(record).to_string()],
+        current_status: slot.current_status.clone(),
+        proposed_status: None,
+        proposed_rfi_no: None,
+        disposition: FollowUpDisposition::ManualReview,
+        reason_key: format!("warn.rfi.followUp.reason.{reason}"),
+        selectable: false,
+        enabled: false,
+        remark: None,
+        formula_fixes: Vec::new(),
+        target: FollowUpReviewTarget {
+            worksheet: slot.layout.worksheet.clone(),
+            row: slot.row,
+            rfi_column: slot.layout.rfi_column,
+            status_column: slot.layout.status_column,
+            rfi_cell: Some(slot.rfi_cell.clone()),
+            status_cell: Some(slot.status_cell.clone()),
+        },
+        source_evidence: record.evidence.clone(),
+        mapping_details: None,
+    }
+}
+
 /// Routes one signed-by record onto its target slots or queues a manual-review row.
 pub(super) fn place_signed_record<'a>(
     record: &'a SourceRecord,
@@ -161,35 +199,7 @@ pub(super) fn place_signed_record<'a>(
             }
             if let Some(reason) = slot.unsafe_reason {
                 *unmapped_count += 1;
-                manual_rows.push(FollowUpRow {
-                    row_id: format!(
-                        "rfi-follow-up-signed-unsafe:{}:{}:{}",
-                        record.canonical_rfi, slot.row, slot.layout.rfi_column
-                    ),
-                    sheet: sheet_name.to_string(),
-                    row: slot.row,
-                    rfi_no: record.short_rfi.clone(),
-                    source_statuses: vec![signed_status_text(record).to_string()],
-                    current_status: slot.current_status.clone(),
-                    proposed_status: None,
-                    proposed_rfi_no: None,
-                    disposition: FollowUpDisposition::ManualReview,
-                    reason_key: format!("warn.rfi.followUp.reason.{reason}"),
-                    selectable: false,
-                    enabled: false,
-                    remark: None,
-                    formula_fixes: Vec::new(),
-                    target: FollowUpReviewTarget {
-                        worksheet: slot.layout.worksheet.clone(),
-                        row: slot.row,
-                        rfi_column: slot.layout.rfi_column,
-                        status_column: slot.layout.status_column,
-                        rfi_cell: Some(slot.rfi_cell.clone()),
-                        status_cell: Some(slot.status_cell.clone()),
-                    },
-                    source_evidence: record.evidence.clone(),
-                    mapping_details: None,
-                });
+                manual_rows.push(unsafe_signed_slot_row(record, slot, sheet_name, reason));
                 continue;
             }
             if !slot.codes.contains(&record.canonical_rfi) {
