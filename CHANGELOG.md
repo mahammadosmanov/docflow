@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.170 - 2026-10-28
+
+### Changed
+
+- Moved OOXML sheet guard token comparison and unique direct-child lookup helpers out of `ooxml/sheet_patch.rs` into `ooxml/sheet_patch/tokens.rs` and `ooxml/sheet_patch/lookup.rs`; behavior unchanged.
+
 ## 1.36.169 - 2026-10-28
 
 ### Changed
