@@ -10,12 +10,14 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  BusyState,
   Button,
   EmptyState,
   Header,
   Notice,
 } from "../components/ui";
+import {
+  BusyState,
+} from "../components/BusyState";
 import { type Strings } from "../i18n";
 import { type Bridge } from "../lib/bridge";
 import {
