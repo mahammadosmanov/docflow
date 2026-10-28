@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.206 - 2026-10-28
+
+### Changed
+
+- Moved parallel scan OCR task planning into a helper.
+
 ## 1.36.205 - 2026-10-28
 
 ### Changed
