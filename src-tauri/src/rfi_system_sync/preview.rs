@@ -226,29 +226,12 @@ where
             }
         }
 
-        let (disposition, reason_key, selectable) = if unsafe_target || matching_log.is_empty() {
-            (
-                "rfi.systemSync.disposition.manualReview",
-                "Unsafe or incomplete workbook mapping; no unsafe cell was authorized".to_string(),
-                false,
-            )
-        } else if ready {
-            (
-                "rfi.systemSync.disposition.ready",
-                if scanned.signed_by_worley {
-                    "Worley signature detected; exact guarded updates are ready".to_string()
-                } else {
-                    "No Worley signature detected; exact Not Signed update is ready".to_string()
-                },
-                true,
-            )
-        } else {
-            (
-                "rfi.systemSync.disposition.alreadySynced",
-                "Already synchronized".to_string(),
-                false,
-            )
-        };
+        let (disposition, reason_key, selectable) = sync_disposition(
+            unsafe_target,
+            matching_log.is_empty(),
+            ready,
+            scanned.signed_by_worley,
+        );
         review_rows.push(SystemSyncRow {
             row_id,
             discipline: scanned.discipline.clone(),
@@ -431,4 +414,35 @@ fn sync_workbook_step(
         note_key: Some(note.to_string()),
         meta,
     }))
+}
+
+fn sync_disposition(
+    blocked: bool,
+    unmatched: bool,
+    ready: bool,
+    signed_by_worley: bool,
+) -> (&'static str, String, bool) {
+    if blocked || unmatched {
+        (
+            "rfi.systemSync.disposition.manualReview",
+            "Unsafe or incomplete workbook mapping; no unsafe cell was authorized".to_string(),
+            false,
+        )
+    } else if ready {
+        (
+            "rfi.systemSync.disposition.ready",
+            if signed_by_worley {
+                "Worley signature detected; exact guarded updates are ready".to_string()
+            } else {
+                "No Worley signature detected; exact Not Signed update is ready".to_string()
+            },
+            true,
+        )
+    } else {
+        (
+            "rfi.systemSync.disposition.alreadySynced",
+            "Already synchronized".to_string(),
+            false,
+        )
+    }
 }
