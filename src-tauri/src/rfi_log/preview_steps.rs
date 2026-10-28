@@ -92,6 +92,18 @@ pub(super) fn extract_email_request(
     Ok(outcome)
 }
 
+/// Deduplicates extraction review notes into one `warn.rfi.emailNeedsReview` warning.
+pub(super) fn email_review_warning(notes: &mut Vec<String>) -> Option<Warning> {
+    if notes.is_empty() {
+        return None;
+    }
+    deduplicate(notes);
+    Some(Warning {
+        key: "warn.rfi.emailNeedsReview".to_string(),
+        subject: truncate_chars(&notes.join(" | "), MAX_WARNING_CHARS),
+    })
+}
+
 /// Builds the single guarded workbook-update step, with its backup destination.
 pub(super) fn workbook_update_step(
     workbook_path: &Path,

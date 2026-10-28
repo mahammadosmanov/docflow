@@ -278,13 +278,7 @@ where
         );
         checkpoint(&cancelled)?;
     }
-    if !extraction_notes.is_empty() {
-        deduplicate(&mut extraction_notes);
-        warnings.push(Warning {
-            key: "warn.rfi.emailNeedsReview".to_string(),
-            subject: truncate_chars(&extraction_notes.join(" | "), MAX_WARNING_CHARS),
-        });
-    }
+    warnings.extend(email_review_warning(&mut extraction_notes));
     warnings.extend(warnings_for_rows(&rows, overflowed, wrap));
     let signature = signature(&workbook_path)?;
     let step = workbook_update_step(&workbook_path, &signature, &batches)?;

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.179 - 2026-10-28
+
+### Changed
+
+- Moved the RFI email review warning aggregation into `rfi_log/preview_steps.rs` as `email_review_warning`; behavior unchanged.
+
 ## 1.36.178 - 2026-10-28
 
 ### Changed
