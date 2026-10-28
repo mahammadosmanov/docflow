@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.189",
+  "currentVersion": "1.36.190",
   "releases": [
+    {
+      "version": "1.36.190",
+      "tag": "v1.36.190",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract extra-target warning reporting from replica publish preview."
+    },
     {
       "version": "1.36.189",
       "tag": "v1.36.189",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract per-attempt cleanup review recording from the print queue apply loop."
     },
     {
