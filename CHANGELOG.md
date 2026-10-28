@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.194 - 2026-10-28
+
+### Changed
+
+- Moved the PDF inspection phase out of the parallel process scan preview.
+
 ## 1.36.193 - 2026-10-28
 
 ### Changed

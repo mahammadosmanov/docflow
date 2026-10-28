@@ -378,33 +378,7 @@ where
         }
     }
     let (inspection_workers, inspections) = if ocr.supports_page_scan() {
-        let mut completed = 0_u64;
-        let (workers, results) = bounded_map_stream(
-            pdfs,
-            |pdf| crate::pdf::inspect(pdf),
-            |index, _| {
-                completed += 1;
-                progress(ProgressEvent {
-                    phase: "scan_discovery".to_string(),
-                    done: completed,
-                    total: pdfs.len() as u64,
-                    subject: display_name(&pdfs[index]),
-                });
-                Ok(())
-            },
-        )
-        .map_err(BackendError::request_failed)?;
-        (
-            workers,
-            pdfs.iter()
-                .cloned()
-                .zip(
-                    results
-                        .into_iter()
-                        .map(|result| result.map_err(|error| error.to_string())),
-                )
-                .collect::<BTreeMap<_, _>>(),
-        )
+        inspect_pdfs(pdfs, &mut progress)?
     } else {
         (0, BTreeMap::new())
     };
@@ -694,4 +668,41 @@ fn push_group_outputs(
             params.keep_original,
         );
     }
+}
+
+type PdfInspections = BTreeMap<PathBuf, Result<crate::pdf::PdfInspection, String>>;
+
+fn inspect_pdfs<P>(
+    pdfs: &[PathBuf],
+    progress: &mut P,
+) -> Result<(usize, PdfInspections), BackendError>
+where
+    P: FnMut(ProgressEvent),
+{
+    let mut completed = 0_u64;
+    let (workers, results) = bounded_map_stream(
+        pdfs,
+        |pdf| crate::pdf::inspect(pdf),
+        |index, _| {
+            completed += 1;
+            progress(ProgressEvent {
+                phase: "scan_discovery".to_string(),
+                done: completed,
+                total: pdfs.len() as u64,
+                subject: display_name(&pdfs[index]),
+            });
+            Ok(())
+        },
+    )
+    .map_err(BackendError::request_failed)?;
+    let inspections = pdfs
+        .iter()
+        .cloned()
+        .zip(
+            results
+                .into_iter()
+                .map(|result| result.map_err(|error| error.to_string())),
+        )
+        .collect();
+    Ok((workers, inspections))
 }
