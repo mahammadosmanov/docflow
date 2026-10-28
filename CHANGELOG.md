@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.161 - 2026-10-28
+
+### Changed
+
+- Moved Follow Up editor metadata and projection-budget helpers out of `rfi_follow_up/scan.rs` into `scan/editor.rs`; behavior unchanged.
+
 ## 1.36.160 - 2026-10-28
 
 ### Changed
