@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.178 - 2026-10-28
+
+### Changed
+
+- Replaced the signed-page comparison preview byte and row counters with a `PreviewBudget` helper in `stage_signed_pages/revise.rs`; behavior unchanged.
+
 ## 1.36.177 - 2026-10-28
 
 ### Changed

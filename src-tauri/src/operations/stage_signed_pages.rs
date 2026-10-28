@@ -310,9 +310,8 @@ where
     )]);
     let mut candidate_steps = JsonObject::new();
     let mut page_comparisons = JsonObject::new();
-    let mut page_preview_bytes = 0_usize;
+    let mut previews = PreviewBudget::default();
     let mut page_preview_omitted = 0_u64;
-    let mut page_preview_rows_attempted = 0_usize;
     let comparison_total = unique.len() as u64;
     for (comparison_index, (code, candidate)) in unique.into_iter().enumerate() {
         if cancelled() {
@@ -418,15 +417,11 @@ where
             choices.push(Value::String(String::new()));
         }
         let mut row_candidates = JsonObject::new();
-        let preview_allowed =
-            ocr.supports_page_previews() && page_preview_rows_attempted < MAX_PAGE_COMPARISONS;
-        if preview_allowed {
-            page_preview_rows_attempted += 1;
-        }
+        let preview_allowed = previews.begin_row(ocr.supports_page_previews());
         let signed_preview = preview_allowed
             .then(|| render_page_thumbnail_data_url(&candidate.path, candidate.page_index))
             .and_then(Result::ok)
-            .and_then(|value| accept_page_preview(value, &mut page_preview_bytes));
+            .and_then(|value| previews.accept(value));
         let mut archive_previews = JsonObject::new();
         for (index, item) in prepared.iter().enumerate() {
             let token = format!("{row_id}-candidate-{}", index + 1);
@@ -439,7 +434,7 @@ where
             if preview_allowed
                 && let Some(value) = render_page_thumbnail_data_url(&item.archive, 0)
                     .ok()
-                    .and_then(|value| accept_page_preview(value, &mut page_preview_bytes))
+                    .and_then(|value| previews.accept(value))
             {
                 archive_previews.insert(token.clone(), Value::String(value));
             }
