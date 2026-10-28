@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.169 - 2026-10-28
+
+### Changed
+
+- Moved RFI Log add preview email extraction, workbook-update step construction, and editor context out of `rfi_log.rs` into `rfi_log/preview_steps.rs`; behavior unchanged.
+
 ## 1.36.168 - 2026-10-28
 
 ### Changed
