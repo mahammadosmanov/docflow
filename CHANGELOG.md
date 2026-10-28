@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.112 - 2026-10-28
+
+### Changed
+
+- `screens/OperationScreen.tsx` moves the interrupted print-queue resume card into `screens/PrintQueueResumeCard.tsx` and drops four unused imports. Markup and behavior are unchanged; `tsc` is clean.
+
 ## 1.36.111 - 2026-10-28
 
 ### Changed

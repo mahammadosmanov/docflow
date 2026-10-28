@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.111",
+  "currentVersion": "1.36.112",
   "releases": [
+    {
+      "version": "1.36.112",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.112",
+      "summary": "Maintainability: the interrupted print-queue resume card moves out of OperationScreen.tsx into screens/PrintQueueResumeCard.tsx, and four unused imports are removed. Markup and behavior are unchanged; typecheck and the frontend suite pass."
+    },
     {
       "version": "1.36.111",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.111",
       "summary": "Maintainability: the PlanWarnings list moves out of PlanSummaries.tsx into plan/PlanWarnings.tsx. PlanView and the localization test import it from the new file. Markup and behavior are unchanged; typecheck and the frontend suite pass."
     },

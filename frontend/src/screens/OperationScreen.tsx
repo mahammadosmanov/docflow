@@ -31,8 +31,6 @@ import {
   type OperationResult,
   type PathSelection,
   type Plan,
-  type RfiPrintCandidate,
-  type RfiPrintResolution,
 } from "../types";
 import {
   isPathSelection,
@@ -54,10 +52,10 @@ import {
   ResultView,
 } from "./ResultView";
 import { BusyStage } from "./BusyStage";
+import { PrintQueueResumeCard } from "./PrintQueueResumeCard";
 import { RfiPrintFinderPanel } from "./RfiPrintFinderPanel";
 import { useRfiPrintFinder } from "./useRfiPrintFinder";
-import { persistableValues } from "../lib/operationValues";
-import { editorRowsOf, rememberedParams } from "./operationState";
+import { editorRowsOf } from "./operationState";
 import { useProgressTrail } from "./useProgressTrail";
 import { usePrintQueue } from "./usePrintQueue";
 import { useScanPreviewUpdate } from "./useScanPreviewUpdate";
@@ -332,35 +330,12 @@ export function OperationScreen({
                   <RfiPrintFinderPanel s={s} inputs={rfiInputs} finder={rfiFinder} />
                 )}
                 {latestPrintQueue && (
-                  <div className="resume-queue-card">
-                    <div>
-                      <strong>{s.t("print.resume.title")}</strong>
-                      <small>
-                        {s.t("print.resume.summary", {
-                          count: latestPrintQueue.resumable,
-                        })}
-                      </small>
-                    </div>
-                    <span className="resume-queue-actions">
-                      <Button
-                        variant="ghost"
-                        onClick={() =>
-                          void discardPrintQueue(latestPrintQueue.queueId)
-                        }
-                      >
-                        {s.t("print.resume.discard")}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        icon={<RotateCcw />}
-                        onClick={() =>
-                          void resumePrintQueue(latestPrintQueue.queueId)
-                        }
-                      >
-                        {s.t("print.resume.review")}
-                      </Button>
-                    </span>
-                  </div>
+                  <PrintQueueResumeCard
+                    queue={latestPrintQueue}
+                    s={s}
+                    onDiscard={(queueId) => discardPrintQueue(queueId)}
+                    onResume={(queueId) => resumePrintQueue(queueId)}
+                  />
                 )}
               </section>
               {error && <Notice kind="error">{error}</Notice>}
