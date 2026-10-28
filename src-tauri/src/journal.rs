@@ -687,6 +687,7 @@ mod fs_io;
 mod lock;
 mod recovery;
 mod s5;
+mod s5_accessors;
 mod s5_session;
 mod store;
 use fs_io::*;
