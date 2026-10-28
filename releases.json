@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.161",
+  "currentVersion": "1.36.162",
   "releases": [
+    {
+      "version": "1.36.162",
+      "tag": "v1.36.162",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split OOXML relationship validation and target path normalization out of relationships.rs into submodules; behavior unchanged."
+    },
     {
       "version": "1.36.161",
       "tag": "v1.36.161",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move Follow Up editor metadata and projection-budget helpers out of rfi_follow_up/scan.rs into scan/editor.rs; behavior unchanged."
     },
     {
