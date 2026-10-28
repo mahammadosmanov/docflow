@@ -96,6 +96,11 @@ export function ReviewScreen({
     void scan();
   }, [scan]);
 
+  const setAllActions = (action: (item: ReviewItem) => ReviewAction) =>
+    setActions(
+      Object.fromEntries(items.map((it) => [it.selectionId, action(it)])),
+    );
+
   const decisions: ReviewDecision[] = items
     .filter((item) => actions[item.selectionId] !== "keep")
     .map((item) => ({
@@ -197,42 +202,25 @@ export function ReviewScreen({
                       <Button
                         variant="secondary"
                         icon={<RotateCcw />}
-                        onClick={() => {
-                          setActions(
-                            Object.fromEntries(
-                              items.map((it) => [it.selectionId, "keep"]),
-                            ),
-                          );
-                        }}
+                        onClick={() => setAllActions(() => "keep")}
                       >
                         {s.t("review.selectAllKeep")}
                       </Button>
                       <Button
                         variant="secondary"
                         icon={<ArrowRight />}
-                        onClick={() => {
-                          setActions(
-                            Object.fromEntries(
-                              items.map((it) => [
-                                it.selectionId,
-                                it.code.trim() ? "put" : "keep",
-                              ]),
-                            ),
-                          );
-                        }}
+                        onClick={() =>
+                          setAllActions((it) =>
+                            it.code.trim() ? "put" : "keep",
+                          )
+                        }
                       >
                         {s.t("review.selectAllPut")}
                       </Button>
                       <Button
                         variant="secondary"
                         icon={<Trash2 />}
-                        onClick={() => {
-                          setActions(
-                            Object.fromEntries(
-                              items.map((it) => [it.selectionId, "delete"]),
-                            ),
-                          );
-                        }}
+                        onClick={() => setAllActions(() => "delete")}
                       >
                         {s.t("review.selectAllTrash")}
                       </Button>
@@ -287,7 +275,7 @@ export function ReviewScreen({
                         }
                         small
                       />
-                      {item.targetExists && actions[item.path] === "put" && (
+                      {item.targetExists && actions[item.selectionId] === "put" && (
                         <span className="row-warning">
                           <CircleAlert /> {s.t("review.willReplace")}
                         </span>

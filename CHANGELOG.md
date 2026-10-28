@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.109 - 2026-10-28
+
+### Fixed
+
+- `screens/ReviewScreen.tsx` looked up the per-file action by `item.path`, but actions are keyed by `selectionId`, so the "will replace an existing file" warning never showed. It now uses `selectionId`. The three batch buttons (keep, put, delete) share one `setAllActions` helper.
+
+### Added
+
+- `screens/ReviewScreen.test.tsx` covers the replace warning.
+
 ## 1.36.108 - 2026-10-28
 
 ### Fixed
