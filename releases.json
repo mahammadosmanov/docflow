@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.170",
+  "currentVersion": "1.36.171",
   "releases": [
+    {
+      "version": "1.36.171",
+      "tag": "v1.36.171",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move parallel signed-page inspection and page OCR prefetch out of stage_signed_pages preview into stage_signed_pages/parallel.rs; behavior unchanged."
+    },
     {
       "version": "1.36.170",
       "tag": "v1.36.170",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split OOXML sheet guard token comparison and direct-child lookup helpers out of sheet_patch.rs into sheet_patch/tokens.rs and sheet_patch/lookup.rs; behavior unchanged."
     },
     {
