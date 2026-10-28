@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.166 - 2026-10-28
+
+### Changed
+
+- Moved RFI Log revise and clipboard/table payload builders out of `rfi_log.rs` into `rfi_log/revise.rs` and `rfi_log/payloads.rs`; behavior unchanged.
+
 ## 1.36.165 - 2026-10-28
 
 ### Changed

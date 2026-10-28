@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.165",
+  "currentVersion": "1.36.166",
   "releases": [
+    {
+      "version": "1.36.166",
+      "tag": "v1.36.166",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move RFI Log revise and clipboard/table payload builders out of rfi_log.rs into rfi_log/revise.rs and rfi_log/payloads.rs; behavior unchanged."
+    },
     {
       "version": "1.36.165",
       "tag": "v1.36.165",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move complete-status sync preview out of rfi_system_sync/preview.rs into preview/complete_status.rs; behavior unchanged."
     },
     {
