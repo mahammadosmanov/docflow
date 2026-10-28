@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.216",
+  "currentVersion": "1.36.217",
   "releases": [
+    {
+      "version": "1.36.217",
+      "tag": "v1.36.217",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add unit tests for review root canonicalization."
+    },
     {
       "version": "1.36.216",
       "tag": "v1.36.216",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add unit tests for RFI file-group offered step authorization."
     },
     {
