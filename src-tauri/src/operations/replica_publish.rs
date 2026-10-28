@@ -237,30 +237,13 @@ where
         let backup_run = backup_root
             .join(&run_id)
             .join(format!("target-{target_name}"));
-        let mut directories = source
-            .directories
-            .iter()
-            .map(|relative| target_root.join(relative))
-            .filter(|path| !path.exists())
-            .collect::<BTreeSet<_>>();
-        for relative in &replacement_paths {
-            if let Some(parent) = relative.parent() {
-                collect_missing_directories(
-                    &backup_root,
-                    &backup_run.join(parent),
-                    &mut directories,
-                )?;
-            }
-        }
-        for directory in directories {
-            steps.push(Step {
-                kind: StepKind::Mkdir,
-                src: None,
-                dst: Some(directory.to_string_lossy().into_owned()),
-                note_key: Some("note.replica.mkdir".to_string()),
-                meta: JsonObject::new(),
-            });
-        }
+        steps.extend(target_mkdir_steps(
+            &source,
+            target_root,
+            &backup_root,
+            &backup_run,
+            &replacement_paths,
+        )?);
 
         for (relative, source_file) in &source.files {
             let destination = target_root.join(relative);
@@ -375,6 +358,37 @@ where
         warnings,
         meta,
     })
+}
+
+/// Plans the directories a target needs before its copies and replacements can land.
+fn target_mkdir_steps(
+    source: &TreeSnapshot,
+    target_root: &Path,
+    backup_root: &Path,
+    backup_run: &Path,
+    replacement_paths: &BTreeSet<PathBuf>,
+) -> Result<Vec<Step>, BackendError> {
+    let mut directories = source
+        .directories
+        .iter()
+        .map(|relative| target_root.join(relative))
+        .filter(|path| !path.exists())
+        .collect::<BTreeSet<_>>();
+    for relative in replacement_paths {
+        if let Some(parent) = relative.parent() {
+            collect_missing_directories(backup_root, &backup_run.join(parent), &mut directories)?;
+        }
+    }
+    Ok(directories
+        .into_iter()
+        .map(|directory| Step {
+            kind: StepKind::Mkdir,
+            src: None,
+            dst: Some(directory.to_string_lossy().into_owned()),
+            note_key: Some("note.replica.mkdir".to_string()),
+            meta: JsonObject::new(),
+        })
+        .collect())
 }
 
 fn push_target_extra_warnings<A, B>(

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.254 - 2026-10-28
+
+### Changed
+
+- Extracted replica target directory planning into a helper.
+
 ## 1.36.253 - 2026-10-28
 
 ### Changed

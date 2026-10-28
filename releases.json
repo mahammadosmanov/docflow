@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.253",
+  "currentVersion": "1.36.254",
   "releases": [
+    {
+      "version": "1.36.254",
+      "tag": "v1.36.254",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract replica target directory planning into a helper."
+    },
     {
       "version": "1.36.253",
       "tag": "v1.36.253",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share PDF needs-review step construction in process scans."
     },
     {
