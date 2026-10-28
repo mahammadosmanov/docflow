@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.224 - 2026-10-28
+
+### Changed
+
+- Extracted per-candidate Worley signature analysis from system root scan into a helper.
+
 ## 1.36.223 - 2026-10-28
 
 ### Changed
