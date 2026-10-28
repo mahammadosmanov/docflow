@@ -177,15 +177,14 @@ pub(super) fn place_record(
     if (candidate_count == 0 || candidate_count > 1 && !exact_multi_area)
         && (candidate_count == 0 || existing_slots.is_empty())
     {
-        *unmapped_count += 1;
         let Some(layout) = layouts
             .iter()
             .find(|layout| layout.worksheet.name == sheet_name && layout.rfi_column == rfi_column)
             .cloned()
         else {
-            *unmapped_count -= 1;
             return Ok(());
         };
+        *unmapped_count += 1;
         manual_rows.push(manual_review_row(
             format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
             sheet_name,
