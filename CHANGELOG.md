@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.180 - 2026-10-28
+
+### Changed
+
+- Split the S5 staging transition match into artifact-parent, retained-artifact, and publication groups in `journal/s5_transition.rs`; behavior unchanged.
+
 ## 1.36.179 - 2026-10-28
 
 ### Changed

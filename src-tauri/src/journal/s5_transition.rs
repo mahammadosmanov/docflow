@@ -45,18 +45,31 @@ pub(super) fn apply_candidate_transition(
     }
 }
 
-/// Artifact-parent, retained-artifact, publication, and canonical-write transitions.
+/// Routes staging transitions to their artifact-parent, retained-artifact, or publication group.
 fn staging_transition(
     candidate: &mut JournalRecord,
     transition: S5Transition,
     leases: S5TransitionLeases,
 ) -> Result<(), BackendError> {
-    let S5TransitionLeases {
-        apply_lease,
-        undo_lease,
-        undo_mode,
-        ..
-    } = leases;
+    match transition {
+        S5Transition::SetPendingArtifactParent(_) | S5Transition::ResolveArtifactParent(_) => {
+            artifact_parent_transition(candidate, transition)
+        }
+        S5Transition::SetPendingRetainedArtifact(_)
+        | S5Transition::MarkPendingRetainedCreated(_)
+        | S5Transition::MarkPendingRetainedIdentityUnknown
+        | S5Transition::FinalizeRetainedArtifact { .. } => {
+            retained_artifact_transition(candidate, transition)
+        }
+        _ => publication_transition(candidate, transition, leases),
+    }
+}
+
+/// Artifact-parent intent and creation-outcome transitions.
+fn artifact_parent_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+) -> Result<(), BackendError> {
     match transition {
         S5Transition::SetPendingArtifactParent(pending) => {
             if candidate.pending_artifact_parent.is_some()
@@ -97,6 +110,17 @@ fn staging_transition(
             }
             candidate.follow_up_phase = Some(FollowUpJournalPhase::ArtifactParentReady);
         }
+        _ => unreachable!("routed by staging_transition"),
+    }
+    Ok(())
+}
+
+/// Retained-artifact intent, creation, and finalization transitions.
+fn retained_artifact_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+) -> Result<(), BackendError> {
+    match transition {
         S5Transition::SetPendingRetainedArtifact(pending) => {
             if candidate.pending_retained_artifact.is_some() {
                 return Err(BackendError::journal_invalid(
@@ -147,6 +171,24 @@ fn staging_transition(
             upsert_evidence(&mut candidate.retained_evidence, evidence)?;
             candidate.follow_up_phase = Some(phase);
         }
+        _ => unreachable!("routed by staging_transition"),
+    }
+    Ok(())
+}
+
+/// Retained publication and canonical-write transitions.
+fn publication_transition(
+    candidate: &mut JournalRecord,
+    transition: S5Transition,
+    leases: S5TransitionLeases,
+) -> Result<(), BackendError> {
+    let S5TransitionLeases {
+        apply_lease,
+        undo_lease,
+        undo_mode,
+        ..
+    } = leases;
+    match transition {
         S5Transition::InitializePublication(publication) => {
             if candidate.pending_publication.is_some()
                 || publication.phase != RetainedPublicationPhase::Prepared
@@ -240,7 +282,7 @@ fn staging_transition(
                 .ok_or_else(|| BackendError::journal_invalid("S5 publication is not active"))?
                 .phase = RetainedPublicationPhase::VerifyingCanonical;
         }
-        _ => unreachable!("routed by apply_candidate_transition"),
+        _ => unreachable!("routed by staging_transition"),
     }
     Ok(())
 }
