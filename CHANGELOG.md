@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.143 - 2026-10-28
+
+### Changed
+
+- Extracted four browser-demo preview branches (`rfi.complete_status_sync`, `rfi.group_files`, `files.batch_print`, `demoFastCoverOperation`) from `previewOperation` into named helpers in `frontend/src/lib/mockPlanHandlers.ts`. `previewOperation` drops from about 480 to about 180 lines. Browser-only demo data; no runtime behavior change; 294 frontend tests pass.
+
 ## 1.36.142 - 2026-10-28
 
 ### Changed

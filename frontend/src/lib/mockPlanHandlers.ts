@@ -17,6 +17,315 @@ export type MockPlanState = {
   fastScanPlan: Plan | null;
 };
 
+function previewCompleteStatus(state: MockPlanState, values: Record<string, unknown>): Plan {
+  const code = "AZE-SUN-INT-QMS-RFI-MEC-0700";
+  const workbook = mockPath(
+    values.rfi_log_workbook,
+    "/Users/demo/Documents/RFI Log.xlsm",
+  );
+  const row = {
+    _rowId: "complete-row-1",
+    enabled: true,
+    selectable: true,
+    discipline: "MEC",
+    rfiNo: "MEC-0700",
+    canonicalRfi: code,
+    pdfPath: `MEC/${code}/RFI No. ${code}.pdf`,
+    pdfCount: 1,
+    pdfPaths: `MEC/${code}/RFI No. ${code}.pdf`,
+    currentStatus: "Ongoing",
+    proposedStatus: "Completed",
+    action: "Set matching Inspection Status cell(s) to Completed",
+    disposition: "rfi.completeStatus.disposition.ready",
+    reasonKey: "Exact completed RFI PDF and safe RFI Log mapping found",
+  };
+  const plan = {
+    planId: "demo-complete-status-plan",
+    opId: "rfi.complete_status_sync",
+    warnings: [],
+    meta: {
+      workerCount: 4,
+      directoriesScanned: 42,
+      entriesScanned: 500,
+      exactPdfCount: 1,
+      editor: {
+        kind: "recordTable",
+        layout: "compact",
+        titleKey: "rfi.completeStatus.editor.title",
+        rowCountKey: "rfi.completeStatus.editor.rowCount",
+        groupField: "discipline",
+        selectionGroupFields: [],
+        selectionEnabled: true,
+        bulkEnabled: true,
+        detailsEnabled: true,
+        detailsDefaultVisible: false,
+        duplicateEnabled: false,
+        requiredFields: ["enabled"],
+        columns: [
+          { key: "enabled", labelKey: "rfi.completeStatus.column.enabled", kind: "bool" },
+          { key: "discipline", labelKey: "rfi.completeStatus.column.discipline", kind: "readonly" },
+          { key: "rfiNo", labelKey: "rfi.completeStatus.column.rfiNo", kind: "readonly" },
+          { key: "pdfPath", labelKey: "rfi.completeStatus.column.pdfPath", kind: "readonly" },
+          { key: "currentStatus", labelKey: "rfi.completeStatus.column.currentStatus", kind: "readonly" },
+          { key: "proposedStatus", labelKey: "rfi.completeStatus.column.proposedStatus", kind: "readonly" },
+          { key: "disposition", labelKey: "rfi.completeStatus.column.disposition", kind: "readonly", display: "localizedKey" },
+        ],
+        rows: [row],
+      },
+    },
+    steps: [
+      {
+        kind: "workbook_update" as const,
+        src: workbook,
+        dst: `${workbook}.completion-backup`,
+        noteKey: "note.rfi.completeStatus.rfiLog",
+        meta: {
+          syncStep: {
+            workbookKind: "rfiLogStatus",
+            updates: {
+              MEC: {
+                "10:16": {
+                  rowId: row._rowId,
+                  expectedValue: "Ongoing",
+                  replacementValue: "Completed",
+                  row: 10,
+                  col: 16,
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
+  } satisfies Plan;
+  state.completeStatusPlan = plan;
+  return plan;
+}
+
+function previewGroupFiles(state: MockPlanState, values: Record<string, unknown>): Plan {
+  const source = mockPath(values.source, "/Incoming");
+  const destination = mockPath(values.destination, "/Grouped");
+  const rows = [
+    {
+      _rowId: "file-group-0-0",
+      enabled: true,
+      rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1260",
+      sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260 SKETCH.pdf",
+      method: "rfi.fileGroup.method.filename",
+      confidence: 1,
+    },
+    {
+      _rowId: "file-group-1-0",
+      enabled: true,
+      rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1261",
+      sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260_1261.eml",
+      method: "rfi.fileGroup.method.mail",
+      confidence: 1,
+    },
+  ];
+  const plan = {
+    planId: "demo-file-group-plan",
+    opId: "rfi.group_files",
+    warnings: [],
+    meta: {
+      sourceReadOnly: true,
+      workerCount: 4,
+      editor: {
+        kind: "recordTable",
+        layout: "compact",
+        titleKey: "rfi.fileGroup.editor.title",
+        rowCountKey: "rfi.fileGroup.editor.rowCount",
+        groupField: "rfiCode",
+        selectionGroupFields: ["rfiCode", "sourceFile"],
+        selectionEnabled: true,
+        bulkEnabled: true,
+        requiredFields: ["enabled"],
+        columns: [
+          { key: "enabled", labelKey: "rfi.fileGroup.column.enabled", kind: "bool", width: 64 },
+          { key: "rfiCode", labelKey: "rfi.fileGroup.column.rfiCode", kind: "readonly", width: 260, bulk: false },
+          { key: "sourceFile", labelKey: "rfi.fileGroup.column.sourceFile", kind: "readonly", width: 300, bulk: false },
+          { key: "method", labelKey: "rfi.fileGroup.column.method", kind: "readonly", display: "localizedKey", width: 120, bulk: false },
+          { key: "confidence", labelKey: "ocr.confidence", kind: "readonly", display: "percent", width: 112, bulk: false },
+        ],
+        rows,
+      },
+    },
+    steps: rows.flatMap((row) => [
+      {
+        kind: "mkdir" as const,
+        src: null,
+        dst: `${destination}/${row.rfiCode}`,
+        noteKey: "note.rfi.fileGroup.folderCreated",
+        meta: { code: row.rfiCode },
+      },
+      {
+        kind: "copy" as const,
+        src: `${source}/${row.sourceFile}`,
+        dst: `${destination}/${row.rfiCode}/${row.sourceFile}`,
+        noteKey: "note.rfi.fileGroup.copy",
+        meta: { rowId: row._rowId, code: row.rfiCode },
+      },
+    ]),
+  } satisfies Plan;
+  state.fileGroupPlan = plan;
+  return plan;
+}
+
+function previewBatchPrint(state: MockPlanState, values: Record<string, unknown>): Plan {
+  const files = Array.isArray(values.files)
+    ? values.files.map((value) => mockPath(value, ""))
+    : ["/Users/demo/Documents/first.pdf"];
+  const rows = files.map((path, index) => ({
+    _rowId: `file-${index + 1}`,
+    enabled: true,
+    status: "ready",
+    file: path.split(/[\\/]/).pop() ?? path,
+    path,
+    format: path.split(".").pop()?.toUpperCase() ?? "FILE",
+    pageRange: "all",
+    printer: "Office Printer",
+    paper: index ? "A3" : "A4",
+    orientation: "auto",
+    scaling: "fit",
+    color: "printer",
+    duplex: "printer",
+    copies: 1,
+  }));
+  const plan = {
+    planId: "demo-print-plan",
+    opId: "files.batch_print",
+    warnings: [],
+    meta: {
+      editor: {
+        kind: "recordTable",
+        titleKey: "print.editor.title",
+        rowCountKey: "print.editor.rowCount",
+        groupField: "format",
+        selectionGroupFields: ["format"],
+        selectionEnabled: true,
+        bulkEnabled: true,
+        columns: [
+          { key: "enabled", labelKey: "print.col.include", kind: "bool", width: 64 },
+          { key: "status", labelKey: "print.col.status", kind: "readonly", width: 90, bulk: false },
+          { key: "file", labelKey: "print.col.file", kind: "readonly", width: 260, bulk: false },
+          { key: "format", labelKey: "print.col.format", kind: "readonly", width: 76, bulk: false },
+          { key: "pageRange", labelKey: "print.col.pageRange", helpKey: "print.col.pageRange.help", kind: "text", width: 112, bulk: false },
+          { key: "printer", labelKey: "print.col.printer", kind: "choice", width: 180 },
+          { key: "paper", labelKey: "print.col.paper", kind: "choice", width: 88 },
+          { key: "orientation", labelKey: "print.col.orientation", kind: "choice", width: 110 },
+          { key: "scaling", labelKey: "print.col.scaling", kind: "choice", width: 110 },
+          { key: "color", labelKey: "print.col.color", kind: "choice", width: 100 },
+          { key: "duplex", labelKey: "print.col.duplex", kind: "choice", width: 116 },
+          { key: "copies", labelKey: "print.col.copies", kind: "int", width: 76 },
+        ],
+        choices: {
+          printer: ["Office Printer"],
+          paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+          orientation: ["auto", "portrait", "landscape"],
+          scaling: ["fit", "actual", "shrink"],
+          color: ["printer", "color", "grayscale"],
+          duplex: ["printer", "simplex", "long", "short"],
+        },
+        choiceLabels: {},
+        rows,
+      },
+    },
+    steps: rows.map((row) => ({
+      kind: "print" as const,
+      src: row.path,
+      dst: row.path,
+      noteKey: "note.print.queued",
+      meta: {},
+    })),
+  } satisfies Plan;
+  state.printPlan = plan;
+  return plan;
+}
+
+function previewFastCover(state: MockPlanState, values: Record<string, unknown>): Plan {
+  const destination = mockPath(values.dest, "/RFI");
+  const organize = values.organize_into_rfi_folders !== false;
+  const code = "AZE-SUN-INT-QMS-RFI-CIV-0064";
+  const discipline = code.split("-")[5];
+  const target = `${destination}${
+    organize ? `/${discipline}` : ""
+  }/RFI No. ${code}.pdf`;
+  const sourceFile = "combined_scan.pdf";
+  const sourcePath = `${mockPath(values.source, "/Scans")}/${sourceFile}`;
+  const row = {
+    _rowId: "scan-output-0",
+    sourceFile,
+    evidenceKey: "rfi.fastScan.evidence.confirmed",
+    detectedCode: code,
+    code,
+    target,
+  };
+  const plan = {
+    planId: "demo-fast-scan-plan",
+    opId: demoFastCoverOperation.id,
+    warnings: [],
+    meta: {
+      scanEdit: {
+        destinationRoot: destination,
+        organizeIntoRfiFolders: organize,
+      },
+      editor: {
+        kind: "rfiScan",
+        titleKey: "rfi.fastScan.editor.title",
+        rowCountKey: "rfi.fastScan.editor.rowCount",
+        groupField: "_rowId",
+        requiredFields: ["code"],
+        columns: [
+          {
+            key: "sourceFile",
+            labelKey: "rfi.fastScan.column.sourceFile",
+            kind: "readonly",
+            width: 170,
+          },
+          {
+            key: "evidenceKey",
+            labelKey: "rfi.fastScan.column.evidence",
+            kind: "readonly",
+            display: "localizedKey",
+            width: 170,
+          },
+          {
+            key: "detectedCode",
+            labelKey: "rfi.fastScan.column.detectedCode",
+            kind: "readonly",
+            width: 270,
+          },
+          {
+            key: "code",
+            labelKey: "rfi.fastScan.column.code",
+            kind: "text",
+            width: 310,
+          },
+          {
+            key: "target",
+            labelKey: "rfi.fastScan.column.target",
+            kind: "readonly",
+            width: 360,
+          },
+        ],
+        rows: [row],
+      },
+    },
+    steps: [
+      {
+        kind: "copy",
+        src: sourcePath,
+        dst: target,
+        noteKey: "note.renamed",
+        meta: { code, scanEditRowId: row._rowId },
+      },
+    ],
+  } satisfies Plan;
+  state.fastScanPlan = plan;
+  return plan;
+}
+
+
 export function previewOperation(
   state: MockPlanState,
   params: Record<string, unknown>,
@@ -33,229 +342,13 @@ export function previewOperation(
     throw new BridgeError("validation", `error.param.required.${missing.name}`);
   }
   if (params.opId === "rfi.complete_status_sync") {
-    const code = "AZE-SUN-INT-QMS-RFI-MEC-0700";
-    const workbook = mockPath(
-      values.rfi_log_workbook,
-      "/Users/demo/Documents/RFI Log.xlsm",
-    );
-    const row = {
-      _rowId: "complete-row-1",
-      enabled: true,
-      selectable: true,
-      discipline: "MEC",
-      rfiNo: "MEC-0700",
-      canonicalRfi: code,
-      pdfPath: `MEC/${code}/RFI No. ${code}.pdf`,
-      pdfCount: 1,
-      pdfPaths: `MEC/${code}/RFI No. ${code}.pdf`,
-      currentStatus: "Ongoing",
-      proposedStatus: "Completed",
-      action: "Set matching Inspection Status cell(s) to Completed",
-      disposition: "rfi.completeStatus.disposition.ready",
-      reasonKey: "Exact completed RFI PDF and safe RFI Log mapping found",
-    };
-    const plan = {
-      planId: "demo-complete-status-plan",
-      opId: "rfi.complete_status_sync",
-      warnings: [],
-      meta: {
-        workerCount: 4,
-        directoriesScanned: 42,
-        entriesScanned: 500,
-        exactPdfCount: 1,
-        editor: {
-          kind: "recordTable",
-          layout: "compact",
-          titleKey: "rfi.completeStatus.editor.title",
-          rowCountKey: "rfi.completeStatus.editor.rowCount",
-          groupField: "discipline",
-          selectionGroupFields: [],
-          selectionEnabled: true,
-          bulkEnabled: true,
-          detailsEnabled: true,
-          detailsDefaultVisible: false,
-          duplicateEnabled: false,
-          requiredFields: ["enabled"],
-          columns: [
-            { key: "enabled", labelKey: "rfi.completeStatus.column.enabled", kind: "bool" },
-            { key: "discipline", labelKey: "rfi.completeStatus.column.discipline", kind: "readonly" },
-            { key: "rfiNo", labelKey: "rfi.completeStatus.column.rfiNo", kind: "readonly" },
-            { key: "pdfPath", labelKey: "rfi.completeStatus.column.pdfPath", kind: "readonly" },
-            { key: "currentStatus", labelKey: "rfi.completeStatus.column.currentStatus", kind: "readonly" },
-            { key: "proposedStatus", labelKey: "rfi.completeStatus.column.proposedStatus", kind: "readonly" },
-            { key: "disposition", labelKey: "rfi.completeStatus.column.disposition", kind: "readonly", display: "localizedKey" },
-          ],
-          rows: [row],
-        },
-      },
-      steps: [
-        {
-          kind: "workbook_update" as const,
-          src: workbook,
-          dst: `${workbook}.completion-backup`,
-          noteKey: "note.rfi.completeStatus.rfiLog",
-          meta: {
-            syncStep: {
-              workbookKind: "rfiLogStatus",
-              updates: {
-                MEC: {
-                  "10:16": {
-                    rowId: row._rowId,
-                    expectedValue: "Ongoing",
-                    replacementValue: "Completed",
-                    row: 10,
-                    col: 16,
-                  },
-                },
-              },
-            },
-          },
-        },
-      ],
-    } satisfies Plan;
-    state.completeStatusPlan = plan;
-    result = plan;
-    return result;
+    return previewCompleteStatus(state, values);
   }
   if (params.opId === "rfi.group_files") {
-    const source = mockPath(values.source, "/Incoming");
-    const destination = mockPath(values.destination, "/Grouped");
-    const rows = [
-      {
-        _rowId: "file-group-0-0",
-        enabled: true,
-        rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1260",
-        sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260 SKETCH.pdf",
-        method: "rfi.fileGroup.method.filename",
-        confidence: 1,
-      },
-      {
-        _rowId: "file-group-1-0",
-        enabled: true,
-        rfiCode: "AZE-SUN-INT-QMS-RFI-CIV-1261",
-        sourceFile: "AZE-SUN-INT-QMS-RFI-CIV-1260_1261.eml",
-        method: "rfi.fileGroup.method.mail",
-        confidence: 1,
-      },
-    ];
-    const plan = {
-      planId: "demo-file-group-plan",
-      opId: "rfi.group_files",
-      warnings: [],
-      meta: {
-        sourceReadOnly: true,
-        workerCount: 4,
-        editor: {
-          kind: "recordTable",
-          layout: "compact",
-          titleKey: "rfi.fileGroup.editor.title",
-          rowCountKey: "rfi.fileGroup.editor.rowCount",
-          groupField: "rfiCode",
-          selectionGroupFields: ["rfiCode", "sourceFile"],
-          selectionEnabled: true,
-          bulkEnabled: true,
-          requiredFields: ["enabled"],
-          columns: [
-            { key: "enabled", labelKey: "rfi.fileGroup.column.enabled", kind: "bool", width: 64 },
-            { key: "rfiCode", labelKey: "rfi.fileGroup.column.rfiCode", kind: "readonly", width: 260, bulk: false },
-            { key: "sourceFile", labelKey: "rfi.fileGroup.column.sourceFile", kind: "readonly", width: 300, bulk: false },
-            { key: "method", labelKey: "rfi.fileGroup.column.method", kind: "readonly", display: "localizedKey", width: 120, bulk: false },
-            { key: "confidence", labelKey: "ocr.confidence", kind: "readonly", display: "percent", width: 112, bulk: false },
-          ],
-          rows,
-        },
-      },
-      steps: rows.flatMap((row) => [
-        {
-          kind: "mkdir" as const,
-          src: null,
-          dst: `${destination}/${row.rfiCode}`,
-          noteKey: "note.rfi.fileGroup.folderCreated",
-          meta: { code: row.rfiCode },
-        },
-        {
-          kind: "copy" as const,
-          src: `${source}/${row.sourceFile}`,
-          dst: `${destination}/${row.rfiCode}/${row.sourceFile}`,
-          noteKey: "note.rfi.fileGroup.copy",
-          meta: { rowId: row._rowId, code: row.rfiCode },
-        },
-      ]),
-    } satisfies Plan;
-    state.fileGroupPlan = plan;
-    result = plan;
-    return result;
+    return previewGroupFiles(state, values);
   }
   if (params.opId === "files.batch_print") {
-    const files = Array.isArray(values.files)
-      ? values.files.map((value) => mockPath(value, ""))
-      : ["/Users/demo/Documents/first.pdf"];
-    const rows = files.map((path, index) => ({
-      _rowId: `file-${index + 1}`,
-      enabled: true,
-      status: "ready",
-      file: path.split(/[\\/]/).pop() ?? path,
-      path,
-      format: path.split(".").pop()?.toUpperCase() ?? "FILE",
-      pageRange: "all",
-      printer: "Office Printer",
-      paper: index ? "A3" : "A4",
-      orientation: "auto",
-      scaling: "fit",
-      color: "printer",
-      duplex: "printer",
-      copies: 1,
-    }));
-    const plan = {
-      planId: "demo-print-plan",
-      opId: "files.batch_print",
-      warnings: [],
-      meta: {
-        editor: {
-          kind: "recordTable",
-          titleKey: "print.editor.title",
-          rowCountKey: "print.editor.rowCount",
-          groupField: "format",
-          selectionGroupFields: ["format"],
-          selectionEnabled: true,
-          bulkEnabled: true,
-          columns: [
-            { key: "enabled", labelKey: "print.col.include", kind: "bool", width: 64 },
-            { key: "status", labelKey: "print.col.status", kind: "readonly", width: 90, bulk: false },
-            { key: "file", labelKey: "print.col.file", kind: "readonly", width: 260, bulk: false },
-            { key: "format", labelKey: "print.col.format", kind: "readonly", width: 76, bulk: false },
-            { key: "pageRange", labelKey: "print.col.pageRange", helpKey: "print.col.pageRange.help", kind: "text", width: 112, bulk: false },
-            { key: "printer", labelKey: "print.col.printer", kind: "choice", width: 180 },
-            { key: "paper", labelKey: "print.col.paper", kind: "choice", width: 88 },
-            { key: "orientation", labelKey: "print.col.orientation", kind: "choice", width: 110 },
-            { key: "scaling", labelKey: "print.col.scaling", kind: "choice", width: 110 },
-            { key: "color", labelKey: "print.col.color", kind: "choice", width: 100 },
-            { key: "duplex", labelKey: "print.col.duplex", kind: "choice", width: 116 },
-            { key: "copies", labelKey: "print.col.copies", kind: "int", width: 76 },
-          ],
-          choices: {
-            printer: ["Office Printer"],
-            paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
-            orientation: ["auto", "portrait", "landscape"],
-            scaling: ["fit", "actual", "shrink"],
-            color: ["printer", "color", "grayscale"],
-            duplex: ["printer", "simplex", "long", "short"],
-          },
-          choiceLabels: {},
-          rows,
-        },
-      },
-      steps: rows.map((row) => ({
-        kind: "print" as const,
-        src: row.path,
-        dst: row.path,
-        noteKey: "note.print.queued",
-        meta: {},
-      })),
-    } satisfies Plan;
-    state.printPlan = plan;
-    result = plan;
-    return result;
+    return previewBatchPrint(state, values);
   }
   if (params.opId === "rfi.normalize_pdf_orientation") {
     result = {
@@ -397,87 +490,7 @@ export function previewOperation(
     return result;
   }
   if (params.opId === demoFastCoverOperation.id) {
-    const destination = mockPath(values.dest, "/RFI");
-    const organize = values.organize_into_rfi_folders !== false;
-    const code = "AZE-SUN-INT-QMS-RFI-CIV-0064";
-    const discipline = code.split("-")[5];
-    const target = `${destination}${
-      organize ? `/${discipline}` : ""
-    }/RFI No. ${code}.pdf`;
-    const sourceFile = "combined_scan.pdf";
-    const sourcePath = `${mockPath(values.source, "/Scans")}/${sourceFile}`;
-    const row = {
-      _rowId: "scan-output-0",
-      sourceFile,
-      evidenceKey: "rfi.fastScan.evidence.confirmed",
-      detectedCode: code,
-      code,
-      target,
-    };
-    const plan = {
-      planId: "demo-fast-scan-plan",
-      opId: demoFastCoverOperation.id,
-      warnings: [],
-      meta: {
-        scanEdit: {
-          destinationRoot: destination,
-          organizeIntoRfiFolders: organize,
-        },
-        editor: {
-          kind: "rfiScan",
-          titleKey: "rfi.fastScan.editor.title",
-          rowCountKey: "rfi.fastScan.editor.rowCount",
-          groupField: "_rowId",
-          requiredFields: ["code"],
-          columns: [
-            {
-              key: "sourceFile",
-              labelKey: "rfi.fastScan.column.sourceFile",
-              kind: "readonly",
-              width: 170,
-            },
-            {
-              key: "evidenceKey",
-              labelKey: "rfi.fastScan.column.evidence",
-              kind: "readonly",
-              display: "localizedKey",
-              width: 170,
-            },
-            {
-              key: "detectedCode",
-              labelKey: "rfi.fastScan.column.detectedCode",
-              kind: "readonly",
-              width: 270,
-            },
-            {
-              key: "code",
-              labelKey: "rfi.fastScan.column.code",
-              kind: "text",
-              width: 310,
-            },
-            {
-              key: "target",
-              labelKey: "rfi.fastScan.column.target",
-              kind: "readonly",
-              width: 360,
-            },
-          ],
-          rows: [row],
-        },
-      },
-      steps: [
-        {
-          kind: "copy",
-          src: sourcePath,
-          dst: target,
-          noteKey: "note.renamed",
-          meta: { code, scanEditRowId: row._rowId },
-        },
-      ],
-    } satisfies Plan;
-    state.fastScanPlan = plan;
-    result = plan;
-    return result;
+    return previewFastCover(state, values);
   }
   result = {
     planId: "demo-plan",
