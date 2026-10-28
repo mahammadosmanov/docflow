@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.229",
+  "currentVersion": "1.36.230",
   "releases": [
+    {
+      "version": "1.36.230",
+      "tag": "v1.36.230",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract publish status row disposition mapping and editor assembly into helpers."
+    },
     {
       "version": "1.36.229",
       "tag": "v1.36.229",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract replica publish source index and schedule limit validation into helpers."
     },
     {

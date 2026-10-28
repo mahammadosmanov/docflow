@@ -91,29 +91,8 @@ where
                 disposition = Disposition::NotInLog;
             }
         }
-        let (key, action, selectable) = match (disposition, pending.is_empty()) {
-            (Disposition::Ready, false) => (
-                "ready",
-                "Set matching Inspection Status cell(s) to Ongoing",
-                true,
-            ),
-            (Disposition::Ready, true) | (Disposition::NotInLog, _) if !matching.is_empty() => (
-                "unsafeCell",
-                "Inspection Status cell is missing, merged, or formula-bearing",
-                false,
-            ),
-            (Disposition::IncompleteFiles, _) => (
-                "incompleteFiles",
-                "Exactly one PDF and one DOCX are required",
-                false,
-            ),
-            (Disposition::StatusNotBlank, _) => (
-                "statusNotBlank",
-                "Inspection Status is already filled",
-                false,
-            ),
-            _ => ("notInLog", "RFI was not found in the RFI Log", false),
-        };
+        let (key, action, selectable) =
+            row_disposition(disposition, !pending.is_empty(), !matching.is_empty());
         if selectable {
             ready_codes.push(code.clone());
             for (sheet, cell_key, update) in pending {
@@ -199,24 +178,7 @@ where
             subject: "No safe RFI Log status changes are ready".to_string(),
         });
     }
-    let columns = vec![
-        json!({"key":"enabled","labelKey":"rfi.publishStatus.column.enabled","kind":"bool","bulk":true,"disabledWhen":{"field":"selectable","equals":false}}),
-        json!({"key":"discipline","labelKey":"rfi.publishStatus.column.discipline","kind":"readonly"}),
-        json!({"key":"rfiNo","labelKey":"rfi.publishStatus.column.rfiNo","kind":"readonly"}),
-        json!({"key":"pdfName","labelKey":"rfi.publishStatus.column.pdfName","kind":"readonly"}),
-        json!({"key":"docxName","labelKey":"rfi.publishStatus.column.docxName","kind":"readonly"}),
-        json!({"key":"currentStatus","labelKey":"rfi.publishStatus.column.currentStatus","kind":"readonly"}),
-        json!({"key":"proposedStatus","labelKey":"rfi.publishStatus.column.proposedStatus","kind":"readonly"}),
-        json!({"key":"disposition","labelKey":"rfi.publishStatus.column.disposition","kind":"readonly","display":"localizedKey"}),
-        json!({"key":"action","labelKey":"rfi.publishStatus.column.action","kind":"readonly","detail":true}),
-    ];
-    let editor = json!({
-        "kind":"recordTable","layout":"compact","titleKey":"rfi.publishStatus.editor.title",
-        "rowCountKey":"rfi.publishStatus.editor.rowCount","requiredFields":["enabled"],
-        "groupField":"discipline","selectionGroupFields":[],"columns":columns,"rows":review_rows,
-        "duplicateEnabled":false,"selectionEnabled":true,"bulkEnabled":true,"reorderable":false,
-        "detailsEnabled":true,"detailsDefaultVisible":false,"copyEnabled":false
-    });
+    let editor = publish_status_editor(review_rows);
     let mut meta = JsonObject::new();
     meta.insert("editor".to_string(), editor);
     progress(ProgressEvent {
@@ -231,6 +193,58 @@ where
         steps,
         warnings,
         meta,
+    })
+}
+
+/// Maps an intake disposition to its report key, action text, and selectability.
+fn row_disposition(
+    disposition: Disposition,
+    has_pending_updates: bool,
+    has_matching_rows: bool,
+) -> (&'static str, &'static str, bool) {
+    match (disposition, has_pending_updates) {
+        (Disposition::Ready, true) => (
+            "ready",
+            "Set matching Inspection Status cell(s) to Ongoing",
+            true,
+        ),
+        (Disposition::Ready, false) | (Disposition::NotInLog, _) if has_matching_rows => (
+            "unsafeCell",
+            "Inspection Status cell is missing, merged, or formula-bearing",
+            false,
+        ),
+        (Disposition::IncompleteFiles, _) => (
+            "incompleteFiles",
+            "Exactly one PDF and one DOCX are required",
+            false,
+        ),
+        (Disposition::StatusNotBlank, _) => (
+            "statusNotBlank",
+            "Inspection Status is already filled",
+            false,
+        ),
+        _ => ("notInLog", "RFI was not found in the RFI Log", false),
+    }
+}
+
+fn publish_status_editor(review_rows: Vec<Value>) -> Value {
+    let columns = vec![
+        json!({"key":"enabled","labelKey":"rfi.publishStatus.column.enabled","kind":"bool","bulk":true,"disabledWhen":{"field":"selectable","equals":false}}),
+        json!({"key":"discipline","labelKey":"rfi.publishStatus.column.discipline","kind":"readonly"}),
+        json!({"key":"rfiNo","labelKey":"rfi.publishStatus.column.rfiNo","kind":"readonly"}),
+        json!({"key":"pdfName","labelKey":"rfi.publishStatus.column.pdfName","kind":"readonly"}),
+        json!({"key":"docxName","labelKey":"rfi.publishStatus.column.docxName","kind":"readonly"}),
+        json!({"key":"currentStatus","labelKey":"rfi.publishStatus.column.currentStatus","kind":"readonly"}),
+        json!({"key":"proposedStatus","labelKey":"rfi.publishStatus.column.proposedStatus","kind":"readonly"}),
+        json!({"key":"disposition","labelKey":"rfi.publishStatus.column.disposition","kind":"readonly","display":"localizedKey"}),
+        json!({"key":"action","labelKey":"rfi.publishStatus.column.action","kind":"readonly","detail":true}),
+    ];
+    json!({
+        "kind":"recordTable","layout":"compact","titleKey":"rfi.publishStatus.editor.title",
+        "rowCountKey":"rfi.publishStatus.editor.rowCount","requiredFields":["enabled"],
+        "groupField":"discipline","selectionGroupFields":[],"columns":columns,"rows":review_rows,
+        "duplicateEnabled":false,"selectionEnabled":true,"bulkEnabled":true,"reorderable":false,
+        "detailsEnabled":true,"detailsDefaultVisible":false,"copyEnabled":false
     })
 }
 
