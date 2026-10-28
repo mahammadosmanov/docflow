@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.122 - 2026-10-28
+
+### Fixed
+
+- The sign-in password visibility toggle sets an explicit `aria-label`, so screen readers announce it without relying on the `title` tooltip fallback. Visual behavior is unchanged.
+
 ## 1.36.121 - 2026-10-28
 
 ### Changed

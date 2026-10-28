@@ -205,6 +205,7 @@ export function LoginScreen({
                   className="field-action"
                   type="button"
                   title={s.t(showPassword ? "auth.hide" : "auth.show")}
+                  aria-label={s.t(showPassword ? "auth.hide" : "auth.show")}
                   onClick={() => setShowPassword((value) => !value)}
                 >
                   {showPassword ? <EyeOff /> : <Eye />}
