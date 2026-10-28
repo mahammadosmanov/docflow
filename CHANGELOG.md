@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.203 - 2026-10-28
+
+### Changed
+
+- Moved unreadable-PDF note outputs from process scan preview into a helper.
+
 ## 1.36.202 - 2026-10-28
 
 ### Changed
