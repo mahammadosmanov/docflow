@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.139 - 2026-10-28
+
+### Changed
+
+- Moved the Windows print submission classification helpers (`WindowsSubmittedJobStatus` through `validate_windows_image_frame_count`) from `src-tauri/src/platform/mod.rs` into `platform/windows_submission.rs`. `mod.rs` drops from 778 to 621 lines. The helpers are cfg-gated as before (`windows` or `test`); Windows-only code was not compiled on this Mac, so Windows build is unverified here. Behavior is unchanged.
+
 ## 1.36.138 - 2026-10-28
 
 ### Changed
