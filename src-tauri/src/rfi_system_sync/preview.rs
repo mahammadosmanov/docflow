@@ -503,3 +503,66 @@ mod sync_disposition_tests {
         assert!(!selectable);
     }
 }
+
+#[cfg(test)]
+mod follow_up_status_tests {
+    use super::{CellData, FollowUpTarget, follow_up_status_updates};
+
+    fn target(value: &str, formula: Option<&str>, merged: bool) -> FollowUpTarget {
+        FollowUpTarget {
+            sheet: "Follow Up".to_string(),
+            row: 7,
+            status_col: 3,
+            status_cell: Some(CellData {
+                value: value.to_string(),
+                formula: formula.map(str::to_string),
+                style: None,
+            }),
+            status_merged: merged,
+        }
+    }
+
+    #[test]
+    fn formula_or_merged_status_cell_needs_manual_review() {
+        for targets in [
+            vec![target("", Some("=A1"), false)],
+            vec![target("", None, true)],
+        ] {
+            let (action, updates, unsafe_target) =
+                follow_up_status_updates("rfi-1", &targets, true, false);
+            assert!(action.starts_with("Manual review"));
+            assert!(updates.is_empty());
+            assert!(unsafe_target);
+        }
+    }
+
+    #[test]
+    fn worley_signature_sets_signed_on_unsigned_cell() {
+        let targets = [target("Not Signed", None, false)];
+        let (action, updates, unsafe_target) =
+            follow_up_status_updates("rfi-1", &targets, true, false);
+        assert_eq!(action, "Set 1 Follow Up control status cell(s) to Signed");
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].1, "7:3");
+        assert_eq!(updates[0].2.replacement_value, "Signed");
+        assert!(!unsafe_target);
+    }
+
+    #[test]
+    fn weak_scan_never_revokes_existing_signature() {
+        let targets = [target("Signed", None, false)];
+        let (_, updates, unsafe_target) = follow_up_status_updates("rfi-1", &targets, false, false);
+        assert!(updates.is_empty());
+        assert!(!unsafe_target);
+    }
+
+    #[test]
+    fn unexpected_status_text_is_preserved_and_flagged() {
+        let targets = [target("Pending", None, false)];
+        let (action, updates, unsafe_target) =
+            follow_up_status_updates("rfi-1", &targets, true, false);
+        assert_eq!(action, "Manual review: unexpected Follow Up status");
+        assert!(updates.is_empty());
+        assert!(unsafe_target);
+    }
+}

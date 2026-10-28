@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.218",
+  "currentVersion": "1.36.219",
   "releases": [
+    {
+      "version": "1.36.219",
+      "tag": "v1.36.219",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add unit tests for Follow Up status signature update decisions."
+    },
     {
       "version": "1.36.218",
       "tag": "v1.36.218",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add unit tests for canonicalize_or_validation error context and existing-path resolution."
     },
     {
