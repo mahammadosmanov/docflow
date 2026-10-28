@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.280 - 2026-10-28
+
+### Changed
+
+- Moved RFI print finder tests into a `native` tests `print_finder` module.
+
 ## 1.36.279 - 2026-10-28
 
 ### Changed
