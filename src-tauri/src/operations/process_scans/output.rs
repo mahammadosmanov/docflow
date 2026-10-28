@@ -157,6 +157,10 @@ pub(super) fn hash_pdf(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", digest.finalize()))
 }
 
+pub(super) fn hash_pdf_checked(path: &Path) -> Result<String, BackendError> {
+    hash_pdf(path).map_err(BackendError::path_invalid)
+}
+
 pub(super) fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, BackendError> {
     let path = fs::canonicalize(path)
         .map_err(|_| BackendError::path_invalid(format!("{label} does not exist")))?;

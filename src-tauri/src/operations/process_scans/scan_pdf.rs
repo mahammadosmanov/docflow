@@ -112,7 +112,7 @@ where
     let orientation_source_hash = if should_correct_orientation {
         Some(match source_sha256.and_then(|hashes| hashes.get(pdf)) {
             Some(expected) => expected.clone(),
-            None => hash_pdf(pdf).map_err(BackendError::path_invalid)?,
+            None => hash_pdf_checked(pdf)?,
         })
     } else {
         None
@@ -152,7 +152,7 @@ where
             Ok(detected_rotations) => {
                 rotations = detected_rotations;
                 if let Some(expected) = orientation_source_hash.as_deref()
-                    && hash_pdf(pdf).map_err(BackendError::path_invalid)? != expected
+                    && hash_pdf_checked(pdf)? != expected
                 {
                     return Err(BackendError::path_invalid(
                         "scan source changed during orientation analysis",
@@ -185,7 +185,7 @@ where
             ));
             return Ok(None);
         }
-        let source_hash = hash_pdf(pdf).map_err(BackendError::path_invalid)?;
+        let source_hash = hash_pdf_checked(pdf)?;
         if orientation_source_hash
             .as_deref()
             .is_some_and(|expected| expected != source_hash.as_str())
@@ -198,7 +198,7 @@ where
         else {
             return Ok(Some(no_ocr_plan(operation_id, ocr)));
         };
-        if hash_pdf(pdf).map_err(BackendError::path_invalid)? != source_hash {
+        if hash_pdf_checked(pdf)? != source_hash {
             return Err(BackendError::path_invalid(
                 "scan source changed during Preview",
             ));
@@ -286,7 +286,7 @@ where
         .then(|| orientation_source_hash.clone())
         .flatten();
     if let Some(expected) = source_hash.as_deref()
-        && hash_pdf(pdf).map_err(BackendError::path_invalid)? != expected
+        && hash_pdf_checked(pdf)? != expected
     {
         return Err(BackendError::path_invalid(
             "scan source changed during Preview",
