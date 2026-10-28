@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.271",
+  "currentVersion": "1.36.272",
   "releases": [
+    {
+      "version": "1.36.272",
+      "tag": "v1.36.272",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move batch print file classification helpers into a batch_print files module."
+    },
     {
       "version": "1.36.271",
       "tag": "v1.36.271",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move atomic file replace and no-clobber helpers into an fs_ops support atomic module."
     },
     {

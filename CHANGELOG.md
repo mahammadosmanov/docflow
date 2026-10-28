@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.272 - 2026-10-28
+
+### Changed
+
+- Moved batch print file classification helpers into a `batch_print` files module.
+
 ## 1.36.271 - 2026-10-28
 
 ### Changed
