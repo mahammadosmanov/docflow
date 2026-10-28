@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.124 - 2026-10-28
+
+### Fixed
+
+- `docs/TRACEABILITY.md` cited `App.test.tsx` in six requirement rows (DF-012, DF-017, DF-018, DF-019, DF-021, DF-031). That file no longer exists after the App suite split, so the matrix now names `App.*.test.tsx` suites. No code or behavior changed.
+
 ## 1.36.123 - 2026-10-28
 
 ### Fixed
