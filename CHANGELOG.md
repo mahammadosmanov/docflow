@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.242 - 2026-10-28
+
+### Changed
+
+- Shared the job pause marking used by print queue failure arms.
+
 ## 1.36.241 - 2026-10-28
 
 ### Changed

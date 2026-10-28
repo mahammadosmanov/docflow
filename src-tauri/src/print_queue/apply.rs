@@ -24,6 +24,15 @@ fn apply_result_meta(
     );
 }
 
+/// Marks the attempted job with `status` and pauses the queue on its failure evidence.
+fn mark_job_paused(state: &mut QueueState, saved_index: usize, status: &str, error: &PrintFailure) {
+    let saved = &mut state.jobs[saved_index];
+    saved.status = Some(status.to_string());
+    saved.error = Some(failure_evidence(error));
+    state.current_job_id = None;
+    state.status = "paused".to_string();
+}
+
 fn cancelled_journal_state(record: &JournalRecord) -> JournalState {
     if record.steps.is_empty() {
         JournalState::CancelledClean
@@ -200,18 +209,12 @@ impl PrintService {
                         break;
                     }
                     Err(error) if error.kind == PrintFailureKind::Cancelled => {
-                        let saved = &mut state.jobs[saved_index];
-                        saved.status = Some(
-                            if error.uncertain {
-                                "uncertain"
-                            } else {
-                                "cancelled"
-                            }
-                            .to_string(),
-                        );
-                        saved.error = Some(failure_evidence(&error));
-                        state.current_job_id = None;
-                        state.status = "paused".to_string();
+                        let status = if error.uncertain {
+                            "uncertain"
+                        } else {
+                            "cancelled"
+                        };
+                        mark_job_paused(&mut state, saved_index, status, &error);
                         record.pending_step = if error.uncertain { Some(pending) } else { None };
                         record.state = Some(if error.uncertain {
                             JournalState::RecoveryRequired
@@ -235,11 +238,7 @@ impl PrintService {
                         break;
                     }
                     Err(error) if error.kind == PrintFailureKind::Uncertain => {
-                        let saved = &mut state.jobs[saved_index];
-                        saved.status = Some("uncertain".to_string());
-                        saved.error = Some(failure_evidence(&error));
-                        state.current_job_id = None;
-                        state.status = "paused".to_string();
+                        mark_job_paused(&mut state, saved_index, "uncertain", &error);
                         record.pending_step = Some(pending);
                         record.state = Some(JournalState::RecoveryRequired);
                         self.write_journal(&record)?;
