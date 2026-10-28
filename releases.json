@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.278",
+  "currentVersion": "1.36.279",
   "releases": [
+    {
+      "version": "1.36.279",
+      "tag": "v1.36.279",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Move native settings and saved operation parameter tests into a native tests settings module."
+    },
     {
       "version": "1.36.278",
       "tag": "v1.36.278",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move Excel export supervisor test fixtures into a fixtures submodule."
     },
     {
