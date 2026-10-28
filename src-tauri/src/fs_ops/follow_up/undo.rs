@@ -222,32 +222,7 @@ impl FilesystemAuthority {
                 "S5 failed apply restore lease is missing",
             ));
         }
-        let publication = record
-            .pending_publication()
-            .cloned()
-            .filter(|publication| publication.purpose == RetainedPublicationPurpose::Apply)
-            .ok_or_else(|| BackendError::journal_invalid("S5 failed apply is not pending"))?;
-        let pending_retained = record
-            .pending_retained_artifact()
-            .cloned()
-            .filter(|pending| {
-                pending.role == RetainedArtifactRole::DisplacedOriginal
-                    && pending.path == publication.retained
-            })
-            .ok_or_else(|| BackendError::journal_invalid("S5 retained original is not pending"))?;
-        if record
-            .retained_evidence_for(RetainedArtifactRole::DisplacedOriginal)
-            .is_some_and(|evidence| {
-                evidence.path != pending_retained.path
-                    || evidence.identity != publication.expected_canonical_identity
-                    || evidence.sha256 != publication.expected_canonical_sha256
-                    || evidence.security_sha256 != publication.expected_canonical_security_sha256
-            })
-        {
-            return Err(BackendError::journal_invalid(
-                "S5 retained original evidence does not match publication authority",
-            ));
-        }
+        let publication = pending_failed_apply_publication(record)?;
         let canonical_path = PathBuf::from(&publication.canonical);
         let retained_path = PathBuf::from(&publication.retained);
         let canonical = authorize_s5_recorded(record, &canonical_path)?
@@ -353,6 +328,39 @@ fn committed_s5_result(record: &ValidatedS5Record) -> OperationResult {
     insert_effect_state(&mut result, "committed");
     insert_retained_evidence(&mut result, record.retained_evidence());
     result
+}
+
+/// Returns the pending failed-apply publication after checking its retained original evidence.
+fn pending_failed_apply_publication(
+    record: &ValidatedS5Record,
+) -> Result<RetainedPublication, BackendError> {
+    let publication = record
+        .pending_publication()
+        .cloned()
+        .filter(|publication| publication.purpose == RetainedPublicationPurpose::Apply)
+        .ok_or_else(|| BackendError::journal_invalid("S5 failed apply is not pending"))?;
+    let pending_retained = record
+        .pending_retained_artifact()
+        .cloned()
+        .filter(|pending| {
+            pending.role == RetainedArtifactRole::DisplacedOriginal
+                && pending.path == publication.retained
+        })
+        .ok_or_else(|| BackendError::journal_invalid("S5 retained original is not pending"))?;
+    if record
+        .retained_evidence_for(RetainedArtifactRole::DisplacedOriginal)
+        .is_some_and(|evidence| {
+            evidence.path != pending_retained.path
+                || evidence.identity != publication.expected_canonical_identity
+                || evidence.sha256 != publication.expected_canonical_sha256
+                || evidence.security_sha256 != publication.expected_canonical_security_sha256
+        })
+    {
+        return Err(BackendError::journal_invalid(
+            "S5 retained original evidence does not match publication authority",
+        ));
+    }
+    Ok(publication)
 }
 
 /// Reads the backup and canonical paths from the S5 step and checks them against the backup evidence.
