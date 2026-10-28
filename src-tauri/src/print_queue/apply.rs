@@ -24,6 +24,14 @@ fn apply_result_meta(
     );
 }
 
+fn cancelled_journal_state(record: &JournalRecord) -> JournalState {
+    if record.steps.is_empty() {
+        JournalState::CancelledClean
+    } else {
+        JournalState::CancelledPartial
+    }
+}
+
 impl PrintService {
     pub fn apply<F>(
         &self,
@@ -136,11 +144,7 @@ impl PrintService {
         for (index, job) in jobs.iter().enumerate() {
             if token.checkpoint().is_err() {
                 paused = true;
-                cancelled_state = Some(if record.steps.is_empty() {
-                    JournalState::CancelledClean
-                } else {
-                    JournalState::CancelledPartial
-                });
+                cancelled_state = Some(cancelled_journal_state(&record));
                 result.errors.push(warning("warn.print.cancelled", ""));
                 break;
             }
@@ -211,10 +215,8 @@ impl PrintService {
                         record.pending_step = if error.uncertain { Some(pending) } else { None };
                         record.state = Some(if error.uncertain {
                             JournalState::RecoveryRequired
-                        } else if record.steps.is_empty() {
-                            JournalState::CancelledClean
                         } else {
-                            JournalState::CancelledPartial
+                            cancelled_journal_state(&record)
                         });
                         if !error.uncertain {
                             cancelled_state = record.state;
