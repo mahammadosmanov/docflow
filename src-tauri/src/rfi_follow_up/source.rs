@@ -117,6 +117,33 @@ pub(super) fn scan_logged_rfi_numbers(
     numbers
 }
 
+/// Folds a source row into the record for its RFI, or marks the RFI ambiguous when duplicate rows disagree.
+fn merge_source_record(records: &mut BTreeMap<String, SourceRecord>, incoming: SourceRecord) {
+    let Some(existing) = records.get_mut(&incoming.canonical_rfi) else {
+        records.insert(incoming.canonical_rfi.clone(), incoming);
+        return;
+    };
+    if existing.excluded_civ_pcs || incoming.excluded_civ_pcs {
+        existing.excluded_civ_pcs = true;
+    } else if existing.itp != incoming.itp
+        || existing.item != incoming.item
+        || existing.state != incoming.state
+        || route_key(existing) != route_key(&incoming)
+    {
+        existing.state = None;
+    } else {
+        for context in incoming.contexts.iter() {
+            if !existing.contexts.contains(context) {
+                existing.contexts.push(context.clone());
+            }
+        }
+    }
+    // An unsigned duplicate is not evidence that an already
+    // observed Worley signature was withdrawn.
+    existing.worley_signed |= incoming.worley_signed;
+    existing.evidence.extend(incoming.evidence);
+}
+
 pub(super) fn scan_source_records(
     discovery: &OrderedWorkbookDiscovery,
     workbook: &WorkbookData,
@@ -215,29 +242,7 @@ pub(super) fn scan_source_records(
                 contexts: vec![context],
                 evidence: vec![evidence],
             };
-            if let Some(existing) = records.get_mut(&canonical_rfi) {
-                if existing.excluded_civ_pcs || incoming.excluded_civ_pcs {
-                    existing.excluded_civ_pcs = true;
-                } else if existing.itp != incoming.itp
-                    || existing.item != incoming.item
-                    || existing.state != incoming.state
-                    || route_key(existing) != route_key(&incoming)
-                {
-                    existing.state = None;
-                } else {
-                    for context in incoming.contexts.iter() {
-                        if !existing.contexts.contains(context) {
-                            existing.contexts.push(context.clone());
-                        }
-                    }
-                }
-                // An unsigned duplicate is not evidence that an already
-                // observed Worley signature was withdrawn.
-                existing.worley_signed |= incoming.worley_signed;
-                existing.evidence.extend(incoming.evidence);
-            } else {
-                records.insert(canonical_rfi, incoming);
-            }
+            merge_source_record(&mut records, incoming);
         }
     }
     Ok(records)

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.159",
+  "currentVersion": "1.36.160",
   "releases": [
+    {
+      "version": "1.36.160",
+      "tag": "v1.36.160",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract duplicate source-row merge from scan_source_records into merge_source_record; behavior unchanged."
+    },
     {
       "version": "1.36.159",
       "tag": "v1.36.159",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split mapping_details into named helpers in rfi_follow_up/source/mapping_details.rs; detail text unchanged."
     },
     {
