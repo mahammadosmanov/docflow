@@ -351,6 +351,21 @@ mod detected_discipline_tests {
     }
 
     #[test]
+    fn default_civil_selection_is_replaced_by_new_detected_discipline() {
+        let mut counts = BTreeMap::from([("CIV".to_string(), 3)]);
+        apply_detected_discipline(&mut counts, Some("ELE"), true);
+        assert_eq!(counts, BTreeMap::from([("ELE".to_string(), 3)]));
+    }
+
+    #[test]
+    fn already_selected_discipline_keeps_its_count() {
+        let mut counts = BTreeMap::from([("MEC".to_string(), 2), ("ELE".to_string(), 5)]);
+        apply_detected_discipline(&mut counts, Some("ELE"), true);
+        assert_eq!(counts.get("ELE"), Some(&5));
+        assert_eq!(counts.get("MEC"), Some(&2));
+    }
+
+    #[test]
     fn unknown_or_missing_discipline_leaves_counts_unchanged() {
         let before = BTreeMap::from([("MEC".to_string(), 2)]);
         let mut counts = before.clone();
