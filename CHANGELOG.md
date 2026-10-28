@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.146 - 2026-10-28
+
+### Changed
+
+- Moved `BackendRouter::select_paths` and `reveal_path` from `src-tauri/src/backend.rs` into `backend/paths.rs`. `backend.rs` drops from 560 to 462 lines. Behavior is unchanged; 16 backend tests pass.
+
 ## 1.36.145 - 2026-10-28
 
 ### Changed
