@@ -621,33 +621,8 @@ where
             }
         }
         let page_results = by_file.remove(&item.path).unwrap_or_default();
-        let mut approved = Vec::new();
-        let mut uncertain = Vec::new();
-        for (task, result) in page_results {
-            match result {
-                Ok(detection) => {
-                    match orientation_target_rotation(task.current_rotation, &detection) {
-                        Ok(target) => {
-                            verified_pages += 1;
-                            if let Some(target) = target {
-                                approved.push(json!({
-                                    "pageIndex": task.page_index,
-                                    "fromRotation": task.current_rotation,
-                                    "targetRotation": target,
-                                    "rotateClockwise": detection.rotate_clockwise,
-                                    "confidence": detection.confidence,
-                                    "method": detection.method,
-                                }));
-                            }
-                        }
-                        Err(error) => {
-                            uncertain.push(format!("page {} {error}", task.page_index + 1))
-                        }
-                    }
-                }
-                Err(error) => uncertain.push(format!("page {} {error}", task.page_index + 1)),
-            }
-        }
+        let (approved, uncertain, verified) = approve_file_pages(page_results);
+        verified_pages += verified;
         if !uncertain.is_empty() {
             manual_review_files += 1;
             plan.warnings.push(warning(
