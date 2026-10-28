@@ -98,9 +98,10 @@ These are not silently waived by passing local tests.
   single-RFI scan must not be used for a combined multi-RFI document.
 - Signed-page preview thumbnails are capped at 20 accepted rows and 12 MiB of
   encoded preview data; open the PDFs manually beyond either bound.
-- The frontend production bundle currently emits a non-failing size advisory;
-  startup/package measurements are the acceptance evidence until safe route-level
-  splitting is implemented.
+- The frontend bundle is split by screen: Review, Queue, History, Recovery and
+  Admin load on demand. The production build emits no size advisory; the entry
+  chunk measures 332 kB (99 kB gzip) and each locale 88-131 kB. Startup and
+  package measurements remain the acceptance evidence for the native app.
 - macOS DMG creation can fail on hosts where `hdiutil` reports `Device not configured`.
 - The current macOS visual launch gate requires an unlocked desktop session; a
   package smoke or process sample does not replace that inspection.

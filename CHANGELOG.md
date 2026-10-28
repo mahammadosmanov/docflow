@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.120 - 2026-10-28
+
+### Fixed
+
+- `docs/KNOWN_ISSUES.md` no longer lists the frontend bundle size advisory as open. Review, Queue, History, Recovery and Admin already load on demand, and the build emits no advisory. The entry now records the measured chunk sizes.
+
 ## 1.36.119 - 2026-10-28
 
 ### Changed
