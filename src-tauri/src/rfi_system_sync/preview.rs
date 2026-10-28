@@ -92,87 +92,22 @@ where
             total: scanned_rfis.len() as u64,
             subject: scanned.canonical_rfi.clone(),
         });
-        let row_id = format!("sync-row-{}", index + 1);
-        let matching_log = rfi_log_rows
-            .iter()
-            .filter(|row| row.canonical_rfi == scanned.canonical_rfi)
-            .collect::<Vec<_>>();
-        let matching_follow_up = follow_up_targets
-            .get(&scanned.canonical_rfi)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        let mut log_action = "Not found in RFI Log".to_string();
-        let mut follow_up_action = if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
-            "Not found in Follow Up control table".to_string()
-        } else {
-            "Not applicable for ELE/PRC".to_string()
-        };
-        let mut ready = false;
-        let mut unsafe_target = false;
-        let mut pending_log_updates = Vec::new();
-        let mut pending_follow_up_updates = Vec::new();
-
-        if scanned.signed_by_worley && !matching_log.is_empty() {
-            let (action, updates, flagged) = rfi_log_remark_updates(&row_id, &matching_log);
-            log_action = action;
-            unsafe_target |= flagged;
-            ready |= !updates.is_empty();
-            pending_log_updates = updates;
-        }
-
-        if !matching_follow_up.is_empty() {
-            let (action, updates, flagged) = follow_up_status_updates(
-                &row_id,
-                matching_follow_up,
-                scanned.signed_by_worley,
-                unsafe_target,
-            );
-            follow_up_action = action;
-            unsafe_target = flagged;
-            ready |= !updates.is_empty();
-            pending_follow_up_updates = updates;
-        } else if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
-            follow_up_action = "Manual review: no existing Follow Up control row".to_string();
-            unsafe_target = true;
-        }
-
-        if unsafe_target || matching_log.is_empty() {
-            ready = false;
-        } else {
-            for (sheet, key, update) in pending_log_updates {
-                log_updates.entry(sheet).or_default().insert(key, update);
-            }
-            for (sheet, key, update) in pending_follow_up_updates {
-                follow_up_updates
-                    .entry(sheet)
-                    .or_default()
-                    .insert(key, update);
-            }
-        }
-
-        let (disposition, reason_key, selectable) = sync_disposition(
-            unsafe_target,
-            matching_log.is_empty(),
-            ready,
-            scanned.signed_by_worley,
+        let (row, log_updates_for_rfi, follow_up_updates_for_rfi) = review_scanned_rfi(
+            format!("sync-row-{}", index + 1),
+            scanned,
+            &rfi_log_rows,
+            &follow_up_targets,
         );
-        review_rows.push(SystemSyncRow {
-            row_id,
-            discipline: scanned.discipline.clone(),
-            rfi_no: scanned.short_rfi.clone(),
-            canonical_rfi: scanned.canonical_rfi.clone(),
-            worley_status: if scanned.signed_by_worley {
-                WORLEY_SIGNED_MARKER.to_string()
-            } else {
-                "Unsigned".to_string()
-            },
-            rfi_log_action: log_action,
-            follow_up_action,
-            disposition: disposition.to_string(),
-            reason_key,
-            enabled: selectable,
-            selectable,
-        });
+        for (sheet, key, update) in log_updates_for_rfi {
+            log_updates.entry(sheet).or_default().insert(key, update);
+        }
+        for (sheet, key, update) in follow_up_updates_for_rfi {
+            follow_up_updates
+                .entry(sheet)
+                .or_default()
+                .insert(key, update);
+        }
+        review_rows.push(row);
     }
 
     let mut steps = Vec::new();
@@ -439,6 +374,91 @@ fn follow_up_status_updates(
         )
     };
     (action, updates, unsafe_target)
+}
+
+type GuardedUpdates = Vec<(String, String, GuardedCellUpdateDto)>;
+
+/// Builds the review row for one scanned RFI. Updates are returned only when
+/// the row is safe to apply and has an RFI Log match.
+fn review_scanned_rfi(
+    row_id: String,
+    scanned: &ScannedRfiRecord,
+    rfi_log_rows: &[RfiLogRowInfo],
+    follow_up_targets: &BTreeMap<String, Vec<FollowUpTarget>>,
+) -> (SystemSyncRow, GuardedUpdates, GuardedUpdates) {
+    let matching_log = rfi_log_rows
+        .iter()
+        .filter(|row| row.canonical_rfi == scanned.canonical_rfi)
+        .collect::<Vec<_>>();
+    let matching_follow_up = follow_up_targets
+        .get(&scanned.canonical_rfi)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let mut log_action = "Not found in RFI Log".to_string();
+    let mut follow_up_action = if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
+        "Not found in Follow Up control table".to_string()
+    } else {
+        "Not applicable for ELE/PRC".to_string()
+    };
+    let mut ready = false;
+    let mut unsafe_target = false;
+    let mut pending_log_updates = Vec::new();
+    let mut pending_follow_up_updates = Vec::new();
+
+    if scanned.signed_by_worley && !matching_log.is_empty() {
+        let (action, updates, flagged) = rfi_log_remark_updates(&row_id, &matching_log);
+        log_action = action;
+        unsafe_target |= flagged;
+        ready |= !updates.is_empty();
+        pending_log_updates = updates;
+    }
+
+    if !matching_follow_up.is_empty() {
+        let (action, updates, flagged) = follow_up_status_updates(
+            &row_id,
+            matching_follow_up,
+            scanned.signed_by_worley,
+            unsafe_target,
+        );
+        follow_up_action = action;
+        unsafe_target = flagged;
+        ready |= !updates.is_empty();
+        pending_follow_up_updates = updates;
+    } else if matches!(scanned.discipline.as_str(), "CIV" | "MEC") {
+        follow_up_action = "Manual review: no existing Follow Up control row".to_string();
+        unsafe_target = true;
+    }
+
+    if unsafe_target || matching_log.is_empty() {
+        ready = false;
+        pending_log_updates.clear();
+        pending_follow_up_updates.clear();
+    }
+
+    let (disposition, reason_key, selectable) = sync_disposition(
+        unsafe_target,
+        matching_log.is_empty(),
+        ready,
+        scanned.signed_by_worley,
+    );
+    let row = SystemSyncRow {
+        row_id,
+        discipline: scanned.discipline.clone(),
+        rfi_no: scanned.short_rfi.clone(),
+        canonical_rfi: scanned.canonical_rfi.clone(),
+        worley_status: if scanned.signed_by_worley {
+            WORLEY_SIGNED_MARKER.to_string()
+        } else {
+            "Unsigned".to_string()
+        },
+        rfi_log_action: log_action,
+        follow_up_action,
+        disposition: disposition.to_string(),
+        reason_key,
+        enabled: selectable,
+        selectable,
+    };
+    (row, pending_log_updates, pending_follow_up_updates)
 }
 
 fn sync_disposition(
