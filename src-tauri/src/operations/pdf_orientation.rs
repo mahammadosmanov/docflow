@@ -222,49 +222,7 @@ where
         let prepared = inspection_pool.install(|| {
             batch
                 .par_iter()
-                .map(|path| {
-                    let relative = path
-                        .strip_prefix(&source_root)
-                        .map_err(|_| {
-                            BackendError::path_invalid("PDF escaped the selected RFI root")
-                        })?
-                        .to_path_buf();
-                    let fingerprint = FileFingerprint::read(path).map_err(|error| {
-                        BackendError::path_invalid(format!(
-                            "orientation fingerprint failed: {error}"
-                        ))
-                    })?;
-                    let source_sha256 = file_sha256(path).map_err(|error| {
-                        BackendError::path_invalid(format!(
-                            "orientation source hash failed: {error}"
-                        ))
-                    })?;
-                    let cached = if force_rescan {
-                        None
-                    } else {
-                        run.as_ref()
-                            .map(|run| run.lookup::<CachedPdfOrientation>(&relative, &fingerprint))
-                            .transpose()
-                            .map_err(|error| {
-                                BackendError::request_failed(format!(
-                                    "scan index read failed: {error}"
-                                ))
-                            })?
-                            .flatten()
-                    };
-                    let cached = cached.filter(|cached| {
-                        cached.source_sha256.as_deref() == Some(source_sha256.as_str())
-                    });
-                    let inspection = cached.is_none().then(|| inspect(path));
-                    Ok::<_, BackendError>(PreparedPdf {
-                        path: path.clone(),
-                        relative,
-                        fingerprint,
-                        source_sha256,
-                        cached,
-                        inspection,
-                    })
-                })
+                .map(|path| prepare_pdf(path, &source_root, force_rescan, run.as_ref()))
                 .collect::<Vec<_>>()
         });
         for prepared in prepared {

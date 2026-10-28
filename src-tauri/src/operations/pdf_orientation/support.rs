@@ -158,3 +158,43 @@ pub(super) fn rotation_step(
         ]),
     }
 }
+
+/// Reads fingerprint and content hash, then reuses a checkpoint or inspects one PDF.
+pub(super) fn prepare_pdf(
+    path: &Path,
+    source_root: &Path,
+    force_rescan: bool,
+    run: Option<&crate::scan_index::ScanRun<'_>>,
+) -> Result<PreparedPdf, BackendError> {
+    let relative = path
+        .strip_prefix(source_root)
+        .map_err(|_| BackendError::path_invalid("PDF escaped the selected RFI root"))?
+        .to_path_buf();
+    let fingerprint = FileFingerprint::read(path).map_err(|error| {
+        BackendError::path_invalid(format!("orientation fingerprint failed: {error}"))
+    })?;
+    let source_sha256 = file_sha256(path).map_err(|error| {
+        BackendError::path_invalid(format!("orientation source hash failed: {error}"))
+    })?;
+    let cached = if force_rescan {
+        None
+    } else {
+        run.map(|run| run.lookup::<CachedPdfOrientation>(&relative, &fingerprint))
+            .transpose()
+            .map_err(|error| {
+                BackendError::request_failed(format!("scan index read failed: {error}"))
+            })?
+            .flatten()
+    };
+    let cached =
+        cached.filter(|cached| cached.source_sha256.as_deref() == Some(source_sha256.as_str()));
+    let inspection = cached.is_none().then(|| inspect(path));
+    Ok::<_, BackendError>(PreparedPdf {
+        path: path.to_path_buf(),
+        relative,
+        fingerprint,
+        source_sha256,
+        cached,
+        inspection,
+    })
+}

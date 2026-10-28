@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.150",
+  "currentVersion": "1.36.151",
   "releases": [
+    {
+      "version": "1.36.151",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.151",
+      "summary": "Extracted per-PDF fingerprint, hash, and checkpoint-or-inspect step from preview_indexed into prepare_pdf."
+    },
     {
       "version": "1.36.150",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.150",
       "summary": "Extracted PDF page-rotation step construction from preview_indexed into rotation_step helper."
     },
