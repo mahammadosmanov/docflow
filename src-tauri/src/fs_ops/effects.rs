@@ -1,6 +1,24 @@
 use super::*;
 
 impl FilesystemAuthority {
+    /// Authorizes a plan path for writing, mapping denial to a no-effect step failure.
+    fn authorize_write_path(
+        &self,
+        binding: &PlanBinding,
+        caller: &CallerIdentity,
+        path: &Path,
+    ) -> Result<PathBuf, StepFailure> {
+        self.grants
+            .authorize_for_plan(
+                &binding.grant_ids,
+                caller,
+                &binding.operation_id,
+                path,
+                PathIntent::Write,
+            )
+            .map_err(step_no_effect)
+    }
+
     pub(super) fn execute_file_effect(
         &self,
         step: &Step,
@@ -21,16 +39,7 @@ impl FilesystemAuthority {
             ));
         }
         let destination = required_path(step.dst.as_deref(), "step destination")?;
-        let destination = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let destination = self.authorize_write_path(binding, caller, &destination)?;
         let source = if step.kind == StepKind::Write {
             None
         } else {
@@ -201,27 +210,9 @@ impl FilesystemAuthority {
         record: &mut JournalRecord,
     ) -> Result<u64, StepFailure> {
         let workbook = required_path(step.src.as_deref(), "workbook source")?;
-        let workbook = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &workbook,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let workbook = self.authorize_write_path(binding, caller, &workbook)?;
         let backup = required_path(step.dst.as_deref(), "workbook backup")?;
-        let backup = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &backup,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let backup = self.authorize_write_path(binding, caller, &backup)?;
         if workbook == backup {
             return Err(StepFailure::NoEffect(
                 "workbook and backup are the same path".to_string(),
@@ -467,27 +458,9 @@ impl FilesystemAuthority {
             ));
         }
         let temporary = required_path(step.src.as_deref(), "stale PDF temporary path")?;
-        let temporary = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &temporary,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let temporary = self.authorize_write_path(binding, caller, &temporary)?;
         let destination = required_path(step.dst.as_deref(), "completed review PDF")?;
-        let destination = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &destination,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let destination = self.authorize_write_path(binding, caller, &destination)?;
         let review_root = step
             .meta
             .get("reviewRoot")
@@ -495,16 +468,7 @@ impl FilesystemAuthority {
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
             .ok_or_else(|| StepFailure::NoEffect("review root is missing".to_string()))?;
-        let review_root = self
-            .grants
-            .authorize_for_plan(
-                &binding.grant_ids,
-                caller,
-                &binding.operation_id,
-                &review_root,
-                PathIntent::Write,
-            )
-            .map_err(step_no_effect)?;
+        let review_root = self.authorize_write_path(binding, caller, &review_root)?;
         if !temporary.starts_with(&review_root)
             || !destination.starts_with(&review_root)
             || temporary.parent() != destination.parent()
