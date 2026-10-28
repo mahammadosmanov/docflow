@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.199",
+  "currentVersion": "1.36.200",
   "releases": [
+    {
+      "version": "1.36.200",
+      "tag": "v1.36.200",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Extract follow-up undo applied-state expectations into a pure helper."
+    },
     {
       "version": "1.36.199",
       "tag": "v1.36.199",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Extract replica publish editor table metadata into a pure helper."
     },
     {
