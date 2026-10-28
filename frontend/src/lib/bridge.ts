@@ -7,24 +7,7 @@ import type {
   FrontendMethod,
 } from "./commands";
 
-import type {
-  AppPrefs,
-  AppUser,
-  AuthState,
-  Bootstrap,
-  HistoryPayload,
-  OperationDef,
-  OperationResult,
-  PathSelection,
-  Plan,
-  ProgressEvent,
-  RecoveryPayload,
-  ReplicaAutomationStatus,
-  ReviewItem,
-  SupportBundlePreview,
-  RfiPrintFindResult,
-  WatchStatus,
-} from "../types";
+import type { ProgressEvent } from "../types";
 
 
 export type ProgressHandler = (event: ProgressEvent) => void;

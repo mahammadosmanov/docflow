@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.124",
+  "currentVersion": "1.36.125",
   "releases": [
+    {
+      "version": "1.36.125",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "tag": "v1.36.125",
+      "summary": "Chore: removed unused imports in lib/bridge.ts, helpers.tsx and two App test files, and the unused sharedBridge variable in lib/mockBridge.ts. No behavior change."
+    },
     {
       "version": "1.36.124",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "tag": "v1.36.124",
       "summary": "Fixed: docs/TRACEABILITY.md cited App.test.tsx, which the App suite split replaced with App.*.test.tsx files. The matrix now names the files that exist."
     },

@@ -1,7 +1,4 @@
 import {
-  User,
-} from "lucide-react";
-import {
   type Strings,
 } from "./i18n";
 import {

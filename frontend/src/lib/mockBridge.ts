@@ -388,5 +388,3 @@ export class MockBridge implements Bridge {
     return result as CommandResult<Method>;
   }
 }
-
-let sharedBridge: Bridge | null = null;
