@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.242",
+  "currentVersion": "1.36.243",
   "releases": [
+    {
+      "version": "1.36.243",
+      "tag": "v1.36.243",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Count signed unmapped rows only after a target layout is found."
+    },
     {
       "version": "1.36.242",
       "tag": "v1.36.242",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Share the job pause marking used by print queue failure arms."
     },
     {
