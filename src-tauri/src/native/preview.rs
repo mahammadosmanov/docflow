@@ -1,5 +1,36 @@
 use super::*;
 
+/// Reads a selected input through the read grant that covers it, bounded by the package size limit.
+fn read_granted_input(
+    filesystem: &FilesystemAuthority,
+    provisional: &crate::paths::ProvisionalPathGrants<'_>,
+    path: &Path,
+) -> Result<Vec<u8>, BackendError> {
+    let grant = provisional
+        .grants()
+        .iter()
+        .filter(|grant| path.starts_with(&grant.root) && grant.access.allows(PathIntent::Read))
+        .max_by_key(|grant| grant.root.components().count())
+        .ok_or_else(|| BackendError::path_invalid("No read grant covers a selected input"))?;
+    let anchor = filesystem.anchor_granted_path(grant, path, PathIntent::Read)?;
+    let mut file = anchor.open_read().map_err(|error| {
+        concrete_documents_error(&format!("Cannot read selected input: {error}"))
+    })?;
+    let length = file
+        .metadata()
+        .map_err(|_| concrete_documents_error("Cannot inspect selected input"))?
+        .len();
+    if length > crate::ooxml::MAX_PACKAGE_BYTES {
+        return Err(concrete_documents_error(
+            "A selected Office package is larger than the supported limit",
+        ));
+    }
+    let mut bytes = Vec::with_capacity(length as usize);
+    file.read_to_end(&mut bytes)
+        .map_err(|_| concrete_documents_error("Could not read a selected input"))?;
+    Ok(bytes)
+}
+
 fn ambient_range(values: &Map<String, Value>) -> Result<(i64, i64), BackendError> {
     let ambient_min = values
         .get("ambient_min")
@@ -327,37 +358,7 @@ impl NativeBackend {
             OPERATION_ID,
         );
         let provisional = self.filesystem.issue_provisional_grants(&scope, &roots)?;
-        let read_selected = |path: &Path| -> Result<Vec<u8>, BackendError> {
-            let grant = provisional
-                .grants()
-                .iter()
-                .filter(|grant| {
-                    path.starts_with(&grant.root) && grant.access.allows(PathIntent::Read)
-                })
-                .max_by_key(|grant| grant.root.components().count())
-                .ok_or_else(|| {
-                    BackendError::path_invalid("No read grant covers a selected input")
-                })?;
-            let anchor = self
-                .filesystem
-                .anchor_granted_path(grant, path, PathIntent::Read)?;
-            let mut file = anchor.open_read().map_err(|error| {
-                concrete_documents_error(&format!("Cannot read selected input: {error}"))
-            })?;
-            let length = file
-                .metadata()
-                .map_err(|_| concrete_documents_error("Cannot inspect selected input"))?
-                .len();
-            if length > crate::ooxml::MAX_PACKAGE_BYTES {
-                return Err(concrete_documents_error(
-                    "A selected Office package is larger than the supported limit",
-                ));
-            }
-            let mut bytes = Vec::with_capacity(length as usize);
-            file.read_to_end(&mut bytes)
-                .map_err(|_| concrete_documents_error("Could not read a selected input"))?;
-            Ok(bytes)
-        };
+        let read_selected = |path: &Path| read_granted_input(&self.filesystem, &provisional, path);
 
         let log_bytes = read_selected(&rfi_log)?;
         let civil_records = read_civil_records(&mut Cursor::new(log_bytes), &requested)
