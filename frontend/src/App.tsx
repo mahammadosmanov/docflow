@@ -12,9 +12,11 @@ import {
 } from "react";
 import {
   Button,
+} from "./components/ui";
+import {
   Centered,
   EmptyState,
-} from "./components/ui";
+} from "./components/feedback";
 import {
   loadLocale,
   makeStrings,

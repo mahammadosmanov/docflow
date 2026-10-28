@@ -9,12 +9,14 @@ import {
   useState,
 } from "react";
 import {
-  EmptyState,
   Header,
   IconButton,
-  Notice,
   Switch,
 } from "../components/ui";
+import {
+  EmptyState,
+  Notice,
+} from "../components/feedback";
 import {
   type Strings,
 } from "../i18n";

@@ -9,7 +9,7 @@ import {
 } from "react";
 import {
   Notice,
-} from "../components/ui";
+} from "../components/feedback";
 import {
   Modal,
 } from "../components/Modal";

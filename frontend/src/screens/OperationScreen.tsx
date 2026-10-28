@@ -11,9 +11,11 @@ import {
 import {
   Button,
   Header,
-  Notice,
   StepIndicator,
 } from "../components/ui";
+import {
+  Notice,
+} from "../components/feedback";
 import { ActionBar } from "../components/ActionBar";
 import {
   type Strings,

@@ -20,14 +20,16 @@ import {
 } from "react";
 import {
   Button,
-  Centered,
-  EmptyState,
   Field,
   Header,
   IconButton,
-  Notice,
   Segmented,
 } from "../components/ui";
+import {
+  Centered,
+  EmptyState,
+  Notice,
+} from "../components/feedback";
 import {
   type Strings,
 } from "../i18n";

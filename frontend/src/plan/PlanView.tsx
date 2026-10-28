@@ -10,9 +10,11 @@ import {
 } from "react";
 import {
   Button,
+} from "../components/ui";
+import {
   EmptyState,
   Notice,
-} from "../components/ui";
+} from "../components/feedback";
 import { ActionBar } from "../components/ActionBar";
 import {
   type Strings,
