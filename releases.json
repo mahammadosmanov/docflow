@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.169",
+  "currentVersion": "1.36.170",
   "releases": [
+    {
+      "version": "1.36.170",
+      "tag": "v1.36.170",
+      "date": "2026-10-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Split OOXML sheet guard token comparison and direct-child lookup helpers out of sheet_patch.rs into sheet_patch/tokens.rs and sheet_patch/lookup.rs; behavior unchanged."
+    },
     {
       "version": "1.36.169",
       "tag": "v1.36.169",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Split RFI Log add preview email extraction, workbook-update step, and editor context into rfi_log/preview_steps.rs; behavior unchanged."
     },
     {
