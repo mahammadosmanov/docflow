@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.160 - 2026-10-28
+
+### Changed
+
+- Extracted the duplicate source-row merge from `scan_source_records` into `merge_source_record`; behavior unchanged.
+
 ## 1.36.159 - 2026-10-28
 
 ### Changed
