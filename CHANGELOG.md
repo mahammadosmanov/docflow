@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.147 - 2026-10-28
+
+### Changed
+
+- Moved the PDF orientation helpers (`empty_plan`, `canonical_directory`, `overlaps`, `normalize_rotation`, `warning`, `truncate`) from `src-tauri/src/operations/pdf_orientation.rs` into `operations/pdf_orientation/support.rs`. `pdf_orientation.rs` drops from 806 to 750 lines. Behavior is unchanged; 12 orientation tests pass.
+
 ## 1.36.146 - 2026-10-28
 
 ### Changed
