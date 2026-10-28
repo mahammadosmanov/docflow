@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.36.138 - 2026-10-28
+
+### Changed
+
+- Moved `apply_follow_up` from `src-tauri/src/fs_ops/apply.rs` into `fs_ops/apply/follow_up_apply.rs`. `apply.rs` drops from 559 to 416 lines. Behavior is unchanged.
+
 ## 1.36.137 - 2026-10-28
 
 ### Changed
