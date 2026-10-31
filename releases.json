@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.0",
+  "currentVersion": "1.37.1",
   "releases": [
+    {
+      "version": "1.37.1",
+      "tag": "v1.37.1",
+      "date": "2026-10-31",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Track the shared frontend test helper required by clean Windows builds."
+    },
     {
       "version": "1.37.0",
       "tag": "v1.37.0",
       "date": "2026-10-31",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Sync existing ELE Follow Up RFIs for two approved ITP/item pairs."
     },
     {

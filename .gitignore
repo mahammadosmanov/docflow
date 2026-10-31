@@ -27,6 +27,8 @@ legacy/
 app/
 sidecar/
 Test/
+!frontend/src/test/
+!frontend/src/test/**
 
 # Local tools
 .playwright-cli/

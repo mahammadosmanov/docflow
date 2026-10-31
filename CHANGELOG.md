@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.1 - 2026-10-31
+
+### Fixed
+
+- Keep the shared frontend test helper in source control so clean Windows builds can resolve test imports.
+
 ## 1.37.0 - 2026-10-31
 
 ### Changed

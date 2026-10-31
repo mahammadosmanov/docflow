@@ -2,6 +2,17 @@
 
 Updated: 2026-10-31
 
+## Windows installer delivery (1.37.1)
+
+- Windows tag build for 1.37.0 stopped in Node tests because the shared
+  `frontend/src/test/appTestSupport.ts` helper existed only as a locally ignored
+  file. `.gitignore` now explicitly keeps the lowercase `test/` support tree.
+- The test helper is tracked and clean-source imports resolve. Version 1.37.1
+  is reserved for this compatible build fix. Windows CI packaging and host
+  install/smoke evidence are pending until the tagged workflow succeeds.
+- The current Mac cross-build attempt failed against pre-existing uncommitted
+  Windows Excel contract edits. Those edits were left untouched.
+
 ## ELE Follow Up existing-entry sync (1.37.0)
 
 - Full Sync can update existing ELE RFIs only for the accepted pairs
