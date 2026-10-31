@@ -549,7 +549,7 @@ fn ordered_worksheet_discovery_rejects_encoded_forbidden_target_character() {
     let error = ordered_workbook_discovery(&mut fixture(
         &workbook,
         &relationships,
-        &[("xl/worksheets/sheet1.xml?ignored", b"worksheet")],
+        &[("xl/worksheets/sheet1.xml_ignored", b"worksheet")],
     ))
     .unwrap_err();
 

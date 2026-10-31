@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.3",
+  "currentVersion": "1.37.4",
   "releases": [
+    {
+      "version": "1.37.4",
+      "tag": "v1.37.4",
+      "date": "2026-10-31",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Keep a malformed worksheet target test valid on Windows."
+    },
     {
       "version": "1.37.3",
       "tag": "v1.37.3",
       "date": "2026-10-31",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fix a Windows-only unused import found by strict Clippy."
     },
     {

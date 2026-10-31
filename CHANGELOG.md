@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.4 - 2026-10-31
+
+### Fixed
+
+- Keep the encoded worksheet target test valid on Windows filesystems.
+
 ## 1.37.3 - 2026-10-31
 
 ### Fixed

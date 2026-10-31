@@ -2,6 +2,15 @@
 
 Updated: 2026-10-31
 
+## Windows test fixture fix (1.37.4)
+
+- v1.37.3 passed 555 Windows Rust tests but failed one OOXML path fixture:
+  Windows rejects `?` in a ZIP entry name before the test reaches relationship
+  validation. The fixture now uses a valid unrelated entry name while the
+  encoded forbidden character remains in the relationship target.
+- v1.37.4 source validation and a fresh Windows release run are pending.
+- Failed workflow: https://github.com/mahammadosmanov/docflow/actions/runs/41189891418
+
 ## Windows Clippy fix (1.37.3)
 
 - The v1.37.2 Windows run passed frontend tests, Windows-critical RFI tests,
