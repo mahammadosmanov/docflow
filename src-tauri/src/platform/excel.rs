@@ -17,7 +17,9 @@ mod staged;
 mod worker;
 pub(crate) use pipeline::*;
 pub(crate) use staged::ExportedWorksheetPdf;
-use staged::{StagedWorkbook, read_pdf_bytes_bounded};
+use staged::StagedWorkbook;
+#[cfg(any(not(windows), test))]
+use staged::read_pdf_bytes_bounded;
 use worker::*;
 
 use crate::{

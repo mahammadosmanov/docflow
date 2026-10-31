@@ -2,6 +2,15 @@
 
 Updated: 2026-10-31
 
+## Windows Clippy fix (1.37.3)
+
+- The v1.37.2 Windows run passed frontend tests, Windows-critical RFI tests,
+  retained Follow Up tests, and Windows cross-parent capability tests. Strict
+  Windows Clippy then failed because `read_pdf_bytes_bounded` is used only by
+  tests on Windows. Its import is now limited to tests/non-Windows builds.
+- Windows validation is pending for v1.37.3. Run 41189178721 records the
+  earlier compile fix and this Clippy finding; no installer was produced.
+
 ## Windows package compile fix (1.37.2)
 
 - The v1.37.1 Windows run passed Node/frontend tests, then the Windows-critical

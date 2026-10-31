@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.3 - 2026-10-31
+
+### Fixed
+
+- Restrict a PDF reader import to supported targets and tests to keep Windows Clippy clean.
+
 ## 1.37.2 - 2026-10-31
 
 ### Fixed

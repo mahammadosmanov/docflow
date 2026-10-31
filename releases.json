@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.2",
+  "currentVersion": "1.37.3",
   "releases": [
+    {
+      "version": "1.37.3",
+      "tag": "v1.37.3",
+      "date": "2026-10-31",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fix a Windows-only unused import found by strict Clippy."
+    },
     {
       "version": "1.37.2",
       "tag": "v1.37.2",
       "date": "2026-10-31",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fix Windows visibility for the controlled Excel PDF artifact."
     },
     {
