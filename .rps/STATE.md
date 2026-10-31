@@ -2,6 +2,15 @@
 
 Updated: 2026-10-31
 
+## Windows package compile fix (1.37.2)
+
+- The v1.37.1 Windows run passed Node/frontend tests, then the Windows-critical
+  Rust compile failed because `ExportedWorksheetPdf` was privately imported in
+  `platform::excel` but used by sibling Windows adapters. The type is now
+  re-exported at crate visibility from the owning module.
+- Windows validation is pending for the v1.37.2 tag. Earlier Windows CI
+  evidence is at run 41188680344; no installer was produced by that run.
+
 ## Windows installer delivery (1.37.1)
 
 - Windows tag build for 1.37.0 stopped in Node tests because the shared

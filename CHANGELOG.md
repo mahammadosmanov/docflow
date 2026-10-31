@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.2 - 2026-10-31
+
+### Fixed
+
+- Re-export the controlled Excel PDF artifact to Windows adapters so the Windows target compiles.
+
 ## 1.37.1 - 2026-10-31
 
 ### Fixed

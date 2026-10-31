@@ -16,7 +16,8 @@ mod pipeline;
 mod staged;
 mod worker;
 pub(crate) use pipeline::*;
-use staged::{ExportedWorksheetPdf, StagedWorkbook, read_pdf_bytes_bounded};
+pub(crate) use staged::ExportedWorksheetPdf;
+use staged::{StagedWorkbook, read_pdf_bytes_bounded};
 use worker::*;
 
 use crate::{

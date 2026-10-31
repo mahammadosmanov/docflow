@@ -67,7 +67,13 @@ fn current_workbooks_produce_a_bounded_guarded_follow_up_plan() {
         assert!(!updates.is_empty());
         assert!(updates.keys().all(|sheet| matches!(
             sheet.as_str(),
-            "CIV" | "MEC" | "ELE" | "PCU" | "Road" | "Signed By Worley CIV" | "Signed By Worley MEC"
+            "CIV"
+                | "MEC"
+                | "ELE"
+                | "PCU"
+                | "Road"
+                | "Signed By Worley CIV"
+                | "Signed By Worley MEC"
         )));
         assert!(!updates.contains_key("POT test"));
         assert!(!updates.contains_key("STAT"));

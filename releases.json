@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.1",
+  "currentVersion": "1.37.2",
   "releases": [
+    {
+      "version": "1.37.2",
+      "tag": "v1.37.2",
+      "date": "2026-10-31",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fix Windows visibility for the controlled Excel PDF artifact."
+    },
     {
       "version": "1.37.1",
       "tag": "v1.37.1",
       "date": "2026-10-31",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Track the shared frontend test helper required by clean Windows builds."
     },
     {
