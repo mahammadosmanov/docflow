@@ -144,6 +144,13 @@ fn target_with_rows(rows: impl IntoIterator<Item = String>, merges: &[&str]) -> 
 }
 
 fn full_schema_source(civ_rows: impl IntoIterator<Item = String>) -> Cursor<Vec<u8>> {
+    full_schema_source_with_ele(civ_rows, std::iter::empty())
+}
+
+fn full_schema_source_with_ele(
+    civ_rows: impl IntoIterator<Item = String>,
+    ele_rows: impl IntoIterator<Item = String>,
+) -> Cursor<Vec<u8>> {
     let header = row(
         9,
         [
@@ -158,8 +165,40 @@ fn full_schema_source(civ_rows: impl IntoIterator<Item = String>) -> Cursor<Vec<
         ],
     );
     let civ = worksheet(std::iter::once(header.clone()).chain(civ_rows), &[]);
-    let mec = worksheet([header], &[]);
-    source_package(civ, mec)
+    let mec = worksheet([header.clone()], &[]);
+    let ele = worksheet(std::iter::once(header).chain(ele_rows), &[]);
+    package(&[
+        ("CIV", None, civ),
+        ("MEC", None, mec),
+        ("ELE", None, ele),
+        ("PRC", None, worksheet(Vec::<String>::new(), &[])),
+    ])
+}
+
+fn full_schema_ele_record(
+    row_number: u32,
+    suffix: &str,
+    itp: &str,
+    item: &str,
+    tag: &str,
+    status: &str,
+) -> String {
+    row(
+        row_number,
+        [
+            inline(
+                &format!("A{row_number}"),
+                &format!("AZE-SUN-INT-QMS-RFI-ELE-{suffix}"),
+            ),
+            inline(&format!("D{row_number}"), itp),
+            inline(&format!("E{row_number}"), item),
+            inline(&format!("F{row_number}"), tag),
+            inline(&format!("G{row_number}"), "North Site"),
+            inline(&format!("N{row_number}"), "Site"),
+            inline(&format!("T{row_number}"), status),
+            blank(&format!("V{row_number}")),
+        ],
+    )
 }
 
 fn full_schema_record(
@@ -941,6 +980,123 @@ fn full_sync_keeps_multiple_matching_follow_up_rows_in_manual_review() {
         "{review}"
     );
     assert_eq!(review["editor"]["detailsDefaultVisible"], true);
+}
+
+#[test]
+fn full_sync_updates_only_preexisting_supported_ele_rfis() {
+    let source = full_schema_source_with_ele(
+        std::iter::empty(),
+        [
+            full_schema_ele_record(
+                10,
+                "0036",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.2.6",
+                "PCS-05",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                11,
+                "0054",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.2.6",
+                "PCS-06",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                12,
+                "0043",
+                "AZE-SUN-INT-QMS-ITP-ELE-0006",
+                "ELE-6.2.5.3",
+                "PCS-05",
+                "Ongoing",
+            ),
+            full_schema_ele_record(
+                13,
+                "0055",
+                "AZE-SUN-INT-QMS-ITP-ELE-0006",
+                "ELE-6.2.5.3",
+                "PCS-06",
+                "Ongoing",
+            ),
+            full_schema_ele_record(
+                14,
+                "0012",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.6",
+                "PCS-01",
+                "Completed",
+            ),
+        ],
+    );
+    let target = package(&[(
+        "ELE",
+        None,
+        worksheet(
+            [
+                row(1, [inline("A1", "Block")]),
+                row(
+                    2,
+                    [
+                        inline("D2", "Cable laying (2.5, 2.6)"),
+                        inline("F2", "Earthing (2.1, 2.4, 2.5.1, 2.5.3)"),
+                        inline("B2", "Cable preparation (1.6)"),
+                    ],
+                ),
+                row(
+                    3,
+                    [
+                        inline("B3", "RFI No."),
+                        inline("C3", "STATUS"),
+                        inline("D3", "RFI No."),
+                        inline("E3", "STATUS"),
+                        inline("F3", "RFI No."),
+                        inline("G3", "STATUS"),
+                    ],
+                ),
+                row(
+                    4,
+                    [
+                        inline("A4", "PCS-05"),
+                        blank("B4"),
+                        blank("C4"),
+                        inline("D4", "ELE-0036"),
+                        inline("E4", "Pending"),
+                        inline("F4", "ELE-0043"),
+                        inline("G4", "Completed"),
+                    ],
+                ),
+                row(
+                    5,
+                    [
+                        inline("A5", "PCS-06"),
+                        blank("B5"),
+                        blank("C5"),
+                        blank("D5"),
+                        blank("E5"),
+                        blank("F5"),
+                        blank("G5"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    let by_rfi = rows
+        .iter()
+        .filter(|row| row["disposition"] == "rfi.followUp.disposition.ready")
+        .map(|row| (row["rfiNo"].as_str().unwrap(), row))
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    assert_eq!(by_rfi.len(), 2, "{review}");
+    assert_eq!(by_rfi["ELE-0036"]["proposedStatus"], "Completed");
+    assert_eq!(by_rfi["ELE-0043"]["proposedStatus"], "In Progress");
+    assert!(!by_rfi.contains_key("ELE-0054"));
+    assert!(!by_rfi.contains_key("ELE-0055"));
+    assert!(!by_rfi.contains_key("ELE-0012"));
 }
 
 #[test]

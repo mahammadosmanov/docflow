@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.0 - 2026-10-31
+
+### Changed
+
+- Sync statuses for existing ELE Follow Up RFIs in the two approved ITP/item groups; leave `1.6`, unlisted items, and missing RFI identifiers untouched.
+
 ## 1.36.280 - 2026-10-28
 
 ### Changed

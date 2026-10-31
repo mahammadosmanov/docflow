@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.36.280",
+  "currentVersion": "1.37.0",
   "releases": [
+    {
+      "version": "1.37.0",
+      "tag": "v1.37.0",
+      "date": "2026-10-31",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Sync existing ELE Follow Up RFIs for two approved ITP/item pairs."
+    },
     {
       "version": "1.36.280",
       "tag": "v1.36.280",
       "date": "2026-10-28",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Move RFI print finder tests into a native tests print_finder module."
     },
     {

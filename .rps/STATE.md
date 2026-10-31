@@ -1,6 +1,21 @@
 # DocFlow project state
 
-Updated: 2026-10-14
+Updated: 2026-10-31
+
+## ELE Follow Up existing-entry sync (1.37.0)
+
+- Full Sync can update existing ELE RFIs only for the accepted pairs
+  `ELE-0005 / ELE-5.2.6 -> 2.6` and
+  `ELE-0006 / ELE-6.2.5.3 -> 2.5.3`. A source PCS Tag No must match the
+  target Block, and the RFI must already exist in the corresponding target
+  cell. No empty RFI slots, rows, or sections are populated; 1.6 and all other
+  ELE item pairs remain excluded.
+- Accepted decision: `docs/adr/0051-ele-follow-up-sync-existing-entries.md`;
+  domain rules are in `docs/RFI_DOMAIN.md`.
+- Verification: source regression, all 97 Follow Up native tests, full Cargo
+  suite, actual workbook read-only Plan preview, docs/version/source and
+  license audits, frontend tests/build, Clippy, and formatting passed.
+  Windows-native Excel/Office behavior is not verified from this macOS run.
 
 ## MEC Follow Up Section/Block mapping (1.18.0)
 

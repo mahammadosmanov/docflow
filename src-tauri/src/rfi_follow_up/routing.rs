@@ -47,6 +47,8 @@ pub(super) fn default_route_col(sheet: &str, clause: &str) -> u32 {
         ("MEC", "3.5") => 14,
         ("MEC", "3.1") => 16,
         ("MEC", "3.2") => 18,
+        ("ELE", "2.6") => 4,
+        ("ELE", "2.5.3") => 6,
         _ => 3,
     }
 }
@@ -157,6 +159,21 @@ pub(super) fn row_matches(
     record: &SourceRecord,
     target_workbook: &WorkbookData,
 ) -> bool {
+    if sheet_name == "ELE" {
+        let tags = record
+            .contexts
+            .iter()
+            .flat_map(|context| normalized_parts(&context.tag))
+            .collect::<BTreeSet<_>>();
+        if tags.len() != 1
+            || !tags
+                .iter()
+                .next()
+                .is_some_and(|tag| tag.starts_with("PCS-"))
+        {
+            return false;
+        }
+    }
     record
         .contexts
         .iter()
@@ -202,6 +219,10 @@ pub(super) fn row_matches_context(
         "Road" => sheet
             .cell(row, 2)
             .is_some_and(|target| road_tag_matches_row(&context.tag, &target.value)),
+        "ELE" => {
+            let tags = normalized_parts(&context.tag);
+            tags.len() == 1 && tags[0].starts_with("PCS-") && cell(1) == tags[0]
+        }
         "MEC" => {
             let target_sections = normalized_parts(&cell(4));
             let target_tags = normalized_parts(&cell(3));

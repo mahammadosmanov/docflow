@@ -17,7 +17,7 @@ and versioned with the code they govern.
 | Non-interactive passive macOS credential restore | Accepted | [`adr/0005-noninteractive-keychain-restore.md`](adr/0005-noninteractive-keychain-restore.md) |
 | Machine-checked maintainer and AI onboarding canon | Accepted | [`adr/0006-machine-checked-onboarding-canon.md`](adr/0006-machine-checked-onboarding-canon.md) |
 | Content-based PDF orientation with read-only source and bounded parallel preview | Accepted | [`adr/0007-safe-parallel-pdf-orientation.md`](adr/0007-safe-parallel-pdf-orientation.md) |
-| Exact RFI Log to existing Follow Up projection with grouped status/removal rules | Accepted | [`adr/0008-exact-rfi-log-follow-up-projection.md`](adr/0008-exact-rfi-log-follow-up-projection.md) |
+| Exact RFI Log to existing Follow Up projection with grouped status/removal rules | Partially superseded | [`adr/0008-exact-rfi-log-follow-up-projection.md`](adr/0008-exact-rfi-log-follow-up-projection.md) |
 | Windows spool release semantics and opt-in Batch Print setting recall | Accepted | [`adr/0009-resilient-print-handoff-and-opt-in-recall.md`](adr/0009-resilient-print-handoff-and-opt-in-recall.md) |
 | Local durable incremental scan index with cloud-independent authority | Accepted | [`adr/0010-durable-incremental-scan-index.md`](adr/0010-durable-incremental-scan-index.md) |
 | Actionable signed-page warnings as hash-pinned no-clobber Review copies | Accepted | [`adr/0011-actionable-signed-page-warning-review.md`](adr/0011-actionable-signed-page-warning-review.md) |
@@ -49,6 +49,7 @@ and versioned with the code they govern.
 | Follow Up Road part rows | Accepted | [`adr/0048-follow-up-road-part-rows.md`](adr/0048-follow-up-road-part-rows.md) |
 | Follow Up formula maintenance and per-cell remarks | Accepted | [`adr/0049-follow-up-formula-maintenance.md`](adr/0049-follow-up-formula-maintenance.md) |
 | Follow Up keeps every planned Road and its zone | Accepted | [`adr/0050-follow-up-road-plan-and-zones.md`](adr/0050-follow-up-road-plan-and-zones.md) |
+| ELE Follow Up sync is limited to two prepared ITP/item groups and existing RFIs | Accepted | [`adr/0051-ele-follow-up-sync-existing-entries.md`](adr/0051-ele-follow-up-sync-existing-entries.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

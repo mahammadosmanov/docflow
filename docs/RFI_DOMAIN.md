@@ -250,12 +250,14 @@ Follow Up sync.
 
 Scope decisions take precedence over missing-route diagnostics. The confirmed
 exclusions in [ADR 0035](adr/0035-intentional-follow-up-scope-exclusions.md)
+and the unlisted ELE pairs in [ADR 0051](adr/0051-ele-follow-up-sync-existing-entries.md)
 are deliberately outside Follow Up; they are not missing mappings to add.
 The zero/partial-match scope is recorded in
 [ADR 0036](adr/0036-follow-up-context-scope-and-diagnostics.md); MEC
 Section/Block matching is defined by
-[ADR 0037](adr/0037-mec-follow-up-section-block-matching.md), and CIV Tag No
-coverage diagnostics by [ADR 0038](adr/0038-civ-follow-up-tag-token-coverage.md).
+[ADR 0037](adr/0037-mec-follow-up-section-block-matching.md), CIV Tag No
+coverage diagnostics by [ADR 0038](adr/0038-civ-follow-up-tag-token-coverage.md),
+and the limited ELE scope by [ADR 0051](adr/0051-ele-follow-up-sync-existing-entries.md).
 Treat any other unmapped ITP/item combination as undecided until an operator
 approves its inclusion or exclusion. Record that decision here and in an
 accepted ADR before changing route behavior.
@@ -270,7 +272,7 @@ and the CIV `PCS-` rule in ADR 0033. Ambiguous contexts or conflicting source
 status cannot authorize a shared-cell status write for that RFI or any other
 RFI represented by the same cell.
 
-The eligible Follow Up sheets are exactly `CIV`, `MEC`, `PCU`, `Road`,
+The eligible Follow Up sheets are exactly `CIV`, `MEC`, `ELE`, `PCU`, `Road`,
 `Signed By Worley CIV`, and `Signed By Worley MEC`. The Signed By sheets and the
 current PCU FINAL `Signed by Worley` column receive only FINAL behavior and use
 the exact `Signed by Worley` REMARKS line, except CIV source RFIs tagged `PCS-`
@@ -282,9 +284,15 @@ deselecting one row cannot leave a half-applied coupled update.
 A target status formula is read-only: an already-present RFI is treated as
 satisfied only when the cached status already equals its projected status;
 otherwise the required change remains manual review. Other formula-bearing,
-merged, or unsafe matched destinations remain manual. `POT test`, `STAT`,
-`Changelog`, MEC calculated remarks/manual overrides, ELE/PRC, and absent
-ITP/item sections are never created or modified by this operation. A source
+merged, or unsafe matched destinations remain manual. For ELE, only ITP
+`ELE-0005` / item `ELE-5.2.6` routes to the prepared `2.5, 2.6` group, and ITP
+`ELE-0006` / item `ELE-6.2.5.3` routes to the prepared `2.1, 2.4, 2.5.1, 2.5.3`
+group. Match one exact `PCS-` Tag No to the target `Block`; update status only
+when that RFI already exists in its routed column. Do not route `1.6` or other
+ELE ITP/item pairs, or add an RFI to an empty cell. Unsupported ELE records stay
+outside Follow Up review. `POT test`, `STAT`, `Changelog`, MEC calculated
+remarks/manual overrides, PRC, and absent ITP/item sections are never created or
+modified by this operation. A source
 record with multiple areas and multiple sections is ambiguous and remains
 manual rather than using a cartesian guess. Missing RFI-System signature-control
 rows are not appended: the scanner does not prove the destination

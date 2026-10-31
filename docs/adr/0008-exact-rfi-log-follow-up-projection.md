@@ -1,7 +1,7 @@
 # ADR 0008: Exact RFI Log to Follow Up projection
 
 - Date: 2026-09-14
-- Status: Accepted
+- Status: Partially superseded by ADR 0051
 
 ## Context
 
@@ -14,9 +14,9 @@ normal spreadsheet rewrite can corrupt formulas, macros, and calc-chain state.
 ## Decision
 
 Extend `rfi.follow_up_sync` instead of adding a second overlapping operation.
-Preview discovers source columns from exact headers, accepts only the existing
-CIV/MEC domain, and routes records only to an existing unique CIV, MEC, PCU, or
-Road cell. It expands only exact same-discipline compact RFI forms and bounded
+Preview discovers source columns from exact headers and routes records only to
+an existing unique prepared cell. The later ELE scope is limited to the pairs in
+ADR 0051. It expands only exact same-discipline compact RFI forms and bounded
 ranges. Blank, Ongoing, and Completed become Pending, In Progress, and Completed;
 mixed active groups become In Progress. Cancelled and Rejected tokens are
 removed before aggregation.
@@ -26,8 +26,8 @@ Signed By Worley processing is limited to the existing CIV/MEC FINAL tables.
 known FINAL record is `Not Signed`. A missing FINAL identifier may be written
 only into one uniquely matched RFI/status pair that already exists as literal
 cells in the workbook template. The operation does not append rows, replace
-formulas, or synthesize a control-table entry. ELE, PRC, POT test, STAT, Changelog, absent
-ITP/item sections, formulas, merged cells, protected cells, and ambiguous
+formulas, or synthesize a control-table entry. PRC, POT test, STAT, Changelog,
+absent ITP/item sections, formulas, merged cells, protected cells, and ambiguous
 multi-area/multi-section mappings are outside mutation authority.
 
 The approved Plan contains the exact old and replacement value for every RFI

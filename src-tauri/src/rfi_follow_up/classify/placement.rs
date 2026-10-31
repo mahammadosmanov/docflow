@@ -23,6 +23,10 @@ pub(super) fn place_record(
         potential_slots_by_sheet_col,
         existing_slot_keys_by_code,
     } = index;
+    let existing_slots = existing_slot_keys_by_code
+        .get(record.canonical_rfi.as_str())
+        .cloned()
+        .unwrap_or_default();
     let Some((target_sheet, target_clause)) = route_clause(record) else {
         if slots
             .values()
@@ -53,10 +57,11 @@ pub(super) fn place_record(
         }
         return Ok(());
     };
-    let composite_pcs_route = record.contexts.iter().any(|context| {
-        let tags = normalized_parts(&context.tag);
-        tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
-    });
+    let composite_pcs_route = target_sheet != "ELE"
+        && record.contexts.iter().any(|context| {
+            let tags = normalized_parts(&context.tag);
+            tags.iter().filter(|tag| tag.starts_with("PCS-")).count() == 1 && tags.len() > 1
+        });
     let (target_sheet, target_clause) = if composite_pcs_route {
         (
             "CIV",
@@ -69,6 +74,9 @@ pub(super) fn place_record(
     } else {
         (target_sheet, target_clause)
     };
+    if target_sheet == "ELE" && existing_slots.is_empty() {
+        return Ok(());
+    }
     let matching_layout = layouts.iter().find(|l| {
         l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
             && (l.clause.as_deref() == Some(target_clause)
@@ -152,10 +160,6 @@ pub(super) fn place_record(
                 .flatten()
         });
     // Signed By rows repeat RFIs as Worley summaries, not lifecycle placements.
-    let existing_slots = existing_slot_keys_by_code
-        .get(record.canonical_rfi.as_str())
-        .cloned()
-        .unwrap_or_default();
     if scope_candidates.is_empty() {
         return Ok(());
     }

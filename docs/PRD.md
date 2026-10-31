@@ -52,7 +52,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   detection, verifies it afterward, and requires matching hash plus cache
   profile v5 for reuse. Apply revalidates the planned hash and creates only
   no-clobber corrected copies under a separate review root.
-- **DF-016 — Exact Follow Up projection:** supported CIV/MEC source records
+- **DF-016 — Exact Follow Up projection:** supported CIV/MEC/ELE source records
   map only to existing prepared destinations. A supported-route record with
   no source context matching any prepared destination is outside the active
   template scope: omit it from Manual Review and leave existing workbook cells
@@ -77,7 +77,11 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   that value already matches the projected status. Shared-cell status changes
   only when every represented RFI has an unambiguous source state and exact
   prepared route. Cancelled/Rejected entries are removed; FINAL Worley state
-  follows the exact REMARKS marker; excluded sheets never change.
+  follows the exact REMARKS marker; excluded sheets never change. ELE supports
+  only ITP `ELE-0005` / item `ELE-5.2.6` and ITP `ELE-0006` / item
+  `ELE-6.2.5.3`, matched by one exact `PCS-` Tag No to target Block. It updates
+  only an RFI already present in its prepared target column; `1.6`, other
+  ITP/item pairs, and missing RFI identifiers remain unchanged.
 - **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
   limited to 256 files and 8 GiB of logical charge across the workbook parent
   and `.docflow-backups`. Apply and Undo refuse before mutation when the

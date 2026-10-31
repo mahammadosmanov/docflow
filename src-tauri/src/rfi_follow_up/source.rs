@@ -85,7 +85,7 @@ pub(super) fn find_header_column(sheet: &WorksheetData, names: &[&str]) -> Optio
     None
 }
 
-/// Every canonical RFI number written in the CIV and MEC RFI No. columns of the Log,
+/// Every canonical RFI number written in the CIV, MEC, and ELE RFI No. columns of the Log,
 /// including rows that only carry a number. The Log is the source of truth: a
 /// number found nowhere in it was deleted and does not belong in Follow Up.
 pub(super) fn scan_logged_rfi_numbers(
@@ -93,7 +93,7 @@ pub(super) fn scan_logged_rfi_numbers(
     workbook: &WorkbookData,
 ) -> BTreeSet<String> {
     let mut numbers = BTreeSet::new();
-    for discipline in ["CIV", "MEC"] {
+    for discipline in ["CIV", "MEC", "ELE"] {
         let Some(sheet) = discovery
             .worksheets
             .iter()
@@ -152,12 +152,17 @@ pub(super) fn scan_source_records(
         return Err(protected());
     }
     let mut records = BTreeMap::<String, SourceRecord>::new();
-    for discipline in ["CIV", "MEC"] {
+    for discipline in ["CIV", "MEC", "ELE"] {
         let descriptor = discovery
             .worksheets
             .iter()
-            .find(|sheet| sheet.name.trim().eq_ignore_ascii_case(discipline))
-            .ok_or_else(workbook_invalid)?;
+            .find(|sheet| sheet.name.trim().eq_ignore_ascii_case(discipline));
+        let Some(descriptor) = descriptor else {
+            if discipline == "ELE" {
+                continue;
+            }
+            return Err(workbook_invalid());
+        };
         let sheet = workbook
             .sheet(&descriptor.name)
             .ok_or_else(workbook_invalid)?;
@@ -167,6 +172,19 @@ pub(super) fn scan_source_records(
             return Err(protected());
         }
         validate_cell_text(sheet)?;
+        if discipline == "ELE"
+            && ![
+                "RFI NO.",
+                "ITP NO:",
+                "ITEM NO.",
+                "INSPECTION STATUS",
+                "REMARKS",
+            ]
+            .iter()
+            .any(|header| find_header_column(sheet, &[*header]).is_some())
+        {
+            continue;
+        }
         let rfi_col =
             find_header_column(sheet, &["RFI NO.", "RFI NO"]).ok_or_else(workbook_invalid)?;
         let itp_col = find_header_column(sheet, &["ITP NO:", "ITP NO.", "ITP NO"])
@@ -207,6 +225,19 @@ pub(super) fn scan_source_records(
             let tag = get(tag_col);
             let area = get(area_col);
             let location = get(location_col);
+            if discipline == "ELE"
+                && !matches!(
+                    (
+                        itp_identity(&itp)
+                            .as_ref()
+                            .map(|(discipline, number)| (discipline.as_str(), number.as_str())),
+                        normalize_code_text(&item).as_str(),
+                    ),
+                    (Some(("ELE", "0005")), "ELE-5.2.6") | (Some(("ELE", "0006")), "ELE-6.2.5.3")
+                )
+            {
+                continue;
+            }
             // A row that holds only a pre-numbered RFI No. is not a record yet.
             if [&status, &remarks, &itp, &item, &tag, &area, &location]
                 .iter()
@@ -252,7 +283,7 @@ pub(super) fn approved_sheet(name: &str) -> bool {
     let norm = name.trim().to_uppercase();
     matches!(
         norm.as_str(),
-        "CIV" | "MEC" | "PCU" | "ROAD" | "SIGNED BY WORLEY CIV" | "SIGNED BY WORLEY MEC"
+        "CIV" | "MEC" | "ELE" | "PCU" | "ROAD" | "SIGNED BY WORLEY CIV" | "SIGNED BY WORLEY MEC"
     )
 }
 
@@ -261,9 +292,11 @@ pub(super) fn extract_header_clause(
     max_row: u32,
     column: u32,
 ) -> Option<String> {
-    static CLAUSE_PARENS: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\((\d+\.\d+(?:\s*,\s*\d+\.\d+)*)\)").unwrap());
-    static CLAUSE_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(\d+\.\d+)\b").unwrap());
+    static CLAUSE_PARENS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\((\d+\.\d+(?:\.\d+)?(?:\s*,\s*\d+\.\d+(?:\.\d+)?)*)\)").unwrap()
+    });
+    static CLAUSE_WORD: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\b(\d+\.\d+(?:\.\d+)?)\b").unwrap());
     for r in (1..max_row).rev() {
         if let Some(cell) = sheet.cell(r, column) {
             let text = &cell.value;

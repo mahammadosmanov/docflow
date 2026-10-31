@@ -126,15 +126,15 @@ fn candidate_rows_detail(
     target_workbook: &WorkbookData,
     ignore_inspection_location: bool,
 ) -> String {
-    let target_columns: &[u32] = if ignore_inspection_location {
-        &[3, 4]
-    } else {
-        &[1, 2, 3, 4]
-    };
     let targets = candidates
         .iter()
         .take(5)
         .map(|(sheet_name, row, _, _)| {
+            let target_columns: &[u32] = match sheet_name.as_str() {
+                "ELE" => &[1],
+                _ if ignore_inspection_location => &[3, 4],
+                _ => &[1, 2, 3, 4],
+            };
             let context = target_workbook
                 .sheet(sheet_name)
                 .into_iter()
