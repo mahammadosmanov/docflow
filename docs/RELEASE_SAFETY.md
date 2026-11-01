@@ -18,9 +18,9 @@
    `DOCFLOW_UPDATER_PUBLIC_KEY` and Actions secret `TAURI_SIGNING_PRIVATE_KEY`;
    a missing key must fail before packaging. The optional private-key password
    is stored only as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-10. Each stable release attaches one signed `.nsis.zip`, its `.sig` and SHA-256,
-    plus `latest.json` pointing to the immutable version-tagged bundle. Do not
-    publish the manifest before all referenced assets exist.
+10. Each stable release attaches the signed NSIS installer `.exe`, its `.exe.sig`
+    and SHA-256, plus `latest.json` pointing to that immutable version-tagged
+    installer. Do not publish the manifest before all referenced assets exist.
 
 ## Required source gates
 

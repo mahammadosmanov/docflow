@@ -203,9 +203,8 @@ jobs:
           name: DocFlow-windows-x64
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
             src-tauri/target/release/bundle/nsis/*.sha256
-            src-tauri/target/release/bundle/nsis/*.nsis.zip
-            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
             src-tauri/target/release/bundle/nsis/*.json
           if-no-files-found: error
           retention-days: 30
@@ -255,16 +254,7 @@ jobs:
             throw "The NSIS installer was not produced."
           }
           $checksum = Get-Item -LiteralPath "$($installer.FullName).sha256"
-          $updaterBundles = @(Get-ChildItem (Join-Path $installer.DirectoryName "*.nsis.zip"))
-          if ($updaterBundles.Count -ne 1) { throw "Expected one NSIS updater bundle." }
-          $updaterBundle = $updaterBundles[0]
-          $updaterSignature = Get-Item -LiteralPath "$($updaterBundle.FullName).sig"
-          $updaterChecksum = Get-Item -LiteralPath "$($updaterBundle.FullName).sha256"
-          $updaterHash = (Get-FileHash -LiteralPath $updaterBundle.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $updaterChecksumContent = (Get-Content -LiteralPath $updaterChecksum.FullName -Raw).Trim()
-          if ($updaterChecksumContent -cne "$updaterHash  $($updaterBundle.Name)") {
-            throw "The updater bundle checksum does not match its archive."
-          }
+          $updaterSignature = Get-Item -LiteralPath "$($installer.FullName).sig"
           $smokeEvidence = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-smoke.json")
           $manifest = Get-Item -LiteralPath (Join-Path $installer.DirectoryName "DocFlow-windows-x64-manifest.json")
 
@@ -273,7 +263,7 @@ jobs:
             Accept = "application/vnd.github+json"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
-          foreach ($asset in @($installer, $checksum, $updaterBundle, $updaterSignature, $updaterChecksum, $smokeEvidence, $manifest)) {
+          foreach ($asset in @($installer, $checksum, $updaterSignature, $smokeEvidence, $manifest)) {
             $assetName = [System.Uri]::EscapeDataString($asset.Name)
             $uploadUri = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$assetName"
             $uploaded = $null
@@ -303,7 +293,7 @@ jobs:
             & gh api "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets" |
               ConvertFrom-Json
           )
-          foreach ($expected in @($installer, $checksum, $updaterBundle, $updaterSignature, $updaterChecksum, $smokeEvidence, $manifest)) {
+          foreach ($expected in @($installer, $checksum, $updaterSignature, $smokeEvidence, $manifest)) {
             $uploaded = $uploadedAssets | Where-Object { $_.name -eq $expected.Name }
             if (-not $uploaded -or $uploaded.size -ne $expected.Length) {
               throw "Draft delivery release has no exact uploaded asset $($expected.Name)."
@@ -335,22 +325,13 @@ jobs:
           }
           $notes = Join-Path $env:RUNNER_TEMP "docflow-$version-notes.md"
           node tools/version_manager.mjs notes $version | Out-File -FilePath $notes -Encoding utf8
-          $updaterBundles = @(Get-ChildItem (Join-Path $installer.DirectoryName "*.nsis.zip"))
-          if ($updaterBundles.Count -ne 1) { throw "Expected one NSIS updater bundle." }
-          $updaterBundle = $updaterBundles[0]
-          $updaterSignature = Get-Item -LiteralPath "$($updaterBundle.FullName).sig"
-          $updaterChecksum = Get-Item -LiteralPath "$($updaterBundle.FullName).sha256"
-          $updaterHash = (Get-FileHash -LiteralPath $updaterBundle.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $updaterChecksumContent = (Get-Content -LiteralPath $updaterChecksum.FullName -Raw).Trim()
-          if ($updaterChecksumContent -cne "$updaterHash  $($updaterBundle.Name)") {
-            throw "The updater bundle checksum does not match its archive."
-          }
+          $updaterSignature = Get-Item -LiteralPath "$($installer.FullName).sig"
           $updateManifest = Join-Path $env:RUNNER_TEMP "latest.json"
           node tools/update_manifest.mjs `
             --version $version `
             --repository $env:GITHUB_REPOSITORY `
             --tag $tag `
-            --archive $updaterBundle.Name `
+            --installer $installer.Name `
             --signature $updaterSignature.FullName `
             --notes $notes `
             --output $updateManifest
@@ -373,7 +354,7 @@ jobs:
             throw "Release $tag already exists; refusing to replace its assets."
           }
 
-          & gh release create $tag $installer.FullName $checksum.FullName $updaterBundle.FullName $updaterSignature.FullName $updaterChecksum.FullName $smokeEvidence.FullName $manifest.FullName $updateManifest `
+          & gh release create $tag $installer.FullName $checksum.FullName $updaterSignature.FullName $smokeEvidence.FullName $manifest.FullName $updateManifest `
             --repo $env:GITHUB_REPOSITORY `
             --verify-tag `
             --title "DocFlow $version" `
@@ -386,7 +367,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or -not $publishedRelease) {
             throw "The published release could not be verified."
           }
-          foreach ($expected in @($installer, $checksum, $updaterBundle, $updaterSignature, $updaterChecksum, $smokeEvidence, $manifest, (Get-Item -LiteralPath $updateManifest))) {
+          foreach ($expected in @($installer, $checksum, $updaterSignature, $smokeEvidence, $manifest, (Get-Item -LiteralPath $updateManifest))) {
             $asset = $publishedRelease.assets | Where-Object { $_.name -eq $expected.Name }
             if (-not $asset -or $asset.size -ne $expected.Length) {
               throw "Published release is missing exact asset $($expected.Name)."

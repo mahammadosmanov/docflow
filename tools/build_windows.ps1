@@ -198,7 +198,7 @@ try {
     $updaterConfigPath = Join-Path ([System.IO.Path]::GetTempPath()) "docflow-updater-$([guid]::NewGuid()).json"
     try {
         Invoke-Checked $node @("tools/updater_config.mjs", "--output", $updaterConfigPath) "Generate the signed updater bundler configuration"
-        Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", $updaterConfigPath) "Build the signed Windows installer and updater bundle"
+        Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", $updaterConfigPath) "Build the signed Windows installer and updater signature"
     }
     finally {
         Remove-Item -LiteralPath $updaterConfigPath -Force -ErrorAction SilentlyContinue
@@ -236,15 +236,10 @@ try {
     Invoke-Checked $node @("tools/package_audit.mjs", "package", $installer.FullName) "Audit the NSIS artifact name and linked payload"
     Invoke-Checked $node @("tools/checksum.mjs", $installer.FullName) "Create the NSIS SHA-256 checksum"
 
-    $updaterBundles = @(Get-ChildItem "src-tauri\target\release\bundle\nsis\*.nsis.zip")
-    if ($updaterBundles.Count -ne 1) {
-        throw "Expected exactly one signed NSIS updater bundle, found $($updaterBundles.Count)."
+    $updaterSignature = "$($installer.FullName).sig"
+    if (-not (Test-Path -LiteralPath $updaterSignature -PathType Leaf)) {
+        throw "The signed NSIS installer updater signature was not produced."
     }
-    $updaterBundle = $updaterBundles[0]
-    if (-not (Test-Path -LiteralPath "$($updaterBundle.FullName).sig" -PathType Leaf)) {
-        throw "The NSIS updater signature was not produced."
-    }
-    Invoke-Checked $node @("tools/checksum.mjs", $updaterBundle.FullName) "Create the updater bundle SHA-256 checksum"
 
     Write-Host "`nWindows installer ready:"
     Write-Host $installer.FullName -ForegroundColor Green

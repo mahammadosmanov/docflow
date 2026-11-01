@@ -14,8 +14,9 @@ DocFlow uses Semantic Versioning and repository-native, zero-cost tracking.
 | GitHub Releases | Downloadable verified installers and release notes |
 
 Stable Windows x64 releases also attach a `latest.json` manifest that points to
-the exact immutable tag's signed NSIS updater archive. Never edit or replace a
-published manifest or its referenced assets.
+the exact immutable tag's signed NSIS installer. Tauri signs the installer
+directly as the updater payload. Never edit or replace a published manifest or
+its referenced assets.
 
 `tools/version_manager.mjs` enforces equality across `package.json`, both root
 `package-lock.json` entries, `src-tauri/Cargo.toml`, the DocFlow package in

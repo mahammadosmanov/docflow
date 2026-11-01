@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.38.1",
+  "currentVersion": "1.38.2",
   "releases": [
+    {
+      "version": "1.38.2",
+      "tag": "v1.38.2",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Publish the signed NSIS installer itself as the Windows updater payload."
+    },
     {
       "version": "1.38.1",
       "tag": "v1.38.1",
       "date": "2026-11-01",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fix updater bundler configuration and trim the trusted public key before signature verification."
     },
     {

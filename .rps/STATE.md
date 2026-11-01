@@ -2,17 +2,17 @@
 
 Updated: 2026-11-01
 
-## Signed in-app updates (1.38.1)
+## Signed in-app updates (1.38.2)
 
 - Added a Rust-owned Tauri updater with a public pre-login check, one-shot
   cached installation, signature verification, and localized update/release-note
   controls. The webview has no updater plugin permissions.
-- Windows x64 release builds produce a signed NSIS updater archive, checksum,
-  and `latest.json` linked to the immutable version tag. Missing signing
-  material fails the release build before packaging.
+- Windows x64 release builds produce a signed NSIS installer (`.exe.sig`),
+  checksum, and `latest.json` linked to the immutable version tag. Missing
+  signing material fails the release build before packaging.
 - v1.38.0 source gates passed, including Node/React, frontend build,
   docs/source/version/license audits, Rust formatting/Clippy, and the Windows
-  runner's full tests. Its release step then failed because the bundler config
+  runner's full tests. Its release step failed because the bundler config
   omitted `plugins.updater`.
 - Signing key pair is generated and configured in GitHub as repository variable
   `DOCFLOW_UPDATER_PUBLIC_KEY` and Actions secret `TAURI_SIGNING_PRIVATE_KEY`.
@@ -20,16 +20,21 @@ Updated: 2026-11-01
   overlay omitted `plugins.updater`. v1.38.1 generates that field from the
   public key, keeps the release endpoint exact, and trims its trailing newline
   in Rust. Focused Node tests, Rust formatting, and a local Tauri no-bundle build
-  with the real public key pass. v1.38.1 Windows release is pending.
+  with the real public key passed.
 - Full local Node tests (32 tooling, 298 frontend), frontend build, docs/source/
   version/license audits, Rust formatting and Clippy pass. Full local Cargo
   tests stopped when the 91 GB target directory exhausted the disk (121 MB
   free); target output was left untouched. The Windows runner had already
   passed its full test/build step before v1.38.0 reached the bundler error.
-- Keep v1.38.0 immutable; retry as v1.38.1 after full gates and a focused
-  commit. Existing users still need one manual install of the first verified
-  update-enabled package. macOS update delivery remains inactive pending its
-  signed/notarized release pipeline and authorized Apple credentials.
+- v1.38.1 run 41289572512 passed tests, built the signed installer, and passed
+  packaged bootstrap/apply/undo smoke, then failed because release scripts
+  expected a nonexistent `.nsis.zip`. Tauri signs the NSIS `.exe` directly;
+  v1.38.2 now uses that installer and its `.exe.sig` as the updater asset.
+- Keep tags immutable. v1.38.0 and v1.38.1 are failed release attempts; v1.38.2
+  still needs source CI and the full Windows release/smoke workflow. Existing
+  users need one manual install of the first verified update-enabled package.
+  macOS update delivery remains inactive pending its signed/notarized release
+  pipeline and authorized Apple credentials.
 
 ## ELE grouped-clause header parsing (1.37.6)
 

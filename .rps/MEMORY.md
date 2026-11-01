@@ -8,6 +8,8 @@
   its updater at runtime. Generate that config overlay with the public key and
   endpoint before bundling; remove only the trailing environment newline when
   passing the key to the Rust verifier.
+- Tauri's Windows updater payload is the signed NSIS setup `.exe` plus its
+  detached `.exe.sig`; it does not produce a separate `.nsis.zip` archive.
 - Laya 0.3.20's cached English checkpoint failed a bounded RFI page-triage
   screen: 5/12 synthetic labels and 8/24 local corpus labels matched. It
   suggested `cover` for 3 continuations and all 5 OCR-uncertain corpus pages;

@@ -6,14 +6,14 @@ import { pathToFileURL } from "node:url";
 
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
-export function buildUpdateManifest({ version, repository, tag, archiveName, signature, notes }) {
+export function buildUpdateManifest({ version, repository, tag, installerName, signature, notes }) {
   if (!VERSION_PATTERN.test(version ?? "")) throw new Error("version must be semantic version");
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository ?? "")) {
     throw new Error("repository must be owner/name");
   }
   if (tag !== `v${version}`) throw new Error("tag must match version");
-  if (!/^DocFlow_[A-Za-z0-9.+-]+_x64-setup\.nsis\.zip$/u.test(archiveName ?? "")) {
-    throw new Error("archive must be the x64 NSIS updater bundle");
+  if (!/^DocFlow_[A-Za-z0-9.+-]+_x64-setup\.exe$/u.test(installerName ?? "")) {
+    throw new Error("installer must be the x64 NSIS installer");
   }
   if (typeof signature !== "string" || !signature.trim()) {
     throw new Error("signature is required");
@@ -25,7 +25,7 @@ export function buildUpdateManifest({ version, repository, tag, archiveName, sig
     notes: notes.trim(),
     platforms: {
       "windows-x86_64": {
-        url: `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(archiveName)}`,
+        url: `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(installerName)}`,
         signature: signature.trim(),
       },
     },
@@ -51,7 +51,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       version: input.version,
       repository: input.repository,
       tag: input.tag,
-      archiveName: input.archive,
+      installerName: input.installer,
       signature: readFileSync(input.signature, "utf8"),
       notes: readFileSync(input.notes, "utf8"),
     });
