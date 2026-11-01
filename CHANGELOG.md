@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.6 - 2026-11-01
+
+### Fixed
+
+- Recognize trailing whitespace before a closing clause parenthesis in Follow Up headers so ELE-6.2.5.3 entries match the prepared Earthing group.
+
 ## 1.37.5 - 2026-11-01
 
 ### Changed

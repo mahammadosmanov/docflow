@@ -2,6 +2,15 @@
 
 Updated: 2026-11-01
 
+## ELE grouped-clause header parsing (1.37.6)
+
+- The actual ELE Follow Up F3 heading ends with `2.5.3 )`. The clause-list
+  parser rejected whitespace before `)` and fell back to the first clause
+  `2.1`, so ITP `ELE-0006` / item `ELE-6.2.5.3` had no matching layout.
+- Allow trailing whitespace before `)`; the real workbook preview then proposes
+  five additional ELE updates after clearing the F/G pairs in a temporary copy.
+- Windows Release and full CI validation are pending.
+
 ## ELE prepared-slot projection (1.37.5)
 
 - The prior ELE guard skipped all records absent from Follow Up even when an

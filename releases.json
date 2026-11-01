@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.5",
+  "currentVersion": "1.37.6",
   "releases": [
+    {
+      "version": "1.37.6",
+      "tag": "v1.37.6",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Recognize spaced closing parentheses in Follow Up clause headers."
+    },
     {
       "version": "1.37.5",
       "tag": "v1.37.5",
       "date": "2026-11-01",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fill supported ELE Follow Up entries in matching prepared blank slots."
     },
     {

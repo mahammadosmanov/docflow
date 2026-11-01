@@ -293,7 +293,7 @@ pub(super) fn extract_header_clause(
     column: u32,
 ) -> Option<String> {
     static CLAUSE_PARENS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\((\d+\.\d+(?:\.\d+)?(?:\s*,\s*\d+\.\d+(?:\.\d+)?)*)\)").unwrap()
+        Regex::new(r"\((\d+\.\d+(?:\.\d+)?(?:\s*,\s*\d+\.\d+(?:\.\d+)?)*)\s*\)").unwrap()
     });
     static CLAUSE_WORD: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"\b(\d+\.\d+(?:\.\d+)?)\b").unwrap());

@@ -1039,7 +1039,7 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
                     2,
                     [
                         inline("D2", "Cable laying (2.5, 2.6)"),
-                        inline("F2", "Earthing (2.1, 2.4, 2.5.1, 2.5.3)"),
+                        inline("F2", "Earthing (2.1, 2.4, 2.5.1, 2.5.3 )"),
                         inline("B2", "Cable preparation (1.6)"),
                     ],
                 ),
@@ -1094,10 +1094,13 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
     assert_eq!(by_rfi.len(), 4, "{review}");
     assert_eq!(by_rfi["ELE-0036"]["proposedStatus"], "Completed");
     assert_eq!(by_rfi["ELE-0043"]["proposedStatus"], "In Progress");
+    assert_eq!(by_rfi["ELE-0043"]["target"]["rfiColumn"], 6);
     assert_eq!(by_rfi["ELE-0054"]["proposedRfiNo"], "ELE-0054");
     assert_eq!(by_rfi["ELE-0054"]["proposedStatus"], "Completed");
+    assert_eq!(by_rfi["ELE-0054"]["target"]["rfiColumn"], 4);
     assert_eq!(by_rfi["ELE-0055"]["proposedRfiNo"], "ELE-0055");
     assert_eq!(by_rfi["ELE-0055"]["proposedStatus"], "In Progress");
+    assert_eq!(by_rfi["ELE-0055"]["target"]["rfiColumn"], 6);
     assert!(!by_rfi.contains_key("ELE-0012"));
 }
 
