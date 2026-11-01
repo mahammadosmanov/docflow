@@ -5,6 +5,22 @@ import type { Bridge } from "../lib/bridge";
 import { UpdateNotice } from "./UpdateNotice";
 
 describe("UpdateNotice", () => {
+  it("stays hidden when DocFlow is up to date", async () => {
+    const call = vi.fn(async () => ({ configured: true, available: false, currentVersion: "1.38.3" }));
+    const { container } = render(<UpdateNotice bridge={{ call } as unknown as Bridge} s={makeStrings("en")} />);
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith("update/check"));
+    expect(container.querySelector(".update-notice")).toBeNull();
+  });
+
+  it("hides an available update when dismissed", async () => {
+    const call = vi.fn(async () => ({ configured: true, available: true, version: "1.38.4", notes: "Fix" }));
+    const { container } = render(<UpdateNotice bridge={{ call } as unknown as Bridge} s={makeStrings("en")} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+    expect(container.querySelector(".update-notice")).toBeNull();
+  });
+
   it("shows a checked update and installs it only after the user clicks", async () => {
     const call = vi.fn(async (method: string) =>
       method === "update/check"

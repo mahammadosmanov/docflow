@@ -1204,5 +1204,6 @@
   "update.checking": "Checking for updates…",
   "update.check": "Check for updates",
   "update.current": "DocFlow is up to date ({version}).",
-  "update.failed": "Could not check or install the update. Check your connection and try again."
+  "update.failed": "Could not check or install the update. Check your connection and try again.",
+  "update.dismiss": "Dismiss"
 }

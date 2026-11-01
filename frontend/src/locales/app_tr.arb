@@ -1176,5 +1176,6 @@
   "update.checking": "Güncellemeler denetleniyor…",
   "update.check": "Güncellemeleri denetle",
   "update.current": "DocFlow güncel ({version}).",
-  "update.failed": "Güncelleme denetlenemedi veya yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."
+  "update.failed": "Güncelleme denetlenemedi veya yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin.",
+  "update.dismiss": "Kapat"
 }

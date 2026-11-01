@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.38.3 - 2026-11-01
+
+### Fixed
+
+- Show the update banner only when an update is available, installing, or failed to install; hide it when up to date or after a background check fails.
+- Add a Dismiss control to the update banner.
+
 ## 1.38.2 - 2026-11-01
 
 ### Fixed
