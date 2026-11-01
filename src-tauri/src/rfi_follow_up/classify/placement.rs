@@ -74,9 +74,6 @@ pub(super) fn place_record(
     } else {
         (target_sheet, target_clause)
     };
-    if target_sheet == "ELE" && existing_slots.is_empty() {
-        return Ok(());
-    }
     let matching_layout = layouts.iter().find(|l| {
         l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
             && (l.clause.as_deref() == Some(target_clause)

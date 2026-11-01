@@ -1,6 +1,21 @@
 # DocFlow project state
 
-Updated: 2026-10-31
+Updated: 2026-11-01
+
+## ELE prepared-slot projection (1.37.5)
+
+- The prior ELE guard skipped all records absent from Follow Up even when an
+  exact approved route and a matching prepared blank pair existed. It is removed;
+  generic exact-route matching now fills those slots, without creating rows or
+  sections. The red/green integration test covers both approved item groups and
+  verifies unsupported `ELE-5.1.6` stays excluded.
+- CIV/MEC/PCU placement already uses the same prepared-slot path. Road retains
+  its approved missing-part row exception. Other route safety rules are unchanged.
+- Version 1.37.5 passed the focused ELE test, all 97 Follow Up native tests,
+  all 575 Rust unit tests, all Rust integration suites, Clippy, formatting,
+  296 frontend tests, frontend build, version/docs/package/license audits.
+  Windows release validation is pending. The previous 1.37.4 Windows release
+  passed run 41190822818.
 
 ## Windows test fixture fix (1.37.4)
 
@@ -8,8 +23,9 @@ Updated: 2026-10-31
   Windows rejects `?` in a ZIP entry name before the test reaches relationship
   validation. The fixture now uses a valid unrelated entry name while the
   encoded forbidden character remains in the relationship target.
-- v1.37.4 source validation and a fresh Windows release run are pending.
-- Failed workflow: https://github.com/mahammadosmanov/docflow/actions/runs/41189891418
+- v1.37.4 Windows build, install/startup/package/uninstall smoke, manifest, and
+  release publication passed: https://github.com/mahammadosmanov/docflow/actions/runs/41190822818
+- Failed predecessor run: https://github.com/mahammadosmanov/docflow/actions/runs/41189891418
 
 ## Windows Clippy fix (1.37.3)
 

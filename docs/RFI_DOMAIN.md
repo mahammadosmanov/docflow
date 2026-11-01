@@ -288,9 +288,10 @@ merged, or unsafe matched destinations remain manual. For ELE, only ITP
 `ELE-0005` / item `ELE-5.2.6` routes to the prepared `2.5, 2.6` group, and ITP
 `ELE-0006` / item `ELE-6.2.5.3` routes to the prepared `2.1, 2.4, 2.5.1, 2.5.3`
 group. Match one exact `PCS-` Tag No to the target `Block`; update status only
-when that RFI already exists in its routed column. Do not route `1.6` or other
-ELE ITP/item pairs, or add an RFI to an empty cell. Unsupported ELE records stay
-outside Follow Up review. `POT test`, `STAT`, `Changelog`, MEC calculated
+when that RFI already exists in its routed column, or fill a safe empty
+RFI/status pair in its matching prepared row. Never create an ELE row or
+section. Do not route `1.6` or other ELE ITP/item pairs. Unsupported ELE
+records stay outside Follow Up review. `POT test`, `STAT`, `Changelog`, MEC calculated
 remarks/manual overrides, PRC, and absent ITP/item sections are never created or
 modified by this operation. A source
 record with multiple areas and multiple sections is ambiguous and remains

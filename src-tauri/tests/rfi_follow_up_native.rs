@@ -983,7 +983,7 @@ fn full_sync_keeps_multiple_matching_follow_up_rows_in_manual_review() {
 }
 
 #[test]
-fn full_sync_updates_only_preexisting_supported_ele_rfis() {
+fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
     let source = full_schema_source_with_ele(
         std::iter::empty(),
         [
@@ -1091,11 +1091,13 @@ fn full_sync_updates_only_preexisting_supported_ele_rfis() {
         .map(|row| (row["rfiNo"].as_str().unwrap(), row))
         .collect::<std::collections::BTreeMap<_, _>>();
 
-    assert_eq!(by_rfi.len(), 2, "{review}");
+    assert_eq!(by_rfi.len(), 4, "{review}");
     assert_eq!(by_rfi["ELE-0036"]["proposedStatus"], "Completed");
     assert_eq!(by_rfi["ELE-0043"]["proposedStatus"], "In Progress");
-    assert!(!by_rfi.contains_key("ELE-0054"));
-    assert!(!by_rfi.contains_key("ELE-0055"));
+    assert_eq!(by_rfi["ELE-0054"]["proposedRfiNo"], "ELE-0054");
+    assert_eq!(by_rfi["ELE-0054"]["proposedStatus"], "Completed");
+    assert_eq!(by_rfi["ELE-0055"]["proposedRfiNo"], "ELE-0055");
+    assert_eq!(by_rfi["ELE-0055"]["proposedStatus"], "In Progress");
     assert!(!by_rfi.contains_key("ELE-0012"));
 }
 

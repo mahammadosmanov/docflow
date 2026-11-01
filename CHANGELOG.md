@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.37.5 - 2026-11-01
+
+### Changed
+
+- Fill supported ELE RFI/status pairs in matching prepared blank slots while keeping the approved ITP/item and row-creation limits.
+
 ## 1.37.4 - 2026-10-31
 
 ### Fixed

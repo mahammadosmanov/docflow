@@ -80,8 +80,9 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   follows the exact REMARKS marker; excluded sheets never change. ELE supports
   only ITP `ELE-0005` / item `ELE-5.2.6` and ITP `ELE-0006` / item
   `ELE-6.2.5.3`, matched by one exact `PCS-` Tag No to target Block. It updates
-  only an RFI already present in its prepared target column; `1.6`, other
-  ITP/item pairs, and missing RFI identifiers remain unchanged.
+  an existing RFI or fills a safe empty RFI/status pair in a matching prepared
+  target row; `1.6` and other ITP/item pairs remain unchanged. It creates no
+  ELE rows or sections.
 - **DF-034 — Bounded S5 recovery capacity:** retained S5 recovery files are
   limited to 256 files and 8 GiB of logical charge across the workbook parent
   and `.docflow-backups`. Apply and Undo refuse before mutation when the

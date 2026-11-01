@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.4",
+  "currentVersion": "1.37.5",
   "releases": [
+    {
+      "version": "1.37.5",
+      "tag": "v1.37.5",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fill supported ELE Follow Up entries in matching prepared blank slots."
+    },
     {
       "version": "1.37.4",
       "tag": "v1.37.4",
       "date": "2026-10-31",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Keep a malformed worksheet target test valid on Windows."
     },
     {
