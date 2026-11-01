@@ -1176,5 +1176,8 @@
   "update.checking": "Yeniləmələr yoxlanılır…",
   "update.check": "Yeniləmələri yoxla",
   "update.current": "DocFlow yenidir ({version}).",
-  "update.failed": "Yeniləməni yoxlamaq və ya quraşdırmaq mümkün olmadı. Bağlantını yoxlayıb yenidən cəhd edin."
+  "update.failed": "Yeniləməni yoxlamaq və ya quraşdırmaq mümkün olmadı. Bağlantını yoxlayıb yenidən cəhd edin.",
+  "update.dismiss": "Bağla",
+  "prefs.updates": "Tətbiq yeniləmələri",
+  "prefs.updates.help": "DocFlow-un yeni versiyasını yoxlayın. Quraşdır düyməsini basmadan heç nə quraşdırılmır."
 }

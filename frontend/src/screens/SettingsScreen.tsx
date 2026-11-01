@@ -100,7 +100,6 @@ export function SettingsScreen({
   } = useSupportDiagnostics({ bridge, s, setError });
   return (
     <div className="screen">
-      {!(auth.signedIn && auth.allowed) && <UpdateNotice bridge={bridge} s={s} />}
       <Header
         title={s.t("prefs.title")}
         titleAs="h1"
@@ -249,6 +248,9 @@ export function SettingsScreen({
               }
             />
           </label>
+        </SettingsGroup>
+        <SettingsGroup title={s.t("prefs.updates")} icon={<Monitor />} help={s.t("prefs.updates.help")}>
+          <UpdateNotice bridge={bridge} s={s} inline />
         </SettingsGroup>
         <SettingsGroup
           title={s.t("prefs.support.title")}
