@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.38.3",
+  "currentVersion": "1.39.0",
   "releases": [
+    {
+      "version": "1.39.0",
+      "tag": "v1.39.0",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add a manual app update check with status in Settings."
+    },
     {
       "version": "1.38.3",
       "tag": "v1.38.3",
       "date": "2026-11-01",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Show the update banner only when an update needs action, with a dismiss control."
     },
     {

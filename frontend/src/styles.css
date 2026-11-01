@@ -3385,6 +3385,14 @@ textarea:focus-visible {
   background: var(--surface);
   box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
 }
+.update-notice-inline {
+  position: static;
+  max-width: none;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
 .update-notice-copy {
   display: grid;
   gap: 4px;

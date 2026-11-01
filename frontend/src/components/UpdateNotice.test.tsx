@@ -1,10 +1,21 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeStrings } from "../i18n";
 import type { Bridge } from "../lib/bridge";
 import { UpdateNotice } from "./UpdateNotice";
 
 describe("UpdateNotice", () => {
+  afterEach(cleanup);
+
+  it("shows the current version with a manual check in settings", async () => {
+    const call = vi.fn(async () => ({ configured: true, available: false, currentVersion: "1.39.0" }));
+    render(<UpdateNotice bridge={{ call } as unknown as Bridge} s={makeStrings("en")} inline />);
+
+    expect(await screen.findByText("DocFlow is up to date (1.39.0).")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+  });
+
   it("stays hidden when DocFlow is up to date", async () => {
     const call = vi.fn(async () => ({ configured: true, available: false, currentVersion: "1.38.3" }));
     const { container } = render(<UpdateNotice bridge={{ call } as unknown as Bridge} s={makeStrings("en")} />);

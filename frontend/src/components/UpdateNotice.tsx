@@ -3,7 +3,8 @@ import type { Strings } from "../i18n";
 import type { Bridge } from "../lib/bridge";
 import type { ProgressEvent, UpdateCheckResult } from "../types";
 
-export function UpdateNotice({ bridge, s }: { bridge: Bridge; s: Strings }) {
+// Floating banner by default; `inline` renders the Settings row that always shows status.
+export function UpdateNotice({ bridge, s, inline = false }: { bridge: Bridge; s: Strings; inline?: boolean }) {
   const [status, setStatus] = useState<UpdateCheckResult | null>(null);
   const [checking, setChecking] = useState(true);
   const [installing, setInstalling] = useState(false);
@@ -19,6 +20,7 @@ export function UpdateNotice({ bridge, s }: { bridge: Bridge; s: Strings }) {
     } catch {
       // Silent on startup: a failed background check must not nag the user.
       setStatus(null);
+      setError(inline);
     } finally {
       setChecking(false);
     }
@@ -42,19 +44,24 @@ export function UpdateNotice({ bridge, s }: { bridge: Bridge; s: Strings }) {
   };
 
   const available = status?.available === true;
-  // Shown only when there is something the user must act on: an update to
-  // install, an install in progress, or an install that failed.
-  if (status?.configured === false || dismissed || !(available || installing || error)) return null;
+  if (status?.configured === false) return null;
+  // Floating banner shows only when the user must act: update, install in progress, or failed install.
+  if (!inline && (dismissed || !(available || installing || error))) return null;
+
+  const headline = installing
+    ? s.t("update.installing")
+    : available
+      ? s.t("update.available", { version: status.version ?? "" })
+      : error
+        ? s.t("update.failed")
+        : checking
+          ? s.t("update.checking")
+          : s.t("update.current", { version: status?.currentVersion ?? "" });
+
   return (
-    <aside className="update-notice" role="status" aria-live="polite">
+    <aside className={inline ? "update-notice update-notice-inline" : "update-notice"} role="status" aria-live="polite">
       <div className="update-notice-copy">
-        <strong>
-          {installing
-            ? s.t("update.installing")
-            : available
-              ? s.t("update.available", { version: status.version ?? "" })
-              : s.t("update.failed")}
-        </strong>
+        <strong>{headline}</strong>
         {available && status.notes && <span>{status.notes}</span>}
         {installing && download && download.total > 0 && (
           <span>{Math.min(100, Math.floor((download.done / download.total) * 100))}%</span>
@@ -65,12 +72,12 @@ export function UpdateNotice({ bridge, s }: { bridge: Bridge; s: Strings }) {
           {s.t(installing ? "update.installing" : "update.install")}
         </button>
       )}
-      {!available && error && (
+      {!available && (inline || error) && (
         <button className="button secondary" type="button" disabled={checking || installing} onClick={() => void check()}>
           {s.t("update.check")}
         </button>
       )}
-      {!installing && (
+      {!inline && !installing && (
         <button className="button secondary" type="button" onClick={() => setDismissed(true)}>
           {s.t("update.dismiss")}
         </button>

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.39.0 - 2026-11-01
+
+### Added
+
+- Add a manual "Check for updates" row in Settings that shows the current version or an available update.
+
 ## 1.38.3 - 2026-11-01
 
 ### Fixed
