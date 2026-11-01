@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.38.1 - 2026-11-01
+
+### Fixed
+
+- Generate the updater bundler configuration with the trusted public key and release endpoint so signed Windows packages can be built.
+- Trim the repository variable's trailing newline before Rust configures update signature verification.
+
 ## 1.38.0 - 2026-11-01
 
 ### Added

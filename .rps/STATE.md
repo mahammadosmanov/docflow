@@ -2,7 +2,7 @@
 
 Updated: 2026-11-01
 
-## Signed in-app updates (1.38.0)
+## Signed in-app updates (1.38.1)
 
 - Added a Rust-owned Tauri updater with a public pre-login check, one-shot
   cached installation, signature verification, and localized update/release-note
@@ -10,16 +10,26 @@ Updated: 2026-11-01
 - Windows x64 release builds produce a signed NSIS updater archive, checksum,
   and `latest.json` linked to the immutable version tag. Missing signing
   material fails the release build before packaging.
-- Source gates pass: Node/React tests, frontend build, docs/source/version/
-  license audits, Rust formatting, Clippy, and the full Rust suite. The Windows
-  MSVC cross-target check could not compile ring because this Mac lacks Windows
-  CRT headers (`assert.h`); native Windows packaging/smoke is still required.
-- GitHub repository variable `DOCFLOW_UPDATER_PUBLIC_KEY` and secret
-  `TAURI_SIGNING_PRIVATE_KEY` are not configured. Existing users need one manual
-  install of the first update-capable package. macOS updater delivery remains
-  inactive until its release pipeline is verified.
-- Next: after approval, configure the signing key pair, run the Windows release
-  workflow, and verify install plus in-app update on Windows.
+- v1.38.0 source gates passed, including Node/React, frontend build,
+  docs/source/version/license audits, Rust formatting/Clippy, and the Windows
+  runner's full tests. Its release step then failed because the bundler config
+  omitted `plugins.updater`.
+- Signing key pair is generated and configured in GitHub as repository variable
+  `DOCFLOW_UPDATER_PUBLIC_KEY` and Actions secret `TAURI_SIGNING_PRIVATE_KEY`.
+- v1.38.0 Windows release run 41287518832 failed because the temporary Tauri
+  overlay omitted `plugins.updater`. v1.38.1 generates that field from the
+  public key, keeps the release endpoint exact, and trims its trailing newline
+  in Rust. Focused Node tests, Rust formatting, and a local Tauri no-bundle build
+  with the real public key pass. v1.38.1 Windows release is pending.
+- Full local Node tests (32 tooling, 298 frontend), frontend build, docs/source/
+  version/license audits, Rust formatting and Clippy pass. Full local Cargo
+  tests stopped when the 91 GB target directory exhausted the disk (121 MB
+  free); target output was left untouched. The Windows runner had already
+  passed its full test/build step before v1.38.0 reached the bundler error.
+- Keep v1.38.0 immutable; retry as v1.38.1 after full gates and a focused
+  commit. Existing users still need one manual install of the first verified
+  update-enabled package. macOS update delivery remains inactive pending its
+  signed/notarized release pipeline and authorized Apple credentials.
 
 ## ELE grouped-clause header parsing (1.37.6)
 

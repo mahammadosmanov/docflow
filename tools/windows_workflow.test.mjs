@@ -136,7 +136,8 @@ test("Windows release signs the updater bundle and publishes an immutable latest
 
   assert.match(workflow, /DOCFLOW_UPDATER_PUBLIC_KEY:\s+\$\{\{ vars\.DOCFLOW_UPDATER_PUBLIC_KEY \}\}/u);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY:\s+\$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/u);
-  assert.match(build, /--config", "src-tauri\/tauri\.updater\.conf\.json"/u);
+  assert.match(build, /tools\/updater_config\.mjs/u);
+  assert.match(build, /--config", \$updaterConfigPath/u);
   assert.match(workflow, /tools\/update_manifest\.mjs/u);
   assert.match(workflow, /\$updateManifest/u);
   assert.match(workflow, /\.nsis\.zip\.sig/u);

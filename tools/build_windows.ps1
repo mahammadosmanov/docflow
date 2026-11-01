@@ -195,7 +195,14 @@ try {
     Assert-TesseractResourceEvidence $ResourceDir
     Write-ResourceChecksums $ResourceDir
     Invoke-Checked $node @("tools/license_audit.mjs", "--target", "x86_64-pc-windows-msvc") "Audit locked dependency and OCR licenses"
-    Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", "src-tauri/tauri.updater.conf.json") "Build the signed Windows installer and updater bundle"
+    $updaterConfigPath = Join-Path ([System.IO.Path]::GetTempPath()) "docflow-updater-$([guid]::NewGuid()).json"
+    try {
+        Invoke-Checked $node @("tools/updater_config.mjs", "--output", $updaterConfigPath) "Generate the signed updater bundler configuration"
+        Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", $updaterConfigPath) "Build the signed Windows installer and updater bundle"
+    }
+    finally {
+        Remove-Item -LiteralPath $updaterConfigPath -Force -ErrorAction SilentlyContinue
+    }
     $application = "src-tauri\target\release\docflow.exe"
     Assert-WindowsGuiExecutable $application
 

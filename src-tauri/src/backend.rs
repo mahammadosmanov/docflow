@@ -170,7 +170,7 @@ impl BackendRouter {
         let update = self
             .app
             .updater_builder()
-            .pubkey(public_key)
+            .pubkey(public_key.trim())
             .endpoints(vec![endpoint])
             .map_err(|_| BackendError::request_failed("update endpoint is invalid"))?
             .timeout(std::time::Duration::from_secs(20))

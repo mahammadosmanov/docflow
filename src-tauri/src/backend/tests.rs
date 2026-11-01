@@ -139,7 +139,7 @@ fn updater_keeps_signature_checks_inside_rust_and_creates_release_artifacts() {
     let config = include_str!("../../tauri.updater.conf.json");
     let capabilities = include_str!("../../capabilities/default.json");
 
-    assert!(backend.contains(".pubkey(public_key)"));
+    assert!(backend.contains(".pubkey(public_key.trim())"));
     assert!(backend.contains(".download_and_install("));
     assert!(app.contains("tauri_plugin_updater::Builder::new().build()"));
     assert!(config.contains("\"createUpdaterArtifacts\": true"));

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.38.0",
+  "currentVersion": "1.38.1",
   "releases": [
+    {
+      "version": "1.38.1",
+      "tag": "v1.38.1",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fix updater bundler configuration and trim the trusted public key before signature verification."
+    },
     {
       "version": "1.38.0",
       "tag": "v1.38.0",
       "date": "2026-11-01",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add signed Windows x64 in-app updates from immutable GitHub Releases."
     },
     {
