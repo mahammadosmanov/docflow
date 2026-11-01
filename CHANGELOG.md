@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.38.0 - 2026-11-01
+
+### Added
+
+- Add signed in-app update checks and installation for Windows x64, backed by immutable GitHub Release assets.
+
+
 ## 1.37.6 - 2026-11-01
 
 ### Fixed

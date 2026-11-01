@@ -91,6 +91,12 @@ export class MockBridge implements Bridge {
           operations: demoOperationList,
         } satisfies Bootstrap;
         break;
+      case "update/check":
+        result = { configured: false, available: false };
+        break;
+      case "update/install":
+        result = { ok: true };
+        break;
       case "auth/signIn":
         this.auth = {
           signedIn: true,

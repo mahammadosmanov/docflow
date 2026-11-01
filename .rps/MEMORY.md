@@ -1,5 +1,9 @@
 # DocFlow project memory
 
+- Signed updates use the Rust-owned Tauri updater bridge and immutable-tag
+  `latest.json` assets; never enable generic updater plugin IPC. See ADR 0052.
+  The release signer private key belongs only in GitHub Actions secrets, and
+  pre-updater installs need one manual bootstrap package.
 - Laya 0.3.20's cached English checkpoint failed a bounded RFI page-triage
   screen: 5/12 synthetic labels and 8/24 local corpus labels matched. It
   suggested `cover` for 3 continuations and all 5 OCR-uncertain corpus pages;

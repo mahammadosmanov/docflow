@@ -45,6 +45,7 @@ import { useSupportDiagnostics } from "./useSupportDiagnostics";
 import { useReplicaStatus } from "./useReplicaStatus";
 
 import { ChoiceGrid, SettingsGroup } from "./SettingsParts";
+import { UpdateNotice } from "../components/UpdateNotice";
 
 export function SettingsScreen({
   bridge,
@@ -99,6 +100,7 @@ export function SettingsScreen({
   } = useSupportDiagnostics({ bridge, s, setError });
   return (
     <div className="screen">
+      {!(auth.signedIn && auth.allowed) && <UpdateNotice bridge={bridge} s={s} />}
       <Header
         title={s.t("prefs.title")}
         titleAs="h1"

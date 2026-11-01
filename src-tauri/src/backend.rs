@@ -1,10 +1,14 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::{AppHandle, ipc::Channel};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::{
     clipboard,
@@ -21,6 +25,7 @@ pub(crate) struct BackendRouter {
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
     activity_log: crate::activity_log::ActivityLog,
+    pending_update: Mutex<Option<Update>>,
 }
 
 fn path_dialog_filter(
@@ -68,6 +73,7 @@ impl BackendRouter {
             activity_log: crate::activity_log::ActivityLog::new(
                 crate::activity_log::ActivityLog::default_dir(),
             ),
+            pending_update: Mutex::new(None),
         })
     }
 
@@ -88,6 +94,8 @@ impl BackendRouter {
         )
         .then(|| self.native.watch_operator_guard());
         match method {
+            BackendMethod::UpdateCheck => self.check_update(params).await,
+            BackendMethod::UpdateInstall => self.install_update(params, progress).await,
             BackendMethod::WatchUpdate => {
                 let native = Arc::clone(&self.native);
                 tauri::async_runtime::spawn_blocking(move || {
@@ -141,6 +149,90 @@ impl BackendRouter {
                 .await
             }
         }
+    }
+
+    async fn check_update(&self, params: Value) -> Result<Value, BackendError> {
+        validate_empty_params(&params)?;
+        if !cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            return Ok(serde_json::json!({"configured": false, "available": false}));
+        }
+        let Some(public_key) = option_env!("DOCFLOW_UPDATER_PUBLIC_KEY") else {
+            *self
+                .pending_update
+                .lock()
+                .map_err(|_| BackendError::request_failed("update state is unavailable"))? = None;
+            return Ok(serde_json::json!({"configured": false, "available": false}));
+        };
+        let endpoint = url::Url::parse(
+            "https://github.com/mahammadosmanov/docflow/releases/latest/download/latest.json",
+        )
+        .map_err(|_| BackendError::request_failed("update endpoint is invalid"))?;
+        let update = self
+            .app
+            .updater_builder()
+            .pubkey(public_key)
+            .endpoints(vec![endpoint])
+            .map_err(|_| BackendError::request_failed("update endpoint is invalid"))?
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+            .map_err(|_| BackendError::request_failed("updater could not be configured"))?
+            .check()
+            .await
+            .map_err(|_| BackendError::request_failed("update check failed"))?;
+        let response = update
+            .as_ref()
+            .map(|update| {
+                serde_json::json!({
+                    "configured": true,
+                    "available": true,
+                    "version": update.version,
+                    "currentVersion": update.current_version,
+                    "notes": update.body,
+                })
+            })
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "configured": true,
+                    "available": false,
+                    "currentVersion": env!("CARGO_PKG_VERSION"),
+                })
+            });
+        *self
+            .pending_update
+            .lock()
+            .map_err(|_| BackendError::request_failed("update state is unavailable"))? = update;
+        Ok(response)
+    }
+
+    async fn install_update(
+        &self,
+        params: Value,
+        progress: Channel<ProgressEvent>,
+    ) -> Result<Value, BackendError> {
+        validate_empty_params(&params)?;
+        let update = self
+            .pending_update
+            .lock()
+            .map_err(|_| BackendError::request_failed("update state is unavailable"))?
+            .take()
+            .ok_or_else(|| BackendError::request_failed("check for an update before installing"))?;
+        let mut downloaded = 0_u64;
+        update
+            .download_and_install(
+                |chunk_length, content_length| {
+                    downloaded = downloaded.saturating_add(chunk_length as u64);
+                    let _ = progress.send(ProgressEvent {
+                        phase: "update.download".to_string(),
+                        done: downloaded,
+                        total: content_length.unwrap_or(0),
+                        subject: String::new(),
+                    });
+                },
+                || {},
+            )
+            .await
+            .map_err(|_| BackendError::request_failed("signed update could not be installed"))?;
+        self.app.restart();
     }
 
     /// Runs one native backend task on the blocking pool; `label` names a task that failed to join.

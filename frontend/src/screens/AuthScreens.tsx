@@ -43,6 +43,7 @@ import {
   humanError,
   usernamePattern,
 } from "../helpers";
+import { UpdateNotice } from "../components/UpdateNotice";
 
 export function LoginScreen({
   bridge,
@@ -122,6 +123,7 @@ export function LoginScreen({
 
   return (
     <div className="screen">
+      <UpdateNotice bridge={bridge} s={s} />
       <Header
         trailing={
           <IconButton label={s.t("prefs.title")} onClick={onSettings}>
@@ -258,6 +260,7 @@ export function PendingScreen({
   };
   return (
     <div className="screen">
+      <UpdateNotice bridge={bridge} s={s} />
       <Header
         title={s.t("app.title")}
         trailing={

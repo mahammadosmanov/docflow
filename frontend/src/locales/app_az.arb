@@ -1169,5 +1169,12 @@
   "error.path.generatedMissing": "Yaradılmış fayl artıq təyinatında yoxdur. Yenidən yaradın.",
   "error.print.queueIdInvalid": "Çap növbəsi müəyyən edilmədi. Növbəni yenidən önizləyin.",
   "error.unexpected": "DocFlow gözlənilməz problemlə qarşılaşdı. Davam etmək üçün yenidən yükləyin.",
-  "action.reload": "Yenidən yüklə"
+  "action.reload": "Yenidən yüklə",
+  "update.available": "DocFlow {version} versiyası hazırdır",
+  "update.install": "Yeniləməni quraşdır",
+  "update.installing": "Yeniləmə quraşdırılır…",
+  "update.checking": "Yeniləmələr yoxlanılır…",
+  "update.check": "Yeniləmələri yoxla",
+  "update.current": "DocFlow yenidir ({version}).",
+  "update.failed": "Yeniləməni yoxlamaq və ya quraşdırmaq mümkün olmadı. Bağlantını yoxlayıb yenidən cəhd edin."
 }

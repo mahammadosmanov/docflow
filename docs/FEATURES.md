@@ -19,6 +19,11 @@
 
 ## Application features
 
+- Windows x64 checks the latest stable GitHub Release on startup and lets the
+  user inspect release notes and install a cryptographically signed update.
+  The first update-capable release must be installed manually once. macOS
+  updater delivery is not active until its release package is verified.
+
 - Generic schema-driven forms, remembered safe values, typed presets, compact
   multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
 - Fast RFI Scan is the only active scan-separation operation. Multi-RFI requires

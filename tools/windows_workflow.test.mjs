@@ -129,3 +129,18 @@ test("manual Windows runs can deliver only to an exact unpublished draft", () =>
   assert.match(source, /\$uploaded\.size -ne \$asset\.Length/u);
   assert.match(source, /\$uploaded\.size -ne \$expected\.Length/u);
 });
+
+test("Windows release signs the updater bundle and publishes an immutable latest manifest", () => {
+  const workflow = readFileSync(resolve(root, ".github/workflows/windows-release.yml"), "utf8");
+  const build = readFileSync(resolve(root, "tools/build_windows.ps1"), "utf8");
+
+  assert.match(workflow, /DOCFLOW_UPDATER_PUBLIC_KEY:\s+\$\{\{ vars\.DOCFLOW_UPDATER_PUBLIC_KEY \}\}/u);
+  assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY:\s+\$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/u);
+  assert.match(build, /--config", "src-tauri\/tauri\.updater\.conf\.json"/u);
+  assert.match(workflow, /tools\/update_manifest\.mjs/u);
+  assert.match(workflow, /\$updateManifest/u);
+  assert.match(workflow, /\.nsis\.zip\.sig/u);
+  assert.match(workflow, /releases\/download/u);
+  assert.match(workflow, /updaterChecksumContent -cne/u);
+  assert.match(workflow, /Published release is missing exact asset/u);
+});

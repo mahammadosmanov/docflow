@@ -35,6 +35,7 @@ import {
 } from "./screens/OperationScreen";
 import {
 } from "./screens/SettingsScreen";
+import { UpdateNotice } from "./components/UpdateNotice";
 
 export function AppFrame({
   bridge,
@@ -217,7 +218,10 @@ export function AppFrame({
           </span>
         </div>
       </aside>
-      <div className="app-frame-content">{children}</div>
+      <div className="app-frame-content">
+        <UpdateNotice bridge={bridge} s={s} />
+        {children}
+      </div>
     </div>
   );
 }

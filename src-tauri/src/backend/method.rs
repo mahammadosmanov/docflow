@@ -4,6 +4,10 @@ use super::*;
 pub(crate) enum BackendMethod {
     #[serde(rename = "app/bootstrap")]
     AppBootstrap,
+    #[serde(rename = "update/check")]
+    UpdateCheck,
+    #[serde(rename = "update/install")]
+    UpdateInstall,
     #[serde(rename = "settings/update")]
     SettingsUpdate,
     #[serde(rename = "settings/reset")]
@@ -90,8 +94,10 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 40] = [
+    pub(crate) const ALL: [Self; 42] = [
         Self::AppBootstrap,
+        Self::UpdateCheck,
+        Self::UpdateInstall,
         Self::AuthUsernameAvailable,
         Self::AuthSignIn,
         Self::AuthSignUp,
@@ -140,6 +146,8 @@ impl BackendMethod {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::AppBootstrap => "app/bootstrap",
+            Self::UpdateCheck => "update/check",
+            Self::UpdateInstall => "update/install",
             Self::SettingsUpdate => "settings/update",
             Self::SettingsReset => "settings/reset",
             Self::SettingsReplicaStatus => "settings/replicaStatus",
@@ -186,6 +194,8 @@ impl BackendMethod {
         if matches!(
             self,
             Self::AppBootstrap
+                | Self::UpdateCheck
+                | Self::UpdateInstall
                 | Self::SettingsUpdate
                 | Self::SettingsReset
                 | Self::SettingsReplicaStatus

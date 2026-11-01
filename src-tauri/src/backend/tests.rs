@@ -21,6 +21,8 @@ fn direct_ipc_requires_an_allowed_authenticated_caller_for_every_protected_metho
     let allowed = auth_state(true, true);
     let public = [
         BackendMethod::AppBootstrap,
+        BackendMethod::UpdateCheck,
+        BackendMethod::UpdateInstall,
         BackendMethod::SettingsUpdate,
         BackendMethod::SettingsReset,
         BackendMethod::SettingsReplicaStatus,
@@ -117,6 +119,31 @@ fn support_diagnostics_preview_and_copy_are_closed_public_rust_methods() {
         }))
         .is_err()
     );
+}
+
+#[test]
+fn update_commands_are_rust_owned_and_available_before_sign_in() {
+    let signed_out = auth_state(false, false);
+    for name in ["update/check", "update/install"] {
+        let method: BackendMethod = serde_json::from_value(serde_json::json!(name))
+            .unwrap_or_else(|error| panic!("{name} should be allowed: {error}"));
+        assert_eq!(method.owner(), MethodOwner::Rust);
+        assert!(method.authorize(&signed_out).is_ok());
+    }
+}
+
+#[test]
+fn updater_keeps_signature_checks_inside_rust_and_creates_release_artifacts() {
+    let backend = include_str!("../backend.rs");
+    let app = include_str!("../lib.rs");
+    let config = include_str!("../../tauri.updater.conf.json");
+    let capabilities = include_str!("../../capabilities/default.json");
+
+    assert!(backend.contains(".pubkey(public_key)"));
+    assert!(backend.contains(".download_and_install("));
+    assert!(app.contains("tauri_plugin_updater::Builder::new().build()"));
+    assert!(config.contains("\"createUpdaterArtifacts\": true"));
+    assert!(!capabilities.contains("updater:"));
 }
 
 #[test]

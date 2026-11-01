@@ -1197,5 +1197,12 @@
   "error.path.generatedMissing": "The generated file is no longer in its destination. Create it again.",
   "error.print.queueIdInvalid": "The print queue could not be identified. Preview the queue again.",
   "error.unexpected": "DocFlow hit an unexpected problem. Reload to continue.",
-  "action.reload": "Reload"
+  "action.reload": "Reload",
+  "update.available": "DocFlow {version} is available",
+  "update.install": "Install update",
+  "update.installing": "Installing update…",
+  "update.checking": "Checking for updates…",
+  "update.check": "Check for updates",
+  "update.current": "DocFlow is up to date ({version}).",
+  "update.failed": "Could not check or install the update. Check your connection and try again."
 }

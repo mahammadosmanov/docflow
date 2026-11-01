@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.37.6",
+  "currentVersion": "1.38.0",
   "releases": [
+    {
+      "version": "1.38.0",
+      "tag": "v1.38.0",
+      "date": "2026-11-01",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add signed Windows x64 in-app updates from immutable GitHub Releases."
+    },
     {
       "version": "1.37.6",
       "tag": "v1.37.6",
       "date": "2026-11-01",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Recognize spaced closing parentheses in Follow Up clause headers."
     },
     {

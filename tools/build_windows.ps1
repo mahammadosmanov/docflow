@@ -168,6 +168,10 @@ try {
         Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Rust backend"
     }
 
+    if (-not $env:DOCFLOW_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) {
+        throw "Signed updater packaging requires DOCFLOW_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY."
+    }
+
     $tesseractDir = Resolve-TesseractDirectory $TesseractPath
     Write-Host "`n==> Stage Tesseract from $tesseractDir"
     New-Item -ItemType Directory -Force -Path $ResourceDir | Out-Null
@@ -191,7 +195,7 @@ try {
     Assert-TesseractResourceEvidence $ResourceDir
     Write-ResourceChecksums $ResourceDir
     Invoke-Checked $node @("tools/license_audit.mjs", "--target", "x86_64-pc-windows-msvc") "Audit locked dependency and OCR licenses"
-    Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis") "Build the Windows installer"
+    Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", "src-tauri/tauri.updater.conf.json") "Build the signed Windows installer and updater bundle"
     $application = "src-tauri\target\release\docflow.exe"
     Assert-WindowsGuiExecutable $application
 
@@ -224,6 +228,16 @@ try {
     }
     Invoke-Checked $node @("tools/package_audit.mjs", "package", $installer.FullName) "Audit the NSIS artifact name and linked payload"
     Invoke-Checked $node @("tools/checksum.mjs", $installer.FullName) "Create the NSIS SHA-256 checksum"
+
+    $updaterBundles = @(Get-ChildItem "src-tauri\target\release\bundle\nsis\*.nsis.zip")
+    if ($updaterBundles.Count -ne 1) {
+        throw "Expected exactly one signed NSIS updater bundle, found $($updaterBundles.Count)."
+    }
+    $updaterBundle = $updaterBundles[0]
+    if (-not (Test-Path -LiteralPath "$($updaterBundle.FullName).sig" -PathType Leaf)) {
+        throw "The NSIS updater signature was not produced."
+    }
+    Invoke-Checked $node @("tools/checksum.mjs", $updaterBundle.FullName) "Create the updater bundle SHA-256 checksum"
 
     Write-Host "`nWindows installer ready:"
     Write-Host $installer.FullName -ForegroundColor Green

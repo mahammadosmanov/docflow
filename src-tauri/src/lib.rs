@@ -55,6 +55,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let router = backend::BackendRouter::new(app.handle().clone())
                 .map_err(|error| std::io::Error::other(error.message))?;

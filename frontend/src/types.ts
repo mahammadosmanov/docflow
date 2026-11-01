@@ -175,6 +175,14 @@ export interface ProgressEvent {
   subject?: string;
 }
 
+export interface UpdateCheckResult {
+  configured: boolean;
+  available: boolean;
+  version?: string;
+  currentVersion?: string;
+  notes?: string | null;
+}
+
 export type ProgressEventHandler = (event: ProgressEvent) => void;
 
 export interface PathSelection {

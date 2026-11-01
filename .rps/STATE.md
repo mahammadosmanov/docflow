@@ -2,6 +2,25 @@
 
 Updated: 2026-11-01
 
+## Signed in-app updates (1.38.0)
+
+- Added a Rust-owned Tauri updater with a public pre-login check, one-shot
+  cached installation, signature verification, and localized update/release-note
+  controls. The webview has no updater plugin permissions.
+- Windows x64 release builds produce a signed NSIS updater archive, checksum,
+  and `latest.json` linked to the immutable version tag. Missing signing
+  material fails the release build before packaging.
+- Source gates pass: Node/React tests, frontend build, docs/source/version/
+  license audits, Rust formatting, Clippy, and the full Rust suite. The Windows
+  MSVC cross-target check could not compile ring because this Mac lacks Windows
+  CRT headers (`assert.h`); native Windows packaging/smoke is still required.
+- GitHub repository variable `DOCFLOW_UPDATER_PUBLIC_KEY` and secret
+  `TAURI_SIGNING_PRIVATE_KEY` are not configured. Existing users need one manual
+  install of the first update-capable package. macOS updater delivery remains
+  inactive until its release pipeline is verified.
+- Next: after approval, configure the signing key pair, run the Windows release
+  workflow, and verify install plus in-app update on Windows.
+
 ## ELE grouped-clause header parsing (1.37.6)
 
 - The actual ELE Follow Up F3 heading ends with `2.5.3 )`. The clause-list

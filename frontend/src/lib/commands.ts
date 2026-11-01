@@ -18,6 +18,7 @@ import type {
   ActivityLogExport,
   SupportBundlePreview,
   WatchStatus,
+  UpdateCheckResult,
 } from "../types";
 
 interface CommandSpec<Params, Result> {
@@ -30,6 +31,8 @@ type Ok = { ok: true };
 
 export interface FrontendCommandMap {
   "app/bootstrap": CommandSpec<NoParams, Bootstrap>;
+  "update/check": CommandSpec<NoParams, UpdateCheckResult>;
+  "update/install": CommandSpec<NoParams, { ok: true }>;
   "auth/usernameAvailable": CommandSpec<{ username: string }, boolean>;
   "auth/signIn": CommandSpec<
     { identifier: string; password: string },
@@ -152,6 +155,8 @@ export interface FrontendCommandMap {
 // BEGIN RUST-VERIFIED FRONTEND METHODS
 export const FRONTEND_METHODS = [
   "app/bootstrap",
+  "update/check",
+  "update/install",
   "auth/usernameAvailable",
   "auth/signIn",
   "auth/signUp",

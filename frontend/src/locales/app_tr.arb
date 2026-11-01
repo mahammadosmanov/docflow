@@ -1169,5 +1169,12 @@
   "error.path.generatedMissing": "Oluşturulan dosya artık hedefinde yok. Yeniden oluşturun.",
   "error.print.queueIdInvalid": "Yazdırma kuyruğu tanımlanamadı. Kuyruğu yeniden önizleyin.",
   "error.unexpected": "DocFlow beklenmedik bir sorunla karşılaştı. Devam etmek için yeniden yükleyin.",
-  "action.reload": "Yeniden yükle"
+  "action.reload": "Yeniden yükle",
+  "update.available": "DocFlow {version} sürümü hazır",
+  "update.install": "Güncellemeyi yükle",
+  "update.installing": "Güncelleme yükleniyor…",
+  "update.checking": "Güncellemeler denetleniyor…",
+  "update.check": "Güncellemeleri denetle",
+  "update.current": "DocFlow güncel ({version}).",
+  "update.failed": "Güncelleme denetlenemedi veya yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."
 }
