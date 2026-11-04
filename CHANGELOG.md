@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.40.0 - 2026-11-04
+
+### Changed
+
+- Orientation detection falls back to drawing labels (such as `S9`, `A17`, `PCS-19`) when OSD and running-text OCR refuse a sparse drawing page; it applies a turn only when one turn has at least three labels and at least twice the next best.
+
 ## 1.39.0 - 2026-11-01
 
 ### Added
