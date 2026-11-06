@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.5",
+  "currentVersion": "1.41.6",
   "releases": [
+    {
+      "version": "1.41.6",
+      "tag": "v1.41.6",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fast RFI Scan keeps original scans by default."
+    },
     {
       "version": "1.41.5",
       "tag": "v1.41.5",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Add deterministic mutation tests for the XLSX, PDF, and email parsers."
     },
     {

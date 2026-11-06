@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.6 - 2026-11-06
+
+### Changed
+
+- Fast RFI Scan now defaults to Keep originals (copy instead of move); operators who prefer moving sources to recoverable trash can still turn it off, and saved values are unchanged.
+
 ## 1.41.5 - 2026-11-06
 
 ### Fixed

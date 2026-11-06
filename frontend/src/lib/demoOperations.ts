@@ -58,7 +58,7 @@ export const demoFastCoverOperation: OperationDef = {
       name: "keep_original",
       kind: "bool",
       labelKey: "param.keep_original",
-      default: false,
+      default: true,
       required: false,
       choices: [],
       choiceLabels: {},
