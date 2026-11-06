@@ -18,6 +18,7 @@ coding agents. Runtime behavior and executable tests win if prose ever drifts.
 8. [`DECISIONS.md`](DECISIONS.md), [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md), and
    [`RELEASE_SAFETY.md`](RELEASE_SAFETY.md) — accepted choices, honest debt, gates.
 9. [`WINDOWS_RUNBOOK.md`](WINDOWS_RUNBOOK.md) — build and native acceptance.
+   [`ACCEPTANCE.md`](ACCEPTANCE.md) — status ledger for every native gate.
 10. [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) — slice, measure, verify,
     and accept every feature consistently.
 

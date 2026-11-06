@@ -1,6 +1,7 @@
 # Known issues and external gates
 
-These are not silently waived by passing local tests.
+These are not silently waived by passing local tests. Track each gate's
+status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 
 ## External acceptance still required
 

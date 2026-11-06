@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.42.1",
+  "currentVersion": "1.42.2",
   "releases": [
+    {
+      "version": "1.42.2",
+      "tag": "v1.42.2",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add a native acceptance ledger that tracks every external Windows gate."
+    },
     {
       "version": "1.42.1",
       "tag": "v1.42.1",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Archive changelog entries before 1.30 so CHANGELOG.md stays readable."
     },
     {

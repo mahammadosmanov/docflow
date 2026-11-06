@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.42.2 - 2026-11-06
+
+### Changed
+
+- Add `docs/ACCEPTANCE.md`, one status row per native Windows/Office/Outlook/printer/cloud gate with version, date, and evidence, and link it from the documentation map and known issues.
+
 ## 1.42.1 - 2026-11-06
 
 ### Changed
