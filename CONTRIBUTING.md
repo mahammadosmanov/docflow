@@ -15,6 +15,7 @@
 - Preserve preview → approval → apply → journal → undo.
 - Add user-visible strings to all four catalogs.
 - Do not add a dependency without documenting why the current stack is insufficient.
+  `axe-core` (dev only) runs automated accessibility checks in the React tests.
 - Do not add an interpreter, application sidecar, or second mutation backend.
 - Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`).
 

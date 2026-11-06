@@ -537,6 +537,22 @@ h2 {
   width: 12px;
   height: 12px;
 }
+.recent-operations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.recent-operations-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.recent-operations .category-chip svg {
+  width: 14px;
+  height: 14px;
+}
 .category-filter-chips {
   display: flex;
   gap: 8px;

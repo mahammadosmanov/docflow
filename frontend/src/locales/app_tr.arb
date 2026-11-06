@@ -177,6 +177,7 @@
   "ops.subheading": "Bir işlem seçin. Siz inceleyip onaylamadan hiçbir dosyanız değiştirilmez.",
   "home.title": "Çalışma alanı",
   "home.subtitle": "Belge işlemleri ve tüm yardımcı araçlar tek yerde.",
+  "home.recent": "Son kullanılanlar",
   "home.previewFirst": "Önizleme öncelikli",
   "param.hint.folder": "Bir klasör seç",
   "param.hint.file": "Bir dosya seç",

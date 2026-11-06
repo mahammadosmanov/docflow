@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.6",
+  "currentVersion": "1.42.0",
   "releases": [
+    {
+      "version": "1.42.0",
+      "tag": "v1.42.0",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add recent-operation shortcuts on Home and automated accessibility checks."
+    },
     {
       "version": "1.41.6",
       "tag": "v1.41.6",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fast RFI Scan keeps original scans by default."
     },
     {

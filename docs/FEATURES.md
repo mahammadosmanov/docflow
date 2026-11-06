@@ -68,7 +68,9 @@
 - Persistent navigation keeps Home, Review, History, Recovery, Preferences,
   and conditional Admin destinations available across authenticated screens.
   Fast RFI Scan is the primary home task; the remaining registered operations
-  stay searchable and category-filtered. The sidebar becomes a compact icon
+  stay searchable and category-filtered. Home also offers up to three of the
+  signed-in operator's most recently journaled operations as shortcuts; the
+  shortcut only opens the operation and never reuses an old Plan. The sidebar becomes a compact icon
   rail or bottom bar at narrower widths.
 - The shared responsive workspace allocates vertical space from the live header
   and keeps one stage-content scroll owner, with primary actions reachable on

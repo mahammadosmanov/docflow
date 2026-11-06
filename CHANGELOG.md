@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.42.0 - 2026-11-06
+
+### Added
+
+- Home shows up to three of the signed-in operator's recently journaled operations as one-click shortcuts.
+- React tests run `axe-core` accessibility checks on sign-in, Home, and an operation form.
+
 ## 1.41.6 - 2026-11-06
 
 ### Changed
