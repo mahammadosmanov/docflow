@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.0 - 2026-11-06
+
+### Added
+
+- Follow Up sync now routes ELE clause `1.6` (ITP `ELE-0005` / item `ELE-5.1.6`) to the matching prepared ELE Block row by exact Tag No, including non-`PCS-` blocks such as `A4` and `A12/1`.
+
 ## 1.40.0 - 2026-11-04
 
 ### Changed

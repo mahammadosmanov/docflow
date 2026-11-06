@@ -6,6 +6,7 @@ pub(in crate::rfi_follow_up) fn route_clause(
     let (discipline, itp) = itp_identity(&record.itp)?;
     if discipline == "ELE" {
         return match (itp.as_str(), normalize_code_text(&record.item).as_str()) {
+            ("0005", "ELE-5.1.6") => Some(("ELE", "1.6")),
             ("0005", "ELE-5.2.6") => Some(("ELE", "2.6")),
             ("0006", "ELE-6.2.5.3") => Some(("ELE", "2.5.3")),
             _ => None,

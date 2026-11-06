@@ -233,7 +233,8 @@ pub(super) fn scan_source_records(
                             .map(|(discipline, number)| (discipline.as_str(), number.as_str())),
                         normalize_code_text(&item).as_str(),
                     ),
-                    (Some(("ELE", "0005")), "ELE-5.2.6") | (Some(("ELE", "0006")), "ELE-6.2.5.3")
+                    (Some(("ELE", "0005")), "ELE-5.1.6" | "ELE-5.2.6")
+                        | (Some(("ELE", "0006")), "ELE-6.2.5.3")
                 )
             {
                 continue;

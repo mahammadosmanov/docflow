@@ -1,7 +1,7 @@
 # ADR 0051: ELE Follow Up sync for existing entries
 
 - Date: 2026-10-31
-- Status: Accepted; empty-slot restriction superseded by [ADR 0052](0052-ele-fill-prepared-empty-slots.md)
+- Status: Accepted; empty-slot restriction superseded by [ADR 0052](0052-ele-fill-prepared-empty-slots.md); `1.6` route added by [ADR 0053](0053-ele-follow-up-clause-1-6.md)
 
 ## Context
 

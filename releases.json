@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.40.0",
+  "currentVersion": "1.41.0",
   "releases": [
+    {
+      "version": "1.41.0",
+      "tag": "v1.41.0",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Route ELE clause 1.6 (ELE-0005 / ELE-5.1.6) in Follow Up sync."
+    },
     {
       "version": "1.40.0",
       "tag": "v1.40.0",
       "date": "2026-11-04",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Improve rotation of sparse drawing pages with a drawing-label fallback when detection would otherwise refuse."
     },
     {
