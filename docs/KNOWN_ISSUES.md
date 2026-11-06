@@ -20,6 +20,9 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   or hand-annotated covers, cache reuse after a restart, and that a replaced
   file is always read again. No timing claim is made from macOS fixtures.
 
+- File and folder drops onto operation fields (ADR 0054) need native Windows
+  acceptance: drag from Explorer, OneDrive, and network folders, check the
+  field highlight under display scaling, and confirm wrong-kind drops are refused.
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy

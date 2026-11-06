@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.43.0 - 2026-11-06
+
+### Fixed
+
+- Dragging a folder or file onto an operation field now works in the desktop app. Before, the webview could send only the file name, so drops failed.
+- Rust now records dropped paths from the native window event and gives them to the field the drop landed on, once and only within 10 seconds. The webview no longer sends paths (`droppedPaths` is removed from `paths/select`), so it cannot select a folder the operator did not choose (ADR 0054).
+- Native Windows acceptance of drops is still pending (ACCEPTANCE row 23).
+
 ## 1.42.5 - 2026-11-06
 
 ### Changed

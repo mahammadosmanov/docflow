@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.42.5",
+  "currentVersion": "1.43.0",
   "releases": [
+    {
+      "version": "1.43.0",
+      "tag": "v1.43.0",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Folder and file drops are captured by Rust and work in the desktop app."
+    },
     {
       "version": "1.42.5",
       "tag": "v1.42.5",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Shorten Home operation descriptions to two or three lines."
     },
     {

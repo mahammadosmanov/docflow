@@ -65,6 +65,13 @@ pub fn run() {
             app.manage(router);
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+                && let Some(router) = window.try_state::<backend::BackendRouter>()
+            {
+                router.record_drop(paths.clone());
+            }
+        })
         .invoke_handler(tauri::generate_handler![backend::frontend_call])
         .run(tauri::generate_context!())
         .expect("error while running DocFlow");

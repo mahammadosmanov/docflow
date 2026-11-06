@@ -33,6 +33,7 @@ Status values: **Pending**, **Passed**, **Failed**, **Blocked**.
 | 20 | EPSON L15160: title substitution, transient errors, wake/offline/paper-out, ordering, cancel | Printing | Pending | | | |
 | 21 | Live Supabase RLS deployment and two-user verification | Cloud | Pending | | | |
 | 22 | Authenticode installer signing and macOS notarization | Release | Blocked | | | Needs paid certificates |
+| 23 | File and folder drag-and-drop onto operation fields from Explorer, including OneDrive and network folders (ADR 0054) | UI | Pending | | | |
 
 ## Order of work
 

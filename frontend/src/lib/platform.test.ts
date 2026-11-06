@@ -29,7 +29,6 @@ describe("path selection helpers", () => {
     expect(call).toHaveBeenNthCalledWith(1, "paths/select", {
       opId: "op",
       paramName: "source",
-      droppedPaths: undefined,
     });
   });
 
@@ -45,13 +44,13 @@ describe("path selection helpers", () => {
     await expect(chooseFiles(bridge, "op", "files")).resolves.toEqual(all);
   });
 
-  it("dropPaths forwards the dropped paths to the bridge", async () => {
+  it("dropPaths claims the native drop without sending any path", async () => {
     const { bridge, call } = bridgeReturning([selection("a")]);
-    await dropPaths(bridge, "op", "files", ["/x.pdf"]);
+    await dropPaths(bridge, "op", "files");
     expect(call).toHaveBeenCalledWith("paths/select", {
       opId: "op",
       paramName: "files",
-      droppedPaths: ["/x.pdf"],
+      fromDrop: true,
     });
   });
 
