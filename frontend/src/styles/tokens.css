@@ -1,0 +1,96 @@
+:root {
+  color-scheme: light dark;
+  --bg: #F4F5F3;
+  --surface: #FFFFFF;
+  --surface-2: #E9EBE9;
+  --surface-3: #D5D8D6;
+  --text: #222423;
+  --accent: #222423;
+  --muted: #555956;
+  --line: #D5D8D6;
+  --line-strong: #727673;
+  --panel-shadow: 0 1px 0 rgb(34 36 35 / 0.04);
+  --inverse: #222423;
+  --inverse-text: #FFFFFF;
+  --danger: #222423;
+  --warning: #626663;
+  --success: #222423;
+  --radius: 8px;
+  --space: 1;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #181A19;
+  --surface: #222423;
+  --surface-2: #2B2E2C;
+  --surface-3: #343835;
+  --text: #F4F5F3;
+  --muted: #A4AAA6;
+  --line: #454A47;
+  --line-strong: #727673;
+  --panel-shadow: none;
+  --inverse: #F4F5F3;
+  --inverse-text: #222423;
+  --danger: #F4F5F3;
+  --warning: #A4AAA6;
+  --success: #F4F5F3;
+  --accent: #F4F5F3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+    --bg: #181A19;
+    --surface: #222423;
+    --surface-2: #2B2E2C;
+    --surface-3: #343835;
+    --text: #F4F5F3;
+    --muted: #A4AAA6;
+    --line: #454A47;
+    --line-strong: #727673;
+    --panel-shadow: none;
+    --inverse: #F4F5F3;
+    --inverse-text: #222423;
+    --danger: #F4F5F3;
+    --warning: #A4AAA6;
+    --success: #F4F5F3;
+    --accent: #F4F5F3;
+  }
+}
+
+:root[data-theme="dark"] .operation-card,
+:root[data-theme="dark"] .feature-card,
+:root[data-theme="dark"] .content-card,
+:root[data-theme="dark"] .settings-group,
+:root[data-theme="dark"] .editor-card {
+  border: 1px solid var(--line);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .operation-card,
+  :root[data-theme="system"] .feature-card,
+  :root[data-theme="system"] .content-card,
+  :root[data-theme="system"] .settings-group,
+  :root[data-theme="system"] .editor-card {
+    border: 1px solid var(--line);
+  }
+}
+
+:root[data-font="sans"] {
+  font-family: Arial, Helvetica, sans-serif;
+}
+:root[data-font="serif"] {
+  font-family: Georgia, "Times New Roman", serif;
+}
+:root[data-font="mono"] {
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+:root[data-compact="true"] {
+  --space: 0.78;
+}

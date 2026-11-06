@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.42.4 - 2026-11-06
+
+### Changed
+
+- Split `frontend/src/styles.css` (4,399 lines) into 12 files under `frontend/src/styles/`, imported in the original cascade order. Design tokens are in `tokens.css`. The built CSS is byte-identical to before.
+
 ## 1.42.3 - 2026-11-06
 
 ### Fixed

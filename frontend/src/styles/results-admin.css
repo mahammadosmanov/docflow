@@ -1,0 +1,351 @@
+.outlook-reply-preview {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.outlook-reply-preview h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.outlook-reply-preview > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.outlook-reply-preview strong {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.outlook-reply-preview pre {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+  font:
+    0.75rem/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.step-list,
+.review-list,
+.history-list,
+.admin-list {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.step-row {
+  padding: calc(12px * var(--space)) 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.step-row:last-child {
+  border: 0;
+}
+.step-kind {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--surface-3);
+}
+.step-copy {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 0.65fr) minmax(140px, 1fr)
+    minmax(140px, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.75rem;
+}
+.step-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+}
+.step-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.confidence-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text) !important;
+  background: var(--surface-2);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1.25;
+  white-space: nowrap !important;
+}
+.step-copy span {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-copy .destination {
+  color: var(--text);
+}
+
+.busy-state {
+  height: 100%;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.busy-state > svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 16px;
+}
+.busy-state h2 {
+  margin-bottom: 16px;
+}
+.progress {
+  width: min(100%, 320px);
+  height: 5px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border-radius: 99px;
+}
+.progress span {
+  height: 100%;
+  display: block;
+  background: var(--inverse);
+  border-radius: inherit;
+  transition: width 180ms;
+}
+.busy-state small {
+  margin-top: 9px;
+  color: var(--muted);
+}
+.progress-phase {
+  margin-top: 9px;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.busy-state > small {
+  max-width: min(100%, 520px);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.progress-trail {
+  width: min(100%, 420px);
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  list-style: none;
+}
+.progress-trail li {
+  min-width: 0;
+  padding: 5px 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.67rem;
+}
+.progress-trail li.current {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.progress-trail svg {
+  width: 13px;
+  height: 13px;
+}
+.progress-trail li.current svg {
+  animation: spin 900ms linear infinite;
+}
+.result-card {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.result-icon {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--surface-3);
+}
+.result-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.result-icon.success {
+  color: var(--success);
+}
+.result-icon.failure {
+  color: var(--danger);
+}
+.result-card .notice {
+  width: min(100%, 520px);
+  margin-top: 16px;
+  text-align: left;
+}
+.result-actions {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.copy-actions {
+  width: min(100%, 720px);
+  margin-top: 18px;
+  padding: 10px;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.review-row {
+  position: relative;
+  padding: calc(13px * var(--space)) 14px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.6fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.review-row:last-child {
+  border: 0;
+}
+.file-button {
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.file-button > svg {
+  flex: 0 0 auto;
+}
+.file-button span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.file-button strong,
+.file-button small {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.file-button small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.file-button .review-confidence {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+.review-row input {
+  width: 100%;
+}
+.row-warning {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 5px;
+  color: var(--warning);
+  font-size: 0.7rem;
+}
+.row-warning svg {
+  width: 0.85rem;
+}
+
+.history-row,
+.admin-row {
+  padding: calc(14px * var(--space));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.history-row:last-child,
+.admin-row:last-child {
+  border: 0;
+}
+.history-copy,
+.admin-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.history-copy small,
+.admin-copy small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.avatar {
+  border-radius: 50%;
+  font-weight: 750;
+}
+.admin-copy strong {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.admin-copy em {
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 500;
+}
