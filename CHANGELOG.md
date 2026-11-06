@@ -5,6 +5,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.2 - 2026-11-06
+
+### Security
+
+- Scope the updater signing secret to the signed build step and withhold it from dependency installation and tests.
+- Install npm dependencies with `--ignore-scripts` in the Windows release build.
+- Pin every GitHub Action to a full commit SHA and disable persisted checkout credentials in the release job.
+- Always install the SHA-256-verified official Tesseract installer instead of the unverified Chocolatey package.
+
 ## 1.41.1 - 2026-11-06
 
 ### Fixed

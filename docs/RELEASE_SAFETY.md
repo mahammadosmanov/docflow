@@ -5,6 +5,8 @@
 1. `.github/workflows/windows-release.yml` and `tools/build_windows.ps1` define
    the distributable Windows build.
 2. Node, Rust lockfiles, Tesseract, and direct dependencies remain pinned.
+   Every GitHub Action is pinned to a full commit SHA, and CI installs only the
+   SHA-256-verified official Tesseract installer.
 3. Tesseract is bundled and user `PATH` is not trusted by installed packages.
 4. Preview does not mutate files; packaged smoke verifies source/destination state.
 5. Bootstrap, the exact thirteen-operation registry, settings, real image-only OCR,
@@ -17,7 +19,10 @@
 9. Windows x64 updater releases require repository variable
    `DOCFLOW_UPDATER_PUBLIC_KEY` and Actions secret `TAURI_SIGNING_PRIVATE_KEY`;
    a missing key must fail before packaging. The optional private-key password
-   is stored only as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+   is stored only as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Both secrets are
+   scoped to the signed build step only; `tools/build_windows.ps1` withholds
+   them from `npm ci --ignore-scripts` and every test, and restores them only
+   for the final `tauri build`.
 10. Each stable release attaches the signed NSIS installer `.exe`, its `.exe.sig`
     and SHA-256, plus `latest.json` pointing to that immutable version-tagged
     installer. Do not publish the manifest before all referenced assets exist.

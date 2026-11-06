@@ -23,8 +23,6 @@ env:
   DOCFLOW_TESSERACT_URL: "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.0/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
   DOCFLOW_TESSERACT_SHA256: "F3FC4236425B690C8BE756F35793F77394EE004BE0A6460A440C754D892F68BC"
   DOCFLOW_UPDATER_PUBLIC_KEY: ${{ vars.DOCFLOW_UPDATER_PUBLIC_KEY }}
-  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
 jobs:
   build:
@@ -34,22 +32,26 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: "1.97.1"
           components: rustfmt, clippy
 
       - name: Require the release signing configuration
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if (-not $env:DOCFLOW_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) {
             throw "Configure repository variable DOCFLOW_UPDATER_PUBLIC_KEY and secret TAURI_SIGNING_PRIVATE_KEY before publishing updater releases."
@@ -61,52 +63,26 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tesseractDirectory = Join-Path $env:ProgramFiles "Tesseract-OCR"
           $tesseractExecutable = Join-Path $tesseractDirectory "tesseract.exe"
-          $validChocolateyExitCodes = @(0, 1605, 1614, 1641, 3010)
+          # Always install the pinned, SHA-256-verified official installer.
+          $installer = Join-Path $env:RUNNER_TEMP "tesseract-$env:DOCFLOW_TESSERACT_VERSION.exe"
+          Invoke-WebRequest `
+            -Uri $env:DOCFLOW_TESSERACT_URL `
+            -OutFile $installer `
+            -MaximumRetryCount 3 `
+            -RetryIntervalSec 10
 
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            Write-Host "Installing Tesseract with Chocolatey (attempt $attempt of 3)..."
-            & choco install tesseract `
-              --version="$env:DOCFLOW_TESSERACT_VERSION" `
-              --allow-downgrade `
-              --no-progress `
-              --yes
-            $chocolateyExitCode = $LASTEXITCODE
-
-            if (
-              $validChocolateyExitCodes -contains $chocolateyExitCode -and
-              (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)
-            ) {
-              break
-            }
-
-            if ($attempt -lt 3) {
-              Write-Warning "Chocolatey failed with exit code $chocolateyExitCode; retrying."
-              Start-Sleep -Seconds (15 * $attempt)
-            }
+          $downloadedHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          if ($downloadedHash -ne $env:DOCFLOW_TESSERACT_SHA256) {
+            throw "Tesseract installer checksum mismatch: $downloadedHash"
           }
 
-          if (-not (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)) {
-            Write-Warning "Chocolatey is unavailable; using the pinned official Tesseract release."
-            $installer = Join-Path $env:RUNNER_TEMP "tesseract-$env:DOCFLOW_TESSERACT_VERSION.exe"
-            Invoke-WebRequest `
-              -Uri $env:DOCFLOW_TESSERACT_URL `
-              -OutFile $installer `
-              -MaximumRetryCount 3 `
-              -RetryIntervalSec 10
-
-            $downloadedHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
-            if ($downloadedHash -ne $env:DOCFLOW_TESSERACT_SHA256) {
-              throw "Tesseract installer checksum mismatch: $downloadedHash"
-            }
-
-            $installProcess = Start-Process `
-              -FilePath $installer `
-              -ArgumentList "/S" `
-              -Wait `
-              -PassThru
-            if ($installProcess.ExitCode -notin @(0, 3010)) {
-              throw "Tesseract installer failed with exit code $($installProcess.ExitCode)."
-            }
+          $installProcess = Start-Process `
+            -FilePath $installer `
+            -ArgumentList "/S" `
+            -Wait `
+            -PassThru
+          if ($installProcess.ExitCode -notin @(0, 3010)) {
+            throw "Tesseract installer failed with exit code $($installProcess.ExitCode)."
           }
 
           if (-not (Test-Path -LiteralPath $tesseractExecutable -PathType Leaf)) {
@@ -121,6 +97,11 @@ jobs:
 
       - name: Test and build Windows installer
         shell: pwsh
+        # The signing secret exists only in this step; build_windows.ps1 also
+        # withholds it from dependency installation and tests.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./tools/build_windows.ps1
 
       - name: Smoke-test clean NSIS install, startup, package, and uninstall
@@ -198,7 +179,7 @@ jobs:
       - name: Upload Windows installer
         id: artifact_upload
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: DocFlow-windows-x64
           path: |

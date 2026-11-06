@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.1",
+  "currentVersion": "1.41.2",
   "releases": [
+    {
+      "version": "1.41.2",
+      "tag": "v1.41.2",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Harden the Windows release pipeline: scope the updater signing secret, pin actions by SHA, and always verify Tesseract."
+    },
     {
       "version": "1.41.1",
       "tag": "v1.41.1",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fix formatting and lint of drawing-label orientation code so the Windows release build passes."
     },
     {
