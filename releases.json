@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.4",
+  "currentVersion": "1.41.5",
   "releases": [
+    {
+      "version": "1.41.5",
+      "tag": "v1.41.5",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Add deterministic mutation tests for the XLSX, PDF, and email parsers."
+    },
     {
       "version": "1.41.4",
       "tag": "v1.41.4",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Record Rust panics in the redacted activity log and forbid new bare unwrap calls."
     },
     {

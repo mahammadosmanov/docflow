@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.5 - 2026-11-06
+
+### Fixed
+
+- Add deterministic mutation tests that feed 2,000 corrupted XLSX packages, PDFs, and email texts each to the untrusted-document parsers and fail on any panic.
+
 ## 1.41.4 - 2026-11-06
 
 ### Fixed
