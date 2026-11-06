@@ -341,10 +341,16 @@ fn rotates_grayscale_pixels_clockwise_without_mirroring() {
 #[test]
 fn drawing_labels_match_only_rfi_drawing_tokens() {
     for label in ["S9", "s17", "N3", "A17", "PCS-19", "PCS12", "ZONE", "PLT"] {
-        assert!(is_drawing_label(label), "{label} should count as a drawing label");
+        assert!(
+            is_drawing_label(label),
+            "{label} should count as a drawing label"
+        );
     }
     for text in ["S", "SKETCH04", "PCS-", "ZONE7X", "hello", "AZE-SUN"] {
-        assert!(!is_drawing_label(text), "{text} should not count as a drawing label");
+        assert!(
+            !is_drawing_label(text),
+            "{text} should not count as a drawing label"
+        );
     }
 }
 

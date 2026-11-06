@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.0",
+  "currentVersion": "1.41.1",
   "releases": [
+    {
+      "version": "1.41.1",
+      "tag": "v1.41.1",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fix formatting and lint of drawing-label orientation code so the Windows release build passes."
+    },
     {
       "version": "1.41.0",
       "tag": "v1.41.0",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Route ELE clause 1.6 (ELE-0005 / ELE-5.1.6) in Follow Up sync."
     },
     {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.1 - 2026-11-06
+
+### Fixed
+
+- Format and lint the drawing-label orientation code so the Windows release gate (`cargo fmt --check`, `clippy -D warnings`) passes.
+
 ## 1.41.0 - 2026-11-06
 
 ### Added

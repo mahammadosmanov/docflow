@@ -97,7 +97,9 @@ pub(in crate::ocr) fn is_drawing_label(text: &str) -> bool {
             (1..=3).contains(&rest.len()) && rest.bytes().all(|byte| byte.is_ascii_digit())
         })
     };
-    ["S", "N", "A", "PCS-", "PCS"].iter().any(|prefix| numbered(prefix))
+    ["S", "N", "A", "PCS-", "PCS"]
+        .iter()
+        .any(|prefix| numbered(prefix))
         || matches!(text.as_str(), "ZONE" | "PLT")
 }
 
@@ -122,7 +124,7 @@ pub(in crate::ocr) fn select_label_direction(
             (rotate_clockwise, labels)
         })
         .collect::<Vec<_>>();
-    ranked.sort_by(|left, right| right.1.cmp(&left.1));
+    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     let (winner, winner_labels) = ranked[0];
     let runner_up_labels = ranked[1].1;
     if winner_labels < MIN_LABELS || winner_labels < runner_up_labels * MIN_RATIO {
