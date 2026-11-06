@@ -173,6 +173,22 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+/* Home cards show two lines; the operation screen shows the full description,
+   and assistive technology still reads the whole text. */
+.operation-list .operation-copy small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.primary-scan-copy small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 .operation-header-row {
   align-items: flex-start;
   gap: 6px 8px;

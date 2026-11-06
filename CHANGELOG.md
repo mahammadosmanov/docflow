@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.42.5 - 2026-11-06
+
+### Changed
+
+- Home operation cards now show at most two lines of description, and the Fast RFI Scan card shows three. The full text still appears on each operation's screen and is read in full by assistive technology. No translations changed.
+
 ## 1.42.4 - 2026-11-06
 
 ### Changed
