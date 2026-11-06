@@ -13,7 +13,9 @@ pub(in crate::rfi_follow_up) fn itp_identity(value: &str) -> Option<(String, Str
     static ITP: OnceLock<Regex> = OnceLock::new();
     let normalized = normalize_code_text(value);
     let captures = ITP
-        .get_or_init(|| Regex::new(r"ITP-(CIV|MEC|ELE)-([0-9]{4})(?:_[A-Z])?\z").unwrap())
+        .get_or_init(|| {
+            Regex::new(r"ITP-(CIV|MEC|ELE)-([0-9]{4})(?:_[A-Z])?\z").expect("static regex is valid")
+        })
         .captures(&normalized)?;
     Some((captures[1].to_string(), captures[2].to_string()))
 }
@@ -22,13 +24,17 @@ pub(in crate::rfi_follow_up) fn item_clause(value: &str) -> Option<String> {
     static ITEM: OnceLock<Regex> = OnceLock::new();
     let normalized = normalize_code_text(value);
     let captures = ITEM
-        .get_or_init(|| Regex::new(r"(?:CIV|MEC|ELE)-[0-9]+\.([0-9]+\.[0-9]+)\z").unwrap())
+        .get_or_init(|| {
+            Regex::new(r"(?:CIV|MEC|ELE)-[0-9]+\.([0-9]+\.[0-9]+)\z")
+                .expect("static regex is valid")
+        })
         .captures(&normalized)?;
     Some(captures[1].to_string())
 }
 pub(in crate::rfi_follow_up) fn full_item_identity(value: &str) -> Option<(String, String)> {
-    static ITEM: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\A(CIV|MEC|ELE)-([0-9]+(?:\.[0-9]+)+)\z").unwrap());
+    static ITEM: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\A(CIV|MEC|ELE)-([0-9]+(?:\.[0-9]+)+)\z").expect("static regex is valid")
+    });
     let normalized = normalize_code_text(value);
     let captures = ITEM.captures(&normalized)?;
     Some((captures[1].to_string(), captures[2].to_string()))
@@ -43,7 +49,8 @@ pub(in crate::rfi_follow_up) fn split_values(value: &str) -> Vec<String> {
 
 pub(in crate::rfi_follow_up) fn parse_rfi_group(value: &str) -> Option<Vec<String>> {
     static PART: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)[-_]?)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z").unwrap()
+        Regex::new(r"\A(?:(CIV|MEC|ELE|PRC)[-_]?)?([0-9]{1,4})(?:-([0-9]{1,4}))?\z")
+            .expect("static regex is valid")
     });
     let mut normalized = normalize_status(value).to_uppercase().replace(',', "/");
     if let Some(short) = normalized.strip_prefix(FULL_RFI_PREFIX) {

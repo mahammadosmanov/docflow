@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
+
 pub(crate) mod activity_log;
 pub mod auth;
 mod backend;

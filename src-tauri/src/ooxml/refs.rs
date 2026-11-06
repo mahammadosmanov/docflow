@@ -46,7 +46,7 @@ static REFERENCE: LazyLock<Regex> = LazyLock::new(|| {
         (?P<a>\$?[A-Za-z]{1,3}\$?[0-9]{1,7})
         (?::(?P<b>\$?[A-Za-z]{1,3}\$?[0-9]{1,7}))?",
     )
-    .unwrap()
+    .expect("static regex is valid")
 });
 
 #[derive(Clone, Copy, Debug)]

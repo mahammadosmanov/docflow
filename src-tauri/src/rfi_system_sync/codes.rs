@@ -8,7 +8,7 @@ pub(crate) fn parse_rfi_discipline_and_number(name: &str) -> Option<(&'static st
     let clean = name.nfc().collect::<String>().trim().to_ascii_uppercase();
     static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
         Regex::new(r"\A(?:AZE-SUN-INT-QMS-RFI-|RFI-)?(CIV|MEC|ELE|PRC)[-_ ]*([0-9]{1,4})\z")
-            .unwrap()
+            .expect("static regex is valid")
     });
     let caps = RE.captures(&clean)?;
     let discipline = match caps.get(1)?.as_str() {

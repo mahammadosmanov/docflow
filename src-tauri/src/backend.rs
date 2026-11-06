@@ -24,7 +24,7 @@ pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
-    activity_log: crate::activity_log::ActivityLog,
+    activity_log: std::sync::Arc<crate::activity_log::ActivityLog>,
     pending_update: Mutex<Option<Update>>,
 }
 
@@ -66,13 +66,15 @@ impl BackendRouter {
 
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         let native = Arc::new(NativeBackend::production()?);
+        let activity_log = Arc::new(crate::activity_log::ActivityLog::new(
+            crate::activity_log::ActivityLog::default_dir(),
+        ));
+        crate::activity_log::install_panic_hook(activity_log.clone());
         Ok(Self {
             app,
             native,
             recent_error_codes: RecentErrorCodes::default(),
-            activity_log: crate::activity_log::ActivityLog::new(
-                crate::activity_log::ActivityLog::default_dir(),
-            ),
+            activity_log,
             pending_update: Mutex::new(None),
         })
     }

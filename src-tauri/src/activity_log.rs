@@ -85,6 +85,40 @@ impl ActivityLog {
     }
 }
 
+/// Records every Rust panic as one redacted activity-log line, then runs the
+/// previous hook, so a support export shows crashes in background work too.
+pub(crate) fn install_panic_hook(log: std::sync::Arc<ActivityLog>) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log.record(panic_entry(info));
+        previous(info);
+    }));
+}
+
+fn panic_entry(info: &std::panic::PanicHookInfo<'_>) -> Value {
+    let payload = info.payload();
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_default();
+    let message: String = message.chars().take(300).collect();
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs());
+    json!({
+        "at": format!("unix:{seconds}"),
+        "version": env!("CARGO_PKG_VERSION"),
+        "os": std::env::consts::OS,
+        "event": "panic",
+        "thread": std::thread::current().name().unwrap_or("unnamed"),
+        "location": info
+            .location()
+            .map(|location| format!("{}:{}", location.file(), location.line())),
+        "error": message,
+    })
+}
+
 /// Compact record of an engine result: warnings, and for review tables the
 /// count per decision/reason plus samples of every non-ready row.
 pub(crate) fn summarize_plan(plan: &Value) -> Value {
@@ -167,6 +201,30 @@ mod tests {
         for leaked in ["RFI Log.xlsx", "Follow Up.xlsx", "secret", "document body"] {
             assert!(!text.contains(leaked), "{leaked} leaked: {text}");
         }
+    }
+
+    #[test]
+    fn panic_hook_records_a_redacted_panic_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = std::sync::Arc::new(ActivityLog::new(dir.path().join("logs")));
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        install_panic_hook(log.clone());
+        let result = std::panic::catch_unwind(|| {
+            panic!("failed to open /Users/x/RFI Log.xlsx");
+        });
+        let _ = std::panic::take_hook();
+        std::panic::set_hook(previous);
+        assert!(result.is_err());
+        let text = log.export();
+        assert!(text.lines().any(|line| {
+            let line: Value = serde_json::from_str(line).unwrap();
+            line["event"] == "panic"
+                && line["location"]
+                    .as_str()
+                    .is_some_and(|location| location.contains("activity_log.rs"))
+        }));
+        assert!(!text.contains("RFI Log.xlsx"), "{text}");
     }
 
     #[test]

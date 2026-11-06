@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.4 - 2026-11-06
+
+### Fixed
+
+- Record every Rust panic (location, thread, redacted message) as one activity-log line so support exports show crashes in background work.
+- Replace the remaining bare `unwrap()` calls in non-test Rust with explained `expect()` invariants and deny new ones with `clippy::unwrap_used`.
+
 ## 1.41.3 - 2026-11-06
 
 ### Changed
