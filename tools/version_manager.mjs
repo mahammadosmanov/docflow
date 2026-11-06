@@ -2,7 +2,9 @@
 
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   writeFileSync,
@@ -127,10 +129,23 @@ export function manifestVersions(root = REPOSITORY_ROOT) {
 
 export function releaseNotes(root, version) {
   parseVersion(version);
-  const source = readFileSync(join(root, "CHANGELOG.md"), "utf8");
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const heading = new RegExp(`^##\\s+\\[?${escaped}\\]?(?:\\s+-.*)?\\s*$`, "mu");
-  const match = heading.exec(source);
+  const archiveDirectory = join(root, "docs/changelog");
+  const sources = [join(root, "CHANGELOG.md")].concat(
+    existsSync(archiveDirectory)
+      ? readdirSync(archiveDirectory)
+          .filter((name) => name.endsWith(".md"))
+          .map((name) => join(archiveDirectory, name))
+      : [],
+  );
+  let source = "";
+  let match = null;
+  for (const path of sources) {
+    source = readFileSync(path, "utf8");
+    match = heading.exec(source);
+    if (match) break;
+  }
   if (!match) throw new VersionError(`CHANGELOG.md has no section for ${version}`);
   const start = match.index + match[0].length;
   const next = /^##\s+/mu.exec(source.slice(start));
