@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.42.3 - 2026-11-06
+
+### Fixed
+
+- Updated `zip` to 9.4.1. On Windows, 9.1.2 panicked when it checked a non-ASCII member name for reserved device names; the new parser robustness test caught this.
+- Updated the yanked `async-executor` 1.14.0 to 1.14.1 so `cargo deny` passes.
+- Moved the cross-platform Rust CI job from the retired `macos-14` runner to `macos-15`.
+
 ## 1.42.2 - 2026-11-06
 
 ### Changed
