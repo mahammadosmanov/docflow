@@ -8,6 +8,7 @@ pub(in crate::ocr) struct DirectionScore {
     pub(in crate::ocr) header_word_count: usize,
     pub(in crate::ocr) header_confidence_sum: f64,
     pub(in crate::ocr) header_rfi_codes: BTreeMap<String, f64>,
+    pub(in crate::ocr) label_word_count: usize,
 }
 
 impl DirectionScore {
@@ -24,6 +25,7 @@ impl DirectionScore {
             header_word_count: 0,
             header_confidence_sum: 0.0,
             header_rfi_codes: BTreeMap::new(),
+            label_word_count: 0,
         }
     }
 
@@ -31,6 +33,12 @@ impl DirectionScore {
     pub(in crate::ocr) fn with_header(mut self, word_count: usize, confidence_sum: f64) -> Self {
         self.header_word_count = word_count;
         self.header_confidence_sum = confidence_sum;
+        self
+    }
+
+    #[cfg(test)]
+    pub(in crate::ocr) fn with_labels(mut self, label_word_count: usize) -> Self {
+        self.label_word_count = label_word_count;
         self
     }
 
@@ -77,6 +85,56 @@ pub(in crate::ocr) fn select_direction_score(
         rotate_clockwise: winner.rotate_clockwise,
         confidence,
         method: format!("tesseract-eng-direction-score:{dpi}dpi"),
+    })
+}
+
+/// Drawing labels such as `S9`, `A17`, `N3`, `PCS-19` or `ZONE 7`, which sparse drawings carry
+/// even when they have no running text for OSD.
+pub(in crate::ocr) fn is_drawing_label(text: &str) -> bool {
+    let text = text.trim().to_ascii_uppercase();
+    let numbered = |prefix: &str| {
+        text.strip_prefix(prefix).is_some_and(|rest| {
+            (1..=3).contains(&rest.len()) && rest.bytes().all(|byte| byte.is_ascii_digit())
+        })
+    };
+    ["S", "N", "A", "PCS-", "PCS"]
+        .iter()
+        .any(|prefix| numbered(prefix))
+        || matches!(text.as_str(), "ZONE" | "PLT")
+}
+
+/// Last resort when OSD and running-text OCR refuse: a turn wins only when its drawing labels
+/// clearly outnumber every other turn's. Uses the TSV already produced, so no extra OCR pass.
+pub(in crate::ocr) fn select_label_direction(
+    first: &[DirectionScore],
+    second: &[DirectionScore],
+) -> Option<OrientationDetection> {
+    const MIN_LABELS: usize = 3;
+    const MIN_RATIO: usize = 2;
+
+    let mut ranked = [0_i64, 90, 180, 270]
+        .into_iter()
+        .map(|rotate_clockwise| {
+            let labels = first
+                .iter()
+                .chain(second)
+                .filter(|score| score.rotate_clockwise == rotate_clockwise)
+                .map(|score| score.label_word_count)
+                .sum::<usize>();
+            (rotate_clockwise, labels)
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+    let (winner, winner_labels) = ranked[0];
+    let runner_up_labels = ranked[1].1;
+    if winner_labels < MIN_LABELS || winner_labels < runner_up_labels * MIN_RATIO {
+        return None;
+    }
+    let margin = (winner_labels - runner_up_labels) as f64;
+    Some(OrientationDetection {
+        rotate_clockwise: winner,
+        confidence: (10.0 + margin * 5.0).clamp(10.0, 100.0),
+        method: "tesseract-label-consensus:250+350dpi".to_string(),
     })
 }
 

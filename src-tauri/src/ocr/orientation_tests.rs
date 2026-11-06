@@ -337,3 +337,67 @@ fn rotates_grayscale_pixels_clockwise_without_mirroring() {
         vec![6, 5, 4, 3, 2, 1]
     );
 }
+
+#[test]
+fn drawing_labels_match_only_rfi_drawing_tokens() {
+    for label in ["S9", "s17", "N3", "A17", "PCS-19", "PCS12", "ZONE", "PLT"] {
+        assert!(
+            is_drawing_label(label),
+            "{label} should count as a drawing label"
+        );
+    }
+    for text in ["S", "SKETCH04", "PCS-", "ZONE7X", "hello", "AZE-SUN"] {
+        assert!(
+            !is_drawing_label(text),
+            "{text} should not count as a drawing label"
+        );
+    }
+}
+
+#[test]
+fn label_consensus_needs_a_clear_turn_with_labels() {
+    let clear_first = [
+        DirectionScore::new(0, 0, 0.0),
+        DirectionScore::new(90, 0, 0.0).with_labels(2),
+        DirectionScore::new(180, 0, 0.0),
+        DirectionScore::new(270, 0, 0.0),
+    ];
+    let clear_second = [
+        DirectionScore::new(0, 0, 0.0),
+        DirectionScore::new(90, 0, 0.0).with_labels(1),
+        DirectionScore::new(180, 0, 0.0),
+        DirectionScore::new(270, 0, 0.0),
+    ];
+    let selected = select_label_direction(&clear_first, &clear_second)
+        .expect("three labels on one turn should decide");
+    assert_eq!(selected.rotate_clockwise, 90);
+    assert_eq!(selected.method, "tesseract-label-consensus:250+350dpi");
+
+    let tied_first = [
+        DirectionScore::new(0, 0, 0.0).with_labels(2),
+        DirectionScore::new(90, 0, 0.0).with_labels(2),
+        DirectionScore::new(180, 0, 0.0),
+        DirectionScore::new(270, 0, 0.0),
+    ];
+    assert!(
+        select_label_direction(&tied_first, &[]).is_none(),
+        "tied label counts must remain uncertain"
+    );
+    let sparse = [DirectionScore::new(270, 0, 0.0).with_labels(2)];
+    assert!(select_label_direction(&sparse, &[]).is_none());
+}
+
+#[test]
+fn parses_drawing_labels_from_direction_tsv() {
+    const TSV_HEADER: &str = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n";
+    let score = parse_direction_score_tsv(
+        &format!(
+            "{TSV_HEADER}5\t1\t1\t1\t1\t1\t912\t186\t1082\t74\t90.5\tS9\n\
+             5\t1\t1\t1\t1\t2\t912\t186\t1082\t74\t40.0\tS9\n\
+             5\t1\t1\t1\t1\t3\t912\t186\t1082\t74\t95.0\tSKETCH04\n"
+        ),
+        90,
+        2_000,
+    );
+    assert_eq!(score.label_word_count, 1, "only the confident S9 counts");
+}

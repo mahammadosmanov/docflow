@@ -5,6 +5,24 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.1 - 2026-11-06
+
+### Fixed
+
+- Format and lint the drawing-label orientation code so the Windows release gate (`cargo fmt --check`, `clippy -D warnings`) passes.
+
+## 1.41.0 - 2026-11-06
+
+### Added
+
+- Follow Up sync now routes ELE clause `1.6` (ITP `ELE-0005` / item `ELE-5.1.6`) to the matching prepared ELE Block row by exact Tag No, including non-`PCS-` blocks such as `A4` and `A12/1`.
+
+## 1.40.0 - 2026-11-04
+
+### Changed
+
+- Orientation detection falls back to drawing labels (such as `S9`, `A17`, `PCS-19`) when OSD and running-text OCR refuse a sparse drawing page; it applies a turn only when one turn has at least three labels and at least twice the next best.
+
 ## 1.39.0 - 2026-11-01
 
 ### Added

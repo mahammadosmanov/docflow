@@ -983,7 +983,7 @@ fn full_sync_keeps_multiple_matching_follow_up_rows_in_manual_review() {
 }
 
 #[test]
-fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
+fn full_sync_adds_supported_ele_rfis_including_1_6_to_matching_prepared_blank_slots() {
     let source = full_schema_source_with_ele(
         std::iter::empty(),
         [
@@ -1024,7 +1024,47 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
                 "0012",
                 "AZE-SUN-INT-QMS-ITP-ELE-0005",
                 "ELE-5.1.6",
+                "PCS-05",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                15,
+                "0013",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.6",
                 "PCS-01",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                16,
+                "0006",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.5",
+                "PCS-06",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                17,
+                "0020",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.6",
+                "A12/1",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                18,
+                "0021",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.1.6",
+                "A4, A12/1",
+                "Completed",
+            ),
+            full_schema_ele_record(
+                19,
+                "0099",
+                "AZE-SUN-INT-QMS-ITP-ELE-0005",
+                "ELE-5.2.6",
+                "A12/1",
                 "Completed",
             ),
         ],
@@ -1078,6 +1118,16 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
                         blank("G5"),
                     ],
                 ),
+                row(
+                    6,
+                    [
+                        inline("A6", "A12/1"),
+                        blank("B6"),
+                        blank("C6"),
+                        blank("D6"),
+                        blank("E6"),
+                    ],
+                ),
             ],
             &[],
         ),
@@ -1091,7 +1141,16 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
         .map(|row| (row["rfiNo"].as_str().unwrap(), row))
         .collect::<std::collections::BTreeMap<_, _>>();
 
-    assert_eq!(by_rfi.len(), 4, "{review}");
+    // 1.6 syncs non-PCS Blocks by exact tag; composite tags and other routes do not.
+    assert_eq!(by_rfi["ELE-0020"]["target"]["row"], 6);
+    assert_eq!(by_rfi["ELE-0020"]["target"]["rfiColumn"], 2);
+    assert!(!by_rfi.contains_key("ELE-0021"));
+    assert!(!by_rfi.contains_key("ELE-0099"));
+    assert_eq!(by_rfi.len(), 6, "{review}");
+    assert_eq!(by_rfi["ELE-0012"]["proposedRfiNo"], "ELE-0012");
+    assert_eq!(by_rfi["ELE-0012"]["proposedStatus"], "Completed");
+    assert_eq!(by_rfi["ELE-0012"]["target"]["rfiColumn"], 2);
+    assert_eq!(by_rfi["ELE-0012"]["target"]["statusColumn"], 3);
     assert_eq!(by_rfi["ELE-0036"]["proposedStatus"], "Completed");
     assert_eq!(by_rfi["ELE-0043"]["proposedStatus"], "In Progress");
     assert_eq!(by_rfi["ELE-0043"]["target"]["rfiColumn"], 6);
@@ -1101,7 +1160,9 @@ fn full_sync_adds_supported_ele_rfis_to_matching_prepared_blank_slots() {
     assert_eq!(by_rfi["ELE-0055"]["proposedRfiNo"], "ELE-0055");
     assert_eq!(by_rfi["ELE-0055"]["proposedStatus"], "In Progress");
     assert_eq!(by_rfi["ELE-0055"]["target"]["rfiColumn"], 6);
-    assert!(!by_rfi.contains_key("ELE-0012"));
+    // No PCS-01 row (ELE-0013) and other 0005 items (ELE-0006) stay out of scope.
+    assert!(!by_rfi.contains_key("ELE-0013"));
+    assert!(!by_rfi.contains_key("ELE-0006"));
 }
 
 #[test]

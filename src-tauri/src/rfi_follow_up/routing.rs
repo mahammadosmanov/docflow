@@ -47,6 +47,7 @@ pub(super) fn default_route_col(sheet: &str, clause: &str) -> u32 {
         ("MEC", "3.5") => 14,
         ("MEC", "3.1") => 16,
         ("MEC", "3.2") => 18,
+        ("ELE", "1.6") => 2,
         ("ELE", "2.6") => 4,
         ("ELE", "2.5.3") => 6,
         _ => 3,
@@ -159,7 +160,9 @@ pub(super) fn row_matches(
     record: &SourceRecord,
     target_workbook: &WorkbookData,
 ) -> bool {
-    if sheet_name == "ELE" {
+    // ADR 0053: ELE 1.6 syncs every Block, not only `PCS-` ones.
+    let ele_1_6 = sheet_name == "ELE" && intended_lifecycle_route(record) == Some(("ELE", "1.6"));
+    if sheet_name == "ELE" && !ele_1_6 {
         let tags = record
             .contexts
             .iter()
@@ -221,7 +224,9 @@ pub(super) fn row_matches_context(
             .is_some_and(|target| road_tag_matches_row(&context.tag, &target.value)),
         "ELE" => {
             let tags = normalized_parts(&context.tag);
-            tags.len() == 1 && tags[0].starts_with("PCS-") && cell(1) == tags[0]
+            let whole = normalized_location(&context.tag);
+            (tags.len() == 1 && tags[0].starts_with("PCS-") && cell(1) == tags[0])
+                || (!whole.is_empty() && cell(1) == whole)
         }
         "MEC" => {
             let target_sections = normalized_parts(&cell(4));

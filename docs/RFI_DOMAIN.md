@@ -285,12 +285,13 @@ A target status formula is read-only: an already-present RFI is treated as
 satisfied only when the cached status already equals its projected status;
 otherwise the required change remains manual review. Other formula-bearing,
 merged, or unsafe matched destinations remain manual. For ELE, only ITP
-`ELE-0005` / item `ELE-5.2.6` routes to the prepared `2.5, 2.6` group, and ITP
+`ELE-0005` / item `ELE-5.1.6` routes to the prepared `1.6` column (ADR 0053),
+ITP `ELE-0005` / item `ELE-5.2.6` routes to the prepared `2.5, 2.6` group, and ITP
 `ELE-0006` / item `ELE-6.2.5.3` routes to the prepared `2.1, 2.4, 2.5.1, 2.5.3`
-group. Match one exact `PCS-` Tag No to the target `Block`; update status only
+group. Match one exact `PCS-` Tag No to the target `Block` (for `1.6` any exact Block tag such as `A4` or `A12/1`); update status only
 when that RFI already exists in its routed column, or fill a safe empty
 RFI/status pair in its matching prepared row. Never create an ELE row or
-section. Do not route `1.6` or other ELE ITP/item pairs. Unsupported ELE
+section. Do not route other ELE ITP/item pairs. Unsupported ELE
 records stay outside Follow Up review. `POT test`, `STAT`, `Changelog`, MEC calculated
 remarks/manual overrides, PRC, and absent ITP/item sections are never created or
 modified by this operation. A source

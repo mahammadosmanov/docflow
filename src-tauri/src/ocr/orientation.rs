@@ -96,6 +96,7 @@ impl OrientationDetector for NativeOcr {
                     primary_detection.as_ref(),
                     secondary_detection.as_ref(),
                 )
+                .or_else(|| select_label_direction(&first_scores, &second_scores))
             })
         };
         detection.ok_or_else(|| {
@@ -361,6 +362,7 @@ pub(super) fn parse_direction_score_tsv(
     let mut header_word_count = 0_usize;
     let mut header_confidence_sum = 0.0_f64;
     let mut header_rfi_codes = BTreeMap::<String, f64>::new();
+    let mut label_word_count = 0_usize;
     for line in output.lines().skip(1) {
         let columns = line.splitn(12, '\t').collect::<Vec<_>>();
         if columns.len() != 12
@@ -395,6 +397,9 @@ pub(super) fn parse_direction_score_tsv(
                 header_confidence_sum += confidence;
             }
         }
+        if confidence >= 60.0 && is_drawing_label(columns[11]) {
+            label_word_count += 1;
+        }
     }
     DirectionScore {
         rotate_clockwise,
@@ -403,6 +408,7 @@ pub(super) fn parse_direction_score_tsv(
         header_word_count,
         header_confidence_sum,
         header_rfi_codes,
+        label_word_count,
     }
 }
 
