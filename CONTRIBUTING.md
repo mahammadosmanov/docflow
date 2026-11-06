@@ -20,6 +20,16 @@
 
 ## Required checks
 
+Enable the fast local gate once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+CI also runs Rust clippy and tests on Windows and macOS, `cargo deny`
+(advisories, bans, sources), `npm audit --omit=dev`, and rejects a pull request
+that keeps the base branch `VERSION`.
+
 ```bash
 node tools/version_manager.mjs check
 node tools/package_audit.mjs source
@@ -30,6 +40,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 npm run audit:licenses
+cargo deny --manifest-path src-tauri/Cargo.toml check advisories bans sources
 ```
 
 Packaging rules and release gates are in `docs/RELEASE_SAFETY.md`.

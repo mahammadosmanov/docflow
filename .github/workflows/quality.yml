@@ -45,6 +45,9 @@ jobs:
           npm test
           npm run build
 
+      - name: Audit production npm dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   rust-quality:
     name: Format and lint Rust authority
     runs-on: ubuntu-24.04
@@ -62,15 +65,10 @@ jobs:
           toolchain: "1.97.1"
           components: rustfmt, clippy
 
-      - name: Cache Rust registry and Git dependencies
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git/db
-          key: ${{ runner.os }}-rust-1.97.1-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-1.97.1-
+          workspaces: src-tauri
 
       - name: Install Linux Tauri prerequisites
         run: |
@@ -104,15 +102,10 @@ jobs:
         with:
           toolchain: "1.97.1"
 
-      - name: Cache Rust registry and Git dependencies
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git/db
-          key: ${{ runner.os }}-rust-1.97.1-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-1.97.1-
+          workspaces: src-tauri
 
       - name: Install Linux Tauri prerequisites
         run: |
@@ -128,3 +121,79 @@ jobs:
           CARGO_BUILD_JOBS: "1"
         run: |
           cargo test --manifest-path src-tauri/Cargo.toml
+
+  rust-platforms:
+    name: Lint and test Rust authority on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-14]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: "1.97.1"
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+
+      - name: Lint platform-specific Rust code
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: Test platform-specific Rust code
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
+
+  supply-chain:
+    name: Audit Rust advisories and sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-deny
+
+      - name: Check advisories, bans, and sources
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check advisories bans sources
+
+  version-bump:
+    name: Require a new version for every pull request
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Compare VERSION with the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          base_version="$(git show "origin/${BASE_REF}:VERSION" | tr -d '[:space:]')"
+          head_version="$(tr -d '[:space:]' < VERSION)"
+          if [ "$base_version" = "$head_version" ]; then
+            echo "::error::VERSION is still $head_version; bump it with node tools/version_manager.mjs set <next-version>."
+            exit 1
+          fi
+          echo "Version $base_version -> $head_version"

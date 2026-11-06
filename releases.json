@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.2",
+  "currentVersion": "1.41.3",
   "releases": [
+    {
+      "version": "1.41.3",
+      "tag": "v1.41.3",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Run Rust lint and tests on Windows and macOS in CI and add supply-chain and version-bump gates."
+    },
     {
       "version": "1.41.2",
       "tag": "v1.41.2",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Harden the Windows release pipeline: scope the updater signing secret, pin actions by SHA, and always verify Tesseract."
     },
     {

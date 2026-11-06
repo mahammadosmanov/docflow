@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.41.3 - 2026-11-06
+
+### Changed
+
+- Run Rust clippy and tests on Windows and macOS for every pull request so platform-only code is checked before release tags.
+- Cache Rust build output in CI with `Swatinem/rust-cache`.
+- Add `cargo deny` (advisories, bans, sources) and `npm audit --omit=dev` gates.
+- Fail a pull request that does not change `VERSION`.
+- Check Rust formatting in the pre-commit hook and run Dependabot weekly.
+
 ## 1.41.2 - 2026-11-06
 
 ### Security

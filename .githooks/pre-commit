@@ -3,3 +3,4 @@
 set -e
 node tools/version_manager.mjs check
 node tools/package_audit.mjs source
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
