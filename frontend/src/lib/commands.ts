@@ -18,6 +18,7 @@ import type {
   ActivityLogExport,
   SupportBundlePreview,
   WatchStatus,
+  TemplateStatus,
   UpdateCheckResult,
 } from "../types";
 
@@ -141,6 +142,8 @@ export interface FrontendCommandMap {
     RfiPrintFindResult
   >;
   "watch/status": CommandSpec<NoParams, WatchStatus>;
+  "templates/status": CommandSpec<NoParams, TemplateStatus>;
+  "templates/sync": CommandSpec<NoParams, TemplateStatus>;
   "watch/update": CommandSpec<
     {
       opId: string;
@@ -196,6 +199,8 @@ export const FRONTEND_METHODS = [
   "watch/status",
   "watch/update",
   "watch/open",
+  "templates/status",
+  "templates/sync",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

@@ -20,6 +20,7 @@ export type Route =
   | { name: "recovery" }
   | { name: "queue" }
   | { name: "history" }
+  | { name: "templates" }
   | { name: "admin" }
   | { name: "settings"; back: "home" | "login" | "pending" };
 

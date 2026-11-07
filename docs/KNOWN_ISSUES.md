@@ -23,6 +23,10 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 - File and folder drops onto operation fields (ADR 0054) need native Windows
   acceptance: drag from Explorer, OneDrive, and network folders, check the
   field highlight under display scaling, and confirm wrong-kind drops are refused.
+- Shared templates (ADR 0055) need `docs/supabase_templates.sql` applied to the
+  live Supabase project, then a two-user check of sync, offline start, and
+  update pickup. Until then the Templates screen reports that the store is not
+  set up.
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy

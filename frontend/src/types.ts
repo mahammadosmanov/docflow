@@ -274,6 +274,33 @@ export interface WatchItem {
   preparedAt: number;
 }
 
+export type TemplateSyncError =
+  | "offline"
+  | "signedOut"
+  | "notConfigured"
+  | "requestFailed";
+
+export interface TemplateSummary {
+  code: string;
+  title: string;
+  discipline: string;
+  fileKind: "xlsx" | "docx";
+  version: number;
+  publishedAt: string | null;
+  fieldCount: number;
+  cached: boolean;
+}
+
+/** Shared templates as Rust last synced them (ADR 0055). Times are Unix seconds. */
+export interface TemplateStatus {
+  online: boolean;
+  syncing: boolean;
+  lastSyncedAt: number | null;
+  lastError: TemplateSyncError | null;
+  failedCodes: string[];
+  templates: TemplateSummary[];
+}
+
 export interface WatchStatus {
   operations: string[];
   enabled: string[];

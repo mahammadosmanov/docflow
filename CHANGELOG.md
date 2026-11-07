@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.44.0 - 2026-11-07
+
+### Added
+
+- New **Templates** screen lists the document templates shared with every DocFlow user, with search and discipline filters (ADR 0055).
+- Rust syncs published templates at startup, every 30 minutes, and on demand. Each file must match its SHA-256 and open as a valid Office file before it is cached. Templates stay usable offline, and a failed download keeps the previous version.
+- New `docs/supabase_templates.sql` creates the shared store: versioned, immutable published templates, an editor role (`can_edit_templates`), row-level security, and a private Storage bucket. An admin must run it once in Supabase.
+
 ## 1.43.0 - 2026-11-06
 
 ### Fixed

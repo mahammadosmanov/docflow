@@ -79,6 +79,14 @@ impl HttpResponse {
         }
     }
 
+    pub fn from_bytes(status: u16, body: Vec<u8>) -> Self {
+        Self { status, body }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.body
+    }
+
     pub fn json(&self) -> Result<Value, HttpError> {
         if self.body.is_empty() {
             return Ok(Value::Null);
@@ -94,6 +102,17 @@ pub trait JsonHttp: Send + Sync {
         url: &str,
         headers: &[(String, String)],
         body: Option<&Value>,
+    ) -> Result<HttpResponse, HttpError>;
+}
+
+/// Raw-body requests for file transfer (template downloads and uploads).
+pub trait BytesHttp: Send + Sync {
+    fn send_bytes(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(String, String)],
+        body: Option<(&str, &[u8])>,
     ) -> Result<HttpResponse, HttpError>;
 }
 
@@ -127,25 +146,44 @@ impl HttpClient {
             .map(serde_json::to_vec)
             .transpose()
             .map_err(|_| HttpError::InvalidRequest)?;
-        if encoded
-            .as_ref()
-            .is_some_and(|payload| payload.len() > self.config.max_request_bytes)
-        {
+        self.send(
+            method,
+            url,
+            "application/json",
+            headers,
+            encoded
+                .as_deref()
+                .map(|payload| ("application/json", payload)),
+        )
+    }
+
+    fn send(
+        &self,
+        method: &str,
+        url: &str,
+        accept: &str,
+        headers: &[(String, String)],
+        body: Option<(&str, &[u8])>,
+    ) -> Result<HttpResponse, HttpError> {
+        if body.is_some_and(|(_, payload)| payload.len() > self.config.max_request_bytes) {
             return Err(HttpError::RequestTooLarge);
         }
 
         let method =
             http::Method::from_bytes(method.as_bytes()).map_err(|_| HttpError::InvalidRequest)?;
         let mut request = http::Request::builder().method(method).uri(url);
-        request = request.header("Accept", "application/json");
-        if encoded.is_some() {
-            request = request.header("Content-Type", "application/json");
+        request = request.header("Accept", accept);
+        if let Some((content_type, _)) = body {
+            request = request.header("Content-Type", content_type);
         }
         for (name, value) in headers {
             request = request.header(name, value);
         }
         let request = request
-            .body(encoded.unwrap_or_default())
+            .body(
+                body.map(|(_, payload)| payload.to_vec())
+                    .unwrap_or_default(),
+            )
             .map_err(|_| HttpError::InvalidRequest)?;
         let mut response = self.agent.run(request).map_err(map_ureq_error)?;
         if response
@@ -163,6 +201,18 @@ impl HttpClient {
             .read_to_vec()
             .map_err(map_ureq_error)?;
         Ok(HttpResponse { status, body })
+    }
+}
+
+impl BytesHttp for HttpClient {
+    fn send_bytes(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(String, String)],
+        body: Option<(&str, &[u8])>,
+    ) -> Result<HttpResponse, HttpError> {
+        self.send(method, url, "*/*", headers, body)
     }
 }
 

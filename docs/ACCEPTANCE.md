@@ -34,6 +34,7 @@ Status values: **Pending**, **Passed**, **Failed**, **Blocked**.
 | 21 | Live Supabase RLS deployment and two-user verification | Cloud | Pending | | | |
 | 22 | Authenticode installer signing and macOS notarization | Release | Blocked | | | Needs paid certificates |
 | 23 | File and folder drag-and-drop onto operation fields from Explorer, including OneDrive and network folders (ADR 0054) | UI | Pending | | | |
+| 24 | Shared templates: run `docs/supabase_templates.sql` on the live project, then two-user sync, offline start with cached templates, and update pickup (ADR 0055) | Cloud | Pending | | | |
 
 ## Order of work
 

@@ -19,6 +19,13 @@
 
 ## Application features
 
+- **Templates** (ADR 0055) lists the document templates shared with every
+  DocFlow user. Rust syncs published templates from Supabase at startup, every
+  30 minutes, and on demand. Each file is checked against its SHA-256 and
+  cached under the app data folder, so templates work offline; a failed
+  download keeps the previous version. Editing, publishing, and generation
+  from templates arrive in later releases. An admin must run
+  `docs/supabase_templates.sql` once before the shared store works.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.
   The first update-capable release must be installed manually once. macOS

@@ -86,6 +86,10 @@ pub(crate) enum BackendMethod {
     WatchUpdate,
     #[serde(rename = "watch/open")]
     WatchOpen,
+    #[serde(rename = "templates/status")]
+    TemplatesStatus,
+    #[serde(rename = "templates/sync")]
+    TemplatesSync,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,7 +98,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 42] = [
+    pub(crate) const ALL: [Self; 44] = [
         Self::AppBootstrap,
         Self::UpdateCheck,
         Self::UpdateInstall,
@@ -137,6 +141,8 @@ impl BackendMethod {
         Self::WatchStatus,
         Self::WatchUpdate,
         Self::WatchOpen,
+        Self::TemplatesStatus,
+        Self::TemplatesSync,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -187,6 +193,8 @@ impl BackendMethod {
             Self::WatchStatus => "watch/status",
             Self::WatchUpdate => "watch/update",
             Self::WatchOpen => "watch/open",
+            Self::TemplatesStatus => "templates/status",
+            Self::TemplatesSync => "templates/sync",
         }
     }
 

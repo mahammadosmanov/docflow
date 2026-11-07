@@ -243,9 +243,15 @@ pub(crate) struct NativeBackend {
     app_data_dir: PathBuf,
     scan_index: ScanIndex,
     watch: crate::watch::WatchQueue,
+    templates: Arc<crate::templates::TemplateStore>,
 }
 
 impl NativeBackend {
+    /// Background template sync; failures only update the reported status.
+    pub(crate) fn sync_templates(&self) {
+        self.templates.sync(now());
+    }
+
     pub(crate) fn production() -> Result<Self, BackendError> {
         let settings_path = default_settings_path();
         let app_data_dir = settings_path.parent().map_or_else(
@@ -274,6 +280,26 @@ impl NativeBackend {
             Arc::new(OsCredentialStore::new()),
             supabase_http.clone(),
             auth_config.clone(),
+        ));
+        let template_http = Arc::new(
+            HttpClient::new(HttpConfig {
+                request_timeout: Duration::from_secs(120),
+                max_request_bytes: crate::templates::MAX_TEMPLATE_BYTES as usize,
+                max_response_bytes: crate::templates::MAX_TEMPLATE_BYTES as usize + 1024,
+                ..HttpConfig::default()
+            })
+            .map_err(|error| {
+                BackendError::protocol(format!("template HTTP initialization: {error}"))
+            })?,
+        );
+        let templates = Arc::new(crate::templates::TemplateStore::new(
+            crate::templates::default_root(&app_data_dir),
+            Arc::new(crate::templates::SupabaseTemplates::new(
+                auth.clone(),
+                supabase_http.clone(),
+                template_http,
+                auth_config.clone(),
+            )),
         ));
         let journals = JournalStore::new(&journal_dir);
         let cloud = Arc::new(CloudHistory::new(
@@ -333,6 +359,7 @@ impl NativeBackend {
             app_data_dir,
             scan_index,
             watch: crate::watch::WatchQueue::default(),
+            templates,
         })
     }
 
@@ -517,6 +544,14 @@ impl NativeBackend {
             BackendMethod::RecoveryList => {
                 decode_empty(params)?;
                 encode(self.recovery()?)
+            }
+            BackendMethod::TemplatesStatus => {
+                decode_empty(params)?;
+                encode(self.templates.status())
+            }
+            BackendMethod::TemplatesSync => {
+                decode_empty(params)?;
+                encode(self.templates.sync(now()))
             }
             _ => Err(BackendError::protocol(
                 "method is not owned by the Rust native backend",

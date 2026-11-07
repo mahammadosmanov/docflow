@@ -65,6 +65,18 @@ impl BackendRouter {
         });
     }
 
+    /// Pulls shared templates shortly after start and every 30 minutes (ADR 0055).
+    pub(crate) fn start_template_sync(&self) {
+        let native = Arc::clone(&self.native);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            loop {
+                native.sync_templates();
+                std::thread::sleep(std::time::Duration::from_secs(30 * 60));
+            }
+        });
+    }
+
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         let native = Arc::new(NativeBackend::production()?);
         let activity_log = Arc::new(crate::activity_log::ActivityLog::new(

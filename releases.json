@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.43.0",
+  "currentVersion": "1.44.0",
   "releases": [
+    {
+      "version": "1.44.0",
+      "tag": "v1.44.0",
+      "date": "2026-11-07",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Shared document template store with Supabase sync and offline cache."
+    },
     {
       "version": "1.43.0",
       "tag": "v1.43.0",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Folder and file drops are captured by Rust and work in the desktop app."
     },
     {

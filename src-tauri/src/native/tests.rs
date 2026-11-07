@@ -498,6 +498,10 @@ fn test_backend_with_responses(
             platform::production_outlook_adapter(),
         ),
         process_session_id: Mutex::new("epoch-initial".to_string()),
+        templates: Arc::new(crate::templates::TemplateStore::new(
+            temporary.path().join("templates"),
+            Arc::new(OfflineTemplates),
+        )),
         app_data_dir: temporary.path().to_path_buf(),
         scan_index: ScanIndex::new(temporary.path().join("scan-index.sqlite3")).unwrap(),
         watch: crate::watch::WatchQueue::default(),
@@ -849,4 +853,16 @@ fn preview_rfi_system_sync_with_nested_workbooks_succeeds_and_applies() {
         .expect("undo must succeed");
     assert_eq!(undo_result.applied, 4);
     assert_eq!(undo_result.failed, 0);
+}
+
+struct OfflineTemplates;
+
+impl crate::templates::TemplateRemote for OfflineTemplates {
+    fn manifest(&self, _now: i64) -> Result<Value, BackendError> {
+        Err(BackendError::offline())
+    }
+
+    fn download(&self, _storage_path: &str, _now: i64) -> Result<Vec<u8>, BackendError> {
+        Err(BackendError::offline())
+    }
 }

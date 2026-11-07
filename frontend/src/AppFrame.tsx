@@ -2,6 +2,7 @@ import {
   FileCheck2,
   Files,
   History,
+  LibraryBig,
   ListChecks,
   LoaderCircle,
   RotateCcw,
@@ -151,6 +152,17 @@ export function AppFrame({
                   {readyCount}
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              className={`app-nav-item ${routeName === "templates" ? "active" : ""}`}
+              aria-label={s.t("templates.title")}
+              title={s.t("templates.title")}
+              aria-current={routeName === "templates" ? "page" : undefined}
+              onClick={() => navigate({ name: "templates" })}
+            >
+              <LibraryBig aria-hidden="true" />
+              <span>{s.t("templates.title")}</span>
             </button>
             <button
               type="button"

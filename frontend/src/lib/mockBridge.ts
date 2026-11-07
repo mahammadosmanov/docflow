@@ -27,6 +27,7 @@ import type {
   AuthState,
   Bootstrap,
   HistoryPayload,
+  TemplateStatus,
   OperationPreset,
   OperationResult,
   PathSelection,
@@ -375,6 +376,48 @@ export class MockBridge implements Bridge {
         break;
       case "watch/status":
         result = this.watchStatus();
+        break;
+      case "templates/status":
+      case "templates/sync":
+        result = {
+          online: method === "templates/sync",
+          syncing: false,
+          lastSyncedAt: 1_793_990_000,
+          lastError: method === "templates/sync" ? null : "offline",
+          failedCodes: [],
+          templates: [
+            {
+              code: "QM-FRM-001",
+              title: "RFI Form",
+              discipline: "GEN",
+              fileKind: "xlsx",
+              version: 3,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 18,
+              cached: true,
+            },
+            {
+              code: "CON-CIV-010",
+              title: "Inspection Report for Concrete Pouring and Traceability",
+              discipline: "CIV",
+              fileKind: "xlsx",
+              version: 1,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 0,
+              cached: true,
+            },
+            {
+              code: "CON-ELE-004",
+              title: "Earthing System Resistance Test Report",
+              discipline: "ELE",
+              fileKind: "docx",
+              version: 2,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 9,
+              cached: false,
+            },
+          ],
+        } satisfies TemplateStatus;
         break;
       case "watch/update": {
         const opId = String(params.opId);

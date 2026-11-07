@@ -839,3 +839,25 @@ textarea[aria-invalid="true"] {
     inset: -10px 0;
   }
 }
+/* Templates library (ADR 0055) */
+.templates-sync-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.templates-sync-line svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.template-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
