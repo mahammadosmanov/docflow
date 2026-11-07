@@ -64,4 +64,34 @@ describe("TemplateEditor", () => {
     ]);
     expect(call).toHaveBeenLastCalledWith("templates/publish", { versionId: "v" });
   });
+
+  it("renames with the discipline prefix and deletes for everyone", async () => {
+    const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
+      method === "templates/saveDraft" ? { ...draft, code: params?.code, title: params?.title } : { templates: [] },
+    );
+    const onClose = vi.fn();
+    render(
+      <TemplateEditor bridge={{ call } as unknown as Bridge} s={s} draft={draft} onClose={onClose} />,
+    );
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "RFI-COVER" } });
+    fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "MEC" } });
+    expect(screen.getByLabelText("Code")).toHaveValue("MEC-RFI-COVER");
+    expect(screen.getByLabelText("Name")).toHaveValue("MEC-RFI Cover (ELE)");
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    await vi.waitFor(() =>
+      expect(call).toHaveBeenCalledWith(
+        "templates/saveDraft",
+        expect.objectContaining({ code: "MEC-RFI-COVER", discipline: "MEC" }),
+      ),
+    );
+
+    expect(await screen.findByText("Draft saved.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Delete template/ }));
+    const buttons = screen.getAllByRole("button", { name: /Delete template/ });
+    fireEvent.click(buttons[buttons.length - 1]);
+    await vi.waitFor(() =>
+      expect(call).toHaveBeenCalledWith("templates/archive", { code: "MEC-RFI-COVER" }),
+    );
+    expect(onClose).toHaveBeenCalled();
+  });
 });

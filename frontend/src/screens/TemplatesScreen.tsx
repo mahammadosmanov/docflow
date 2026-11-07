@@ -23,6 +23,7 @@ import {
 } from "../components/ui";
 import { Modal } from "../components/Modal";
 import { TemplateEditor } from "./TemplateEditor";
+import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
 import {
   EmptyState,
   Notice,
@@ -159,6 +160,7 @@ export function TemplatesScreen({
         onClose={(published) => {
           setEditing(null);
           if (published) setStatus(published);
+          else void run(true);
           void loadEditor();
         }}
       />
@@ -363,10 +365,34 @@ export function TemplatesScreen({
           <div className="template-new">
           <p className="muted">{s.t("templates.editor.new.help")}</p>
           <label className="field">
+            <span>{s.t("templates.editor.discipline")}</span>
+            <select
+              value={newTemplate.discipline}
+              onChange={(event) => {
+                const discipline = event.target.value;
+                setNewTemplate({
+                  discipline,
+                  code: withDisciplinePrefix(newTemplate.code, discipline),
+                  title: withDisciplinePrefix(newTemplate.title, discipline),
+                });
+              }}
+            >
+              <option value="" disabled>
+                {s.t("templates.editor.chooseDiscipline")}
+              </option>
+              {TEMPLATE_DISCIPLINES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
             <span>{s.t("templates.editor.code")}</span>
             <input
               value={newTemplate.code}
-              placeholder="RFI-COVER-ELE"
+              placeholder="ELE-RFI-COVER"
+              maxLength={64}
               onChange={(event) =>
                 setNewTemplate({ ...newTemplate, code: event.target.value })
               }
@@ -378,20 +404,6 @@ export function TemplatesScreen({
               value={newTemplate.title}
               onChange={(event) =>
                 setNewTemplate({ ...newTemplate, title: event.target.value })
-              }
-            />
-          </label>
-          <label className="field">
-            <span>{s.t("templates.editor.discipline")}</span>
-            <input
-              value={newTemplate.discipline}
-              placeholder="ELE"
-              maxLength={8}
-              onChange={(event) =>
-                setNewTemplate({
-                  ...newTemplate,
-                  discipline: event.target.value.toUpperCase(),
-                })
               }
             />
           </label>

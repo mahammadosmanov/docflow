@@ -56,6 +56,8 @@ pub struct NewTemplate {
 #[serde(rename_all = "camelCase")]
 pub struct SaveDraft {
     pub version_id: String,
+    /// The new code; renaming keeps the template's history and versions.
+    pub code: String,
     pub title: String,
     pub discipline: String,
     pub field_map: Value,
@@ -373,7 +375,7 @@ impl TemplateStore {
     }
 
     pub fn save_draft(&self, request: &SaveDraft, now: i64) -> Result<TemplateDraft, BackendError> {
-        check_identity(None, &request.title, &request.discipline)?;
+        check_identity(Some(&request.code), &request.title, &request.discipline)?;
         let field_map = FieldMap::parse(&request.field_map).map_err(invalid)?;
         let version = self.version_row(&request.version_id, now)?;
         if version.status != "draft" {
@@ -382,7 +384,11 @@ impl TemplateStore {
         self.remote.rest(
             "PATCH",
             &format!("doc_templates?id=eq.{}", uuid_ok(&version.template_id)?),
-            Some(json!({"title": request.title.trim(), "discipline": request.discipline})),
+            Some(json!({
+                "code": request.code,
+                "title": request.title.trim(),
+                "discipline": request.discipline,
+            })),
             now,
         )?;
         let updated = single::<VersionRow>(self.remote.rest(
@@ -393,6 +399,20 @@ impl TemplateStore {
         )?)?;
         let template = self.template_row(&format!("id=eq.{}", version.template_id), now)?;
         self.draft_of(&template, updated, now)
+    }
+
+    /// Removes a template from every user's library. Rows and files are kept
+    /// (archived, not destroyed), so generated documents stay traceable.
+    pub fn archive(&self, code: &str, now: i64) -> Result<super::TemplateStatus, BackendError> {
+        check_identity(Some(code), "x", "GEN")?;
+        let template = self.template_row(&format!("code=eq.{code}"), now)?;
+        self.remote.rest(
+            "PATCH",
+            &format!("doc_templates?id=eq.{}", uuid_ok(&template.id)?),
+            Some(json!({"archived": true})),
+            now,
+        )?;
+        Ok(self.sync(now))
     }
 
     /// Publishes a valid draft for everyone, then refreshes the local cache.

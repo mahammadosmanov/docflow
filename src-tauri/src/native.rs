@@ -600,6 +600,10 @@ impl NativeBackend {
                 let request: crate::templates::editor::SaveDraft = decode(params)?;
                 encode(self.templates.save_draft(&request, now())?)
             }
+            BackendMethod::TemplatesArchive => {
+                let request: TemplateCodeParams = decode(params)?;
+                encode(self.templates.archive(&request.code, now())?)
+            }
             BackendMethod::TemplatesPublish => {
                 let request: TemplateVersionParams = decode(params)?;
                 encode(self.templates.publish(&request.version_id, now())?)

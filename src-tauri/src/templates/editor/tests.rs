@@ -188,6 +188,7 @@ fn published_versions_and_bad_maps_are_refused() {
         .save_draft(
             &SaveDraft {
                 version_id: VERSION_ID.into(),
+                code: "ELE-RFI-COVER".into(),
                 title: "T".into(),
                 discipline: "ELE".into(),
                 field_map: json!({"schema": 1, "fields": [{"key": "a"}, {"key": "a"}]}),
@@ -210,4 +211,29 @@ fn only_office_files_of_a_known_kind_are_accepted() {
     assert!(file_kind_of("a.pdf", &bytes).is_err());
     assert!(check_identity(Some("RFI ELE"), "t", "ELE").is_err());
     assert!(check_identity(Some("RFI-ELE"), "t", "ele").is_err());
+}
+
+#[test]
+fn archiving_hides_a_template_for_everyone() {
+    let remote = Arc::new(Scripted::default());
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("GET doc_templates".into(), template_row(json!([])));
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("PATCH doc_templates".into(), json!([]));
+    let (_dir, store) = store(remote.clone());
+    store.archive("RFI-ELE", 1).expect("archived");
+    let calls = remote.calls.lock().unwrap();
+    let patch = calls
+        .iter()
+        .find(|(method, _, _)| method == "PATCH")
+        .expect("patch");
+    assert_eq!(patch.1, format!("doc_templates?id=eq.{TEMPLATE_ID}"));
+    assert_eq!(patch.2, Some(json!({"archived": true})));
+    assert!(store.archive("bad code", 1).is_err());
 }

@@ -1278,7 +1278,7 @@
   "param.templates.template.help": "Templates available offline on this computer.",
   "param.templates.rfiLog": "RFI Log workbook",
   "param.templates.rfiNumbers": "RFI numbers",
-  "param.templates.rfiNumbers.help": "One or more full RFI numbers, separated by commas or lines.",
+  "param.templates.rfiNumbers.help": "Just the number is enough, for example 49 (the template's discipline is added). Separate several with commas or lines; MEC-7 or a full RFI number also works.",
   "param.templates.output": "Output folder",
   "param.templates.output.help": "New files are added here. Existing files are never overwritten.",
   "templates.generate.action": "Create documents with {code}",
@@ -1291,5 +1291,9 @@
   "error.templates.generate": "The documents could not be prepared",
   "error.templates.notCached": "This template is not available offline yet. Open Templates and sync.",
   "error.templates.changed": "The template was updated after the preview. Preview again.",
-  "error.templates.rowsInvalid": "The edited document values are invalid. Preview again."
+  "error.templates.rowsInvalid": "The edited document values are invalid. Preview again.",
+  "templates.editor.delete": "Delete template",
+  "templates.editor.delete.title": "Delete {code}?",
+  "templates.editor.delete.help": "The template disappears from every DocFlow user's library. Documents already created are not affected.",
+  "templates.editor.chooseDiscipline": "Choose a discipline"
 }

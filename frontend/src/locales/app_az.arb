@@ -1250,7 +1250,7 @@
   "param.templates.template.help": "Bu kompüterdə oflayn istifadə edilə bilən şablonlar.",
   "param.templates.rfiLog": "RFI Log iş kitabı",
   "param.templates.rfiNumbers": "RFI nömrələri",
-  "param.templates.rfiNumbers.help": "Bir və ya bir neçə tam RFI nömrəsi, vergül və ya sətirlə ayırın.",
+  "param.templates.rfiNumbers.help": "Yalnız nömrə kifayətdir, məsələn 49 (şablonun disiplini əlavə olunur). Bir neçəsini vergül və ya sətirlə ayırın; MEC-7 və ya tam RFI nömrəsi də olar.",
   "param.templates.output": "Çıxış qovluğu",
   "param.templates.output.help": "Yeni fayllar bura əlavə olunur. Mövcud faylların üzərinə heç vaxt yazılmır.",
   "templates.generate.action": "{code} ilə sənəd yarat",
@@ -1263,5 +1263,9 @@
   "error.templates.generate": "Sənədlər hazırlana bilmədi",
   "error.templates.notCached": "Bu şablon hələ oflayn mövcud deyil. Şablonlar bölməsini açıb sinxronlaşdırın.",
   "error.templates.changed": "Şablon önizləmədən sonra yeniləndi. Yenidən önizləyin.",
-  "error.templates.rowsInvalid": "Redaktə edilmiş sənəd dəyərləri yanlışdır. Yenidən önizləyin."
+  "error.templates.rowsInvalid": "Redaktə edilmiş sənəd dəyərləri yanlışdır. Yenidən önizləyin.",
+  "templates.editor.delete": "Şablonu sil",
+  "templates.editor.delete.title": "{code} silinsin?",
+  "templates.editor.delete.help": "Şablon bütün DocFlow istifadəçilərinin kitabxanasından çıxarılır. Artıq yaradılmış sənədlərə təsir etmir.",
+  "templates.editor.chooseDiscipline": "Disiplin seçin"
 }

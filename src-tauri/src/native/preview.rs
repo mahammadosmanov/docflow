@@ -621,7 +621,8 @@ impl NativeBackend {
         let code = text("template");
         let (entry, template, map) = self.cached_template(&code)?;
         let rfis =
-            template_documents::requested_rfis(&text("rfi_numbers")).map_err(template_error)?;
+            template_documents::requested_rfis(&text("rfi_numbers"), Some(&entry.discipline))
+                .map_err(template_error)?;
         let rfi_log = required_selected_path(&request.values, "rfi_log_workbook")?;
         let output_directory = required_selected_path(&request.values, "output_directory")?;
         if !rfi_log.is_file() {

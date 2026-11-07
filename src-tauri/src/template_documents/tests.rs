@@ -198,12 +198,37 @@ fn rendering_fills_the_document_and_names_it_by_rfi() {
 #[test]
 fn file_names_are_made_safe() {
     assert_eq!(safe_file_stem(" a/b:c*? . "), "a_b_c__");
-    assert!(requested_rfis("").is_err());
-    assert!(requested_rfis("not an rfi").is_err());
+    assert!(requested_rfis("", Some("ELE")).is_err());
+    assert!(requested_rfis("not an rfi", Some("ELE")).is_err());
     assert_eq!(
-        requested_rfis("AZE-SUN-INT-QMS-RFI-ELE-0059, AZE-SUN-INT-QMS-RFI-ELE-0059")
-            .unwrap()
-            .len(),
+        requested_rfis(
+            "AZE-SUN-INT-QMS-RFI-ELE-0059, AZE-SUN-INT-QMS-RFI-ELE-0059",
+            None
+        )
+        .unwrap()
+        .len(),
         1
     );
+}
+
+#[test]
+fn short_rfi_numbers_use_the_template_discipline() {
+    assert_eq!(
+        requested_rfis("49\n58; MEC-7, civ 12", Some("ELE")).unwrap(),
+        [
+            "AZE-SUN-INT-QMS-RFI-ELE-0049",
+            "AZE-SUN-INT-QMS-RFI-ELE-0058",
+            "AZE-SUN-INT-QMS-RFI-MEC-0007",
+            "AZE-SUN-INT-QMS-RFI-CIV-0012",
+        ]
+    );
+    assert!(
+        requested_rfis("49", None).is_err(),
+        "no discipline to infer"
+    );
+    assert!(
+        requested_rfis("49", Some("GEN")).is_err(),
+        "only RFI disciplines"
+    );
+    assert!(requested_rfis("12345", Some("ELE")).is_err());
 }

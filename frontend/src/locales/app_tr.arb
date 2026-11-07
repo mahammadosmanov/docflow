@@ -1250,7 +1250,7 @@
   "param.templates.template.help": "Bu bilgisayarda çevrimdışı kullanılabilen şablonlar.",
   "param.templates.rfiLog": "RFI Log çalışma kitabı",
   "param.templates.rfiNumbers": "RFI numaraları",
-  "param.templates.rfiNumbers.help": "Bir veya daha fazla tam RFI numarası; virgül veya satırla ayır.",
+  "param.templates.rfiNumbers.help": "Sadece numara yeterli, örneğin 49 (şablonun disiplini eklenir). Birden fazlasını virgül veya satırla ayır; MEC-7 veya tam RFI numarası da olur.",
   "param.templates.output": "Çıktı klasörü",
   "param.templates.output.help": "Yeni dosyalar buraya eklenir. Var olan dosyaların üzerine asla yazılmaz.",
   "templates.generate.action": "{code} ile belge oluştur",
@@ -1263,5 +1263,9 @@
   "error.templates.generate": "Belgeler hazırlanamadı",
   "error.templates.notCached": "Bu şablon henüz çevrimdışı kullanılamıyor. Şablonlar'ı açıp eşitle.",
   "error.templates.changed": "Şablon önizlemeden sonra güncellendi. Tekrar önizle.",
-  "error.templates.rowsInvalid": "Düzenlenen belge değerleri geçersiz. Tekrar önizle."
+  "error.templates.rowsInvalid": "Düzenlenen belge değerleri geçersiz. Tekrar önizle.",
+  "templates.editor.delete": "Şablonu sil",
+  "templates.editor.delete.title": "{code} silinsin mi?",
+  "templates.editor.delete.help": "Şablon tüm DocFlow kullanıcılarının kütüphanesinden kalkar. Daha önce oluşturulan belgeler etkilenmez.",
+  "templates.editor.chooseDiscipline": "Disiplin seç"
 }
