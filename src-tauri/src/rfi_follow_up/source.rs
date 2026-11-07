@@ -210,7 +210,7 @@ pub(super) fn scan_source_records(
             }
             let short_rfi = canonical_rfi
                 .strip_prefix(FULL_RFI_PREFIX)
-                .unwrap()
+                .expect("canonical RFI has the full prefix")
                 .to_string();
             let get = |column| {
                 sheet
@@ -294,10 +294,11 @@ pub(super) fn extract_header_clause(
     column: u32,
 ) -> Option<String> {
     static CLAUSE_PARENS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\((\d+\.\d+(?:\.\d+)?(?:\s*,\s*\d+\.\d+(?:\.\d+)?)*)\s*\)").unwrap()
+        Regex::new(r"\((\d+\.\d+(?:\.\d+)?(?:\s*,\s*\d+\.\d+(?:\.\d+)?)*)\s*\)")
+            .expect("static regex is valid")
     });
     static CLAUSE_WORD: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\b(\d+\.\d+(?:\.\d+)?)\b").unwrap());
+        LazyLock::new(|| Regex::new(r"\b(\d+\.\d+(?:\.\d+)?)\b").expect("static regex is valid"));
     for r in (1..max_row).rev() {
         if let Some(cell) = sheet.cell(r, column) {
             let text = &cell.value;

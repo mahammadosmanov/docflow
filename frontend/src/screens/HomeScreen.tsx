@@ -117,6 +117,32 @@ export function HomeScreen({
   );
   const promotePrimaryScan =
     activeCategory === "all" && !searchQuery.trim();
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const ownEmail = bootstrap.auth.session?.email;
+  useEffect(() => {
+    let active = true;
+    bridge
+      .call("history/list", { limit: 30 })
+      .then((history) => {
+        if (!active) return;
+        const ids: string[] = [];
+        for (const row of history.rows) {
+          const own = !row.fromCloud || row.userEmail === ownEmail;
+          if (own && !ids.includes(row.opId)) ids.push(row.opId);
+        }
+        setRecentIds(ids);
+      })
+      .catch(() => {
+        // Recent shortcuts are optional; History reports real failures.
+      });
+    return () => {
+      active = false;
+    };
+  }, [bridge, ownEmail]);
+  const recentOperations = recentIds
+    .map((id) => bootstrap.operations.find((operation) => operation.id === id))
+    .filter((operation) => operation !== undefined)
+    .slice(0, 3);
   const listedOperations =
     promotePrimaryScan && primaryScan
       ? filteredOperations.filter((operation) => operation.id !== primaryScan.id)
@@ -208,6 +234,22 @@ export function HomeScreen({
             </span>
             <ChevronRight aria-hidden="true" />
           </button>
+        )}
+        {recentOperations.length > 0 && (
+          <nav className="recent-operations" aria-label={s.t("home.recent")}>
+            <span className="recent-operations-label">{s.t("home.recent")}</span>
+            {recentOperations.map((operation) => (
+              <button
+                type="button"
+                className="category-chip"
+                key={operation.id}
+                onClick={() => navigate({ name: "operation", operation })}
+              >
+                {getOperationIcon(operation.id)}
+                {s.t(operation.titleKey)}
+              </button>
+            ))}
+          </nav>
         )}
         <div className="dashboard-grid workspace-dashboard-grid">
           <section className="dashboard-section">

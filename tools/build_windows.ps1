@@ -149,8 +149,15 @@ try {
 
     Invoke-Checked $cargo @("--version") "Check Rust"
 
+    # Keep the updater signing secret away from dependency installation and
+    # test code; only the final signed bundle step receives it.
+    $signingKey = $env:TAURI_SIGNING_PRIVATE_KEY
+    $signingKeyPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+    Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+
     if (-not $SkipInstall) {
-        Invoke-Checked $npm @("ci") "Install frontend dependencies"
+        Invoke-Checked $npm @("ci", "--ignore-scripts") "Install frontend dependencies"
     }
 
     if (-not $SkipTests) {
@@ -168,7 +175,7 @@ try {
         Invoke-Checked $cargo @("check", "--manifest-path", "src-tauri/Cargo.toml") "Check the Rust backend"
     }
 
-    if (-not $env:DOCFLOW_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) {
+    if (-not $env:DOCFLOW_UPDATER_PUBLIC_KEY -or -not $signingKey) {
         throw "Signed updater packaging requires DOCFLOW_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY."
     }
 
@@ -198,9 +205,15 @@ try {
     $updaterConfigPath = Join-Path ([System.IO.Path]::GetTempPath()) "docflow-updater-$([guid]::NewGuid()).json"
     try {
         Invoke-Checked $node @("tools/updater_config.mjs", "--output", $updaterConfigPath) "Generate the signed updater bundler configuration"
+        $env:TAURI_SIGNING_PRIVATE_KEY = $signingKey
+        if ($signingKeyPassword) {
+            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $signingKeyPassword
+        }
         Invoke-Checked $npm @("run", "tauri", "build", "--", "--bundles", "nsis", "--config", $updaterConfigPath) "Build the signed Windows installer and updater signature"
     }
     finally {
+        Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+        Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $updaterConfigPath -Force -ErrorAction SilentlyContinue
     }
     $application = "src-tauri\target\release\docflow.exe"

@@ -4,6 +4,9 @@ import {
   X,
 } from "lucide-react";
 import {
+  useEffect,
+  useEffectEvent,
+  useRef,
   useState,
 } from "react";
 import {
@@ -20,6 +23,7 @@ import {
   chooseFiles,
   chooseFolder,
   dropPaths,
+  listenNativeDrop,
 } from "../lib/platform";
 import {
   type ParamDef,
@@ -41,6 +45,24 @@ function mergeSelections(
   ];
 }
 
+/**
+ * Highlights the field while an OS file drag is over it and claims the drop
+ * when it lands there. Rust holds the dropped paths; the field asks for them.
+ */
+function useNativeDrop<T extends Element>(enabled: boolean, onDrop: () => void) {
+  const ref = useRef<T>(null);
+  const [over, setOver] = useState(false);
+  const claimDrop = useEffectEvent(onDrop);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return listenNativeDrop(({ type, target }) => {
+      const inside = Boolean(target && ref.current?.contains(target));
+      setOver(type === "over" && inside);
+      if (type === "drop" && inside) claimDrop();
+    });
+  }, [enabled]);
+  return [ref, over] as const;
+}
 
 export function MultiFileField({
   bridge,
@@ -58,35 +80,15 @@ export function MultiFileField({
   onChange: (value: unknown) => void;
 }) {
   const paths = Array.isArray(value) ? value.filter(isPathSelection) : [];
-  const [dragOver, setDragOver] = useState(false);
+  const [dropRef, dragOver] = useNativeDrop<HTMLDivElement>(true, () => {
+    void dropPaths(bridge, operationId, param.name).then((selected) => {
+      onChange(mergeSelections(paths, selected));
+    });
+  });
   return (
     <div
+      ref={dropRef}
       className={`field dropzone-field ${dragOver ? "drop-active" : ""}`}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setDragOver(true);
-      }}
-      onDragLeave={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setDragOver(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setDragOver(false);
-        const dropped = Array.from(event.dataTransfer.files).map(
-          (file) => (file as unknown as { path?: string }).path || file.name,
-        );
-        if (dropped.length > 0) {
-          void dropPaths(bridge, operationId, param.name, dropped).then(
-            (selected) => {
-              onChange(mergeSelections(paths, selected));
-            },
-          );
-        }
-      }}
     >
       <span>{s.t(param.labelKey)}</span>
       <div className="multi-file-actions">
@@ -154,53 +156,19 @@ export function PathField({
 }) {
   const browse = param.kind === "folder" || param.kind === "file";
   const pathValue = isPathSelection(value) ? value.displayPath : "";
-  const [browseDragOver, setBrowseDragOver] = useState(false);
+  const [dropRef, browseDragOver] = useNativeDrop<HTMLDivElement>(browse, () => {
+    void dropPaths(bridge, operationId, param.name).then((selected) => {
+      if (selected[0]) onChange(selected[0]);
+    });
+  });
   return (
     <label className="field">
       <span>{s.t(param.labelKey)}</span>
       <div
+        ref={dropRef}
         className={`path-input ${browse ? "dropzone-field" : ""} ${browse && browseDragOver ? "drop-active" : ""}`}
-        onDragOver={
-          browse
-            ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setBrowseDragOver(true);
-              }
-            : undefined
-        }
-        onDragLeave={
-          browse
-            ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setBrowseDragOver(false);
-              }
-            : undefined
-        }
-        onDrop={
-          browse
-            ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setBrowseDragOver(false);
-                const dropped = Array.from(event.dataTransfer.files).map(
-                  (file) =>
-                    (file as unknown as { path?: string }).path || file.name,
-                );
-                if (dropped.length > 0) {
-                  void dropPaths(bridge, operationId, param.name, dropped).then(
-                    (selected) => {
-                      if (selected[0]) onChange(selected[0]);
-                    },
-                  );
-                }
-              }
-            : undefined
-        }
       >
         <input
-
           aria-invalid={invalid || undefined}
           type={
             param.kind === "int"

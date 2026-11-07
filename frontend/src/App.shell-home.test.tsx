@@ -44,4 +44,19 @@ describe("DocFlow shell: home screen filters", () => {
       screen.queryByRole("button", { name: /Birden fazla dosya yazdır/ }),
     ).not.toBeInTheDocument();
   });
+
+  it("offers the signed-in user's recent operations as shortcuts", async () => {
+    render(<App />);
+    await signIn();
+
+    const recent = await screen.findByRole("navigation", {
+      name: "Son kullanılanlar",
+    });
+    fireEvent.click(
+      within(recent).getByRole("button", { name: /Hızlı RFI Taraması/ }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: /Yapılandır/ }),
+    ).toBeVisible();
+  });
 });

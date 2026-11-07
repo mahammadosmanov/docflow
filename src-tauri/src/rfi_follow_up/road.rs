@@ -20,10 +20,12 @@ pub(super) struct RoadRef {
 /// style variations. Unrecognized text is ignored.
 pub(super) fn road_refs(value: &str) -> Vec<RoadRef> {
     static ROAD: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\AROAD\s*0*([0-9]+)\s*(?:\(?\s*PART\s*0*([0-9]+)\s*\)?)?\z").unwrap()
+        Regex::new(r"\AROAD\s*0*([0-9]+)\s*(?:\(?\s*PART\s*0*([0-9]+)\s*\)?)?\z")
+            .expect("static regex is valid")
     });
-    static PART: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\A\(?\s*(?:PART\s*)?0*([0-9]+)\s*\)?\z").unwrap());
+    static PART: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\A\(?\s*(?:PART\s*)?0*([0-9]+)\s*\)?\z").expect("static regex is valid")
+    });
     let text = value
         .to_uppercase()
         .replace(" SITE", "")

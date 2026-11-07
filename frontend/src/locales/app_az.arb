@@ -177,6 +177,7 @@
   "ops.subheading": "Bir əməliyyat seçin. Siz yoxlayıb təsdiqləməyincə heç bir faylınız dəyişdirilmir.",
   "home.title": "İş sahəsi",
   "home.subtitle": "Sənəd əməliyyatları və bütün köməkçi alətlər bir yerdə.",
+  "home.recent": "Son istifadə olunanlar",
   "home.previewFirst": "Öncə baxış",
   "param.hint.folder": "Qovluq seçin",
   "param.hint.file": "Fayl seçin",

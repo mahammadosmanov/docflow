@@ -4,7 +4,7 @@
 
 | Operation | Operator outcome |
 |---|---|
-| `rfi.process_scans_fast_covers` | Fast RFI Scan: Multi-RFI separates confirmed cover groups; Single-RFI OCRs only page one and keeps the complete PDF. Preview supports canonical name correction and Rust-derived targets. The approved OCR alias is CLV→CIV; manual correction does not use aliases. Full-code candidate suffixes of one to four ASCII digits are padded to four. Optional page rotation is off by default and visible only in Multi-RFI. If direction-zero generic OCR words do not confirm a cover, the detector continues the remaining cardinal searches; uncertain/no-code pages use the unchanged-copy review route. That rotation path pins source SHA-256 before parallel analysis, rechecks afterward, and rejects changes before Plan creation. |
+| `rfi.process_scans_fast_covers` | Fast RFI Scan: Multi-RFI separates confirmed cover groups; Single-RFI OCRs only page one and keeps the complete PDF. Preview supports canonical name correction and Rust-derived targets. The approved OCR alias is CLV→CIV; manual correction does not use aliases. Full-code candidate suffixes of one to four ASCII digits are padded to four. Keep originals (copy instead of move) is on by default; turning it off moves sources to recoverable trash after all outputs succeed. Optional page rotation is off by default and visible only in Multi-RFI. If direction-zero generic OCR words do not confirm a cover, the detector continues the remaining cardinal searches; uncertain/no-code pages use the unchanged-copy review route. That rotation path pins source SHA-256 before parallel analysis, rechecks afterward, and rejects changes before Plan creation. |
 | `rfi.group_files` | Detect exact CIV/MEC/ELE/PRC RFIs in top-level filenames and content; after EML/MSG evidence eligibility, Preview and copy approved files to `<destination>/<discipline>/<full-code>/<source filename>` |
 | `rfi.log_add` | Extract/edit requests and apply guarded multi-sheet RFI Log rows |
 | `rfi.follow_up_sync` | Route CIV multi-tag, MEC `(Block, Section)`, and approved ELE records to matching prepared rows, including every distinct eligible FINAL Worley destination; fill safe blank RFI/status slots only inside an existing prepared row with an exact route/context match. MEC matching ignores `Inspection Location`. ELE supports only `ELE-0005` / `ELE-5.1.6` (1.6), `ELE-0005` / `ELE-5.2.6`, and `ELE-0006` / `ELE-6.2.5.3`, and matches one exact `PCS-` Tag No to target Block (1.6: any exact Block tag such as `A4`); other item pairs stay outside scope. No-match supported records stay outside template scope; partial contexts remain reviewable, independently confirmed rows may sync, and unmatched CIV tags are named in an unselectable diagnostic. Conflicts, ambiguous contexts, and unrelated placements cannot authorize shared-cell status changes. An already-present RFI with a cached formula status is a no-op only when the cached value matches the projected status; other unsafe targets remain manual. Apart from the Road part-row exception, no rows or sections are created; remove Cancelled/Rejected entries; never change worksheet Remarks. |
@@ -68,7 +68,9 @@
 - Persistent navigation keeps Home, Review, History, Recovery, Preferences,
   and conditional Admin destinations available across authenticated screens.
   Fast RFI Scan is the primary home task; the remaining registered operations
-  stay searchable and category-filtered. The sidebar becomes a compact icon
+  stay searchable and category-filtered. Home also offers up to three of the
+  signed-in operator's most recently journaled operations as shortcuts; the
+  shortcut only opens the operation and never reuses an old Plan. The sidebar becomes a compact icon
   rail or bottom bar at narrower widths.
 - The shared responsive workspace allocates vertical space from the live header
   and keeps one stage-content scroll owner, with primary actions reachable on

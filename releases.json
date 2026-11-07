@@ -1,13 +1,109 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.41.1",
+  "currentVersion": "1.43.0",
   "releases": [
+    {
+      "version": "1.43.0",
+      "tag": "v1.43.0",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Folder and file drops are captured by Rust and work in the desktop app."
+    },
+    {
+      "version": "1.42.5",
+      "tag": "v1.42.5",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Shorten Home operation descriptions to two or three lines."
+    },
+    {
+      "version": "1.42.4",
+      "tag": "v1.42.4",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Split the frontend stylesheet into ordered layer files."
+    },
+    {
+      "version": "1.42.3",
+      "tag": "v1.42.3",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Update zip and async-executor; move the macOS CI runner to a supported label."
+    },
+    {
+      "version": "1.42.2",
+      "tag": "v1.42.2",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Add a native acceptance ledger that tracks every external Windows gate."
+    },
+    {
+      "version": "1.42.1",
+      "tag": "v1.42.1",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Archive changelog entries before 1.30 so CHANGELOG.md stays readable."
+    },
+    {
+      "version": "1.42.0",
+      "tag": "v1.42.0",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Add recent-operation shortcuts on Home and automated accessibility checks."
+    },
+    {
+      "version": "1.41.6",
+      "tag": "v1.41.6",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Fast RFI Scan keeps original scans by default."
+    },
+    {
+      "version": "1.41.5",
+      "tag": "v1.41.5",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Add deterministic mutation tests for the XLSX, PDF, and email parsers."
+    },
+    {
+      "version": "1.41.4",
+      "tag": "v1.41.4",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Record Rust panics in the redacted activity log and forbid new bare unwrap calls."
+    },
+    {
+      "version": "1.41.3",
+      "tag": "v1.41.3",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Run Rust lint and tests on Windows and macOS in CI and add supply-chain and version-bump gates."
+    },
+    {
+      "version": "1.41.2",
+      "tag": "v1.41.2",
+      "date": "2026-11-06",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Harden the Windows release pipeline: scope the updater signing secret, pin actions by SHA, and always verify Tesseract."
+    },
     {
       "version": "1.41.1",
       "tag": "v1.41.1",
       "date": "2026-11-06",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fix formatting and lint of drawing-label orientation code so the Windows release build passes."
     },
     {

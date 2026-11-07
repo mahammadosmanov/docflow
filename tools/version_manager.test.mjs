@@ -121,3 +121,9 @@ test("release notes never include neighboring sections", () => {
   assert.ok(notes.length > 0);
   assert.doesNotMatch(notes, /^##\s+/mu);
 });
+
+test("release notes resolve archived changelog sections", () => {
+  assert.match(releaseNotes(root, "0.28.0"), /\S/u);
+  assert.match(releaseNotes(root, "1.0.0"), /\S/u);
+  assert.throws(() => releaseNotes(root, "0.0.999"), /no section/u);
+});

@@ -15,10 +15,21 @@
 - Preserve preview → approval → apply → journal → undo.
 - Add user-visible strings to all four catalogs.
 - Do not add a dependency without documenting why the current stack is insufficient.
+  `axe-core` (dev only) runs automated accessibility checks in the React tests.
 - Do not add an interpreter, application sidecar, or second mutation backend.
 - Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`).
 
 ## Required checks
+
+Enable the fast local gate once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+CI also runs Rust clippy and tests on Windows and macOS, `cargo deny`
+(advisories, bans, sources), `npm audit --omit=dev`, and rejects a pull request
+that keeps the base branch `VERSION`.
 
 ```bash
 node tools/version_manager.mjs check
@@ -30,6 +41,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 npm run audit:licenses
+cargo deny --manifest-path src-tauri/Cargo.toml check advisories bans sources
 ```
 
 Packaging rules and release gates are in `docs/RELEASE_SAFETY.md`.

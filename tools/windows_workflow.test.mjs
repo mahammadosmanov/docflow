@@ -35,7 +35,7 @@ test("CI workflows pin the verified Rust toolchain", () => {
     const source = readFileSync(resolve(root, path), "utf8");
     assert.match(
       source,
-      /uses:\s+dtolnay\/rust-toolchain@master\s+with:\s+toolchain:\s+"1\.97\.1"\s+components:\s+rustfmt, clippy/u,
+      /uses:\s+dtolnay\/rust-toolchain@[0-9a-f]{40} # master\s+with:\s+toolchain:\s+"1\.97\.1"\s+components:\s+rustfmt, clippy/u,
       path,
     );
     assert.doesNotMatch(source, /dtolnay\/rust-toolchain@stable/u, path);
@@ -146,4 +146,32 @@ test("Windows release signs the NSIS installer and publishes an immutable latest
   assert.match(workflow, /\$\(\$installer\.FullName\)\.sig/u);
   assert.doesNotMatch(workflow, /\.nsis\.zip/u);
   assert.match(workflow, /Published release is missing exact asset/u);
+});
+
+test("CI workflows pin every action to an immutable commit SHA", () => {
+  for (const path of [
+    ".github/workflows/quality.yml",
+    ".github/workflows/windows-release.yml",
+  ]) {
+    const source = readFileSync(resolve(root, path), "utf8");
+    const uses = [...source.matchAll(/uses:\s+(\S+)/gu)].map((match) => match[1]);
+    assert.ok(uses.length > 0, path);
+    for (const action of uses) {
+      assert.match(action, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/u, `${path}: ${action}`);
+    }
+  }
+});
+
+test("Windows release exposes the updater signing secret only to the signed build", () => {
+  const workflow = readFileSync(resolve(root, ".github/workflows/windows-release.yml"), "utf8");
+  const build = readFileSync(resolve(root, "tools/build_windows.ps1"), "utf8");
+  const workflowEnv = workflow.split("\njobs:", 1)[0];
+
+  assert.doesNotMatch(workflowEnv, /TAURI_SIGNING_PRIVATE_KEY/u);
+  assert.match(workflow, /persist-credentials: false/u);
+  assert.doesNotMatch(workflow, /choco install/u);
+  assert.match(build, /@\("ci", "--ignore-scripts"\)/u);
+  assert.match(build, /Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY /u);
+  const beforeBundle = build.split('$env:TAURI_SIGNING_PRIVATE_KEY = $signingKey', 1)[0];
+  assert.match(beforeBundle, /Invoke-Checked \$npm @\("test"\)/u);
 });

@@ -89,7 +89,7 @@ pub(super) fn is_app_remark(text: &str) -> bool {
         Regex::new(
             r"\A[A-Z]{3}-[0-9]{4}(?:,(?:[A-Z]{3}-)?[0-9]{4})* (?:Completed|In Progress|Pending)(?: [A-Z]{3}-[0-9]{4}(?:,(?:[A-Z]{3}-)?[0-9]{4})* (?:Completed|In Progress|Pending))*\z",
         )
-        .unwrap()
+        .expect("static regex is valid")
     });
     SEGMENT.is_match(text)
 }

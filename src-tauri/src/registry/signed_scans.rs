@@ -144,7 +144,7 @@ pub(super) fn fast_cover_scans_operation() -> OperationDef {
                 "keep_original",
                 ParamKind::Bool,
                 "param.keep_original",
-                json!(false),
+                json!(true),
                 false,
                 Vec::new(),
                 BTreeMap::new(),

@@ -162,7 +162,11 @@ where
             if !mail_codes.contains(&detection.code) {
                 continue;
             }
-            let discipline = detection.code.split('-').nth(5).unwrap();
+            let discipline = detection
+                .code
+                .split('-')
+                .nth(5)
+                .expect("canonical RFI code has a discipline segment");
             let directory = destination.join(discipline).join(&detection.code);
             let target = directory.join(file_name);
             if let Some(blocked) = copy_blocker(&directory, &target) {

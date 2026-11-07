@@ -1,0 +1,506 @@
+.editor-card {
+  min-height: 0;
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.work-pane.editor-pane > .flow-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.work-pane.editor-pane .editor-card {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.work-pane.editor-pane .action-bar {
+  flex-shrink: 0;
+  position: static;
+  margin-top: 4px;
+  padding: 8px 0 4px;
+}
+.editor-heading {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.editor-heading > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+.editor-heading > div {
+  display: grid;
+  gap: 2px;
+}
+.editor-heading small {
+  color: var(--muted);
+}
+.editor-heading-actions {
+  margin-left: auto;
+  display: flex !important;
+  align-items: center;
+}
+.table-filter-bar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.table-search-box {
+  flex: 1 1 200px;
+}
+.table-search-box input {
+  width: 100%;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+.table-search-box input:focus {
+  border-color: var(--text);
+}
+.table-filter-tabs {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.filter-tab {
+  padding: 5px 12px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.filter-tab:last-child {
+  border-right: none;
+}
+.filter-tab:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.filter-tab--active {
+  background: var(--inverse);
+  color: var(--inverse-text);
+}
+.filter-tab--active:hover {
+  background: var(--inverse);
+  color: var(--inverse-text);
+}
+.table-filter-count {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.empty-filter-cell {
+  text-align: center;
+  padding: 24px;
+  color: var(--muted);
+  font-style: italic;
+}
+.bulk-editor {
+  margin-bottom: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.bulk-selection,
+.bulk-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.bulk-selection strong {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.bulk-selection button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.72rem;
+}
+.bulk-selection button:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.bulk-fields select,
+.bulk-fields input {
+  width: min(220px, 100%);
+  flex: 0 1 220px;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+}
+.editor-scroll {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.plan-flow-scroll .editor-card {
+  flex: 0 0 auto;
+  min-height: clamp(260px, 52vh, 560px);
+}
+.editor-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  table-layout: fixed;
+}
+.editor-table th.editor-actions-header {
+  position: sticky;
+  right: 0;
+  background: var(--surface-2);
+  z-index: 3;
+  border-left: 1px solid var(--line);
+  box-shadow: -3px 0 6px rgba(0, 0, 0, 0.04);
+}
+.editor-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  padding: 7px 8px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: left;
+}
+.editor-table td {
+  height: 48px;
+  padding: 5px 6px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--line) 70%, transparent),
+    0 -1px 0 color-mix(in srgb, var(--line) 70%, transparent);
+}
+.editor-table tr.selected-row td {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 30%, var(--line)),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+.selection-column {
+  width: 62px;
+  min-width: 62px;
+  text-align: center !important;
+}
+.editor-table td.selection-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.editor-table input[type="checkbox"],
+.editor-table .selection-column input {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.selection-column button {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.editor-table td:first-child {
+  border-radius: 9px 0 0 9px;
+}
+.editor-table td:last-child {
+  border-radius: 0 9px 9px 0;
+}
+.editor-table input,
+.editor-table select,
+.editor-table textarea {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 6px 8px;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--surface-2);
+  outline: 0;
+}
+.editor-table textarea {
+  height: 54px;
+  resize: vertical;
+}
+.editor-table input:focus,
+.editor-table select:focus,
+.editor-table textarea:focus {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+.editor-table input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.editor-field-error {
+  display: block;
+  padding: 3px 2px 0;
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+.compact-date-cell {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.editor-table .compact-date-cell select,
+.bulk-fields .compact-date-cell select {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 3px 2px;
+  font-size: 0.78rem;
+}
+.editor-table .compact-date-day,
+.bulk-fields .compact-date-day {
+  width: 39px;
+}
+.editor-table .compact-date-month,
+.bulk-fields .compact-date-month {
+  width: 48px;
+}
+.compact-date-cell button {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.compact-date-cell button:hover,
+.compact-date-cell button.active {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--surface-3);
+}
+.compact-date-cell button svg {
+  width: 13px;
+  height: 13px;
+}
+.editor-table .compact-date-year,
+.bulk-fields .compact-date-year {
+  position: absolute;
+  z-index: 5;
+  top: 31px;
+  right: 0;
+  width: 68px;
+  height: 30px;
+  padding: 3px 5px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+}
+.editor-table .compact-date-cell .compact-date-year,
+.bulk-fields .compact-date-cell .compact-date-year {
+  position: absolute;
+  width: 68px;
+  padding: 3px 5px;
+}
+.editor-card--compact {
+  padding: 10px;
+}
+.editor-card--compact .editor-heading {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.editor-card--compact .editor-heading > span {
+  width: 28px;
+  height: 28px;
+}
+.editor-card--compact .bulk-editor {
+  margin-bottom: 7px;
+  padding: 6px 7px;
+  grid-template-columns: minmax(0, auto) minmax(360px, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+}
+.editor-card--compact .bulk-selection,
+.editor-card--compact .bulk-fields {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.editor-card--compact .bulk-selection {
+  overflow-x: auto;
+}
+.editor-card--compact .bulk-selection button {
+  min-height: 24px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.editor-card--compact .bulk-fields {
+  justify-content: flex-end;
+}
+.editor-card--compact .bulk-fields > select,
+.editor-card--compact .bulk-fields > input {
+  width: min(160px, 100%);
+  flex-basis: 150px;
+  min-height: 30px;
+  padding: 4px 7px;
+}
+.editor-card--compact .editor-table {
+  width: max-content;
+  min-width: 100%;
+  border-spacing: 0 3px;
+}
+.editor-card--compact .editor-table th {
+  padding: 5px 6px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.editor-card--compact .editor-table td {
+  height: 38px;
+  padding: 3px 4px;
+}
+.editor-card--compact .selection-column {
+  width: 48px;
+  min-width: 48px;
+}
+.editor-card--compact .editor-table input,
+.editor-card--compact .editor-table select {
+  height: 30px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.editor-card--compact .editor-table .compact-date-cell select {
+  width: auto;
+  padding: 3px 2px;
+}
+.editor-card--compact .editor-table .compact-date-day {
+  width: 39px;
+}
+.editor-card--compact .editor-table .compact-date-month {
+  width: 48px;
+}
+.editor-card--compact .editor-table input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+}
+.editor-card--compact .readonly-cell {
+  font-size: 0.78rem;
+}
+.editor-card--compact .editor-row-actions {
+  min-width: 64px;
+}
+.editor-card--compact .editor-row-actions button {
+  width: 27px;
+  height: 27px;
+}
+.readonly-cell {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.not-applicable {
+  color: var(--muted);
+  text-align: center;
+}
+.editor-row-actions {
+  position: sticky;
+  right: 0;
+  min-width: 76px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  background: var(--surface);
+  z-index: 1;
+  border-left: 1px solid var(--line);
+  box-shadow: -3px 0 6px rgba(0, 0, 0, 0.04);
+}
+.editor-table tr.selected-row td.editor-row-actions {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.editor-row-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+.editor-row-actions button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.plan-heading {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+.plan-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.plan-heading svg {
+  width: 0.9rem;
+}

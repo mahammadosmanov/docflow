@@ -580,7 +580,7 @@
       {
         "choiceLabels": {},
         "choices": [],
-        "default": false,
+        "default": true,
         "helpKey": null,
         "kind": "bool",
         "labelKey": "param.keep_original",

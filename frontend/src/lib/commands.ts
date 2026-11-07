@@ -126,7 +126,7 @@ export interface FrontendCommandMap {
   >;
   "history/list": CommandSpec<{ limit?: number }, HistoryPayload>;
   "paths/select": CommandSpec<
-    { opId: string; paramName: string; droppedPaths?: string[] },
+    { opId: string; paramName: string; fromDrop?: boolean },
     PathSelection[]
   >;
   "paths/reveal": CommandSpec<{ selectionId: string }, Ok>;

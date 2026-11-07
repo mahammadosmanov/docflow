@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
+
 pub(crate) mod activity_log;
 pub mod auth;
 mod backend;
@@ -62,6 +64,13 @@ pub fn run() {
             router.start_watch();
             app.manage(router);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+                && let Some(router) = window.try_state::<backend::BackendRouter>()
+            {
+                router.record_drop(paths.clone());
+            }
         })
         .invoke_handler(tauri::generate_handler![backend::frontend_call])
         .run(tauri::generate_context!())

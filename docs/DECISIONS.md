@@ -52,6 +52,7 @@ and versioned with the code they govern.
 | ELE Follow Up sync is limited to two prepared ITP/item groups and existing RFIs | Accepted | [`adr/0051-ele-follow-up-sync-existing-entries.md`](adr/0051-ele-follow-up-sync-existing-entries.md) |
 | ELE Follow Up sync routes clause 1.6 (`ELE-0005` / `ELE-5.1.6`) | Accepted | [`adr/0053-ele-follow-up-clause-1-6.md`](adr/0053-ele-follow-up-clause-1-6.md) |
 | Signed in-app updates from immutable GitHub Releases | Accepted | [`adr/0052-signed-in-app-updates.md`](adr/0052-signed-in-app-updates.md) |
+| File and folder drops are captured by Rust; the webview sends no path | Accepted | [`adr/0054-native-file-drop.md`](adr/0054-native-file-drop.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

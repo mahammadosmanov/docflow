@@ -24,8 +24,9 @@ pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
-    activity_log: crate::activity_log::ActivityLog,
+    activity_log: std::sync::Arc<crate::activity_log::ActivityLog>,
     pending_update: Mutex<Option<Update>>,
+    drop_inbox: paths::DropInbox,
 }
 
 fn path_dialog_filter(
@@ -66,15 +67,24 @@ impl BackendRouter {
 
     pub(crate) fn new(app: AppHandle) -> Result<Self, BackendError> {
         let native = Arc::new(NativeBackend::production()?);
+        let activity_log = Arc::new(crate::activity_log::ActivityLog::new(
+            crate::activity_log::ActivityLog::default_dir(),
+        ));
+        crate::activity_log::install_panic_hook(activity_log.clone());
         Ok(Self {
             app,
             native,
             recent_error_codes: RecentErrorCodes::default(),
-            activity_log: crate::activity_log::ActivityLog::new(
-                crate::activity_log::ActivityLog::default_dir(),
-            ),
+            activity_log,
             pending_update: Mutex::new(None),
+            drop_inbox: paths::DropInbox::default(),
         })
+    }
+
+    /// Records paths from an OS file drop on the main window. Only Rust sees the
+    /// native drop event, so the webview never supplies a path it was not given.
+    pub(crate) fn record_drop(&self, paths: Vec<PathBuf>) {
+        self.drop_inbox.record(paths, std::time::Instant::now());
     }
 
     pub(crate) async fn call(
@@ -447,7 +457,7 @@ struct SelectPathsParams {
     op_id: String,
     param_name: String,
     #[serde(default)]
-    dropped_paths: Vec<String>,
+    from_drop: bool,
 }
 
 #[derive(Deserialize)]

@@ -123,7 +123,9 @@ pub(super) fn place_record(
     let potential = potential_slots_by_sheet_col
         .get(&(sheet_name.to_string(), rfi_column))
         .unwrap_or(&empty_potential);
-    let target_sheet_data = target_workbook.sheet(sheet_name).unwrap();
+    let target_sheet_data = target_workbook
+        .sheet(sheet_name)
+        .expect("layout worksheet exists in its workbook");
     let mut scope_candidates = Vec::new();
     let mut candidates = Vec::new();
     for key in potential {

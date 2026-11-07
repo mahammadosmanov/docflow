@@ -1,0 +1,17 @@
+# cargo-deny supply-chain gate. Licenses are audited by tools/license_audit.mjs.
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Transitive Tauri/Linux-only crates are reported but not blocking.
+unmaintained = "workspace"
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
