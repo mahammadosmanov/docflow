@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 use super::{
     FileKind, MAX_TEMPLATE_BYTES, TemplateStore,
-    field_map::{FieldMap, placeholders},
+    field_map::{FieldMap, scan},
     verify_package,
 };
 use crate::errors::BackendError;
@@ -226,9 +226,9 @@ impl TemplateStore {
                 "template file does not match its checksum",
             ));
         }
-        let found = placeholders(template.file_kind, &bytes).map_err(invalid)?;
+        let (found, defaults) = scan(template.file_kind, &bytes).map_err(invalid)?;
         let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
-        field_map.merge_placeholders(&found);
+        field_map.merge_placeholders(&found, &defaults);
         Ok(TemplateDraft {
             template_id: template.id.clone(),
             version_id: version.id,
@@ -311,7 +311,8 @@ impl TemplateStore {
         )?)?;
         let (sha, path) = self.upload_file(&template.id, 1, kind, bytes, now)?;
         let mut field_map = FieldMap::default();
-        field_map.merge_placeholders(&placeholders(kind, bytes).map_err(invalid)?);
+        let (found, defaults) = scan(kind, bytes).map_err(invalid)?;
+        field_map.merge_placeholders(&found, &defaults);
         let version = single::<VersionRow>(self.remote.rest(
             "POST",
             "doc_template_versions",
@@ -355,7 +356,8 @@ impl TemplateStore {
             now,
         )?;
         let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
-        field_map.merge_placeholders(&placeholders(template.file_kind, bytes).map_err(invalid)?);
+        let (found, defaults) = scan(template.file_kind, bytes).map_err(invalid)?;
+        field_map.merge_placeholders(&found, &defaults);
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
             &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),

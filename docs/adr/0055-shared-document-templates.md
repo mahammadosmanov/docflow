@@ -70,8 +70,10 @@ the operator reviewed the ELE RFI covers:
   intervention points. Choosing a preset fills those fields at once.
 - `fileName`: the output name pattern, `{{rfiNo}}` by default.
 
-Opening a file finds its placeholders; a new placeholder gets a field, and a
-placeholder named like a token (`rfiNo`) starts as that token. Placeholders
+Opening a file finds its placeholders; a new placeholder gets a field. Its
+starting value is the default written in the file (`{{item|Underground LV
+cable}}`, tokens allowed: `{{area|({area}) {tagNo}}}`), else the RFI Log token
+of the same name (`rfiNo`), else empty. Placeholders
 work in Word documents (body, headers, footers) and in Excel shared and inline
 strings, even when Word splits one placeholder across several runs. Labels are
 single strings written by the editor. Click-to-map cells for Excel forms
@@ -91,9 +93,15 @@ sync. Published versions are never edited in place.
 
 ### Generation
 
-Generation is a normal operation: Preview shows each output file with its
-resolved values, the operator edits or approves, and Apply writes new files
-only (never overwriting), journaled with Undo. The template version used is
+`templates.generate_document` is a normal operation (1.46.0). The operator
+picks a cached template, the RFI Log, one or more RFI numbers, and an output
+folder. Rust reads each RFI from its discipline sheet (dates as `dd.MM.yyyy`,
+times as `HH:mm`, look-alike dashes such as `˗` written as `-`). Preview shows
+one editable row per RFI: a Preset column fills its fields, and every value
+stays editable, with the field's choices offered as suggestions. Revise
+renders the edited rows again from the same template version; a template
+update between Preview and Apply stops the run. Apply writes new files only
+(never overwriting), journaled with Undo. The template version used is
 recorded in the journal, so a later template change does not alter
 already generated documents.
 

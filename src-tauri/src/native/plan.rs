@@ -257,6 +257,9 @@ impl NativeBackend {
                     .ok_or_else(BackendError::invalid_params)?,
             )?,
             "rfi.stage_signed_first_pages" => revise_stage_signed_pages(&claimed.plan, &payload)?,
+            template_documents::OPERATION_ID => {
+                self.revise_template_document(&claimed.plan, &payload)?
+            }
             _ => {
                 return Err(BackendError::validation(
                     "native plan does not support revision",

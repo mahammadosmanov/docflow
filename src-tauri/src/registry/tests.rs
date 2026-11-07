@@ -58,7 +58,7 @@ fn param_schema_validation_matches_frozen_required_value_rules() {
 #[test]
 fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
     let operations = operation_registry(RegistryFacts::default());
-    assert_eq!(operations.len(), 11);
+    assert_eq!(operations.len(), 12);
     let operation = operations
         .iter()
         .find(|operation| operation.id == "rfi.generate_concrete_documents")

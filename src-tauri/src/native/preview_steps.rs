@@ -69,6 +69,7 @@ pub(super) fn output_steps(
     generated: Vec<GeneratedFile>,
     output_directory: &Path,
     warnings: &mut Vec<Warning>,
+    note_key: &str,
 ) -> Result<Vec<Step>, BackendError> {
     let mut steps = Vec::new();
     let mut destinations = HashSet::new();
@@ -102,7 +103,7 @@ pub(super) fn output_steps(
             kind: StepKind::Write,
             src: None,
             dst: Some(destination.to_string_lossy().into_owned()),
-            note_key: Some("step.rfi.generatedConcreteDocument".to_string()),
+            note_key: Some(note_key.to_string()),
             meta,
         });
     }

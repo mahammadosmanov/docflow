@@ -495,7 +495,12 @@ impl NativeBackend {
         }
 
         let generated_count = generated.len() as u64;
-        let steps = output_steps(generated, &output_directory, &mut warnings)?;
+        let steps = output_steps(
+            generated,
+            &output_directory,
+            &mut warnings,
+            "step.rfi.generatedConcreteDocument",
+        )?;
         progress(ProgressEvent {
             phase: "concrete_document_generation".to_string(),
             done: steps.len() as u64,
@@ -528,5 +533,232 @@ impl NativeBackend {
         )?;
         provisional.commit();
         encode(cached)
+    }
+}
+
+fn template_error(detail: impl std::fmt::Display) -> BackendError {
+    BackendError::validation(format!("error.templates.generate: {detail}"))
+}
+
+/// Renders every row and turns the files into no-overwrite write steps.
+fn template_steps(
+    kind: crate::templates::FileKind,
+    template: &[u8],
+    map: &crate::templates::field_map::FieldMap,
+    rows: &[Value],
+    output_directory: &Path,
+    warnings: &mut Vec<Warning>,
+) -> Result<Vec<Step>, BackendError> {
+    let mut generated = Vec::with_capacity(rows.len());
+    let mut empty = std::collections::BTreeSet::new();
+    for row in rows {
+        let (file, missing) =
+            template_documents::render(kind, template, map, row).map_err(template_error)?;
+        empty.extend(missing);
+        generated.push(file);
+    }
+    if !empty.is_empty() {
+        warnings.push(Warning {
+            key: "warn.templates.placeholderEmpty".to_string(),
+            subject: empty.into_iter().collect::<Vec<_>>().join(", "),
+        });
+    }
+    output_steps(
+        generated,
+        output_directory,
+        warnings,
+        template_documents::STEP_NOTE,
+    )
+}
+
+impl NativeBackend {
+    fn cached_template(
+        &self,
+        code: &str,
+    ) -> Result<
+        (
+            crate::templates::TemplateEntry,
+            Vec<u8>,
+            crate::templates::field_map::FieldMap,
+        ),
+        BackendError,
+    > {
+        let (entry, bytes) = self
+            .templates
+            .read_cached(code)
+            .ok_or_else(|| BackendError::validation("error.templates.notCached"))?;
+        let map =
+            crate::templates::field_map::FieldMap::parse(&entry.field_map).map_err(|error| {
+                BackendError::validation(format!("error.templates.invalid: {error}"))
+            })?;
+        Ok((entry, bytes, map))
+    }
+
+    pub(crate) fn preview_template_document<F>(
+        &self,
+        params: Value,
+        mut progress: F,
+    ) -> Result<Value, BackendError>
+    where
+        F: FnMut(ProgressEvent),
+    {
+        let request: PreviewEnvelope<Map<String, Value>> =
+            decode(self.materialize_preview(params)?)?;
+        if request.op_id != template_documents::OPERATION_ID {
+            return Err(BackendError::validation(
+                "operation is not owned by the template document backend",
+            ));
+        }
+        let text = |name: &str| {
+            request
+                .values
+                .get(name)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        let code = text("template");
+        let (entry, template, map) = self.cached_template(&code)?;
+        let rfis =
+            template_documents::requested_rfis(&text("rfi_numbers")).map_err(template_error)?;
+        let rfi_log = required_selected_path(&request.values, "rfi_log_workbook")?;
+        let output_directory = required_selected_path(&request.values, "output_directory")?;
+        if !rfi_log.is_file() {
+            return Err(template_error(
+                "The selected RFI Log workbook is unavailable",
+            ));
+        }
+        if !output_directory.is_dir() {
+            return Err(template_error("The output folder is unavailable"));
+        }
+        let mut roots = Vec::new();
+        add_grant_root(
+            &mut roots,
+            rfi_log
+                .parent()
+                .ok_or_else(|| BackendError::path_invalid("Selected input has no parent folder"))?
+                .to_path_buf(),
+            GrantAccess::Read,
+        );
+        add_grant_root(&mut roots, output_directory.clone(), GrantAccess::ReadWrite);
+        let caller = self.caller_identity()?;
+        let scope = GrantScope::new(
+            &caller.owner_id,
+            &caller.session_id,
+            uuid::Uuid::new_v4().to_string(),
+            template_documents::OPERATION_ID,
+        );
+        let provisional = self.filesystem.issue_provisional_grants(&scope, &roots)?;
+        let log_bytes = read_granted_input(&self.filesystem, &provisional, &rfi_log)?;
+        let log = template_documents::read_log_rows(&mut Cursor::new(log_bytes), &rfis)
+            .map_err(template_error)?;
+        let mut warnings = rfis
+            .iter()
+            .filter(|rfi| !log.contains_key(*rfi))
+            .map(|rfi| Warning {
+                key: "warn.templates.rfiNotInLog".to_string(),
+                subject: rfi.clone(),
+            })
+            .collect::<Vec<_>>();
+        let rows = template_documents::initial_rows(&map, &log, &rfis);
+        if rows.is_empty() {
+            return Err(template_error("None of the RFI numbers are in the RFI Log"));
+        }
+        let steps = template_steps(
+            entry.file_kind,
+            &template,
+            &map,
+            &rows,
+            &output_directory,
+            &mut warnings,
+        )?;
+        progress(ProgressEvent {
+            phase: "template_document_generation".to_string(),
+            done: steps.len() as u64,
+            total: steps.len() as u64,
+            subject: output_directory.to_string_lossy().into_owned(),
+        });
+        let meta = serde_json::from_value(json!({
+            "editor": template_documents::editor(&map, rows),
+            "templateCode": entry.code,
+            "templateVersion": entry.version,
+            "templateSha256": entry.file_sha256,
+            "outputDirectory": output_directory.to_string_lossy(),
+        }))
+        .map_err(|_| BackendError::protocol("template plan metadata encoding failed"))?;
+        let plan = Plan {
+            plan_id: String::new(),
+            op_id: template_documents::OPERATION_ID.to_string(),
+            steps,
+            warnings,
+            meta,
+        };
+        let grant_ids = provisional
+            .grants()
+            .iter()
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        let cached = self.filesystem.cache_plan(
+            BackendOrigin::Rust,
+            PlanBinding::new(
+                &caller.owner_id,
+                &caller.session_id,
+                template_documents::OPERATION_ID,
+                grant_ids,
+            ),
+            plan,
+        )?;
+        provisional.commit();
+        encode(cached)
+    }
+
+    /// Re-renders edited rows from the exact template version previewed.
+    pub(crate) fn revise_template_document(
+        &self,
+        plan: &Plan,
+        payload: &Value,
+    ) -> Result<Plan, BackendError> {
+        let invalid = || BackendError::validation("error.templates.rowsInvalid");
+        let meta_text = |key: &str| {
+            plan.meta
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        };
+        let (entry, template, map) = self.cached_template(meta_text("templateCode"))?;
+        if entry.file_sha256 != meta_text("templateSha256") {
+            return Err(BackendError::validation("error.templates.changed"));
+        }
+        let original = plan
+            .meta
+            .get("editor")
+            .and_then(|editor| editor.get("rows"))
+            .and_then(Value::as_array)
+            .ok_or_else(invalid)?;
+        let submitted = payload["rows"].as_array().ok_or_else(invalid)?;
+        let rows = template_documents::accept_rows(original, submitted).map_err(|_| invalid())?;
+        let output_directory = PathBuf::from(meta_text("outputDirectory"));
+        let mut warnings = plan
+            .warnings
+            .iter()
+            .filter(|warning| warning.key == "warn.templates.rfiNotInLog")
+            .cloned()
+            .collect::<Vec<_>>();
+        let steps = template_steps(
+            entry.file_kind,
+            &template,
+            &map,
+            &rows,
+            &output_directory,
+            &mut warnings,
+        )?;
+        let mut revised = plan.clone();
+        revised.steps = steps;
+        revised.warnings = warnings;
+        revised
+            .meta
+            .insert("editor".to_string(), template_documents::editor(&map, rows));
+        Ok(revised)
     }
 }

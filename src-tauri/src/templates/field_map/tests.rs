@@ -33,7 +33,7 @@ const SPLIT: &str = concat!(
     r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,
     r#"<w:r><w:t>{{date</w:t></w:r><w:r><w:t>OfIssue}}</w:t></w:r></w:p>"#,
     r#"<w:p><w:r><w:t>RFI No: {{rfiNo}} / {{ rfiNo }}</w:t></w:r></w:p>"#,
-    r#"<w:p><w:r><w:t>{{remarks}}</w:t></w:r><w:r><w:tab/><w:t>{{unknown}}</w:t></w:r></w:p>"#,
+    r#"<w:p><w:r><w:t>{{remarks}}</w:t></w:r><w:r><w:tab/><w:t>{{unknown|Mr. A}}{{area|({area}) {tagNo}}}</w:t></w:r></w:p>"#,
     r#"</w:body></w:document>"#
 );
 
@@ -51,7 +51,15 @@ fn values() -> BTreeMap<String, String> {
 #[test]
 fn placeholders_are_found_across_runs_once_each() {
     let keys = placeholders(FileKind::Docx, &docx(SPLIT)).expect("placeholders");
-    assert_eq!(keys, ["dateOfIssue", "rfiNo", "remarks", "unknown"]);
+    assert_eq!(keys, ["dateOfIssue", "rfiNo", "remarks", "unknown", "area"]);
+    let (_, defaults) = scan(FileKind::Docx, &docx(SPLIT)).expect("scan");
+    assert_eq!(
+        defaults,
+        BTreeMap::from([
+            ("area".to_string(), "({area}) {tagNo}".to_string()),
+            ("unknown".to_string(), "Mr. A".to_string()),
+        ])
+    );
 }
 
 #[test]
@@ -63,7 +71,10 @@ fn filling_keeps_run_formatting_and_other_parts() {
     assert!(xml.contains("RFI No: AZE-SUN-INT-QMS-RFI-ELE-0059 / AZE-SUN-INT-QMS-RFI-ELE-0059"));
     assert!(xml.contains("A &amp; B</w:t><w:br/><w:t xml:space=\"preserve\">line 2"));
     assert!(!xml.contains("{{"));
-    assert_eq!(missing, BTreeSet::from(["unknown".to_string()]));
+    assert_eq!(
+        missing,
+        BTreeSet::from(["area".to_string(), "unknown".to_string()])
+    );
     assert_eq!(part(&bytes, "word/media/image1.png"), "PNG");
     assert!(
         placeholders(FileKind::Docx, &bytes)
@@ -126,15 +137,26 @@ fn new_placeholders_become_fields_and_known_tokens_prefill() {
         value: "keep".to_string(),
         ..FieldDef::default()
     });
-    map.merge_placeholders(&[
-        "remarks".to_string(),
-        "rfiNo".to_string(),
-        "stage".to_string(),
-    ]);
-    assert_eq!(map.fields.len(), 3);
+    map.merge_placeholders(
+        &[
+            "remarks".to_string(),
+            "rfiNo".to_string(),
+            "stage".to_string(),
+            "item".to_string(),
+        ],
+        &BTreeMap::from([
+            ("item".to_string(), "Underground LV cable".to_string()),
+            (
+                "remarks".to_string(),
+                "ignored for existing fields".to_string(),
+            ),
+        ]),
+    );
+    assert_eq!(map.fields.len(), 4);
     assert_eq!(map.fields[0].value, "keep");
     assert_eq!(map.fields[1].value, "{rfiNo}");
     assert_eq!(map.fields[2].value, "");
+    assert_eq!(map.fields[3].value, "Underground LV cable");
     map.validate().expect("valid");
 }
 

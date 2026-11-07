@@ -47,7 +47,10 @@ pub const LOG_TOKENS: [&str; 17] = [
 ];
 
 static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\{\{\s*([A-Za-z][A-Za-z0-9_]{0,63})\s*\}\}").expect("static placeholder regex")
+    Regex::new(
+        r"\{\{\s*([A-Za-z][A-Za-z0-9_]{0,63})\s*(?:\|((?:[^{}]|\{[A-Za-z][A-Za-z0-9]{0,31}\})*))?\}\}",
+    )
+        .expect("static placeholder regex")
 });
 static TOKEN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{([A-Za-z][A-Za-z0-9]{0,31})\}").expect("static token regex"));
@@ -164,8 +167,14 @@ impl FieldMap {
     }
 
     /// Adds a field for every placeholder that has none. Existing fields keep
-    /// their settings; a placeholder named like an RFI Log token starts as it.
-    pub fn merge_placeholders(&mut self, placeholders: &[String]) {
+    /// their settings. A new field starts with the default written in the file
+    /// (`{{item|Underground LV cable}}`), else as the RFI Log token of the
+    /// same name, else empty.
+    pub fn merge_placeholders(
+        &mut self,
+        placeholders: &[String],
+        defaults: &BTreeMap<String, String>,
+    ) {
         let known = self
             .fields
             .iter()
@@ -175,11 +184,13 @@ impl FieldMap {
             if known.contains(key) || self.fields.len() >= MAX_FIELDS {
                 continue;
             }
-            let value = LOG_TOKENS
-                .iter()
-                .find(|token| token.eq_ignore_ascii_case(key))
-                .map(|token| format!("{{{token}}}"))
-                .unwrap_or_default();
+            let value = defaults.get(key).cloned().unwrap_or_else(|| {
+                LOG_TOKENS
+                    .iter()
+                    .find(|token| token.eq_ignore_ascii_case(key))
+                    .map(|token| format!("{{{token}}}"))
+                    .unwrap_or_default()
+            });
             self.fields.push(FieldDef {
                 key: key.clone(),
                 label: key.clone(),
@@ -262,9 +273,18 @@ fn read_package(bytes: &[u8]) -> Result<Package, String> {
 
 /// Placeholder keys in document order, without repeats.
 pub fn placeholders(kind: FileKind, bytes: &[u8]) -> Result<Vec<String>, String> {
+    Ok(scan(kind, bytes)?.0)
+}
+
+/// Placeholder keys plus the first default written for each (`{{key|default}}`).
+pub fn scan(
+    kind: FileKind,
+    bytes: &[u8],
+) -> Result<(Vec<String>, BTreeMap<String, String>), String> {
     let package = read_package(bytes)?;
     let mut seen = BTreeSet::new();
     let mut keys = Vec::new();
+    let mut defaults = BTreeMap::new();
     for (name, data) in &package.entries {
         if !text_parts(kind, name) {
             continue;
@@ -277,13 +297,18 @@ pub fn placeholders(kind: FileKind, bytes: &[u8]) -> Result<Vec<String>, String>
                 .collect::<String>();
             for captures in PLACEHOLDER.captures_iter(&joined) {
                 let key = captures[1].to_string();
+                if let Some(default) = captures.get(2) {
+                    defaults
+                        .entry(key.clone())
+                        .or_insert_with(|| default.as_str().trim().to_string());
+                }
                 if seen.insert(key.clone()) {
                     keys.push(key);
                 }
             }
         }
     }
-    Ok(keys)
+    Ok((keys, defaults))
 }
 
 /// Writes `values` into every `{{key}}` and returns the new package plus the

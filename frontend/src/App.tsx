@@ -229,6 +229,22 @@ export function App() {
             bridge={bridge}
             s={s}
             onBack={() => setRoute({ name: "home" })}
+            onGenerate={(code, codes) => {
+              const operation = bootstrap.operations.find(
+                (item) => item.id === "templates.generate_document",
+              );
+              if (!operation) return;
+              setRoute({
+                name: "operation",
+                operation: {
+                  ...operation,
+                  schema: operation.schema.map((param) =>
+                    param.name === "template" ? { ...param, choices: codes } : param,
+                  ),
+                },
+                initialValues: { template: code },
+              });
+            }}
           />
         );
       case "history":

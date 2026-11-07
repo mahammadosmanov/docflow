@@ -27,8 +27,11 @@
   (Admin screen toggle) create templates from Word or Excel files with
   `{{placeholders}}`, set each field's label, starting value (RFI Log tokens
   such as `{rfiNo}`), choices, and presets (for example ITP stage groups),
-  then publish to every user. Generation from templates arrives in the next
-  release. An admin must run
+  then publish to every user. **Create documents from a template**
+  (`templates.generate_document`) fills a cached template for one or more RFI
+  numbers from the RFI Log; Preview lets the user pick a preset and edit any
+  value per document, and Apply writes new files only, with Undo. An admin
+  must run
   `docs/supabase_templates.sql` once before the shared store works.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.

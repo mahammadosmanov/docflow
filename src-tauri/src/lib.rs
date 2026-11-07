@@ -45,6 +45,7 @@ pub mod rfi_system_sync;
 pub mod scan_index;
 pub mod settings;
 pub mod smoke;
+pub mod template_documents;
 pub mod templates;
 pub mod undo;
 pub mod watch;

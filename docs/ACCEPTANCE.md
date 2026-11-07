@@ -36,6 +36,7 @@ Status values: **Pending**, **Passed**, **Failed**, **Blocked**.
 | 23 | File and folder drag-and-drop onto operation fields from Explorer, including OneDrive and network folders (ADR 0054) | UI | Pending | | | |
 | 24 | Shared templates: run `docs/supabase_templates.sql` on the live project, then two-user sync, offline start with cached templates, and update pickup (ADR 0055) | Cloud | Pending | | | |
 | 25 | Template editing: admin grants an editor, editor creates a template from a real `.docx`, saves a draft, publishes, and a second user receives it; a non-editor sees no edit controls and Supabase refuses its writes (ADR 0055) | Cloud | Pending | | | |
+| 26 | Template generation on Windows: RFI cover from a published template with the live RFI Log, preset and edits in Preview, output opened in Word with layout intact, rerun refuses to overwrite, Undo removes the file (ADR 0055) | Windows / Word | Pending | | | |
 
 ## Order of work
 

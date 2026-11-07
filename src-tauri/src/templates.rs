@@ -489,6 +489,24 @@ impl TemplateStore {
         Ok(failed)
     }
 
+    /// The entry and verified bytes of a cached template, for generation.
+    pub fn read_cached(&self, code: &str) -> Option<(TemplateEntry, Vec<u8>)> {
+        let (entry, path) = self.resolve(code)?;
+        let bytes = fs::read(path).ok()?;
+        verify_file(&entry, &bytes).ok()?;
+        Some((entry, bytes))
+    }
+
+    /// Codes of templates that can be generated offline right now.
+    pub fn cached_codes(&self) -> Vec<String> {
+        self.read_manifest()
+            .entries
+            .iter()
+            .filter(|entry| self.cached_file(entry).is_some())
+            .map(|entry| entry.code.clone())
+            .collect()
+    }
+
     /// The cached file and entry for a template code, for generation.
     pub fn resolve(&self, code: &str) -> Option<(TemplateEntry, PathBuf)> {
         let entry = self

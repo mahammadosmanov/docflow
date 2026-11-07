@@ -145,6 +145,15 @@ const MAX_OUTLOOK_MSG_BYTES: usize = 100 * 1024 * 1024;
 const CONCRETE_DOCUMENT_OPERATION: &str = "rfi.generate_concrete_documents";
 const CONCRETE_DOCUMENT_NOTE: &str = "step.rfi.generatedConcreteDocument";
 
+/// Operations allowed to write generated file bytes, each with its step note.
+fn generated_write_note(operation_id: &str) -> Option<&'static str> {
+    match operation_id {
+        CONCRETE_DOCUMENT_OPERATION => Some(CONCRETE_DOCUMENT_NOTE),
+        crate::template_documents::OPERATION_ID => Some(crate::template_documents::STEP_NOTE),
+        _ => None,
+    }
+}
+
 fn decode_concrete_document_base64(value: &str) -> Result<Vec<u8>, GeneratedWriteFailure> {
     let max_bytes = usize::try_from(crate::ooxml::MAX_PACKAGE_BYTES).unwrap_or(usize::MAX);
     let max_encoded = max_bytes.div_ceil(3) * 4;

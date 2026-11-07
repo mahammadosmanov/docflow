@@ -5,6 +5,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.46.0 - 2026-11-07
+
+### Template documents
+
+- New operation Create documents from a template: pick a template, the RFI Log, RFI numbers, and an output folder; values come from each RFI's row in its discipline sheet.
+- Preview shows one editable row per document; the Preset column fills a stage group's fields at once, and suggestions offer each field's choices.
+- Apply writes new files only, never overwriting, and Undo removes them; a template update between Preview and Apply stops the run.
+- Templates can carry defaults inside the file, such as {{item|Underground LV cable}} or {{area|({area}) {tagNo}}}.
+
 ## 1.45.0 - 2026-11-07
 
 ### Template editor

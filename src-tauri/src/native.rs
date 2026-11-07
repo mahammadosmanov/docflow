@@ -61,6 +61,7 @@ use crate::{
     rfi_follow_up, rfi_log, rfi_system_sync,
     scan_index::ScanIndex,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
+    template_documents,
 };
 
 fn concrete_documents_error(detail: &str) -> BackendError {
@@ -195,7 +196,7 @@ fn document_location(document_type: DocumentType, area: &str, tag: &str) -> Stri
     }
 }
 
-fn excel_date_text(value: &str) -> String {
+pub(crate) fn excel_date_text(value: &str) -> String {
     let Ok(serial) = value.trim().parse::<f64>() else {
         return value.to_string();
     };
@@ -213,7 +214,7 @@ fn excel_date_text(value: &str) -> String {
         )
 }
 
-fn excel_time_text(value: &str) -> String {
+pub(crate) fn excel_time_text(value: &str) -> String {
     let Ok(serial) = value.trim().parse::<f64>() else {
         return value.to_string();
     };

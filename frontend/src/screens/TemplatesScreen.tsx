@@ -1,5 +1,6 @@
 import {
   CloudOff,
+  FilePlus2,
   FileSearch,
   FileSpreadsheet,
   FileText,
@@ -50,10 +51,12 @@ export function TemplatesScreen({
   bridge,
   s,
   onBack,
+  onGenerate,
 }: {
   bridge: Bridge;
   s: Strings;
   onBack: () => void;
+  onGenerate?: (code: string, cachedCodes: string[]) => void;
 }) {
   const [status, setStatus] = useState<TemplateStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -296,6 +299,21 @@ export function TemplatesScreen({
                   >
                     {s.t(item.cached ? "templates.cached" : "templates.notCached")}
                   </span>
+                  {item.cached && onGenerate && (
+                    <IconButton
+                      label={s.t("templates.generate.action", { code: item.code })}
+                      onClick={() =>
+                        onGenerate(
+                          item.code,
+                          status.templates
+                            .filter((entry) => entry.cached)
+                            .map((entry) => entry.code),
+                        )
+                      }
+                    >
+                      <FilePlus2 />
+                    </IconButton>
+                  )}
                   {canEdit && (
                     <IconButton
                       label={s.t("templates.editor.edit", { code: item.code })}
