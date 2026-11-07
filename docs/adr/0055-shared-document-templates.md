@@ -91,6 +91,15 @@ replaced). Saving writes the draft; publishing calls
 `publish_template_version` and every DocFlow picks the version up on its next
 sync. Published versions are never edited in place.
 
+Since 1.48.0 fields no longer need to be typed in Word. The editor shows the
+template's text, one block per paragraph or Excel string. The editor selects
+text and either makes it a field (typed by the user, from an RFI Log column,
+or the same as an existing field) or changes it. Rust checks that the selected
+text still matches, rewrites only that span (keeping the formatting of the run
+where it starts), uploads the result as the draft's new file, and adds the
+field. Generating from a template without fields stops with a clear message
+instead of an empty Preview.
+
 Since 1.47.0 the discipline is chosen from ELE, MEC, CIV, and PRC, and choosing
 one starts the code and name with `ELE-` style text. The code can be renamed
 in the editor; versions and history stay with the template. Deleting a

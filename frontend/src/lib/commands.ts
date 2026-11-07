@@ -171,6 +171,23 @@ export interface FrontendCommandMap {
   >;
   "templates/publish": CommandSpec<{ versionId: string }, TemplateStatus>;
   "templates/archive": CommandSpec<{ code: string }, TemplateStatus>;
+  "templates/blocks": CommandSpec<
+    { versionId: string },
+    { blocks: { part: string; index: number; text: string }[] }
+  >;
+  "templates/editText": CommandSpec<
+    {
+      versionId: string;
+      part: string;
+      index: number;
+      start: number;
+      end: number;
+      expected: string;
+      replacement: string;
+      field?: { key: string; label: string; value: string };
+    },
+    TemplateDraft
+  >;
   "watch/update": CommandSpec<
     {
       opId: string;
@@ -235,6 +252,8 @@ export const FRONTEND_METHODS = [
   "templates/saveDraft",
   "templates/publish",
   "templates/archive",
+  "templates/blocks",
+  "templates/editText",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

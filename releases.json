@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.47.0",
+  "currentVersion": "1.48.0",
   "releases": [
+    {
+      "version": "1.48.0",
+      "tag": "v1.48.0",
+      "date": "2026-11-07",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Mark template fields in the app: select text and make it a field or change it"
+    },
     {
       "version": "1.47.0",
       "tag": "v1.47.0",
       "date": "2026-11-07",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template management: discipline picker, code rename, delete, and short RFI numbers"
     },
     {

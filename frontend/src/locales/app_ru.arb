@@ -1267,5 +1267,18 @@
   "templates.editor.delete": "Удалить шаблон",
   "templates.editor.delete.title": "Удалить {code}?",
   "templates.editor.delete.help": "Шаблон исчезнет из библиотеки всех пользователей DocFlow. Уже созданные документы не затрагиваются.",
-  "templates.editor.chooseDiscipline": "Выберите дисциплину"
+  "templates.editor.chooseDiscipline": "Выберите дисциплину",
+  "templates.document.title": "Документ",
+  "templates.document.help": "Выделите любой текст в шаблоне и сделайте его полем (заполняется для каждого документа) или измените. Поля подсвечены.",
+  "templates.document.selected": "Выделено:",
+  "templates.document.makeField": "Сделать полем",
+  "templates.document.changeText": "Изменить текст",
+  "templates.document.source": "Откуда значение",
+  "templates.document.source.manual": "Вводит пользователь (выделенный текст по умолчанию)",
+  "templates.document.source.log": "RFI Log",
+  "templates.document.source.existing": "Как у существующего поля",
+  "templates.document.newText": "Новый текст",
+  "templates.document.apply": "Применить к шаблону",
+  "templates.document.loading": "Загрузка документа…",
+  "error.templates.noFields": "В этом шаблоне ещё нет полей. Откройте «Шаблоны», измените шаблон и отметьте поля в документе."
 }

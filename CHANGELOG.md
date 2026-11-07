@@ -5,6 +5,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.0 - 2026-11-07
+
+### Template marking
+
+- The template editor shows the document's text; select any text to make it a field or change it, without editing the file in Word.
+- A field's value can be typed by the user (the selected text is the default), come from an RFI Log column, or match an existing field.
+- Rust checks the selection still matches, keeps the text formatting, and saves the edited file as the draft's new file.
+- Creating documents from a template without fields now explains how to add fields instead of showing an empty Preview.
+
 ## 1.47.0 - 2026-11-07
 
 ### Template management

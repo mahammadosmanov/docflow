@@ -7,6 +7,7 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { Modal } from "../components/Modal";
 import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
+import { TemplateDocument } from "./TemplateDocument";
 import {
   type TemplateDraft,
   type TemplateFieldMap,
@@ -244,6 +245,18 @@ export function TemplateEditor({
           {saved && <Notice kind="info">{s.t("templates.editor.saved")}</Notice>}
           {error && <Notice kind="error">{error}</Notice>}
         </section>
+
+        <TemplateDocument
+          bridge={bridge}
+          s={s}
+          draft={draft}
+          fields={map.fields}
+          beforeEdit={save}
+          onEdited={(next) => {
+            load(next);
+            setSaved(true);
+          }}
+        />
 
         <section className="content-card template-editor-section">
           <h2>{s.t("templates.editor.fields")}</h2>

@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 use super::{
     FileKind, MAX_TEMPLATE_BYTES, TemplateStore,
-    field_map::{FieldMap, scan},
+    field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
     verify_package,
 };
 use crate::errors::BackendError;
@@ -61,6 +61,32 @@ pub struct SaveDraft {
     pub title: String,
     pub discipline: String,
     pub field_map: Value,
+}
+
+/// A field made from selected text, or plain replacement text.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewField {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EditText {
+    pub version_id: String,
+    pub part: String,
+    pub index: usize,
+    /// UTF-16 offsets into the block's text, as the webview selected them.
+    pub start: usize,
+    pub end: usize,
+    pub expected: String,
+    /// New literal text, used when `field` is absent.
+    #[serde(default)]
+    pub replacement: String,
+    #[serde(default)]
+    pub field: Option<NewField>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,18 +242,109 @@ impl TemplateStore {
         )?)
     }
 
-    fn draft_of(
-        &self,
-        template: &TemplateRow,
-        version: VersionRow,
-        now: i64,
-    ) -> Result<TemplateDraft, BackendError> {
+    /// The draft's file, checked against its recorded checksum and size.
+    fn version_bytes(&self, version: &VersionRow, now: i64) -> Result<Vec<u8>, BackendError> {
         let bytes = self.remote.download(&version.storage_path, now)?;
         if sha256_hex(&bytes) != version.file_sha256 || bytes.len() as u64 != version.file_size {
             return Err(BackendError::request_failed(
                 "template file does not match its checksum",
             ));
         }
+        Ok(bytes)
+    }
+
+    /// The text of the draft's file, one block per paragraph or string.
+    pub fn blocks(&self, version_id: &str, now: i64) -> Result<Vec<TextBlock>, BackendError> {
+        let version = self.version_row(version_id, now)?;
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let bytes = self.version_bytes(&version, now)?;
+        text_blocks(template.file_kind, &bytes).map_err(invalid)
+    }
+
+    /// Turns selected text into a field, or changes it, inside the draft's
+    /// file. The edited file is uploaded as the draft's new file.
+    pub fn edit_text(&self, request: &EditText, now: i64) -> Result<TemplateDraft, BackendError> {
+        let version = self.version_row(&request.version_id, now)?;
+        if version.status != "draft" {
+            return Err(BackendError::validation("error.templates.notDraft"));
+        }
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
+        let replacement = match &request.field {
+            Some(field) => {
+                let def = FieldDef {
+                    key: field.key.clone(),
+                    label: field.label.trim().to_string(),
+                    value: field.value.clone(),
+                    options: Vec::new(),
+                    multiline: false,
+                };
+                match field_map.fields.iter_mut().find(|item| item.key == def.key) {
+                    Some(existing) => {
+                        existing.label = def.label;
+                        existing.value = def.value;
+                    }
+                    None => field_map.fields.push(def),
+                }
+                field_map.validate().map_err(invalid)?;
+                format!("{{{{{}}}}}", field.key)
+            }
+            None => {
+                if request.replacement.contains("{{")
+                    || request.replacement.contains("}}")
+                    || request.replacement.chars().count() > 4_000
+                {
+                    return Err(invalid("replacement text is not allowed"));
+                }
+                request.replacement.clone()
+            }
+        };
+        let bytes = self.version_bytes(&version, now)?;
+        let edited = replace_in_block(
+            template.file_kind,
+            &bytes,
+            &request.part,
+            request.index,
+            request.start..request.end,
+            &request.expected,
+            &replacement,
+        )
+        .map_err(invalid)?;
+        if edited.len() as u64 > MAX_TEMPLATE_BYTES {
+            return Err(BackendError::validation("error.templates.fileSize"));
+        }
+        let (sha, path) = self.upload_file(
+            &template.id,
+            version.version,
+            template.file_kind,
+            &edited,
+            now,
+        )?;
+        let (found, defaults) = scan(template.file_kind, &edited).map_err(invalid)?;
+        field_map.merge_placeholders(&found, &defaults);
+        let updated = single::<VersionRow>(self.remote.rest(
+            "PATCH",
+            &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
+            Some(json!({
+                "file_sha256": sha,
+                "file_size": edited.len(),
+                "storage_path": path,
+                "field_map": field_map,
+            })),
+            now,
+        )?)?;
+        self.draft_of(&template, updated, now)
+    }
+
+    fn draft_of(
+        &self,
+        template: &TemplateRow,
+        version: VersionRow,
+        now: i64,
+    ) -> Result<TemplateDraft, BackendError> {
+        let bytes = self.version_bytes(&version, now)?;
         let (found, defaults) = scan(template.file_kind, &bytes).map_err(invalid)?;
         let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
         field_map.merge_placeholders(&found, &defaults);
