@@ -318,38 +318,10 @@ pub fn fill_package(
     bytes: &[u8],
     values: &BTreeMap<String, String>,
 ) -> Result<(Vec<u8>, BTreeSet<String>), String> {
-    let package = read_package(bytes)?;
     let mut missing = BTreeSet::new();
-    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    for (name, data) in &package.entries {
-        let filled;
-        let output = if text_parts(kind, name) {
-            let xml = std::str::from_utf8(data)
-                .map_err(|_| format!("Template part {name} is not UTF-8"))?;
-            filled = fill_xml(xml, values, &mut missing);
-            filled.as_bytes()
-        } else {
-            data.as_slice()
-        };
-        if name.ends_with('/') {
-            writer
-                .add_directory(name.as_str(), options)
-                .map_err(|_| "Could not build the document".to_string())?;
-            continue;
-        }
-        writer
-            .start_file(name.as_str(), options)
-            .and_then(|()| writer.write_all(output).map_err(Into::into))
-            .map_err(|_| "Could not build the document".to_string())?;
-    }
-    writer
-        .set_raw_comment(package.comment.into())
-        .map_err(|_| "Could not build the document".to_string())?;
-    let bytes = writer
-        .finish()
-        .map_err(|_| "Could not build the document".to_string())?
-        .into_inner();
+    let bytes = rewrite_package(bytes, |name, xml| {
+        text_parts(kind, name).then(|| fill_xml(xml, values, &mut missing))
+    })?;
     Ok((bytes, missing))
 }
 
@@ -391,12 +363,85 @@ fn text_groups(xml: &str) -> Vec<Vec<TextNode>> {
     groups
 }
 
+/// XML edits that replace byte spans of a group's joined text. The first node
+/// a span touches receives the replacement; the rest of the span is cut, so
+/// the run formatting where the span starts is kept.
+fn span_edits(
+    xml: &str,
+    group: &[TextNode],
+    mut spans: Vec<(std::ops::Range<usize>, String)>,
+) -> Vec<(std::ops::Range<usize>, String)> {
+    let mut texts = group
+        .iter()
+        .map(|node| node.text.clone())
+        .collect::<Vec<_>>();
+    // Last span first, so earlier offsets (taken from the original text)
+    // still point at unchanged bytes.
+    spans.sort_by_key(|(span, _)| std::cmp::Reverse(span.start));
+    for (span, value) in spans {
+        let mut offset = 0;
+        let mut owner = None;
+        let mut cuts = Vec::new();
+        for (index, node) in group.iter().enumerate() {
+            let end = offset + node.text.len();
+            let touches = if span.is_empty() {
+                span.start >= offset && span.start <= end && owner.is_none()
+            } else {
+                span.start < end && span.end > offset
+            };
+            if touches {
+                owner.get_or_insert(index);
+                cuts.push((
+                    index,
+                    span.start.max(offset) - offset,
+                    span.end.min(end) - offset,
+                ));
+            }
+            offset = end;
+        }
+        for (index, from, to) in cuts {
+            let current = &texts[index];
+            let insert = if Some(index) == owner {
+                value.as_str()
+            } else {
+                ""
+            };
+            texts[index] = format!("{}{}{}", &current[..from], insert, &current[to..]);
+        }
+    }
+    let mut edits = Vec::new();
+    for (node, text) in group.iter().zip(texts) {
+        if text == node.text {
+            continue;
+        }
+        let open = &xml[node.open.clone()];
+        if !open.contains("xml:space") {
+            let tag_end = node.open.end - 1;
+            edits.push((tag_end..tag_end, " xml:space=\"preserve\"".to_string()));
+        }
+        edits.push((
+            node.inner.clone(),
+            escape_text(&text, open.starts_with("<w:")),
+        ));
+    }
+    edits
+}
+
+fn apply_edits(xml: &str, mut edits: Vec<(std::ops::Range<usize>, String)>) -> String {
+    edits.sort_by_key(|(range, _)| (range.start, range.end));
+    let mut output = xml.to_string();
+    for (range, text) in edits.into_iter().rev() {
+        output.replace_range(range, &text);
+    }
+    output
+}
+
 fn fill_xml(
     xml: &str,
     values: &BTreeMap<String, String>,
     missing: &mut BTreeSet<String>,
 ) -> String {
-    let mut edits: Vec<(std::ops::Range<usize>, String)> = Vec::new();
+    let mut edits = Vec::new();
     for group in text_groups(xml) {
         let joined = group
             .iter()
@@ -405,70 +450,167 @@ fn fill_xml(
         if !joined.contains("{{") {
             continue;
         }
-        let matches = PLACEHOLDER.captures_iter(&joined).collect::<Vec<_>>();
-        if matches.is_empty() {
+        let spans = PLACEHOLDER
+            .captures_iter(&joined)
+            .map(|captures| {
+                let key = &captures[1];
+                let value = values.get(key).cloned().unwrap_or_else(|| {
+                    missing.insert(key.to_string());
+                    String::new()
+                });
+                (captures.get(0).expect("whole placeholder").range(), value)
+            })
+            .collect::<Vec<_>>();
+        edits.extend(span_edits(xml, &group, spans));
+    }
+    apply_edits(xml, edits)
+}
+
+/// One paragraph (Word) or string (Excel) of a template, for marking fields
+/// in the app. `index` counts the part's text groups, empty ones included.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextBlock {
+    pub part: String,
+    pub index: usize,
+    pub text: String,
+}
+
+const MAX_BLOCKS: usize = 5_000;
+
+pub fn text_blocks(kind: FileKind, bytes: &[u8]) -> Result<Vec<TextBlock>, String> {
+    let package = read_package(bytes)?;
+    let mut blocks = Vec::new();
+    for (name, data) in &package.entries {
+        if !text_parts(kind, name) {
             continue;
         }
-        let mut texts = group
-            .iter()
-            .map(|node| node.text.clone())
-            .collect::<Vec<_>>();
-        // Replace from the end so earlier offsets stay valid.
-        for captures in matches.iter().rev() {
-            let span = captures.get(0).expect("whole placeholder");
-            let key = &captures[1];
-            let value = values.get(key).cloned().unwrap_or_else(|| {
-                missing.insert(key.to_string());
-                String::new()
-            });
-            let mut offset = 0;
-            let mut owner = None;
-            let mut cuts = Vec::new();
-            for (index, node) in group.iter().enumerate() {
-                let end = offset + node.text.len();
-                if span.start() < end && span.end() > offset {
-                    owner.get_or_insert(index);
-                    cuts.push((
-                        index,
-                        span.start().max(offset) - offset,
-                        span.end().min(end) - offset,
-                    ));
-                }
-                offset = end;
-            }
-            // Matches run last to first, so these offsets (taken from the
-            // original text) still point at unchanged bytes.
-            for (index, from, to) in cuts {
-                let current = &texts[index];
-                let insert = if Some(index) == owner {
-                    value.as_str()
-                } else {
-                    ""
-                };
-                texts[index] = format!("{}{}{}", &current[..from], insert, &current[to..]);
-            }
-        }
-        for (node, text) in group.iter().zip(texts) {
-            if text == node.text {
+        let xml = String::from_utf8_lossy(data);
+        for (index, group) in text_groups(&xml).into_iter().enumerate() {
+            let text = group
+                .iter()
+                .map(|node| node.text.as_str())
+                .collect::<String>();
+            if text.trim().is_empty() {
                 continue;
             }
-            let open = &xml[node.open.clone()];
-            if !open.contains("xml:space") {
-                let tag_end = node.open.end - 1;
-                edits.push((tag_end..tag_end, " xml:space=\"preserve\"".to_string()));
+            if blocks.len() >= MAX_BLOCKS {
+                return Err("The template has too much text to show".to_string());
             }
-            edits.push((
-                node.inner.clone(),
-                escape_text(&text, open.starts_with("<w:")),
-            ));
+            blocks.push(TextBlock {
+                part: name.clone(),
+                index,
+                text,
+            });
         }
     }
-    edits.sort_by_key(|(range, _)| (range.start, range.end));
-    let mut output = xml.to_string();
-    for (range, text) in edits.into_iter().rev() {
-        output.replace_range(range, &text);
+    Ok(blocks)
+}
+
+/// A UTF-16 offset (as the webview counts) to a byte offset in `text`.
+fn utf16_to_byte(text: &str, offset: usize) -> Option<usize> {
+    let mut units = 0;
+    for (byte, character) in text.char_indices() {
+        if units == offset {
+            return Some(byte);
+        }
+        units += character.len_utf16();
+        if units > offset {
+            return None;
+        }
     }
-    output
+    (units == offset).then_some(text.len())
+}
+
+/// Replaces part of one block's text in the file. `expected` must equal the
+/// current text in that span, so a stale view can never edit the wrong text.
+pub fn replace_in_block(
+    kind: FileKind,
+    bytes: &[u8],
+    part: &str,
+    index: usize,
+    utf16_span: std::ops::Range<usize>,
+    expected: &str,
+    replacement: &str,
+) -> Result<Vec<u8>, String> {
+    if !text_parts(kind, part) {
+        return Err("The selected text is not in an editable part".to_string());
+    }
+    let mut found = false;
+    let mut failure = None;
+    let output = rewrite_package(bytes, |name, xml| {
+        if name != part {
+            return None;
+        }
+        found = true;
+        let groups = text_groups(xml);
+        let Some(group) = groups.get(index) else {
+            failure = Some("The selected text was not found".to_string());
+            return None;
+        };
+        let joined = group
+            .iter()
+            .map(|node| node.text.as_str())
+            .collect::<String>();
+        let span = utf16_to_byte(&joined, utf16_span.start)
+            .zip(utf16_to_byte(&joined, utf16_span.end))
+            .filter(|(start, end)| start < end);
+        let Some((start, end)) = span else {
+            failure = Some("The selected text was not found".to_string());
+            return None;
+        };
+        if joined[start..end] != *expected {
+            failure = Some("The template changed; open it again".to_string());
+            return None;
+        }
+        Some(apply_edits(
+            xml,
+            span_edits(xml, group, vec![(start..end, replacement.to_string())]),
+        ))
+    })?;
+    if let Some(failure) = failure {
+        return Err(failure);
+    }
+    if !found {
+        return Err("The selected text was not found".to_string());
+    }
+    Ok(output)
+}
+
+/// Rebuilds the package, letting `change` rewrite text parts.
+fn rewrite_package<F>(bytes: &[u8], mut change: F) -> Result<Vec<u8>, String>
+where
+    F: FnMut(&str, &str) -> Option<String>,
+{
+    let package = read_package(bytes)?;
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, data) in &package.entries {
+        if name.ends_with('/') {
+            writer
+                .add_directory(name.as_str(), options)
+                .map_err(|_| "Could not build the document".to_string())?;
+            continue;
+        }
+        let changed = std::str::from_utf8(data)
+            .ok()
+            .and_then(|xml| change(name, xml));
+        writer
+            .start_file(name.as_str(), options)
+            .and_then(|()| {
+                writer
+                    .write_all(changed.as_deref().map_or(data.as_slice(), str::as_bytes))
+                    .map_err(Into::into)
+            })
+            .map_err(|_| "Could not build the document".to_string())?;
+    }
+    writer
+        .set_raw_comment(package.comment.into())
+        .map_err(|_| "Could not build the document".to_string())?;
+    Ok(writer
+        .finish()
+        .map_err(|_| "Could not build the document".to_string())?
+        .into_inner())
 }
 
 fn escape_text(value: &str, word: bool) -> String {

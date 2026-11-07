@@ -936,3 +936,54 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 12px;
 }
+.template-blocks {
+  display: grid;
+  gap: 2px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.template-block {
+  margin: 0;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  cursor: text;
+}
+.template-block:hover {
+  background: var(--surface);
+}
+.template-mark {
+  padding: 0 3px;
+  border-radius: 4px;
+  color: var(--inverse-text);
+  background: var(--inverse);
+}
+.template-selection {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.template-selection > span {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+.template-new select {
+  width: 100%;
+}

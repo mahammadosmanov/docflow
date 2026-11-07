@@ -620,6 +620,9 @@ impl NativeBackend {
         };
         let code = text("template");
         let (entry, template, map) = self.cached_template(&code)?;
+        if map.fields.is_empty() {
+            return Err(BackendError::validation("error.templates.noFields"));
+        }
         let rfis =
             template_documents::requested_rfis(&text("rfi_numbers"), Some(&entry.discipline))
                 .map_err(template_error)?;

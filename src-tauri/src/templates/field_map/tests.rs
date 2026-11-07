@@ -177,3 +177,83 @@ fn invalid_maps_are_rejected() {
     duplicate_preset["presets"] = json!([{"name": "A"}, {"name": "a"}]);
     assert!(FieldMap::parse(&duplicate_preset).is_err());
 }
+
+const PLAIN: &str = concat!(
+    r#"<w:document><w:body>"#,
+    r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,
+    r#"<w:r><w:t>0</w:t></w:r><w:r><w:t>7.11.2026</w:t></w:r></w:p>"#,
+    r#"<w:p></w:p><w:p><w:r><w:t>Issuer: Ağa Ömer</w:t></w:r></w:p>"#,
+    r#"</w:body></w:document>"#
+);
+
+#[test]
+fn blocks_list_paragraph_text_with_stable_indexes() {
+    let blocks = text_blocks(FileKind::Docx, &docx(PLAIN)).expect("blocks");
+    assert_eq!(blocks.len(), 2);
+    assert_eq!(blocks[0].text, "Date: 07.11.2026");
+    assert_eq!(blocks[0].part, "word/document.xml");
+    assert_eq!(blocks[1].text, "Issuer: Ağa Ömer");
+}
+
+#[test]
+fn marking_a_selection_turns_split_runs_into_one_placeholder() {
+    let bytes = docx(PLAIN);
+    let block = &text_blocks(FileKind::Docx, &bytes).unwrap()[0];
+    let marked = replace_in_block(
+        FileKind::Docx,
+        &bytes,
+        &block.part,
+        block.index,
+        6..16,
+        "07.11.2026",
+        "{{dateOfIssue}}",
+    )
+    .expect("marked");
+    let xml = part(&marked, "word/document.xml");
+    assert!(xml.contains(r#"<w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t>"#));
+    assert_eq!(
+        placeholders(FileKind::Docx, &marked).unwrap(),
+        ["dateOfIssue"]
+    );
+    assert_eq!(part(&marked, "word/media/image1.png"), "PNG");
+
+    let other = &text_blocks(FileKind::Docx, &marked).unwrap()[1];
+    let renamed = replace_in_block(
+        FileKind::Docx,
+        &marked,
+        &other.part,
+        other.index,
+        8..16,
+        "Ağa Ömer",
+        "{{issuer}}",
+    )
+    .expect("utf-16 offsets map to bytes");
+    assert_eq!(
+        placeholders(FileKind::Docx, &renamed).unwrap(),
+        ["dateOfIssue", "issuer"]
+    );
+}
+
+#[test]
+fn stale_or_invalid_selections_are_refused() {
+    let bytes = docx(PLAIN);
+    let block = &text_blocks(FileKind::Docx, &bytes).unwrap()[0];
+    let edit = |span: std::ops::Range<usize>, expected: &str| {
+        replace_in_block(
+            FileKind::Docx,
+            &bytes,
+            &block.part,
+            block.index,
+            span,
+            expected,
+            "x",
+        )
+    };
+    assert!(edit(6..16, "08.11.2026").is_err(), "text changed");
+    assert!(edit(6..99, "07.11.2026").is_err(), "outside the block");
+    assert!(edit(6..6, "").is_err(), "empty selection");
+    assert!(
+        replace_in_block(FileKind::Docx, &bytes, "word/styles.xml", 0, 0..1, "D", "x").is_err()
+    );
+    assert!(replace_in_block(FileKind::Docx, &bytes, &block.part, 99, 0..1, "D", "x").is_err());
+}

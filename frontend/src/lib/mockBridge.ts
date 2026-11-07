@@ -476,6 +476,17 @@ export class MockBridge implements Bridge {
           ],
         };
         break;
+      case "templates/blocks":
+        result = {
+          blocks: [
+            { part: "word/document.xml", index: 0, text: "REQUEST FOR INSPECTION (RFI)" },
+            { part: "word/document.xml", index: 1, text: "Date: {{dateOfIssue}}" },
+            { part: "word/document.xml", index: 2, text: "Item (s) Underground LV cable" },
+            { part: "word/document.xml", index: 3, text: "Name: Mahammad Osmanov" },
+          ],
+        };
+        break;
+      case "templates/editText":
       case "templates/openDraft":
       case "templates/create":
       case "templates/replaceFile":

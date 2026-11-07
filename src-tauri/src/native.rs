@@ -600,6 +600,16 @@ impl NativeBackend {
                 let request: crate::templates::editor::SaveDraft = decode(params)?;
                 encode(self.templates.save_draft(&request, now())?)
             }
+            BackendMethod::TemplatesBlocks => {
+                let request: TemplateVersionParams = decode(params)?;
+                Ok(serde_json::json!({
+                    "blocks": self.templates.blocks(&request.version_id, now())?
+                }))
+            }
+            BackendMethod::TemplatesEditText => {
+                let request: crate::templates::editor::EditText = decode(params)?;
+                encode(self.templates.edit_text(&request, now())?)
+            }
             BackendMethod::TemplatesArchive => {
                 let request: TemplateCodeParams = decode(params)?;
                 encode(self.templates.archive(&request.code, now())?)

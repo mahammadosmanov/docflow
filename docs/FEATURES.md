@@ -27,7 +27,9 @@
   (Admin screen toggle) create templates from Word or Excel files with
   `{{placeholders}}`, set each field's label, starting value (RFI Log tokens
   such as `{rfiNo}`), choices, and presets (for example ITP stage groups),
-  then publish to every user. Editors pick the discipline (ELE, MEC, CIV,
+  then publish to every user. In the editor's Document panel, editors select
+  any text and make it a field (typed, from an RFI Log column, or the same as
+  another field) or change it, without editing the file in Word. Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI

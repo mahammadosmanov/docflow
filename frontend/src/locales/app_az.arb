@@ -1267,5 +1267,18 @@
   "templates.editor.delete": "Şablonu sil",
   "templates.editor.delete.title": "{code} silinsin?",
   "templates.editor.delete.help": "Şablon bütün DocFlow istifadəçilərinin kitabxanasından çıxarılır. Artıq yaradılmış sənədlərə təsir etmir.",
-  "templates.editor.chooseDiscipline": "Disiplin seçin"
+  "templates.editor.chooseDiscipline": "Disiplin seçin",
+  "templates.document.title": "Sənəd",
+  "templates.document.help": "Şablonda istənilən mətni seçin, sonra onu sahə edin (hər sənəddə doldurulur) və ya dəyişin. İşarələnmiş sahələr vurğulanır.",
+  "templates.document.selected": "Seçilib:",
+  "templates.document.makeField": "Sahə et",
+  "templates.document.changeText": "Mətni dəyiş",
+  "templates.document.source": "Dəyər haradan gəlsin",
+  "templates.document.source.manual": "İstifadəçi yazır (seçilmiş mətn standartdır)",
+  "templates.document.source.log": "RFI Log",
+  "templates.document.source.existing": "Mövcud sahə ilə eyni",
+  "templates.document.newText": "Yeni mətn",
+  "templates.document.apply": "Şablona tətbiq et",
+  "templates.document.loading": "Sənəd yüklənir…",
+  "error.templates.noFields": "Bu şablonda hələ sahə yoxdur. Şablonlar bölməsində şablonu redaktə edib sənəddə sahələri işarələyin."
 }

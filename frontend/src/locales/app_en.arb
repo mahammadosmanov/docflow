@@ -1295,5 +1295,18 @@
   "templates.editor.delete": "Delete template",
   "templates.editor.delete.title": "Delete {code}?",
   "templates.editor.delete.help": "The template disappears from every DocFlow user's library. Documents already created are not affected.",
-  "templates.editor.chooseDiscipline": "Choose a discipline"
+  "templates.editor.chooseDiscipline": "Choose a discipline",
+  "templates.document.title": "Document",
+  "templates.document.help": "Select any text in the template, then make it a field (filled for each document) or change it. Marked fields are highlighted.",
+  "templates.document.selected": "Selected:",
+  "templates.document.makeField": "Make field",
+  "templates.document.changeText": "Change text",
+  "templates.document.source": "Value comes from",
+  "templates.document.source.manual": "Typed by the user (selected text is the default)",
+  "templates.document.source.log": "RFI Log",
+  "templates.document.source.existing": "Same as an existing field",
+  "templates.document.newText": "New text",
+  "templates.document.apply": "Apply to template",
+  "templates.document.loading": "Loading the document…",
+  "error.templates.noFields": "This template has no fields yet. Open Templates, edit it, and mark fields in the document."
 }

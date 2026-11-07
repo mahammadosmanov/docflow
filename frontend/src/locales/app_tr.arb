@@ -1267,5 +1267,18 @@
   "templates.editor.delete": "Şablonu sil",
   "templates.editor.delete.title": "{code} silinsin mi?",
   "templates.editor.delete.help": "Şablon tüm DocFlow kullanıcılarının kütüphanesinden kalkar. Daha önce oluşturulan belgeler etkilenmez.",
-  "templates.editor.chooseDiscipline": "Disiplin seç"
+  "templates.editor.chooseDiscipline": "Disiplin seç",
+  "templates.document.title": "Belge",
+  "templates.document.help": "Şablondaki herhangi bir metni seç; sonra alan yap (her belgede doldurulur) veya metni değiştir. İşaretli alanlar vurgulanır.",
+  "templates.document.selected": "Seçili:",
+  "templates.document.makeField": "Alan yap",
+  "templates.document.changeText": "Metni değiştir",
+  "templates.document.source": "Değer nereden gelsin",
+  "templates.document.source.manual": "Kullanıcı yazar (seçili metin varsayılan)",
+  "templates.document.source.log": "RFI Log",
+  "templates.document.source.existing": "Mevcut bir alanla aynı",
+  "templates.document.newText": "Yeni metin",
+  "templates.document.apply": "Şablona uygula",
+  "templates.document.loading": "Belge yükleniyor…",
+  "error.templates.noFields": "Bu şablonda henüz alan yok. Şablonlar'da şablonu düzenle ve belgede alanları işaretle."
 }

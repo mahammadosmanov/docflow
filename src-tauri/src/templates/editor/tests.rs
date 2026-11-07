@@ -237,3 +237,81 @@ fn archiving_hides_a_template_for_everyone() {
     assert_eq!(patch.2, Some(json!({"archived": true})));
     assert!(store.archive("bad code", 1).is_err());
 }
+
+#[test]
+fn marking_text_uploads_a_new_draft_file_with_the_field() {
+    let remote = Arc::new(Scripted::default());
+    let bytes = docx("Date: 07.11.2026");
+    let path = format!("{TEMPLATE_ID}/2/{}.docx", sha256_hex(&bytes));
+    remote
+        .files
+        .lock()
+        .unwrap()
+        .insert(path.clone(), bytes.clone());
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("GET doc_templates".into(), template_row(json!([])));
+    remote.rows.lock().unwrap().insert(
+        "GET doc_template_versions".into(),
+        json!([{"id": VERSION_ID, "template_id": TEMPLATE_ID, "version": 2, "status": "draft",
+                "file_sha256": sha256_hex(&bytes), "file_size": bytes.len(), "storage_path": path,
+                "field_map": {"schema": 1, "fields": []}}]),
+    );
+    let (_dir, store) = store(remote.clone());
+    let block = &store.blocks(VERSION_ID, 1).expect("blocks")[0];
+    assert_eq!(block.text, "Date: 07.11.2026");
+
+    let request = |field: Option<NewField>, replacement: &str| EditText {
+        version_id: VERSION_ID.into(),
+        part: block.part.clone(),
+        index: block.index,
+        start: 6,
+        end: 16,
+        expected: "07.11.2026".into(),
+        replacement: replacement.into(),
+        field,
+    };
+    let draft = store
+        .edit_text(
+            &request(
+                Some(NewField {
+                    key: "dateOfIssue".into(),
+                    label: "Date".into(),
+                    value: "{dateOfIssue}".into(),
+                }),
+                "",
+            ),
+            1,
+        )
+        .expect("marked");
+    assert_eq!(draft.placeholders, ["dateOfIssue"]);
+    assert_eq!(draft.field_map.fields[0].label, "Date");
+    assert_eq!(draft.field_map.fields[0].value, "{dateOfIssue}");
+    assert_eq!(
+        remote.files.lock().unwrap().len(),
+        2,
+        "edited file uploaded beside the old one"
+    );
+
+    assert!(
+        store.edit_text(&request(None, "{{x}}"), 1).is_err(),
+        "no raw placeholders"
+    );
+    assert!(
+        store
+            .edit_text(
+                &request(
+                    Some(NewField {
+                        key: "1bad".into(),
+                        label: "x".into(),
+                        value: String::new()
+                    }),
+                    ""
+                ),
+                1
+            )
+            .is_err()
+    );
+}
