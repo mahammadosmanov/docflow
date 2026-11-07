@@ -498,6 +498,10 @@ fn test_backend_with_responses(
             platform::production_outlook_adapter(),
         ),
         process_session_id: Mutex::new("epoch-initial".to_string()),
+        templates: Arc::new(crate::templates::TemplateStore::new(
+            temporary.path().join("templates"),
+            Arc::new(OfflineTemplates),
+        )),
         app_data_dir: temporary.path().to_path_buf(),
         scan_index: ScanIndex::new(temporary.path().join("scan-index.sqlite3")).unwrap(),
         watch: crate::watch::WatchQueue::default(),
@@ -849,4 +853,151 @@ fn preview_rfi_system_sync_with_nested_workbooks_succeeds_and_applies() {
         .expect("undo must succeed");
     assert_eq!(undo_result.applied, 4);
     assert_eq!(undo_result.failed, 0);
+}
+
+struct OfflineTemplates;
+
+impl crate::templates::TemplateRemote for OfflineTemplates {
+    fn manifest(&self, _now: i64) -> Result<Value, BackendError> {
+        Err(BackendError::offline())
+    }
+
+    fn download(&self, _storage_path: &str, _now: i64) -> Result<Vec<u8>, BackendError> {
+        Err(BackendError::offline())
+    }
+}
+
+/// Serves one published template so generation can run from the cache.
+struct ServedTemplate {
+    row: Value,
+    bytes: Vec<u8>,
+}
+
+impl crate::templates::TemplateRemote for ServedTemplate {
+    fn manifest(&self, _now: i64) -> Result<Value, BackendError> {
+        Ok(json!([self.row.clone()]))
+    }
+
+    fn download(&self, _storage_path: &str, _now: i64) -> Result<Vec<u8>, BackendError> {
+        Ok(self.bytes.clone())
+    }
+}
+
+#[test]
+fn template_documents_preview_edit_apply_never_overwrite_and_undo() {
+    use sha2::{Digest, Sha256};
+    let temporary = tempfile::tempdir().unwrap();
+    let mut backend = test_backend(&temporary);
+    let document = concat!(
+        r#"<w:document><w:body><w:p><w:r><w:t>RFI No: {{rfiNo}}</w:t></w:r></w:p>"#,
+        r#"<w:p><w:r><w:t>Stage {{stage}} / {{area}} / {{date}}</w:t></w:r></w:p></w:body></w:document>"#
+    );
+    let template = test_ooxml_package(&[
+        ("[Content_Types].xml", "<Types/>"),
+        ("word/document.xml", document),
+    ]);
+    let sha = Sha256::digest(&template)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let template_id = "11111111-1111-4111-8111-111111111111";
+    backend.templates = Arc::new(crate::templates::TemplateStore::new(
+        temporary.path().join("templates"),
+        Arc::new(ServedTemplate {
+            row: json!({
+                "template_id": template_id, "code": "RFI-COVER-ELE", "title": "RFI Cover",
+                "discipline": "ELE", "file_kind": "docx", "version_id": "v1", "version": 1,
+                "file_sha256": sha, "file_size": template.len(),
+                "storage_path": format!("{template_id}/1/{sha}.docx"),
+                "field_map": {"schema": 1, "fileName": "{{rfiNo}}", "fields": [
+                    {"key": "rfiNo", "label": "RFI No", "value": "{rfiNo}"},
+                    {"key": "stage", "label": "Stage", "value": ""},
+                    {"key": "area", "label": "Area", "value": "({area}) {tagNo}"},
+                    {"key": "date", "label": "Date", "value": "{dateOfIssue}"}
+                ], "presets": [{"name": "ITP 5", "values": {"stage": "2.5, 2.6"}}]}
+            }),
+            bytes: template,
+        }),
+    ));
+    backend.templates.sync(1);
+    assert_eq!(backend.templates.cached_codes(), ["RFI-COVER-ELE"]);
+
+    let input = temporary.path().join("inputs");
+    let output = temporary.path().join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    std::fs::create_dir_all(&output).unwrap();
+    let rfi_log = input.join("RFI Log.xlsm");
+    let log_sheet = concat!(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#,
+        r#"<row r="1"><c r="A1" t="inlineStr"><is><t>RFI No.</t></is></c><c r="B1" t="inlineStr"><is><t>TAG NO</t></is></c><c r="C1" t="inlineStr"><is><t>AREA</t></is></c><c r="D1" t="inlineStr"><is><t>DATE OF ISSUE</t></is></c></row>"#,
+        r#"<row r="2"><c r="A2" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-ELE-0059</t></is></c><c r="B2" t="inlineStr"><is><t>PCS-16</t></is></c><c r="C2" t="inlineStr"><is><t>North Site</t></is></c><c r="D2"><v>46333</v></c></row>"#,
+        r#"</sheetData></worksheet>"#
+    );
+    std::fs::write(&rfi_log, test_xlsx("ELE", log_sheet)).unwrap();
+
+    let caller = backend.caller_identity().unwrap();
+    let operation = crate::template_documents::OPERATION_ID;
+    let preview = |backend: &NativeBackend| {
+        let issue = |name: &str, path: &Path, kind| {
+            backend
+                .selections
+                .issue(&caller, operation, name, path, kind)
+                .unwrap()
+        };
+        backend
+            .preview_template_document(
+                json!({"opId": operation, "values": {
+                    "template": "RFI-COVER-ELE",
+                    "rfi_numbers": "AZE-SUN-INT-QMS-RFI-ELE-0059\nAZE-SUN-INT-QMS-RFI-ELE-0099",
+                    "rfi_log_workbook": issue("rfi_log_workbook", &rfi_log, SelectionKind::File),
+                    "output_directory": issue("output_directory", &output, SelectionKind::Folder)
+                }}),
+                |_| {},
+            )
+            .unwrap()
+    };
+    let plan = preview(&backend);
+    assert_eq!(plan["steps"].as_array().unwrap().len(), 1);
+    assert!(plan["warnings"].as_array().unwrap().contains(&json!({
+        "key": "warn.templates.rfiNotInLog", "subject": "AZE-SUN-INT-QMS-RFI-ELE-0099"
+    })));
+    let mut rows = plan["meta"]["editor"]["rows"].as_array().unwrap().clone();
+    assert_eq!(rows[0]["area"], "(North Site) PCS-16");
+    assert_eq!(rows[0]["date"], "07.11.2026");
+    rows[0]["_preset"] = json!("ITP 5");
+    rows[0]["stage"] = json!("2.5, 2.6");
+    rows[0]["area"] = json!("PCS-16");
+
+    let revised = backend
+        .revise_native_plan(json!({"planId": plan["planId"], "rows": rows}))
+        .unwrap();
+    let (result, _) = backend
+        .apply_native_plan(revised["planId"].as_str().unwrap(), Some(operation), |_| {})
+        .unwrap();
+    let written = output.join("AZE-SUN-INT-QMS-RFI-ELE-0059.docx");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(&written).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut archive.by_name("word/document.xml").unwrap(), &mut xml)
+        .unwrap();
+    assert!(xml.contains("RFI No: AZE-SUN-INT-QMS-RFI-ELE-0059"));
+    assert!(xml.contains("Stage 2.5, 2.6 / PCS-16 / 07.11.2026"));
+
+    let again = preview(&backend);
+    assert!(
+        again["steps"].as_array().unwrap().is_empty(),
+        "existing file is never overwritten"
+    );
+    assert!(
+        again["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.documents.outputExists")
+    );
+
+    backend
+        .try_native_undo(&json!({"journalId": result["journalId"]}))
+        .unwrap()
+        .expect("generated document should be undoable");
+    assert!(!written.exists());
 }

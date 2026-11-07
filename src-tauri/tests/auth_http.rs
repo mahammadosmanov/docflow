@@ -320,6 +320,7 @@ fn email_sign_in_preserves_auth_dto_and_persists_secrets_only_in_credentials() {
                 "display": "operator",
                 "allowed": true,
                 "isAdmin": false,
+                "canEditTemplates": false,
                 "createdAt": "2026-08-25T00:00:00Z"
             }
         })
@@ -712,10 +713,11 @@ fn admin_user_methods_preserve_profile_dtos_and_owner_authorization_headers() {
             "display": "operator",
             "allowed": false,
             "isAdmin": false,
+            "canEditTemplates": false,
             "createdAt": "2026-08-25T00:00:00Z"
         }])
     );
-    auth.set_flags("user-id", Some(true), None, now)
+    auth.set_flags("user-id", Some(true), None, None, now)
         .expect("admin should update flags");
 
     let requests = http.requests.lock().expect("request lock");

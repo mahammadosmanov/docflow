@@ -29,6 +29,8 @@ pub struct RegistryFacts {
     pub default_workbook: Option<String>,
     pub printers: Vec<String>,
     pub default_printer: Option<String>,
+    /// Template codes cached on this computer, offered for generation.
+    pub templates: Vec<String>,
 }
 
 fn strings(values: &[&str]) -> Vec<String> {
@@ -120,6 +122,7 @@ fn operation(id: &str, schema: Vec<ParamDef>) -> OperationDef {
 }
 
 pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
+    let template_document = template_document_operation(&facts.templates);
     let rfi_log = rfi_log_operation(&facts);
     let file_group = file_group_operation();
     let rfi_follow_up = rfi_follow_up_operation();
@@ -151,7 +154,56 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         rfi_complete_status_sync,
         rfi_publish_status,
         fast_cover_scans,
+        template_document,
     ]
+}
+
+fn template_document_operation(templates: &[String]) -> OperationDef {
+    operation(
+        crate::template_documents::OPERATION_ID,
+        vec![
+            parameter(
+                "template",
+                ParamKind::Choice,
+                "param.templates.template",
+                templates.first().map_or(Value::Null, |code| json!(code)),
+                true,
+                templates.to_vec(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.templates.template.help"),
+            ),
+            parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.templates.rfiLog",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                None,
+            ),
+            transient_parameter(
+                "rfi_numbers",
+                ParamKind::LongText,
+                "param.templates.rfiNumbers",
+                json!(""),
+                Some("param.templates.rfiNumbers.help"),
+            ),
+            parameter(
+                "output_directory",
+                ParamKind::Folder,
+                "param.templates.output",
+                Value::Null,
+                true,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.templates.output.help"),
+            ),
+        ],
+    )
 }
 
 /// Returns the first required-parameter error key for an operation's values, or

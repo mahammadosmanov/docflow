@@ -58,6 +58,11 @@ const ReviewScreen = lazy(() =>
 const QueueScreen = lazy(() =>
   import("./screens/QueueScreen").then((module) => ({ default: module.QueueScreen })),
 );
+const TemplatesScreen = lazy(() =>
+  import("./screens/TemplatesScreen").then((module) => ({
+    default: module.TemplatesScreen,
+  })),
+);
 const HistoryScreen = lazy(() =>
   import("./screens/HistoryScreen").then((module) => ({ default: module.HistoryScreen })),
 );
@@ -216,6 +221,30 @@ export function App() {
                 initialPlan: plan,
               })
             }
+          />
+        );
+      case "templates":
+        return (
+          <TemplatesScreen
+            bridge={bridge}
+            s={s}
+            onBack={() => setRoute({ name: "home" })}
+            onGenerate={(code, codes) => {
+              const operation = bootstrap.operations.find(
+                (item) => item.id === "templates.generate_document",
+              );
+              if (!operation) return;
+              setRoute({
+                name: "operation",
+                operation: {
+                  ...operation,
+                  schema: operation.schema.map((param) =>
+                    param.name === "template" ? { ...param, choices: codes } : param,
+                  ),
+                },
+                initialValues: { template: code },
+              });
+            }}
           />
         );
       case "history":

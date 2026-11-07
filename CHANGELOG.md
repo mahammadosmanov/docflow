@@ -5,6 +5,33 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.46.0 - 2026-11-07
+
+### Template documents
+
+- New operation Create documents from a template: pick a template, the RFI Log, RFI numbers, and an output folder; values come from each RFI's row in its discipline sheet.
+- Preview shows one editable row per document; the Preset column fills a stage group's fields at once, and suggestions offer each field's choices.
+- Apply writes new files only, never overwriting, and Undo removes them; a template update between Preview and Apply stops the run.
+- Templates can carry defaults inside the file, such as {{item|Underground LV cable}} or {{area|({area}) {tagNo}}}.
+
+## 1.45.0 - 2026-11-07
+
+### Template editor
+
+- Admins and chosen template editors create templates from Word or Excel files that mark values with {{placeholders}}; Rust opens the file and uploads it.
+- Each field gets a label, a starting value that can use RFI Log tokens such as {rfiNo} or ({area}) {tagNo}, suggestion choices, and a multi-line option.
+- Presets fill several fields at once, for example one ITP stage group with its stage, activity, item, and drawing.
+- Edits land in a draft; publishing shares the new version with every DocFlow user, and published versions never change.
+- The Admin screen can mark users as template editors.
+
+## 1.44.0 - 2026-11-07
+
+### Added
+
+- New **Templates** screen lists the document templates shared with every DocFlow user, with search and discipline filters (ADR 0055).
+- Rust syncs published templates at startup, every 30 minutes, and on demand. Each file must match its SHA-256 and open as a valid Office file before it is cached. Templates stay usable offline, and a failed download keeps the previous version.
+- New `docs/supabase_templates.sql` creates the shared store: versioned, immutable published templates, an editor role (`can_edit_templates`), row-level security, and a private Storage bucket. An admin must run it once in Supabase.
+
 ## 1.43.0 - 2026-11-06
 
 ### Fixed

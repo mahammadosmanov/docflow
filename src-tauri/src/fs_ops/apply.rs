@@ -227,12 +227,13 @@ impl FilesystemAuthority {
                 .binding
                 .as_ref()
                 .map(|binding| binding.operation_id.as_str())
-                != Some(CONCRETE_DOCUMENT_OPERATION)
-                || inspected.plan.op_id != CONCRETE_DOCUMENT_OPERATION
+                != Some(inspected.plan.op_id.as_str())
+                || generated_write_note(&inspected.plan.op_id).is_none()
                 || inspected.plan.steps.iter().any(|step| {
                     step.meta.contains_key("contentBase64")
                         && (step.kind != StepKind::Write
-                            || step.note_key.as_deref() != Some(CONCRETE_DOCUMENT_NOTE)
+                            || step.note_key.as_deref()
+                                != generated_write_note(&inspected.plan.op_id)
                             || step.meta.contains_key("content")
                             || !step.meta.get("contentBase64").is_some_and(Value::is_string))
                 }))

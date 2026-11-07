@@ -61,6 +61,7 @@ use crate::{
     rfi_follow_up, rfi_log, rfi_system_sync,
     scan_index::ScanIndex,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
+    template_documents,
 };
 
 fn concrete_documents_error(detail: &str) -> BackendError {
@@ -195,7 +196,7 @@ fn document_location(document_type: DocumentType, area: &str, tag: &str) -> Stri
     }
 }
 
-fn excel_date_text(value: &str) -> String {
+pub(crate) fn excel_date_text(value: &str) -> String {
     let Ok(serial) = value.trim().parse::<f64>() else {
         return value.to_string();
     };
@@ -213,7 +214,7 @@ fn excel_date_text(value: &str) -> String {
         )
 }
 
-fn excel_time_text(value: &str) -> String {
+pub(crate) fn excel_time_text(value: &str) -> String {
     let Ok(serial) = value.trim().parse::<f64>() else {
         return value.to_string();
     };
@@ -243,9 +244,37 @@ pub(crate) struct NativeBackend {
     app_data_dir: PathBuf,
     scan_index: ScanIndex,
     watch: crate::watch::WatchQueue,
+    templates: Arc<crate::templates::TemplateStore>,
 }
 
 impl NativeBackend {
+    /// Background template sync; failures only update the reported status.
+    /// Creates a template from a file the operator picked in a Rust dialog.
+    pub(crate) fn create_template(
+        &self,
+        request: &crate::templates::editor::NewTemplate,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> Result<Value, BackendError> {
+        encode(self.templates.create(request, file_name, bytes, now())?)
+    }
+
+    pub(crate) fn replace_template_file(
+        &self,
+        version_id: &str,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> Result<Value, BackendError> {
+        encode(
+            self.templates
+                .replace_file(version_id, file_name, bytes, now())?,
+        )
+    }
+
+    pub(crate) fn sync_templates(&self) {
+        self.templates.sync(now());
+    }
+
     pub(crate) fn production() -> Result<Self, BackendError> {
         let settings_path = default_settings_path();
         let app_data_dir = settings_path.parent().map_or_else(
@@ -274,6 +303,26 @@ impl NativeBackend {
             Arc::new(OsCredentialStore::new()),
             supabase_http.clone(),
             auth_config.clone(),
+        ));
+        let template_http = Arc::new(
+            HttpClient::new(HttpConfig {
+                request_timeout: Duration::from_secs(120),
+                max_request_bytes: crate::templates::MAX_TEMPLATE_BYTES as usize,
+                max_response_bytes: crate::templates::MAX_TEMPLATE_BYTES as usize + 1024,
+                ..HttpConfig::default()
+            })
+            .map_err(|error| {
+                BackendError::protocol(format!("template HTTP initialization: {error}"))
+            })?,
+        );
+        let templates = Arc::new(crate::templates::TemplateStore::new(
+            crate::templates::default_root(&app_data_dir),
+            Arc::new(crate::templates::SupabaseTemplates::new(
+                auth.clone(),
+                supabase_http.clone(),
+                template_http,
+                auth_config.clone(),
+            )),
         ));
         let journals = JournalStore::new(&journal_dir);
         let cloud = Arc::new(CloudHistory::new(
@@ -333,6 +382,7 @@ impl NativeBackend {
             app_data_dir,
             scan_index,
             watch: crate::watch::WatchQueue::default(),
+            templates,
         })
     }
 
@@ -485,8 +535,13 @@ impl NativeBackend {
             }
             BackendMethod::AuthSetFlags => {
                 let request: SetFlagsParams = decode(params)?;
-                self.auth
-                    .set_flags(&request.user_id, request.allowed, request.is_admin, now())?;
+                self.auth.set_flags(
+                    &request.user_id,
+                    request.allowed,
+                    request.is_admin,
+                    request.can_edit_templates,
+                    now(),
+                )?;
                 Ok(json!({"ok": true}))
             }
             BackendMethod::EnginePrintQueueLatest => {
@@ -517,6 +572,37 @@ impl NativeBackend {
             BackendMethod::RecoveryList => {
                 decode_empty(params)?;
                 encode(self.recovery()?)
+            }
+            BackendMethod::TemplatesStatus => {
+                decode_empty(params)?;
+                encode(self.templates.status())
+            }
+            BackendMethod::TemplatesSync => {
+                decode_empty(params)?;
+                encode(self.templates.sync(now()))
+            }
+            BackendMethod::TemplatesEditable => {
+                decode_empty(params)?;
+                let now = now();
+                let can_edit = self.templates.can_edit(now);
+                let templates = if can_edit {
+                    self.templates.editable(now)?
+                } else {
+                    Vec::new()
+                };
+                Ok(serde_json::json!({"canEdit": can_edit, "templates": templates}))
+            }
+            BackendMethod::TemplatesOpenDraft => {
+                let request: TemplateCodeParams = decode(params)?;
+                encode(self.templates.open_draft(&request.code, now())?)
+            }
+            BackendMethod::TemplatesSaveDraft => {
+                let request: crate::templates::editor::SaveDraft = decode(params)?;
+                encode(self.templates.save_draft(&request, now())?)
+            }
+            BackendMethod::TemplatesPublish => {
+                let request: TemplateVersionParams = decode(params)?;
+                encode(self.templates.publish(&request.version_id, now())?)
             }
             _ => Err(BackendError::protocol(
                 "method is not owned by the Rust native backend",

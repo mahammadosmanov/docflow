@@ -48,6 +48,9 @@ fn path_dialog_filter(
         ("rfi.generate_concrete_documents", "template_011" | "template_014") => {
             Some(("Word (.docx)", &["docx"]))
         }
+        (crate::template_documents::OPERATION_ID, "rfi_log_workbook") => {
+            Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
+        }
         _ => None,
     }
 }
@@ -61,6 +64,18 @@ impl BackendRouter {
             loop {
                 native.watch_tick();
                 std::thread::sleep(native.watch_poll_interval());
+            }
+        });
+    }
+
+    /// Pulls shared templates shortly after start and every 30 minutes (ADR 0055).
+    pub(crate) fn start_template_sync(&self) {
+        let native = Arc::clone(&self.native);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            loop {
+                native.sync_templates();
+                std::thread::sleep(std::time::Duration::from_secs(30 * 60));
             }
         });
     }
@@ -146,6 +161,9 @@ impl BackendRouter {
             BackendMethod::EngineUndo => self.undo(params).await,
             BackendMethod::PathsSelect => self.select_paths(params).await,
             BackendMethod::PathsReveal => self.reveal_path(params).await,
+            BackendMethod::TemplatesCreate | BackendMethod::TemplatesReplaceFile => {
+                self.template_file(method, params).await
+            }
             BackendMethod::RfiPrintFind => {
                 self.run_native("RFI document discovery failed", move |native| {
                     native.find_rfi_print_files(params)
@@ -411,6 +429,7 @@ where
         "rfi.log_add" => native.preview_rfi_log(params, send),
         "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
         "rfi.generate_concrete_documents" => native.preview_concrete_documents(params, send),
+        crate::template_documents::OPERATION_ID => native.preview_template_document(params, send),
         "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
         "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
         "rfi.publish_status" => native.preview_rfi_publish_status(params, send),

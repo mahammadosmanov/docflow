@@ -27,6 +27,8 @@ import type {
   AuthState,
   Bootstrap,
   HistoryPayload,
+  TemplateDraft,
+  TemplateStatus,
   OperationPreset,
   OperationResult,
   PathSelection,
@@ -50,6 +52,46 @@ export class MockBridge implements Bridge {
     fastScanPlan: null,
   };
   private watchEnabled: string[] = [];
+
+  private templateDraft(params: Record<string, unknown>): TemplateDraft {
+    const saved = (params.fieldMap ?? null) as TemplateDraft["fieldMap"] | null;
+    return {
+      templateId: "demo-template",
+      versionId: "demo-version",
+      version: 2,
+      code: "RFI-COVER-ELE",
+      title: "RFI Cover (ELE)",
+      discipline: "ELE",
+      fileKind: "docx",
+      placeholders: ["rfiNo", "dateOfIssue", "stage", "activity", "issuer"],
+      fieldMap: saved ?? {
+        schema: 1,
+        fileName: "{{rfiNo}}",
+        fields: [
+          { key: "rfiNo", label: "RFI No", value: "{rfiNo}", options: [], multiline: false },
+          { key: "dateOfIssue", label: "Date", value: "{dateOfIssue}", options: [], multiline: false },
+          { key: "stage", label: "Stage", value: "", options: [], multiline: false },
+          { key: "activity", label: "Activity", value: "", options: [], multiline: true },
+          {
+            key: "issuer",
+            label: "Issuer",
+            value: "Mahammad Osmanov",
+            options: ["Mahammad Osmanov", "Emin Dashdamirov"],
+            multiline: false,
+          },
+        ],
+        presets: [
+          {
+            name: "ITP 5 · 2.5, 2.6",
+            values: {
+              stage: "2.5, 2.6",
+              activity: "Perform underground cable laying partial inspection",
+            },
+          },
+        ],
+      },
+    };
+  }
 
   private watchStatus(): WatchStatus {
     return {
@@ -375,6 +417,73 @@ export class MockBridge implements Bridge {
         break;
       case "watch/status":
         result = this.watchStatus();
+        break;
+      case "templates/status":
+      case "templates/sync":
+        result = {
+          online: method === "templates/sync",
+          syncing: false,
+          lastSyncedAt: 1_793_990_000,
+          lastError: method === "templates/sync" ? null : "offline",
+          failedCodes: [],
+          templates: [
+            {
+              code: "QM-FRM-001",
+              title: "RFI Form",
+              discipline: "GEN",
+              fileKind: "xlsx",
+              version: 3,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 18,
+              cached: true,
+            },
+            {
+              code: "CON-CIV-010",
+              title: "Inspection Report for Concrete Pouring and Traceability",
+              discipline: "CIV",
+              fileKind: "xlsx",
+              version: 1,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 0,
+              cached: true,
+            },
+            {
+              code: "CON-ELE-004",
+              title: "Earthing System Resistance Test Report",
+              discipline: "ELE",
+              fileKind: "docx",
+              version: 2,
+              publishedAt: "2026-11-07T08:00:00Z",
+              fieldCount: 9,
+              cached: false,
+            },
+          ],
+        } satisfies TemplateStatus;
+        break;
+      case "templates/editable":
+        result = {
+          canEdit: true,
+          templates: [
+            {
+              templateId: "demo-template",
+              code: "RFI-COVER-ELE",
+              title: "RFI Cover (ELE)",
+              discipline: "ELE",
+              fileKind: "docx",
+              currentVersion: 1,
+              draftVersion: null,
+            },
+          ],
+        };
+        break;
+      case "templates/openDraft":
+      case "templates/create":
+      case "templates/replaceFile":
+      case "templates/saveDraft":
+        result = this.templateDraft(params);
+        break;
+      case "templates/publish":
+        result = await this.call("templates/sync");
         break;
       case "watch/update": {
         const opId = String(params.opId);

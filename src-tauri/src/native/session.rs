@@ -132,11 +132,16 @@ impl NativeBackend {
     }
 
     pub(super) fn registry_facts(&self) -> RegistryFacts {
+        let templates = self.templates.cached_codes();
         self.print.inventory().map_or_else(
-            |_| RegistryFacts::default(),
+            |_| RegistryFacts {
+                templates: templates.clone(),
+                ..RegistryFacts::default()
+            },
             |inventory| RegistryFacts {
                 printers: inventory.printers,
                 default_printer: inventory.default_printer,
+                templates: templates.clone(),
                 ..RegistryFacts::default()
             },
         )

@@ -51,6 +51,72 @@ impl BackendRouter {
         .map_err(|_| BackendError::protocol("path selection response encoding failed"))
     }
 
+    /// Template upload: Rust opens the picker and reads the file, so the
+    /// webview never handles a path or file bytes.
+    pub(super) async fn template_file(
+        &self,
+        method: BackendMethod,
+        params: Value,
+    ) -> Result<Value, BackendError> {
+        let create = method == BackendMethod::TemplatesCreate;
+        let new_template = if create {
+            Some(
+                serde_json::from_value::<crate::templates::editor::NewTemplate>(params.clone())
+                    .map_err(|_| BackendError::invalid_params())?,
+            )
+        } else {
+            None
+        };
+        let version = if create {
+            None
+        } else {
+            Some(
+                serde_json::from_value::<crate::native::TemplateVersionParams>(params)
+                    .map_err(|_| BackendError::invalid_params())?,
+            )
+        };
+        let app = self.app.clone();
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            let Some(file) = app
+                .dialog()
+                .file()
+                .add_filter("Word / Excel", &["docx", "xlsx"])
+                .blocking_pick_file()
+            else {
+                return Ok(None);
+            };
+            let path = file
+                .into_path()
+                .map_err(|_| BackendError::path_invalid("selected path is invalid"))?;
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let size = std::fs::metadata(&path)
+                .map_err(|_| BackendError::path_invalid("selected file is unavailable"))?
+                .len();
+            if size > crate::templates::MAX_TEMPLATE_BYTES {
+                return Err(BackendError::validation("error.templates.fileSize"));
+            }
+            let bytes = std::fs::read(&path)
+                .map_err(|_| BackendError::path_invalid("selected file is unavailable"))?;
+            Ok(Some((name, bytes)))
+        })
+        .await
+        .map_err(|_| BackendError::request_failed("template file task failed"))??;
+        let Some((name, bytes)) = picked else {
+            return Ok(Value::Null);
+        };
+        let native = Arc::clone(&self.native);
+        tauri::async_runtime::spawn_blocking(move || match (new_template, version) {
+            (Some(request), _) => native.create_template(&request, &name, &bytes),
+            (_, Some(version)) => native.replace_template_file(&version.version_id, &name, &bytes),
+            _ => Err(BackendError::invalid_params()),
+        })
+        .await
+        .map_err(|_| BackendError::request_failed("template upload task failed"))?
+    }
+
     pub(super) async fn reveal_path(&self, params: Value) -> Result<Value, BackendError> {
         let request: RevealPathParams =
             serde_json::from_value(params).map_err(|_| BackendError::invalid_params())?;

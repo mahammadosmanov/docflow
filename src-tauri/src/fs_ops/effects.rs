@@ -49,9 +49,9 @@ impl FilesystemAuthority {
         record: &mut JournalRecord,
     ) -> Result<(), StepFailure> {
         if step.meta.contains_key("contentBase64")
-            && (binding.operation_id != CONCRETE_DOCUMENT_OPERATION
+            && (generated_write_note(&binding.operation_id).is_none()
                 || step.kind != StepKind::Write
-                || step.note_key.as_deref() != Some(CONCRETE_DOCUMENT_NOTE)
+                || step.note_key.as_deref() != generated_write_note(&binding.operation_id)
                 || step.meta.contains_key("content")
                 || !step.meta.get("contentBase64").is_some_and(Value::is_string))
         {

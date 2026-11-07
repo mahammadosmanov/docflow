@@ -130,6 +130,18 @@ pub(super) struct EmptyParams {}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct TemplateCodeParams {
+    pub(super) code: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TemplateVersionParams {
+    pub(crate) version_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct OperationIdParams {
     pub(super) op_id: String,
 }
@@ -187,6 +199,8 @@ pub(super) struct SetFlagsParams {
     pub(super) allowed: Option<bool>,
     #[serde(default)]
     pub(super) is_admin: Option<bool>,
+    #[serde(default)]
+    pub(super) can_edit_templates: Option<bool>,
 }
 
 #[derive(Deserialize)]

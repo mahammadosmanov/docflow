@@ -1,6 +1,7 @@
 import type { AppPrefs, AppUser, AuthState, OperationDef } from "../types";
 import {
   demoConcreteDocumentsOperation,
+  demoTemplateDocumentOperation,
   demoFastCoverOperation,
   demoFileGroupOperation,
   demoPdfOrientationOperation,
@@ -27,6 +28,7 @@ export const demoAdmin: AppUser = {
   display: "demo",
   allowed: true,
   isAdmin: true,
+  canEditTemplates: false,
   createdAt: new Date().toISOString(),
 };
 
@@ -71,6 +73,7 @@ export const demoOperationList: OperationDef[] = [
   demoPdfOrientationOperation,
   demoRfiSystemSyncOperation,
   demoRfiCompleteStatusOperation,
+  demoTemplateDocumentOperation,
 ];
 
 export function isEmptyValue(value: unknown): boolean {
