@@ -91,6 +91,14 @@ replaced). Saving writes the draft; publishing calls
 `publish_template_version` and every DocFlow picks the version up on its next
 sync. Published versions are never edited in place.
 
+Since 1.47.0 the discipline is chosen from ELE, MEC, CIV, and PRC, and choosing
+one starts the code and name with `ELE-` style text. The code can be renamed
+in the editor; versions and history stay with the template. Deleting a
+template archives it: it disappears from every user's library on the next
+sync, while its rows and files stay in Supabase so earlier documents remain
+traceable. Generation accepts just the RFI number (`49`) and adds the
+template's discipline; `MEC-7` or a full RFI number also works.
+
 ### Generation
 
 `templates.generate_document` is a normal operation (1.46.0). The operator

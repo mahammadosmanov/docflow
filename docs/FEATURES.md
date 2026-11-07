@@ -27,9 +27,12 @@
   (Admin screen toggle) create templates from Word or Excel files with
   `{{placeholders}}`, set each field's label, starting value (RFI Log tokens
   such as `{rfiNo}`), choices, and presets (for example ITP stage groups),
-  then publish to every user. **Create documents from a template**
+  then publish to every user. Editors pick the discipline (ELE, MEC, CIV,
+  PRC), which prefixes the code and name, can rename the code, and can delete
+  a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI
-  numbers from the RFI Log; Preview lets the user pick a preset and edit any
+  numbers from the RFI Log (just `49` is enough: the template's discipline is
+  added); Preview lets the user pick a preset and edit any
   value per document, and Apply writes new files only, with Undo. An admin
   must run
   `docs/supabase_templates.sql` once before the shared store works.

@@ -102,6 +102,8 @@ pub(crate) enum BackendMethod {
     TemplatesSaveDraft,
     #[serde(rename = "templates/publish")]
     TemplatesPublish,
+    #[serde(rename = "templates/archive")]
+    TemplatesArchive,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -110,7 +112,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 50] = [
+    pub(crate) const ALL: [Self; 51] = [
         Self::AppBootstrap,
         Self::UpdateCheck,
         Self::UpdateInstall,
@@ -161,6 +163,7 @@ impl BackendMethod {
         Self::TemplatesReplaceFile,
         Self::TemplatesSaveDraft,
         Self::TemplatesPublish,
+        Self::TemplatesArchive,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -219,6 +222,7 @@ impl BackendMethod {
             Self::TemplatesReplaceFile => "templates/replaceFile",
             Self::TemplatesSaveDraft => "templates/saveDraft",
             Self::TemplatesPublish => "templates/publish",
+            Self::TemplatesArchive => "templates/archive",
         }
     }
 

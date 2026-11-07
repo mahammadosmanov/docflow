@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.46.0",
+  "currentVersion": "1.47.0",
   "releases": [
+    {
+      "version": "1.47.0",
+      "tag": "v1.47.0",
+      "date": "2026-11-07",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template management: discipline picker, code rename, delete, and short RFI numbers"
+    },
     {
       "version": "1.46.0",
       "tag": "v1.46.0",
       "date": "2026-11-07",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Create documents such as RFI covers from shared templates and the RFI Log"
     },
     {

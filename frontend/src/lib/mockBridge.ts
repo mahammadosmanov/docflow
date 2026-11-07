@@ -482,6 +482,7 @@ export class MockBridge implements Bridge {
       case "templates/saveDraft":
         result = this.templateDraft(params);
         break;
+      case "templates/archive":
       case "templates/publish":
         result = await this.call("templates/sync");
         break;

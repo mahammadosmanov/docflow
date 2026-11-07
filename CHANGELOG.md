@@ -5,6 +5,15 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.47.0 - 2026-11-07
+
+### Template management
+
+- The discipline is chosen from ELE, MEC, CIV, and PRC; choosing one starts the code and name with ELE- style text.
+- Editors can rename a template's code; its versions and history stay with it.
+- Editors can delete a template; it disappears from every user's library while its history stays traceable.
+- Create documents accepts just the RFI number, such as 49, and adds the template's discipline; MEC-7 or a full RFI number also works.
+
 ## 1.46.0 - 2026-11-07
 
 ### Template documents

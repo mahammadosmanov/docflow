@@ -5,6 +5,8 @@ import { Notice } from "../components/feedback";
 import { type Strings } from "../i18n";
 import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
+import { Modal } from "../components/Modal";
+import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
 import {
   type TemplateDraft,
   type TemplateFieldMap,
@@ -49,7 +51,9 @@ export function TemplateEditor({
   onClose: (status: TemplateStatus | null) => void;
 }) {
   const [draft, setDraft] = useState(initial);
+  const [code, setCode] = useState(initial.code);
   const [title, setTitle] = useState(initial.title);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [discipline, setDiscipline] = useState(initial.discipline);
   const [map, setMap] = useState<TemplateFieldMap>(initial.fieldMap);
   const [optionText, setOptionText] = useState<Record<string, string>>(() =>
@@ -64,6 +68,7 @@ export function TemplateEditor({
 
   const load = (next: TemplateDraft) => {
     setDraft(next);
+    setCode(next.code);
     setTitle(next.title);
     setDiscipline(next.discipline);
     setMap(next.fieldMap);
@@ -104,6 +109,7 @@ export function TemplateEditor({
   const save = async () => {
     const next = await bridge.call("templates/saveDraft", {
       versionId: draft.versionId,
+      code: code.trim(),
       title: title.trim(),
       discipline: discipline.trim().toUpperCase(),
       fieldMap: currentMap(),
@@ -150,7 +156,7 @@ export function TemplateEditor({
       <main className="pane template-editor">
         <div className="page-heading compact-heading">
           <div>
-            <h1>{draft.code}</h1>
+            <h1>{code || draft.code}</h1>
             <p>{s.t("templates.editor.draftOf", { version: draft.version })}</p>
           </div>
         </div>
@@ -158,16 +164,33 @@ export function TemplateEditor({
         <section className="content-card template-editor-section">
           <div className="template-editor-grid">
             <label className="field">
-              <span>{s.t("templates.editor.name")}</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              <span>{s.t("templates.editor.discipline")}</span>
+              <select
+                value={discipline}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setDiscipline(next);
+                  setCode((value) => withDisciplinePrefix(value, next));
+                  setTitle((value) => withDisciplinePrefix(value, next));
+                }}
+              >
+                {!TEMPLATE_DISCIPLINES.includes(
+                  discipline as (typeof TEMPLATE_DISCIPLINES)[number],
+                ) && <option value={discipline}>{discipline}</option>}
+                {TEMPLATE_DISCIPLINES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="field">
-              <span>{s.t("templates.editor.discipline")}</span>
-              <input
-                value={discipline}
-                maxLength={8}
-                onChange={(event) => setDiscipline(event.target.value.toUpperCase())}
-              />
+              <span>{s.t("templates.editor.code")}</span>
+              <input value={code} maxLength={64} onChange={(event) => setCode(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>{s.t("templates.editor.name")}</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label className="field">
               <span>{s.t("templates.editor.fileName")}</span>
@@ -208,6 +231,14 @@ export function TemplateEditor({
               }
             >
               {s.t("templates.editor.publish")}
+            </Button>
+            <Button
+              variant="danger"
+              icon={<Trash2 />}
+              disabled={busy}
+              onClick={() => setConfirmDelete(true)}
+            >
+              {s.t("templates.editor.delete")}
             </Button>
           </div>
           {saved && <Notice kind="info">{s.t("templates.editor.saved")}</Notice>}
@@ -390,6 +421,35 @@ export function TemplateEditor({
           )}
         </section>
       </main>
+      {confirmDelete && (
+        <Modal
+          title={s.t("templates.editor.delete.title", { code: draft.code })}
+          closeLabel={s.t("action.cancel")}
+          onClose={() => setConfirmDelete(false)}
+        >
+          <div className="template-new">
+            <p>{s.t("templates.editor.delete.help")}</p>
+            <div className="template-editor-actions">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
+                {s.t("action.cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                icon={<Trash2 />}
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    setConfirmDelete(false);
+                    onClose(await bridge.call("templates/archive", { code: draft.code }));
+                  })
+                }
+              >
+                {s.t("templates.editor.delete")}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

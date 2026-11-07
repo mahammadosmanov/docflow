@@ -1250,7 +1250,7 @@
   "param.templates.template.help": "Шаблоны, доступные офлайн на этом компьютере.",
   "param.templates.rfiLog": "Книга RFI Log",
   "param.templates.rfiNumbers": "Номера RFI",
-  "param.templates.rfiNumbers.help": "Один или несколько полных номеров RFI через запятую или с новой строки.",
+  "param.templates.rfiNumbers.help": "Достаточно номера, например 49 (дисциплина шаблона добавится). Несколько номеров разделяйте запятыми или строками; MEC-7 или полный номер RFI тоже подходят.",
   "param.templates.output": "Папка для результата",
   "param.templates.output.help": "Новые файлы добавляются сюда. Существующие файлы никогда не перезаписываются.",
   "templates.generate.action": "Создать документы по {code}",
@@ -1263,5 +1263,9 @@
   "error.templates.generate": "Не удалось подготовить документы",
   "error.templates.notCached": "Этот шаблон ещё недоступен офлайн. Откройте «Шаблоны» и синхронизируйте.",
   "error.templates.changed": "Шаблон обновился после просмотра. Выполните просмотр снова.",
-  "error.templates.rowsInvalid": "Изменённые значения документа неверны. Выполните просмотр снова."
+  "error.templates.rowsInvalid": "Изменённые значения документа неверны. Выполните просмотр снова.",
+  "templates.editor.delete": "Удалить шаблон",
+  "templates.editor.delete.title": "Удалить {code}?",
+  "templates.editor.delete.help": "Шаблон исчезнет из библиотеки всех пользователей DocFlow. Уже созданные документы не затрагиваются.",
+  "templates.editor.chooseDiscipline": "Выберите дисциплину"
 }

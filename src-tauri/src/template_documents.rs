@@ -54,8 +54,33 @@ const DATE_TOKENS: [&str; 3] = ["dateOfIssue", "inspectionDate", "expiryDate"];
 
 pub type LogRow = BTreeMap<String, String>;
 
-/// Canonical RFI numbers from free text (commas, spaces, or lines).
-pub fn requested_rfis(raw: &str) -> Result<Vec<String>, String> {
+/// The four RFI disciplines; a template of one of them lets users type
+/// only the number (`49` means `AZE-SUN-INT-QMS-RFI-ELE-0049`).
+pub const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
+
+/// One RFI entry: a full code, `ELE-49` / `ELE 49`, or just `49` when the
+/// template has an RFI discipline.
+fn parse_rfi(item: &str, discipline: Option<&str>) -> Option<String> {
+    let upper = item.trim().to_ascii_uppercase();
+    let (prefix, digits) = match upper.rsplit_once(['-', ' ']) {
+        Some((prefix, digits)) if DISCIPLINES.contains(&prefix.trim()) => {
+            (Some(prefix.trim().to_string()), digits.trim())
+        }
+        _ => (None, upper.as_str()),
+    };
+    if let Some(number) = crate::rfi_code::normalize_candidate_number(digits) {
+        let discipline = prefix.or_else(|| discipline.map(str::to_string))?;
+        return Some(format!("{}-{discipline}-{number}", crate::rfi_code::PREFIX));
+    }
+    let codes = crate::rfi_code::exact_codes(item);
+    (codes.len() == 1)
+        .then(|| codes.into_iter().next())
+        .flatten()
+}
+
+/// Canonical RFI numbers from free text (commas, semicolons, or lines).
+pub fn requested_rfis(raw: &str, discipline: Option<&str>) -> Result<Vec<String>, String> {
+    let discipline = discipline.filter(|value| DISCIPLINES.contains(value));
     let mut seen = BTreeSet::new();
     let mut values = Vec::new();
     for item in raw.split([',', ';', '\n', '\r', '\t']) {
@@ -63,12 +88,10 @@ pub fn requested_rfis(raw: &str) -> Result<Vec<String>, String> {
         if item.is_empty() {
             continue;
         }
-        let matched = crate::rfi_code::find(item);
-        if !matched.ok() {
-            return Err(format!("Invalid RFI number: {item}"));
-        }
-        if seen.insert(matched.code.clone()) {
-            values.push(matched.code);
+        let code =
+            parse_rfi(item, discipline).ok_or_else(|| format!("Invalid RFI number: {item}"))?;
+        if seen.insert(code.clone()) {
+            values.push(code);
         }
     }
     if values.is_empty() {
