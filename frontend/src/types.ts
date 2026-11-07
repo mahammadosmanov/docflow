@@ -119,6 +119,7 @@ export interface AppUser {
   display: string;
   allowed: boolean;
   isAdmin: boolean;
+  canEditTemplates: boolean;
   createdAt: string;
 }
 
@@ -299,6 +300,55 @@ export interface TemplateStatus {
   lastError: TemplateSyncError | null;
   failedCodes: string[];
   templates: TemplateSummary[];
+}
+
+/** One fillable value of a template; `value` may hold `{rfiNo}`-style RFI Log tokens. */
+export interface TemplateField {
+  key: string;
+  label: string;
+  value: string;
+  options: string[];
+  multiline: boolean;
+}
+
+/** A named set of field values applied together, such as one ITP stage group. */
+export interface TemplatePreset {
+  name: string;
+  values: Record<string, string>;
+}
+
+export interface TemplateFieldMap {
+  schema: 1;
+  fileName: string;
+  fields: TemplateField[];
+  presets: TemplatePreset[];
+}
+
+export interface EditableTemplate {
+  templateId: string;
+  code: string;
+  title: string;
+  discipline: string;
+  fileKind: "xlsx" | "docx";
+  currentVersion: number | null;
+  draftVersion: number | null;
+}
+
+export interface TemplateEditorState {
+  canEdit: boolean;
+  templates: EditableTemplate[];
+}
+
+export interface TemplateDraft {
+  templateId: string;
+  versionId: string;
+  version: number;
+  code: string;
+  title: string;
+  discipline: string;
+  fileKind: "xlsx" | "docx";
+  fieldMap: TemplateFieldMap;
+  placeholders: string[];
 }
 
 export interface WatchStatus {

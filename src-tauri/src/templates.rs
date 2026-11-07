@@ -26,6 +26,9 @@ use crate::{
 pub const MAX_TEMPLATE_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_TEMPLATES: usize = 500;
 const MAX_FIELDS: usize = 500;
+
+pub mod editor;
+pub mod field_map;
 const BUCKET: &str = "doc-templates";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -104,6 +107,29 @@ pub struct TemplateSummary {
 pub trait TemplateRemote: Send + Sync {
     fn manifest(&self, now: i64) -> Result<Value, BackendError>;
     fn download(&self, storage_path: &str, now: i64) -> Result<Vec<u8>, BackendError>;
+
+    /// A PostgREST call (`path` is relative to `/rest/v1/`), used by editing.
+    fn rest(
+        &self,
+        _method: &str,
+        _path: &str,
+        _body: Option<Value>,
+        _now: i64,
+    ) -> Result<Value, BackendError> {
+        Err(BackendError::offline())
+    }
+
+    /// Stores a template file. Paths are content-addressed, so an existing
+    /// object at the same path already holds these bytes.
+    fn upload(
+        &self,
+        _storage_path: &str,
+        _kind: FileKind,
+        _bytes: &[u8],
+        _now: i64,
+    ) -> Result<(), BackendError> {
+        Err(BackendError::offline())
+    }
 }
 
 pub struct SupabaseTemplates {
@@ -166,11 +192,7 @@ impl TemplateRemote for SupabaseTemplates {
 
     fn download(&self, storage_path: &str, now: i64) -> Result<Vec<u8>, BackendError> {
         let headers = self.headers(now)?;
-        let encoded = storage_path
-            .split('/')
-            .map(|segment| utf8_percent_encode(segment, NON_ALPHANUMERIC).to_string())
-            .collect::<Vec<_>>()
-            .join("/");
+        let encoded = encode_path(storage_path);
         let response = self.bytes.send_bytes(
             "GET",
             &format!(
@@ -185,6 +207,79 @@ impl TemplateRemote for SupabaseTemplates {
         }
         Ok(response.into_bytes())
     }
+
+    fn rest(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        now: i64,
+    ) -> Result<Value, BackendError> {
+        let mut headers = self.headers(now)?;
+        headers.push(("Prefer".to_string(), "return=representation".to_string()));
+        let response = self.json.send_json(
+            method,
+            &format!("{}/rest/v1/{path}", self.config.url()),
+            &headers,
+            body.as_ref(),
+        )?;
+        match response.status {
+            200 | 201 => response
+                .json()
+                .map_err(|_| BackendError::request_failed("template response is invalid")),
+            204 => Ok(Value::Null),
+            401 => Err(BackendError::auth_required()),
+            403 => Err(BackendError::permission_denied()),
+            404 => Err(BackendError::request_failed("templates_not_configured")),
+            409 => Err(BackendError::validation("error.templates.codeTaken")),
+            _ => Err(BackendError::validation("error.templates.editFailed")),
+        }
+    }
+
+    fn upload(
+        &self,
+        storage_path: &str,
+        kind: FileKind,
+        bytes: &[u8],
+        now: i64,
+    ) -> Result<(), BackendError> {
+        let mut headers = self.headers(now)?;
+        headers.push(("x-upsert".to_string(), "false".to_string()));
+        let mime = match kind {
+            FileKind::Docx => {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
+            FileKind::Xlsx => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        };
+        let response = self.bytes.send_bytes(
+            "POST",
+            &format!(
+                "{}/storage/v1/object/{BUCKET}/{}",
+                self.config.url(),
+                encode_path(storage_path)
+            ),
+            &headers,
+            Some((mime, bytes)),
+        )?;
+        let status = response.status;
+        let body = response.into_bytes();
+        match status {
+            200 | 201 => Ok(()),
+            // Storage answers 400 or 409 "Duplicate" for an existing object.
+            400 | 409 if String::from_utf8_lossy(&body).contains("Duplicate") => Ok(()),
+            401 => Err(BackendError::auth_required()),
+            403 => Err(BackendError::permission_denied()),
+            _ => Err(BackendError::validation("error.templates.uploadFailed")),
+        }
+    }
+}
+
+fn encode_path(storage_path: &str) -> String {
+    storage_path
+        .split('/')
+        .map(|segment| utf8_percent_encode(segment, NON_ALPHANUMERIC).to_string())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 #[derive(Default)]

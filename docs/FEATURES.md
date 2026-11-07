@@ -23,8 +23,12 @@
   DocFlow user. Rust syncs published templates from Supabase at startup, every
   30 minutes, and on demand. Each file is checked against its SHA-256 and
   cached under the app data folder, so templates work offline; a failed
-  download keeps the previous version. Editing, publishing, and generation
-  from templates arrive in later releases. An admin must run
+  download keeps the previous version. Admins and chosen template editors
+  (Admin screen toggle) create templates from Word or Excel files with
+  `{{placeholders}}`, set each field's label, starting value (RFI Log tokens
+  such as `{rfiNo}`), choices, and presets (for example ITP stage groups),
+  then publish to every user. Generation from templates arrives in the next
+  release. An admin must run
   `docs/supabase_templates.sql` once before the shared store works.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.

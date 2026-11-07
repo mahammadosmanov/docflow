@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.44.0",
+  "currentVersion": "1.45.0",
   "releases": [
+    {
+      "version": "1.45.0",
+      "tag": "v1.45.0",
+      "date": "2026-11-07",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template editor: create, edit, and publish shared templates from the app"
+    },
     {
       "version": "1.44.0",
       "tag": "v1.44.0",
       "date": "2026-11-07",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Shared document template store with Supabase sync and offline cache."
     },
     {

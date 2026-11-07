@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.45.0 - 2026-11-07
+
+### Template editor
+
+- Admins and chosen template editors create templates from Word or Excel files that mark values with {{placeholders}}; Rust opens the file and uploads it.
+- Each field gets a label, a starting value that can use RFI Log tokens such as {rfiNo} or ({area}) {tagNo}, suggestion choices, and a multi-line option.
+- Presets fill several fields at once, for example one ITP stage group with its stage, activity, item, and drawing.
+- Edits land in a draft; publishing shares the new version with every DocFlow user, and published versions never change.
+- The Admin screen can mark users as template editors.
+
 ## 1.44.0 - 2026-11-07
 
 ### Added

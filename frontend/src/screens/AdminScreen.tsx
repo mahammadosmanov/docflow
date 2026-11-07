@@ -57,7 +57,7 @@ export function AdminScreen({
   }, [load]);
   const update = async (
     user: AppUser,
-    patch: { allowed?: boolean; isAdmin?: boolean },
+    patch: { allowed?: boolean; isAdmin?: boolean; canEditTemplates?: boolean },
   ) => {
     setBusyId(user.id);
     try {
@@ -129,6 +129,17 @@ export function AdminScreen({
                       disabled={self || busyId === user.id}
                       ariaLabel={`${s.t("admin.admin")}: ${user.display}`}
                       onChange={(isAdmin) => void update(user, { isAdmin })}
+                    />
+                  </label>
+                  <label className="mini-toggle">
+                    {s.t("admin.templateEditor")}
+                    <Switch
+                      checked={user.isAdmin || user.canEditTemplates}
+                      disabled={user.isAdmin || busyId === user.id}
+                      ariaLabel={`${s.t("admin.templateEditor")}: ${user.display}`}
+                      onChange={(canEditTemplates) =>
+                        void update(user, { canEditTemplates })
+                      }
                     />
                   </label>
                 </div>

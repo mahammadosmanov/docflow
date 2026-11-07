@@ -194,6 +194,8 @@ pub struct AppUser {
     pub display: String,
     pub allowed: bool,
     pub is_admin: bool,
+    #[serde(default)]
+    pub can_edit_templates: bool,
     pub created_at: String,
 }
 

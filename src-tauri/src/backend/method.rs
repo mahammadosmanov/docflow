@@ -90,6 +90,18 @@ pub(crate) enum BackendMethod {
     TemplatesStatus,
     #[serde(rename = "templates/sync")]
     TemplatesSync,
+    #[serde(rename = "templates/editable")]
+    TemplatesEditable,
+    #[serde(rename = "templates/openDraft")]
+    TemplatesOpenDraft,
+    #[serde(rename = "templates/create")]
+    TemplatesCreate,
+    #[serde(rename = "templates/replaceFile")]
+    TemplatesReplaceFile,
+    #[serde(rename = "templates/saveDraft")]
+    TemplatesSaveDraft,
+    #[serde(rename = "templates/publish")]
+    TemplatesPublish,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,7 +110,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 44] = [
+    pub(crate) const ALL: [Self; 50] = [
         Self::AppBootstrap,
         Self::UpdateCheck,
         Self::UpdateInstall,
@@ -143,6 +155,12 @@ impl BackendMethod {
         Self::WatchOpen,
         Self::TemplatesStatus,
         Self::TemplatesSync,
+        Self::TemplatesEditable,
+        Self::TemplatesOpenDraft,
+        Self::TemplatesCreate,
+        Self::TemplatesReplaceFile,
+        Self::TemplatesSaveDraft,
+        Self::TemplatesPublish,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -195,6 +213,12 @@ impl BackendMethod {
             Self::WatchOpen => "watch/open",
             Self::TemplatesStatus => "templates/status",
             Self::TemplatesSync => "templates/sync",
+            Self::TemplatesEditable => "templates/editable",
+            Self::TemplatesOpenDraft => "templates/openDraft",
+            Self::TemplatesCreate => "templates/create",
+            Self::TemplatesReplaceFile => "templates/replaceFile",
+            Self::TemplatesSaveDraft => "templates/saveDraft",
+            Self::TemplatesPublish => "templates/publish",
         }
     }
 

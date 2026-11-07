@@ -27,6 +27,7 @@ export const demoAdmin: AppUser = {
   display: "demo",
   allowed: true,
   isAdmin: true,
+  canEditTemplates: false,
   createdAt: new Date().toISOString(),
 };
 

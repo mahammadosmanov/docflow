@@ -248,6 +248,28 @@ pub(crate) struct NativeBackend {
 
 impl NativeBackend {
     /// Background template sync; failures only update the reported status.
+    /// Creates a template from a file the operator picked in a Rust dialog.
+    pub(crate) fn create_template(
+        &self,
+        request: &crate::templates::editor::NewTemplate,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> Result<Value, BackendError> {
+        encode(self.templates.create(request, file_name, bytes, now())?)
+    }
+
+    pub(crate) fn replace_template_file(
+        &self,
+        version_id: &str,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> Result<Value, BackendError> {
+        encode(
+            self.templates
+                .replace_file(version_id, file_name, bytes, now())?,
+        )
+    }
+
     pub(crate) fn sync_templates(&self) {
         self.templates.sync(now());
     }
@@ -512,8 +534,13 @@ impl NativeBackend {
             }
             BackendMethod::AuthSetFlags => {
                 let request: SetFlagsParams = decode(params)?;
-                self.auth
-                    .set_flags(&request.user_id, request.allowed, request.is_admin, now())?;
+                self.auth.set_flags(
+                    &request.user_id,
+                    request.allowed,
+                    request.is_admin,
+                    request.can_edit_templates,
+                    now(),
+                )?;
                 Ok(json!({"ok": true}))
             }
             BackendMethod::EnginePrintQueueLatest => {
@@ -552,6 +579,29 @@ impl NativeBackend {
             BackendMethod::TemplatesSync => {
                 decode_empty(params)?;
                 encode(self.templates.sync(now()))
+            }
+            BackendMethod::TemplatesEditable => {
+                decode_empty(params)?;
+                let now = now();
+                let can_edit = self.templates.can_edit(now);
+                let templates = if can_edit {
+                    self.templates.editable(now)?
+                } else {
+                    Vec::new()
+                };
+                Ok(serde_json::json!({"canEdit": can_edit, "templates": templates}))
+            }
+            BackendMethod::TemplatesOpenDraft => {
+                let request: TemplateCodeParams = decode(params)?;
+                encode(self.templates.open_draft(&request.code, now())?)
+            }
+            BackendMethod::TemplatesSaveDraft => {
+                let request: crate::templates::editor::SaveDraft = decode(params)?;
+                encode(self.templates.save_draft(&request, now())?)
+            }
+            BackendMethod::TemplatesPublish => {
+                let request: TemplateVersionParams = decode(params)?;
+                encode(self.templates.publish(&request.version_id, now())?)
             }
             _ => Err(BackendError::protocol(
                 "method is not owned by the Rust native backend",

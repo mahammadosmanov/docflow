@@ -57,12 +57,37 @@ SQL: [`docs/supabase_templates.sql`](../supabase_templates.sql).
 
 ### Field map
 
-Each version carries a `field_map` (schema 1): fields with a key, labels in
-the four locales, a type (text, date, time, number, choice, check), a data
-source (manual, constant, today, RFI Log column, ITP item), formatting, and
-targets. Targets are worksheet cells for `.xlsx` and placeholder names for
-`.docx`. A choice field can write a mark (for example `X`) into the cell for
-the selected option. Rust validates every map before publish and before use.
+Each version carries a `field_map` (schema 1), refined on 2026-11-07 after
+the operator reviewed the ELE RFI covers:
+
+- `fields`: one per `{{key}}` placeholder in the file, with a label, a
+  starting `value`, suggestion `options` (for example the issuer names), and a
+  `multiline` flag. A starting value is text that may contain RFI Log tokens
+  such as `{rfiNo}`, `{dateOfIssue}`, or `({area}) {tagNo}`. Anything not in
+  the RFI Log is plain template text and stays editable at generation time.
+- `presets`: named sets of field values, for example one ITP stage group
+  (`2.1, 2.4, 2.5.1, 2.5.3`) with its stage, activity, item, drawing, and
+  intervention points. Choosing a preset fills those fields at once.
+- `fileName`: the output name pattern, `{{rfiNo}}` by default.
+
+Opening a file finds its placeholders; a new placeholder gets a field, and a
+placeholder named like a token (`rfiNo`) starts as that token. Placeholders
+work in Word documents (body, headers, footers) and in Excel shared and inline
+strings, even when Word splits one placeholder across several runs. Labels are
+single strings written by the editor. Click-to-map cells for Excel forms
+without placeholders is still planned and not built yet. Rust validates every
+map on save, on publish, and before use.
+
+### Editing
+
+Admins, and users an admin marks as template editors on the Admin screen,
+see edit controls on the Templates screen. A new template is created from a
+Word or Excel file that Rust opens in its own file dialog and uploads; the
+webview never handles the path or the bytes. Editing a published template
+opens a draft (the next version, reusing the published file until it is
+replaced). Saving writes the draft; publishing calls
+`publish_template_version` and every DocFlow picks the version up on its next
+sync. Published versions are never edited in place.
 
 ### Generation
 

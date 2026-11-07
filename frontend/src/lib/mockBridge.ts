@@ -27,6 +27,7 @@ import type {
   AuthState,
   Bootstrap,
   HistoryPayload,
+  TemplateDraft,
   TemplateStatus,
   OperationPreset,
   OperationResult,
@@ -51,6 +52,46 @@ export class MockBridge implements Bridge {
     fastScanPlan: null,
   };
   private watchEnabled: string[] = [];
+
+  private templateDraft(params: Record<string, unknown>): TemplateDraft {
+    const saved = (params.fieldMap ?? null) as TemplateDraft["fieldMap"] | null;
+    return {
+      templateId: "demo-template",
+      versionId: "demo-version",
+      version: 2,
+      code: "RFI-COVER-ELE",
+      title: "RFI Cover (ELE)",
+      discipline: "ELE",
+      fileKind: "docx",
+      placeholders: ["rfiNo", "dateOfIssue", "stage", "activity", "issuer"],
+      fieldMap: saved ?? {
+        schema: 1,
+        fileName: "{{rfiNo}}",
+        fields: [
+          { key: "rfiNo", label: "RFI No", value: "{rfiNo}", options: [], multiline: false },
+          { key: "dateOfIssue", label: "Date", value: "{dateOfIssue}", options: [], multiline: false },
+          { key: "stage", label: "Stage", value: "", options: [], multiline: false },
+          { key: "activity", label: "Activity", value: "", options: [], multiline: true },
+          {
+            key: "issuer",
+            label: "Issuer",
+            value: "Mahammad Osmanov",
+            options: ["Mahammad Osmanov", "Emin Dashdamirov"],
+            multiline: false,
+          },
+        ],
+        presets: [
+          {
+            name: "ITP 5 · 2.5, 2.6",
+            values: {
+              stage: "2.5, 2.6",
+              activity: "Perform underground cable laying partial inspection",
+            },
+          },
+        ],
+      },
+    };
+  }
 
   private watchStatus(): WatchStatus {
     return {
@@ -418,6 +459,31 @@ export class MockBridge implements Bridge {
             },
           ],
         } satisfies TemplateStatus;
+        break;
+      case "templates/editable":
+        result = {
+          canEdit: true,
+          templates: [
+            {
+              templateId: "demo-template",
+              code: "RFI-COVER-ELE",
+              title: "RFI Cover (ELE)",
+              discipline: "ELE",
+              fileKind: "docx",
+              currentVersion: 1,
+              draftVersion: null,
+            },
+          ],
+        };
+        break;
+      case "templates/openDraft":
+      case "templates/create":
+      case "templates/replaceFile":
+      case "templates/saveDraft":
+        result = this.templateDraft(params);
+        break;
+      case "templates/publish":
+        result = await this.call("templates/sync");
         break;
       case "watch/update": {
         const opId = String(params.opId);

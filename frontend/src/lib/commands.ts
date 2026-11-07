@@ -18,6 +18,9 @@ import type {
   ActivityLogExport,
   SupportBundlePreview,
   WatchStatus,
+  TemplateDraft,
+  TemplateEditorState,
+  TemplateFieldMap,
   TemplateStatus,
   UpdateCheckResult,
 } from "../types";
@@ -48,7 +51,12 @@ export interface FrontendCommandMap {
   "auth/setUsername": CommandSpec<{ username: string }, AuthState>;
   "auth/listUsers": CommandSpec<NoParams, AppUser[]>;
   "auth/setFlags": CommandSpec<
-    { userId: string; allowed?: boolean; isAdmin?: boolean },
+    {
+      userId: string;
+      allowed?: boolean;
+      isAdmin?: boolean;
+      canEditTemplates?: boolean;
+    },
     Ok
   >;
   "settings/update": CommandSpec<Partial<AppPrefs>, AppPrefs>;
@@ -144,6 +152,23 @@ export interface FrontendCommandMap {
   "watch/status": CommandSpec<NoParams, WatchStatus>;
   "templates/status": CommandSpec<NoParams, TemplateStatus>;
   "templates/sync": CommandSpec<NoParams, TemplateStatus>;
+  "templates/editable": CommandSpec<NoParams, TemplateEditorState>;
+  "templates/openDraft": CommandSpec<{ code: string }, TemplateDraft>;
+  "templates/create": CommandSpec<
+    { code: string; title: string; discipline: string },
+    TemplateDraft | null
+  >;
+  "templates/replaceFile": CommandSpec<{ versionId: string }, TemplateDraft | null>;
+  "templates/saveDraft": CommandSpec<
+    {
+      versionId: string;
+      title: string;
+      discipline: string;
+      fieldMap: TemplateFieldMap;
+    },
+    TemplateDraft
+  >;
+  "templates/publish": CommandSpec<{ versionId: string }, TemplateStatus>;
   "watch/update": CommandSpec<
     {
       opId: string;
@@ -201,6 +226,12 @@ export const FRONTEND_METHODS = [
   "watch/open",
   "templates/status",
   "templates/sync",
+  "templates/editable",
+  "templates/openDraft",
+  "templates/create",
+  "templates/replaceFile",
+  "templates/saveDraft",
+  "templates/publish",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

@@ -4,6 +4,8 @@ import {
   FileSpreadsheet,
   FileText,
   LibraryBig,
+  Pencil,
+  Plus,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -14,9 +16,12 @@ import {
   useState,
 } from "react";
 import {
+  Button,
   Header,
   IconButton,
 } from "../components/ui";
+import { Modal } from "../components/Modal";
+import { TemplateEditor } from "./TemplateEditor";
 import {
   EmptyState,
   Notice,
@@ -31,6 +36,8 @@ import {
   type Bridge,
 } from "../lib/bridge";
 import {
+  type TemplateDraft,
+  type TemplateEditorState,
   type TemplateStatus,
 } from "../types";
 import {
@@ -53,6 +60,10 @@ export function TemplatesScreen({
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [discipline, setDiscipline] = useState("all");
+  const [editor, setEditor] = useState<TemplateEditorState | null>(null);
+  const [editing, setEditing] = useState<TemplateDraft | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({ code: "", title: "", discipline: "" });
 
   const run = useCallback(
     async (sync: boolean) => {
@@ -73,9 +84,51 @@ export function TemplatesScreen({
     [bridge, s],
   );
 
+  const loadEditor = useCallback(async () => {
+    try {
+      setEditor(await bridge.call("templates/editable"));
+    } catch {
+      setEditor(null);
+    }
+  }, [bridge]);
+
   useEffect(() => {
-    void run(false).then(() => run(true));
-  }, [run]);
+    void run(false)
+      .then(() => run(true))
+      .then(loadEditor);
+  }, [run, loadEditor]);
+
+  const openDraft = async (code: string) => {
+    setError("");
+    try {
+      setEditing(await bridge.call("templates/openDraft", { code }));
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+
+  const create = async () => {
+    setError("");
+    try {
+      const draft = await bridge.call("templates/create", {
+        code: newTemplate.code.trim(),
+        title: newTemplate.title.trim(),
+        discipline: newTemplate.discipline.trim().toUpperCase(),
+      });
+      if (draft) {
+        setCreating(false);
+        setNewTemplate({ code: "", title: "", discipline: "" });
+        setEditing(draft);
+      }
+    } catch (reason) {
+      setError(humanError(reason, s));
+    }
+  };
+
+  const canEdit = editor?.canEdit === true;
+  const unpublished = (editor?.templates ?? []).filter(
+    (item) => !status?.templates.some((cached) => cached.code === item.code),
+  );
 
   const disciplines = useMemo(
     () => [...new Set(status?.templates.map((item) => item.discipline))].sort(),
@@ -94,6 +147,21 @@ export function TemplatesScreen({
       ? formatDate(new Date(status.lastSyncedAt * 1000).toISOString(), s.locale)
       : null;
 
+  if (editing) {
+    return (
+      <TemplateEditor
+        bridge={bridge}
+        s={s}
+        draft={editing}
+        onClose={(published) => {
+          setEditing(null);
+          if (published) setStatus(published);
+          void loadEditor();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="screen">
       <Header
@@ -101,6 +169,15 @@ export function TemplatesScreen({
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={
+          <>
+          {canEdit && (
+            <IconButton
+              label={s.t("templates.editor.new")}
+              onClick={() => setCreating(true)}
+            >
+              <Plus />
+            </IconButton>
+          )}
           <IconButton
             label={s.t("templates.sync")}
             disabled={syncing}
@@ -108,6 +185,7 @@ export function TemplatesScreen({
           >
             <RefreshCw />
           </IconButton>
+          </>
         }
       />
       <main className="pane">
@@ -218,6 +296,36 @@ export function TemplatesScreen({
                   >
                     {s.t(item.cached ? "templates.cached" : "templates.notCached")}
                   </span>
+                  {canEdit && (
+                    <IconButton
+                      label={s.t("templates.editor.edit", { code: item.code })}
+                      onClick={() => void openDraft(item.code)}
+                    >
+                      <Pencil />
+                    </IconButton>
+                  )}
+                </span>
+              </div>
+            ))}
+            {unpublished.map((item) => (
+              <div className="history-row" key={item.code}>
+                <span className="history-icon">
+                  {item.fileKind === "xlsx" ? <FileSpreadsheet /> : <FileText />}
+                </span>
+                <div className="history-copy">
+                  <strong>{item.code}</strong>
+                  <small>{item.title}</small>
+                </div>
+                <span className="template-meta">
+                  <span className="status-label warning">
+                    {s.t("templates.editor.unpublished")}
+                  </span>
+                  <IconButton
+                    label={s.t("templates.editor.edit", { code: item.code })}
+                    onClick={() => void openDraft(item.code)}
+                  >
+                    <Pencil />
+                  </IconButton>
                 </span>
               </div>
             ))}
@@ -228,6 +336,62 @@ export function TemplatesScreen({
         )}
         {error && <Notice kind="error">{error}</Notice>}
       </main>
+      {creating && (
+        <Modal
+          title={s.t("templates.editor.new")}
+          closeLabel={s.t("action.cancel")}
+          onClose={() => setCreating(false)}
+        >
+          <div className="template-new">
+          <p className="muted">{s.t("templates.editor.new.help")}</p>
+          <label className="field">
+            <span>{s.t("templates.editor.code")}</span>
+            <input
+              value={newTemplate.code}
+              placeholder="RFI-COVER-ELE"
+              onChange={(event) =>
+                setNewTemplate({ ...newTemplate, code: event.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>{s.t("templates.editor.name")}</span>
+            <input
+              value={newTemplate.title}
+              onChange={(event) =>
+                setNewTemplate({ ...newTemplate, title: event.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>{s.t("templates.editor.discipline")}</span>
+            <input
+              value={newTemplate.discipline}
+              placeholder="ELE"
+              maxLength={8}
+              onChange={(event) =>
+                setNewTemplate({
+                  ...newTemplate,
+                  discipline: event.target.value.toUpperCase(),
+                })
+              }
+            />
+          </label>
+          <Button
+            icon={<Plus />}
+            disabled={
+              !newTemplate.code.trim() ||
+              !newTemplate.title.trim() ||
+              newTemplate.discipline.trim().length < 2
+            }
+            onClick={() => void create()}
+          >
+            {s.t("templates.editor.chooseFile")}
+          </Button>
+          {error && <Notice kind="error">{error}</Notice>}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -861,3 +861,78 @@ textarea[aria-invalid="true"] {
   gap: 6px;
   min-width: 0;
 }
+.template-editor .field input,
+.template-new .field input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  outline: 0;
+}
+.template-editor .field input:focus,
+.template-new .field input:focus {
+  border-color: var(--text);
+}
+.template-editor .field textarea {
+  min-height: 0;
+}
+.template-new {
+  display: grid;
+  gap: 12px;
+}
+.template-editor-section {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.template-editor-section h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.template-editor-section > p.muted {
+  margin: 0;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.template-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.template-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.template-field {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.template-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.template-field-head code {
+  font-size: 0.875rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.template-preset {
+  display: grid;
+  gap: 12px;
+}

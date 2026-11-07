@@ -252,6 +252,7 @@ impl AuthService {
         user_id: &str,
         allowed: Option<bool>,
         is_admin: Option<bool>,
+        can_edit_templates: Option<bool>,
         now: i64,
     ) -> Result<(), BackendError> {
         self.require_admin()?;
@@ -262,6 +263,9 @@ impl AuthService {
         }
         if let Some(is_admin) = is_admin {
             patch.insert("is_admin".to_string(), Value::Bool(is_admin));
+        }
+        if let Some(can_edit) = can_edit_templates {
+            patch.insert("can_edit_templates".to_string(), Value::Bool(can_edit));
         }
         if patch.is_empty() {
             return Ok(());
@@ -571,6 +575,9 @@ fn app_user_from_json(raw: &serde_json::Map<String, Value>) -> AppUser {
             .is_some_and(|value| value == &Value::Bool(true)),
         is_admin: raw
             .get("is_admin")
+            .is_some_and(|value| value == &Value::Bool(true)),
+        can_edit_templates: raw
+            .get("can_edit_templates")
             .is_some_and(|value| value == &Value::Bool(true)),
         created_at: string_value(raw.get("created_at")),
     }

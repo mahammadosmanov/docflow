@@ -158,6 +158,9 @@ impl BackendRouter {
             BackendMethod::EngineUndo => self.undo(params).await,
             BackendMethod::PathsSelect => self.select_paths(params).await,
             BackendMethod::PathsReveal => self.reveal_path(params).await,
+            BackendMethod::TemplatesCreate | BackendMethod::TemplatesReplaceFile => {
+                self.template_file(method, params).await
+            }
             BackendMethod::RfiPrintFind => {
                 self.run_native("RFI document discovery failed", move |native| {
                     native.find_rfi_print_files(params)
