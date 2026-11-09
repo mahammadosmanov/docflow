@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.1 - 2026-11-09
+
+### RFI file grouping
+
+- Office owner/lock files such as `~$name.xlsx` are no longer read as RFI sources, so they stop producing unreadable-file and existing-review warnings.
+- Thumbs.db and desktop.ini are skipped the same way the folder watcher skips them.
+
 ## 1.48.0 - 2026-11-07
 
 ### Template marking

@@ -31,11 +31,12 @@ pub(super) fn discover_files(root: &Path) -> Result<Vec<PathBuf>, BackendError> 
                 "RFI file source contains a symbolic link",
             ));
         }
-        let hidden = entry
+        // Skips Office owner/lock files (`~$...`), dotfiles, Thumbs.db, desktop.ini.
+        let ignored = entry
             .file_name()
             .to_str()
-            .is_some_and(|name| name.starts_with('.'));
-        if metadata.is_file() && !hidden {
+            .is_some_and(crate::watch::ignored_name);
+        if metadata.is_file() && !ignored {
             files.push(entry.path());
             if files.len() > MAX_FILES {
                 return Err(BackendError::validation(format!(

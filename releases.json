@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.0",
+  "currentVersion": "1.48.1",
   "releases": [
+    {
+      "version": "1.48.1",
+      "tag": "v1.48.1",
+      "date": "2026-11-09",
+      "channel": "stable",
+      "status": "current",
+      "summary": "RFI file grouping ignores Office lock files (~$) and no longer leaves empty folders"
+    },
     {
       "version": "1.48.0",
       "tag": "v1.48.0",
       "date": "2026-11-07",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Mark template fields in the app: select text and make it a field or change it"
     },
     {

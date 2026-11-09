@@ -84,7 +84,7 @@ pub struct Snapshot {
     pub newest_mtime_ms: i64,
 }
 
-fn ignored_name(name: &str) -> bool {
+pub(crate) fn ignored_name(name: &str) -> bool {
     name.starts_with('.')
         || name.starts_with("~$")
         || name.eq_ignore_ascii_case("thumbs.db")
