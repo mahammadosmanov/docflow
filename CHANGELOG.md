@@ -13,6 +13,10 @@ Versioning; `releases.json` is the machine-readable release catalog.
 - Rust tests run under `cargo llvm-cov` and the frontend tests run with `@vitest/coverage-v8`; both coverage summaries are written to the job summary without thresholds.
 - The frontend TypeScript configuration enables `noUnusedLocals` and `noUnusedParameters`; unused code was removed or renamed with a leading underscore.
 
+### Dependencies
+
+- `rusqlite` moves from 0.38 to 0.41.1 so the bundled SQLite is 3.54.1, which clears RUSTSEC-2026-0459 in the local scan index.
+
 ## 1.48.1 - 2026-11-09
 
 ### RFI file grouping
