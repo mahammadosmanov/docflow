@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.1",
+  "currentVersion": "1.48.2",
   "releases": [
+    {
+      "version": "1.48.2",
+      "tag": "v1.48.2",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "CI runs the docs audit and coverage summaries; frontend compiles with unused-code checks"
+    },
     {
       "version": "1.48.1",
       "tag": "v1.48.1",
       "date": "2026-11-09",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "RFI file grouping ignores Office lock files (~$) and no longer leaves empty folders"
     },
     {

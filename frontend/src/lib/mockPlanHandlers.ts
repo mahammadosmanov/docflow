@@ -326,7 +326,7 @@ function previewFastCover(state: MockPlanState, values: Record<string, unknown>)
 }
 
 
-function previewPdfOrientation(state: MockPlanState, values: Record<string, unknown>): Plan {
+function previewPdfOrientation(_state: MockPlanState, values: Record<string, unknown>): Plan {
   return {
     planId: "demo-orientation-plan",
     opId: "rfi.normalize_pdf_orientation",
@@ -363,7 +363,7 @@ function previewPdfOrientation(state: MockPlanState, values: Record<string, unkn
   } satisfies Plan;
 }
 
-function previewLogAdd(state: MockPlanState, values: Record<string, unknown>): Plan {
+function previewLogAdd(_state: MockPlanState, values: Record<string, unknown>): Plan {
   const rows = [
     {
       _rowId: "CIV-g1-r1",

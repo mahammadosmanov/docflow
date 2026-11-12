@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.2 - 2026-11-12
+
+### Continuous integration
+
+- The quality workflow now runs the documentation audit. The dependency license audit stays in the Windows release build because it needs the staged Tesseract resources.
+- Rust tests run under `cargo llvm-cov` and the frontend tests run with `@vitest/coverage-v8`; both coverage summaries are written to the job summary without thresholds.
+- The frontend TypeScript configuration enables `noUnusedLocals` and `noUnusedParameters`; unused code was removed or renamed with a leading underscore.
+
 ## 1.48.1 - 2026-11-09
 
 ### RFI file grouping
