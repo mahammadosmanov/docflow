@@ -5,6 +5,13 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.6 - 2026-11-12
+
+### Documentation
+
+- `docs/ACCEPTANCE_KIT.md` gives a step-by-step Windows procedure, pass and fail conditions, and an evidence record (`docs/acceptance-evidence.template.json`) for ledger rows 1, 13, 16, 19 and 4. Its expected results come from the documents and source and have not been run on Windows.
+- The README, Windows runbook and release-safety gate now state the twelve registered operations that the registry and package smoke enforce, and the README lists template document generation.
+
 ## 1.48.5 - 2026-11-12
 
 ### Documentation

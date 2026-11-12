@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.5",
+  "currentVersion": "1.48.6",
   "releases": [
+    {
+      "version": "1.48.6",
+      "tag": "v1.48.6",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Native acceptance kit for the first five Windows gates; operation count corrected to twelve in the docs"
+    },
     {
       "version": "1.48.5",
       "tag": "v1.48.5",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Closed migration and verification records move to docs/archive"
     },
     {
