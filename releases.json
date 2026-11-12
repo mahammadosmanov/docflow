@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.3",
+  "currentVersion": "1.48.4",
   "releases": [
+    {
+      "version": "1.48.4",
+      "tag": "v1.48.4",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Frontend tests share one jsdom per worker and run in about half the time"
+    },
     {
       "version": "1.48.3",
       "tag": "v1.48.3",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Dependency updates: lucide-react, Vitest, base64, png, ureq, uuid and build tooling"
     },
     {

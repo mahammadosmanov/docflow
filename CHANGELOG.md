@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.4 - 2026-11-12
+
+### Tooling
+
+- Vitest uses the `vmThreads` pool, so jsdom is created once per worker instead of once per test file. The 314 frontend tests keep per-file isolation and the local run drops from about 8 s to about 4 s.
+
 ## 1.48.3 - 2026-11-12
 
 ### Dependencies
