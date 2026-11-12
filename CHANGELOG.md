@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.3 - 2026-11-12
+
+### Dependencies
+
+- npm: `lucide-react` 1.67.0, `vitest` and `@vitest/coverage-v8` 5.1.0, `@vitejs/plugin-react` 6.2.1, `@types/node` 26.6.6.
+- Cargo: `base64` 0.23, `png` 0.18, `ureq` 3.5.1, `uuid` 1.29, `tauri-plugin-dialog` 2.8.4, `cc` 1.11. The PNG reader now rejects an image whose buffer size cannot be computed, and a round-trip test covers it.
+- `sha2` 0.11, `quick-xml` 0.42 and `windows` 0.62 are not taken: the first two need source changes in hashing and workbook parsing, and the third cannot be compiled on the development host.
+
 ## 1.48.2 - 2026-11-12
 
 ### Continuous integration

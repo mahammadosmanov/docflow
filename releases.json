@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.2",
+  "currentVersion": "1.48.3",
   "releases": [
+    {
+      "version": "1.48.3",
+      "tag": "v1.48.3",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Dependency updates: lucide-react, Vitest, base64, png, ureq, uuid and build tooling"
+    },
     {
       "version": "1.48.2",
       "tag": "v1.48.2",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "CI runs the docs audit and coverage summaries; frontend compiles with unused-code checks"
     },
     {
