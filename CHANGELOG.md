@@ -5,6 +5,45 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.8 - 2026-11-12
+
+### Fixed
+
+- Follow Up sync updates the PCU `Signed by Worley` column again. The FINAL lifecycle columns and the Worley column share the same RFI column and the 3.6 clause, so a FINAL PCU record was matched to the lifecycle layout and its Worley state was never proposed. An existing PCU FINAL RFI now gets `Signed` when its RFI Log REMARKS holds the exact `Signed by Worley` line and `Not Signed` otherwise (ADR 0022). Verified by preview on copies of the current workbooks on macOS; Excel-on-Windows acceptance is still open.
+
+## 1.48.7 - 2026-11-12
+
+### Fixed
+
+- The Windows-only print page decoder compiles again after the `png` 0.18 upgrade in 1.48.3. A page whose buffer size cannot be represented now fails as a too-large page. The break was caught by the Windows CI job; it could not be compiled on macOS.
+
+## 1.48.6 - 2026-11-12
+
+### Documentation
+
+- `docs/ACCEPTANCE_KIT.md` gives a step-by-step Windows procedure, pass and fail conditions, and an evidence record (`docs/acceptance-evidence.template.json`) for ledger rows 1, 13, 16, 19 and 4. Its expected results come from the documents and source and have not been run on Windows.
+- The README, Windows runbook and release-safety gate now state the twelve registered operations that the registry and package smoke enforce, and the README lists template document generation.
+
+## 1.48.5 - 2026-11-12
+
+### Documentation
+
+- `MIGRATION_STATUS.md` and `VERIFICATION.md` move to `docs/archive/`. Both stopped being updated after the Rust migration closed (the verification record ends at 1.12.2); the documentation map now marks them as historical.
+
+## 1.48.4 - 2026-11-12
+
+### Tooling
+
+- Vitest uses the `vmThreads` pool, so jsdom is created once per worker instead of once per test file. The 314 frontend tests keep per-file isolation and the local run drops from about 8 s to about 4 s.
+
+## 1.48.3 - 2026-11-12
+
+### Dependencies
+
+- npm: `lucide-react` 1.67.0, `vitest` and `@vitest/coverage-v8` 5.1.0, `@vitejs/plugin-react` 6.2.1, `@types/node` 26.6.6.
+- Cargo: `base64` 0.23, `png` 0.18, `ureq` 3.5.1, `uuid` 1.29, `tauri-plugin-dialog` 2.8.4, `cc` 1.11. The PNG reader now rejects an image whose buffer size cannot be computed, and a round-trip test covers it.
+- `sha2` 0.11, `quick-xml` 0.42 and `windows` 0.62 are not taken: the first two need source changes in hashing and workbook parsing, and the third cannot be compiled on the development host.
+
 ## 1.48.2 - 2026-11-12
 
 ### Continuous integration

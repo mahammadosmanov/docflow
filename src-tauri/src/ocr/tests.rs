@@ -306,3 +306,24 @@ fn unconfirmed_cover_identity_cannot_recover_an_unresolved_page() {
 fn tesseract_launch_suppresses_the_windows_console() {
     assert_eq!(tesseract_windows_creation_flags(), 0x0800_0000);
 }
+
+#[test]
+fn read_png_gray_decodes_grayscale_and_rgb_pixels() {
+    let directory = tempfile::tempdir().unwrap();
+    let write = |name: &str, color: png::ColorType, data: &[u8]| {
+        let path = directory.path().join(name);
+        let mut encoder = png::Encoder::new(std::fs::File::create(&path).unwrap(), 2, 1);
+        encoder.set_color(color);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(data).unwrap();
+        writer.finish().unwrap();
+        path
+    };
+
+    let gray = read_png_gray(&write("gray.png", png::ColorType::Grayscale, &[0, 255])).unwrap();
+    assert_eq!((gray.width, gray.height, gray.pixels), (2, 1, vec![0, 255]));
+
+    let rgb = write("rgb.png", png::ColorType::Rgb, &[0, 0, 0, 255, 255, 255]);
+    assert_eq!(read_png_gray(&rgb).unwrap().pixels, vec![0, 255]);
+}
