@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.7 - 2026-11-12
+
+### Fixed
+
+- The Windows-only print page decoder compiles again after the `png` 0.18 upgrade in 1.48.3. A page whose buffer size cannot be represented now fails as a too-large page. The break was caught by the Windows CI job; it could not be compiled on macOS.
+
 ## 1.48.6 - 2026-11-12
 
 ### Documentation

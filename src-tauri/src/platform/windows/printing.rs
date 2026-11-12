@@ -1103,7 +1103,9 @@ fn decode_png_reader(reader: impl BufRead + Seek) -> Result<Bitmap, PrintFailure
     let mut reader = decoder
         .read_info()
         .map_err(|_| PrintFailure::failed("Windows rendered an invalid PDF page"))?;
-    let size = reader.output_buffer_size();
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| PrintFailure::failed("Windows PDF page is too large"))?;
     let mut source = vec![0; size];
     let info = reader
         .next_frame(&mut source)

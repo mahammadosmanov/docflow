@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.6",
+  "currentVersion": "1.48.7",
   "releases": [
+    {
+      "version": "1.48.7",
+      "tag": "v1.48.7",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows print page decoder builds again after the png 0.18 upgrade"
+    },
     {
       "version": "1.48.6",
       "tag": "v1.48.6",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Native acceptance kit for the first five Windows gates; operation count corrected to twelve in the docs"
     },
     {
