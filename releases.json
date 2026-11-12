@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.7",
+  "currentVersion": "1.48.8",
   "releases": [
+    {
+      "version": "1.48.8",
+      "tag": "v1.48.8",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up sync updates the PCU Signed by Worley column again"
+    },
     {
       "version": "1.48.7",
       "tag": "v1.48.7",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Windows print page decoder builds again after the png 0.18 upgrade"
     },
     {

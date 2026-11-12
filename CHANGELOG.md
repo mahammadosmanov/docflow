@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.8 - 2026-11-12
+
+### Fixed
+
+- Follow Up sync updates the PCU `Signed by Worley` column again. The FINAL lifecycle columns and the Worley column share the same RFI column and the 3.6 clause, so a FINAL PCU record was matched to the lifecycle layout and its Worley state was never proposed. An existing PCU FINAL RFI now gets `Signed` when its RFI Log REMARKS holds the exact `Signed by Worley` line and `Not Signed` otherwise (ADR 0022). Verified by preview on copies of the current workbooks on macOS; Excel-on-Windows acceptance is still open.
+
 ## 1.48.7 - 2026-11-12
 
 ### Fixed
