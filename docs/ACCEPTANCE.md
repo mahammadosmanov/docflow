@@ -42,4 +42,5 @@ Status values: **Pending**, **Passed**, **Failed**, **Blocked**.
 
 Clear rows 1, 13, 16, 19, and 4 first: they cover the most-used operations
 and the data-loss, workbook-repair, and duplicate-print risks ranked first in
-[`ROADMAP.md`](ROADMAP.md#prioritization).
+[`ROADMAP.md`](ROADMAP.md#prioritization). [`ACCEPTANCE_KIT.md`](ACCEPTANCE_KIT.md)
+holds the step-by-step procedure for those five rows.

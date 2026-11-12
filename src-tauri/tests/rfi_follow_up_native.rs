@@ -596,6 +596,33 @@ fn full_sync_keeps_literal_pcu_tagged_civ_final_in_scope() {
 }
 
 #[test]
+fn full_sync_updates_pcu_worley_status_beside_the_final_lifecycle_layout() {
+    // The FINAL lifecycle layout (P/Q) and the Worley layout (P/R) share the RFI
+    // column and the 3.6 clause; the Worley state must still reach column R.
+    for (remarks, current, proposed) in [
+        ("Signed by Worley", "Not Signed", "Signed"),
+        ("Signed by Worley", "", "Signed"),
+        ("", "", "Not Signed"),
+    ] {
+        let source =
+            full_schema_source([pcu_final_record(10, remarks).replace("PCS-01", "PCU-01")]);
+        let target = package(&[("PCU", None, pcu_target("CIV-1001", "Completed", current))]);
+
+        let review = classify(source, target).unwrap();
+        let row = review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["_sheet"] == "PCU" && row["target"]["statusColumn"] == 18)
+            .unwrap_or_else(|| panic!("no Worley row for {remarks:?}/{current:?}: {review}"));
+
+        assert_eq!(row["disposition"], "rfi.followUp.disposition.ready");
+        assert_eq!(row["proposedStatus"], proposed);
+        assert_eq!(row["proposedRfiNo"], "CIV-1001");
+    }
+}
+
+#[test]
 fn full_sync_excludes_every_civ_pcs_tagged_rfi_from_follow_up() {
     for tag in ["PCS-19", "PCS-19/S1,S2,S3"] {
         let source = full_schema_source([full_schema_record_with_status(

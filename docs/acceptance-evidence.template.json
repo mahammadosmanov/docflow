@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "ledgerRow": 0,
+  "gate": "<gate name, as written in docs/ACCEPTANCE.md>",
+  "status": "<Passed | Failed | Blocked>",
+  "nativeWindowsHost": true,
+  "candidateVersion": "<exact version, e.g. 1.2.3>",
+  "installerSha256": "<64 lowercase hex characters of the verified installer>",
+  "date": "<YYYY-MM-DD>",
+  "windowsVersion": "<Windows edition and build>",
+  "applications": {
+    "excel": "<product and build, or n/a>",
+    "outlook": "<product and build, or n/a>",
+    "printers": [
+      {
+        "model": "<printer model, or n/a>",
+        "driver": "<driver name and version, or n/a>"
+      }
+    ]
+  },
+  "stepResults": [
+    {
+      "step": "<row.step, e.g. 13.7>",
+      "result": "<pass | fail | skipped | not-run>",
+      "observed": "<one short sentence; counts, durations and DocFlow status words only>"
+    }
+  ],
+  "failures": [
+    {
+      "step": "<row.step>",
+      "summary": "<one sentence; no paths, names or contents>"
+    }
+  ],
+  "note": "<free text; no paths, file or document names, mail details or contents>"
+}

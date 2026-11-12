@@ -6,7 +6,7 @@ import type { Plan } from "../types";
 export function reviseOperation(
   state: MockPlanState,
   params: Record<string, unknown>,
-  onProgress?: ProgressHandler,
+  _onProgress?: ProgressHandler,
 ): unknown {
   let result: unknown;
   if (state.fastScanPlan && params.planId === state.fastScanPlan.planId) {

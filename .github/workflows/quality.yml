@@ -39,11 +39,18 @@ jobs:
         run: |
           node tools/version_manager.mjs check
           node tools/package_audit.mjs source
+          node tools/docs_audit.mjs
 
       - name: Verify Node tooling and the React interface
         run: |
           npm test
           npm run build
+
+      - name: Summarize frontend coverage
+        shell: bash
+        run: |
+          npx vitest run --config frontend/vite.config.ts --coverage --coverage.reporter=text-summary | tee coverage-summary.txt
+          { echo '### Frontend coverage'; echo '```'; cat coverage-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Audit production npm dependencies
         run: npm audit --omit=dev --audit-level=high
@@ -89,7 +96,7 @@ jobs:
   rust-tests:
     name: Test Rust authority
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out source
@@ -101,6 +108,7 @@ jobs:
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: "1.97.1"
+          components: llvm-tools-preview
 
       - name: Cache Rust dependencies and build output
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -116,11 +124,18 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Test Rust authority
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Test Rust authority with coverage summary
+        shell: bash
         env:
           CARGO_BUILD_JOBS: "1"
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo llvm-cov --manifest-path src-tauri/Cargo.toml --summary-only | tee coverage-summary.txt
+          { echo '### Rust coverage'; echo '```'; cat coverage-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   rust-platforms:
     name: Lint and test Rust authority on ${{ matrix.os }}

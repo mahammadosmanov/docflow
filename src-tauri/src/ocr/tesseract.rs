@@ -64,7 +64,10 @@ pub(crate) fn read_png_gray(path: &Path) -> Result<GrayImage, String> {
     let mut reader = decoder
         .read_info()
         .map_err(|error| format!("OCR PNG header: {error}"))?;
-    let mut buffer = vec![0; reader.output_buffer_size()];
+    let buffer_size = reader
+        .output_buffer_size()
+        .ok_or("OCR PNG size is invalid")?;
+    let mut buffer = vec![0; buffer_size];
     let info = reader
         .next_frame(&mut buffer)
         .map_err(|error| format!("OCR PNG pixels: {error}"))?;

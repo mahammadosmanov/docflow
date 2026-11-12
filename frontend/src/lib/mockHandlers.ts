@@ -6,7 +6,7 @@ import {
 
 export function printFindOperation(
   params: Record<string, unknown>,
-  onProgress?: ProgressHandler,
+  _onProgress?: ProgressHandler,
 ): unknown {
   let result: unknown;
   const requests = Array.isArray(params.numbers) ? (params.numbers as string[]) : [];
@@ -67,8 +67,8 @@ export function printFindOperation(
 }
 
 export function diagnosticsOperation(
-  params: Record<string, unknown>,
-  onProgress?: ProgressHandler,
+  _params: Record<string, unknown>,
+  _onProgress?: ProgressHandler,
 ): unknown {
   let result: unknown;
   const content = `${JSON.stringify(

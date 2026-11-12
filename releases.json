@@ -1,13 +1,77 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.0",
+  "currentVersion": "1.48.8",
   "releases": [
+    {
+      "version": "1.48.8",
+      "tag": "v1.48.8",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up sync updates the PCU Signed by Worley column again"
+    },
+    {
+      "version": "1.48.7",
+      "tag": "v1.48.7",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Windows print page decoder builds again after the png 0.18 upgrade"
+    },
+    {
+      "version": "1.48.6",
+      "tag": "v1.48.6",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Native acceptance kit for the first five Windows gates; operation count corrected to twelve in the docs"
+    },
+    {
+      "version": "1.48.5",
+      "tag": "v1.48.5",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Closed migration and verification records move to docs/archive"
+    },
+    {
+      "version": "1.48.4",
+      "tag": "v1.48.4",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Frontend tests share one jsdom per worker and run in about half the time"
+    },
+    {
+      "version": "1.48.3",
+      "tag": "v1.48.3",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Dependency updates: lucide-react, Vitest, base64, png, ureq, uuid and build tooling"
+    },
+    {
+      "version": "1.48.2",
+      "tag": "v1.48.2",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "CI runs the docs audit and coverage summaries; frontend compiles with unused-code checks"
+    },
+    {
+      "version": "1.48.1",
+      "tag": "v1.48.1",
+      "date": "2026-11-09",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "RFI file grouping ignores Office lock files (~$) and no longer leaves empty folders"
+    },
     {
       "version": "1.48.0",
       "tag": "v1.48.0",
       "date": "2026-11-07",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Mark template fields in the app: select text and make it a field or change it"
     },
     {

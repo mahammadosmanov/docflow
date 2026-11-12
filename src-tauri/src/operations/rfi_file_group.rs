@@ -499,6 +499,30 @@ mod tests {
 }
 
 #[cfg(test)]
+mod discovery_tests {
+    use super::*;
+
+    #[test]
+    fn discovery_skips_office_lock_and_os_junk_files() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "~$AZE-SUN-MDR.xlsx",
+            ".hidden.pdf",
+            "Thumbs.db",
+            "real.docx",
+        ] {
+            fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        let names: Vec<_> = discover_files(dir.path())
+            .unwrap()
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["real.docx".to_string()]);
+    }
+}
+
+#[cfg(test)]
 mod offered_step_tests {
     use super::offered_step_allowed;
     use super::steps::{copy_step, directory_step};

@@ -1,6 +1,6 @@
 # DocFlow
 
-DocFlow 1.48.0 is a Tauri 2 desktop application with eleven registered document
+DocFlow 1.48.8 is a Tauri 2 desktop application with twelve registered document
 workflows:
 
 - Fast RFI Scan: separate confirmed multi-RFI scans or read only page one for
@@ -33,6 +33,8 @@ workflows:
   Follow Up workbooks using selected RFI types and templates
 - Publish RFI status: match PDF and DOCX pairs in a folder to the RFI Log and
   propose Ongoing only for blank Inspection Status cells
+- Create documents from a template: fill a shared template, such as an RFI
+  cover, from the RFI Log and review each document before it is written
 
 Authenticated users can reach Home, Review, History, Recovery, Preferences,
 and (when authorized) Admin from persistent navigation. Fast RFI Scan is the

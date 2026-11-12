@@ -26,8 +26,6 @@ import {
   getBridge,
 } from "./lib/bridge";
 import {
-} from "./lib/platform";
-import {
   type AppPrefs,
   type AuthState,
   type Bootstrap,

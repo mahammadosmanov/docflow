@@ -101,8 +101,11 @@ pub(super) fn place_signed_record<'a>(
     } = index;
     let (target_sheet, target_clause, match_layout) =
         signed_route_clause(record).expect("filtered final record has a signed route");
+    // PCU carries the FINAL lifecycle layout and the Worley layout on the same RFI
+    // column and clause; only the Worley one is a signed destination.
     let matching_layout = layouts.iter().find(|l| {
-        l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
+        is_signed_layout(l)
+            && l.worksheet.name.trim().eq_ignore_ascii_case(target_sheet)
             && (l.clause.as_deref() == Some(target_clause)
                 || (target_sheet.trim().to_uppercase().contains("PCU") && l.status_column == 18)
                 || (l.clause.is_none()
