@@ -22,6 +22,14 @@ coding agents. Runtime behavior and executable tests win if prose ever drifts.
 10. [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) — slice, measure, verify,
     and accept every feature consistently.
 
+## Archive
+
+[`archive/MIGRATION_STATUS.md`](archive/MIGRATION_STATUS.md) and
+[`archive/VERIFICATION.md`](archive/VERIFICATION.md) are closed historical
+records of the Rust migration slices and of per-release checks up to 1.12.2.
+They are not maintained; current evidence lives in `CHANGELOG.md` and
+[`ACCEPTANCE.md`](ACCEPTANCE.md).
+
 ## Source-of-truth order
 
 1. `AGENTS.md` and accepted ADRs

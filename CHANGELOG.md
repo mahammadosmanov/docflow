@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.5 - 2026-11-12
+
+### Documentation
+
+- `MIGRATION_STATUS.md` and `VERIFICATION.md` move to `docs/archive/`. Both stopped being updated after the Rust migration closed (the verification record ends at 1.12.2); the documentation map now marks them as historical.
+
 ## 1.48.4 - 2026-11-12
 
 ### Tooling

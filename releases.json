@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.4",
+  "currentVersion": "1.48.5",
   "releases": [
+    {
+      "version": "1.48.5",
+      "tag": "v1.48.5",
+      "date": "2026-11-12",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Closed migration and verification records move to docs/archive"
+    },
     {
       "version": "1.48.4",
       "tag": "v1.48.4",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Frontend tests share one jsdom per worker and run in about half the time"
     },
     {
