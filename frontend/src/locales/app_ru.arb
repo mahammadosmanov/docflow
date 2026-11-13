@@ -319,6 +319,7 @@
   "warn.print.invalidCopies": "Количество копий должно быть от 1 до 99",
   "warn.print.tooManyFiles": "Очередь может содержать не более 250 файлов",
   "warn.print.fileMissing": "Файл отсутствует и будет пропущен",
+  "warn.print.fileUnreadable": "Не удалось прочитать этот файл для печати; он пропущен",
   "warn.print.workbookDiscoveryFailed": "Не удалось безопасно проверить книгу, поэтому она не была добавлена в порядок печати",
   "warn.print.workbookTooManyWorksheets": "Книга содержит слишком много листов",
   "warn.print.expandedOrderTooLarge": "Расширенный порядок печати может содержать не более 250 заданий",

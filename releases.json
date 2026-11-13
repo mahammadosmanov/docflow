@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.9",
+  "currentVersion": "1.48.10",
   "releases": [
+    {
+      "version": "1.48.10",
+      "tag": "v1.48.10",
+      "date": "2026-11-13",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Unreadable print files are skipped with a warning"
+    },
     {
       "version": "1.48.9",
       "tag": "v1.48.9",
       "date": "2026-11-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Print dropdowns show their option labels again"
     },
     {

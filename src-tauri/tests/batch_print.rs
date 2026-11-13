@@ -38,6 +38,7 @@ struct FakeAdapter {
     inspected: AtomicUsize,
     pdf_page_count: Mutex<Option<u32>>,
     unsupported_paper: Mutex<Option<String>>,
+    unreadable_name: Mutex<Option<String>>,
     submit_gate: Mutex<Option<SubmitGate>>,
     inventory_gate: Mutex<Option<SubmitGate>>,
 }
@@ -92,6 +93,11 @@ impl PrintAdapter for FakeAdapter {
             .lock()
             .unwrap()
             .push(settings.clone());
+        if self.unreadable_name.lock().unwrap().as_deref()
+            == path.file_name().and_then(|name| name.to_str())
+        {
+            return Err(PrintFailure::failed("test file cannot be read"));
+        }
         if self.unsupported_paper.lock().unwrap().as_deref() == Some(settings.paper.as_str()) {
             return Err(PrintFailure::unsupported_options(
                 "paper is unsupported by the test printer",
@@ -288,6 +294,30 @@ fn descriptor(name: &str, visibility: WorksheetVisibility) -> WorksheetDescripto
 
 fn safe_workbook_facts() -> WorkbookSafetyFacts {
     WorkbookSafetyFacts::default()
+}
+
+#[test]
+fn unreadable_file_becomes_a_warning_and_other_files_stay_in_the_queue() {
+    let root = TempDir::new().unwrap();
+    let good = root.path().join("good.pdf");
+    let bad = root.path().join("bad.pdf");
+    std::fs::write(&good, b"good").unwrap();
+    std::fs::write(&bad, b"bad").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    *adapter.unreadable_name.lock().unwrap() = Some("bad.pdf".to_string());
+    let service = print_service(&root, adapter);
+
+    let plan = service
+        .preview(&caller(), params(vec![good, bad]), |_| {})
+        .unwrap();
+
+    assert_eq!(plan.steps.len(), 1);
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.print.fileUnreadable" && warning.subject == "bad.pdf"
+    }));
 }
 
 #[test]

@@ -347,6 +347,7 @@
   "warn.print.invalidCopies": "Copies must be between 1 and 99",
   "warn.print.tooManyFiles": "A queue can contain at most 250 files",
   "warn.print.fileMissing": "File is missing and will be skipped",
+  "warn.print.fileUnreadable": "This file could not be read for printing and was skipped",
   "warn.print.workbookDiscoveryFailed": "The workbook could not be inspected safely and was not added to the print order",
   "warn.print.workbookTooManyWorksheets": "The workbook contains too many worksheets",
   "warn.print.expandedOrderTooLarge": "The expanded print order can contain at most 250 jobs",

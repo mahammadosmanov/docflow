@@ -16,8 +16,8 @@ use crate::{
     },
     page_range::{PageRange, PageRangeCapability, canonical_for},
     print_queue::{
-        BatchPrintParams, FileSignature, PrintAdapter, PrintJob, PrintJobSupport, PrintSettings,
-        PrinterInventory, file_signature_from_open_file,
+        BatchPrintParams, FileSignature, PrintAdapter, PrintFailureKind, PrintJob, PrintJobSupport,
+        PrintSettings, PrinterInventory, file_signature_from_open_file,
     },
 };
 
@@ -152,6 +152,9 @@ where
             }
             Err(error) if error.is_unsupported_options() => {
                 warnings.push(warning("warn.print.unsupportedOptions", display_name(path)));
+            }
+            Err(error) if error.kind == PrintFailureKind::Failed => {
+                warnings.push(warning("warn.print.fileUnreadable", display_name(path)));
             }
             Err(error) => return Err(error.into_backend_error()),
         }

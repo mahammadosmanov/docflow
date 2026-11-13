@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.10 - 2026-11-13
+
+### Fixed
+
+- A PDF or other file that cannot be read for printing no longer stops the whole batch Preview. It is skipped with a warning that names the file, and the other files stay in the queue. Edits in a table revision still reject an unreadable file.
+
 ## 1.48.9 - 2026-11-13
 
 ### Fixed

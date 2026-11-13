@@ -319,6 +319,7 @@
   "warn.print.invalidCopies": "Nüsxə sayı 1 ilə 99 arasında olmalıdır",
   "warn.print.tooManyFiles": "Bir növbədə ən çox 250 fayl ola bilər",
   "warn.print.fileMissing": "Fayl tapılmadı və ötürüləcək",
+  "warn.print.fileUnreadable": "Bu fayl çap üçün oxuna bilmədi və ötürüldü",
   "warn.print.workbookDiscoveryFailed": "İş kitabı təhlükəsiz şəkildə yoxlanıla bilmədi və çap sırasına əlavə edilmədi",
   "warn.print.workbookTooManyWorksheets": "İş kitabında həddindən artıq iş vərəqi var",
   "warn.print.expandedOrderTooLarge": "Genişləndirilmiş çap sırası ən çox 250 işdən ibarət ola bilər",

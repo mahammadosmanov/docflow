@@ -319,6 +319,7 @@
   "warn.print.invalidCopies": "Kopya sayısı 1 ile 99 arasında olmalıdır",
   "warn.print.tooManyFiles": "Bir kuyruk en fazla 250 dosya içerebilir",
   "warn.print.fileMissing": "Dosya bulunamadı ve atlanacak",
+  "warn.print.fileUnreadable": "Bu dosya yazdırma için okunamadı ve atlandı",
   "warn.print.workbookDiscoveryFailed": "Çalışma kitabı güvenle incelenemedi ve yazdırma sırasına eklenmedi",
   "warn.print.workbookTooManyWorksheets": "Çalışma kitabı çok fazla çalışma sayfası içeriyor",
   "warn.print.expandedOrderTooLarge": "Genişletilmiş yazdırma sırası en fazla 250 iş içerebilir",
