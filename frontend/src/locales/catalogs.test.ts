@@ -45,6 +45,21 @@ describe("ARB catalogs", () => {
     expect(missing).toEqual([]);
   });
 
+  it("defines every print choice label the backend builds from a prefix", () => {
+    // Built in Rust with format!("{prefix}.{value}"); a literal search cannot find them.
+    const choices: Record<string, string[]> = {
+      paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+      orientation: ["auto", "portrait", "landscape"],
+      scaling: ["fit", "actual", "shrink"],
+      color: ["printer", "color", "grayscale"],
+      duplex: ["printer", "simplex", "long", "short"],
+    };
+    const missing = Object.entries(choices)
+      .flatMap(([field, values]) => values.map((value) => `choice.print.${field}.${value}`))
+      .filter((key) => !(key in en));
+    expect(missing).toEqual([]);
+  });
+
   it("defines every literal s.t() key the frontend uses", () => {
     const used = new Set(
       sourceFiles(resolve(process.cwd(), "frontend/src")).flatMap((file) =>

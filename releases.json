@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.8",
+  "currentVersion": "1.48.9",
   "releases": [
+    {
+      "version": "1.48.9",
+      "tag": "v1.48.9",
+      "date": "2026-11-13",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Print dropdowns show their option labels again"
+    },
     {
       "version": "1.48.8",
       "tag": "v1.48.8",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up sync updates the PCU Signed by Worley column again"
     },
     {

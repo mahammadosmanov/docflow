@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.9 - 2026-11-13
+
+### Fixed
+
+- The Paper, Orientation, Scaling, Color, and Duplex dropdowns in batch print show their option labels again. Commit 3413efb3 (1.33.83) removed 19 `choice.print.*` keys as unused, but the backend builds those keys from prefixes, so the dropdowns showed raw keys such as `choice.print.duplex.long`. The keys are restored in all four catalogs and a test now pins them.
+
 ## 1.48.8 - 2026-11-12
 
 ### Fixed
