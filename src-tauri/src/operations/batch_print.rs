@@ -16,8 +16,8 @@ use crate::{
     },
     page_range::{PageRange, PageRangeCapability, canonical_for},
     print_queue::{
-        BatchPrintParams, FileSignature, PrintAdapter, PrintJob, PrintJobSupport, PrintSettings,
-        PrinterInventory, file_signature_from_open_file,
+        BatchPrintParams, FileSignature, PrintAdapter, PrintFailureKind, PrintJob, PrintJobSupport,
+        PrintSettings, PrinterInventory, file_signature_from_open_file,
     },
 };
 
@@ -34,7 +34,7 @@ pub const MAX_RETRIES: u32 = 3;
 pub const MIN_TIMEOUT_MINUTES: u32 = 1;
 pub const MAX_TIMEOUT_MINUTES: u32 = 240;
 
-const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
+const PAPER_CHOICES: &[&str] = &["auto", "match", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
 const SCALING_CHOICES: &[&str] = &["fit", "actual", "shrink"];
 const COLOR_CHOICES: &[&str] = &["printer", "color", "grayscale"];
@@ -148,10 +148,19 @@ where
                 rows.push(row_from_file(path, index, &normalized, &support)?);
             }
             Err(error) if error.is_unsupported() => {
-                warnings.push(warning("warn.print.noHandler", display_name(path)));
+                warnings.push(warning(
+                    unsupported_file_warning_key(&error.message),
+                    display_name(path),
+                ));
             }
             Err(error) if error.is_unsupported_options() => {
-                warnings.push(warning("warn.print.unsupportedOptions", display_name(path)));
+                warnings.push(warning(
+                    unsupported_option_warning_key(&error.message),
+                    display_name(path),
+                ));
+            }
+            Err(error) if error.kind == PrintFailureKind::Failed => {
+                warnings.push(warning("warn.print.fileUnreadable", display_name(path)));
             }
             Err(error) => return Err(error.into_backend_error()),
         }
@@ -585,6 +594,23 @@ fn warning_plan(key: &str, subject: &str) -> Plan {
         steps: Vec::new(),
         warnings: vec![warning(key, subject)],
         meta: JsonObject::new(),
+    }
+}
+
+fn unsupported_file_warning_key(message: &str) -> &'static str {
+    match message {
+        "warn.print.multiPageImage" => "warn.print.multiPageImage",
+        _ => "warn.print.noHandler",
+    }
+}
+
+fn unsupported_option_warning_key(message: &str) -> &'static str {
+    match message {
+        "error.print.optionUnsupported.paper" => "error.print.optionUnsupported.paper",
+        "error.print.optionUnsupported.orientation" => "error.print.optionUnsupported.orientation",
+        "error.print.optionUnsupported.color" => "error.print.optionUnsupported.color",
+        "error.print.optionUnsupported.duplex" => "error.print.optionUnsupported.duplex",
+        _ => "warn.print.unsupportedOptions",
     }
 }
 

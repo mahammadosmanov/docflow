@@ -1,5 +1,11 @@
 use super::*;
 
+#[derive(Default)]
+pub(in crate::print_queue) struct PauseState {
+    pub(in crate::print_queue) pause_requested: bool,
+    pub(in crate::print_queue) active_is_excel: bool,
+}
+
 pub struct PrintService {
     pub(in crate::print_queue) queues: PrintQueueStore,
     pub(in crate::print_queue) journals: JournalStore,
@@ -7,6 +13,7 @@ pub struct PrintService {
     pub(in crate::print_queue) grants: PathGrantStore,
     pub(in crate::print_queue) mutation_lock: GlobalMutationLock,
     pub(in crate::print_queue) cancellations: CancellationRegistry,
+    pub(in crate::print_queue) pause_requests: Mutex<HashMap<String, PauseState>>,
     pub(in crate::print_queue) adapter: Arc<dyn PrintAdapter>,
     #[cfg(any(target_os = "windows", test))]
     pub(in crate::print_queue) excel_pipeline:
@@ -32,6 +39,7 @@ impl PrintService {
             grants: PathGrantStore::new(ttl),
             mutation_lock,
             cancellations: CancellationRegistry::default(),
+            pause_requests: Mutex::new(HashMap::new()),
             adapter,
             #[cfg(any(target_os = "windows", test))]
             excel_pipeline: None,
@@ -288,8 +296,29 @@ impl PrintService {
         self.plans.active_plan_count_for_testing()
     }
 
+    pub(in crate::print_queue) fn pause_requested(&self, plan_id: &str) -> bool {
+        lock(&self.pause_requests)
+            .get(plan_id)
+            .is_some_and(|state| state.pause_requested)
+    }
+
+    pub(in crate::print_queue) fn set_active_is_excel(&self, plan_id: &str, value: bool) {
+        if let Some(state) = lock(&self.pause_requests).get_mut(plan_id) {
+            state.active_is_excel = value;
+        }
+    }
+
     pub fn cancel(&self, plan_id: &str) -> bool {
-        self.cancellations.cancel(plan_id)
+        let paused = match lock(&self.pause_requests).get_mut(plan_id) {
+            // First press during a running plain-file queue: pause after the current file.
+            Some(state) if !state.active_is_excel && !state.pause_requested => {
+                state.pause_requested = true;
+                true
+            }
+            _ => false,
+        };
+        // Second press, Excel worksheet export, or no running queue: cancel now.
+        paused || self.cancellations.cancel(plan_id)
     }
 
     pub fn revoke(&self, caller: &CallerIdentity) {

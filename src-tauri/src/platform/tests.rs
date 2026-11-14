@@ -138,6 +138,7 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
             &known,
             &[(7, "older".to_string()), (9, "Microsoft Word".to_string())],
             "report.docx",
+            true,
         ),
         Some(9),
         "a native handler may replace the filename with an application title"
@@ -150,6 +151,7 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
                 (10, "unrelated".to_string()),
             ],
             "report.docx",
+            true,
         ),
         None,
         "multiple unnamed new jobs are ambiguous"
@@ -162,9 +164,40 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
                 (10, "unrelated".to_string()),
             ],
             "report.docx",
+            true,
         ),
         Some(9),
         "one exact title match remains authoritative among concurrent jobs"
+    );
+}
+
+#[test]
+fn native_handler_untitled_fallback_requires_explicit_permission() {
+    let known = std::collections::HashSet::from([7, 8]);
+    let untitled = [(9, "unrelated".to_string())];
+    assert_eq!(
+        select_windows_submitted_job(&known, &untitled, "report.docx", false),
+        None,
+        "after an unconfirmed native receipt, an untitled new job must not be adopted"
+    );
+    assert_eq!(
+        select_windows_submitted_job(&known, &untitled, "report.docx", true),
+        Some(9),
+        "without a prior unconfirmed receipt, one untitled new job is still accepted"
+    );
+    let titled = [
+        (9, "report.docx".to_string()),
+        (10, "unrelated".to_string()),
+    ];
+    assert_eq!(
+        select_windows_submitted_job(&known, &titled, "report.docx", false),
+        Some(9),
+        "a title match is accepted even after an unconfirmed native receipt"
+    );
+    assert_eq!(
+        select_windows_submitted_job(&known, &titled, "report.docx", true),
+        Some(9),
+        "a title match is accepted in both modes"
     );
 }
 
@@ -284,12 +317,20 @@ fn windows_image_frame_count_preflight_requires_exactly_one_frame() {
             failure.kind,
             crate::print_queue::PrintFailureKind::Unsupported
         );
-        assert_eq!(
-            failure.message,
-            "Windows controlled image printing requires exactly one image frame"
-        );
+        assert_eq!(failure.message, "warn.print.multiPageImage");
         assert!(!failure.uncertain);
     }
+}
+
+#[test]
+fn windows_multi_frame_image_reports_the_multi_page_warning_key() {
+    let failure = validate_windows_image_frame_count(2).unwrap_err();
+
+    assert_eq!(
+        failure.kind,
+        crate::print_queue::PrintFailureKind::Unsupported
+    );
+    assert_eq!(failure.message, "warn.print.multiPageImage");
 }
 
 #[test]
@@ -455,4 +496,26 @@ fn production_print_service_installs_excel_pipeline_only_on_windows() {
             ".with_excel_pipeline(platform::windows::excel::production_excel_pipeline())"
         )
     );
+}
+
+#[test]
+fn pdf_page_size_maps_to_a_known_paper_within_two_percent() {
+    let cases = [
+        (595.0, 842.0, Some("A4")),
+        (842.0, 595.0, Some("A4")),
+        (842.0, 1191.0, Some("A3")),
+        (612.0, 792.0, Some("Letter")),
+        (612.0, 1008.0, Some("Legal")),
+        (420.0, 595.0, Some("A5")),
+        (606.0, 842.0, Some("A4")),
+        (630.0, 842.0, None),
+        (300.0, 300.0, None),
+    ];
+    for (width, height, expected) in cases {
+        assert_eq!(
+            paper_for_page(width, height),
+            expected,
+            "page {width} x {height} points"
+        );
+    }
 }

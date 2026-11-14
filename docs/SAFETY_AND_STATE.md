@@ -80,7 +80,7 @@ and Worley workbooks are never selected or modified by this operation.
 | Settings | `~/.docflow/settings.json` | Atomic, schema-filtered, secrets removed |
 | Journals | `~/.docflow/journal/` | Local undo authority and recovery evidence |
 | Trash | `~/.docflow/trash/` | Recoverable review removals |
-| Print queue | `~/.docflow/print_queue.json` | Resume state, not an undo journal |
+| Print queue | `<app data dir>/print-queues/<queue-id>.json` (or `DOCFLOW_PRINT_QUEUE_DIR` when set) | Resume state, not an undo journal; finished queues (no pending, failed, cancelled, or uncertain jobs) last modified more than 30 days ago are deleted when the print screen loads its latest queue; the newest queue file is always kept, and a queue with resumable jobs is never deleted |
 | Retired work events | `~/.docflow/work-items/events/` | Preserved legacy data; no active UI or operation mutates it |
 | Scan index | `~/.docflow/scan-index.sqlite3` | Owner/root/operation-scoped checkpoints and scan-run audit; never Apply authority |
 | Credentials | Windows Credential Manager/macOS Keychain | Tokens never enter settings or React |

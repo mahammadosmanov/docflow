@@ -4,7 +4,7 @@ use std::{
     io::{self, BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,8 @@ use crate::{
 };
 
 pub const DEFAULT_TIMEOUT_MINUTES: u32 = 30;
+
+const FINISHED_QUEUE_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 fn default_page_range() -> String {
     "all".to_string()
@@ -164,6 +166,7 @@ pub trait PrintAdapter: Send + Sync {
         printer: &str,
         settings: &PrintSettings,
     ) -> Result<PrintJobSupport, PrintFailure>;
+    /// The caller must have inspected the same path, printer, and settings immediately before calling.
     fn submit(&self, job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure>;
 }
 
@@ -435,6 +438,31 @@ impl PrintQueueStore {
         Ok(self.root.join(format!("{queue_id}.json")))
     }
 
+    fn prune_finished(&self, caller: &CallerIdentity, candidates: &[(SystemTime, PathBuf)]) {
+        let now = SystemTime::now();
+        for (modified, path) in candidates.iter().skip(1) {
+            let Some(queue_id) = path.file_stem().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            let age = now.duration_since(*modified).unwrap_or_default();
+            if age < FINISHED_QUEUE_RETENTION || self.is_active(queue_id) {
+                continue;
+            }
+            let Ok(mut state) = self.load(queue_id) else {
+                continue;
+            };
+            if state.authorize_owner(caller).is_err() {
+                continue;
+            }
+            state.recover_interrupted();
+            if state.summary().resumable > 0 {
+                continue;
+            }
+            let _ = fs::remove_file(path);
+            lock(&self.memory).remove(queue_id);
+        }
+    }
+
     pub fn latest(
         &self,
         caller: &CallerIdentity,
@@ -453,6 +481,7 @@ impl PrintQueueStore {
             Err(_) => Vec::new(),
         };
         candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
+        self.prune_finished(caller, &candidates);
         let mut seen = HashSet::new();
         for (_, path) in candidates {
             let Some(queue_id) = path.file_stem().and_then(|value| value.to_str()) else {

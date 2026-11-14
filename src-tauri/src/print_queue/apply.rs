@@ -22,6 +22,33 @@ fn apply_result_meta(
         "effectState".to_string(),
         json!(journal_effect_state(record.state)),
     );
+    const MAX_JOB_RESULTS: usize = 1000;
+    let job_results = state
+        .jobs
+        .iter()
+        .take(MAX_JOB_RESULTS)
+        .map(|job| {
+            let mut entry = JsonObject::new();
+            entry.insert("file".to_string(), json!(display_name(&job.path)));
+            if let Some(worksheet) = job.worksheet.as_ref() {
+                entry.insert("worksheet".to_string(), json!(worksheet.name));
+            }
+            entry.insert("copy".to_string(), json!(job.copy));
+            entry.insert(
+                "status".to_string(),
+                json!(job.status.as_deref().unwrap_or("pending")),
+            );
+            Value::Object(entry)
+        })
+        .collect::<Vec<_>>();
+    result
+        .meta
+        .insert("jobResults".to_string(), json!(job_results));
+    if state.jobs.len() > MAX_JOB_RESULTS {
+        result
+            .meta
+            .insert("jobResultsTruncated".to_string(), json!(true));
+    }
 }
 
 /// Marks the attempted job with `status` and pauses the queue on its failure evidence.
@@ -91,6 +118,11 @@ impl PrintService {
         let token = self.cancellations.register(plan_id);
         let _registration = PrintCancellationRegistration {
             registry: &self.cancellations,
+            plan_id,
+        };
+        lock(&self.pause_requests).insert(plan_id.to_string(), PauseState::default());
+        let _pause_registration = PrintPauseRegistration {
+            requests: &self.pause_requests,
             plan_id,
         };
         let raw_jobs = claim
@@ -170,6 +202,11 @@ impl PrintService {
                 result.errors.push(warning("warn.print.cancelled", ""));
                 break;
             }
+            if self.pause_requested(plan_id) {
+                paused = true;
+                result.errors.push(warning("warn.print.cancelled", ""));
+                break;
+            }
             progress(ProgressEvent {
                 phase: "print_waiting".to_string(),
                 done: index as u64,
@@ -183,7 +220,7 @@ impl PrintService {
                 .ok_or_else(|| BackendError::validation("saved print job no longer exists"))?;
             let attempts_allowed = 1 + job.retries;
             let mut completed = false;
-            for _ in 0..attempts_allowed {
+            for attempt in 1..=attempts_allowed {
                 {
                     let saved = &mut state.jobs[saved_index];
                     saved.status = Some("printing".to_string());
@@ -197,7 +234,9 @@ impl PrintService {
                 record.state = Some(JournalState::Applying);
                 self.write_journal(&record)?;
 
+                self.set_active_is_excel(plan_id, job.worksheet.is_some());
                 let submitted = self.submit_approved_job(job, binding, caller, token.clone());
+                self.set_active_is_excel(plan_id, false);
                 self.record_attempt_cleanup_review(
                     &mut state,
                     &mut record,
@@ -292,9 +331,10 @@ impl PrintService {
                         state.current_job_id = None;
                         record.pending_step = None;
                         self.write_journal(&record)?;
-                        if saved.attempts.unwrap_or_default() < attempts_allowed
+                        if attempt < attempts_allowed
                             && retry_disposition_allows_retry(&error)
                             && token.checkpoint().is_ok()
+                            && !self.pause_requested(plan_id)
                         {
                             saved.status = Some("pending".to_string());
                             self.queues.save(&mut state)?;

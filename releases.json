@@ -1,13 +1,141 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.8",
+  "currentVersion": "1.51.3",
   "releases": [
+    {
+      "version": "1.51.3",
+      "tag": "v1.51.3",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows build passes the argument-count lint for the PDF render path"
+    },
+    {
+      "version": "1.51.2",
+      "tag": "v1.51.2",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Windows build passes the argument-count lint for the per-page paper reset"
+    },
+    {
+      "version": "1.51.1",
+      "tag": "v1.51.1",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Match page size sets each PDF page's paper on Windows"
+    },
+    {
+      "version": "1.51.0",
+      "tag": "v1.51.0",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Paper choice Match page size added; page-size selection not yet active"
+    },
+    {
+      "version": "1.50.6",
+      "tag": "v1.50.6",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Late spool jobs from earlier native files are not adopted"
+    },
+    {
+      "version": "1.50.5",
+      "tag": "v1.50.5",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Multi-page images explain why they are not printed"
+    },
+    {
+      "version": "1.50.4",
+      "tag": "v1.50.4",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Print jobs are inspected once before submission"
+    },
+    {
+      "version": "1.50.3",
+      "tag": "v1.50.3",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Windows printer reset only when page orientation changes"
+    },
+    {
+      "version": "1.50.2",
+      "tag": "v1.50.2",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Rejected print options are named in the warning"
+    },
+    {
+      "version": "1.50.1",
+      "tag": "v1.50.1",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Windows PDF jobs are checked before the spool job opens"
+    },
+    {
+      "version": "1.50.0",
+      "tag": "v1.50.0",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Pause finishes the current print file first"
+    },
+    {
+      "version": "1.49.1",
+      "tag": "v1.49.1",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Finished print queues older than 30 days are removed"
+    },
+    {
+      "version": "1.49.0",
+      "tag": "v1.49.0",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Print result screen lists each file's final status"
+    },
+    {
+      "version": "1.48.11",
+      "tag": "v1.48.11",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Resumed print jobs get their retries again"
+    },
+    {
+      "version": "1.48.10",
+      "tag": "v1.48.10",
+      "date": "2026-11-13",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Unreadable print files are skipped with a warning"
+    },
+    {
+      "version": "1.48.9",
+      "tag": "v1.48.9",
+      "date": "2026-11-13",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Print dropdowns show their option labels again"
+    },
     {
       "version": "1.48.8",
       "tag": "v1.48.8",
       "date": "2026-11-12",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up sync updates the PCU Signed by Worley column again"
     },
     {

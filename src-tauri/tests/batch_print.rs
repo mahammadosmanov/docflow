@@ -38,8 +38,11 @@ struct FakeAdapter {
     inspected: AtomicUsize,
     pdf_page_count: Mutex<Option<u32>>,
     unsupported_paper: Mutex<Option<String>>,
+    unreadable_name: Mutex<Option<String>>,
+    unsupported_name: Mutex<Option<(String, String)>>,
     submit_gate: Mutex<Option<SubmitGate>>,
     inventory_gate: Mutex<Option<SubmitGate>>,
+    post_gate_cancelled: Mutex<Vec<bool>>,
 }
 
 impl FakeAdapter {
@@ -92,9 +95,19 @@ impl PrintAdapter for FakeAdapter {
             .lock()
             .unwrap()
             .push(settings.clone());
+        if self.unreadable_name.lock().unwrap().as_deref()
+            == path.file_name().and_then(|name| name.to_str())
+        {
+            return Err(PrintFailure::failed("test file cannot be read"));
+        }
+        if let Some((name, message)) = self.unsupported_name.lock().unwrap().clone()
+            && path.file_name().and_then(|value| value.to_str()) == Some(name.as_str())
+        {
+            return Err(PrintFailure::unsupported(message));
+        }
         if self.unsupported_paper.lock().unwrap().as_deref() == Some(settings.paper.as_str()) {
             return Err(PrintFailure::unsupported_options(
-                "paper is unsupported by the test printer",
+                "error.print.optionUnsupported.paper",
             ));
         }
         match path.extension().and_then(|value| value.to_str()) {
@@ -124,6 +137,7 @@ impl PrintAdapter for FakeAdapter {
                 state = changed.wait(state).unwrap();
             }
         }
+        self.post_gate_cancelled.lock().unwrap().push(cancelled());
         self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()))
     }
 }
@@ -288,6 +302,30 @@ fn descriptor(name: &str, visibility: WorksheetVisibility) -> WorksheetDescripto
 
 fn safe_workbook_facts() -> WorkbookSafetyFacts {
     WorkbookSafetyFacts::default()
+}
+
+#[test]
+fn unreadable_file_becomes_a_warning_and_other_files_stay_in_the_queue() {
+    let root = TempDir::new().unwrap();
+    let good = root.path().join("good.pdf");
+    let bad = root.path().join("bad.pdf");
+    std::fs::write(&good, b"good").unwrap();
+    std::fs::write(&bad, b"bad").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    *adapter.unreadable_name.lock().unwrap() = Some("bad.pdf".to_string());
+    let service = print_service(&root, adapter);
+
+    let plan = service
+        .preview(&caller(), params(vec![good, bad]), |_| {})
+        .unwrap();
+
+    assert_eq!(plan.steps.len(), 1);
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.print.fileUnreadable" && warning.subject == "bad.pdf"
+    }));
 }
 
 #[test]
@@ -2464,6 +2502,39 @@ fn retry_timeout_and_skip_semantics_produce_partial_results_without_reordering()
 }
 
 #[test]
+fn resumed_job_gets_its_full_retry_allowance_again() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.push(Err(PrintFailure::failed("first")));
+    adapter.push(Err(PrintFailure::failed("second")));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![file]);
+    values.retries = 1;
+    values.on_error = "pause".to_string();
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+    assert_eq!(result.failed, 1);
+    let queue_id = result.meta["queueId"].as_str().unwrap();
+
+    let restarted = print_service(&root, adapter.clone());
+    let resumed = restarted.resume(&caller(), queue_id).unwrap();
+    adapter.push(Err(PrintFailure::failed("third")));
+    adapter.push(Ok(()));
+    let second = restarted
+        .apply(&resumed.plan_id, &caller(), |_| {})
+        .unwrap();
+
+    assert_eq!(second.applied, 1);
+    assert_eq!(second.failed, 0);
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 4);
+}
+
+#[test]
 fn uncertain_and_cancelled_jobs_are_never_retried_automatically() {
     for (failure, expected_status, expected_warning) in [
         (
@@ -2682,8 +2753,52 @@ fn unknown_printers_unsupported_options_and_injection_strings_fail_before_submit
     unsupported.paper = "A3".to_string();
     let plan = service.preview(&caller(), unsupported, |_| {}).unwrap();
     assert!(plan.steps.is_empty());
-    assert_eq!(plan.warnings[0].key, "warn.print.unsupportedOptions");
+    assert_eq!(plan.warnings[0].key, "error.print.optionUnsupported.paper");
     assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn preview_warns_that_a_multi_page_tiff_must_be_converted_to_pdf() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("scan.tif");
+    std::fs::write(&file, b"two frames").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    *adapter.unsupported_name.lock().unwrap() = Some((
+        "scan.tif".to_string(),
+        "warn.print.multiPageImage".to_string(),
+    ));
+    let service = print_service(&root, adapter.clone());
+
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings[0].key, "warn.print.multiPageImage");
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn preview_names_the_rejected_print_option() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter.clone());
+    *adapter.unsupported_paper.lock().unwrap() = Some("A3".to_string());
+    let mut unsupported = params(vec![file]);
+    unsupported.paper = "A3".to_string();
+
+    let plan = service.preview(&caller(), unsupported, |_| {}).unwrap();
+
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings[0].key, "error.print.optionUnsupported.paper");
 }
 
 #[test]
@@ -2753,4 +2868,177 @@ fn operator_ventoy_pdf_print_preview_and_fake_submit_preserve_source() {
     assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
     assert_eq!(std::fs::read(&source).unwrap(), original);
     assert_eq!(std::fs::read(&file).unwrap(), original);
+}
+
+#[test]
+fn apply_result_lists_each_file_name_and_status_without_directories() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter);
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    let job_results = result.meta["jobResults"].as_array().unwrap();
+    assert_eq!(job_results.len(), 2);
+    assert_eq!(job_results[0]["file"], "one.pdf");
+    assert_eq!(job_results[0]["status"], "completed");
+    assert_eq!(job_results[1]["file"], "two.pdf");
+    assert_eq!(job_results[1]["status"], "completed");
+    for entry in job_results {
+        let object = entry.as_object().unwrap();
+        assert!(object.contains_key("file"));
+        assert!(object.contains_key("status"));
+        assert!(!entry.to_string().contains(root.path().to_str().unwrap()));
+    }
+}
+
+#[test]
+fn first_pause_request_lets_the_current_job_finish() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let gate: SubmitGate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    *adapter.submit_gate.lock().unwrap() = Some(gate.clone());
+    let service = Arc::new(print_service(&root, adapter.clone()));
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+    let plan_id = plan.plan_id.clone();
+    let applying = {
+        let service = service.clone();
+        let plan_id = plan_id.clone();
+        thread::spawn(move || service.apply(&plan_id, &caller(), |_| {}))
+    };
+    let (state, changed) = &*gate;
+    let mut state = state.lock().unwrap();
+    while !state.0 {
+        state = changed.wait(state).unwrap();
+    }
+    assert!(service.cancel(&plan_id));
+    state.1 = true;
+    changed.notify_all();
+    drop(state);
+
+    let result = applying.join().unwrap().unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
+    assert_eq!(
+        adapter.post_gate_cancelled.lock().unwrap().as_slice(),
+        &[false],
+        "the pause flag must not set the cancellation token for the running job"
+    );
+    assert_eq!(result.meta["jobResults"][0]["status"], "completed");
+    assert_eq!(result.meta["counts"]["completed"], 1);
+    assert_eq!(result.meta["counts"]["pending"], 1);
+    assert_eq!(result.meta["status"], "paused");
+    assert_eq!(result.meta["resumeAvailable"], true);
+    assert_ne!(
+        result.meta["effectState"], "cancelled_partial",
+        "a pause after a completed file is not a cancellation"
+    );
+}
+
+#[test]
+fn second_pause_request_cancels_the_active_job() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let gate: SubmitGate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    *adapter.submit_gate.lock().unwrap() = Some(gate.clone());
+    let service = Arc::new(print_service(&root, adapter.clone()));
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+    let plan_id = plan.plan_id.clone();
+    let applying = {
+        let service = service.clone();
+        let plan_id = plan_id.clone();
+        thread::spawn(move || service.apply(&plan_id, &caller(), |_| {}))
+    };
+    let (state, changed) = &*gate;
+    let mut state = state.lock().unwrap();
+    while !state.0 {
+        state = changed.wait(state).unwrap();
+    }
+    assert!(service.cancel(&plan_id));
+    assert!(service.cancel(&plan_id));
+    state.1 = true;
+    changed.notify_all();
+    drop(state);
+
+    let result = applying.join().unwrap().unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
+    assert_eq!(
+        adapter.post_gate_cancelled.lock().unwrap().as_slice(),
+        &[true],
+        "the second press must set the cancellation token"
+    );
+    assert_eq!(result.meta["counts"]["pending"], 1);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|warning| warning.key == "warn.print.cancelled")
+    );
+}
+
+#[test]
+fn cancel_without_a_running_queue_keeps_the_old_behavior() {
+    let root = TempDir::new().unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter);
+
+    assert!(!service.cancel("unknown"));
+}
+
+#[test]
+fn match_page_size_paper_persists_through_queue_and_resume() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("sketch.pdf");
+    std::fs::write(&file, b"sketch").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.push(Err(PrintFailure::failed("paper jam")));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![file]);
+    values.paper = "match".to_string();
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+    assert_eq!(plan.meta["jobs"][0]["paper"], "match");
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap()[0].paper, "match");
+    let queue_id = result.meta["queueId"].as_str().unwrap();
+    let restarted = print_service(&root, adapter);
+    let resumed = restarted.resume(&caller(), queue_id).unwrap();
+    assert_eq!(resumed.meta["editor"]["rows"][0]["paper"], "match");
+    assert_eq!(resumed.meta["jobs"][0]["paper"], "match");
 }

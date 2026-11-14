@@ -103,6 +103,7 @@ pub(crate) fn select_windows_submitted_job(
     known_ids: &HashSet<u32>,
     candidates: &[(u32, String)],
     expected_title: &str,
+    allow_untitled_fallback: bool,
 ) -> Option<u32> {
     let fresh = candidates
         .iter()
@@ -119,7 +120,7 @@ pub(crate) fn select_windows_submitted_job(
         .collect::<Vec<_>>();
     if named.len() == 1 {
         Some(named[0].0)
-    } else if named.is_empty() && fresh.len() == 1 {
+    } else if allow_untitled_fallback && named.is_empty() && fresh.len() == 1 {
         Some(fresh[0].0)
     } else {
         None
@@ -145,7 +146,26 @@ pub(crate) fn validate_windows_image_frame_count(
         Ok(())
     } else {
         Err(crate::print_queue::PrintFailure::unsupported(
-            "Windows controlled image printing requires exactly one image frame",
+            "warn.print.multiPageImage",
         ))
     }
+}
+
+/// Maps a PDF page size (points, 1/72 inch) to a Paper choice name.
+/// Sides are compared unordered, so landscape pages match too.
+pub(crate) fn paper_for_page(width_points: f32, height_points: f32) -> Option<&'static str> {
+    const TOLERANCE: f32 = 0.02;
+    const SIZES: &[(&str, f32, f32)] = &[
+        ("A5", 420.0, 595.0),
+        ("A4", 595.0, 842.0),
+        ("A3", 842.0, 1191.0),
+        ("Letter", 612.0, 792.0),
+        ("Legal", 612.0, 1008.0),
+    ];
+    let short = width_points.min(height_points);
+    let long = width_points.max(height_points);
+    SIZES.iter().find_map(|&(name, want_short, want_long)| {
+        let close = |actual: f32, want: f32| (actual - want).abs() <= want * TOLERANCE;
+        (close(short, want_short) && close(long, want_long)).then_some(name)
+    })
 }

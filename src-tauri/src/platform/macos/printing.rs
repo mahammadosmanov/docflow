@@ -80,12 +80,6 @@ impl PrintAdapter for MacOsPrintAdapter {
                 false,
             ));
         }
-        let inventory = self.inventory()?;
-        if !inventory.contains(&job.printer) {
-            return Err(PrintFailure::failed("printer is no longer available"));
-        }
-        let path = Path::new(&job.path);
-        self.inspect(path, &job.printer, &job.settings())?;
         let args = lp_arguments(job);
         let output = run_bounded(LP, args.iter().map(OsString::as_os_str), COMMAND_TIMEOUT)
             .map_err(|error| {
@@ -120,7 +114,7 @@ fn lp_arguments(job: &PrintJob) -> Vec<OsString> {
 
 pub fn cups_options(settings: &PrintSettings) -> Vec<String> {
     let mut options = vec!["job-sheets=none".to_string()];
-    if settings.paper != "auto" {
+    if !matches!(settings.paper.as_str(), "auto" | "match") {
         options.push(format!("media={}", settings.paper));
     }
     match settings.orientation.as_str() {
@@ -166,14 +160,16 @@ fn validate_reported_options(printer: &str, settings: &PrintSettings) -> Result<
     if reported.trim().is_empty() {
         return Ok(());
     }
-    if settings.paper != "auto" && !reported.contains(&settings.paper.to_ascii_lowercase()) {
+    if !matches!(settings.paper.as_str(), "auto" | "match")
+        && !reported.contains(&settings.paper.to_ascii_lowercase())
+    {
         return Err(PrintFailure::unsupported_options(
-            "the selected paper is not reported by this printer",
+            "error.print.optionUnsupported.paper",
         ));
     }
     if settings.duplex != "printer" && !reported.contains("duplex") && !reported.contains("sides") {
         return Err(PrintFailure::unsupported_options(
-            "the selected duplex mode is not reported by this printer",
+            "error.print.optionUnsupported.duplex",
         ));
     }
     if settings.color != "printer"
@@ -181,7 +177,7 @@ fn validate_reported_options(printer: &str, settings: &PrintSettings) -> Result<
         && !reported.contains("monochrome")
     {
         return Err(PrintFailure::unsupported_options(
-            "the selected color mode is not reported by this printer",
+            "error.print.optionUnsupported.color",
         ));
     }
     Ok(())
@@ -344,6 +340,18 @@ mod tests {
                 "print-color-mode=monochrome",
                 "sides=two-sided-short-edge",
             ]
+        );
+    }
+
+    #[test]
+    fn cups_match_page_size_emits_no_media_option_like_auto() {
+        let mut settings = settings();
+        settings.paper = "match".to_string();
+
+        assert!(
+            cups_options(&settings)
+                .iter()
+                .all(|option| !option.starts_with("media="))
         );
     }
 

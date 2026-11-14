@@ -5,6 +5,102 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.3 - 2026-11-14
+
+### Fixed
+
+- The Windows build passes the lint limit on function arguments. The PDF render path takes one request value instead of eight arguments. The 1.51.2 change addressed a different function and did not clear this lint. No printing behaviour changed.
+
+## 1.51.2 - 2026-11-14
+
+### Fixed
+
+- The Windows build passes the lint limit on function arguments again. The per-page paper reset takes the page size as one value, with no change to printing behaviour.
+
+## 1.51.1 - 2026-11-14
+
+### Added
+
+- Paper "Match page size" now sets each PDF page's paper on Windows. Each page is printed on the smallest standard paper that fits it (A5, A4, A3, Letter, or Legal, within 2 percent). Before anything is spooled, every selected page must map to a known paper and the printer must accept it; otherwise the job is refused with the paper-not-supported message. Worksheet and image jobs, and all jobs on macOS, still use the printer's default paper for this choice. Not yet verified on a physical printer with mixed page sizes.
+
+## 1.51.0 - 2026-11-14
+
+### Added
+
+- New Paper choice "Match page size" in batch print. It is saved and queued like the other paper choices. Page-size selection is not active yet: on Windows and macOS a job with this choice still uses the printer's default paper, as "Printer default" does. Choosing a paper for each PDF page is planned for a later release.
+
+## 1.50.6 - 2026-11-14
+
+### Fixed
+
+- A late spool job from an earlier Office-style file is no longer adopted as the next file's job. After one native file ends with an unconfirmed receipt, later native files in the same app session need a spool title match. Without one they end as "Sent; receipt unavailable" instead of tracking a possibly wrong job. No job is resubmitted.
+
+## 1.50.5 - 2026-11-14
+
+### Fixed
+
+- A multi-page image is no longer reported as needing a default print app. The warning now says multi-page images are not supported and to convert the file to PDF.
+
+## 1.50.4 - 2026-11-14
+
+### Fixed
+
+- Each print job is inspected once before submission. The Windows and macOS adapters no longer repeat the printer check and inspection that the queue already ran, so network printers skip the extra enumeration and PDF open on every job.
+
+## 1.50.3 - 2026-11-14
+
+### Fixed
+
+- Windows printing no longer resets the printer between pages when the next page already has the same orientation. Some duplex drivers could eject a sheet during that reset. Pages whose orientation changes still reset the printer as before.
+
+## 1.50.2 - 2026-11-14
+
+### Fixed
+
+- When a Windows or macOS printer rejects a paper size, orientation, color mode, or two-sided mode, DocFlow now names that option in the preview warning and in the queue message, in the selected language. Before, it showed a generic message or an English sentence.
+
+## 1.50.1 - 2026-11-14
+
+### Fixed
+
+- A Windows PDF print job now checks the file's page count, page range, and work folder before the print job is opened. A PDF that cannot be read fails cleanly and is not marked "uncertain", so the queue no longer pauses and retry is no longer blocked for it.
+
+## 1.50.0 - 2026-11-14
+
+### Changed
+
+- "Pause queue" no longer interrupts the file that is printing. The first press stops the queue after that file finishes. Its result is recorded normally, and later files stay pending. The button then reads "Cancel current file". A second press cancels the file that is printing, as before. That file is marked for checking and is never printed again automatically. An Excel worksheet export keeps the single press: "Pause queue" cancels it at once.
+
+## 1.49.1 - 2026-11-14
+
+### Fixed
+
+- Finished print queues are removed automatically 30 days after they were last changed. Before, every finished queue file stayed in the app data folder forever, and the print screen read all of them each time it opened. The newest queue file is always kept, and a queue with a pending, failed, cancelled, or uncertain file is never removed.
+
+## 1.49.0 - 2026-11-14
+
+### Added
+
+- The print result screen lists each file with its final status (completed, failed, pending and so on). Before, the result showed only counts, so the user had to open the resume review to see which file ended in which state. The list shows file names only, not full paths.
+
+## 1.48.11 - 2026-11-14
+
+### Fixed
+
+- A print job that was paused and then resumed gets its full retry count again. Before, the attempts already used in the earlier run counted against the new run, so a resumed file could get no retry at all.
+
+## 1.48.10 - 2026-11-13
+
+### Fixed
+
+- A PDF or other file that cannot be read for printing no longer stops the whole batch Preview. It is skipped with a warning that names the file, and the other files stay in the queue. Edits in a table revision still reject an unreadable file.
+
+## 1.48.9 - 2026-11-13
+
+### Fixed
+
+- The Paper, Orientation, Scaling, Color, and Duplex dropdowns in batch print show their option labels again. Commit 3413efb3 (1.33.83) removed 19 `choice.print.*` keys as unused, but the backend builds those keys from prefixes, so the dropdowns showed raw keys such as `choice.print.duplex.long`. The keys are restored in all four catalogs and a test now pins them.
+
 ## 1.48.8 - 2026-11-12
 
 ### Fixed
