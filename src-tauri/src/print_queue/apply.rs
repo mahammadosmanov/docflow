@@ -183,7 +183,7 @@ impl PrintService {
                 .ok_or_else(|| BackendError::validation("saved print job no longer exists"))?;
             let attempts_allowed = 1 + job.retries;
             let mut completed = false;
-            for _ in 0..attempts_allowed {
+            for attempt in 1..=attempts_allowed {
                 {
                     let saved = &mut state.jobs[saved_index];
                     saved.status = Some("printing".to_string());
@@ -292,7 +292,7 @@ impl PrintService {
                         state.current_job_id = None;
                         record.pending_step = None;
                         self.write_journal(&record)?;
-                        if saved.attempts.unwrap_or_default() < attempts_allowed
+                        if attempt < attempts_allowed
                             && retry_disposition_allows_retry(&error)
                             && token.checkpoint().is_ok()
                         {

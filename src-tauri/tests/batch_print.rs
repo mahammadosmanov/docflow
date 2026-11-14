@@ -2494,6 +2494,39 @@ fn retry_timeout_and_skip_semantics_produce_partial_results_without_reordering()
 }
 
 #[test]
+fn resumed_job_gets_its_full_retry_allowance_again() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.push(Err(PrintFailure::failed("first")));
+    adapter.push(Err(PrintFailure::failed("second")));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![file]);
+    values.retries = 1;
+    values.on_error = "pause".to_string();
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+    assert_eq!(result.failed, 1);
+    let queue_id = result.meta["queueId"].as_str().unwrap();
+
+    let restarted = print_service(&root, adapter.clone());
+    let resumed = restarted.resume(&caller(), queue_id).unwrap();
+    adapter.push(Err(PrintFailure::failed("third")));
+    adapter.push(Ok(()));
+    let second = restarted
+        .apply(&resumed.plan_id, &caller(), |_| {})
+        .unwrap();
+
+    assert_eq!(second.applied, 1);
+    assert_eq!(second.failed, 0);
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 4);
+}
+
+#[test]
 fn uncertain_and_cancelled_jobs_are_never_retried_automatically() {
     for (failure, expected_status, expected_warning) in [
         (

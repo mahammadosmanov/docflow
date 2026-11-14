@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.10",
+  "currentVersion": "1.48.11",
   "releases": [
+    {
+      "version": "1.48.11",
+      "tag": "v1.48.11",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Resumed print jobs get their retries again"
+    },
     {
       "version": "1.48.10",
       "tag": "v1.48.10",
       "date": "2026-11-13",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Unreadable print files are skipped with a warning"
     },
     {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.48.11 - 2026-11-14
+
+### Fixed
+
+- A print job that was paused and then resumed gets its full retry count again. Before, the attempts already used in the earlier run counted against the new run, so a resumed file could get no retry at all.
+
 ## 1.48.10 - 2026-11-13
 
 ### Fixed
