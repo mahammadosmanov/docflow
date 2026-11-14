@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.1",
+  "currentVersion": "1.51.2",
   "releases": [
+    {
+      "version": "1.51.2",
+      "tag": "v1.51.2",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows build passes the argument-count lint for the per-page paper reset"
+    },
     {
       "version": "1.51.1",
       "tag": "v1.51.1",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Match page size sets each PDF page's paper on Windows"
     },
     {

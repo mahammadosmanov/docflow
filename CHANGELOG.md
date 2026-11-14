@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.2 - 2026-11-14
+
+### Fixed
+
+- The Windows build passes the lint limit on function arguments again. The per-page paper reset takes the page size as one value, with no change to printing behaviour.
+
 ## 1.51.1 - 2026-11-14
 
 ### Added

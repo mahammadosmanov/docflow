@@ -940,7 +940,7 @@ fn draw_image_frames(
         }
         image.select_frame(dimension, frame)?;
         let (width, height, image_dpi_x, image_dpi_y) = image.metrics()?;
-        reset_auto_orientation(context, devmode, settings, width, height, false)?;
+        reset_auto_orientation(context, devmode, settings, (width, height), false)?;
         // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printable_width = unsafe { GetDeviceCaps(context.0, HORZRES as i32) };
         // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
@@ -1037,8 +1037,7 @@ fn render_pdf_pages(
             context,
             devmode,
             settings,
-            bitmap.width,
-            bitmap.height,
+            (bitmap.width, bitmap.height),
             match_paper,
         )?;
         // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
@@ -1094,8 +1093,7 @@ fn render_in_memory_pdf_pages(
             context,
             devmode,
             request.settings,
-            bitmap.width,
-            bitmap.height,
+            (bitmap.width, bitmap.height),
             false,
         )?;
         // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
@@ -1119,10 +1117,10 @@ fn reset_auto_orientation(
     context: &mut DeviceContext,
     devmode: *mut DEVMODEW,
     settings: &PrintSettings,
-    width: i32,
-    height: i32,
+    page_pixels: (i32, i32),
     match_paper: bool,
 ) -> Result<(), PrintFailure> {
+    let (width, height) = page_pixels;
     let set_orientation = settings.orientation == "auto";
     let orientation = if width > height {
         DMORIENT_LANDSCAPE as i16
