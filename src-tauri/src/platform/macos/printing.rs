@@ -80,12 +80,6 @@ impl PrintAdapter for MacOsPrintAdapter {
                 false,
             ));
         }
-        let inventory = self.inventory()?;
-        if !inventory.contains(&job.printer) {
-            return Err(PrintFailure::failed("printer is no longer available"));
-        }
-        let path = Path::new(&job.path);
-        self.inspect(path, &job.printer, &job.settings())?;
         let args = lp_arguments(job);
         let output = run_bounded(LP, args.iter().map(OsString::as_os_str), COMMAND_TIMEOUT)
             .map_err(|error| {

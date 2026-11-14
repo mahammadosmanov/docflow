@@ -132,12 +132,6 @@ impl PrintAdapter for WindowsPrintAdapter {
             ));
         }
         let path = Path::new(&job.path);
-        let support = self.inspect(path, &job.printer, &job.settings())?;
-        if support.verb != job.verb {
-            return Err(PrintFailure::failed(
-                "Windows print capability changed after preview",
-            ));
-        }
         if job.verb == "docflow" {
             if extension(path) == "pdf" {
                 print_pdf(job, cancelled)

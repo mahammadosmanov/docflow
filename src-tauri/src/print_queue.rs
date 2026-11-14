@@ -166,6 +166,7 @@ pub trait PrintAdapter: Send + Sync {
         printer: &str,
         settings: &PrintSettings,
     ) -> Result<PrintJobSupport, PrintFailure>;
+    /// The caller must have inspected the same path, printer, and settings immediately before calling.
     fn submit(&self, job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure>;
 }
 

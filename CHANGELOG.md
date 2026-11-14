@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.4 - 2026-11-14
+
+### Fixed
+
+- Each print job is inspected once before submission. The Windows and macOS adapters no longer repeat the printer check and inspection that the queue already ran, so network printers skip the extra enumeration and PDF open on every job.
+
 ## 1.50.3 - 2026-11-14
 
 ### Fixed

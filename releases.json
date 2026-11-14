@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.3",
+  "currentVersion": "1.50.4",
   "releases": [
+    {
+      "version": "1.50.4",
+      "tag": "v1.50.4",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Print jobs are inspected once before submission"
+    },
     {
       "version": "1.50.3",
       "tag": "v1.50.3",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Windows printer reset only when page orientation changes"
     },
     {
