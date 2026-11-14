@@ -497,3 +497,25 @@ fn production_print_service_installs_excel_pipeline_only_on_windows() {
         )
     );
 }
+
+#[test]
+fn pdf_page_size_maps_to_a_known_paper_within_two_percent() {
+    let cases = [
+        (595.0, 842.0, Some("A4")),
+        (842.0, 595.0, Some("A4")),
+        (842.0, 1191.0, Some("A3")),
+        (612.0, 792.0, Some("Letter")),
+        (612.0, 1008.0, Some("Legal")),
+        (420.0, 595.0, Some("A5")),
+        (606.0, 842.0, Some("A4")),
+        (630.0, 842.0, None),
+        (300.0, 300.0, None),
+    ];
+    for (width, height, expected) in cases {
+        assert_eq!(
+            paper_for_page(width, height),
+            expected,
+            "page {width} x {height} points"
+        );
+    }
+}

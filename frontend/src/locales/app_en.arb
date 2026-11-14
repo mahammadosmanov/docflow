@@ -415,6 +415,7 @@
   "param.print.timeout": "Job timeout (minutes)",
   "param.print.timeout.help": "Stops waiting when a printer remains blocked, offline or unresponsive.",
   "choice.print.paper.auto": "Printer default",
+  "choice.print.paper.match": "Match page size",
   "choice.print.paper.A4": "A4",
   "choice.print.paper.A3": "A3",
   "choice.print.paper.A5": "A5",

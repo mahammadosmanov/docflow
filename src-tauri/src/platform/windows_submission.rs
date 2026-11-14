@@ -150,3 +150,22 @@ pub(crate) fn validate_windows_image_frame_count(
         ))
     }
 }
+
+/// Maps a PDF page size (points, 1/72 inch) to a Paper choice name.
+/// Sides are compared unordered, so landscape pages match too.
+pub(crate) fn paper_for_page(width_points: f32, height_points: f32) -> Option<&'static str> {
+    const TOLERANCE: f32 = 0.02;
+    const SIZES: &[(&str, f32, f32)] = &[
+        ("A5", 420.0, 595.0),
+        ("A4", 595.0, 842.0),
+        ("A3", 842.0, 1191.0),
+        ("Letter", 612.0, 792.0),
+        ("Legal", 612.0, 1008.0),
+    ];
+    let short = width_points.min(height_points);
+    let long = width_points.max(height_points);
+    SIZES.iter().find_map(|&(name, want_short, want_long)| {
+        let close = |actual: f32, want: f32| (actual - want).abs() <= want * TOLERANCE;
+        (close(short, want_short) && close(long, want_long)).then_some(name)
+    })
+}

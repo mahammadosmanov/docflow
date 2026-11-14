@@ -264,7 +264,8 @@ struct RequestedDevMode {
 
 fn requested_devmode(settings: &PrintSettings) -> Result<RequestedDevMode, PrintFailure> {
     let paper = match settings.paper.as_str() {
-        "auto" => None,
+        // "match" keeps the driver paper until per-page selection is added.
+        "auto" | "match" => None,
         "A3" => Some(DMPAPER_A3 as i16),
         "A4" => Some(DMPAPER_A4 as i16),
         "A5" => Some(DMPAPER_A5 as i16),

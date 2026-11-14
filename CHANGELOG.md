@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.0 - 2026-11-14
+
+### Added
+
+- New Paper choice "Match page size" in batch print. It is saved and queued like the other paper choices. Page-size selection is not active yet: on Windows and macOS a job with this choice still uses the printer's default paper, as "Printer default" does. Choosing a paper for each PDF page is planned for a later release.
+
 ## 1.50.6 - 2026-11-14
 
 ### Fixed

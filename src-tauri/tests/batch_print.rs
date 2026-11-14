@@ -3016,3 +3016,29 @@ fn cancel_without_a_running_queue_keeps_the_old_behavior() {
 
     assert!(!service.cancel("unknown"));
 }
+
+#[test]
+fn match_page_size_paper_persists_through_queue_and_resume() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("sketch.pdf");
+    std::fs::write(&file, b"sketch").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    adapter.push(Err(PrintFailure::failed("paper jam")));
+    let service = print_service(&root, adapter.clone());
+    let mut values = params(vec![file]);
+    values.paper = "match".to_string();
+    let plan = service.preview(&caller(), values, |_| {}).unwrap();
+    assert_eq!(plan.meta["jobs"][0]["paper"], "match");
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap()[0].paper, "match");
+    let queue_id = result.meta["queueId"].as_str().unwrap();
+    let restarted = print_service(&root, adapter);
+    let resumed = restarted.resume(&caller(), queue_id).unwrap();
+    assert_eq!(resumed.meta["editor"]["rows"][0]["paper"], "match");
+    assert_eq!(resumed.meta["jobs"][0]["paper"], "match");
+}

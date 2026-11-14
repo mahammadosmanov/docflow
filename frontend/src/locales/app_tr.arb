@@ -387,6 +387,7 @@
   "param.print.timeout": "İş zaman aşımı (dakika)",
   "param.print.timeout.help": "Yazıcı bloke, çevrimdışı veya yanıtsız kalırsa beklemeyi durdurur.",
   "choice.print.paper.auto": "Yazıcı varsayılanı",
+  "choice.print.paper.match": "Sayfa boyutuna uy",
   "choice.print.paper.A4": "A4",
   "choice.print.paper.A3": "A3",
   "choice.print.paper.A5": "A5",

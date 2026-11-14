@@ -18,7 +18,7 @@ use rfi_log::rfi_log_operation;
 use rfi_sync::*;
 use signed_scans::*;
 
-const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
+const PAPER_CHOICES: &[&str] = &["auto", "match", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
 const SCALING_CHOICES: &[&str] = &["fit", "actual", "shrink"];
 const COLOR_CHOICES: &[&str] = &["printer", "color", "grayscale"];

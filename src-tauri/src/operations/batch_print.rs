@@ -34,7 +34,7 @@ pub const MAX_RETRIES: u32 = 3;
 pub const MIN_TIMEOUT_MINUTES: u32 = 1;
 pub const MAX_TIMEOUT_MINUTES: u32 = 240;
 
-const PAPER_CHOICES: &[&str] = &["auto", "A4", "A3", "A5", "Letter", "Legal"];
+const PAPER_CHOICES: &[&str] = &["auto", "match", "A4", "A3", "A5", "Letter", "Legal"];
 const ORIENTATION_CHOICES: &[&str] = &["auto", "portrait", "landscape"];
 const SCALING_CHOICES: &[&str] = &["fit", "actual", "shrink"];
 const COLOR_CHOICES: &[&str] = &["printer", "color", "grayscale"];

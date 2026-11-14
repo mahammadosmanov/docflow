@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.6",
+  "currentVersion": "1.51.0",
   "releases": [
+    {
+      "version": "1.51.0",
+      "tag": "v1.51.0",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Paper choice Match page size added; page-size selection not yet active"
+    },
     {
       "version": "1.50.6",
       "tag": "v1.50.6",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Late spool jobs from earlier native files are not adopted"
     },
     {

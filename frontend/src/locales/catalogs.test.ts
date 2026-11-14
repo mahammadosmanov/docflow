@@ -48,7 +48,7 @@ describe("ARB catalogs", () => {
   it("defines every print choice label the backend builds from a prefix", () => {
     // Built in Rust with format!("{prefix}.{value}"); a literal search cannot find them.
     const choices: Record<string, string[]> = {
-      paper: ["auto", "A4", "A3", "A5", "Letter", "Legal"],
+      paper: ["auto", "match", "A4", "A3", "A5", "Letter", "Legal"],
       orientation: ["auto", "portrait", "landscape"],
       scaling: ["fit", "actual", "shrink"],
       color: ["printer", "color", "grayscale"],

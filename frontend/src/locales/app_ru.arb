@@ -387,6 +387,7 @@
   "param.print.timeout": "Тайм-аут задания (минуты)",
   "param.print.timeout.help": "Прекращает ожидание, если принтер заблокирован, отключён или не отвечает.",
   "choice.print.paper.auto": "Настройка принтера",
+  "choice.print.paper.match": "По размеру страницы",
   "choice.print.paper.A4": "A4",
   "choice.print.paper.A3": "A3",
   "choice.print.paper.A5": "A5",

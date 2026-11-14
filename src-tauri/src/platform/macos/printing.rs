@@ -114,7 +114,7 @@ fn lp_arguments(job: &PrintJob) -> Vec<OsString> {
 
 pub fn cups_options(settings: &PrintSettings) -> Vec<String> {
     let mut options = vec!["job-sheets=none".to_string()];
-    if settings.paper != "auto" {
+    if !matches!(settings.paper.as_str(), "auto" | "match") {
         options.push(format!("media={}", settings.paper));
     }
     match settings.orientation.as_str() {
@@ -160,7 +160,9 @@ fn validate_reported_options(printer: &str, settings: &PrintSettings) -> Result<
     if reported.trim().is_empty() {
         return Ok(());
     }
-    if settings.paper != "auto" && !reported.contains(&settings.paper.to_ascii_lowercase()) {
+    if !matches!(settings.paper.as_str(), "auto" | "match")
+        && !reported.contains(&settings.paper.to_ascii_lowercase())
+    {
         return Err(PrintFailure::unsupported_options(
             "error.print.optionUnsupported.paper",
         ));
@@ -338,6 +340,18 @@ mod tests {
                 "print-color-mode=monochrome",
                 "sides=two-sided-short-edge",
             ]
+        );
+    }
+
+    #[test]
+    fn cups_match_page_size_emits_no_media_option_like_auto() {
+        let mut settings = settings();
+        settings.paper = "match".to_string();
+
+        assert!(
+            cups_options(&settings)
+                .iter()
+                .all(|option| !option.starts_with("media="))
         );
     }
 

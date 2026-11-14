@@ -387,6 +387,7 @@
   "param.print.timeout": "İş vaxt limiti (dəqiqə)",
   "param.print.timeout.help": "Printer bloklanmış, oflayn və ya cavabsız qalarsa gözləməni dayandırır.",
   "choice.print.paper.auto": "Printer standartı",
+  "choice.print.paper.match": "Səhifə ölçüsünə uyğun",
   "choice.print.paper.A4": "A4",
   "choice.print.paper.A3": "A3",
   "choice.print.paper.A5": "A5",
