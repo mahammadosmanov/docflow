@@ -1087,6 +1087,14 @@ fn reset_auto_orientation(
     } else {
         DMORIENT_PORTRAIT as i16
     };
+    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and these reads only inspect its flags and orientation.
+    let already_oriented = unsafe {
+        ((*devmode).dmFields & DM_ORIENTATION) != 0
+            && (*devmode).Anonymous1.Anonymous1.dmOrientation == orientation
+    };
+    if already_oriented {
+        return Ok(());
+    }
     // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and only its orientation fields change.
     unsafe {
         (*devmode).dmFields |= DM_ORIENTATION;

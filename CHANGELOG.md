@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.3 - 2026-11-14
+
+### Fixed
+
+- Windows printing no longer resets the printer between pages when the next page already has the same orientation. Some duplex drivers could eject a sheet during that reset. Pages whose orientation changes still reset the printer as before.
+
 ## 1.50.2 - 2026-11-14
 
 ### Fixed

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.2",
+  "currentVersion": "1.50.3",
   "releases": [
+    {
+      "version": "1.50.3",
+      "tag": "v1.50.3",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows printer reset only when page orientation changes"
+    },
     {
       "version": "1.50.2",
       "tag": "v1.50.2",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Rejected print options are named in the warning"
     },
     {
