@@ -520,12 +520,14 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
     let result = render_pdf_pages(
         &mut context,
         devmode.as_mut_ptr::<DEVMODEW>(),
-        Path::new(&job.path),
-        &job.settings(),
-        pages,
-        &temporary,
-        deadline,
-        cancelled,
+        PdfRenderRequest {
+            path: Path::new(&job.path),
+            settings: &job.settings(),
+            pages,
+            temporary: &temporary,
+            deadline,
+            cancelled,
+        },
     );
     if let Err(error) = result {
         // SAFETY: context.0 is the device context whose document was started above.
@@ -1006,16 +1008,28 @@ fn draw_image_frames(
     Ok(())
 }
 
+struct PdfRenderRequest<'a> {
+    path: &'a Path,
+    settings: &'a PrintSettings,
+    pages: Vec<u32>,
+    temporary: &'a tempfile::TempDir,
+    deadline: Instant,
+    cancelled: &'a dyn Fn() -> bool,
+}
+
 fn render_pdf_pages(
     context: &mut DeviceContext,
     devmode: *mut DEVMODEW,
-    path: &Path,
-    settings: &PrintSettings,
-    pages: Vec<u32>,
-    temporary: &tempfile::TempDir,
-    deadline: Instant,
-    cancelled: &dyn Fn() -> bool,
+    request: PdfRenderRequest<'_>,
 ) -> Result<(), PrintFailure> {
+    let PdfRenderRequest {
+        path,
+        settings,
+        pages,
+        temporary,
+        deadline,
+        cancelled,
+    } = request;
     for page in pages {
         if cancelled() {
             return Err(PrintFailure::cancelled(

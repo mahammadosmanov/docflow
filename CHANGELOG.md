@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.3 - 2026-11-14
+
+### Fixed
+
+- The Windows build passes the lint limit on function arguments. The PDF render path takes one request value instead of eight arguments. The 1.51.2 change addressed a different function and did not clear this lint. No printing behaviour changed.
+
 ## 1.51.2 - 2026-11-14
 
 ### Fixed

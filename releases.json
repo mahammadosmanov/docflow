@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.2",
+  "currentVersion": "1.51.3",
   "releases": [
+    {
+      "version": "1.51.3",
+      "tag": "v1.51.3",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows build passes the argument-count lint for the PDF render path"
+    },
     {
       "version": "1.51.2",
       "tag": "v1.51.2",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Windows build passes the argument-count lint for the per-page paper reset"
     },
     {
