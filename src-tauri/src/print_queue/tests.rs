@@ -114,3 +114,57 @@ fn protected_workbook_safety_is_unsafe_for_resume_and_apply() {
 
     assert!(workbook_safety_is_unsafe(&safety));
 }
+
+#[test]
+fn finished_queues_older_than_retention_are_pruned_but_newest_and_resumable_stay() {
+    let root = tempfile::TempDir::new().unwrap();
+    let store = PrintQueueStore::new(root.path().join("print-queues"));
+    let caller = CallerIdentity::new("owner", "session");
+    let queue = |queue_id: &str, status: &str, job_status: &str| {
+        let job = PrintJob {
+            job_id: format!("{queue_id}-job"),
+            path: format!("{queue_id}.pdf"),
+            status: Some(job_status.to_string()),
+            ..PrintJob::default()
+        };
+        QueueState {
+            version: 1,
+            queue_id: queue_id.to_string(),
+            owner_id: "owner".to_string(),
+            session_id: "session".to_string(),
+            created_at: utc_now(),
+            updated_at: utc_now(),
+            status: status.to_string(),
+            current_job_id: None,
+            jobs: vec![job],
+            grant_root_identities: Vec::new(),
+            source_identities: Vec::new(),
+            extra: Map::new(),
+        }
+    };
+    store
+        .save(&mut queue("queue-a", "completed", "completed"))
+        .unwrap();
+    store
+        .save(&mut queue("queue-b", "paused", "pending"))
+        .unwrap();
+    store
+        .save(&mut queue("queue-c", "completed", "completed"))
+        .unwrap();
+    let forty_days_ago = std::time::SystemTime::now() - Duration::from_secs(40 * 24 * 60 * 60);
+    for queue_id in ["queue-a", "queue-b"] {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(store.path(queue_id).unwrap())
+            .unwrap()
+            .set_modified(forty_days_ago)
+            .unwrap();
+    }
+
+    let summary = store.latest(&caller).unwrap().unwrap();
+
+    assert!(!store.path("queue-a").unwrap().exists());
+    assert!(store.path("queue-b").unwrap().exists());
+    assert!(store.path("queue-c").unwrap().exists());
+    assert_eq!(summary.queue_id, "queue-b");
+}

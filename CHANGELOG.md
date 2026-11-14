@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.49.1 - 2026-11-14
+
+### Fixed
+
+- Finished print queues are removed automatically 30 days after they were last changed. Before, every finished queue file stayed in the app data folder forever, and the print screen read all of them each time it opened. The newest queue file is always kept, and a queue with a pending, failed, cancelled, or uncertain file is never removed.
+
 ## 1.49.0 - 2026-11-14
 
 ### Added

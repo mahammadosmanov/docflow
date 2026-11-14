@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.49.0",
+  "currentVersion": "1.49.1",
   "releases": [
+    {
+      "version": "1.49.1",
+      "tag": "v1.49.1",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Finished print queues older than 30 days are removed"
+    },
     {
       "version": "1.49.0",
       "tag": "v1.49.0",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Print result screen lists each file's final status"
     },
     {
