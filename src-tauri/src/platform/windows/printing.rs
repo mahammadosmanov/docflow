@@ -262,20 +262,24 @@ struct RequestedDevMode {
     duplex: Option<i16>,
 }
 
-fn requested_devmode(settings: &PrintSettings) -> Result<RequestedDevMode, PrintFailure> {
-    let paper = match settings.paper.as_str() {
-        // "match" keeps the driver paper until per-page selection is added.
-        "auto" | "match" => None,
+fn paper_size_code(name: &str) -> Option<i16> {
+    match name {
         "A3" => Some(DMPAPER_A3 as i16),
         "A4" => Some(DMPAPER_A4 as i16),
         "A5" => Some(DMPAPER_A5 as i16),
         "Letter" => Some(DMPAPER_LETTER as i16),
         "Legal" => Some(DMPAPER_LEGAL as i16),
-        _ => {
-            return Err(PrintFailure::unsupported_options(
-                "Windows does not support the selected paper size",
-            ));
-        }
+        _ => None,
+    }
+}
+
+fn requested_devmode(settings: &PrintSettings) -> Result<RequestedDevMode, PrintFailure> {
+    // "match" keeps the driver paper here; print_pdf sets each page's paper.
+    let paper = match settings.paper.as_str() {
+        "auto" | "match" => None,
+        other => Some(paper_size_code(other).ok_or_else(|| {
+            PrintFailure::unsupported_options("Windows does not support the selected paper size")
+        })?),
     };
     let orientation = match settings.orientation.as_str() {
         "auto" => None,
@@ -443,12 +447,41 @@ unsafe fn devmode_mismatch(
     None
 }
 
+/// For paper "match": every selected page must map to a known paper, and the
+/// printer must accept each of those papers. Runs before anything is spooled.
+fn check_match_page_papers(
+    printer: &str,
+    settings: &PrintSettings,
+    path: &Path,
+    pages: &[u32],
+) -> Result<(), PrintFailure> {
+    if settings.paper != "match" {
+        return Ok(());
+    }
+    let sizes = crate::windows_pdf::page_sizes_points(path, pages).map_err(PrintFailure::failed)?;
+    let mut checked = HashSet::new();
+    for (width, height) in sizes {
+        let paper = crate::platform::windows_submission::paper_for_page(width, height).ok_or_else(
+            || PrintFailure::unsupported_options("error.print.optionUnsupported.paper"),
+        )?;
+        if checked.insert(paper) {
+            let probe = PrintSettings {
+                paper: paper.to_string(),
+                ..settings.clone()
+            };
+            validated_devmode(printer, &probe)?;
+        }
+    }
+    Ok(())
+}
+
 fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;
     let page_count =
         crate::windows_pdf::page_count(Path::new(&job.path)).map_err(PrintFailure::failed)?;
     let pages = selected_pdf_pages(&job.settings().page_range, page_count)
         .map_err(|error| PrintFailure::failed(error.message))?;
+    check_match_page_papers(&job.printer, &job.settings(), Path::new(&job.path), &pages)?;
     let temporary = tempfile::Builder::new()
         .prefix("docflow-print-")
         .tempdir()
@@ -907,7 +940,7 @@ fn draw_image_frames(
         }
         image.select_frame(dimension, frame)?;
         let (width, height, image_dpi_x, image_dpi_y) = image.metrics()?;
-        reset_auto_orientation(context, devmode, settings, width, height)?;
+        reset_auto_orientation(context, devmode, settings, width, height, false)?;
         // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
         let printable_width = unsafe { GetDeviceCaps(context.0, HORZRES as i32) };
         // SAFETY: context.0 is a live device context, and the index constant is a valid GetDeviceCaps argument.
@@ -999,7 +1032,15 @@ fn render_pdf_pages(
         crate::windows_pdf::render_page_png(path, &image_path, PDF_DPI, page)
             .map_err(PrintFailure::failed)?;
         let bitmap = decode_png(&image_path)?;
-        reset_auto_orientation(context, devmode, settings, bitmap.width, bitmap.height)?;
+        let match_paper = settings.paper == "match";
+        reset_auto_orientation(
+            context,
+            devmode,
+            settings,
+            bitmap.width,
+            bitmap.height,
+            match_paper,
+        )?;
         // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
         if unsafe { StartPage(context.0) } <= 0 {
             return Err(PrintFailure::failed("Windows could not start a PDF page"));
@@ -1055,6 +1096,7 @@ fn render_in_memory_pdf_pages(
             request.settings,
             bitmap.width,
             bitmap.height,
+            false,
         )?;
         // SAFETY: context.0 is a live device context, and StartPage is paired with EndPage below.
         if unsafe { StartPage(context.0) } <= 0 {
@@ -1071,33 +1113,64 @@ fn render_in_memory_pdf_pages(
     Ok(())
 }
 
+/// Sets orientation (when "auto") and, when `match_paper` is true, the paper
+/// that fits this page. Both changes share one `ResetDCW` call.
 fn reset_auto_orientation(
     context: &mut DeviceContext,
     devmode: *mut DEVMODEW,
     settings: &PrintSettings,
     width: i32,
     height: i32,
+    match_paper: bool,
 ) -> Result<(), PrintFailure> {
-    if settings.orientation != "auto" {
-        return Ok(());
-    }
+    let set_orientation = settings.orientation == "auto";
     let orientation = if width > height {
         DMORIENT_LANDSCAPE as i16
     } else {
         DMORIENT_PORTRAIT as i16
     };
-    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and these reads only inspect its flags and orientation.
-    let already_oriented = unsafe {
-        ((*devmode).dmFields & DM_ORIENTATION) != 0
-            && (*devmode).Anonymous1.Anonymous1.dmOrientation == orientation
+    let paper = if match_paper {
+        // Pixels at PDF_DPI back to points (1/72 inch).
+        let to_points = |pixels: i32| pixels as f32 * 72.0 / PDF_DPI as f32;
+        let name = crate::platform::windows_submission::paper_for_page(
+            to_points(width),
+            to_points(height),
+        )
+        .ok_or_else(|| PrintFailure::unsupported_options("error.print.optionUnsupported.paper"))?;
+        paper_size_code(name)
+    } else {
+        None
     };
-    if already_oriented {
+    if !set_orientation && paper.is_none() {
         return Ok(());
     }
-    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and only its orientation fields change.
+    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and these reads only inspect its flags and fields.
+    let already_set = unsafe {
+        let fields = (*devmode).dmFields;
+        let orientation_ok = !set_orientation
+            || ((fields & DM_ORIENTATION) != 0
+                && (*devmode).Anonymous1.Anonymous1.dmOrientation == orientation);
+        let paper_ok = match paper {
+            None => true,
+            Some(code) => {
+                (fields & DM_PAPERSIZE) != 0 && (*devmode).Anonymous1.Anonymous1.dmPaperSize == code
+            }
+        };
+        orientation_ok && paper_ok
+    };
+    if already_set {
+        return Ok(());
+    }
+    // SAFETY: devmode points to the driver-filled DEVMODEW buffer that the caller owns, and only the orientation and paper fields change.
     unsafe {
-        (*devmode).dmFields |= DM_ORIENTATION;
-        (*devmode).Anonymous1.Anonymous1.dmOrientation = orientation;
+        if set_orientation {
+            (*devmode).dmFields |= DM_ORIENTATION;
+            (*devmode).Anonymous1.Anonymous1.dmOrientation = orientation;
+        }
+        if let Some(code) = paper {
+            (*devmode).dmFields |= DM_PAPERSIZE;
+            (*devmode).Anonymous1.Anonymous1.dmPaperSize = code;
+        }
     }
     // SAFETY: context.0 is a live device context, and devmode is the buffer whose orientation was just updated.
     let reset = unsafe { ResetDCW(context.0, devmode) };

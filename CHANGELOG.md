@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.1 - 2026-11-14
+
+### Added
+
+- Paper "Match page size" now sets each PDF page's paper on Windows. Each page is printed on the smallest standard paper that fits it (A5, A4, A3, Letter, or Legal, within 2 percent). Before anything is spooled, every selected page must map to a known paper and the printer must accept it; otherwise the job is refused with the paper-not-supported message. Worksheet and image jobs, and all jobs on macOS, still use the printer's default paper for this choice. Not yet verified on a physical printer with mixed page sizes.
+
 ## 1.51.0 - 2026-11-14
 
 ### Added

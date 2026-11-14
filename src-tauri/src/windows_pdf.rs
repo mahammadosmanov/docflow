@@ -108,6 +108,29 @@ fn document_page_count(document: &PdfDocument) -> Result<u32, String> {
     Ok(count)
 }
 
+/// Page sizes in points (1/72 inch) for the given zero-based pages.
+pub fn page_sizes_points(input: &Path, pages: &[u32]) -> Result<Vec<(f32, f32)>, String> {
+    let _runtime = initialize_runtime()?;
+    let (document, _input_stream) = load_document(input)?;
+    let page_count = document_page_count(&document)?;
+    pages
+        .iter()
+        .map(|&page_index| {
+            if page_index >= page_count {
+                return Err("Windows PDF page index is out of range".to_string());
+            }
+            let page = document
+                .GetPage(page_index)
+                .map_err(|error| format!("Windows could not open the PDF page: {error}"))?;
+            let size = page
+                .Size()
+                .map_err(|error| format!("Windows could not measure the PDF page: {error}"))?;
+            // Size is in 1/96 inch; points are 1/72 inch.
+            Ok((size.Width * 0.75, size.Height * 0.75))
+        })
+        .collect()
+}
+
 pub fn render_page_png(
     input: &Path,
     output: &Path,
