@@ -329,6 +329,7 @@
   "warn.print.workbookUnsafeConnections": "Çalışma kitabı dış veri bağlantıları içerdiği için reddedildi",
   "warn.print.workbookUnsafeQueryTables": "Çalışma kitabı sorgu tabloları içerdiği için reddedildi",
   "warn.print.noHandler": "Bu dosya türü için yerel bir yazdırma uygulaması bulunamadı; yazdırabilen bir varsayılan uygulama kurun veya seçin",
+  "warn.print.multiPageImage": "Çok sayfalı görüntüler desteklenmiyor; dosyayı PDF'e dönüştürün",
   "warn.print.unsupportedOptions": "Seçilen yazıcı veya yerel uygulama bu yazdırma seçeneklerini desteklemiyor",
   "warn.print.nonUndoable": "Yazdırma geri alınamaz. Dosyalar kesin olarak tek tek çalışır; bir uygulama doğrulama isterse sonraki dosya başlatılmadan önce kuyruk bekler.",
   "error.print.invalidPlan": "Yazdırma planı geçersiz. Kuyruğu yeniden önizleyin.",

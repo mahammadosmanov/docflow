@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.4",
+  "currentVersion": "1.50.5",
   "releases": [
+    {
+      "version": "1.50.5",
+      "tag": "v1.50.5",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Multi-page images explain why they are not printed"
+    },
     {
       "version": "1.50.4",
       "tag": "v1.50.4",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Print jobs are inspected once before submission"
     },
     {

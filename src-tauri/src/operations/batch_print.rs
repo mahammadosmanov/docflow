@@ -148,7 +148,10 @@ where
                 rows.push(row_from_file(path, index, &normalized, &support)?);
             }
             Err(error) if error.is_unsupported() => {
-                warnings.push(warning("warn.print.noHandler", display_name(path)));
+                warnings.push(warning(
+                    unsupported_file_warning_key(&error.message),
+                    display_name(path),
+                ));
             }
             Err(error) if error.is_unsupported_options() => {
                 warnings.push(warning(
@@ -591,6 +594,13 @@ fn warning_plan(key: &str, subject: &str) -> Plan {
         steps: Vec::new(),
         warnings: vec![warning(key, subject)],
         meta: JsonObject::new(),
+    }
+}
+
+fn unsupported_file_warning_key(message: &str) -> &'static str {
+    match message {
+        "warn.print.multiPageImage" => "warn.print.multiPageImage",
+        _ => "warn.print.noHandler",
     }
 }
 

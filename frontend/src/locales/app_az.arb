@@ -329,6 +329,7 @@
   "warn.print.workbookUnsafeConnections": "İş kitabında xarici məlumat bağlantıları olduğu üçün rədd edildi",
   "warn.print.workbookUnsafeQueryTables": "İş kitabında sorğu cədvəlləri olduğu üçün rədd edildi",
   "warn.print.noHandler": "Bu fayl növü üçün yerli çap tətbiqi tapılmadı; çap edə bilən standart tətbiq quraşdırın və ya seçin",
+  "warn.print.multiPageImage": "Çoxsəhifəli şəkillər dəstəklənmir; faylı PDF-ə çevirin",
   "warn.print.unsupportedOptions": "Seçilmiş printer və ya yerli tətbiq bu çap seçimlərini dəstəkləmir",
   "warn.print.nonUndoable": "Çap geri qaytarıla bilməz. Fayllar dəqiq şəkildə bir-bir işləyir; tətbiq təsdiq istəsə növbəti fayl başlamazdan əvvəl növbə gözləyir.",
   "error.print.invalidPlan": "Çap planı etibarsızdır. Növbəni yenidən önizləyin.",

@@ -39,6 +39,7 @@ struct FakeAdapter {
     pdf_page_count: Mutex<Option<u32>>,
     unsupported_paper: Mutex<Option<String>>,
     unreadable_name: Mutex<Option<String>>,
+    unsupported_name: Mutex<Option<(String, String)>>,
     submit_gate: Mutex<Option<SubmitGate>>,
     inventory_gate: Mutex<Option<SubmitGate>>,
     post_gate_cancelled: Mutex<Vec<bool>>,
@@ -98,6 +99,11 @@ impl PrintAdapter for FakeAdapter {
             == path.file_name().and_then(|name| name.to_str())
         {
             return Err(PrintFailure::failed("test file cannot be read"));
+        }
+        if let Some((name, message)) = self.unsupported_name.lock().unwrap().clone()
+            && path.file_name().and_then(|value| value.to_str()) == Some(name.as_str())
+        {
+            return Err(PrintFailure::unsupported(message));
         }
         if self.unsupported_paper.lock().unwrap().as_deref() == Some(settings.paper.as_str()) {
             return Err(PrintFailure::unsupported_options(
@@ -2748,6 +2754,30 @@ fn unknown_printers_unsupported_options_and_injection_strings_fail_before_submit
     let plan = service.preview(&caller(), unsupported, |_| {}).unwrap();
     assert!(plan.steps.is_empty());
     assert_eq!(plan.warnings[0].key, "error.print.optionUnsupported.paper");
+    assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn preview_warns_that_a_multi_page_tiff_must_be_converted_to_pdf() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("scan.tif");
+    std::fs::write(&file, b"two frames").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    *adapter.unsupported_name.lock().unwrap() = Some((
+        "scan.tif".to_string(),
+        "warn.print.multiPageImage".to_string(),
+    ));
+    let service = print_service(&root, adapter.clone());
+
+    let plan = service
+        .preview(&caller(), params(vec![file]), |_| {})
+        .unwrap();
+
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings[0].key, "warn.print.multiPageImage");
     assert!(adapter.submitted.lock().unwrap().is_empty());
 }
 

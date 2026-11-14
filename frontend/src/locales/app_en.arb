@@ -357,6 +357,7 @@
   "warn.print.workbookUnsafeConnections": "The workbook contains external data connections and was rejected",
   "warn.print.workbookUnsafeQueryTables": "The workbook contains query tables and was rejected",
   "warn.print.noHandler": "No native print handler is available for this file type; install or choose a default app that can print it",
+  "warn.print.multiPageImage": "Multi-page images are not supported; convert the file to PDF",
   "warn.print.unsupportedOptions": "The selected printer or native application does not support these print options",
   "warn.print.nonUndoable": "Printing cannot be undone. Files run strictly one at a time; if an app asks for confirmation, the queue waits before starting the next file.",
   "error.print.invalidPlan": "The print plan is invalid. Preview the queue again.",

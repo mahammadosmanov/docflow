@@ -145,7 +145,7 @@ pub(crate) fn validate_windows_image_frame_count(
         Ok(())
     } else {
         Err(crate::print_queue::PrintFailure::unsupported(
-            "Windows controlled image printing requires exactly one image frame",
+            "warn.print.multiPageImage",
         ))
     }
 }

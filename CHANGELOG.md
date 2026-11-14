@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.5 - 2026-11-14
+
+### Fixed
+
+- A multi-page image is no longer reported as needing a default print app. The warning now says multi-page images are not supported and to convert the file to PDF.
+
 ## 1.50.4 - 2026-11-14
 
 ### Fixed

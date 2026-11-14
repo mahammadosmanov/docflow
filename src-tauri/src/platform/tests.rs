@@ -284,12 +284,20 @@ fn windows_image_frame_count_preflight_requires_exactly_one_frame() {
             failure.kind,
             crate::print_queue::PrintFailureKind::Unsupported
         );
-        assert_eq!(
-            failure.message,
-            "Windows controlled image printing requires exactly one image frame"
-        );
+        assert_eq!(failure.message, "warn.print.multiPageImage");
         assert!(!failure.uncertain);
     }
+}
+
+#[test]
+fn windows_multi_frame_image_reports_the_multi_page_warning_key() {
+    let failure = validate_windows_image_frame_count(2).unwrap_err();
+
+    assert_eq!(
+        failure.kind,
+        crate::print_queue::PrintFailureKind::Unsupported
+    );
+    assert_eq!(failure.message, "warn.print.multiPageImage");
 }
 
 #[test]
