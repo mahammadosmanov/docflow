@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.1 - 2026-11-14
+
+### Fixed
+
+- A Windows PDF print job now checks the file's page count, page range, and work folder before the print job is opened. A PDF that cannot be read fails cleanly and is not marked "uncertain", so the queue no longer pauses and retry is no longer blocked for it.
+
 ## 1.50.0 - 2026-11-14
 
 ### Changed

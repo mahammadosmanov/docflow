@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.0",
+  "currentVersion": "1.50.1",
   "releases": [
+    {
+      "version": "1.50.1",
+      "tag": "v1.50.1",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows PDF jobs are checked before the spool job opens"
+    },
     {
       "version": "1.50.0",
       "tag": "v1.50.0",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Pause finishes the current print file first"
     },
     {

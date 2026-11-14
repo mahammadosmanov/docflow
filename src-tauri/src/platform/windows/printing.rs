@@ -428,6 +428,14 @@ unsafe fn devmode_matches(devmode: &DEVMODEW, requested: RequestedDevMode) -> bo
 
 fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {
     let mut devmode = validated_devmode(&job.printer, &job.settings())?;
+    let page_count =
+        crate::windows_pdf::page_count(Path::new(&job.path)).map_err(PrintFailure::failed)?;
+    let pages = selected_pdf_pages(&job.settings().page_range, page_count)
+        .map_err(|error| PrintFailure::failed(error.message))?;
+    let temporary = tempfile::Builder::new()
+        .prefix("docflow-print-")
+        .tempdir()
+        .map_err(|_| PrintFailure::failed("Windows print workspace is unavailable"))?;
     let printer = wide(&job.printer);
     let driver = wide("WINSPOOL");
     // SAFETY: driver and printer are NUL-terminated names that live across the call, and devmode points to a buffer the driver filled.
@@ -464,6 +472,8 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
         devmode.as_mut_ptr::<DEVMODEW>(),
         Path::new(&job.path),
         &job.settings(),
+        pages,
+        &temporary,
         deadline,
         cancelled,
     );
@@ -951,16 +961,11 @@ fn render_pdf_pages(
     devmode: *mut DEVMODEW,
     path: &Path,
     settings: &PrintSettings,
+    pages: Vec<u32>,
+    temporary: &tempfile::TempDir,
     deadline: Instant,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(), PrintFailure> {
-    let page_count = crate::windows_pdf::page_count(path).map_err(PrintFailure::failed)?;
-    let pages = selected_pdf_pages(&settings.page_range, page_count)
-        .map_err(|error| PrintFailure::failed(error.message))?;
-    let temporary = tempfile::Builder::new()
-        .prefix("docflow-print-")
-        .tempdir()
-        .map_err(|_| PrintFailure::failed("Windows print workspace is unavailable"))?;
     for page in pages {
         if cancelled() {
             return Err(PrintFailure::cancelled(
