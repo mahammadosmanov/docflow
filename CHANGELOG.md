@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.6 - 2026-11-14
+
+### Fixed
+
+- A late spool job from an earlier Office-style file is no longer adopted as the next file's job. After one native file ends with an unconfirmed receipt, later native files in the same app session need a spool title match. Without one they end as "Sent; receipt unavailable" instead of tracking a possibly wrong job. No job is resubmitted.
+
 ## 1.50.5 - 2026-11-14
 
 ### Fixed

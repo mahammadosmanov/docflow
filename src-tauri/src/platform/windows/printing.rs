@@ -7,6 +7,7 @@ use std::{
     os::windows::ffi::OsStrExt,
     path::Path,
     ptr::{null, null_mut},
+    sync::atomic::{AtomicBool, Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -65,6 +66,9 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HANDLER_JOB_TIMEOUT: Duration = Duration::from_secs(30);
 const OBSERVATION_ERROR_GRACE: Duration = Duration::from_secs(3);
 const CONTROLLED_IMAGE_FORMATS: &[&str] = &["png", "jpg", "jpeg", "bmp", "tif", "tiff"];
+// Set when a native file was submitted but its spool job was never identified.
+// Until a title-matched job is confirmed, an untitled new job is not adopted.
+static NATIVE_RECEIPT_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
 pub struct WindowsPrintAdapter;
@@ -1380,6 +1384,7 @@ fn print_with_native_application(
             Err(_) => {
                 let first_error = enumeration_error_since.get_or_insert_with(Instant::now);
                 if first_error.elapsed() >= OBSERVATION_ERROR_GRACE {
+                    NATIVE_RECEIPT_PENDING.store(true, Ordering::SeqCst);
                     return Err(windows_post_submission_observation_error(
                         WindowsPostSubmissionObservation::JobEnumeration,
                     ));
@@ -1392,17 +1397,25 @@ fn print_with_native_application(
             .into_iter()
             .map(|candidate| (candidate.id, candidate.document))
             .collect::<Vec<_>>();
-        if let Some(job_id) = select_windows_submitted_job(&known_jobs, &candidates, &title) {
+        let allow_untitled_fallback = !NATIVE_RECEIPT_PENDING.load(Ordering::SeqCst);
+        if let Some(job_id) =
+            select_windows_submitted_job(&known_jobs, &candidates, &title, allow_untitled_fallback)
+        {
             break job_id;
         }
         if Instant::now() >= acquisition_deadline {
+            NATIVE_RECEIPT_PENDING.store(true, Ordering::SeqCst);
             return Err(PrintFailure::submitted_unconfirmed(
                 "the native application did not expose an identifiable spool job",
             ));
         }
         thread::sleep(POLL_INTERVAL);
     };
-    wait_for_job(&job.printer, job_id, deadline, cancelled)
+    let result = wait_for_job(&job.printer, job_id, deadline, cancelled);
+    if result.is_ok() {
+        NATIVE_RECEIPT_PENDING.store(false, Ordering::SeqCst);
+    }
+    result
 }
 
 fn has_print_handler(extension: &str, action: &str) -> bool {

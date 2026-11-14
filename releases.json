@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.5",
+  "currentVersion": "1.50.6",
   "releases": [
+    {
+      "version": "1.50.6",
+      "tag": "v1.50.6",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Late spool jobs from earlier native files are not adopted"
+    },
     {
       "version": "1.50.5",
       "tag": "v1.50.5",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Multi-page images explain why they are not printed"
     },
     {

@@ -103,6 +103,7 @@ pub(crate) fn select_windows_submitted_job(
     known_ids: &HashSet<u32>,
     candidates: &[(u32, String)],
     expected_title: &str,
+    allow_untitled_fallback: bool,
 ) -> Option<u32> {
     let fresh = candidates
         .iter()
@@ -119,7 +120,7 @@ pub(crate) fn select_windows_submitted_job(
         .collect::<Vec<_>>();
     if named.len() == 1 {
         Some(named[0].0)
-    } else if named.is_empty() && fresh.len() == 1 {
+    } else if allow_untitled_fallback && named.is_empty() && fresh.len() == 1 {
         Some(fresh[0].0)
     } else {
         None

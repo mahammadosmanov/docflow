@@ -138,6 +138,7 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
             &known,
             &[(7, "older".to_string()), (9, "Microsoft Word".to_string())],
             "report.docx",
+            true,
         ),
         Some(9),
         "a native handler may replace the filename with an application title"
@@ -150,6 +151,7 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
                 (10, "unrelated".to_string()),
             ],
             "report.docx",
+            true,
         ),
         None,
         "multiple unnamed new jobs are ambiguous"
@@ -162,9 +164,40 @@ fn native_handler_job_selection_accepts_one_new_job_without_trusting_ambiguous_j
                 (10, "unrelated".to_string()),
             ],
             "report.docx",
+            true,
         ),
         Some(9),
         "one exact title match remains authoritative among concurrent jobs"
+    );
+}
+
+#[test]
+fn native_handler_untitled_fallback_requires_explicit_permission() {
+    let known = std::collections::HashSet::from([7, 8]);
+    let untitled = [(9, "unrelated".to_string())];
+    assert_eq!(
+        select_windows_submitted_job(&known, &untitled, "report.docx", false),
+        None,
+        "after an unconfirmed native receipt, an untitled new job must not be adopted"
+    );
+    assert_eq!(
+        select_windows_submitted_job(&known, &untitled, "report.docx", true),
+        Some(9),
+        "without a prior unconfirmed receipt, one untitled new job is still accepted"
+    );
+    let titled = [
+        (9, "report.docx".to_string()),
+        (10, "unrelated".to_string()),
+    ];
+    assert_eq!(
+        select_windows_submitted_job(&known, &titled, "report.docx", false),
+        Some(9),
+        "a title match is accepted even after an unconfirmed native receipt"
+    );
+    assert_eq!(
+        select_windows_submitted_job(&known, &titled, "report.docx", true),
+        Some(9),
+        "a title match is accepted in both modes"
     );
 }
 
