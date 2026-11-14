@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.49.0 - 2026-11-14
+
+### Added
+
+- The print result screen lists each file with its final status (completed, failed, pending and so on). Before, the result showed only counts, so the user had to open the resume review to see which file ended in which state. The list shows file names only, not full paths.
+
 ## 1.48.11 - 2026-11-14
 
 ### Fixed

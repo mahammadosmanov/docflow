@@ -195,6 +195,11 @@ export function ResultView({
           : "committed";
   const success =
     effectState === "committed" && result.meta?.resumeAvailable !== true;
+  const jobResults = Array.isArray(result.meta?.jobResults)
+    ? (result.meta.jobResults as Array<Record<string, unknown>>)
+    : null;
+  const showSheet =
+    jobResults?.some((row) => typeof row.worksheet === "string") ?? false;
   return (
     <div className="result-card" ref={focusRef} tabIndex={-1}>
       <span className={`result-icon ${success ? "success" : "failure"}`}>
@@ -216,6 +221,30 @@ export function ResultView({
             .map((item) => `${item.subject} ${s.t(item.key)}`)
             .join("\n")}
         </Notice>
+      )}
+      {jobResults && (
+        <table className="editor-table">
+          <thead>
+            <tr>
+              <th>{s.t("print.col.file")}</th>
+              {showSheet && <th>{s.t("print.col.worksheet")}</th>}
+              <th>{s.t("print.col.status")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobResults.map((row, index) => (
+              <tr key={index}>
+                <td>{String(row.file ?? "")}</td>
+                {showSheet && (
+                  <td>
+                    {typeof row.worksheet === "string" ? row.worksheet : ""}
+                  </td>
+                )}
+                <td>{s.t(`print.status.${String(row.status)}`)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
       {result.meta?.resumeAvailable === true && (
         <div className="queue-result-summary">

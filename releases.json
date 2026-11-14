@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.48.11",
+  "currentVersion": "1.49.0",
   "releases": [
+    {
+      "version": "1.49.0",
+      "tag": "v1.49.0",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Print result screen lists each file's final status"
+    },
     {
       "version": "1.48.11",
       "tag": "v1.48.11",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Resumed print jobs get their retries again"
     },
     {

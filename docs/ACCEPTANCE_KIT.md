@@ -463,8 +463,9 @@ not undoable; the result screen's Undo is disabled for it. EPSON-specific cases
    what you set, and the workbook appears as one row per worksheet in the
    "Worksheet" column with its Visibility.
 4. Read the warning "Printing cannot be undone". Press Apply.
-5. Watch the Status column. Rows move through "Pending" and "Printing" to
-   "Completed", or to "Sent; receipt unavailable" when Windows keeps no final
+5. Watch the progress line advance one file at a time. When the queue ends,
+   check the per-file status list on the result screen: each file shows
+   "Completed", or "Sent; receipt unavailable" when Windows keeps no final
    receipt. If Windows asks where to save the PDF, save into `<test>\out\pdf`; the
    queue waits for you before starting the next file. Note whether such a prompt
    appeared.

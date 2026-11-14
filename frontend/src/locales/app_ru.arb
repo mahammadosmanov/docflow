@@ -434,6 +434,7 @@
   "print.status.failed": "Ошибка",
   "print.status.cancelled": "Отменено",
   "print.status.uncertain": "Проверьте принтер",
+  "print.status.abandoned": "Отброшено",
   "warn.print.settingsLimited": "Этот формат печатается системным приложением; поддержка бумаги и макета зависит от приложения",
   "warn.print.noJobsSelected": "Не выбраны строки для печати",
   "warn.print.invalidRetries": "Количество повторов должно быть от 0 до 3",

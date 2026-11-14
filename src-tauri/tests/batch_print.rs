@@ -2817,3 +2817,35 @@ fn operator_ventoy_pdf_print_preview_and_fake_submit_preserve_source() {
     assert_eq!(std::fs::read(&source).unwrap(), original);
     assert_eq!(std::fs::read(&file).unwrap(), original);
 }
+
+#[test]
+fn apply_result_lists_each_file_name_and_status_without_directories() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter);
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    let job_results = result.meta["jobResults"].as_array().unwrap();
+    assert_eq!(job_results.len(), 2);
+    assert_eq!(job_results[0]["file"], "one.pdf");
+    assert_eq!(job_results[0]["status"], "completed");
+    assert_eq!(job_results[1]["file"], "two.pdf");
+    assert_eq!(job_results[1]["status"], "completed");
+    for entry in job_results {
+        let object = entry.as_object().unwrap();
+        assert!(object.contains_key("file"));
+        assert!(object.contains_key("status"));
+        assert!(!entry.to_string().contains(root.path().to_str().unwrap()));
+    }
+}

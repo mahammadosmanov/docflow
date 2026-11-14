@@ -434,6 +434,7 @@
   "print.status.failed": "Başarısız",
   "print.status.cancelled": "İptal edildi",
   "print.status.uncertain": "Yazıcıyı kontrol edin",
+  "print.status.abandoned": "Vazgeçildi",
   "warn.print.settingsLimited": "Bu format kendi yerel uygulamasıyla yazdırılır; kağıt ve yerleşim desteği o uygulamaya bağlıdır",
   "warn.print.noJobsSelected": "Yazdırılacak satır seçilmedi",
   "warn.print.invalidRetries": "Otomatik yeniden deneme 0 ile 3 arasında olmalıdır",

@@ -22,6 +22,33 @@ fn apply_result_meta(
         "effectState".to_string(),
         json!(journal_effect_state(record.state)),
     );
+    const MAX_JOB_RESULTS: usize = 1000;
+    let job_results = state
+        .jobs
+        .iter()
+        .take(MAX_JOB_RESULTS)
+        .map(|job| {
+            let mut entry = JsonObject::new();
+            entry.insert("file".to_string(), json!(display_name(&job.path)));
+            if let Some(worksheet) = job.worksheet.as_ref() {
+                entry.insert("worksheet".to_string(), json!(worksheet.name));
+            }
+            entry.insert("copy".to_string(), json!(job.copy));
+            entry.insert(
+                "status".to_string(),
+                json!(job.status.as_deref().unwrap_or("pending")),
+            );
+            Value::Object(entry)
+        })
+        .collect::<Vec<_>>();
+    result
+        .meta
+        .insert("jobResults".to_string(), json!(job_results));
+    if state.jobs.len() > MAX_JOB_RESULTS {
+        result
+            .meta
+            .insert("jobResultsTruncated".to_string(), json!(true));
+    }
 }
 
 /// Marks the attempted job with `status` and pauses the queue on its failure evidence.

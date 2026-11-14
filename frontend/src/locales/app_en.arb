@@ -462,6 +462,7 @@
   "print.status.failed": "Failed",
   "print.status.cancelled": "Cancelled",
   "print.status.uncertain": "Check printer",
+  "print.status.abandoned": "Discarded",
   "warn.print.settingsLimited": "This format is printed by its native application; paper and layout support depends on that application",
   "warn.print.noJobsSelected": "No print rows are selected",
   "warn.print.invalidRetries": "Automatic retries must be between 0 and 3",
