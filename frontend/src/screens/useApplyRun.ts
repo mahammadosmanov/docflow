@@ -15,6 +15,7 @@ type ApplyScreenState = {
   setStage: (stage: RunStage) => void;
   setResult: (result: OperationResult) => void;
   setCancelling: (cancelling: boolean) => void;
+  setPausing: (pausing: boolean) => void;
 };
 
 /** Applies the reviewed plan, first revising it when the editor has unsaved rows. */
@@ -42,7 +43,16 @@ export function useApplyRun({
   };
   updateScanPreview: () => Promise<void>;
 }) {
-  const { setError, setPlan, setEditorRows, setEditorDirty, setStage, setResult, setCancelling } = screen;
+  const {
+    setError,
+    setPlan,
+    setEditorRows,
+    setEditorDirty,
+    setStage,
+    setResult,
+    setCancelling,
+    setPausing,
+  } = screen;
 
   const apply = async () => {
     if (editorDirty && plan?.opId === "rfi.process_scans_fast_covers") {
@@ -84,9 +94,11 @@ export function useApplyRun({
         ),
       );
       setCancelling(false);
+      setPausing(false);
       setStage("result");
     } catch (reason) {
       setCancelling(false);
+      setPausing(false);
       setError(humanError(reason, s));
       setStage("preview");
     }

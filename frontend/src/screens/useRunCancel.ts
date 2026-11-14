@@ -5,7 +5,11 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { type Plan } from "../types";
 
-/** Cancel actions for a running preview or apply. `cancelling` guards against a second request. */
+/**
+ * Cancel actions for a running preview or apply. `cancelling` guards against a second request.
+ * With `twoStageCancel`, the first apply request only pauses the queue after the current file
+ * (`pausing`); the second request cancels the active job.
+ */
 export function useRunCancel({
   bridge,
   operationId,
@@ -13,6 +17,7 @@ export function useRunCancel({
   s,
   setError,
   onPreviewCancelled,
+  twoStageCancel,
 }: {
   bridge: Bridge;
   operationId: string;
@@ -20,8 +25,10 @@ export function useRunCancel({
   s: Strings;
   setError: (message: string) => void;
   onPreviewCancelled: () => void;
+  twoStageCancel: boolean;
 }) {
   const [cancelling, setCancelling] = useState(false);
+  const [pausing, setPausing] = useState(false);
 
   const cancelPreview = async () => {
     if (cancelling) return;
@@ -38,6 +45,15 @@ export function useRunCancel({
 
   const cancelApply = async () => {
     if (!plan || cancelling) return;
+    if (twoStageCancel && !pausing) {
+      try {
+        await bridge.call("engine/cancel", { planId: plan.planId });
+        setPausing(true);
+      } catch (reason) {
+        setError(humanError(reason, s));
+      }
+      return;
+    }
     setCancelling(true);
     try {
       await bridge.call("engine/cancel", { planId: plan.planId });
@@ -46,5 +62,5 @@ export function useRunCancel({
     }
   };
 
-  return { cancelling, setCancelling, cancelPreview, cancelApply };
+  return { cancelling, setCancelling, pausing, setPausing, cancelPreview, cancelApply };
 }

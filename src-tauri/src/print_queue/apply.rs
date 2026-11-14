@@ -120,6 +120,11 @@ impl PrintService {
             registry: &self.cancellations,
             plan_id,
         };
+        lock(&self.pause_requests).insert(plan_id.to_string(), PauseState::default());
+        let _pause_registration = PrintPauseRegistration {
+            requests: &self.pause_requests,
+            plan_id,
+        };
         let raw_jobs = claim
             .claimed
             .plan
@@ -197,6 +202,11 @@ impl PrintService {
                 result.errors.push(warning("warn.print.cancelled", ""));
                 break;
             }
+            if self.pause_requested(plan_id) {
+                paused = true;
+                result.errors.push(warning("warn.print.cancelled", ""));
+                break;
+            }
             progress(ProgressEvent {
                 phase: "print_waiting".to_string(),
                 done: index as u64,
@@ -224,7 +234,9 @@ impl PrintService {
                 record.state = Some(JournalState::Applying);
                 self.write_journal(&record)?;
 
+                self.set_active_is_excel(plan_id, job.worksheet.is_some());
                 let submitted = self.submit_approved_job(job, binding, caller, token.clone());
+                self.set_active_is_excel(plan_id, false);
                 self.record_attempt_cleanup_review(
                     &mut state,
                     &mut record,
@@ -322,6 +334,7 @@ impl PrintService {
                         if attempt < attempts_allowed
                             && retry_disposition_allows_retry(&error)
                             && token.checkpoint().is_ok()
+                            && !self.pause_requested(plan_id)
                         {
                             saved.status = Some("pending".to_string());
                             self.queues.save(&mut state)?;

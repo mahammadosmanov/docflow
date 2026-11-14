@@ -483,6 +483,8 @@
   "params.previous.apply": "Use previous settings",
   "print.resume.incomplete": "The queue is safely paused",
   "print.cancelQueue": "Pause queue",
+  "print.cancelCurrent": "Cancel current file",
+  "print.pausing": "Pausing after the current file…",
   "editor.action.showDetails": "Show automatic fields",
   "editor.action.hideDetails": "Hide automatic fields",
   "layout.data.resetHeight": "Reset height",

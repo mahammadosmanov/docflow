@@ -9,7 +9,10 @@ import { useRunCancel } from "./useRunCancel";
 const s = makeStrings("en");
 const plan = { planId: "p1", opId: "rfi.log_add" } as unknown as Plan;
 
-function setup(call: ReturnType<typeof vi.fn>, overrides: { plan?: Plan | null } = {}) {
+function setup(
+  call: ReturnType<typeof vi.fn>,
+  overrides: { plan?: Plan | null; twoStageCancel?: boolean } = {},
+) {
   const setError = vi.fn();
   const onPreviewCancelled = vi.fn();
   const bridge = { call } as unknown as Bridge;
@@ -21,6 +24,7 @@ function setup(call: ReturnType<typeof vi.fn>, overrides: { plan?: Plan | null }
       s,
       setError,
       onPreviewCancelled,
+      twoStageCancel: overrides.twoStageCancel ?? false,
     }),
   );
   return { ...hook, setError, onPreviewCancelled };
@@ -51,6 +55,34 @@ describe("useRunCancel", () => {
     await act(() => result.current.cancelApply());
     expect(call).toHaveBeenCalledWith("engine/cancel", { planId: "p1" });
     expect(setError).not.toHaveBeenCalled();
+  });
+
+  it("first apply cancel pauses after the current file when two-stage cancel is on", async () => {
+    const call = vi.fn(async () => null);
+    const { result, setError } = setup(call, { twoStageCancel: true });
+    await act(() => result.current.cancelApply());
+    expect(call).toHaveBeenCalledWith("engine/cancel", { planId: "p1" });
+    expect(result.current.pausing).toBe(true);
+    expect(result.current.cancelling).toBe(false);
+    expect(setError).not.toHaveBeenCalled();
+  });
+
+  it("second apply cancel stops the active job when two-stage cancel is on", async () => {
+    const call = vi.fn(async () => null);
+    const { result } = setup(call, { twoStageCancel: true });
+    await act(() => result.current.cancelApply());
+    await act(() => result.current.cancelApply());
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(result.current.pausing).toBe(true);
+    expect(result.current.cancelling).toBe(true);
+  });
+
+  it("keeps the one-stage apply cancel when two-stage cancel is off", async () => {
+    const call = vi.fn(async () => null);
+    const { result } = setup(call);
+    await act(() => result.current.cancelApply());
+    expect(result.current.cancelling).toBe(true);
+    expect(result.current.pausing).toBe(false);
   });
 
   it("does nothing to apply without a plan", async () => {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.0 - 2026-11-14
+
+### Changed
+
+- "Pause queue" no longer interrupts the file that is printing. The first press stops the queue after that file finishes. Its result is recorded normally, and later files stay pending. The button then reads "Cancel current file". A second press cancels the file that is printing, as before. That file is marked for checking and is never printed again automatically. An Excel worksheet export keeps the single press: "Pause queue" cancels it at once.
+
 ## 1.49.1 - 2026-11-14
 
 ### Fixed

@@ -455,6 +455,8 @@
   "params.previous.apply": "Önceki ayarları getir",
   "print.resume.incomplete": "Kuyruk güvenli biçimde duraklatıldı",
   "print.cancelQueue": "Kuyruğu duraklat",
+  "print.cancelCurrent": "Geçerli dosyayı iptal et",
+  "print.pausing": "Geçerli dosyadan sonra duraklatılıyor…",
   "editor.action.showDetails": "Otomatik alanları göster",
   "editor.action.hideDetails": "Otomatik alanları gizle",
   "layout.data.resetHeight": "Yüksekliği sıfırla",

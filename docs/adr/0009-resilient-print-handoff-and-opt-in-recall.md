@@ -94,3 +94,11 @@ page-count stage.
 Reinstall the previous immutable release to restore application behavior. Saved
 print queues remain compatible. Do not roll back by editing queue JSON or by
 automatically retrying an uncertain submitted job.
+
+## 2026-11 amendment
+
+"Pause queue" no longer cancels the active spool job. The first request stops
+the queue after the current file finishes; that file's outcome is recorded
+normally and later files stay pending. A second request during the same run
+cancels the active job as before, and that job remains uncertain and is never
+retried automatically. Excel worksheet export keeps single-press cancel: a press while a worksheet job is active cancels it at once.

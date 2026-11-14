@@ -455,6 +455,8 @@
   "params.previous.apply": "Использовать предыдущие настройки",
   "print.resume.incomplete": "Очередь безопасно приостановлена",
   "print.cancelQueue": "Поставить на паузу",
+  "print.cancelCurrent": "Отменить текущий файл",
+  "print.pausing": "Пауза после текущего файла…",
   "editor.action.showDetails": "Показать автоматические поля",
   "editor.action.hideDetails": "Скрыть автоматические поля",
   "layout.data.resetHeight": "Сбросить высоту",

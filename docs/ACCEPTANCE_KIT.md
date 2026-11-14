@@ -483,11 +483,16 @@ not undoable; the result screen's Undo is disabled for it. EPSON-specific cases
    is the expected, honest outcome.
 9. Pause test, physical or network printer. Queue the five-page PDF followed by
    two other files. Press Apply, and while the first job is printing press
-   "Pause queue".
-10. Observe the row statuses and the message "The print queue was paused by the
-    user". The remaining rows must not be submitted. If a row shows "Check
-    printer", inspect the printer and its Windows queue before doing anything
-    else and do not select that file again until you know what printed.
+   "Pause queue" once. The printing file must finish normally, and the button
+   changes to "Pausing after the current file…".
+10. Observe the row statuses after the queue stops: the first file shows its
+    normal outcome, the later rows stay pending and are not submitted, and the
+    message "The print queue was paused by the user" appears. Then run the
+    second-press case: queue the same files again, press "Pause queue" once,
+    then press "Cancel current file" while that first file is still printing.
+    The active row must show "Check printer". Inspect the printer and its
+    Windows queue before doing anything else, and do not select that file again
+    until you know what printed.
 11. Close DocFlow and start it again. Open "Print multiple files" and confirm the
     card "Unfinished print queue found" appears. Choose "Retry unprinted only".
 12. Confirm only the unprinted jobs printed and no completed file printed a second

@@ -164,14 +164,16 @@ export function OperationScreen({
       stageFocusRef.current?.focus();
     }
   }, [stage]);
-  const { cancelling, setCancelling, cancelPreview, cancelApply } = useRunCancel({
-    bridge,
-    operationId: operation.id,
-    plan,
-    s,
-    setError,
-    onPreviewCancelled: () => setStage("form"),
-  });
+  const { cancelling, setCancelling, pausing, setPausing, cancelPreview, cancelApply } =
+    useRunCancel({
+      bridge,
+      operationId: operation.id,
+      plan,
+      s,
+      setError,
+      onPreviewCancelled: () => setStage("form"),
+      twoStageCancel: operation.id === "files.batch_print",
+    });
   const { latestPrintQueue, resumePrintQueue, discardPrintQueue } =
     usePrintQueue({
       bridge,
@@ -208,6 +210,7 @@ export function OperationScreen({
       setStage,
       setResult,
       setCancelling,
+      setPausing,
     },
     progress: { startProgress, receiveProgress },
     updateScanPreview,
@@ -387,7 +390,7 @@ export function OperationScreen({
         )}
         {stage === "applying" && (
           <BusyStage
-            label={s.t("plan.applying")}
+            label={s.t(pausing ? "print.pausing" : "plan.applying")}
             progress={progress}
             progressTrail={progressTrail}
             s={s}
@@ -395,7 +398,9 @@ export function OperationScreen({
             cancelLabel={s.t(
               cancelling
                 ? "operation.cancelling"
-                : operation.id === "files.batch_print"
+                : pausing
+                  ? "print.cancelCurrent"
+                  : operation.id === "files.batch_print"
                   ? "print.cancelQueue"
                   : "operation.cancel",
             )}

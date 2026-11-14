@@ -22,6 +22,7 @@ function setup(
     setStage: vi.fn(),
     setResult: vi.fn(),
     setCancelling: vi.fn(),
+    setPausing: vi.fn(),
   };
   const progress = { startProgress: vi.fn(), receiveProgress: vi.fn() };
   const updateScanPreview = vi.fn(async () => undefined);

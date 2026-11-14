@@ -72,6 +72,17 @@ impl Drop for PrintCancellationRegistration<'_> {
     }
 }
 
+pub(super) struct PrintPauseRegistration<'a> {
+    pub(super) requests: &'a Mutex<HashMap<String, PauseState>>,
+    pub(super) plan_id: &'a str,
+}
+
+impl Drop for PrintPauseRegistration<'_> {
+    fn drop(&mut self) {
+        lock(self.requests).remove(self.plan_id);
+    }
+}
+
 pub(super) struct PrintQueueActiveRegistration<'a> {
     pub(super) store: &'a PrintQueueStore,
     pub(super) queue_id: String,

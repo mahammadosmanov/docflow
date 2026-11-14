@@ -41,6 +41,7 @@ struct FakeAdapter {
     unreadable_name: Mutex<Option<String>>,
     submit_gate: Mutex<Option<SubmitGate>>,
     inventory_gate: Mutex<Option<SubmitGate>>,
+    post_gate_cancelled: Mutex<Vec<bool>>,
 }
 
 impl FakeAdapter {
@@ -130,6 +131,7 @@ impl PrintAdapter for FakeAdapter {
                 state = changed.wait(state).unwrap();
             }
         }
+        self.post_gate_cancelled.lock().unwrap().push(cancelled());
         self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()))
     }
 }
@@ -2848,4 +2850,119 @@ fn apply_result_lists_each_file_name_and_status_without_directories() {
         assert!(object.contains_key("status"));
         assert!(!entry.to_string().contains(root.path().to_str().unwrap()));
     }
+}
+
+#[test]
+fn first_pause_request_lets_the_current_job_finish() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let gate: SubmitGate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    *adapter.submit_gate.lock().unwrap() = Some(gate.clone());
+    let service = Arc::new(print_service(&root, adapter.clone()));
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+    let plan_id = plan.plan_id.clone();
+    let applying = {
+        let service = service.clone();
+        let plan_id = plan_id.clone();
+        thread::spawn(move || service.apply(&plan_id, &caller(), |_| {}))
+    };
+    let (state, changed) = &*gate;
+    let mut state = state.lock().unwrap();
+    while !state.0 {
+        state = changed.wait(state).unwrap();
+    }
+    assert!(service.cancel(&plan_id));
+    state.1 = true;
+    changed.notify_all();
+    drop(state);
+
+    let result = applying.join().unwrap().unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
+    assert_eq!(
+        adapter.post_gate_cancelled.lock().unwrap().as_slice(),
+        &[false],
+        "the pause flag must not set the cancellation token for the running job"
+    );
+    assert_eq!(result.meta["jobResults"][0]["status"], "completed");
+    assert_eq!(result.meta["counts"]["completed"], 1);
+    assert_eq!(result.meta["counts"]["pending"], 1);
+    assert_eq!(result.meta["status"], "paused");
+    assert_eq!(result.meta["resumeAvailable"], true);
+    assert_ne!(
+        result.meta["effectState"], "cancelled_partial",
+        "a pause after a completed file is not a cancellation"
+    );
+}
+
+#[test]
+fn second_pause_request_cancels_the_active_job() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("one.pdf");
+    let second = root.path().join("two.pdf");
+    std::fs::write(&first, b"one").unwrap();
+    std::fs::write(&second, b"two").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let gate: SubmitGate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    *adapter.submit_gate.lock().unwrap() = Some(gate.clone());
+    let service = Arc::new(print_service(&root, adapter.clone()));
+    let plan = service
+        .preview(&caller(), params(vec![first, second]), |_| {})
+        .unwrap();
+    let plan_id = plan.plan_id.clone();
+    let applying = {
+        let service = service.clone();
+        let plan_id = plan_id.clone();
+        thread::spawn(move || service.apply(&plan_id, &caller(), |_| {}))
+    };
+    let (state, changed) = &*gate;
+    let mut state = state.lock().unwrap();
+    while !state.0 {
+        state = changed.wait(state).unwrap();
+    }
+    assert!(service.cancel(&plan_id));
+    assert!(service.cancel(&plan_id));
+    state.1 = true;
+    changed.notify_all();
+    drop(state);
+
+    let result = applying.join().unwrap().unwrap();
+
+    assert_eq!(adapter.submitted.lock().unwrap().len(), 1);
+    assert_eq!(
+        adapter.post_gate_cancelled.lock().unwrap().as_slice(),
+        &[true],
+        "the second press must set the cancellation token"
+    );
+    assert_eq!(result.meta["counts"]["pending"], 1);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|warning| warning.key == "warn.print.cancelled")
+    );
+}
+
+#[test]
+fn cancel_without_a_running_queue_keeps_the_old_behavior() {
+    let root = TempDir::new().unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter);
+
+    assert!(!service.cancel("unknown"));
 }

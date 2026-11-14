@@ -455,6 +455,8 @@
   "params.previous.apply": "Əvvəlki parametrləri gətir",
   "print.resume.incomplete": "Növbə təhlükəsiz dayandırılıb",
   "print.cancelQueue": "Növbəni dayandır",
+  "print.cancelCurrent": "Cari faylı ləğv et",
+  "print.pausing": "Cari fayldan sonra dayandırılır…",
   "editor.action.showDetails": "Avtomatik sahələri göstər",
   "editor.action.hideDetails": "Avtomatik sahələri gizlət",
   "layout.data.resetHeight": "Hündürlüyü sıfırla",
