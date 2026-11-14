@@ -384,10 +384,10 @@ fn validated_devmode(
         ));
     }
     // SAFETY: devmode still points into buffer, which lives while buffer is in scope, and was validated above.
-    if unsafe { !devmode_matches(&*devmode, requested) } {
-        return Err(PrintFailure::unsupported_options(
-            "the printer changed an unsupported selected option",
-        ));
+    if let Some(name) = unsafe { devmode_mismatch(&*devmode, requested) } {
+        return Err(PrintFailure::unsupported_options(format!(
+            "error.print.optionUnsupported.{name}"
+        )));
     }
     Ok(buffer)
 }
@@ -411,19 +411,37 @@ unsafe fn apply_requested_devmode(devmode: &mut DEVMODEW, requested: RequestedDe
     }
 }
 
-unsafe fn devmode_matches(devmode: &DEVMODEW, requested: RequestedDevMode) -> bool {
-    requested
+unsafe fn devmode_mismatch(
+    devmode: &DEVMODEW,
+    requested: RequestedDevMode,
+) -> Option<&'static str> {
+    // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
+    if requested
         .paper
-        // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
-        .is_none_or(|value| unsafe { devmode.Anonymous1.Anonymous1.dmPaperSize == value })
-        && requested
-            .orientation
-            // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
-            .is_none_or(|value| unsafe { devmode.Anonymous1.Anonymous1.dmOrientation == value })
-        && requested.color.is_none_or(|value| devmode.dmColor == value)
-        && requested
-            .duplex
-            .is_none_or(|value| devmode.dmDuplex == value)
+        .is_some_and(|value| unsafe { devmode.Anonymous1.Anonymous1.dmPaperSize != value })
+    {
+        return Some("paper");
+    }
+    // SAFETY: reading a DEVMODEW union member is valid because the driver filled the structure the caller passes in.
+    if requested
+        .orientation
+        .is_some_and(|value| unsafe { devmode.Anonymous1.Anonymous1.dmOrientation != value })
+    {
+        return Some("orientation");
+    }
+    if requested
+        .color
+        .is_some_and(|value| devmode.dmColor != value)
+    {
+        return Some("color");
+    }
+    if requested
+        .duplex
+        .is_some_and(|value| devmode.dmDuplex != value)
+    {
+        return Some("duplex");
+    }
+    None
 }
 
 fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFailure> {

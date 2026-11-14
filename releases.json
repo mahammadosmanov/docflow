@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.50.1",
+  "currentVersion": "1.50.2",
   "releases": [
+    {
+      "version": "1.50.2",
+      "tag": "v1.50.2",
+      "date": "2026-11-14",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Rejected print options are named in the warning"
+    },
     {
       "version": "1.50.1",
       "tag": "v1.50.1",
       "date": "2026-11-14",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Windows PDF jobs are checked before the spool job opens"
     },
     {

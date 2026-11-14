@@ -101,7 +101,7 @@ impl PrintAdapter for FakeAdapter {
         }
         if self.unsupported_paper.lock().unwrap().as_deref() == Some(settings.paper.as_str()) {
             return Err(PrintFailure::unsupported_options(
-                "paper is unsupported by the test printer",
+                "error.print.optionUnsupported.paper",
             ));
         }
         match path.extension().and_then(|value| value.to_str()) {
@@ -2747,8 +2747,28 @@ fn unknown_printers_unsupported_options_and_injection_strings_fail_before_submit
     unsupported.paper = "A3".to_string();
     let plan = service.preview(&caller(), unsupported, |_| {}).unwrap();
     assert!(plan.steps.is_empty());
-    assert_eq!(plan.warnings[0].key, "warn.print.unsupportedOptions");
+    assert_eq!(plan.warnings[0].key, "error.print.optionUnsupported.paper");
     assert!(adapter.submitted.lock().unwrap().is_empty());
+}
+
+#[test]
+fn preview_names_the_rejected_print_option() {
+    let root = TempDir::new().unwrap();
+    let file = root.path().join("one.pdf");
+    std::fs::write(&file, b"one").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter.clone());
+    *adapter.unsupported_paper.lock().unwrap() = Some("A3".to_string());
+    let mut unsupported = params(vec![file]);
+    unsupported.paper = "A3".to_string();
+
+    let plan = service.preview(&caller(), unsupported, |_| {}).unwrap();
+
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.warnings[0].key, "error.print.optionUnsupported.paper");
 }
 
 #[test]

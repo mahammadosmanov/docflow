@@ -151,7 +151,10 @@ where
                 warnings.push(warning("warn.print.noHandler", display_name(path)));
             }
             Err(error) if error.is_unsupported_options() => {
-                warnings.push(warning("warn.print.unsupportedOptions", display_name(path)));
+                warnings.push(warning(
+                    unsupported_option_warning_key(&error.message),
+                    display_name(path),
+                ));
             }
             Err(error) if error.kind == PrintFailureKind::Failed => {
                 warnings.push(warning("warn.print.fileUnreadable", display_name(path)));
@@ -588,6 +591,16 @@ fn warning_plan(key: &str, subject: &str) -> Plan {
         steps: Vec::new(),
         warnings: vec![warning(key, subject)],
         meta: JsonObject::new(),
+    }
+}
+
+fn unsupported_option_warning_key(message: &str) -> &'static str {
+    match message {
+        "error.print.optionUnsupported.paper" => "error.print.optionUnsupported.paper",
+        "error.print.optionUnsupported.orientation" => "error.print.optionUnsupported.orientation",
+        "error.print.optionUnsupported.color" => "error.print.optionUnsupported.color",
+        "error.print.optionUnsupported.duplex" => "error.print.optionUnsupported.duplex",
+        _ => "warn.print.unsupportedOptions",
     }
 }
 

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.50.2 - 2026-11-14
+
+### Fixed
+
+- When a Windows or macOS printer rejects a paper size, orientation, color mode, or two-sided mode, DocFlow now names that option in the preview warning and in the queue message, in the selected language. Before, it showed a generic message or an English sentence.
+
 ## 1.50.1 - 2026-11-14
 
 ### Fixed

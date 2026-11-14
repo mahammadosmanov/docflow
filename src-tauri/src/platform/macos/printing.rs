@@ -168,12 +168,12 @@ fn validate_reported_options(printer: &str, settings: &PrintSettings) -> Result<
     }
     if settings.paper != "auto" && !reported.contains(&settings.paper.to_ascii_lowercase()) {
         return Err(PrintFailure::unsupported_options(
-            "the selected paper is not reported by this printer",
+            "error.print.optionUnsupported.paper",
         ));
     }
     if settings.duplex != "printer" && !reported.contains("duplex") && !reported.contains("sides") {
         return Err(PrintFailure::unsupported_options(
-            "the selected duplex mode is not reported by this printer",
+            "error.print.optionUnsupported.duplex",
         ));
     }
     if settings.color != "printer"
@@ -181,7 +181,7 @@ fn validate_reported_options(printer: &str, settings: &PrintSettings) -> Result<
         && !reported.contains("monochrome")
     {
         return Err(PrintFailure::unsupported_options(
-            "the selected color mode is not reported by this printer",
+            "error.print.optionUnsupported.color",
         ));
     }
     Ok(())
