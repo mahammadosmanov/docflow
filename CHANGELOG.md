@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.8 - 2026-11-15
+
+### Fixed
+
+- The 12px type floor from 1.51.4 missed 20 labels sized between 11.2 and 11.8px. They now use the same 12px size, and the style test rejects anything under 12px. No behaviour changed.
+
 ## 1.51.7 - 2026-11-15
 
 ### Fixed

@@ -160,7 +160,7 @@
   border-color: var(--text);
 }
 .category-chip .chip-count {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   padding: 1px 5px;
   border-radius: var(--radius-lg);
   background: var(--surface-3);
@@ -259,6 +259,6 @@
 }
 .feature-copy small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }

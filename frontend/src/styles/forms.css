@@ -43,7 +43,7 @@
 .preset-toolbar-heading small,
 .preset-toolbar > small {
   color: var(--muted);
-  font-size: 0.73rem;
+  font-size: var(--text-xs);
 }
 .preset-toolbar-row {
   min-width: 0;
@@ -77,7 +77,7 @@
   display: grid;
   gap: 6px;
   color: var(--text);
-  font-size: 0.79rem;
+  font-size: var(--text-xs);
   font-weight: 650;
 }
 .field small {
@@ -195,7 +195,7 @@ textarea:focus {
 .resume-queue-card small,
 .queue-result-summary span {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
 }
 .resume-queue-actions {
   display: flex;
@@ -372,7 +372,7 @@ textarea:focus {
 .segmented.small button {
   min-height: 31px;
   padding: 5px 9px;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 .notice {

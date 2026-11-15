@@ -3,7 +3,7 @@
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
 }
 
 .settings-pane {
@@ -131,7 +131,7 @@
   gap: 10px;
   align-items: center;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
 }
 .range-row input {
   accent-color: var(--inverse);

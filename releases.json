@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.7",
+  "currentVersion": "1.51.8",
   "releases": [
+    {
+      "version": "1.51.8",
+      "tag": "v1.51.8",
+      "date": "2026-11-15",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Remaining labels between 11 and 12px raised to the 12px type floor"
+    },
     {
       "version": "1.51.7",
       "tag": "v1.51.7",
       "date": "2026-11-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Failed Preview moves focus to the field's Browse button and links the error to the field"
     },
     {

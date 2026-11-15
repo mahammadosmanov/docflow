@@ -20,7 +20,7 @@ const hitsFor = (pattern: RegExp) =>
 
 describe("type scale floor", () => {
   it("has no font-size below 12px", () => {
-    const offender = /font-size:\s*(0\.[0-6][0-9]*rem|[0-9](\.[0-9]+)?px|1[01](\.[0-9]+)?px)/;
+    const offender = /font-size:\s*(0\.([0-6][0-9]*|7[0-4]?)rem|[0-9](\.[0-9]+)?px|1[01](\.[0-9]+)?px)/;
     expect(hitsFor(offender)).toEqual([]);
   });
 });
