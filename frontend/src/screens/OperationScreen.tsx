@@ -113,6 +113,19 @@ export function OperationScreen({
     useProgressTrail();
   const [error, setError] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const schemaFormRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!invalidField) return;
+    const control = schemaFormRef.current?.querySelector<HTMLElement>(
+      '[aria-invalid="true"]',
+    );
+    if (!control) return;
+    control.scrollIntoView?.({ block: "center" });
+    const target = control.matches("input[readonly]")
+      ? control.parentElement?.querySelector<HTMLElement>("button")
+      : control;
+    (target ?? control).focus();
+  }, [invalidField]);
   const [editorRows, setEditorRows] = useState<Record<string, unknown>[]>([]);
   const [editorDirty, setEditorDirty] = useState(false);
   const rfiInputs = operation.id === "files.batch_print" ? parseRfiInputs(values.rfi_numbers) : [];
@@ -288,7 +301,7 @@ export function OperationScreen({
                     onApply={() => mergeValues(previousValues)}
                   />
                 )}
-                <div className="form-stack schema-form">
+                <div className="form-stack schema-form" ref={schemaFormRef}>
                   {operation.schema
                     .filter((param) => isParamVisible(param, values))
                     .map((param) => (
@@ -327,7 +340,7 @@ export function OperationScreen({
                   />
                 )}
               </section>
-              {error && <Notice kind="error">{error}</Notice>}
+              {error && <Notice id="operation-error" kind="error">{error}</Notice>}
               {saveError && <Notice kind="error">{saveError}</Notice>}
             </div>
             <ActionBar

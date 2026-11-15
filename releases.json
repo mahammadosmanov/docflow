@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.6",
+  "currentVersion": "1.51.7",
   "releases": [
+    {
+      "version": "1.51.7",
+      "tag": "v1.51.7",
+      "date": "2026-11-15",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Failed Preview moves focus to the field's Browse button and links the error to the field"
+    },
     {
       "version": "1.51.6",
       "tag": "v1.51.6",
       "date": "2026-11-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Decorative DOCFLOW label removed and page titles shown once"
     },
     {

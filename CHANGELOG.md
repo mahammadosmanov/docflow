@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.7 - 2026-11-15
+
+### Fixed
+
+- When Preview fails because a required field is empty, the form scrolls to that field and focuses it (its Browse button for folder and file fields). The field is linked to the error message for screen readers. No new text was added and no behaviour changed.
+
 ## 1.51.6 - 2026-11-15
 
 ### Fixed
