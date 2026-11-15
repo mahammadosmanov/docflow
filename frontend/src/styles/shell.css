@@ -221,9 +221,9 @@
 .eyebrow {
   margin-bottom: 0.45rem !important;
   color: var(--muted);
-  font-size: 0.68rem !important;
+  font-size: var(--text-xs) !important;
   font-weight: 750;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.06em;
 }
 .dashboard-section {
   min-width: 0;

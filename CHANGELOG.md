@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.4 - 2026-11-15
+
+### Fixed
+
+- Text that was set below 12px (row metadata, badges, and step labels in review, results, home, and shell) now uses a shared 12px floor token. No layout, behaviour, or colour changed.
+
 ## 1.51.3 - 2026-11-14
 
 ### Fixed

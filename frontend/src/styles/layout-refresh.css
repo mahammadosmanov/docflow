@@ -200,7 +200,7 @@
 .category-tag {
   padding: 3px 7px;
   border-radius: 4px;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -513,7 +513,7 @@ textarea:focus-visible {
     width: min(100% - 20px, 480px);
   }
   .step-indicator small {
-    font-size: 0.65rem;
+    font-size: var(--text-xs);
   }
   .action-bar {
     flex-direction: column;

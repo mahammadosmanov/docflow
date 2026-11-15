@@ -16,6 +16,8 @@
   --warning: #626663;
   --success: #222423;
   --radius: 8px;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
   --space: 1;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);

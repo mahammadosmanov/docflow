@@ -97,7 +97,7 @@
   border-radius: 999px;
   color: var(--text) !important;
   background: var(--surface-2);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   font-weight: 750;
   line-height: 1.25;
@@ -176,7 +176,7 @@
   border-radius: 7px;
   color: var(--muted);
   background: var(--surface-2);
-  font-size: 0.67rem;
+  font-size: var(--text-xs);
 }
 .progress-trail li.current {
   color: var(--text);
@@ -345,7 +345,7 @@
   border-radius: 99px;
   background: var(--surface-3);
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-style: normal;
   font-weight: 500;
 }
