@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.5",
+  "currentVersion": "1.51.6",
   "releases": [
+    {
+      "version": "1.51.6",
+      "tag": "v1.51.6",
+      "date": "2026-11-15",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Decorative DOCFLOW label removed and page titles shown once"
+    },
     {
       "version": "1.51.5",
       "tag": "v1.51.5",
       "date": "2026-11-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Focus rings, outline offsets, and corner radii come from shared tokens"
     },
     {

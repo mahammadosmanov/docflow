@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.6 - 2026-11-15
+
+### Fixed
+
+- The decorative DOCFLOW label on Home and the success result is removed. Queue, Templates, History, Recovery, Admin, and Review no longer show their title twice (bar and page heading); each page keeps one level-1 heading. Review keeps its bar title while a plan, result, or busy state replaces the page heading. The failure result still shows its warnings label. No behaviour changed.
+
 ## 1.51.5 - 2026-11-15
 
 ### Fixed

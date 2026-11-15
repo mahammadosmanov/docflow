@@ -93,7 +93,6 @@ export function HistoryScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("history.title")}
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={

@@ -205,7 +205,7 @@ export function ResultView({
       <span className={`result-icon ${success ? "success" : "failure"}`}>
         {success ? <CheckCircle2 /> : <CircleAlert />}
       </span>
-      <p className="eyebrow">{success ? "DOCFLOW" : s.t("ui.warnings")}</p>
+      {!success && <p className="eyebrow">{s.t("ui.warnings")}</p>}
       <h1>{s.t("result.applied", { count: result.applied })}</h1>
       <p className="muted">{s.t("result.failed", { count: result.failed })}</p>
       <span className="status-label">{s.t(`effect.${effectState}`)}</span>

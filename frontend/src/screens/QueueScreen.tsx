@@ -150,7 +150,6 @@ export function QueueScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("queue.title")}
         onBack={onBack}
         backLabel={s.t("action.back")}
       />

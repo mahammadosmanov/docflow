@@ -75,7 +75,6 @@ export function AdminScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("admin.title")}
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={
