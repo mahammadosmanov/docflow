@@ -43,7 +43,7 @@
   height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-3);
 }
 .editor-heading > div {
@@ -71,7 +71,7 @@
 .table-search-box input {
   width: 100%;
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text);
@@ -83,7 +83,7 @@
 .table-filter-tabs {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--surface);
 }
@@ -132,7 +132,7 @@
   display: grid;
   gap: 9px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 .bulk-selection,
@@ -167,7 +167,7 @@
   min-height: 34px;
   padding: 6px 9px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text);
   background: var(--surface-2);
 }
@@ -248,7 +248,7 @@
   height: 22px;
   padding: 0 5px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   background: var(--surface-2);
   font-size: 0.78rem;
@@ -269,7 +269,7 @@
   padding: 6px 8px;
   color: var(--text);
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: var(--surface-2);
   outline: 0;
 }
@@ -280,7 +280,7 @@
 .editor-table input:focus,
 .editor-table select:focus,
 .editor-table textarea:focus {
-  border-color: var(--line-strong);
+  border-color: var(--text);
   background: var(--surface);
 }
 .editor-table input[aria-invalid="true"] {
@@ -325,7 +325,7 @@
   display: grid;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -424,7 +424,7 @@
 .editor-card--compact .editor-table select {
   height: 30px;
   padding: 4px 5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.78rem;
 }
 .editor-card--compact .editor-table .compact-date-cell select {

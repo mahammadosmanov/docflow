@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.5 - 2026-11-15
+
+### Fixed
+
+- Focus rings use one shared 2px ring with a 2px offset, and control focus on search bars and table cells is a visible text-coloured border. Corner radii of 4-14px use three shared sizes (6, 8, 12px) so cards, inputs, and chips match. No behaviour changed.
+
 ## 1.51.4 - 2026-11-15
 
 ### Fixed

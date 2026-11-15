@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.4",
+  "currentVersion": "1.51.5",
   "releases": [
+    {
+      "version": "1.51.5",
+      "tag": "v1.51.5",
+      "date": "2026-11-15",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Focus rings, outline offsets, and corner radii come from shared tokens"
+    },
     {
       "version": "1.51.4",
       "tag": "v1.51.4",
       "date": "2026-11-15",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Text below 12px raised to a shared 12px floor for legible row metadata, badges, and step labels"
     },
     {

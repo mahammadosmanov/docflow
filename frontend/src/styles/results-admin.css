@@ -3,7 +3,7 @@
   display: grid;
   gap: 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 .outlook-reply-preview h3 {
@@ -23,7 +23,7 @@
   margin: 0;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text);
   background: var(--surface-2);
   font:
@@ -52,7 +52,7 @@
   align-items: center;
   gap: 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--panel-shadow);
 }
@@ -65,7 +65,7 @@
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: var(--surface-3);
 }
 .step-copy {
@@ -173,7 +173,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--muted);
   background: var(--surface-2);
   font-size: var(--text-xs);
@@ -233,7 +233,7 @@
   margin-top: 18px;
   padding: 10px;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface-2);
 }
 
@@ -245,7 +245,7 @@
   gap: 12px;
   align-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--panel-shadow);
 }
@@ -307,7 +307,7 @@
   align-items: center;
   gap: 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--panel-shadow);
 }
