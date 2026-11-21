@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.7 - 2026-11-21
+
+### Changed
+
+- The CI frontend job runs the React test suite once, with coverage, instead of once without coverage and again with it. A failing test still fails the job. The application is unchanged.
+
 ## 1.51.6 - 2026-11-21
 
 ### Changed

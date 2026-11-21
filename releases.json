@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.6",
+  "currentVersion": "1.51.7",
   "releases": [
+    {
+      "version": "1.51.7",
+      "tag": "v1.51.7",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "CI runs the React tests once, with coverage"
+    },
     {
       "version": "1.51.6",
       "tag": "v1.51.6",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "RFI code and template code patterns each have one definition"
     },
     {
