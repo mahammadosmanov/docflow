@@ -15,6 +15,7 @@ pub(super) fn place_record(
     slots: &mut SlotMap,
     manual_rows: &mut Vec<FollowUpRow>,
     unmapped_count: &mut usize,
+    misplaced: &mut Vec<(SlotKey, String)>,
 ) -> Result<(), BackendError> {
     let RecordIndex {
         layouts,
@@ -217,7 +218,29 @@ pub(super) fn place_record(
         ));
         return Ok(());
     }
-    if placed_elsewhere {
+    let wrong_cells = existing_slots
+        .iter()
+        .filter(|key| !candidates.contains(key))
+        .collect::<Vec<_>>();
+    // The Log pins every matching cell, so a copy anywhere else is a mistake:
+    // queue it for removal and place the RFI in its own cell below.
+    let sure = placed_elsewhere
+        && (candidate_count == 1 || exact_multi_area)
+        && record.state.is_some()
+        && civ_tag_coverage != Some(false)
+        && mec_context_coverage != Some(false)
+        && wrong_cells.iter().all(|key| {
+            slots
+                .get(*key)
+                .is_some_and(|slot| slot.unsafe_reason.is_none())
+        });
+    if sure {
+        misplaced.extend(
+            wrong_cells
+                .into_iter()
+                .map(|key| (key.clone(), record.canonical_rfi.clone())),
+        );
+    } else if placed_elsewhere {
         // Also present in the matched cell: the other cell is a misplacement.
         let reason = if existing_slots.iter().any(|key| candidates.contains(key))
             && civ_tag_coverage != Some(false)

@@ -1318,7 +1318,7 @@ fn full_sync_reviews_a_record_whose_only_matching_cell_holds_another_item() {
 }
 
 #[test]
-fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
+fn full_sync_removes_an_rfi_copy_from_a_cell_the_log_contradicts() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
         "0015",
@@ -1375,18 +1375,18 @@ fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
     )]);
 
     let review = classify(source, target).unwrap();
-    let row = review["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["rfiNo"] == "CIV-0015")
-        .unwrap_or_else(|| panic!("misplaced CIV-0015 must be reviewed: {review}"));
-    assert_eq!(row["selectable"], false);
-    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.placedElsewhere");
+    let rows = review["rows"].as_array().unwrap();
     assert!(
-        row["mappingDetails"].as_str().unwrap().contains("M5"),
-        "{row}"
+        rows.iter().all(|row| row["selectable"] == true),
+        "no review is left: {review}"
     );
+    let cleared = rows
+        .iter()
+        .find(|row| row["_row"] == 5 && row["target"]["rfiColumn"] == 13)
+        .unwrap_or_else(|| panic!("the wrong M5 copy must be removed: {review}"));
+    assert_eq!(cleared["proposedRfiNo"], "");
+    assert_eq!(cleared["proposedStatus"], "");
+    assert!(!rows.iter().any(|row| row["_row"] == 6), "{review}");
 }
 
 #[test]
@@ -6501,4 +6501,46 @@ fn full_sync_adds_items_that_share_one_follow_up_column() {
 
     let review = classify(source, target).unwrap();
     assert_eq!(proposed_rows(&review), [(5, "CIV-0296/0095".to_string())]);
+}
+
+#[test]
+fn full_sync_moves_a_misplaced_rfi_and_fills_the_cell_it_blocked() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0015", "CIV-2.1.5", "A19", "South Site"),
+        civ_record_in_area(11, "0315", "CIV-2.1.5", "A17/1", "South Site"),
+        civ_record_in_area(12, "0541", "CIV-2.1.5", "N9", "North Site"),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(
+                    2,
+                    [
+                        inline("B2", "A17/1"),
+                        inline("C2", "CIV-0015/0541"),
+                        inline("D2", "Completed"),
+                    ],
+                ),
+                row(3, [inline("B3", "A19"), blank("C3"), blank("D3")]),
+                row(4, [inline("B4", "N9"), blank("C4"), blank("D4")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let mut proposed = proposed_rows(&review);
+    proposed.sort();
+    assert_eq!(
+        proposed,
+        [
+            (2, "CIV-0315".to_string()),
+            (3, "CIV-0015".to_string()),
+            (4, "CIV-0541".to_string()),
+        ],
+        "{review}"
+    );
 }

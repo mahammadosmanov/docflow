@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.23 - 2026-11-21
+
+### Changed
+
+- When the RFI Log pins the cell an RFI belongs in, a copy of that RFI in another Follow Up cell is now removed there and the RFI is added to its own cell once you approve the preview (ADR 0056). On the current workbooks this clears CIV-0086/0104/0218 from `CIV!G8`, CIV-0346 from `G10`, CIV-0267 from `G11`, CIV-0200 from `M52` and CIV-0322 from `E75`, moves CIV-0541 from `C13` to `E13`, replaces CIV-0015 in `M68` with CIV-0315, and corrects PCU `H7`, `L7`, `J17`/`L17` (swapped), `F23` and `L29`. Ambiguous or partly unmatched records and formula or merged cells stay in Manual Review.
+
 ## 1.51.22 - 2026-11-21
 
 ### Fixed

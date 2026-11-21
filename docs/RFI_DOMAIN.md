@@ -201,9 +201,13 @@ column is unsafe (items that share one column, such as `2.2.1` and `2.2.2`
 under `2.1&2.2`, are compatible),
 including one row of a multi-row fan-out:
 the record stays in Manual Review and is neither added there nor dropped
-silently. An RFI found both in its matching cell and in another cell
-whose row or column does not match it stays in Manual Review naming that
-other cell; DocFlow never moves or deletes it.
+silently. When the Log pins every matching cell of an RFI (one match, or an
+exact fan-out whose every tag matched), a copy of that RFI in any other safe
+lifecycle cell contradicts the Log: the next approved sync removes it there
+and adds the RFI to its matching cell, recomputing both statuses
+([ADR 0056](adr/0056-follow-up-moves-contradicted-placements.md)). If the
+match is ambiguous or partly unmatched, or the other cell is unsafe, the RFI
+stays in Manual Review naming that other cell.
 Multiple matches remain manual review except when CIV or MEC records map to
 distinct existing rows justified by different exact source contexts.
 
@@ -281,11 +285,11 @@ accepted ADR before changing route behavior.
 
 
 A context-mismatched existing placement for an otherwise in-scope record is
-never moved or deleted merely to force a match; it remains Manual Review. The
+moved only under the ADR 0056 rule above; otherwise it remains Manual Review. The
 zero-context template-scope rule above takes precedence and leaves any existing
-placement unchanged without review or status updates. The only automatic
-removal exceptions are the explicitly out-of-scope ITP/item pairs in ADR 0035
-and the CIV `PCS-` rule in ADR 0033. Ambiguous contexts or conflicting source
+placement unchanged without review or status updates. The automatic removal
+exceptions are the explicitly out-of-scope ITP/item pairs in ADR 0035, the CIV
+`PCS-` rule in ADR 0033, and copies the Log contradicts under ADR 0056. Ambiguous contexts or conflicting source
 status cannot authorize a shared-cell status write for that RFI or any other
 RFI represented by the same cell.
 
