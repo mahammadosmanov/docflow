@@ -262,7 +262,7 @@ pub(super) fn scan_source_records(
             let excluded_civ_pcs = discipline == "CIV"
                 && split_values(&context.tag)
                     .iter()
-                    .any(|tag| normalize_header(tag).starts_with("PCS-"));
+                    .any(|tag| normalize_code_text(tag).starts_with("PCS-"));
             let incoming = SourceRecord {
                 canonical_rfi: canonical_rfi.clone(),
                 short_rfi,

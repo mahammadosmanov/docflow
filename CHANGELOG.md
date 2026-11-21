@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.9 - 2026-11-21
+
+### Fixed
+
+- A CIV RFI Log `Tag No` such as `PCS–19` or `PCS‑19`, written with an en dash, non-breaking hyphen, or another dash that looks like `-`, is now excluded from Follow Up like `PCS-19` (ADR 0033). Before, such a record could be synchronized into Follow Up.
+
 ## 1.51.8 - 2026-11-21
 
 ### Fixed
