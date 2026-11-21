@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.16",
+  "currentVersion": "1.51.17",
   "releases": [
+    {
+      "version": "1.51.17",
+      "tag": "v1.51.17",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up reviews RFIs whose matching cell holds another item instead of dropping them"
+    },
     {
       "version": "1.51.16",
       "tag": "v1.51.16",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up matches CIV sub-block tags such as A17/1 to their own row"
     },
     {

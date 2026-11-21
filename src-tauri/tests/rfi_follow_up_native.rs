@@ -1266,6 +1266,58 @@ fn full_sync_matches_a_civ_sub_block_tag_to_its_own_row_not_the_parent_block() {
 }
 
 #[test]
+fn full_sync_reviews_a_record_whose_only_matching_cell_holds_another_item() {
+    let source = full_schema_source([
+        full_schema_record_with_status(
+            10,
+            "0015",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-2.2.2",
+            "A19",
+            "Completed",
+            "",
+        ),
+        full_schema_record_with_status(
+            11,
+            "0315",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-2.1.5",
+            "A17/1",
+            "Completed",
+            "",
+        ),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(
+                    2,
+                    [
+                        inline("B2", "A17/1"),
+                        inline("C2", "CIV-0015"),
+                        inline("D2", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let row = review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["rfiNo"] == "CIV-0315")
+        .unwrap_or_else(|| panic!("CIV-0315 must not be dropped silently: {review}"));
+    assert_eq!(row["selectable"], false);
+    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.targetOccupied");
+}
+
+#[test]
 fn full_sync_reports_unmatched_civ_tag_when_only_some_tag_rows_are_prepared() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
