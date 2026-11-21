@@ -1390,6 +1390,63 @@ fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
 }
 
 #[test]
+fn full_sync_fans_out_but_reviews_the_row_whose_cell_holds_another_item() {
+    let source = full_schema_source([
+        full_schema_record_with_status(
+            10,
+            "0041",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-2.1.5",
+            "S14,S15",
+            "Completed",
+            "",
+        ),
+        full_schema_record_with_status(
+            11,
+            "0099",
+            "AZE-SUN-INT-QMS-ITP-CIV-0002",
+            "CIV-2.2.2",
+            "S15",
+            "Completed",
+            "",
+        ),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "S14"), blank("C2"), blank("D2")]),
+                row(
+                    3,
+                    [
+                        inline("B3", "S15"),
+                        inline("C3", "CIV-0099"),
+                        inline("D3", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert!(
+        rows.iter().any(|row| row["_row"] == 2
+            && row["proposedRfiNo"] == "CIV-0041"
+            && row["selectable"] == true),
+        "{review}"
+    );
+    assert!(
+        rows.iter().any(|row| row["rfiNo"] == "CIV-0041"
+            && row["reasonKey"] == "warn.rfi.followUp.reason.targetOccupied"),
+        "{review}"
+    );
+}
+
+#[test]
 fn full_sync_reports_unmatched_civ_tag_when_only_some_tag_rows_are_prepared() {
     let source = full_schema_source([full_schema_record_with_status(
         10,

@@ -288,6 +288,7 @@ pub(super) fn place_record(
     }
 
     let mut placed = false;
+    let mut blocked = false;
     for key in &candidates {
         let slot = slots.get_mut(key).ok_or_else(workbook_invalid)?;
         if slot.codes.contains(&record.canonical_rfi) {
@@ -304,6 +305,7 @@ pub(super) fn place_record(
                     })
                 });
             if !compatible {
+                blocked = true;
                 continue;
             }
             slot.codes.push(record.canonical_rfi.clone());
@@ -311,15 +313,15 @@ pub(super) fn place_record(
             placed = true;
         }
     }
-    // Every matching cell holds a different item's RFI: review, never drop silently.
-    if !placed {
+    // A matching cell holds a different item's RFI: review, never drop silently.
+    if blocked || !placed {
         *unmapped_count += 1;
         let layout = slots
             .get(&candidates[0])
             .map(|slot| slot.layout.clone())
             .ok_or_else(workbook_invalid)?;
         manual_rows.push(manual_review_row(
-            format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+            format!("rfi-follow-up-unmapped:{}:occupied", record.canonical_rfi),
             sheet_name,
             &layout,
             record,

@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.12",
+  "currentVersion": "1.51.13",
   "releases": [
+    {
+      "version": "1.51.13",
+      "tag": "v1.51.13",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up reviews a fan-out row whose cell holds another item"
+    },
     {
       "version": "1.51.12",
       "tag": "v1.51.12",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up reviews an RFI that also sits in a wrong cell"
     },
     {
