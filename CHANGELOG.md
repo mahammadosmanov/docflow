@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.5 - 2026-11-21
+
+### Changed
+
+- Concrete document generation and template manifest checks compile their fixed text patterns once per run of the app instead of on every call. Generated workbooks and validation results are unchanged. Patterns built from a cell reference are still compiled per cell. No timing was measured.
+
 ## 1.51.4 - 2026-11-21
 
 ### Changed
