@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.7",
+  "currentVersion": "1.51.8",
   "releases": [
+    {
+      "version": "1.51.8",
+      "tag": "v1.51.8",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up sync reaches the PV Module FINAL (3.2) column on Signed By Worley MEC"
+    },
     {
       "version": "1.51.7",
       "tag": "v1.51.7",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "CI runs the React tests once, with coverage"
     },
     {

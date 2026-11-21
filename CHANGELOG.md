@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.8 - 2026-11-21
+
+### Fixed
+
+- Follow Up sync now updates the PV Module FINAL (3.2) RFI/status pair in columns O/P of `Signed By Worley MEC`. Layout discovery stopped at column N, so every ITP MEC-0004 item 4.3.2 record showed as Manual Review with no prepared row, and Worley Signed/Not Signed values in that column were never synchronized. The Worley RFI signature control table from column U on is still not a destination.
+
 ## 1.51.7 - 2026-11-21
 
 ### Changed
