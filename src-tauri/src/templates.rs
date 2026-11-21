@@ -7,7 +7,7 @@ use std::{
     fs,
     io::{Cursor, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, LazyLock, Mutex, PoisonError},
 };
 
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
@@ -545,9 +545,14 @@ fn field_count(field_map: &Value) -> usize {
 
 fn validate_entry(entry: &TemplateEntry) -> Result<(), BackendError> {
     let invalid = || BackendError::request_failed("template manifest entry is invalid");
-    let code = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$").expect("static regex is valid");
-    let hex = Regex::new(r"^[0-9a-f]{64}$").expect("static regex is valid");
-    let segment = Regex::new(r"^[A-Za-z0-9._-]{1,128}$").expect("static regex is valid");
+    static CODE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$").expect("static regex is valid")
+    });
+    static HEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("static regex is valid"));
+    static SEGMENT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[A-Za-z0-9._-]{1,128}$").expect("static regex is valid"));
+    let (code, hex, segment): (&Regex, &Regex, &Regex) = (&CODE, &HEX, &SEGMENT);
     let segments = entry.storage_path.split('/').collect::<Vec<_>>();
     let valid = code.is_match(&entry.code)
         && !entry.title.trim().is_empty()

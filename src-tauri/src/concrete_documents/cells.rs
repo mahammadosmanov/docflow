@@ -1,5 +1,19 @@
 use super::*;
 
+static SECOND_BATCH_ROW: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<row\b[^>]*\br="21"[^>]*>.*?</row>"#).expect("static worksheet row pattern")
+});
+static ROW_REFERENCE_ATTRIBUTE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?P<prefix>\b(?:r|ref|sqref)=")(?P<value>[^"]+)""#)
+        .expect("static row reference attribute")
+});
+static CELL_COORDINATE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"([A-Z]{1,3})([0-9]+)").expect("static cell coordinate"));
+static CELL_VALUE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<v>.*?</v>").expect("static cell-value expression"));
+static CELL_TYPE_ATTRIBUTE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\s+t="[^"]*""#).expect("static cell type attribute"));
+
 pub(super) fn patch_civ010_numeric_cells(
     package: &[u8],
     record: &SourceRecord,
@@ -124,8 +138,7 @@ pub(super) fn expand_civ010_batch_rows(xml: &str, batch_count: usize) -> Result<
     if batch_count <= 2 {
         return Ok(xml.to_string());
     }
-    let row_pattern = Regex::new(r#"(?s)<row\b[^>]*\br="21"[^>]*>.*?</row>"#)
-        .expect("static worksheet row pattern");
+    let row_pattern: &Regex = &SECOND_BATCH_ROW;
     if !row_pattern.is_match(xml) {
         return Err("CON-CIV-010 template has no second concrete-batch row to extend".to_string());
     }
@@ -150,9 +163,7 @@ pub(super) fn expand_civ010_batch_rows(xml: &str, batch_count: usize) -> Result<
 }
 
 pub(super) fn shift_civ010_row_references(xml: &str, rows: usize) -> Result<String, String> {
-    let attribute = Regex::new(r#"(?P<prefix>\b(?:r|ref|sqref)=")(?P<value>[^"]+)""#)
-        .map_err(|error| error.to_string())?;
-    let coordinate = Regex::new(r"([A-Z]{1,3})([0-9]+)").map_err(|error| error.to_string())?;
+    let (attribute, coordinate): (&Regex, &Regex) = (&ROW_REFERENCE_ATTRIBUTE, &CELL_COORDINATE);
     Ok(attribute
         .replace_all(xml, |captures: &regex::Captures<'_>| {
             let prefix = &captures["prefix"];
@@ -165,10 +176,10 @@ pub(super) fn shift_civ010_row_references(xml: &str, rows: usize) -> Result<Stri
                         value.to_string()
                     }
                 } else {
-                    shift_coordinate_rows(&coordinate, value, rows, 22)
+                    shift_coordinate_rows(coordinate, value, rows, 22)
                 }
             } else {
-                shift_coordinate_rows(&coordinate, value, rows, 22)
+                shift_coordinate_rows(coordinate, value, rows, 22)
             };
             format!("{prefix}{shifted}\"")
         })
@@ -176,9 +187,7 @@ pub(super) fn shift_civ010_row_references(xml: &str, rows: usize) -> Result<Stri
 }
 
 pub(super) fn clone_civ010_row(row: &str, target_row: usize) -> Result<String, String> {
-    let attribute = Regex::new(r#"(?P<prefix>\b(?:r|ref|sqref)=")(?P<value>[^"]+)""#)
-        .map_err(|error| error.to_string())?;
-    let coordinate = Regex::new(r"([A-Z]{1,3})([0-9]+)").map_err(|error| error.to_string())?;
+    let (attribute, coordinate): (&Regex, &Regex) = (&ROW_REFERENCE_ATTRIBUTE, &CELL_COORDINATE);
     Ok(attribute
         .replace_all(row, |captures: &regex::Captures<'_>| {
             let prefix = &captures["prefix"];
@@ -186,7 +195,7 @@ pub(super) fn clone_civ010_row(row: &str, target_row: usize) -> Result<String, S
             let cloned = if prefix == "r=\"" && value == "21" {
                 target_row.to_string()
             } else {
-                shift_coordinate_rows(&coordinate, value, target_row.saturating_sub(21), 21)
+                shift_coordinate_rows(coordinate, value, target_row.saturating_sub(21), 21)
             };
             format!("{prefix}{cloned}\"")
         })
@@ -220,7 +229,7 @@ pub(super) fn set_numeric_cell(xml: &str, reference: &str, value: &str) -> Resul
         return Ok(xml.to_string());
     };
     let mut replacement = cell.as_str().replace(" t=\"s\"", "");
-    let value_pattern = Regex::new(r"(?s)<v>.*?</v>").expect("static cell-value expression");
+    let value_pattern: &Regex = &CELL_VALUE;
     if let Some(value_node) = value_pattern.find(&replacement) {
         if value.is_empty() {
             replacement.replace_range(value_node.range(), "");
@@ -248,7 +257,7 @@ pub(super) fn set_text_cell(xml: &str, reference: &str, value: &str) -> Result<S
         .find('>')
         .ok_or_else(|| format!("Malformed cell {reference}"))?;
     let mut opening = matched[..=opening_end].to_string();
-    let type_attribute = Regex::new(r#"\s+t="[^"]*""#).expect("static cell type attribute");
+    let type_attribute: &Regex = &CELL_TYPE_ATTRIBUTE;
     opening = type_attribute.replace_all(&opening, "").into_owned();
     opening.pop();
     opening.push_str(" t=\"inlineStr\">");

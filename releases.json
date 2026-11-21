@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.9",
+  "currentVersion": "1.51.10",
   "releases": [
+    {
+      "version": "1.51.10",
+      "tag": "v1.51.10",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Concrete documents and template checks reuse compiled patterns"
+    },
     {
       "version": "1.51.9",
       "tag": "v1.51.9",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "File hashing shares one streaming SHA-256 helper"
     },
     {
