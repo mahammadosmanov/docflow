@@ -19,6 +19,7 @@ Keep these source ITP/item pairs outside Follow Up; do not add route mappings fo
 | CIV-0007 | 7.1.5, 7.2.3, 7.2.4, 7.3.9 |
 | MEC-0001 | 1.1.4, 1.2.5 |
 | MEC-0004 | 4.3.1 |
+| CIV-0003_A | all items (culvert ITP; Follow Up has no culvert sheet or columns; operator decision 2026-11-21) |
 
 These exclusions are approved business scope, not work waiting to be mapped. Absence from the route table alone is not authorization to add a route. Any proposed inclusion or exclusion requires explicit operator approval and an update to this ADR and `docs/RFI_DOMAIN.md` before route behavior changes.
 

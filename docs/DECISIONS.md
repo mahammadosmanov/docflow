@@ -54,6 +54,7 @@ and versioned with the code they govern.
 | Signed in-app updates from immutable GitHub Releases | Accepted | [`adr/0052-signed-in-app-updates.md`](adr/0052-signed-in-app-updates.md) |
 | File and folder drops are captured by Rust; the webview sends no path | Accepted | [`adr/0054-native-file-drop.md`](adr/0054-native-file-drop.md) |
 | Shared document templates synced from Supabase with an offline cache | Accepted | [`adr/0055-shared-document-templates.md`](adr/0055-shared-document-templates.md) |
+| Follow Up moves placements the RFI Log contradicts and repairs mistyped RFI cells | Accepted | [`adr/0056-follow-up-moves-contradicted-placements.md`](adr/0056-follow-up-moves-contradicted-placements.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

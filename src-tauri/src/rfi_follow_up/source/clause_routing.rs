@@ -73,6 +73,10 @@ pub(in crate::rfi_follow_up) fn intended_lifecycle_route(
 }
 
 pub(in crate::rfi_follow_up) fn is_confirmed_follow_up_exclusion(record: &SourceRecord) -> bool {
+    // Culvert ITP: Follow Up has no culvert sheet or columns.
+    if normalize_code_text(&record.itp).ends_with("ITP-CIV-0003_A") {
+        return true;
+    }
     let Some((discipline, itp)) = itp_identity(&record.itp) else {
         return false;
     };

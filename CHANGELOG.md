@@ -5,6 +5,36 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.24 - 2026-11-21
+
+### Changed
+
+- A mistyped Follow Up RFI cell, such as `CIV-13741461` with the `/` missing, or numbers separated by spaces, `;`, `\`, `&`, `+`, `|` or doubled slashes, is now rewritten in the standard form (`CIV-1374/1461`) when every number in it exists in the RFI Log. Otherwise it stays in Manual Review as `invalidRfi`.
+
+## 1.51.23 - 2026-11-21
+
+### Changed
+
+- When the RFI Log pins the cell an RFI belongs in, a copy of that RFI in another Follow Up cell is now removed there and the RFI is added to its own cell once you approve the preview (ADR 0056). On the current workbooks this clears CIV-0086/0104/0218 from `CIV!G8`, CIV-0346 from `G10`, CIV-0267 from `G11`, CIV-0200 from `M52` and CIV-0322 from `E75`, moves CIV-0541 from `C13` to `E13`, replaces CIV-0015 in `M68` with CIV-0315, and corrects PCU `H7`, `L7`, `J17`/`L17` (swapped), `F23` and `L29`. Ambiguous or partly unmatched records and formula or merged cells stay in Manual Review.
+
+## 1.51.22 - 2026-11-21
+
+### Fixed
+
+- Items that share one Follow Up column, such as CIV `2.2.1` and `2.2.2` under Site clearing (2.1&2.2), are now added to the same cell. Since 1.51.17 they blocked each other and showed `targetOccupied` in Manual Review.
+
+## 1.51.21 - 2026-11-21
+
+### Fixed
+
+- Follow Up now reads more CIV `Tag No` forms from the RFI Log: shorthand `N1/2/3/…/15` (N1 to N15), notes such as `A2/Zone 2` or `A19/New`, a parent tag like `A17` whose Follow Up rows are `A17/1` and `A17/2` (only `A12/2` when Area says `Part 2`), and a name inside a combined row such as `A1, A1/1, A1/2`. Before, these RFIs sat in Manual Review as ambiguous or partly unmatched (CIV-0005, CIV-0012, CIV-0013, CIV-0028 and CIV-0322 on the current Log) or were silently skipped. A missing sub-row such as `A17/3` still matches nothing.
+
+## 1.51.20 - 2026-11-21
+
+### Fixed
+
+- RFIs of the culvert ITP `CIV-0003_A` (items such as `CIV-3.1.7` and `CIV-3.2.2.x`, locations like `Culvert T-016C`) are now outside Follow Up scope, as confirmed by the operator: Follow Up has no culvert sheet or columns. They no longer fill Manual Review (30 rows on the current Log) and, like the other ADR 0035 exclusions, are removed from any Follow Up cell on the next approved sync.
+
 ## 1.51.19 - 2026-11-21
 
 ### Fixed

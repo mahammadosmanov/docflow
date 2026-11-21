@@ -1,13 +1,53 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.19",
+  "currentVersion": "1.51.24",
   "releases": [
+    {
+      "version": "1.51.24",
+      "tag": "v1.51.24",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up repairs mistyped RFI cells when the Log has every number"
+    },
+    {
+      "version": "1.51.23",
+      "tag": "v1.51.23",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up moves an RFI out of a cell the Log contradicts"
+    },
+    {
+      "version": "1.51.22",
+      "tag": "v1.51.22",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up adds items that share one column to the same cell"
+    },
+    {
+      "version": "1.51.21",
+      "tag": "v1.51.21",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reads CIV tag shorthand, notes, parent tags and combined rows"
+    },
+    {
+      "version": "1.51.20",
+      "tag": "v1.51.20",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up leaves culvert ITP CIV-0003_A out of scope"
+    },
     {
       "version": "1.51.19",
       "tag": "v1.51.19",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up reviews a fan-out row whose cell holds another item"
     },
     {

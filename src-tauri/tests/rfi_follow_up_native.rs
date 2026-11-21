@@ -1318,7 +1318,7 @@ fn full_sync_reviews_a_record_whose_only_matching_cell_holds_another_item() {
 }
 
 #[test]
-fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
+fn full_sync_removes_an_rfi_copy_from_a_cell_the_log_contradicts() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
         "0015",
@@ -1375,18 +1375,18 @@ fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
     )]);
 
     let review = classify(source, target).unwrap();
-    let row = review["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["rfiNo"] == "CIV-0015")
-        .unwrap_or_else(|| panic!("misplaced CIV-0015 must be reviewed: {review}"));
-    assert_eq!(row["selectable"], false);
-    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.placedElsewhere");
+    let rows = review["rows"].as_array().unwrap();
     assert!(
-        row["mappingDetails"].as_str().unwrap().contains("M5"),
-        "{row}"
+        rows.iter().all(|row| row["selectable"] == true),
+        "no review is left: {review}"
     );
+    let cleared = rows
+        .iter()
+        .find(|row| row["_row"] == 5 && row["target"]["rfiColumn"] == 13)
+        .unwrap_or_else(|| panic!("the wrong M5 copy must be removed: {review}"));
+    assert_eq!(cleared["proposedRfiNo"], "");
+    assert_eq!(cleared["proposedStatus"], "");
+    assert!(!rows.iter().any(|row| row["_row"] == 6), "{review}");
 }
 
 #[test]
@@ -6323,4 +6323,286 @@ fn backup_copy_can_live_in_a_separate_folder_and_undo_still_restores_exactly() {
     let undone = authority.undo(&applied.journal_id, &caller, None).unwrap();
     assert_eq!(undone.failed, 0);
     assert_eq!(std::fs::read(&target_path).unwrap(), original);
+}
+
+/// CIV Proctor column (1.5) with one blank row per area name.
+fn civ_proctor_target(areas: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = std::iter::once(row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")])).chain(
+        areas.iter().enumerate().map(|(index, area)| {
+            let number = index as u32 + 2;
+            row(
+                number,
+                [
+                    inline(&format!("B{number}"), area),
+                    blank(&format!("C{number}")),
+                    blank(&format!("D{number}")),
+                ],
+            )
+        }),
+    );
+    package(&[("CIV", None, worksheet(rows, &[]))])
+}
+
+#[test]
+fn full_sync_excludes_the_culvert_itp_from_follow_up() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "1709",
+        "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0003_A",
+        "CIV-3.1.7",
+        "Road 1",
+        "Completed",
+        "",
+    )]);
+    let target = civ_proctor_target(&["N1"]);
+
+    let review = classify(source, target).unwrap();
+    assert!(review["rows"].as_array().unwrap().is_empty(), "{review}");
+    assert!(
+        !review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
+        "{review}"
+    );
+}
+
+fn civ_record_in_area(row_number: u32, suffix: &str, item: &str, tag: &str, area: &str) -> String {
+    row(
+        row_number,
+        [
+            inline(
+                &format!("A{row_number}"),
+                &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
+            ),
+            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-CIV-0002"),
+            inline(&format!("E{row_number}"), item),
+            inline(&format!("F{row_number}"), tag),
+            inline(&format!("G{row_number}"), area),
+            inline(&format!("T{row_number}"), "Completed"),
+        ],
+    )
+}
+
+fn proposed_rows(review: &Value) -> Vec<(u64, String)> {
+    let rows = review["rows"].as_array().unwrap();
+    assert!(
+        rows.iter().all(|row| row["selectable"] == true),
+        "no manual review expected: {review}"
+    );
+    rows.iter()
+        .map(|row| {
+            (
+                row["_row"].as_u64().unwrap(),
+                row["proposedRfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn full_sync_reads_civ_tag_shorthand_notes_parents_and_combined_rows() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0028", "CIV-2.1.5", "N1/2/3", "North Side"),
+        civ_record_in_area(
+            11,
+            "0005",
+            "CIV-2.1.5",
+            "A2/Zone 2, A3/Zone 2",
+            "North Side",
+        ),
+        civ_record_in_area(12, "0322", "CIV-2.1.5", "A19/New", "South Site"),
+        civ_record_in_area(13, "0012", "CIV-2.1.5", "A17", "South Site"),
+        civ_record_in_area(14, "0094", "CIV-2.1.5", "A12", "Part 2"),
+        civ_record_in_area(15, "0192", "CIV-2.1.5", "A1/2", "North Site"),
+    ]);
+    let target = civ_proctor_target(&[
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "A2",
+        "A3",
+        "A19",
+        "A17/1",
+        "A17/2",
+        "A12/1",
+        "A12/2",
+        "A1, A1/1, A1/2",
+    ]);
+
+    let review = classify(source, target).unwrap();
+    let mut proposed = proposed_rows(&review);
+    proposed.sort();
+    let expected = [
+        (2, "CIV-0028"),
+        (3, "CIV-0028"),
+        (4, "CIV-0028"),
+        (6, "CIV-0005"),
+        (7, "CIV-0005"),
+        (8, "CIV-0322"),
+        (9, "CIV-0012"),
+        (10, "CIV-0012"),
+        (12, "CIV-0094"),
+        (13, "CIV-0192"),
+    ]
+    .map(|(row, rfi)| (row, rfi.to_string()));
+    assert_eq!(proposed, expected, "{review}");
+}
+
+#[test]
+fn full_sync_keeps_a_missing_civ_sub_row_visible_instead_of_guessing() {
+    let source = full_schema_source([civ_record_in_area(
+        10,
+        "0040",
+        "CIV-2.1.5",
+        "A17/3",
+        "South Site",
+    )]);
+    let target = civ_proctor_target(&["A3", "A17/1", "A17/2"]);
+
+    let review = classify(source, target).unwrap();
+    assert!(
+        !review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["selectable"] == true),
+        "A17/3 must not land in A3 or every A17 sub-row: {review}"
+    );
+}
+
+#[test]
+fn full_sync_adds_items_that_share_one_follow_up_column() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0095", "CIV-2.2.1", "A12/1", "Part 1"),
+        civ_record_in_area(11, "0296", "CIV-2.2.2", "A12/1", "Part 1"),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(3, [inline("G3", "Site clearing (2.1&amp;2.2)")]),
+                row(4, [inline("G4", "RFI No."), inline("H4", "STATUS")]),
+                row(
+                    5,
+                    [
+                        inline("B5", "A12/1"),
+                        inline("G5", "CIV-0296"),
+                        inline("H5", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    assert_eq!(proposed_rows(&review), [(5, "CIV-0296/0095".to_string())]);
+}
+
+#[test]
+fn full_sync_moves_a_misplaced_rfi_and_fills_the_cell_it_blocked() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0015", "CIV-2.1.5", "A19", "South Site"),
+        civ_record_in_area(11, "0315", "CIV-2.1.5", "A17/1", "South Site"),
+        civ_record_in_area(12, "0541", "CIV-2.1.5", "N9", "North Site"),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(
+                    2,
+                    [
+                        inline("B2", "A17/1"),
+                        inline("C2", "CIV-0015/0541"),
+                        inline("D2", "Completed"),
+                    ],
+                ),
+                row(3, [inline("B3", "A19"), blank("C3"), blank("D3")]),
+                row(4, [inline("B4", "N9"), blank("C4"), blank("D4")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let mut proposed = proposed_rows(&review);
+    proposed.sort();
+    assert_eq!(
+        proposed,
+        [
+            (2, "CIV-0315".to_string()),
+            (3, "CIV-0015".to_string()),
+            (4, "CIV-0541".to_string()),
+        ],
+        "{review}"
+    );
+}
+
+#[test]
+fn full_sync_repairs_a_mistyped_rfi_cell_only_when_the_log_has_every_number() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "1374", "CIV-2.1.5", "S10", "South Site"),
+        civ_record_in_area(11, "1461", "CIV-2.1.5", "S10", "South Site"),
+    ]);
+    let target = |value: &str| {
+        package(&[(
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                    row(
+                        2,
+                        [
+                            inline("B2", "S10"),
+                            inline("C2", value),
+                            inline("D2", "Completed"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        )])
+    };
+
+    let repaired = classify(source.clone(), target("CIV-13741461")).unwrap();
+    assert_eq!(
+        proposed_rows(&repaired),
+        [(2, "CIV-1374/1461".to_string())],
+        "{repaired}"
+    );
+    // The apply guard must accept the mistyped original it is replacing.
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(&source_path, source.clone().into_inner()).unwrap();
+    std::fs::write(&target_path, target("CIV-13741461").into_inner()).unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut File::open(&source_path).unwrap(),
+        &mut File::open(&target_path).unwrap(),
+    )
+    .unwrap();
+    assert!(guarded_updates(&plan.steps[0]).unwrap()["CIV"].contains_key(&(2, 3)));
+
+    let unknown = classify(source, target("CIV-13749999")).unwrap();
+    assert!(
+        unknown["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |row| row["reasonKey"] == "warn.rfi.followUp.reason.invalidRfi"
+                    && row["selectable"] == false
+            ),
+        "a number missing from the Log stays manual: {unknown}"
+    );
 }
