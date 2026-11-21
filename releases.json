@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.21",
+  "currentVersion": "1.51.22",
   "releases": [
+    {
+      "version": "1.51.22",
+      "tag": "v1.51.22",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up adds items that share one column to the same cell"
+    },
     {
       "version": "1.51.21",
       "tag": "v1.51.21",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up reads CIV tag shorthand, notes, parent tags and combined rows"
     },
     {

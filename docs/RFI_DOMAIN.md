@@ -196,7 +196,9 @@ the record is outside the active template scope: omit it from Manual Review and
 propose no RFI or status update, regardless of an unrelated existing placement.
 Leave that existing placement untouched. If any context matches but the target
 cell is unsafe, keep it in Manual Review with the specific target-safety reason.
-A matching cell that already holds an RFI of a different ITP item is unsafe,
+A matching cell that already holds an RFI routed to a different Follow Up
+column is unsafe (items that share one column, such as `2.2.1` and `2.2.2`
+under `2.1&2.2`, are compatible),
 including one row of a multi-row fan-out:
 the record stays in Manual Review and is neither added there nor dropped
 silently. An RFI found both in its matching cell and in another cell

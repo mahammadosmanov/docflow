@@ -6472,3 +6472,33 @@ fn full_sync_keeps_a_missing_civ_sub_row_visible_instead_of_guessing() {
         "A17/3 must not land in A3 or every A17 sub-row: {review}"
     );
 }
+
+#[test]
+fn full_sync_adds_items_that_share_one_follow_up_column() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0095", "CIV-2.2.1", "A12/1", "Part 1"),
+        civ_record_in_area(11, "0296", "CIV-2.2.2", "A12/1", "Part 1"),
+    ]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(3, [inline("G3", "Site clearing (2.1&amp;2.2)")]),
+                row(4, [inline("G4", "RFI No."), inline("H4", "STATUS")]),
+                row(
+                    5,
+                    [
+                        inline("B5", "A12/1"),
+                        inline("G5", "CIV-0296"),
+                        inline("H5", "Completed"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    assert_eq!(proposed_rows(&review), [(5, "CIV-0296/0095".to_string())]);
+}

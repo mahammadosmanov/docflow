@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.22 - 2026-11-21
+
+### Fixed
+
+- Items that share one Follow Up column, such as CIV `2.2.1` and `2.2.2` under Site clearing (2.1&2.2), are now added to the same cell. Since 1.51.17 they blocked each other and showed `targetOccupied` in Manual Review.
+
 ## 1.51.21 - 2026-11-21
 
 ### Fixed

@@ -299,9 +299,11 @@ pub(super) fn place_record(
                 .iter()
                 .filter(|code| !is_placeholder_rfi(code))
                 .all(|code| {
+                    // Items sharing one column (2.2.1 and 2.2.2 in 2.1&2.2) are compatible.
                     records.get(code).is_some_and(|existing| {
                         existing.itp == record.itp
-                            && item_clause(&existing.item) == item_clause(&record.item)
+                            && intended_lifecycle_route(existing)
+                                == intended_lifecycle_route(record)
                     })
                 });
             if !compatible {
