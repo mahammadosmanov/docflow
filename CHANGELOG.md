@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.21 - 2026-11-21
+
+### Fixed
+
+- Follow Up now reads more CIV `Tag No` forms from the RFI Log: shorthand `N1/2/3/…/15` (N1 to N15), notes such as `A2/Zone 2` or `A19/New`, a parent tag like `A17` whose Follow Up rows are `A17/1` and `A17/2` (only `A12/2` when Area says `Part 2`), and a name inside a combined row such as `A1, A1/1, A1/2`. Before, these RFIs sat in Manual Review as ambiguous or partly unmatched (CIV-0005, CIV-0012, CIV-0013, CIV-0028 and CIV-0322 on the current Log) or were silently skipped. A missing sub-row such as `A17/3` still matches nothing.
+
 ## 1.51.20 - 2026-11-21
 
 ### Fixed

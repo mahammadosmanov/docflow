@@ -215,7 +215,14 @@ destination. DocFlow never corrects the source log. No row or section is
 synthesized.
 For CIV, split the source `Tag No` list into exact individual tag contexts. A
 comma-separated tag that exactly names an existing CIV row, such as `A17/1`, is
-that row and is not split at `/`; it never matches the parent `A17` row. Each
+that row and is not split at `/`; it never matches the parent `A17` row. A name
+inside a combined row such as `A1, A1/1, A1/2` is that row. After the first tag
+of a `/` list, a bare number takes the first tag's letters when that row family
+has no `/` sub-rows (`N1/2/3` is N1, N2 and N3), and a note without a row that
+has no digits or reads `Zone n` is dropped (`A2/Zone 2` is A2, `A19/New` is A19).
+A tag with no row of its own but with `/` sub-rows (`A17` with `A17/1` and
+`A17/2`) covers the sub-row named by an Area of `Part n`, otherwise every
+sub-row; a missing sub-row such as `A17/3` stays visible as unmatched. Each
 tag may map to its own distinct, uniquely matching prepared CIV area row; no
 target row is created or guessed. When only some tags have unique prepared rows,
 sync the eligible rows and show an unselectable Manual Review diagnostic naming

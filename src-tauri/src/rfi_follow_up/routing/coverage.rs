@@ -125,7 +125,7 @@ pub(in crate::rfi_follow_up) fn civ_tag_coverage(
     let source_tags = record
         .contexts
         .iter()
-        .flat_map(|context| civ_area_tags(sheet, &context.tag))
+        .flat_map(|context| civ_area_tags(sheet, context))
         .filter(|tag| !tag.starts_with("PCS-"))
         .collect::<BTreeSet<_>>();
     if candidates.is_empty() || source_tags.len() < 2 {
@@ -158,7 +158,7 @@ pub(in crate::rfi_follow_up) fn distinct_civ_area_rows(
     let source_tags = record
         .contexts
         .iter()
-        .flat_map(|context| civ_area_tags(sheet, &context.tag))
+        .flat_map(|context| civ_area_tags(sheet, context))
         .collect::<BTreeSet<_>>();
     let mut matched_tags = BTreeSet::new();
     candidates.iter().all(|(_, row, _, _)| {

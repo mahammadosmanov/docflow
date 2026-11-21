@@ -96,26 +96,99 @@ pub(super) fn normalized_parts(value: &str) -> Vec<String> {
         .collect()
 }
 
-/// CIV area tags of a source `Tag No`. A comma-separated token that names an
-/// existing CIV row (`A5/1`) is that row; any other token splits on `/` as
-/// shorthand (`N1/2`). Splitting `A5/1` would match it to the `A5` row.
-pub(super) fn civ_area_tags(sheet: &WorksheetData, tag: &str) -> Vec<String> {
-    tag.split([',', ';', '\n'])
-        .flat_map(|raw| {
-            let token = normalized_location(raw);
-            let names_row = token.contains('/')
-                && (1..=sheet.max_row).any(|row| {
-                    sheet
-                        .cell(row, 2)
-                        .is_some_and(|cell| normalized_location(&cell.value) == token)
-                });
-            if names_row {
-                vec![token]
-            } else {
-                normalized_parts(raw)
+/// CIV area tags of a source context, as the full names of CIV rows where they
+/// exist. A comma-separated token that names a row, or one name in a combined
+/// row such as `A1, A1/1, A1/2`, is that row; any other token splits on `/` as
+/// shorthand. After the first part, a bare number takes its prefix (`N1/2` is
+/// N1 and N2) when that row family has no `/` sub-rows, and a note without its
+/// own row (`A2/Zone 2`, `A19/New`) is dropped. A tag without a row of its own
+/// but with sub-rows covers its `Part n` sub-row when Area names one (`A12`,
+/// `Part 1` is `A12/1`), otherwise every sub-row (`A17` is `A17/1`, `A17/2`).
+pub(super) fn civ_area_tags(sheet: &WorksheetData, context: &SourceRouteContext) -> Vec<String> {
+    let mut names = BTreeMap::<String, String>::new();
+    for row in 1..=sheet.max_row {
+        let Some(full) = sheet
+            .cell(row, 2)
+            .map(|cell| normalized_location(&cell.value))
+        else {
+            continue;
+        };
+        if full.is_empty() {
+            continue;
+        }
+        for part in full
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
+            names
+                .entry(part.to_string())
+                .or_insert_with(|| full.clone());
+        }
+        names.insert(full.clone(), full);
+    }
+    let area = normalized_location(&context.area);
+    let area_part = area
+        .strip_prefix("PART ")
+        .filter(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()));
+    let sub_rows = |part: &str| {
+        let prefix = format!("{part}/");
+        names
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(_, full)| full.clone())
+            .collect::<BTreeSet<_>>()
+    };
+    let resolve = |part: &str| -> Vec<String> {
+        if let Some(full) = names.get(part) {
+            return vec![full.clone()];
+        }
+        if let Some(full) = area_part.and_then(|number| names.get(&format!("{part}/{number}"))) {
+            return vec![full.clone()];
+        }
+        let subs = sub_rows(part);
+        if subs.is_empty() {
+            vec![part.to_string()]
+        } else {
+            subs.into_iter().collect()
+        }
+    };
+    let digits = |part: &String| part.chars().all(|c| c.is_ascii_digit());
+    let mut tags = Vec::<String>::new();
+    for raw in context.tag.split([',', ';', '\n']) {
+        let token = normalized_location(raw);
+        if let Some(full) = names.get(&token) {
+            tags.push(full.clone());
+            continue;
+        }
+        let parts = normalized_parts(raw);
+        let Some((first, rest)) = parts.split_first() else {
+            continue;
+        };
+        // `A17/3` names a missing sub-row, not A17 and A3: keep it visible.
+        if rest.iter().any(digits) && !sub_rows(first).is_empty() {
+            tags.push(token);
+            continue;
+        }
+        let stem = first.trim_end_matches(|c: char| c.is_ascii_digit());
+        let family_has_sub_rows = names
+            .keys()
+            .any(|name| name.starts_with(stem) && name.contains('/'));
+        tags.extend(resolve(first));
+        for part in rest {
+            let expanded = format!("{stem}{part}");
+            if let Some(full) = names.get(part) {
+                tags.push(full.clone());
+            } else if digits(part) && !family_has_sub_rows && names.contains_key(&expanded) {
+                tags.push(names[&expanded].clone());
+            } else if !part.starts_with("ZONE") && part.chars().any(|c| c.is_ascii_digit()) {
+                tags.extend(resolve(part));
             }
-        })
-        .collect()
+        }
+    }
+    let mut seen = BTreeSet::new();
+    tags.retain(|tag| seen.insert(tag.clone()));
+    tags
 }
 
 pub(super) fn pcu_row_matches(
@@ -220,7 +293,7 @@ pub(super) fn row_matches_context(
     };
     match sheet_name {
         "CIV" => {
-            let tags = civ_area_tags(sheet, &context.tag);
+            let tags = civ_area_tags(sheet, context);
             let pcs = tags
                 .iter()
                 .filter(|tag| tag.starts_with("PCS-"))

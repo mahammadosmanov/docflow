@@ -6367,3 +6367,108 @@ fn full_sync_excludes_the_culvert_itp_from_follow_up() {
         "{review}"
     );
 }
+
+fn civ_record_in_area(row_number: u32, suffix: &str, item: &str, tag: &str, area: &str) -> String {
+    row(
+        row_number,
+        [
+            inline(
+                &format!("A{row_number}"),
+                &format!("AZE-SUN-INT-QMS-RFI-CIV-{suffix}"),
+            ),
+            inline(&format!("D{row_number}"), "AZE-SUN-INT-QMS-ITP-CIV-0002"),
+            inline(&format!("E{row_number}"), item),
+            inline(&format!("F{row_number}"), tag),
+            inline(&format!("G{row_number}"), area),
+            inline(&format!("T{row_number}"), "Completed"),
+        ],
+    )
+}
+
+fn proposed_rows(review: &Value) -> Vec<(u64, String)> {
+    let rows = review["rows"].as_array().unwrap();
+    assert!(
+        rows.iter().all(|row| row["selectable"] == true),
+        "no manual review expected: {review}"
+    );
+    rows.iter()
+        .map(|row| {
+            (
+                row["_row"].as_u64().unwrap(),
+                row["proposedRfiNo"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn full_sync_reads_civ_tag_shorthand_notes_parents_and_combined_rows() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "0028", "CIV-2.1.5", "N1/2/3", "North Side"),
+        civ_record_in_area(
+            11,
+            "0005",
+            "CIV-2.1.5",
+            "A2/Zone 2, A3/Zone 2",
+            "North Side",
+        ),
+        civ_record_in_area(12, "0322", "CIV-2.1.5", "A19/New", "South Site"),
+        civ_record_in_area(13, "0012", "CIV-2.1.5", "A17", "South Site"),
+        civ_record_in_area(14, "0094", "CIV-2.1.5", "A12", "Part 2"),
+        civ_record_in_area(15, "0192", "CIV-2.1.5", "A1/2", "North Site"),
+    ]);
+    let target = civ_proctor_target(&[
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "A2",
+        "A3",
+        "A19",
+        "A17/1",
+        "A17/2",
+        "A12/1",
+        "A12/2",
+        "A1, A1/1, A1/2",
+    ]);
+
+    let review = classify(source, target).unwrap();
+    let mut proposed = proposed_rows(&review);
+    proposed.sort();
+    let expected = [
+        (2, "CIV-0028"),
+        (3, "CIV-0028"),
+        (4, "CIV-0028"),
+        (6, "CIV-0005"),
+        (7, "CIV-0005"),
+        (8, "CIV-0322"),
+        (9, "CIV-0012"),
+        (10, "CIV-0012"),
+        (12, "CIV-0094"),
+        (13, "CIV-0192"),
+    ]
+    .map(|(row, rfi)| (row, rfi.to_string()));
+    assert_eq!(proposed, expected, "{review}");
+}
+
+#[test]
+fn full_sync_keeps_a_missing_civ_sub_row_visible_instead_of_guessing() {
+    let source = full_schema_source([civ_record_in_area(
+        10,
+        "0040",
+        "CIV-2.1.5",
+        "A17/3",
+        "South Site",
+    )]);
+    let target = civ_proctor_target(&["A3", "A17/1", "A17/2"]);
+
+    let review = classify(source, target).unwrap();
+    assert!(
+        !review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["selectable"] == true),
+        "A17/3 must not land in A3 or every A17 sub-row: {review}"
+    );
+}

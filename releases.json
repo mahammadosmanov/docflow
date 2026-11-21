@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.20",
+  "currentVersion": "1.51.21",
   "releases": [
+    {
+      "version": "1.51.21",
+      "tag": "v1.51.21",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up reads CIV tag shorthand, notes, parent tags and combined rows"
+    },
     {
       "version": "1.51.20",
       "tag": "v1.51.20",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up leaves culvert ITP CIV-0003_A out of scope"
     },
     {

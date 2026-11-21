@@ -88,7 +88,7 @@ fn route_source_contexts(
                     .sheet("CIV")
                     .map_or_else(
                         || normalized_parts(&context.tag),
-                        |sheet| civ_area_tags(sheet, &context.tag),
+                        |sheet| civ_area_tags(sheet, context),
                     )
                     .into_iter()
                     .filter(|tag| !tag.starts_with("PCS-"))
