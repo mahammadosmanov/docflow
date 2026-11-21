@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.20 - 2026-11-21
+
+### Fixed
+
+- RFIs of the culvert ITP `CIV-0003_A` (items such as `CIV-3.1.7` and `CIV-3.2.2.x`, locations like `Culvert T-016C`) are now outside Follow Up scope, as confirmed by the operator: Follow Up has no culvert sheet or columns. They no longer fill Manual Review (30 rows on the current Log) and, like the other ADR 0035 exclusions, are removed from any Follow Up cell on the next approved sync.
+
 ## 1.51.19 - 2026-11-21
 
 ### Fixed

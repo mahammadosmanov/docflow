@@ -6324,3 +6324,46 @@ fn backup_copy_can_live_in_a_separate_folder_and_undo_still_restores_exactly() {
     assert_eq!(undone.failed, 0);
     assert_eq!(std::fs::read(&target_path).unwrap(), original);
 }
+
+/// CIV Proctor column (1.5) with one blank row per area name.
+fn civ_proctor_target(areas: &[&str]) -> Cursor<Vec<u8>> {
+    let rows = std::iter::once(row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")])).chain(
+        areas.iter().enumerate().map(|(index, area)| {
+            let number = index as u32 + 2;
+            row(
+                number,
+                [
+                    inline(&format!("B{number}"), area),
+                    blank(&format!("C{number}")),
+                    blank(&format!("D{number}")),
+                ],
+            )
+        }),
+    );
+    package(&[("CIV", None, worksheet(rows, &[]))])
+}
+
+#[test]
+fn full_sync_excludes_the_culvert_itp_from_follow_up() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "1709",
+        "AZE˗SUN˗INT˗QMS˗ITP˗CIV˗0003_A",
+        "CIV-3.1.7",
+        "Road 1",
+        "Completed",
+        "",
+    )]);
+    let target = civ_proctor_target(&["N1"]);
+
+    let review = classify(source, target).unwrap();
+    assert!(review["rows"].as_array().unwrap().is_empty(), "{review}");
+    assert!(
+        !review["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["key"] == "warn.rfi.followUp.unmappedRecords"),
+        "{review}"
+    );
+}

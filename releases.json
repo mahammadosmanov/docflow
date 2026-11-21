@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.19",
+  "currentVersion": "1.51.20",
   "releases": [
+    {
+      "version": "1.51.20",
+      "tag": "v1.51.20",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up leaves culvert ITP CIV-0003_A out of scope"
+    },
     {
       "version": "1.51.19",
       "tag": "v1.51.19",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up reviews a fan-out row whose cell holds another item"
     },
     {
