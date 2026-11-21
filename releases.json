@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.17",
+  "currentVersion": "1.51.18",
   "releases": [
+    {
+      "version": "1.51.18",
+      "tag": "v1.51.18",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up reviews an RFI that also sits in a wrong cell"
+    },
     {
       "version": "1.51.17",
       "tag": "v1.51.17",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up reviews RFIs whose matching cell holds another item instead of dropping them"
     },
     {

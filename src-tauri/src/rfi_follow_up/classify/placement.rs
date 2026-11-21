@@ -162,8 +162,10 @@ pub(super) fn place_record(
     if scope_candidates.is_empty() {
         return Ok(());
     }
+    let placed_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
     if candidate_count == 1
         && !existing_slots.is_empty()
+        && !placed_elsewhere
         && mec_context_coverage != Some(false)
         && civ_tag_coverage != Some(false)
     {
@@ -215,8 +217,16 @@ pub(super) fn place_record(
         ));
         return Ok(());
     }
-    let already_mapped_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
-    if already_mapped_elsewhere {
+    if placed_elsewhere {
+        // Also present in the matched cell: the other cell is a misplacement.
+        let reason = if existing_slots.iter().any(|key| candidates.contains(key))
+            && civ_tag_coverage != Some(false)
+            && mec_context_coverage != Some(false)
+        {
+            "warn.rfi.followUp.reason.placedElsewhere"
+        } else {
+            "warn.rfi.followUp.reason.mappingAmbiguous"
+        };
         *unmapped_count += 1;
         let layout = slots
             .get(&candidates[0])
@@ -227,12 +237,24 @@ pub(super) fn place_record(
             sheet_name,
             &layout,
             record,
-            "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
-            Some(mapping_details(
-                record,
-                Some((sheet_name, target_clause)),
-                target_workbook,
-                &scope_candidates,
+            reason.to_string(),
+            Some(format!(
+                "{}; also placed in: {}",
+                mapping_details(
+                    record,
+                    Some((sheet_name, target_clause)),
+                    target_workbook,
+                    &scope_candidates,
+                ),
+                existing_slots
+                    .iter()
+                    .filter(|key| !candidates.contains(key))
+                    .map(|(sheet, row, column, _)| format!(
+                        "{sheet}!{}{row}",
+                        column_letters(*column)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )),
         ));
         return Ok(());

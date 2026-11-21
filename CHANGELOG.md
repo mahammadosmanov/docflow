@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.18 - 2026-11-21
+
+### Fixed
+
+- An RFI that is in its matching Follow Up cell and also in another cell whose row or column does not match its ITP item or Tag No now appears in Manual Review with the new reason `placedElsewhere` (all four languages), naming the other cell. Before, the extra placement was silently accepted. On the current workbooks this lists CIV-0015 (`CIV!M68`), CIV-0086/0104/0218 (`CIV!G8`), CIV-0267 (`CIV!G11`), CIV-0346 (`CIV!G10`), CIV-0200 (`CIV!M52`), CIV-0322 (`CIV!E75`), CIV-0944 (`PCU!H7`) and CIV-0776 (`PCU!L7`). Nothing is moved or deleted.
+
 ## 1.51.17 - 2026-11-21
 
 ### Fixed
