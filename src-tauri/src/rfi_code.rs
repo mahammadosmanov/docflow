@@ -52,15 +52,18 @@ pub fn normalize_candidate_number(value: &str) -> Option<String> {
     Some(format!("{value:0>4}"))
 }
 
-pub fn normalize_full_code(value: &str) -> Option<String> {
+/// Whole-string match of a full RFI code; groups are discipline and number.
+pub(crate) fn full_code_regex() -> &'static Regex {
     static FULL_CODE: OnceLock<Regex> = OnceLock::new();
+    FULL_CODE.get_or_init(|| {
+        Regex::new(r"\AAZE-SUN-INT-QMS-RFI-(CIV|ELE|MEC|PRC)-([0-9]{1,4})\z")
+            .expect("anchored full RFI code pattern is valid")
+    })
+}
+
+pub fn normalize_full_code(value: &str) -> Option<String> {
     let normalized = canonical(value);
-    let captures = FULL_CODE
-        .get_or_init(|| {
-            Regex::new(r"\AAZE-SUN-INT-QMS-RFI-(CIV|ELE|MEC|PRC)-([0-9]{1,4})\z")
-                .expect("anchored full RFI code pattern is valid")
-        })
-        .captures(&normalized)?;
+    let captures = full_code_regex().captures(&normalized)?;
     Some(format!(
         "{PREFIX}-{}-{}",
         &captures[1],
@@ -156,7 +159,8 @@ fn find_canonical(text: &str) -> RfiMatch {
     miss()
 }
 
-fn strict() -> &'static Regex {
+/// Unanchored strict `-RFI-` code; groups are discipline and number.
+pub(crate) fn strict() -> &'static Regex {
     static STRICT: OnceLock<Regex> = OnceLock::new();
     STRICT.get_or_init(|| {
         Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{1,4})")

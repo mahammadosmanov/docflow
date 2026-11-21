@@ -246,12 +246,8 @@ pub(super) fn raw_codes(path: &Path) -> Result<BTreeSet<String>, String> {
 }
 
 pub(super) fn exact_codes(value: &str) -> BTreeSet<String> {
-    static RFI: OnceLock<Regex> = OnceLock::new();
     let text = value.nfc().collect::<String>().to_uppercase();
-    let regex = RFI.get_or_init(|| {
-        Regex::new(r"AZE-SUN-INT-QMS-RFI-([A-Z]{3})-([0-9]{1,4})")
-            .expect("exact RFI regex is valid")
-    });
+    let regex = crate::rfi_code::strict();
     let mut codes = shared_exact_codes(&text);
     for captures in regex.captures_iter(&text) {
         let matched = captures.get(0).expect("RFI match exists");

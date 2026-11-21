@@ -543,16 +543,18 @@ fn field_count(field_map: &Value) -> usize {
         .map_or(0, Vec::len)
 }
 
+/// Template code rule shared by the manifest check and the editor.
+static TEMPLATE_CODE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$").expect("static regex is valid")
+});
+
 fn validate_entry(entry: &TemplateEntry) -> Result<(), BackendError> {
     let invalid = || BackendError::request_failed("template manifest entry is invalid");
-    static CODE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$").expect("static regex is valid")
-    });
     static HEX: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("static regex is valid"));
     static SEGMENT: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^[A-Za-z0-9._-]{1,128}$").expect("static regex is valid"));
-    let (code, hex, segment): (&Regex, &Regex, &Regex) = (&CODE, &HEX, &SEGMENT);
+    let (code, hex, segment): (&Regex, &Regex, &Regex) = (&TEMPLATE_CODE, &HEX, &SEGMENT);
     let segments = entry.storage_path.split('/').collect::<Vec<_>>();
     let valid = code.is_match(&entry.code)
         && !entry.title.trim().is_empty()

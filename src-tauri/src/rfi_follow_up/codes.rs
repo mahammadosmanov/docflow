@@ -1,12 +1,8 @@
 use super::*;
 
 pub fn canonical_rfi(value: &str) -> Option<String> {
-    static RFI: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\AAZE-SUN-INT-QMS-RFI-(CIV|MEC|ELE|PRC)-([0-9]{1,4})\z")
-            .expect("canonical RFI regex is valid")
-    });
     let normalized = normalize_status(value).to_uppercase();
-    let captures = RFI.captures(&normalized)?;
+    let captures = crate::rfi_code::full_code_regex().captures(&normalized)?;
     Some(format!(
         "{FULL_RFI_PREFIX}{}-{}",
         &captures[1],

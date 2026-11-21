@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.11 - 2026-11-21
+
+### Changed
+
+- The full RFI code pattern, the strict `-RFI-` code pattern, and the template code rule each have one definition. Follow Up, RFI file grouping, and the template editor now use the shared patterns instead of their own copies. Matching rules and results are unchanged.
+
 ## 1.51.10 - 2026-11-21
 
 ### Changed
