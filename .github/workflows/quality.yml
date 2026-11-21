@@ -41,12 +41,14 @@ jobs:
           node tools/package_audit.mjs source
           node tools/docs_audit.mjs
 
-      - name: Verify Node tooling and the React interface
+      - name: Verify Node tooling and build the React interface
         run: |
-          npm test
+          node --test tools/*.test.mjs
           npm run build
 
-      - name: Summarize frontend coverage
+      # One Vitest run both gates the React tests and reports coverage;
+      # `shell: bash` runs with pipefail, so a failing test still fails the job.
+      - name: Test the React interface with coverage summary
         shell: bash
         run: |
           npx vitest run --config frontend/vite.config.ts --coverage --coverage.reporter=text-summary | tee coverage-summary.txt
