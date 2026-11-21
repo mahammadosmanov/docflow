@@ -117,20 +117,10 @@ pub fn file_signature_from_open_file(
     let mtime_ns = u64::try_from(mtime_ns)
         .map_err(|_| BackendError::path_invalid("print file timestamp is unavailable"))?;
     let sha256 = if include_sha256 {
-        file.seek(SeekFrom::Start(0))
-            .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
-        let mut digest = Sha256::new();
-        let mut buffer = vec![0_u8; 64 * 1024];
-        loop {
-            let read = file
-                .read(&mut buffer)
-                .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
-            if read == 0 {
-                break;
-            }
-            digest.update(&buffer[..read]);
-        }
-        Some(format!("{:x}", digest.finalize()))
+        Some(
+            crate::cap_fs::sha256_rewound(&mut *file)
+                .map_err(|_| BackendError::path_invalid("print file is unavailable"))?,
+        )
     } else {
         None
     };

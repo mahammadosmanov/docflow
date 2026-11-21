@@ -244,21 +244,6 @@ pub(super) fn s5_recovery_result(
     result
 }
 
-pub(super) fn sha256_open_file(file: &mut File) -> io::Result<String> {
-    file.seek(SeekFrom::Start(0))?;
-    let mut digest = Sha256::new();
-    let mut buffer = vec![0_u8; 64 * 1024];
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        digest.update(&buffer[..count]);
-    }
-    file.seek(SeekFrom::Start(0))?;
-    Ok(format!("{:x}", digest.finalize()))
-}
-
 pub(super) enum StepFailure {
     NoEffect(String),
     WarningNoEffect(Warning),
