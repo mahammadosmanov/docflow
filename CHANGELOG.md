@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.15 - 2026-11-21
+
+### Fixed
+
+- In History, Recovery and the watch Queue, the button you pressed (Undo, Restore original, Discard, Open, Re-prepare, Dismiss, Check now) now shows its own spinner while it runs, instead of every button just going grey.
+
 ## 1.51.14 - 2026-11-21
 
 ### Fixed

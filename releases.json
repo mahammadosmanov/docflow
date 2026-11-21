@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.14",
+  "currentVersion": "1.51.15",
   "releases": [
+    {
+      "version": "1.51.15",
+      "tag": "v1.51.15",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "History, Recovery and Queue buttons show their own spinner"
+    },
     {
       "version": "1.51.14",
       "tag": "v1.51.14",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Progress and busy states no longer look frozen"
     },
     {

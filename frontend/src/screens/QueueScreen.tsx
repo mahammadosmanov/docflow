@@ -59,6 +59,7 @@ export function QueueScreen({
 }) {
   const [status, setStatus] = useState<WatchStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState("");
   const [error, setError] = useState("");
   const mounted = useRef(true);
 
@@ -101,6 +102,7 @@ export function QueueScreen({
       action?: "checkNow" | "dismiss" | "reprepare";
     },
   ) => {
+    setWorking(`${opId}:${change.action ?? "toggle"}`);
     setBusy(true);
     setError("");
     try {
@@ -114,7 +116,10 @@ export function QueueScreen({
     } catch (reason) {
       if (mounted.current) setError(humanError(reason, s));
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setWorking("");
+      }
     }
   };
 
@@ -125,6 +130,7 @@ export function QueueScreen({
   };
 
   const open = async (operation: OperationDef) => {
+    setWorking(`${operation.id}:open`);
     setBusy(true);
     setError("");
     try {
@@ -137,7 +143,10 @@ export function QueueScreen({
       setError(humanError(reason, s));
       await refresh();
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setWorking("");
+      }
     }
   };
 
@@ -162,8 +171,8 @@ export function QueueScreen({
           <Button
             variant="secondary"
             icon={<RefreshCw />}
-            busy={busy}
-            disabled={!status || status.enabled.length === 0}
+            busy={working.endsWith(":checkNow")}
+            disabled={busy || !status || status.enabled.length === 0}
             onClick={() => void checkNow()}
           >
             {s.t("queue.checkNow")}
@@ -219,6 +228,7 @@ export function QueueScreen({
                       <Button
                         variant="secondary"
                         icon={<Eye />}
+                        busy={working === `${operation.id}:open`}
                         disabled={busy}
                         onClick={() => void open(operation)}
                       >
@@ -229,6 +239,7 @@ export function QueueScreen({
                       <Button
                         variant="secondary"
                         icon={<RotateCcw />}
+                        busy={working === `${item.opId}:reprepare`}
                         disabled={busy}
                         onClick={() =>
                           void update(item.opId, { action: "reprepare" })
@@ -241,6 +252,7 @@ export function QueueScreen({
                       <Button
                         variant="ghost"
                         icon={<X />}
+                        busy={working === `${item.opId}:dismiss`}
                         disabled={busy}
                         onClick={() =>
                           void update(item.opId, { action: "dismiss" })

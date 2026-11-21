@@ -51,6 +51,7 @@ export function RecoveryScreen({
 }) {
   const [payload, setPayload] = useState<RecoveryPayload | null>(null);
   const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -71,6 +72,7 @@ export function RecoveryScreen({
 
   const discardQueue = async () => {
     if (!payload?.printQueue) return;
+    setWorking("discard");
     setBusy(true);
     setError("");
     try {
@@ -81,10 +83,13 @@ export function RecoveryScreen({
     } catch (reason) {
       setError(humanError(reason, s));
       setBusy(false);
+    } finally {
+      setWorking("");
     }
   };
 
   const restoreOriginal = async (journalId: string) => {
+    setWorking(journalId);
     setBusy(true);
     setError("");
     try {
@@ -97,6 +102,7 @@ export function RecoveryScreen({
       setError(humanError(reason, s));
     } finally {
       setBusy(false);
+      setWorking("");
     }
   };
 
@@ -150,6 +156,7 @@ export function RecoveryScreen({
                     <Button
                       variant="secondary"
                       icon={<Undo2 />}
+                      busy={working === entry.journalId}
                       disabled={busy}
                       onClick={() => void restoreOriginal(entry.journalId)}
                     >
@@ -172,6 +179,7 @@ export function RecoveryScreen({
                 <span className="resume-queue-actions">
                   <Button
                     variant="ghost"
+                    busy={working === "discard"}
                     disabled={busy}
                     onClick={() => void discardQueue()}
                   >
