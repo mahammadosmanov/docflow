@@ -146,7 +146,7 @@ pub(super) fn formula_repair_rows(
     rows
 }
 
-fn column_letters(mut column: u32) -> String {
+pub(super) fn column_letters(mut column: u32) -> String {
     let mut out = Vec::new();
     while column > 0 {
         column -= 1;

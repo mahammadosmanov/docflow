@@ -1318,6 +1318,78 @@ fn full_sync_reviews_a_record_whose_only_matching_cell_holds_another_item() {
 }
 
 #[test]
+fn full_sync_reviews_an_rfi_also_placed_in_a_cell_of_another_item() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0015",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.2.2",
+        "A19",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    3,
+                    [
+                        inline("G3", "Site clearing (2.1&amp;2.2)"),
+                        inline("M3", "Final grading (3.1)"),
+                    ],
+                ),
+                row(
+                    4,
+                    [
+                        inline("G4", "RFI No."),
+                        inline("H4", "STATUS"),
+                        inline("M4", "RFI No."),
+                        inline("N4", "STATUS"),
+                    ],
+                ),
+                row(
+                    5,
+                    [
+                        inline("B5", "A17/1"),
+                        blank("G5"),
+                        blank("H5"),
+                        inline("M5", "CIV-0015"),
+                        inline("N5", "Completed"),
+                    ],
+                ),
+                row(
+                    6,
+                    [
+                        inline("B6", "A19"),
+                        inline("G6", "CIV-0015"),
+                        inline("H6", "Completed"),
+                        blank("M6"),
+                        blank("N6"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let row = review["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["rfiNo"] == "CIV-0015")
+        .unwrap_or_else(|| panic!("misplaced CIV-0015 must be reviewed: {review}"));
+    assert_eq!(row["selectable"], false);
+    assert_eq!(row["reasonKey"], "warn.rfi.followUp.reason.placedElsewhere");
+    assert!(
+        row["mappingDetails"].as_str().unwrap().contains("M5"),
+        "{row}"
+    );
+}
+
+#[test]
 fn full_sync_reports_unmatched_civ_tag_when_only_some_tag_rows_are_prepared() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
