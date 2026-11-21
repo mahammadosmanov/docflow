@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.10 - 2026-11-21
+
+### Fixed
+
+- A CIV RFI Log `Tag No` that exactly names an existing CIV Follow Up row, such as `A17/1` or `A5/1`, now matches that row. Before, the tag was split at `/` into `A17` and `1`: an `A17/1` record could never reach its own row and was skipped without a review row, and a new `A5/1` record could be written into the `A5` row instead. Shorthand tags that name no row, such as `N1/2/3`, are still split.
+
 ## 1.51.9 - 2026-11-21
 
 ### Fixed

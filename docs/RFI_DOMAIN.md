@@ -207,7 +207,9 @@ visible for manual review; the warning identifies matched contexts and target
 rows, then lists unmatched contexts and the source-log fields relevant to that
 destination. DocFlow never corrects the source log. No row or section is
 synthesized.
-For CIV, split the source `Tag No` list into exact individual tag contexts. Each
+For CIV, split the source `Tag No` list into exact individual tag contexts. A
+comma-separated tag that exactly names an existing CIV row, such as `A17/1`, is
+that row and is not split at `/`; it never matches the parent `A17` row. Each
 tag may map to its own distinct, uniquely matching prepared CIV area row; no
 target row is created or guessed. When only some tags have unique prepared rows,
 sync the eligible rows and show an unselectable Manual Review diagnostic naming

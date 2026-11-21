@@ -96,6 +96,28 @@ pub(super) fn normalized_parts(value: &str) -> Vec<String> {
         .collect()
 }
 
+/// CIV area tags of a source `Tag No`. A comma-separated token that names an
+/// existing CIV row (`A5/1`) is that row; any other token splits on `/` as
+/// shorthand (`N1/2`). Splitting `A5/1` would match it to the `A5` row.
+pub(super) fn civ_area_tags(sheet: &WorksheetData, tag: &str) -> Vec<String> {
+    tag.split([',', ';', '\n'])
+        .flat_map(|raw| {
+            let token = normalized_location(raw);
+            let names_row = token.contains('/')
+                && (1..=sheet.max_row).any(|row| {
+                    sheet
+                        .cell(row, 2)
+                        .is_some_and(|cell| normalized_location(&cell.value) == token)
+                });
+            if names_row {
+                vec![token]
+            } else {
+                normalized_parts(raw)
+            }
+        })
+        .collect()
+}
+
 pub(super) fn pcu_row_matches(
     sheet: &WorksheetData,
     row: u32,
@@ -198,7 +220,7 @@ pub(super) fn row_matches_context(
     };
     match sheet_name {
         "CIV" => {
-            let tags = normalized_parts(&context.tag);
+            let tags = civ_area_tags(sheet, &context.tag);
             let pcs = tags
                 .iter()
                 .filter(|tag| tag.starts_with("PCS-"))

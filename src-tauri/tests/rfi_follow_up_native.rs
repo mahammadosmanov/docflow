@@ -1233,6 +1233,39 @@ fn full_sync_fans_out_a_record_only_across_distinct_exact_civ_area_tags() {
 }
 
 #[test]
+fn full_sync_matches_a_civ_sub_block_tag_to_its_own_row_not_the_parent_block() {
+    let source = full_schema_source([full_schema_record_with_status(
+        10,
+        "0315",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-2.1.5",
+        "A5/1",
+        "Completed",
+        "",
+    )]);
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                row(2, [inline("B2", "A5"), blank("C2"), blank("D2")]),
+                row(3, [inline("B3", "A5/1"), blank("C3"), blank("D3")]),
+                row(4, [inline("B4", "A5/2"), blank("C4"), blank("D4")]),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["_row"], 3);
+    assert_eq!(rows[0]["proposedRfiNo"], "CIV-0315");
+    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+}
+
+#[test]
 fn full_sync_reports_unmatched_civ_tag_when_only_some_tag_rows_are_prepared() {
     let source = full_schema_source([full_schema_record_with_status(
         10,
