@@ -196,6 +196,9 @@ the record is outside the active template scope: omit it from Manual Review and
 propose no RFI or status update, regardless of an unrelated existing placement.
 Leave that existing placement untouched. If any context matches but the target
 cell is unsafe, keep it in Manual Review with the specific target-safety reason.
+A matching cell that already holds an RFI of a different ITP item is unsafe:
+the record stays in Manual Review and is neither added there nor dropped
+silently.
 Multiple matches remain manual review except when CIV or MEC records map to
 distinct existing rows justified by different exact source contexts.
 

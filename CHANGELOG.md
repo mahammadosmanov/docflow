@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.11 - 2026-11-21
+
+### Fixed
+
+- When the only Follow Up cell matching an RFI already holds an RFI of a different ITP item, the RFI now appears in Manual Review with the new reason `targetOccupied` (all four languages). Before, it was skipped with no write and no review row. On the current workbooks this surfaces CIV-0315, whose `A17/1` Final grading cell `M68` holds CIV-0015.
+
 ## 1.51.10 - 2026-11-21
 
 ### Fixed

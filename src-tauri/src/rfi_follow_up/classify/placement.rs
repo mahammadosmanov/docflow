@@ -265,9 +265,12 @@ pub(super) fn place_record(
         ));
     }
 
-    for key in candidates {
-        let slot = slots.get_mut(&key).ok_or_else(workbook_invalid)?;
-        if !slot.codes.contains(&record.canonical_rfi) {
+    let mut placed = false;
+    for key in &candidates {
+        let slot = slots.get_mut(key).ok_or_else(workbook_invalid)?;
+        if slot.codes.contains(&record.canonical_rfi) {
+            placed = true;
+        } else {
             let compatible = slot
                 .codes
                 .iter()
@@ -283,7 +286,29 @@ pub(super) fn place_record(
             }
             slot.codes.push(record.canonical_rfi.clone());
             slot.changed_rfis.insert(record.canonical_rfi.clone());
+            placed = true;
         }
+    }
+    // Every matching cell holds a different item's RFI: review, never drop silently.
+    if !placed {
+        *unmapped_count += 1;
+        let layout = slots
+            .get(&candidates[0])
+            .map(|slot| slot.layout.clone())
+            .ok_or_else(workbook_invalid)?;
+        manual_rows.push(manual_review_row(
+            format!("rfi-follow-up-unmapped:{}", record.canonical_rfi),
+            sheet_name,
+            &layout,
+            record,
+            "warn.rfi.followUp.reason.targetOccupied".to_string(),
+            Some(mapping_details(
+                record,
+                Some((sheet_name, target_clause)),
+                target_workbook,
+                &scope_candidates,
+            )),
+        ));
     }
     Ok(())
 }
