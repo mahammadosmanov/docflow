@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.19 - 2026-11-21
+
+### Fixed
+
+- When an RFI fans out to several Follow Up rows and one of those cells already holds an RFI of a different ITP item, the RFI is still added to the free rows and now also appears in Manual Review with the reason `targetOccupied`. Before, the blocked row was skipped without a review row.
+
 ## 1.51.18 - 2026-11-21
 
 ### Fixed
