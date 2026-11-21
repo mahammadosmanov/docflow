@@ -1068,6 +1068,8 @@
   "warn.rfi.followUp.reason.readyRemarkClear": "Tüm RFI'lar Completed olduğu için üretilmiş Remarks metni silinecek.",
   "warn.rfi.followUp.reason.remarkManual": "Remarks hücresinde elle yazılmış metin var; DocFlow dokunmadı.",
   "warn.rfi.followUp.reason.remarkUnsafe": "Remarks hücresi formül içeriyor veya birleştirilmiş; değiştirilmedi.",
+  "warn.rfi.followUp.reason.targetOccupied": "Eşleşen hedef hücrede farklı bir ITP maddesine ait RFI var; bu RFI eklenmedi. Follow Up'taki o hücreyi kontrol edin.",
+  "warn.rfi.followUp.reason.placedElsewhere": "Bu RFI eşleşen hücresinde ve ayrıca satırı veya sütunu ITP maddesi ya da Tag No ile uyuşmayan başka bir hücrede de var. Hiçbir şey değiştirilmedi; Follow Up'taki o diğer hücreyi kontrol edin.",
   "warn.rfi.followUp.massDeletionBrake": "Follow Up'taki RFI'ların büyük bölümü seçilen RFI Log'da yok; silme duraklatıldı. Doğru ve güncel RFI Log'u seçtiğinizden emin olun.",
   "warn.rfi.followUp.reason.structureInsert": "Road part satırı eklenecek (biçim ve formüller komşu satırdan kopyalanır).",
   "warn.rfi.followUp.reason.structureRename": "Parçasız Road satırı, Log'daki parçalar için 'Part 1' olarak yeniden adlandırılacak.",

@@ -162,8 +162,10 @@ pub(super) fn place_record(
     if scope_candidates.is_empty() {
         return Ok(());
     }
+    let placed_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
     if candidate_count == 1
         && !existing_slots.is_empty()
+        && !placed_elsewhere
         && mec_context_coverage != Some(false)
         && civ_tag_coverage != Some(false)
     {
@@ -215,8 +217,16 @@ pub(super) fn place_record(
         ));
         return Ok(());
     }
-    let already_mapped_elsewhere = existing_slots.iter().any(|key| !candidates.contains(key));
-    if already_mapped_elsewhere {
+    if placed_elsewhere {
+        // Also present in the matched cell: the other cell is a misplacement.
+        let reason = if existing_slots.iter().any(|key| candidates.contains(key))
+            && civ_tag_coverage != Some(false)
+            && mec_context_coverage != Some(false)
+        {
+            "warn.rfi.followUp.reason.placedElsewhere"
+        } else {
+            "warn.rfi.followUp.reason.mappingAmbiguous"
+        };
         *unmapped_count += 1;
         let layout = slots
             .get(&candidates[0])
@@ -227,12 +237,24 @@ pub(super) fn place_record(
             sheet_name,
             &layout,
             record,
-            "warn.rfi.followUp.reason.mappingAmbiguous".to_string(),
-            Some(mapping_details(
-                record,
-                Some((sheet_name, target_clause)),
-                target_workbook,
-                &scope_candidates,
+            reason.to_string(),
+            Some(format!(
+                "{}; also placed in: {}",
+                mapping_details(
+                    record,
+                    Some((sheet_name, target_clause)),
+                    target_workbook,
+                    &scope_candidates,
+                ),
+                existing_slots
+                    .iter()
+                    .filter(|key| !candidates.contains(key))
+                    .map(|(sheet, row, column, _)| format!(
+                        "{sheet}!{}{row}",
+                        column_letters(*column)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )),
         ));
         return Ok(());
@@ -265,9 +287,13 @@ pub(super) fn place_record(
         ));
     }
 
-    for key in candidates {
-        let slot = slots.get_mut(&key).ok_or_else(workbook_invalid)?;
-        if !slot.codes.contains(&record.canonical_rfi) {
+    let mut placed = false;
+    let mut blocked = false;
+    for key in &candidates {
+        let slot = slots.get_mut(key).ok_or_else(workbook_invalid)?;
+        if slot.codes.contains(&record.canonical_rfi) {
+            placed = true;
+        } else {
             let compatible = slot
                 .codes
                 .iter()
@@ -279,11 +305,34 @@ pub(super) fn place_record(
                     })
                 });
             if !compatible {
+                blocked = true;
                 continue;
             }
             slot.codes.push(record.canonical_rfi.clone());
             slot.changed_rfis.insert(record.canonical_rfi.clone());
+            placed = true;
         }
+    }
+    // A matching cell holds a different item's RFI: review, never drop silently.
+    if blocked || !placed {
+        *unmapped_count += 1;
+        let layout = slots
+            .get(&candidates[0])
+            .map(|slot| slot.layout.clone())
+            .ok_or_else(workbook_invalid)?;
+        manual_rows.push(manual_review_row(
+            format!("rfi-follow-up-unmapped:{}:occupied", record.canonical_rfi),
+            sheet_name,
+            &layout,
+            record,
+            "warn.rfi.followUp.reason.targetOccupied".to_string(),
+            Some(mapping_details(
+                record,
+                Some((sheet_name, target_clause)),
+                target_workbook,
+                &scope_candidates,
+            )),
+        ));
     }
     Ok(())
 }

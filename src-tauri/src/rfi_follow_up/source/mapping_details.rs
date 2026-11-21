@@ -15,7 +15,12 @@ pub(in crate::rfi_follow_up) fn mapping_details(
         route.is_some_and(|(sheet, _)| matches!(sheet, "MEC" | "Signed By Worley MEC"));
     let split_civ_tags =
         route.is_some_and(|(sheet, _)| matches!(sheet, "CIV" | "Signed By Worley CIV"));
-    let source_contexts = route_source_contexts(record, ignore_inspection_location, split_civ_tags);
+    let source_contexts = route_source_contexts(
+        record,
+        ignore_inspection_location,
+        split_civ_tags,
+        target_workbook,
+    );
     let contexts = source_contexts
         .iter()
         .map(|context| route_context_label(context, ignore_inspection_location))
@@ -67,6 +72,7 @@ fn route_source_contexts(
     record: &SourceRecord,
     ignore_inspection_location: bool,
     split_civ_tags: bool,
+    target_workbook: &WorkbookData,
 ) -> Vec<SourceRouteContext> {
     if !(ignore_inspection_location || split_civ_tags) {
         return record.contexts.clone();
@@ -78,7 +84,12 @@ fn route_source_contexts(
             let values = if ignore_inspection_location {
                 normalized_parts(&context.area)
             } else {
-                normalized_parts(&context.tag)
+                target_workbook
+                    .sheet("CIV")
+                    .map_or_else(
+                        || normalized_parts(&context.tag),
+                        |sheet| civ_area_tags(sheet, &context.tag),
+                    )
                     .into_iter()
                     .filter(|tag| !tag.starts_with("PCS-"))
                     .collect()

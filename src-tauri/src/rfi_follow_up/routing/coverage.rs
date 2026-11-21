@@ -121,26 +121,23 @@ pub(in crate::rfi_follow_up) fn civ_tag_coverage(
     candidates: &[(String, u32, u32, u32)],
     record: &SourceRecord,
 ) -> Option<bool> {
+    let sheet = target_workbook.sheet("CIV")?;
     let source_tags = record
         .contexts
         .iter()
-        .flat_map(|context| normalized_parts(&context.tag))
+        .flat_map(|context| civ_area_tags(sheet, &context.tag))
         .filter(|tag| !tag.starts_with("PCS-"))
         .collect::<BTreeSet<_>>();
     if candidates.is_empty() || source_tags.len() < 2 {
         return None;
     }
-    let sheet = target_workbook.sheet("CIV")?;
     let mut matched_tags = BTreeSet::new();
     for (_, row, _, _) in candidates {
-        let tags = sheet
+        let tag = sheet
             .cell(*row, 2)
-            .map(|cell| normalized_parts(&cell.value))
+            .map(|cell| normalized_location(&cell.value))
             .unwrap_or_default();
-        if tags.len() != 1
-            || !source_tags.contains(&tags[0])
-            || !matched_tags.insert(tags[0].clone())
-        {
+        if !source_tags.contains(&tag) || !matched_tags.insert(tag) {
             return None;
         }
     }
@@ -161,8 +158,7 @@ pub(in crate::rfi_follow_up) fn distinct_civ_area_rows(
     let source_tags = record
         .contexts
         .iter()
-        .flat_map(|context| split_values(&context.tag))
-        .map(|value| normalized_location(&value))
+        .flat_map(|context| civ_area_tags(sheet, &context.tag))
         .collect::<BTreeSet<_>>();
     let mut matched_tags = BTreeSet::new();
     candidates.iter().all(|(_, row, _, _)| {

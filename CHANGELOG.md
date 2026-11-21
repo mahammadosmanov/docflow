@@ -5,6 +5,42 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.19 - 2026-11-21
+
+### Fixed
+
+- When an RFI fans out to several Follow Up rows and one of those cells already holds an RFI of a different ITP item, the RFI is still added to the free rows and now also appears in Manual Review with the reason `targetOccupied`. Before, the blocked row was skipped without a review row.
+
+## 1.51.18 - 2026-11-21
+
+### Fixed
+
+- An RFI that is in its matching Follow Up cell and also in another cell whose row or column does not match its ITP item or Tag No now appears in Manual Review with the new reason `placedElsewhere` (all four languages), naming the other cell. Before, the extra placement was silently accepted. On the current workbooks this lists CIV-0015 (`CIV!M68`), CIV-0086/0104/0218 (`CIV!G8`), CIV-0267 (`CIV!G11`), CIV-0346 (`CIV!G10`), CIV-0200 (`CIV!M52`), CIV-0322 (`CIV!E75`), CIV-0944 (`PCU!H7`) and CIV-0776 (`PCU!L7`). Nothing is moved or deleted.
+
+## 1.51.17 - 2026-11-21
+
+### Fixed
+
+- When the only Follow Up cell matching an RFI already holds an RFI of a different ITP item, the RFI now appears in Manual Review with the new reason `targetOccupied` (all four languages). Before, it was skipped with no write and no review row. On the current workbooks this surfaces CIV-0315, whose `A17/1` Final grading cell `M68` holds CIV-0015.
+
+## 1.51.16 - 2026-11-21
+
+### Fixed
+
+- A CIV RFI Log `Tag No` that exactly names an existing CIV Follow Up row, such as `A17/1` or `A5/1`, now matches that row. Before, the tag was split at `/` into `A17` and `1`: an `A17/1` record could never reach its own row and was skipped without a review row, and a new `A5/1` record could be written into the `A5` row instead. Shorthand tags that name no row, such as `N1/2/3`, are still split.
+
+## 1.51.15 - 2026-11-21
+
+### Fixed
+
+- A CIV RFI Log `Tag No` such as `PCS–19` or `PCS‑19`, written with an en dash, non-breaking hyphen, or another dash that looks like `-`, is now excluded from Follow Up like `PCS-19` (ADR 0033). Before, such a record could be synchronized into Follow Up.
+
+## 1.51.14 - 2026-11-21
+
+### Fixed
+
+- Follow Up sync now updates the PV Module FINAL (3.2) RFI/status pair in columns O/P of `Signed By Worley MEC`. Layout discovery stopped at column N, so every ITP MEC-0004 item 4.3.2 record showed as Manual Review with no prepared row, and Worley Signed/Not Signed values in that column were never synchronized. The Worley RFI signature control table from column U on is still not a destination.
+
 ## 1.51.13 - 2026-11-21
 
 ### Changed

@@ -196,6 +196,12 @@ the record is outside the active template scope: omit it from Manual Review and
 propose no RFI or status update, regardless of an unrelated existing placement.
 Leave that existing placement untouched. If any context matches but the target
 cell is unsafe, keep it in Manual Review with the specific target-safety reason.
+A matching cell that already holds an RFI of a different ITP item is unsafe,
+including one row of a multi-row fan-out:
+the record stays in Manual Review and is neither added there nor dropped
+silently. An RFI found both in its matching cell and in another cell
+whose row or column does not match it stays in Manual Review naming that
+other cell; DocFlow never moves or deletes it.
 Multiple matches remain manual review except when CIV or MEC records map to
 distinct existing rows justified by different exact source contexts.
 
@@ -207,7 +213,9 @@ visible for manual review; the warning identifies matched contexts and target
 rows, then lists unmatched contexts and the source-log fields relevant to that
 destination. DocFlow never corrects the source log. No row or section is
 synthesized.
-For CIV, split the source `Tag No` list into exact individual tag contexts. Each
+For CIV, split the source `Tag No` list into exact individual tag contexts. A
+comma-separated tag that exactly names an existing CIV row, such as `A17/1`, is
+that row and is not split at `/`; it never matches the parent `A17` row. Each
 tag may map to its own distinct, uniquely matching prepared CIV area row; no
 target row is created or guessed. When only some tags have unique prepared rows,
 sync the eligible rows and show an unselectable Manual Review diagnostic naming

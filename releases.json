@@ -1,13 +1,61 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.13",
+  "currentVersion": "1.51.19",
   "releases": [
+    {
+      "version": "1.51.19",
+      "tag": "v1.51.19",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up reviews a fan-out row whose cell holds another item"
+    },
+    {
+      "version": "1.51.18",
+      "tag": "v1.51.18",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reviews an RFI that also sits in a wrong cell"
+    },
+    {
+      "version": "1.51.17",
+      "tag": "v1.51.17",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reviews RFIs whose matching cell holds another item instead of dropping them"
+    },
+    {
+      "version": "1.51.16",
+      "tag": "v1.51.16",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up matches CIV sub-block tags such as A17/1 to their own row"
+    },
+    {
+      "version": "1.51.15",
+      "tag": "v1.51.15",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "CIV PCS tags written with a Unicode dash stay outside Follow Up"
+    },
+    {
+      "version": "1.51.14",
+      "tag": "v1.51.14",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up sync reaches the PV Module FINAL (3.2) column on Signed By Worley MEC"
+    },
     {
       "version": "1.51.13",
       "tag": "v1.51.13",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Dates and timestamps use jiff instead of the unmaintained chrono crate"
     },
     {

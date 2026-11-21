@@ -344,7 +344,7 @@ describe("frontend authority boundary", () => {
       const catalog = JSON.parse(
         read(`frontend/src/locales/app_${locale}.arb`),
       ) as Record<string, unknown>;
-      for (const key of ["warn.rfi.followUp.reason.readyRemark","warn.rfi.followUp.reason.readyRemarkClear","warn.rfi.followUp.reason.remarkManual","warn.rfi.followUp.reason.remarkUnsafe"]) {
+      for (const key of ["warn.rfi.followUp.reason.readyRemark","warn.rfi.followUp.reason.readyRemarkClear","warn.rfi.followUp.reason.remarkManual","warn.rfi.followUp.reason.remarkUnsafe","warn.rfi.followUp.reason.targetOccupied","warn.rfi.followUp.reason.placedElsewhere"]) {
         expect(catalog[key], `${locale}:${key}`).toEqual(expect.any(String));
       }
     }
