@@ -352,12 +352,14 @@ pub(super) fn discover_approved_layouts(
         validate_cell_text(sheet)?;
         for row in 1..=sheet.max_row.min(10) {
             for rfi_column in 1..sheet.max_column.min(MAX_HEADER_COLUMNS) {
+                // FINAL pairs end at O/P (PV Module 3.2); the Worley RFI
+                // signature control table from column U on is not a destination.
                 if descriptor
                     .name
                     .trim()
                     .to_uppercase()
                     .contains("SIGNED BY WORLEY MEC")
-                    && rfi_column > 14
+                    && rfi_column > 15
                 {
                     continue;
                 }

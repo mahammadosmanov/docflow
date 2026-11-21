@@ -2034,6 +2034,85 @@ fn full_sync_adds_unsigned_mec_final_rfi_to_a_matching_prepared_row() {
 }
 
 #[test]
+fn full_sync_routes_pv_module_final_to_column_o_but_not_the_signature_control_table() {
+    let mec = worksheet(
+        [
+            full_schema_mec_header(),
+            full_schema_mec_record_with_itp(
+                10,
+                "0001",
+                (
+                    "AZE-SUN-INT-QMS-ITP-MEC-0004",
+                    "MEC-4.3.2",
+                    "PCS-01",
+                    "S1",
+                    "N1",
+                    "Completed",
+                ),
+            ),
+        ],
+        &[],
+    );
+    let source = source_package(worksheet([full_schema_mec_header()], &[]), mec);
+    // Current template: 3.5 at K/L, 3.1 at M/N, 3.2 at O/P, then the
+    // Worley RFI signature control table starting at U.
+    let target = package(&[(
+        "Signed By Worley MEC",
+        None,
+        worksheet(
+            [
+                row(
+                    3,
+                    [
+                        inline("K3", "Final acceptance of pile installation (3.5)"),
+                        inline("M3", "Final acceptance of tracker installation (3.1)"),
+                        inline("O3", "Final acceptance of PV Module installation (3.2)"),
+                        inline("U3", "Category"),
+                        inline("V3", "RFI No."),
+                        inline("W3", "Worley Status"),
+                    ],
+                ),
+                row(
+                    4,
+                    [
+                        inline("K4", "RFI No."),
+                        inline("L4", "STATUS"),
+                        inline("M4", "RFI No."),
+                        inline("N4", "STATUS"),
+                        inline("O4", "RFI No."),
+                        inline("P4", "STATUS"),
+                        inline("U4", "Module (3.2)"),
+                        inline("V4", "MEC-0001"),
+                        inline("W4", "Signed"),
+                    ],
+                ),
+                row(
+                    5,
+                    [
+                        inline("A5", "Zone 1"),
+                        inline("B5", "N1"),
+                        inline("C5", "PCS-01"),
+                        inline("D5", "S1"),
+                        blank("O5"),
+                        blank("P5"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+
+    let review = classify(source, target).unwrap();
+    let rows = review["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{review}");
+    assert_eq!(rows[0]["_row"], 5);
+    assert_eq!(rows[0]["target"]["rfiColumn"], 15);
+    assert_eq!(rows[0]["proposedRfiNo"], "MEC-0001");
+    assert_eq!(rows[0]["proposedStatus"], "Not Signed");
+    assert_eq!(rows[0]["disposition"], "rfi.followUp.disposition.ready");
+}
+
+#[test]
 fn full_sync_adds_missing_signed_mec_destination_even_when_same_rfi_exists_elsewhere() {
     let source_record = |row_number, area: &str| {
         row(
