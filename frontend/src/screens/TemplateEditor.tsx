@@ -206,7 +206,7 @@ export function TemplateEditor({
             <Button
               variant="secondary"
               icon={<FileUp />}
-              disabled={busy}
+              busy={busy}
               onClick={() =>
                 void run(async () => {
                   const next = await bridge.call("templates/replaceFile", {
@@ -218,12 +218,12 @@ export function TemplateEditor({
             >
               {s.t("templates.editor.replaceFile")}
             </Button>
-            <Button variant="secondary" icon={<Save />} disabled={busy} onClick={() => void run(save)}>
+            <Button variant="secondary" icon={<Save />} busy={busy} onClick={() => void run(save)}>
               {s.t("templates.editor.save")}
             </Button>
             <Button
               icon={<Send />}
-              disabled={busy}
+              busy={busy}
               onClick={() =>
                 void run(async () => {
                   await save();

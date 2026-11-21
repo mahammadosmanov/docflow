@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Check,
   LoaderCircle,
@@ -17,6 +18,16 @@ export function BusyState({
   progressTrail?: ProgressEvent[];
   s: Strings;
 }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  const determinate = Boolean(progress && progress.total > 0);
   const fraction =
     progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
@@ -29,19 +40,24 @@ export function BusyState({
         </strong>
       )}
       <div
-        className="progress"
+        className={determinate ? "progress" : "progress indeterminate"}
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}
         aria-valuemax={progress?.total || undefined}
         aria-valuenow={progress && progress.total > 0 ? progress.done : undefined}
       >
-        <span style={{ width: fraction ? `${fraction * 100}%` : "35%" }} />
+        <span style={determinate ? { width: `${fraction * 100}%` } : undefined} />
       </div>
       {progress && (
         <small>
           {progress.total > 0 ? `${progress.done} / ${progress.total}` : ""}
           {progress.subject ? ` · ${progress.subject}` : ""}
+        </small>
+      )}
+      {elapsed >= 3 && (
+        <small className="busy-elapsed" role="timer" aria-live="off">
+          {s.t("progress.elapsed", { seconds: elapsed })}
         </small>
       )}
       {progressTrail.length > 1 && (

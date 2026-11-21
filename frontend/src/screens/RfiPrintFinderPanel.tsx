@@ -53,7 +53,8 @@ export function RfiPrintFinderPanel({
       />
       <Button
         variant="secondary"
-        disabled={rfiFinderBusy || !inputs.length}
+        busy={rfiFinderBusy}
+        disabled={!inputs.length}
         onClick={() => void searchRfiDocuments()}
       >
         {s.t(rfiFinderBusy ? "print.rfi.searching" : "print.rfi.search")}

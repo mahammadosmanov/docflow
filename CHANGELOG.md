@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.14 - 2026-11-21
+
+### Fixed
+
+- Running screens no longer look frozen: when a step has no known total, the progress bar now animates, and a "Working… N s elapsed" line appears after 3 seconds. Buttons for template save, publish, replace file, document apply, queue check, RFI search and support diagnostics show a spinner while they run. Document generation steps now show a readable name instead of a raw key.
+
 ## 1.51.13 - 2026-11-21
 
 ### Changed

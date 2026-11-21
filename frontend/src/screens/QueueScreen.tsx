@@ -162,7 +162,8 @@ export function QueueScreen({
           <Button
             variant="secondary"
             icon={<RefreshCw />}
-            disabled={busy || !status || status.enabled.length === 0}
+            busy={busy}
+            disabled={!status || status.enabled.length === 0}
             onClick={() => void checkNow()}
           >
             {s.t("queue.checkNow")}

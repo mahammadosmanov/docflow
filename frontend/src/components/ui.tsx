@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Check,
+  LoaderCircle,
 } from "lucide-react";
 import type {
   ButtonHTMLAttributes,
@@ -73,9 +74,13 @@ export function Button({
   icon,
   variant = "primary",
   wide,
+  busy,
+  disabled,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: ReactNode;
+  /** Shows a spinner in place of the icon and blocks clicks while work runs. */
+  busy?: boolean;
   variant?: "primary" | "secondary" | "ghost" | "danger";
   wide?: boolean;
 }) {
@@ -83,9 +88,11 @@ export function Button({
     <button
       type="button"
       className={`button ${variant} ${wide ? "wide" : ""}`}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       {...props}
     >
-      {icon}
+      {busy ? <LoaderCircle className="spin" aria-hidden="true" /> : icon}
       {children}
     </button>
   );
