@@ -624,7 +624,12 @@ fn full_sync_updates_pcu_worley_status_beside_the_final_lifecycle_layout() {
 
 #[test]
 fn full_sync_excludes_every_civ_pcs_tagged_rfi_from_follow_up() {
-    for tag in ["PCS-19", "PCS-19/S1,S2,S3"] {
+    for tag in [
+        "PCS-19",
+        "PCS-19/S1,S2,S3",
+        "PCS\u{2013}19",
+        "PCS\u{2011}19/S1",
+    ] {
         let source = full_schema_source([full_schema_record_with_status(
             10,
             "1401",

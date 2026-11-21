@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.14",
+  "currentVersion": "1.51.15",
   "releases": [
+    {
+      "version": "1.51.15",
+      "tag": "v1.51.15",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "CIV PCS tags written with a Unicode dash stay outside Follow Up"
+    },
     {
       "version": "1.51.14",
       "tag": "v1.51.14",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up sync reaches the PV Module FINAL (3.2) column on Signed By Worley MEC"
     },
     {
