@@ -105,7 +105,7 @@ impl AnchoredPath {
     pub(crate) fn remove_verified(&self, expected_sha256: &str) -> io::Result<()> {
         self.require_write()?;
         let mut file = self.open_mutable()?;
-        if sha256_open_file(&mut file)? != expected_sha256 {
+        if sha256_rewound(&mut file)? != expected_sha256 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "file changed before pinned deletion",
@@ -219,10 +219,10 @@ impl AnchoredPath {
     ) -> io::Result<()> {
         self.require_write()?;
         let mut input = source.open_read()?;
-        let source_sha256 = sha256_open_file(&mut input)?;
+        let source_sha256 = sha256_rewound(&mut input)?;
         let source_permissions = input.metadata()?.permissions();
         let mut output = self.open_mutable()?;
-        if sha256_open_file(&mut output)? != expected_current_sha256 {
+        if sha256_rewound(&mut output)? != expected_current_sha256 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "destination changed before pinned restore",
@@ -234,7 +234,7 @@ impl AnchoredPath {
         io::copy(&mut input, &mut output)?;
         output.set_permissions(source_permissions)?;
         output.sync_all()?;
-        if sha256_open_file(&mut output)? != source_sha256 {
+        if sha256_rewound(&mut output)? != source_sha256 {
             return Err(io::Error::other("pinned restore verification failed"));
         }
         self.parent.sync_all()
@@ -334,7 +334,7 @@ impl AnchoredPath {
 
     pub(crate) fn sha256(&self) -> io::Result<String> {
         let mut file = self.open_read()?;
-        sha256_open_file(&mut file)
+        sha256_rewound(&mut file)
     }
 
     pub(crate) fn temporary_sibling(&self, label: &str) -> io::Result<Self> {
@@ -419,21 +419,28 @@ pub(crate) fn file_identity(file: &File) -> io::Result<FilesystemObjectIdentity>
     }
 }
 
-pub(super) fn sha256_open_file(file: &mut File) -> io::Result<String> {
+/// Hashes `reader` from its current position to the end; returns lowercase hex SHA-256.
+pub(crate) fn sha256_stream<R: Read>(mut reader: R) -> io::Result<String> {
     use sha2::{Digest, Sha256};
 
-    file.seek(SeekFrom::Start(0))?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024];
     loop {
-        let read = file.read(&mut buffer)?;
+        let read = reader.read(&mut buffer)?;
         if read == 0 {
             break;
         }
         digest.update(&buffer[..read]);
     }
-    file.seek(SeekFrom::Start(0))?;
     Ok(format!("{:x}", digest.finalize()))
+}
+
+/// Hashes the whole stream and leaves it rewound to the start.
+pub(crate) fn sha256_rewound<R: Read + Seek>(mut reader: R) -> io::Result<String> {
+    reader.seek(SeekFrom::Start(0))?;
+    let hash = sha256_stream(&mut reader)?;
+    reader.seek(SeekFrom::Start(0))?;
+    Ok(hash)
 }
 
 pub(super) fn validate_relative(path: &Path) -> io::Result<()> {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.9 - 2026-11-21
+
+### Changed
+
+- File hashing uses one shared streaming SHA-256 helper instead of six copies of the same loop. Hash values, file positions after hashing, and error handling are unchanged. Not yet measured on Windows.
+
 ## 1.51.8 - 2026-11-15
 
 ### Fixed

@@ -1,18 +1,18 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
     cap_fs::{
         AnchoredPath, ArtifactParentCreateOutcome, AuthorizedPath, CreationSecurityDescriptor,
-        FileSecuritySnapshot, RetainedStorageReservation, SecuredCreateOutcome,
+        FileSecuritySnapshot, RetainedStorageReservation, SecuredCreateOutcome, sha256_rewound,
+        sha256_stream,
     },
     contracts::{JsonObject, OperationResult, Plan, ProgressEvent, Step, StepKind, Warning},
     errors::BackendError,
@@ -110,17 +110,7 @@ pub fn move_no_clobber(source: &Path, destination: &Path) -> io::Result<()> {
 }
 
 pub fn file_sha256(path: &Path) -> io::Result<String> {
-    let mut file = open_source_no_follow(path)?;
-    let mut digest = Sha256::new();
-    let mut buffer = vec![0_u8; 1024 * 1024];
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        digest.update(&buffer[..count]);
-    }
-    Ok(format!("{:x}", digest.finalize()))
+    sha256_stream(open_source_no_follow(path)?)
 }
 
 pub struct FilesystemAuthority {
