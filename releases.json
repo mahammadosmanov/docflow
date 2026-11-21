@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.5",
+  "currentVersion": "1.51.6",
   "releases": [
+    {
+      "version": "1.51.6",
+      "tag": "v1.51.6",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "current",
+      "summary": "RFI code and template code patterns each have one definition"
+    },
     {
       "version": "1.51.5",
       "tag": "v1.51.5",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Concrete documents and template checks reuse compiled patterns"
     },
     {

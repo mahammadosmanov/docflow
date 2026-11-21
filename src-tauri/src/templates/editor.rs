@@ -147,11 +147,7 @@ fn uuid_ok(value: &str) -> Result<&str, BackendError> {
 
 /// Code, title and discipline rules shared with the SQL constraints.
 fn check_identity(code: Option<&str>, title: &str, discipline: &str) -> Result<(), BackendError> {
-    let code_ok = code.is_none_or(|code| {
-        regex::Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$")
-            .expect("static regex")
-            .is_match(code)
-    });
+    let code_ok = code.is_none_or(|code| super::TEMPLATE_CODE.is_match(code));
     let title_ok = !title.trim().is_empty() && title.chars().count() <= 200;
     let discipline_ok = (2..=8).contains(&discipline.len())
         && discipline.bytes().all(|byte| byte.is_ascii_uppercase());

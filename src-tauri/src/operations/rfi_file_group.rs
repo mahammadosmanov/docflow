@@ -3,11 +3,9 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
-    sync::OnceLock,
 };
 
 use quick_xml::{Reader, events::Event};
-use regex::Regex;
 use serde_json::{Value, json};
 use unicode_normalization::UnicodeNormalization;
 use zip::ZipArchive;
