@@ -117,20 +117,10 @@ pub fn file_signature_from_open_file(
     let mtime_ns = u64::try_from(mtime_ns)
         .map_err(|_| BackendError::path_invalid("print file timestamp is unavailable"))?;
     let sha256 = if include_sha256 {
-        file.seek(SeekFrom::Start(0))
-            .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
-        let mut digest = Sha256::new();
-        let mut buffer = vec![0_u8; 64 * 1024];
-        loop {
-            let read = file
-                .read(&mut buffer)
-                .map_err(|_| BackendError::path_invalid("print file is unavailable"))?;
-            if read == 0 {
-                break;
-            }
-            digest.update(&buffer[..read]);
-        }
-        Some(format!("{:x}", digest.finalize()))
+        Some(
+            crate::cap_fs::sha256_rewound(&mut *file)
+                .map_err(|_| BackendError::path_invalid("print file is unavailable"))?,
+        )
     } else {
         None
     };
@@ -255,8 +245,11 @@ pub(super) fn queue_diagnostic(state: QueueState) -> PrintQueueDiagnostic {
     }
 }
 
-pub(super) fn utc_now() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false)
+/// RFC 3339 UTC with microseconds and `+00:00`, the persisted journal and queue format.
+pub(crate) fn utc_now() -> String {
+    jiff::Timestamp::now()
+        .strftime("%Y-%m-%dT%H:%M:%S%.6f+00:00")
+        .to_string()
 }
 
 pub(super) fn display_name(path: &str) -> String {

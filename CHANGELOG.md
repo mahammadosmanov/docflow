@@ -5,6 +5,36 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.13 - 2026-11-21
+
+### Changed
+
+- Dates and timestamps use the `jiff` crate instead of `chrono`, which RustSec now lists as unmaintained (RUSTSEC-2026-0543) and which the supply-chain check rejects. Journal and print-queue timestamps, plan stamps, backup names, RFI Log dates and times, and Excel date conversion produce the same text as before. A two-digit RFI Log year of `69` still reads as 2069. Local dates were checked on macOS only.
+
+## 1.51.12 - 2026-11-21
+
+### Changed
+
+- The CI frontend job runs the React test suite once, with coverage, instead of once without coverage and again with it. A failing test still fails the job. The application is unchanged.
+
+## 1.51.11 - 2026-11-21
+
+### Changed
+
+- The full RFI code pattern, the strict `-RFI-` code pattern, and the template code rule each have one definition. Follow Up, RFI file grouping, and the template editor now use the shared patterns instead of their own copies. Matching rules and results are unchanged.
+
+## 1.51.10 - 2026-11-21
+
+### Changed
+
+- Concrete document generation and template manifest checks compile their fixed text patterns once per run of the app instead of on every call. Generated workbooks and validation results are unchanged. Patterns built from a cell reference are still compiled per cell. No timing was measured.
+
+## 1.51.9 - 2026-11-21
+
+### Changed
+
+- File hashing uses one shared streaming SHA-256 helper instead of six copies of the same loop. Hash values, file positions after hashing, and error handling are unchanged. Not yet measured on Windows.
+
 ## 1.51.8 - 2026-11-15
 
 ### Fixed

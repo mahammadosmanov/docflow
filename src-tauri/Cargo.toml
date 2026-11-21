@@ -1,6 +1,6 @@
 [package]
 name = "docflow"
-version = "1.51.8"
+version = "1.51.13"
 description = "Safe desktop document automation"
 authors = ["DocFlow"]
 edition = "2024"
@@ -28,7 +28,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 base64 = "0.23"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+jiff = "0.2"
 flate2 = "1.1.9"
 libc = "0.2"
 regex = "1"

@@ -1,7 +1,5 @@
 use std::io::{Read, Seek, SeekFrom};
 
-use sha2::{Digest, Sha256};
-
 use crate::{
     cap_fs::{AnchoredPath, CreationSecurityDescriptor, FileSecuritySnapshot, SecuredCreatedFile},
     errors::BackendError,
@@ -92,7 +90,7 @@ where
     };
     let retained_bytes = retained_file.metadata().map(|metadata| metadata.len());
     let retained_security = FileSecuritySnapshot::capture(&retained_file, None);
-    let retained_hash = sha256_reader(retained_file);
+    let retained_hash = crate::cap_fs::sha256_rewound(retained_file);
     let (retained_bytes, retained_security, retained_hash) =
         match (retained_bytes, retained_security, retained_hash) {
             (Ok(bytes), Ok(security), Ok(hash)) => (bytes, security, hash),
@@ -201,7 +199,7 @@ where
     if created.identity().ok().as_ref() != Some(&created_identity) {
         return Ok(fail("created_identity_changed", String::new()));
     }
-    let created_hash = sha256_reader(&mut created).map_err(|error| {
+    let created_hash = crate::cap_fs::sha256_rewound(&mut created).map_err(|error| {
         note_failure("hash_canonical", &error.to_string());
         BackendError::validation("error.rfi.followUp.recoveryRequired")
     })?;
@@ -415,7 +413,7 @@ fn observe_recorded_path(record: &ValidatedS5Record, raw_path: &str) -> PathObse
         Ok(security) => security,
         Err(_) => return PathObservation::Unknown,
     };
-    let sha256 = match sha256_reader(file) {
+    let sha256 = match crate::cap_fs::sha256_rewound(file) {
         Ok(hash) => hash,
         Err(_) => return PathObservation::Unknown,
     };
@@ -470,21 +468,6 @@ fn recovery_required(locator: &str) -> RetainedPublicationOutcome {
         warning_key: "error.rfi.followUp.recoveryRequired".to_string(),
         locator: locator.to_string(),
     })
-}
-
-fn sha256_reader<R: Read + Seek>(mut reader: R) -> std::io::Result<String> {
-    reader.seek(SeekFrom::Start(0))?;
-    let mut digest = Sha256::new();
-    let mut buffer = vec![0_u8; 64 * 1024];
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        digest.update(&buffer[..read]);
-    }
-    reader.seek(SeekFrom::Start(0))?;
-    Ok(format!("{:x}", digest.finalize()))
 }
 
 #[cfg(test)]

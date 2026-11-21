@@ -2,6 +2,7 @@ use std::io::{Cursor, Read, Write};
 
 use quick_xml::{Reader, escape::unescape, events::Event};
 use regex::Regex;
+use std::sync::LazyLock;
 use zip::{ZipArchive, ZipWriter};
 pub(crate) struct SourceRecord {
     pub rfi: String,
@@ -148,7 +149,7 @@ pub(crate) fn generate(
         "Template does not contain a location value adjacent to a location label".to_string()
     })?;
 
-    let rfi_regex = Regex::new(r"(?i)CIV-\d{3,}").map_err(|error| error.to_string())?;
+    let rfi_regex: &Regex = &CIV_RFI;
     let mut rng = rng_seed;
     let mut generated = Vec::with_capacity(records.len());
     for record in records {
@@ -206,7 +207,7 @@ pub(crate) fn generate(
                 original.clone()
             } else if name.ends_with(".xml") {
                 let xml = String::from_utf8_lossy(original);
-                replace_xml_text(&xml, &replacements, &rfi_regex).into_bytes()
+                replace_xml_text(&xml, &replacements, rfi_regex).into_bytes()
             } else {
                 original.clone()
             };
@@ -244,9 +245,17 @@ pub(crate) fn generate(
     Ok(generated)
 }
 
+static CIV_RFI: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)CIV-\d{3,}").expect("static CIV RFI regex"));
+static CIV_RFI_ANCHOR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)AZE-SUN-INT-QMS-RFI-CIV-\d{3,}|CIV-\d{3,}")
+        .expect("static CIV RFI anchor regex")
+});
+static CIV_RFI_LABEL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^CIV-\d+$").expect("static RFI label filter"));
+
 fn rfi_anchor(xml: &str) -> Option<String> {
-    let regex = Regex::new(r"(?i)AZE-SUN-INT-QMS-RFI-CIV-\d{3,}|CIV-\d{3,}").ok()?;
-    regex
+    CIV_RFI_ANCHOR
         .find(&xml_text_nodes(xml).join(""))
         .map(|found| found.as_str().to_string())
 }
@@ -284,7 +293,7 @@ const KNOWN_LABELS: &[&str] = &[
 ];
 
 fn labeled_anchor(parts: &[(String, Vec<u8>)], labels: &[&str]) -> Option<String> {
-    let rfi_label = Regex::new(r"(?i)^CIV-\d+$").expect("static RFI label filter");
+    let rfi_label: &Regex = &CIV_RFI_LABEL;
     for (name, bytes) in parts {
         if !name.ends_with(".xml") {
             continue;
@@ -395,7 +404,6 @@ fn xml_text_nodes(xml: &str) -> Vec<String> {
 }
 
 fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Regex) -> String {
-    use std::sync::LazyLock;
     static TEXT_NODE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?s)<([A-Za-z_][\w.-]*:)?t\b[^>]*>.*?</([A-Za-z_][\w.-]*:)?t\s*>")
             .expect("static OOXML text-node regex")
@@ -471,7 +479,6 @@ fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Re
 }
 
 fn replace_split_text_nodes(xml: &str, old: &str, new: &str) -> String {
-    use std::sync::LazyLock;
     static TEXT_NODE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?s)<([A-Za-z_][\w.-]*:)?t\b[^>]*>.*?</([A-Za-z_][\w.-]*:)?t\s*>")
             .expect("static OOXML text-node regex")

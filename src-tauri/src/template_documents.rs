@@ -162,7 +162,7 @@ pub fn read_log_rows<R: Read + Seek>(
     let wanted = disciplines.iter().map(String::as_str).collect::<Vec<_>>();
     let workbook = read_workbook_selective_from_reader(reader, &wanted)
         .map_err(|error| format!("Cannot read the RFI Log workbook: {error}"))?;
-    let today = chrono::Local::now().format("%d.%m.%Y").to_string();
+    let today = jiff::Zoned::now().strftime("%d.%m.%Y").to_string();
     let mut rows = BTreeMap::new();
     for discipline in &disciplines {
         let Some(sheet) = workbook

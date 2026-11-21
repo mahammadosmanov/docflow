@@ -286,7 +286,7 @@ impl FilesystemAuthority {
 fn is_expected_canonical_file(file: &mut File, publication: &RetainedPublication) -> bool {
     crate::cap_fs::file_identity(file).ok().as_ref()
         == Some(&publication.expected_canonical_identity)
-        && sha256_open_file(file).ok().as_deref()
+        && sha256_rewound(&mut *file).ok().as_deref()
             == Some(publication.expected_canonical_sha256.as_str())
         && FileSecuritySnapshot::capture(file, None)
             .ok()
@@ -387,9 +387,9 @@ fn verify_applied_undo_files(
         .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
     let backup_identity = crate::cap_fs::file_identity(&backup_file)
         .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
-    let current_hash = sha256_open_file(&mut current_file)
+    let current_hash = sha256_rewound(&mut current_file)
         .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
-    let backup_hash = sha256_open_file(&mut backup_file)
+    let backup_hash = sha256_rewound(&mut backup_file)
         .map_err(|_| BackendError::validation("error.rfi.followUp.backupVerify"))?;
     let current_snapshot = FileSecuritySnapshot::capture(&current_file, None)
         .map_err(|_| BackendError::validation("error.rfi.followUp.workbookChanged"))?;
