@@ -101,6 +101,32 @@ fn build_slots(
     Ok(slots)
 }
 
+/// Rewrites a mistyped RFI cell (`CIV-13741461` -> `CIV-1374/1461`) only when
+/// every repaired code exists in the RFI Log; otherwise it stays `invalidRfi`.
+fn repair_mistyped_slots(
+    slots: &mut SlotMap,
+    records: &BTreeMap<String, SourceRecord>,
+    logged_numbers: &BTreeSet<String>,
+) {
+    for slot in slots.values_mut() {
+        if slot.unsafe_reason != Some("repairableRfi") {
+            continue;
+        }
+        match repair_rfi_group(&slot.rfi_cell.value) {
+            Some(codes)
+                if codes
+                    .iter()
+                    .all(|code| records.contains_key(code) || logged_numbers.contains(code)) =>
+            {
+                slot.changed_rfis.extend(codes.iter().cloned());
+                slot.codes = codes;
+                slot.unsafe_reason = None;
+            }
+            _ => slot.unsafe_reason = Some("invalidRfi"),
+        }
+    }
+}
+
 fn deletion_evidence(
     slots: &SlotMap,
     records: &BTreeMap<String, SourceRecord>,
@@ -264,6 +290,7 @@ pub(super) fn classify_workbooks_full(
         &mut merge_budget,
     )?;
     let mut slots = build_slots(&layouts, target_workbook, &mut merge_budget)?;
+    repair_mistyped_slots(&mut slots, &records, &logged_numbers);
     let (deleted_count, mass_deletion) = deletion_evidence(&slots, &records, &logged_numbers);
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {

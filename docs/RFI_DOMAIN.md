@@ -189,6 +189,11 @@ For RFI Log projection, blank means `Pending`, all `Completed` means
 Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
+A Follow Up RFI cell that does not parse is rewritten only when a fixed repair,
+splitting two four-digit numbers typed together (`CIV-13741461` to
+`CIV-1374/1461`) or reading `\`, `;`, `&`, `+`, `|`, commas, spaces and doubled
+slashes as separators, gives RFIs that all exist in the Log; otherwise it
+stays `invalidRfi` Manual Review ([ADR 0056](adr/0056-follow-up-moves-contradicted-placements.md)).
 For supported CIV/MEC routes, including FINAL routes, records synchronize only
 into uniquely matching prepared rows and exact source contexts. If none of a
 record's source contexts matches any prepared row in its intended destination,

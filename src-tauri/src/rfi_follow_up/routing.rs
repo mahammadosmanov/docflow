@@ -413,6 +413,12 @@ pub(super) fn safe_slot(
     } else if let Some(codes) = parse_rfi_group(&raw) {
         codes
     } else {
+        // Classification repairs it only when every repaired code is in the Log.
+        let reason = if unsafe_reason.is_none() && repair_rfi_group(&raw).is_some() {
+            "repairableRfi"
+        } else {
+            "invalidRfi"
+        };
         return Ok(Some(SlotWork {
             layout: layout.clone(),
             row,
@@ -421,7 +427,7 @@ pub(super) fn safe_slot(
             codes: Vec::new(),
             current_status: normalize_status(&status_cell.value),
             changed_rfis: BTreeSet::new(),
-            unsafe_reason: Some("invalidRfi"),
+            unsafe_reason: Some(reason),
         }));
     };
     Ok(Some(SlotWork {

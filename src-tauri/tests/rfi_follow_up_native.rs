@@ -6544,3 +6544,65 @@ fn full_sync_moves_a_misplaced_rfi_and_fills_the_cell_it_blocked() {
         "{review}"
     );
 }
+
+#[test]
+fn full_sync_repairs_a_mistyped_rfi_cell_only_when_the_log_has_every_number() {
+    let source = full_schema_source([
+        civ_record_in_area(10, "1374", "CIV-2.1.5", "S10", "South Site"),
+        civ_record_in_area(11, "1461", "CIV-2.1.5", "S10", "South Site"),
+    ]);
+    let target = |value: &str| {
+        package(&[(
+            "CIV",
+            None,
+            worksheet(
+                [
+                    row(1, [inline("C1", "RFI No."), inline("D1", "STATUS")]),
+                    row(
+                        2,
+                        [
+                            inline("B2", "S10"),
+                            inline("C2", value),
+                            inline("D2", "Completed"),
+                        ],
+                    ),
+                ],
+                &[],
+            ),
+        )])
+    };
+
+    let repaired = classify(source.clone(), target("CIV-13741461")).unwrap();
+    assert_eq!(
+        proposed_rows(&repaired),
+        [(2, "CIV-1374/1461".to_string())],
+        "{repaired}"
+    );
+    // The apply guard must accept the mistyped original it is replacing.
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    std::fs::write(&source_path, source.clone().into_inner()).unwrap();
+    std::fs::write(&target_path, target("CIV-13741461").into_inner()).unwrap();
+    let plan = preview_from_open_files(
+        &source_path,
+        &target_path,
+        &mut File::open(&source_path).unwrap(),
+        &mut File::open(&target_path).unwrap(),
+    )
+    .unwrap();
+    assert!(guarded_updates(&plan.steps[0]).unwrap()["CIV"].contains_key(&(2, 3)));
+
+    let unknown = classify(source, target("CIV-13749999")).unwrap();
+    assert!(
+        unknown["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |row| row["reasonKey"] == "warn.rfi.followUp.reason.invalidRfi"
+                    && row["selectable"] == false
+            ),
+        "a number missing from the Log stays manual: {unknown}"
+    );
+}

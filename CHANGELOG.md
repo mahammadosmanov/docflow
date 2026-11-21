@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.24 - 2026-11-21
+
+### Changed
+
+- A mistyped Follow Up RFI cell, such as `CIV-13741461` with the `/` missing, or numbers separated by spaces, `;`, `\`, `&`, `+`, `|` or doubled slashes, is now rewritten in the standard form (`CIV-1374/1461`) when every number in it exists in the RFI Log. Otherwise it stays in Manual Review as `invalidRfi`.
+
 ## 1.51.23 - 2026-11-21
 
 ### Changed
