@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.51.13 - 2026-11-21
+
+### Changed
+
+- Dates and timestamps use the `jiff` crate instead of `chrono`, which RustSec now lists as unmaintained (RUSTSEC-2026-0543) and which the supply-chain check rejects. Journal and print-queue timestamps, plan stamps, backup names, RFI Log dates and times, and Excel date conversion produce the same text as before. A two-digit RFI Log year of `69` still reads as 2069. Local dates were checked on macOS only.
+
 ## 1.51.12 - 2026-11-21
 
 ### Changed

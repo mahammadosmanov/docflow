@@ -78,7 +78,7 @@ pub(super) fn read_source(
     let mut areas = Vec::new();
     let mut locations = Vec::new();
     let mut subcontractors = Vec::new();
-    let mut occupied = BTreeMap::<NaiveDate, BTreeMap<String, NaiveTime>>::new();
+    let mut occupied = BTreeMap::<Date, BTreeMap<String, Time>>::new();
     for row in 10..=sheet.max_row {
         let rfi = sheet.value(row, 1).trim();
         let Some((rfi_discipline, number)) = rfi_parts(rfi) else {
@@ -210,11 +210,11 @@ pub(super) fn lookup_columns(sheet: &WorksheetData) -> Result<BTreeMap<String, u
 }
 
 pub(super) fn allocate(
-    occupied: &BTreeMap<NaiveDate, BTreeMap<String, NaiveTime>>,
-    start_day: NaiveDate,
+    occupied: &BTreeMap<Date, BTreeMap<String, Time>>,
+    start_day: Date,
     count: usize,
     wrap: bool,
-) -> Result<(Vec<(NaiveDate, NaiveTime)>, usize), BackendError> {
+) -> Result<(Vec<(Date, Time)>, usize), BackendError> {
     let mut working = occupied.clone();
     let mut slots = Vec::new();
     let mut overflowed = 0;
@@ -225,15 +225,16 @@ pub(super) fn allocate(
             overflowed += 1;
             if wrap {
                 while minutes > DAY_END_MINUTES {
-                    day = day.checked_add_days(Days::new(1)).ok_or_else(|| {
+                    day = day.tomorrow().map_err(|_| {
                         BackendError::validation("RFI schedule date is out of range")
                     })?;
                     minutes = next_slot_minutes(&working, day);
                 }
             }
         }
-        let time = NaiveTime::from_num_seconds_from_midnight_opt((minutes % (24 * 60)) * 60, 0)
-            .ok_or_else(|| BackendError::validation("RFI schedule time is invalid"))?;
+        let minutes = minutes % (24 * 60);
+        let time = Time::new((minutes / 60) as i8, (minutes % 60) as i8, 0, 0)
+            .map_err(|_| BackendError::validation("RFI schedule time is invalid"))?;
         working
             .entry(day)
             .or_default()
@@ -244,14 +245,14 @@ pub(super) fn allocate(
 }
 
 pub(super) fn next_slot_minutes(
-    occupied: &BTreeMap<NaiveDate, BTreeMap<String, NaiveTime>>,
-    day: NaiveDate,
+    occupied: &BTreeMap<Date, BTreeMap<String, Time>>,
+    day: Date,
 ) -> u32 {
     occupied
         .get(&day)
         .and_then(|values| values.values().max())
         .map_or(DAY_START_MINUTES, |time| {
-            time.hour() * 60 + time.minute() + SLOT_MINUTES
+            time.hour() as u32 * 60 + time.minute() as u32 + SLOT_MINUTES
         })
 }
 
@@ -260,8 +261,8 @@ pub(super) fn record(
     discipline: &str,
     rfi: &str,
     source: &Source,
-    issue_day: NaiveDate,
-    slot: (NaiveDate, NaiveTime),
+    issue_day: Date,
+    slot: (Date, Time),
 ) -> Record {
     let preset = &source.data.presets[&source.default_item];
     Record {

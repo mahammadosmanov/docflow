@@ -245,8 +245,11 @@ pub(super) fn queue_diagnostic(state: QueueState) -> PrintQueueDiagnostic {
     }
 }
 
-pub(super) fn utc_now() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false)
+/// RFC 3339 UTC with microseconds and `+00:00`, the persisted journal and queue format.
+pub(crate) fn utc_now() -> String {
+    jiff::Timestamp::now()
+        .strftime("%Y-%m-%dT%H:%M:%S%.6f+00:00")
+        .to_string()
 }
 
 pub(super) fn display_name(path: &str) -> String {

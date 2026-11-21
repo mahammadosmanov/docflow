@@ -232,53 +232,61 @@ pub(super) fn recent_unique(values: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-pub(super) fn cell_date(value: &str) -> Option<NaiveDate> {
+pub(super) fn cell_date(value: &str) -> Option<Date> {
     if let Ok(serial) = value.parse::<f64>() {
-        return NaiveDate::from_ymd_opt(1899, 12, 30)?
-            .checked_add_days(Days::new(serial.floor().max(0.0) as u64));
+        let days = i64::try_from(serial.floor().max(0.0) as u64).ok()?;
+        return EXCEL_EPOCH.checked_add(days.days()).ok();
     }
     parse_date(value).ok()
 }
 
-pub(super) fn cell_time(value: &str) -> Option<NaiveTime> {
+pub(super) fn cell_time(value: &str) -> Option<Time> {
     if let Ok(serial) = value.parse::<f64>() {
         let seconds = (serial * 24.0 * 60.0 * 60.0).round() as u32 % (24 * 60 * 60);
-        return NaiveTime::from_num_seconds_from_midnight_opt(seconds, 0)
-            .map(|time| time.with_second(0).unwrap_or(time));
+        return Time::new((seconds / 3600) as i8, (seconds / 60 % 60) as i8, 0, 0).ok();
     }
     parse_time(value).ok()
 }
 
-pub(super) fn parse_date(value: &str) -> Result<NaiveDate, BackendError> {
+pub(super) fn parse_date(value: &str) -> Result<Date, BackendError> {
     for format in ["%d-%b-%y", "%Y-%m-%d", "%d.%m.%Y"] {
-        if let Ok(date) = NaiveDate::parse_from_str(value.trim(), format) {
+        if let Ok(date) = Date::strptime(format, value.trim()) {
+            // jiff reads two-digit year 69 as 1969; chrono (and earlier releases) read 2069.
+            if format == "%d-%b-%y"
+                && date.year() == 1969
+                && let Ok(date) = date.checked_add(100.years())
+            {
+                return Ok(date);
+            }
             return Ok(date);
         }
     }
     Err(BackendError::validation(format!("gecersiz tarih: {value}")))
 }
 
-pub(super) fn parse_time(value: &str) -> Result<NaiveTime, BackendError> {
-    NaiveTime::parse_from_str(value.trim(), "%H:%M")
+pub(super) fn parse_time(value: &str) -> Result<Time, BackendError> {
+    Time::strptime("%H:%M", value.trim())
         .map_err(|_| BackendError::validation(format!("gecersiz saat: {value}")))
 }
 
-pub(super) fn date_text(value: NaiveDate) -> String {
-    value.format("%d-%b-%y").to_string()
+pub(super) fn date_text(value: Date) -> String {
+    value.strftime("%d-%b-%y").to_string()
 }
 
-pub(super) fn time_text(value: NaiveTime) -> String {
-    value.format("%H:%M").to_string()
+pub(super) fn time_text(value: Time) -> String {
+    value.strftime("%H:%M").to_string()
 }
 
-pub(super) fn excel_date(value: NaiveDate) -> i64 {
-    value
-        .signed_duration_since(NaiveDate::from_ymd_opt(1899, 12, 30).expect("Excel epoch"))
-        .num_days()
+const EXCEL_EPOCH: Date = jiff::civil::date(1899, 12, 30);
+
+pub(super) fn excel_date(value: Date) -> i64 {
+    i64::from((value - EXCEL_EPOCH).get_days())
 }
 
-pub(super) fn excel_time(value: NaiveTime) -> String {
-    let seconds = value.num_seconds_from_midnight() as f64;
+pub(super) fn excel_time(value: Time) -> String {
+    let seconds = f64::from(
+        i32::from(value.hour()) * 3600 + i32::from(value.minute()) * 60 + i32::from(value.second()),
+    );
     format!("{:.15}", seconds / (24.0 * 60.0 * 60.0))
         .trim_end_matches('0')
         .trim_end_matches('.')
@@ -455,4 +463,36 @@ pub(super) fn south_pattern() -> &'static Regex {
         Regex::new(r"(?i)(?:^|[^A-Z0-9])S\d{1,3}(?:[^A-Z0-9]|$)")
             .expect("static RFI log regex is valid")
     })
+}
+
+#[cfg(test)]
+mod date_parsing_tests {
+    use super::*;
+
+    #[test]
+    fn dates_and_times_keep_their_earlier_meaning() {
+        assert_eq!(
+            parse_date("15-Mar-69").unwrap(),
+            jiff::civil::date(2069, 3, 15)
+        );
+        assert_eq!(
+            parse_date("15-mar-70").unwrap(),
+            jiff::civil::date(1970, 3, 15)
+        );
+        assert_eq!(
+            parse_date("1969-03-15").unwrap(),
+            jiff::civil::date(1969, 3, 15)
+        );
+        assert_eq!(
+            parse_date("5.1.2026").unwrap(),
+            jiff::civil::date(2026, 1, 5)
+        );
+        assert!(parse_date("30-Feb-26").is_err());
+        assert_eq!(date_text(jiff::civil::date(2026, 1, 5)), "05-Jan-26");
+        assert_eq!(excel_date(jiff::civil::date(2026, 1, 5)), 46027);
+        assert_eq!(cell_date("46027"), Some(jiff::civil::date(2026, 1, 5)));
+        assert_eq!(cell_time("0.5"), Some(jiff::civil::time(12, 0, 0, 0)));
+        assert_eq!(excel_time(jiff::civil::time(12, 0, 0, 0)), "0.5");
+        assert_eq!(time_text(parse_time("8:05").unwrap()), "08:05");
+    }
 }

@@ -5,7 +5,10 @@ use std::{
     sync::OnceLock,
 };
 
-use chrono::{Days, Local, NaiveDate, NaiveTime, Timelike};
+use jiff::{
+    ToSpan, Zoned,
+    civil::{Date, Time},
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -88,7 +91,7 @@ struct Source {
     default_itp: String,
     max_number: u32,
     last_row: u32,
-    occupied: BTreeMap<NaiveDate, BTreeMap<String, NaiveTime>>,
+    occupied: BTreeMap<Date, BTreeMap<String, Time>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -186,7 +189,7 @@ fn apply_detected_discipline(
 
 pub fn preview<F, C>(
     values: &Map<String, Value>,
-    today: NaiveDate,
+    today: Date,
     gemini: Option<&GeminiClient>,
     mut progress: F,
     cancelled: C,
@@ -252,8 +255,8 @@ where
     );
 
     let start_day = today
-        .checked_add_days(Days::new(1))
-        .ok_or_else(|| BackendError::validation("RFI schedule date is out of range"))?;
+        .tomorrow()
+        .map_err(|_| BackendError::validation("RFI schedule date is out of range"))?;
     let mut rows = Vec::new();
     let mut batches = Vec::new();
     let mut overflowed = 0_usize;

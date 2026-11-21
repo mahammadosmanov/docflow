@@ -492,7 +492,9 @@ impl NativeBackend {
         let app_data_grant =
             self.filesystem
                 .issue_grant(&scope, &self.app_data_dir, GrantAccess::ReadWrite)?;
-        let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%6f").to_string();
+        let timestamp = jiff::Timestamp::now()
+            .strftime("%Y%m%dT%H%M%S%6f")
+            .to_string();
         let plan = preview_review(
             &destination,
             &self.app_data_dir.join("trash"),
