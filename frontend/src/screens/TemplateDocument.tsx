@@ -276,7 +276,7 @@ export function TemplateDocument({
                 />
               </label>
             )}
-            <Button disabled={busy} onClick={() => void submit()}>
+            <Button busy={busy} onClick={() => void submit()}>
               {s.t("templates.document.apply")}
             </Button>
           </div>

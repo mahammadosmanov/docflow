@@ -4,7 +4,6 @@ import {
   Download,
   Eye,
   FileSearch,
-  LoaderCircle,
   Monitor,
   RotateCcw,
   Save,
@@ -262,10 +261,8 @@ export function SettingsScreen({
             <div className="support-diagnostics-actions">
               <Button
                 variant="secondary"
-                icon={
-                  diagnosticsBusy ? <LoaderCircle className="spin" /> : <Eye />
-                }
-                disabled={diagnosticsBusy}
+                icon={<Eye />}
+                busy={diagnosticsBusy}
                 onClick={() => void previewDiagnostics()}
               >
                 {s.t("prefs.support.preview")}

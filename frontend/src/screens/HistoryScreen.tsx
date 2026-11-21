@@ -59,6 +59,7 @@ export function HistoryScreen({
   const [payload, setPayload] = useState<HistoryPayload | null>(null);
   const [undoRow, setUndoRow] = useState<HistoryRow | null>(null);
   const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState("");
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     setBusy(true);
@@ -76,6 +77,7 @@ export function HistoryScreen({
 
   const undo = async (row: HistoryRow, destination?: PathSelection) => {
     setUndoRow(null);
+    setWorking(row.journalId);
     setBusy(true);
     try {
       await bridge.call("engine/undo", {
@@ -88,6 +90,7 @@ export function HistoryScreen({
       setError(humanError(reason, s));
     } finally {
       setBusy(false);
+      setWorking("");
     }
   };
   return (
@@ -158,6 +161,7 @@ export function HistoryScreen({
                   <Button
                     variant="secondary"
                     icon={<Undo2 />}
+                    busy={working === row.journalId}
                     disabled={busy}
                     onClick={() => setUndoRow(row)}
                   >
