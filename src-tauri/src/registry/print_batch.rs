@@ -175,6 +175,17 @@ pub(super) fn batch_print_operation(facts: RegistryFacts) -> OperationDef {
                 Map::new(),
                 Some("param.print.timeout.help"),
             ),
+            parameter(
+                "queue_mode",
+                ParamKind::Choice,
+                "param.print.queueMode",
+                json!("wait"),
+                true,
+                strings(batch_print::QUEUE_MODE_CHOICES),
+                prefixed_labels("choice.print.queueMode", batch_print::QUEUE_MODE_CHOICES),
+                Map::new(),
+                Some("param.print.queueMode.help"),
+            ),
         ],
     );
     batch_print.supports_presets = true;

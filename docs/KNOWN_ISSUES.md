@@ -27,6 +27,10 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   live Supabase project, then a two-user check of sync, offline start, and
   update pickup. Until then the Templates screen reports that the store is not
   set up.
+- Batch Print fast queue mode (ADR 0057) needs native acceptance on Windows
+  and macOS with representative printers: time per batch against wait mode,
+  approved order on paper, and the effect of a printer fault after the spooler
+  accepted a job. macOS code was not compiled in the Linux source gates.
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
 - Completion Status Sync requires native Windows/OneDrive acceptance on a copy

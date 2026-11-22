@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.24",
+  "currentVersion": "1.52.0",
   "releases": [
+    {
+      "version": "1.52.0",
+      "tag": "v1.52.0",
+      "date": "2026-11-22",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Batch Print adds a fast queue mode beside waiting for each job"
+    },
     {
       "version": "1.51.24",
       "tag": "v1.51.24",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up repairs mistyped RFI cells when the Log has every number"
     },
     {

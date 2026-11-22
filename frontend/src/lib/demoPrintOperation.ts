@@ -187,5 +187,19 @@ export const demoPrintOperation: OperationDef = {
       visibleWhen: {},
       helpKey: "param.print.timeout.help",
     },
+    {
+      name: "queue_mode",
+      kind: "choice",
+      labelKey: "param.print.queueMode",
+      default: "wait",
+      required: true,
+      choices: ["wait", "fast"],
+      choiceLabels: {
+        wait: "choice.print.queueMode.wait",
+        fast: "choice.print.queueMode.fast",
+      },
+      visibleWhen: {},
+      helpKey: "param.print.queueMode.help",
+    },
   ],
 };

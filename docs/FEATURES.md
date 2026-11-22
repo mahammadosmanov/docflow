@@ -73,6 +73,11 @@
   print queue: printer inventory availability, selected printer, file formats,
   native/controlled routes, requested options, attempts, outcomes, counts, and
   bounded error details. Preview, copy, and download remain local and redacted.
+- Batch Print's queue mode is `Wait for each job` (default) or `Fast`. Wait
+  sends the next file only after the printer queue releases the current job.
+  Fast sends the next file once the Windows spooler or CUPS accepted the
+  current job, in the same order; DocFlow then does not confirm that the
+  printer finished it (ADR 0057).
 - An accepted job whose final Windows spool receipt is unavailable is shown as
   sent-unconfirmed and the queue continues. It is never retried automatically;
   destructive deletion or uncertain cancellation still pauses for review.

@@ -92,6 +92,10 @@ impl PrintAdapter for MacOsPrintAdapter {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let job_id = parse_job_id(&stdout, &job.printer)
             .ok_or_else(|| PrintFailure::uncertain("CUPS accepted a job without a job ID"))?;
+        // Fast queue mode stops once CUPS returned the job ID it accepted.
+        if !job.waits_for_completion() {
+            return Ok(());
+        }
         wait_for_job(&job.printer, job_id, job.timeout_minutes, cancelled)
     }
 }

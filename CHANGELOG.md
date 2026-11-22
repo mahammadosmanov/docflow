@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.52.0 - 2026-11-22
+
+### Added
+
+- Batch Print has a new `Print queue mode` option on Windows and macOS. `Wait for each job` (default) keeps the current behavior: DocFlow sends the next file only after the printer queue releases the current one. `Fast` sends the next file as soon as the printer queue accepts the current one, so files no longer wait for the printer to finish. In Fast mode DocFlow does not confirm that the printer finished a job (ADR 0057).
+
 ## 1.51.24 - 2026-11-21
 
 ### Changed
