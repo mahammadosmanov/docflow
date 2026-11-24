@@ -118,7 +118,7 @@
   "rfi.fastScan.column.target": "Destination",
   "rfi.fastScan.evidence.clvToCiv": "OCR alias: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Confirmed",
-  "rfi.fastScan.evidence.headRecovered": "OCR repaired a damaged fixed start of the number",
+  "rfi.fastScan.evidence.ocrRepaired": "OCR repaired a misread character in the number",
   "param.rfi.processScans.rfiLogWorkbook": "RFI Log check (optional)",
   "param.rfi.processScans.rfiLogWorkbook.help": "Optional. Flags each scanned RFI whose Inspection Status in the RFI Log is not Ongoing, or that is not in the Log. The Log is only read.",
   "rfi.fastScan.column.logStatus": "RFI Log status",

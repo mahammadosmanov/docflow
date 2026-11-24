@@ -90,7 +90,7 @@
   "rfi.fastScan.column.target": "Hedef",
   "rfi.fastScan.evidence.clvToCiv": "OCR eşlemesi: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Doğrulandı",
-  "rfi.fastScan.evidence.headRecovered": "OCR numaranın bozulan sabit başlangıcını düzeltti",
+  "rfi.fastScan.evidence.ocrRepaired": "OCR numaradaki yanlış okunan karakteri düzeltti",
   "param.rfi.processScans.rfiLogWorkbook": "RFI Log kontrolü (isteğe bağlı)",
   "param.rfi.processScans.rfiLogWorkbook.help": "İsteğe bağlı. RFI Log'daki Inspection Status değeri Ongoing olmayan veya Log'da bulunmayan taranmış RFI'ları işaretler. Log yalnızca okunur.",
   "rfi.fastScan.column.logStatus": "RFI Log durumu",

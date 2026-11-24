@@ -90,7 +90,7 @@
   "rfi.fastScan.column.target": "Назначение",
   "rfi.fastScan.evidence.clvToCiv": "Подстановка OCR: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Подтверждено",
-  "rfi.fastScan.evidence.headRecovered": "OCR исправил поврежденное постоянное начало номера",
+  "rfi.fastScan.evidence.ocrRepaired": "OCR исправил неверно прочитанный символ в номере",
   "param.rfi.processScans.rfiLogWorkbook": "Проверка по RFI Log (необязательно)",
   "param.rfi.processScans.rfiLogWorkbook.help": "Необязательно. Отмечает каждый отсканированный RFI, у которого Inspection Status в RFI Log не Ongoing или которого нет в Log. Log только читается.",
   "rfi.fastScan.column.logStatus": "Статус в RFI Log",
