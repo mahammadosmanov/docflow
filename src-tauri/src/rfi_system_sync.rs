@@ -197,6 +197,7 @@ mod publish_preview;
 mod revise;
 mod scan;
 pub(crate) use codes::*;
+pub use log::read_log_statuses;
 use log::*;
 pub use preview::*;
 pub use publish_preview::*;

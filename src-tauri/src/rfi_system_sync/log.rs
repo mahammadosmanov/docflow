@@ -150,6 +150,26 @@ pub(super) fn append_signed_marker(value: &str) -> String {
     }
 }
 
+/// Read-only map from each exact canonical RFI code to its trimmed Inspection Status values
+/// (one entry per Log row, so a code on several rows keeps every distinct status).
+pub fn read_log_statuses<R: std::io::Read + std::io::Seek>(
+    reader: &mut R,
+) -> Result<BTreeMap<String, BTreeSet<String>>, BackendError> {
+    let workbook = read_workbook_from_reader(reader).map_err(|error| {
+        BackendError::validation(format!("error.rfi.completeStatus.workbookInvalid: {error}"))
+    })?;
+    let mut statuses = BTreeMap::<String, BTreeSet<String>>::new();
+    for row in read_rfi_log_status_rows(&workbook)? {
+        let value = row
+            .status_cell
+            .as_ref()
+            .map(|cell| cell.value.nfc().collect::<String>().trim().to_string())
+            .unwrap_or_default();
+        statuses.entry(row.canonical_rfi).or_default().insert(value);
+    }
+    Ok(statuses)
+}
+
 #[cfg(test)]
 mod signed_marker_tests {
     use super::{WORLEY_SIGNED_MARKER, append_signed_marker};

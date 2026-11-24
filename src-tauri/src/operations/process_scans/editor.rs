@@ -82,6 +82,109 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
     );
 }
 
+const LOG_WARNING_PREFIX: &str = "warn.rfi.fastScan.log";
+
+/// Optional RFI Log check: Fast RFI Scan only handles `Ongoing` RFIs, so a code whose Log
+/// status is anything else (or that is not in the Log) is flagged. Flags never block Apply.
+pub fn apply_log_check(plan: &mut Plan, statuses: &BTreeMap<String, BTreeSet<String>>) {
+    let Some(editor) = plan.meta.get_mut("editor") else {
+        return;
+    };
+    let Some(columns) = editor.get_mut("columns").and_then(Value::as_array_mut) else {
+        return;
+    };
+    columns.push(serde_json::json!({
+        "key": "logStatusKey", "labelKey": "rfi.fastScan.column.logStatus",
+        "kind": "readonly", "display": "localizedKey", "width": 170, "bulk": false
+    }));
+    if let Some(rows) = editor.get_mut("rows").and_then(Value::as_array_mut) {
+        for row in rows {
+            let code = row.get("code").and_then(Value::as_str).unwrap_or_default();
+            row["logStatusKey"] = Value::String(log_status_key(statuses, code).to_string());
+        }
+    }
+    let stored = statuses
+        .iter()
+        .map(|(code, values)| (code.clone(), serde_json::json!(values)))
+        .collect::<serde_json::Map<_, _>>();
+    if let Some(edit) = plan.meta.get_mut("scanEdit") {
+        edit["logStatuses"] = Value::Object(stored);
+    }
+    refresh_log_warnings(plan, statuses);
+}
+
+fn log_status_key(statuses: &BTreeMap<String, BTreeSet<String>>, code: &str) -> &'static str {
+    match statuses.get(code) {
+        None => "rfi.fastScan.logStatus.notInLog",
+        Some(values)
+            if values
+                .iter()
+                .all(|value| value.eq_ignore_ascii_case("Ongoing")) =>
+        {
+            "rfi.fastScan.logStatus.ongoing"
+        }
+        Some(_) => "rfi.fastScan.logStatus.notOngoing",
+    }
+}
+
+fn refresh_log_warnings(plan: &mut Plan, statuses: &BTreeMap<String, BTreeSet<String>>) {
+    plan.warnings
+        .retain(|warning| !warning.key.starts_with(LOG_WARNING_PREFIX));
+    let codes = plan
+        .meta
+        .get("editor")
+        .and_then(|editor| editor.get("rows"))
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| row.get("code").and_then(Value::as_str))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    for code in codes {
+        match log_status_key(statuses, &code) {
+            "rfi.fastScan.logStatus.notInLog" => plan.warnings.push(Warning {
+                key: "warn.rfi.fastScan.logNotInLog".to_string(),
+                subject: code,
+            }),
+            "rfi.fastScan.logStatus.notOngoing" => {
+                let shown = statuses[&code]
+                    .iter()
+                    .map(|value| if value.is_empty() { "(blank)" } else { value })
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                plan.warnings.push(Warning {
+                    key: "warn.rfi.fastScan.logNotOngoing".to_string(),
+                    subject: format!("{code} — {shown}"),
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+fn stored_log_statuses(plan: &Plan) -> Option<BTreeMap<String, BTreeSet<String>>> {
+    let stored = plan.meta.get("scanEdit")?.get("logStatuses")?.as_object()?;
+    Some(
+        stored
+            .iter()
+            .map(|(code, values)| {
+                let values = values
+                    .as_array()
+                    .map(|values| {
+                        values
+                            .iter()
+                            .filter_map(|value| value.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                (code.clone(), values)
+            })
+            .collect(),
+    )
+}
+
 pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
     if plan.op_id != FAST_COVER_OPERATION_ID {
         return Err(BackendError::validation(
@@ -119,6 +222,7 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         .and_then(Value::as_bool)
         .ok_or_else(|| BackendError::validation("error.rfi.fastScan.revisionInvalid"))?;
 
+    let stored_statuses = stored_log_statuses(plan);
     let mut originals = BTreeMap::new();
     for row in original_rows {
         let row_id = row
@@ -156,15 +260,20 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
             .ok_or_else(|| BackendError::validation("error.rfi.fastScan.codeInvalid"))?;
         let mut expected = (*original).clone();
         expected["code"] = Value::String(code.clone());
+        if let Some(statuses) = &stored_statuses {
+            expected["logStatusKey"] = Value::String(log_status_key(statuses, &code).to_string());
+        }
         let unchanged_except_code =
             submitted
                 .as_object()
                 .zip(expected.as_object())
                 .is_some_and(|(submitted, expected)| {
                     submitted.len() == expected.len()
-                        && expected
-                            .iter()
-                            .all(|(key, value)| key == "code" || submitted.get(key) == Some(value))
+                        && expected.iter().all(|(key, value)| {
+                            key == "code"
+                                || key == "logStatusKey"
+                                || submitted.get(key) == Some(value)
+                        })
                 });
         if !unchanged_except_code {
             return Err(BackendError::validation(
@@ -267,13 +376,17 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
     }
     let mut meta = plan.meta.clone();
     meta["editor"]["rows"] = Value::Array(rows);
-    Ok(Plan {
+    let mut revised = Plan {
         plan_id: String::new(),
         op_id: FAST_COVER_OPERATION_ID.to_string(),
         steps,
         warnings: plan.warnings.clone(),
         meta,
-    })
+    };
+    if let Some(statuses) = &stored_statuses {
+        refresh_log_warnings(&mut revised, statuses);
+    }
+    Ok(revised)
 }
 
 fn scan_edit_folder_exists(destination: &Path, folder: &Path) -> Result<bool, BackendError> {

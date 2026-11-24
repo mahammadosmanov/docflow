@@ -330,3 +330,16 @@ fn publish_status_applies_revises_and_undoes_through_the_guarded_pipeline() {
     authority.undo(&applied.journal_id, &caller, None).unwrap();
     assert_eq!(status_cell(&log_path), "");
 }
+
+#[test]
+fn read_log_statuses_returns_trimmed_status_per_exact_code() {
+    let statuses = rfi_system_sync::read_log_statuses(&mut Cursor::new(log_workbook())).unwrap();
+    let status = |suffix: &str| {
+        statuses
+            .get(&format!("{MEC}-{suffix}"))
+            .map(|values| values.iter().cloned().collect::<Vec<_>>())
+    };
+    assert_eq!(status("0876"), Some(vec![String::new()]));
+    assert_eq!(status("0877"), Some(vec!["Ongoing".to_string()]));
+    assert_eq!(status("0999"), None);
+}

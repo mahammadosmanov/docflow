@@ -131,10 +131,38 @@ impl NativeBackend {
             &caller.owner_id,
             &scan_params.source,
         );
+        let log_statuses = match request.values.rfi_log_workbook.as_deref() {
+            None => None,
+            Some(log) => {
+                if !log.is_file() {
+                    return Err(BackendError::path_invalid(
+                        "The selected RFI Log workbook is unavailable",
+                    ));
+                }
+                let mut roots = Vec::new();
+                add_grant_root(
+                    &mut roots,
+                    log.parent()
+                        .ok_or_else(|| {
+                            BackendError::path_invalid("Selected input has no parent folder")
+                        })?
+                        .to_path_buf(),
+                    GrantAccess::Read,
+                );
+                let provisional = self.filesystem.issue_provisional_grants(&scope, &roots)?;
+                let bytes = read_granted_input(&self.filesystem, &provisional, log)?;
+                Some(crate::rfi_system_sync::read_log_statuses(
+                    &mut Cursor::new(bytes),
+                )?)
+            }
+        };
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
-        let plan = preview_fast_covers(&scan_params, &ocr, &mut progress, || {
+        let mut plan = preview_fast_covers(&scan_params, &ocr, &mut progress, || {
             cancellation.is_cancelled()
         })?;
+        if let Some(statuses) = &log_statuses {
+            crate::operations::process_scans::apply_log_check(&mut plan, statuses);
+        }
         encode(
             self.filesystem.cache_plan(
                 BackendOrigin::Rust,

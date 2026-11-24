@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.53.0 - 2026-11-24
+
+### Added
+
+- Fast RFI Scan has an optional `RFI Log check` file. When selected, the Preview table shows each scanned RFI's Inspection Status from the RFI Log and warns when it is not `Ongoing` (blank counts as not Ongoing) or when the RFI is not in the Log, because Fast RFI Scan is only used for Ongoing RFIs. The warning never blocks Apply, and it updates when the RFI number is corrected in Preview. The RFI Log is only read.
+
 ## 1.52.3 - 2026-11-24
 
 ### Fixed

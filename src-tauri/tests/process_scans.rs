@@ -1323,6 +1323,75 @@ fn fast_scan_preview_revision_rederives_target_from_valid_code() {
     );
 }
 #[test]
+fn fast_scan_log_check_flags_non_ongoing_codes_and_follows_code_edits() {
+    use std::collections::{BTreeMap, BTreeSet};
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    write_multi_page_pdf(&source.join("scan.pdf"), 2);
+    let ocr = CountingPageOcr {
+        page_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        orientation_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        ocr_alias: true,
+    };
+    let mut plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    let scanned = plan.meta["editor"]["rows"][0]["code"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let edited = "AZE-SUN-INT-QMS-RFI-MEC-0192";
+    let statuses = BTreeMap::from([
+        (scanned.clone(), BTreeSet::from(["Completed".to_string()])),
+        (edited.to_string(), BTreeSet::from(["Ongoing".to_string()])),
+    ]);
+    docflow_lib::operations::process_scans::apply_log_check(&mut plan, &statuses);
+    assert_eq!(
+        plan.meta["editor"]["rows"][0]["logStatusKey"],
+        "rfi.fastScan.logStatus.notOngoing"
+    );
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.fastScan.logNotOngoing"
+            && warning.subject == format!("{scanned} — Completed")
+    }));
+
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["code"] = json!(edited);
+    let revised = docflow_lib::operations::process_scans::revise(&plan, &json!({"rows": rows}))
+        .expect("a code edit stays valid with the log check");
+    assert_eq!(
+        revised.meta["editor"]["rows"][0]["logStatusKey"],
+        "rfi.fastScan.logStatus.ongoing"
+    );
+    assert!(
+        revised
+            .warnings
+            .iter()
+            .all(|warning| !warning.key.starts_with("warn.rfi.fastScan.log"))
+    );
+
+    docflow_lib::operations::process_scans::apply_log_check(&mut plan, &BTreeMap::new());
+    assert_eq!(
+        plan.meta["editor"]["rows"][0]["logStatusKey"],
+        "rfi.fastScan.logStatus.notInLog"
+    );
+}
+#[test]
 fn fast_scan_revision_rejects_invalid_codes_paths_and_target_collisions() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("source");
