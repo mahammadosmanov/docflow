@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.54.0",
+  "currentVersion": "1.54.1",
   "releases": [
+    {
+      "version": "1.54.1",
+      "tag": "v1.54.1",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Dependency update for RUSTSEC-2026-0592 and RUSTSEC-2026-0594"
+    },
     {
       "version": "1.54.0",
       "tag": "v1.54.0",
       "date": "2026-11-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fast RFI Scan reads the RFI number cell a second time and shows it under Preview"
     },
     {

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.54.1 - 2026-11-24
+
+### Security
+
+- Updated `url` to 2.5.9 and `cookie` to 0.18.3 for RUSTSEC-2026-0592 and RUSTSEC-2026-0594. No DocFlow code changed.
+
 ## 1.54.0 - 2026-11-24
 
 ### Added
