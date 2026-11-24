@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.52.1",
+  "currentVersion": "1.52.2",
   "releases": [
+    {
+      "version": "1.52.2",
+      "tag": "v1.52.2",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fast RFI Scan reads a cover whose RFI number head was damaged by a table line"
+    },
     {
       "version": "1.52.1",
       "tag": "v1.52.1",
       "date": "2026-11-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Windows Excel COM plan moves to its own module"
     },
     {

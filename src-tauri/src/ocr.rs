@@ -14,7 +14,9 @@ use regex::Regex;
 use crate::{
     operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
-    rfi_code::{PREFIX, RfiMatch, RfiMethod, canonical, exact_codes, find},
+    rfi_code::{
+        PREFIX, PREFIX_HEAD, RfiMatch, RfiMethod, canonical, exact_codes, find, levenshtein,
+    },
 };
 
 const TEXT_LAYER_MIN_CHARS: usize = 50;

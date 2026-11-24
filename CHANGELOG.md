@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.52.2 - 2026-11-24
+
+### Fixed
+
+- Fast RFI Scan no longer sends a whole RFI to review with "RFI number not found" when a table line damages the fixed start of the number on the cover, such as `AZE-SUN4NT-QMS-RFI-PRC-0096` for `AZE-SUN-INT-QMS-RFI-PRC-0096`. The cover is accepted only when the line starts with `RFI No`, the head is within two edits of `AZE-SUN-INT-QMS`, the `-RFI-` anchor, discipline and serial are exact, and one distinct code follows the label. Filenames, text layers and manual corrections do not use this recovery.
+
 ## 1.52.1 - 2026-11-24
 
 ### Changed

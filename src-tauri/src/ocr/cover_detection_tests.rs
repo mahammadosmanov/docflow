@@ -97,6 +97,32 @@ fn fast_cover_recognizes_ocr_clv_as_civ_with_alias_evidence() {
 }
 
 #[test]
+fn fast_cover_recovers_a_head_hyphen_swallowed_by_a_table_rule() {
+    let cover = "SUNRISE PROJECT\nREQUEST FOR INSPECTION (RFI)\nDate: 04.11.2026 RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096 Rev: 0";
+    let read = confirmed_cover_read(cover, "test").expect("damaged head cover is confirmed");
+    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-PRC-0096");
+    assert_eq!(read.matched.method, RfiMethod::OcrAlias);
+    assert!(read.source.ends_with(":alias:head"), "{}", read.source);
+    // No label, no recovery.
+    assert!(
+        confirmed_cover_read(
+            "SUNRISE PROJECT\nREQUEST FOR INSPECTION\nAZE-SUN4NT-QMS-RFI-PRC-0096",
+            "test"
+        )
+        .is_none()
+    );
+    // Head too far from the fixed head, unknown discipline, longer serial, two codes.
+    for text in [
+        "RFI No: XYZ-ABC-DEF-GHI-RFI-PRC-0096",
+        "RFI No: AZE-SUN4NT-QMS-RFI-XYZ-0096",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-00961",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096 RFI No: AZE-SUN4NT-QMS-RFI-PRC-0097",
+    ] {
+        assert!(damaged_head_identity(text).is_none(), "{text}");
+    }
+}
+
+#[test]
 #[ignore = "set DOCFLOW_COVER_LAB_PDF and DOCFLOW_COVER_LAB_TESSERACT to check a supplied cover page"]
 fn production_fast_cover_detects_the_supplied_first_page() {
     let source = PathBuf::from(
@@ -384,4 +410,43 @@ fn cover_first_identity_rejects_a_non_strict_match_labelled_as_a_cover() {
     })
     .unwrap();
     assert_eq!(read.source, "ocr:full");
+}
+
+#[test]
+#[ignore = "set DOCFLOW_COVER_LAB_SOURCE_DIR and DOCFLOW_COVER_LAB_TESSERACT to preview a supplied scan folder"]
+fn production_multi_rfi_preview_of_supplied_folder() {
+    let source = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_SOURCE_DIR")
+            .expect("DOCFLOW_COVER_LAB_SOURCE_DIR is required"),
+    );
+    let tesseract = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+            .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+    );
+    let destination = tempfile::tempdir().expect("temporary destination should open");
+    let ocr = NativeOcr::with_tesseract(tesseract);
+    let plan = crate::operations::process_scans::preview_fast_covers(
+        &crate::operations::process_scans::ProcessScansParams {
+            source,
+            destination: destination.path().to_path_buf(),
+            organize_into_rfi_folders: false,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .expect("preview should complete");
+    for warning in &plan.warnings {
+        eprintln!("LAB warning {} {}", warning.key, warning.subject);
+    }
+    for step in &plan.steps {
+        eprintln!(
+            "LAB step {:?} dst={:?} meta={:?}",
+            step.kind, step.dst, step.meta
+        );
+    }
 }
