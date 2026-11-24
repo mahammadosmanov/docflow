@@ -71,6 +71,8 @@ pub(super) fn damaged_head_identity(text: &str) -> Option<RfiMatch> {
     let mut matched = find(&code);
     matched.ok().then(|| {
         matched.method = RfiMethod::OcrAlias;
+        // Below an exact read, so Preview never shows a recovered head as 100%.
+        matched.confidence = 0.9;
         matched
     })
 }

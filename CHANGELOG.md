@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.52.3 - 2026-11-24
+
+### Fixed
+
+- The Fast RFI Scan Preview table shows the OCR evidence score for each RFI again. It is a heuristic consistency score, not an accuracy probability. A number whose fixed start was repaired by OCR shows 90% and the label "OCR repaired a damaged fixed start of the number", never 100%.
+
 ## 1.52.2 - 2026-11-24
 
 ### Fixed

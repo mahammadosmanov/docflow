@@ -29,13 +29,15 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             .and_then(|name| name.to_str())
             .unwrap_or_default()
             .to_string();
-        let evidence_key = if step
+        let evidence_source = step
             .meta
             .get("source")
             .and_then(Value::as_str)
-            .is_some_and(|source| source.contains("CLV->CIV"))
-        {
+            .unwrap_or_default();
+        let evidence_key = if evidence_source.contains("CLV->CIV") {
             "rfi.fastScan.evidence.clvToCiv"
+        } else if evidence_source.contains(":alias:head") {
+            "rfi.fastScan.evidence.headRecovered"
         } else {
             "rfi.fastScan.evidence.confirmed"
         };
@@ -43,6 +45,7 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             "_rowId": row_id,
             "sourceFile": source_file,
             "evidenceKey": evidence_key,
+            "confidence": step.meta.get("confidence").cloned().unwrap_or(Value::Null),
             "detectedCode": code,
             "code": code,
             "target": target,
@@ -69,6 +72,7 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             "columns": [
                 {"key": "sourceFile", "labelKey": "rfi.fastScan.column.sourceFile", "kind": "readonly", "width": 170, "bulk": false},
                 {"key": "evidenceKey", "labelKey": "rfi.fastScan.column.evidence", "kind": "readonly", "display": "localizedKey", "width": 170, "bulk": false},
+                {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 150, "bulk": false},
                 {"key": "detectedCode", "labelKey": "rfi.fastScan.column.detectedCode", "kind": "readonly", "width": 270, "bulk": false},
                 {"key": "code", "labelKey": "rfi.fastScan.column.code", "kind": "text", "width": 310, "bulk": false},
                 {"key": "target", "labelKey": "rfi.fastScan.column.target", "kind": "readonly", "width": 360, "bulk": false}

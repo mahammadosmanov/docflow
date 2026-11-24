@@ -90,6 +90,7 @@
   "rfi.fastScan.column.target": "Назначение",
   "rfi.fastScan.evidence.clvToCiv": "Подстановка OCR: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Подтверждено",
+  "rfi.fastScan.evidence.headRecovered": "OCR исправил поврежденное постоянное начало номера",
   "rfi.fastScan.editor.updatePreview": "Обновить предпросмотр",
   "rfi.fastScan.editor.updatingPreview": "Обновление предпросмотра…",
   "rfi.fastScan.editor.previewUpdated": "Предпросмотр обновлён. Проверьте целевые пути перед применением.",

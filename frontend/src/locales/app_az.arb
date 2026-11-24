@@ -90,6 +90,7 @@
   "rfi.fastScan.column.target": "Hədəf",
   "rfi.fastScan.evidence.clvToCiv": "OCR uyğunlaşdırması: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Təsdiqlənib",
+  "rfi.fastScan.evidence.headRecovered": "OCR nömrənin zədələnmiş sabit başlanğıcını düzəltdi",
   "rfi.fastScan.editor.updatePreview": "Önizləməni yenilə",
   "rfi.fastScan.editor.updatingPreview": "Önizləmə yenilənir…",
   "rfi.fastScan.editor.previewUpdated": "Önizləmə yeniləndi. Tətbiq etməzdən əvvəl hədəf yollarını yoxlayın.",

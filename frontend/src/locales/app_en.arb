@@ -118,6 +118,7 @@
   "rfi.fastScan.column.target": "Destination",
   "rfi.fastScan.evidence.clvToCiv": "OCR alias: CLV → CIV",
   "rfi.fastScan.evidence.confirmed": "Confirmed",
+  "rfi.fastScan.evidence.headRecovered": "OCR repaired a damaged fixed start of the number",
   "rfi.fastScan.editor.updatePreview": "Update preview",
   "rfi.fastScan.editor.updatingPreview": "Updating preview…",
   "rfi.fastScan.editor.previewUpdated": "Preview updated. Check the destination paths before applying.",

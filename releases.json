@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.52.2",
+  "currentVersion": "1.52.3",
   "releases": [
+    {
+      "version": "1.52.3",
+      "tag": "v1.52.3",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fast RFI Scan Preview shows the OCR evidence score again"
+    },
     {
       "version": "1.52.2",
       "tag": "v1.52.2",
       "date": "2026-11-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fast RFI Scan reads a cover whose RFI number head was damaged by a table line"
     },
     {

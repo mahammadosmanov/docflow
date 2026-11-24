@@ -256,6 +256,7 @@ function previewFastCover(state: MockPlanState, values: Record<string, unknown>)
     _rowId: "scan-output-0",
     sourceFile,
     evidenceKey: "rfi.fastScan.evidence.confirmed",
+    confidence: 1,
     detectedCode: code,
     code,
     target,
@@ -288,6 +289,13 @@ function previewFastCover(state: MockPlanState, values: Record<string, unknown>)
             kind: "readonly",
             display: "localizedKey",
             width: 170,
+          },
+          {
+            key: "confidence",
+            labelKey: "ocr.confidence",
+            kind: "readonly",
+            display: "percent",
+            width: 150,
           },
           {
             key: "detectedCode",
