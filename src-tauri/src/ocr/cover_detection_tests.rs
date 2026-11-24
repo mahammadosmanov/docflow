@@ -1,5 +1,6 @@
 use super::*;
-use std::{env, path::PathBuf, time::Instant};
+use identity_check::identity_tail;
+use std::{env, fs, path::PathBuf, time::Instant};
 
 fn is_confirmed_cover(read: &OcrRead) -> bool {
     read.source.starts_with("ocr:fast-cover:confirmed:")
@@ -449,4 +450,48 @@ fn production_multi_rfi_preview_of_supplied_folder() {
             step.kind, step.dst, step.meta
         );
     }
+}
+
+#[test]
+#[ignore = "set DOCFLOW_COVER_LAB_PDF, DOCFLOW_COVER_LAB_PAGE and DOCFLOW_COVER_LAB_TESSERACT to check one cover identity cell"]
+fn production_identity_check_of_supplied_cover() {
+    let source = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
+    );
+    let page = env::var("DOCFLOW_COVER_LAB_PAGE")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let tesseract = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+            .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+    );
+    let check = NativeOcr::with_tesseract(tesseract)
+        .check_cover_identity(&source, page)
+        .expect("identity check should run");
+    eprintln!(
+        "LAB reread_tail={:?} crop_bytes={}",
+        check.reread_tail,
+        check.crop_data_url.as_ref().map_or(0, String::len)
+    );
+    if let (Some(url), Ok(out)) = (check.crop_data_url, env::var("DOCFLOW_COVER_LAB_CROP_OUT")) {
+        let bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            url.trim_start_matches("data:image/png;base64,"),
+        )
+        .unwrap();
+        fs::write(out, bytes).unwrap();
+    }
+}
+
+#[test]
+fn identity_tail_reads_only_an_exact_unique_discipline_and_number() {
+    assert_eq!(
+        identity_tail("RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096").as_deref(),
+        Some("PRC-0096")
+    );
+    assert_eq!(identity_tail("QMS-RFI-ELE-69").as_deref(), Some("ELE-0069"));
+    assert_eq!(identity_tail("RFI-XYZ-0096"), None);
+    assert_eq!(identity_tail("RFI-PRC-00961"), None);
+    assert_eq!(identity_tail("RFI-PRC-0096 RFI-ELE-0069"), None);
 }

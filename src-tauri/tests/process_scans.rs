@@ -1392,6 +1392,73 @@ fn fast_scan_log_check_flags_non_ongoing_codes_and_follows_code_edits() {
     );
 }
 #[test]
+fn fast_scan_second_read_verdict_flags_a_different_number_and_follows_code_edits() {
+    use docflow_lib::operations::process_scans::{CoverEvidence, attach_cover_checks};
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    write_multi_page_pdf(&source.join("scan.pdf"), 2);
+    let ocr = CountingPageOcr {
+        page_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        orientation_reads: std::array::from_fn(|_| AtomicUsize::new(0)),
+        ocr_alias: true,
+    };
+    let mut plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: docflow_lib::operations::process_scans::ScanMode::SingleRfi,
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .unwrap();
+    attach_cover_checks(&mut plan, |_, page| {
+        assert_eq!(page, 0);
+        Some(CoverEvidence {
+            crop_data_url: Some("data:image/png;base64,AAAA".to_string()),
+            reread_tail: Some("MEC-0192".to_string()),
+        })
+    });
+    let row = &plan.meta["editor"]["rows"][0];
+    assert_eq!(row["coverCrop"], "data:image/png;base64,AAAA");
+    assert_eq!(row["rereadKey"], "rfi.fastScan.reread.differs");
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|warning| warning.key == "warn.rfi.fastScan.rereadDiffers")
+    );
+
+    let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+    rows[0]["code"] = json!("AZE-SUN-INT-QMS-RFI-MEC-0192");
+    let revised = docflow_lib::operations::process_scans::revise(&plan, &json!({"rows": rows}))
+        .expect("a code edit stays valid with the second read");
+    assert_eq!(
+        revised.meta["editor"]["rows"][0]["rereadKey"],
+        "rfi.fastScan.reread.agrees"
+    );
+    assert!(
+        revised
+            .warnings
+            .iter()
+            .all(|warning| warning.key != "warn.rfi.fastScan.rereadDiffers")
+    );
+
+    attach_cover_checks(&mut plan, |_, _| None);
+    assert_eq!(
+        plan.meta["editor"]["rows"][0]["rereadKey"],
+        "rfi.fastScan.reread.unavailable"
+    );
+    assert!(plan.meta["editor"]["rows"][0]["coverCrop"].is_null());
+}
+#[test]
 fn fast_scan_revision_rejects_invalid_codes_paths_and_target_collisions() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("source");

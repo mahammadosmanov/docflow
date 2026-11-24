@@ -504,3 +504,39 @@
 .plan-heading svg {
   width: 0.9rem;
 }
+
+.cover-crop-strip {
+  flex-shrink: 0;
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.cover-crop-strip > strong {
+  font-size: 0.8125rem;
+}
+.cover-crop-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+.cover-crop-list figure {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.cover-crop-list img {
+  display: block;
+  height: 26px;
+  width: auto;
+  max-width: 320px;
+  border: 1px solid var(--line);
+}
+.cover-crop-list figcaption {
+  font-size: 0.75rem;
+  color: var(--muted);
+}

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.54.0 - 2026-11-24
+
+### Added
+
+- Fast RFI Scan finds the printed RFI No. cell on each scanned cover, reads it a second time as one line, and compares the discipline and number with the first read. The Preview table has a `Second read` column (Matches, Differs, Not available). A difference adds a warning that never blocks Apply and updates when the number is corrected in Preview. A small strip under the table shows each cropped RFI No. cell as scanned. The second read adds one extra page render and OCR per scanned RFI, run in parallel.
+
 ## 1.53.0 - 2026-11-24
 
 ### Added

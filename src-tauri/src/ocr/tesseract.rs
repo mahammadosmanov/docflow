@@ -241,8 +241,19 @@ pub(super) fn run_tesseract(
         tessdata,
         psm,
         attempt,
-        Some("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:."),
+        TesseractExtras {
+            whitelist: Some("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:."),
+            output_config: None,
+        },
     )
+}
+
+/// Optional Tesseract settings beyond page-segmentation mode.
+#[derive(Clone, Copy, Default)]
+pub(super) struct TesseractExtras<'a> {
+    pub(super) whitelist: Option<&'a str>,
+    /// Output config name such as `tsv`.
+    pub(super) output_config: Option<&'a str>,
 }
 
 pub(super) fn run_tesseract_for_cover(
@@ -253,7 +264,37 @@ pub(super) fn run_tesseract_for_cover(
     psm: u8,
     attempt: usize,
 ) -> Result<String, OcrFailure> {
-    run_tesseract_with_whitelist(executable, image, temporary, tessdata, psm, attempt, None)
+    run_tesseract_with_whitelist(
+        executable,
+        image,
+        temporary,
+        tessdata,
+        psm,
+        attempt,
+        TesseractExtras::default(),
+    )
+}
+
+/// Word boxes (`tsv` output) for locating the identity on a cover.
+pub(super) fn run_tesseract_tsv(
+    executable: &Path,
+    image: &Path,
+    temporary: &Path,
+    tessdata: Option<&Path>,
+    attempt: usize,
+) -> Result<String, OcrFailure> {
+    run_tesseract_with_whitelist(
+        executable,
+        image,
+        temporary,
+        tessdata,
+        6,
+        attempt,
+        TesseractExtras {
+            whitelist: None,
+            output_config: Some("tsv"),
+        },
+    )
 }
 
 pub(super) fn run_tesseract_with_whitelist(
@@ -263,7 +304,7 @@ pub(super) fn run_tesseract_with_whitelist(
     tessdata: Option<&Path>,
     psm: u8,
     attempt: usize,
-    character_whitelist: Option<&str>,
+    extras: TesseractExtras<'_>,
 ) -> Result<String, OcrFailure> {
     const MAX_OUTPUT_BYTES: u64 = 1024 * 1024;
     let output_path = temporary.join(format!("tesseract-{attempt}-{psm}.txt"));
@@ -283,10 +324,13 @@ pub(super) fn run_tesseract_with_whitelist(
         .stdin(Stdio::null())
         .stdout(Stdio::from(output))
         .stderr(Stdio::null());
-    if let Some(whitelist) = character_whitelist {
+    if let Some(whitelist) = extras.whitelist {
         command
             .arg("-c")
             .arg(format!("tessedit_char_whitelist={whitelist}"));
+    }
+    if let Some(config) = extras.output_config {
+        command.arg(config);
     }
     if let Some(tessdata) = tessdata {
         command.env("TESSDATA_PREFIX", tessdata);

@@ -103,6 +103,7 @@ mod adapter;
 #[cfg(test)]
 use adapter::*;
 mod cover;
+mod identity_check;
 mod image;
 mod orientation;
 mod render;
@@ -110,6 +111,7 @@ mod session;
 mod tesseract;
 pub use cover::take_cover_trace;
 use cover::*;
+pub use identity_check::CoverCheck;
 pub use image::*;
 use orientation::*;
 pub use render::*;

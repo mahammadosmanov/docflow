@@ -163,6 +163,19 @@ impl NativeBackend {
         if let Some(statuses) = &log_statuses {
             crate::operations::process_scans::apply_log_check(&mut plan, statuses);
         }
+        crate::operations::process_scans::attach_cover_checks(&mut plan, |source, page| {
+            if cancellation.is_cancelled() {
+                return None;
+            }
+            // A failed second read only leaves that row unverified; the scan itself stands.
+            native_ocr
+                .check_cover_identity(source, page)
+                .ok()
+                .map(|check| crate::operations::process_scans::CoverEvidence {
+                    crop_data_url: check.crop_data_url,
+                    reread_tail: check.reread_tail,
+                })
+        });
         encode(
             self.filesystem.cache_plan(
                 BackendOrigin::Rust,
