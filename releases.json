@@ -1,14 +1,110 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.51.13",
+  "currentVersion": "1.52.0",
   "releases": [
+    {
+      "version": "1.52.0",
+      "tag": "v1.52.0",
+      "date": "2026-11-22",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Batch Print adds a fast queue mode beside waiting for each job"
+    },
+    {
+      "version": "1.51.24",
+      "tag": "v1.51.24",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up repairs mistyped RFI cells when the Log has every number"
+    },
+    {
+      "version": "1.51.23",
+      "tag": "v1.51.23",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up moves an RFI out of a cell the Log contradicts"
+    },
+    {
+      "version": "1.51.22",
+      "tag": "v1.51.22",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up adds items that share one column to the same cell"
+    },
+    {
+      "version": "1.51.21",
+      "tag": "v1.51.21",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reads CIV tag shorthand, notes, parent tags and combined rows"
+    },
+    {
+      "version": "1.51.20",
+      "tag": "v1.51.20",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up leaves culvert ITP CIV-0003_A out of scope"
+    },
+    {
+      "version": "1.51.19",
+      "tag": "v1.51.19",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reviews a fan-out row whose cell holds another item"
+    },
+    {
+      "version": "1.51.18",
+      "tag": "v1.51.18",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reviews an RFI that also sits in a wrong cell"
+    },
+    {
+      "version": "1.51.17",
+      "tag": "v1.51.17",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up reviews RFIs whose matching cell holds another item instead of dropping them"
+    },
+    {
+      "version": "1.51.16",
+      "tag": "v1.51.16",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up matches CIV sub-block tags such as A17/1 to their own row"
+    },
+    {
+      "version": "1.51.15",
+      "tag": "v1.51.15",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "CIV PCS tags written with a Unicode dash stay outside Follow Up"
+    },
+    {
+      "version": "1.51.14",
+      "tag": "v1.51.14",
+      "date": "2026-11-21",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Follow Up sync reaches the PV Module FINAL (3.2) column on Signed By Worley MEC"
+    },
     {
       "version": "1.51.13",
       "tag": "v1.51.13",
       "date": "2026-11-21",
       "channel": "stable",
-      "status": "current",
-      "summary": "Follow Up reviews a fan-out row whose cell holds another item"
+      "status": "superseded",
+      "summary": "Dates and timestamps use jiff instead of the unmaintained chrono crate"
     },
     {
       "version": "1.51.12",
@@ -16,7 +112,7 @@
       "date": "2026-11-21",
       "channel": "stable",
       "status": "superseded",
-      "summary": "Follow Up reviews an RFI that also sits in a wrong cell"
+      "summary": "CI runs the React tests once, with coverage"
     },
     {
       "version": "1.51.11",
@@ -24,7 +120,7 @@
       "date": "2026-11-21",
       "channel": "stable",
       "status": "superseded",
-      "summary": "Follow Up reviews RFIs whose matching cell holds another item instead of dropping them"
+      "summary": "RFI code and template code patterns each have one definition"
     },
     {
       "version": "1.51.10",
@@ -32,7 +128,7 @@
       "date": "2026-11-21",
       "channel": "stable",
       "status": "superseded",
-      "summary": "Follow Up matches CIV sub-block tags such as A17/1 to their own row"
+      "summary": "Concrete documents and template checks reuse compiled patterns"
     },
     {
       "version": "1.51.9",
@@ -40,47 +136,47 @@
       "date": "2026-11-21",
       "channel": "stable",
       "status": "superseded",
-      "summary": "CIV PCS tags written with a Unicode dash stay outside Follow Up"
+      "summary": "File hashing shares one streaming SHA-256 helper"
     },
     {
       "version": "1.51.8",
       "tag": "v1.51.8",
-      "date": "2026-11-21",
+      "date": "2026-11-15",
       "channel": "stable",
       "status": "superseded",
-      "summary": "Follow Up sync reaches the PV Module FINAL (3.2) column on Signed By Worley MEC"
+      "summary": "Remaining labels between 11 and 12px raised to the 12px type floor"
     },
     {
       "version": "1.51.7",
       "tag": "v1.51.7",
-      "date": "2026-11-21",
+      "date": "2026-11-15",
       "channel": "stable",
       "status": "superseded",
-      "summary": "CI runs the React tests once, with coverage"
+      "summary": "Failed Preview moves focus to the field's Browse button and links the error to the field"
     },
     {
       "version": "1.51.6",
       "tag": "v1.51.6",
-      "date": "2026-11-21",
+      "date": "2026-11-15",
       "channel": "stable",
       "status": "superseded",
-      "summary": "RFI code and template code patterns each have one definition"
+      "summary": "Decorative DOCFLOW label removed and page titles shown once"
     },
     {
       "version": "1.51.5",
       "tag": "v1.51.5",
-      "date": "2026-11-21",
+      "date": "2026-11-15",
       "channel": "stable",
       "status": "superseded",
-      "summary": "Concrete documents and template checks reuse compiled patterns"
+      "summary": "Focus rings, outline offsets, and corner radii come from shared tokens"
     },
     {
       "version": "1.51.4",
       "tag": "v1.51.4",
-      "date": "2026-11-21",
+      "date": "2026-11-15",
       "channel": "stable",
       "status": "superseded",
-      "summary": "File hashing shares one streaming SHA-256 helper"
+      "summary": "Text below 12px raised to a shared 12px floor for legible row metadata, badges, and step labels"
     },
     {
       "version": "1.51.3",

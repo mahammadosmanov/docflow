@@ -170,6 +170,7 @@ export function PathField({
       >
         <input
           aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? "operation-error" : undefined}
           type={
             param.kind === "int"
               ? "number"

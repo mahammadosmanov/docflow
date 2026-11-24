@@ -161,7 +161,7 @@ export function ReviewScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("review.title")}
+        title={plan || result || busy ? s.t("review.title") : undefined}
         onBack={onBack}
         backLabel={s.t("action.back")}
       />

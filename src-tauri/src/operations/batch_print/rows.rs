@@ -124,6 +124,7 @@ pub(super) fn job_from_row(row: &Map<String, Value>, copy: u32) -> PrintJob {
         duplex: string_field(row, "duplex"),
         page_range: string_field(row, "pageRange"),
         timeout_minutes: unsigned_field(row, "timeoutMinutes").unwrap_or(30) as u32,
+        queue_mode: choice(row, "queueMode", QUEUE_MODE_CHOICES, DEFAULT_QUEUE_MODE),
         retries: unsigned_field(row, "retries").unwrap_or_default() as u32,
         on_error: string_field(row, "onError"),
         copy,
@@ -164,6 +165,7 @@ pub(super) fn insert_print_settings(row: &mut Map<String, Value>, settings: &Nor
         "timeoutMinutes".to_string(),
         json!(settings.timeout_minutes),
     );
+    row.insert("queueMode".to_string(), json!(settings.queue_mode));
 }
 
 pub(super) fn row_from_file(
@@ -257,6 +259,7 @@ pub(super) struct NormalizedSettings {
     retries: u32,
     on_error: String,
     timeout_minutes: u32,
+    queue_mode: String,
 }
 
 impl NormalizedSettings {
@@ -272,6 +275,11 @@ impl NormalizedSettings {
             retries: params.retries,
             on_error: normalized_choice(&params.on_error, ERROR_ACTION_CHOICES, "pause"),
             timeout_minutes: params.timeout_minutes,
+            queue_mode: normalized_choice(
+                &params.queue_mode,
+                QUEUE_MODE_CHOICES,
+                DEFAULT_QUEUE_MODE,
+            ),
         }
     }
 

@@ -63,6 +63,7 @@ export function SchemaField({
         <select
 
           aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? "operation-error" : undefined}
           value={currentChoice}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -151,6 +152,7 @@ export function SchemaField({
         <textarea
 
           aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? "operation-error" : undefined}
           aria-label={s.t(param.labelKey)}
           rows={8}
           value={String(value ?? "")}

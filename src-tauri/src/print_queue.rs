@@ -41,6 +41,9 @@ use crate::{
 };
 
 pub const DEFAULT_TIMEOUT_MINUTES: u32 = 30;
+pub const QUEUE_MODE_WAIT: &str = "wait";
+pub const QUEUE_MODE_FAST: &str = "fast";
+pub const DEFAULT_QUEUE_MODE: &str = QUEUE_MODE_WAIT;
 
 const FINISHED_QUEUE_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
@@ -184,6 +187,7 @@ pub struct BatchPrintParams {
     pub retries: u32,
     pub on_error: String,
     pub timeout_minutes: u32,
+    pub queue_mode: String,
 }
 
 impl Default for BatchPrintParams {
@@ -201,6 +205,7 @@ impl Default for BatchPrintParams {
             retries: 0,
             on_error: "pause".to_string(),
             timeout_minutes: DEFAULT_TIMEOUT_MINUTES,
+            queue_mode: DEFAULT_QUEUE_MODE.to_string(),
         }
     }
 }

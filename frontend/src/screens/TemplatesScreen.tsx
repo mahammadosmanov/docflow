@@ -170,7 +170,6 @@ export function TemplatesScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("templates.title")}
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={

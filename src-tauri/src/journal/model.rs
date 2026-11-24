@@ -429,7 +429,7 @@ impl JournalRecord {
         Self::new(
             Uuid::new_v4().to_string(),
             op_id,
-            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false),
+            crate::print_queue::utc_now(),
             owner_id,
             session_id,
             plan_digest,

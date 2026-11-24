@@ -101,6 +101,32 @@ fn build_slots(
     Ok(slots)
 }
 
+/// Rewrites a mistyped RFI cell (`CIV-13741461` -> `CIV-1374/1461`) only when
+/// every repaired code exists in the RFI Log; otherwise it stays `invalidRfi`.
+fn repair_mistyped_slots(
+    slots: &mut SlotMap,
+    records: &BTreeMap<String, SourceRecord>,
+    logged_numbers: &BTreeSet<String>,
+) {
+    for slot in slots.values_mut() {
+        if slot.unsafe_reason != Some("repairableRfi") {
+            continue;
+        }
+        match repair_rfi_group(&slot.rfi_cell.value) {
+            Some(codes)
+                if codes
+                    .iter()
+                    .all(|code| records.contains_key(code) || logged_numbers.contains(code)) =>
+            {
+                slot.changed_rfis.extend(codes.iter().cloned());
+                slot.codes = codes;
+                slot.unsafe_reason = None;
+            }
+            _ => slot.unsafe_reason = Some("invalidRfi"),
+        }
+    }
+}
+
 fn deletion_evidence(
     slots: &SlotMap,
     records: &BTreeMap<String, SourceRecord>,
@@ -264,6 +290,7 @@ pub(super) fn classify_workbooks_full(
         &mut merge_budget,
     )?;
     let mut slots = build_slots(&layouts, target_workbook, &mut merge_budget)?;
+    repair_mistyped_slots(&mut slots, &records, &logged_numbers);
     let (deleted_count, mass_deletion) = deletion_evidence(&slots, &records, &logged_numbers);
     let mut manual_rows = Vec::new();
     for slot in slots.values_mut() {
@@ -276,6 +303,43 @@ pub(super) fn classify_workbooks_full(
         );
     }
 
+    let in_scope = |record: &&SourceRecord| {
+        !record.excluded_civ_pcs
+            && !is_confirmed_follow_up_exclusion(record)
+            && record.state != Some(LogState::Remove)
+    };
+    // First pass only finds copies sitting in cells the Log contradicts; they are
+    // removed before the real pass so placement never depends on record order.
+    let misplaced = {
+        let (potential, existing) = index_slots(&slots);
+        let index = RecordIndex {
+            layouts: &layouts,
+            records: &records,
+            target_workbook,
+            potential_slots_by_sheet_col: &potential,
+            existing_slot_keys_by_code: &existing,
+        };
+        let mut scratch = slots.clone();
+        let mut misplaced = Vec::new();
+        for record in records.values().filter(in_scope) {
+            place_record(
+                record,
+                &index,
+                &mut scratch,
+                &mut Vec::new(),
+                &mut 0,
+                &mut misplaced,
+            )?;
+        }
+        misplaced
+    };
+    for (key, code) in misplaced {
+        if let Some(slot) = slots.get_mut(&key) {
+            slot.codes.retain(|existing| *existing != code);
+            slot.changed_rfis.insert(code);
+        }
+    }
+
     let (potential_slots_by_sheet_col, existing_slot_keys_by_code) = index_slots(&slots);
 
     let mut unmapped_count = 0usize;
@@ -286,17 +350,14 @@ pub(super) fn classify_workbooks_full(
         potential_slots_by_sheet_col: &potential_slots_by_sheet_col,
         existing_slot_keys_by_code: &existing_slot_keys_by_code,
     };
-    for record in records.values().filter(|record| {
-        !record.excluded_civ_pcs
-            && !is_confirmed_follow_up_exclusion(record)
-            && record.state != Some(LogState::Remove)
-    }) {
+    for record in records.values().filter(in_scope) {
         place_record(
             record,
             &index,
             &mut slots,
             &mut manual_rows,
             &mut unmapped_count,
+            &mut Vec::new(),
         )?;
     }
 

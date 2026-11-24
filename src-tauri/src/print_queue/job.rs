@@ -19,6 +19,8 @@ pub struct PrintJob {
     #[serde(default = "default_page_range")]
     pub page_range: String,
     pub timeout_minutes: u32,
+    #[serde(default = "default_queue_mode")]
+    pub queue_mode: String,
     pub retries: u32,
     pub on_error: String,
     pub copy: u32,
@@ -57,6 +59,7 @@ struct PrintJobUnchecked {
     duplex: String,
     page_range: String,
     timeout_minutes: u32,
+    queue_mode: String,
     retries: u32,
     on_error: String,
     copy: u32,
@@ -87,6 +90,7 @@ impl Default for PrintJob {
             duplex: "printer".to_string(),
             page_range: default_page_range(),
             timeout_minutes: DEFAULT_TIMEOUT_MINUTES,
+            queue_mode: default_queue_mode(),
             retries: 0,
             on_error: "pause".to_string(),
             copy: 1,
@@ -119,6 +123,7 @@ impl Default for PrintJobUnchecked {
             duplex: job.duplex,
             page_range: job.page_range,
             timeout_minutes: job.timeout_minutes,
+            queue_mode: job.queue_mode,
             retries: job.retries,
             on_error: job.on_error,
             copy: job.copy,
@@ -184,6 +189,7 @@ impl<'de> Deserialize<'de> for PrintJob {
             duplex: unchecked.duplex,
             page_range: unchecked.page_range,
             timeout_minutes: unchecked.timeout_minutes,
+            queue_mode: unchecked.queue_mode,
             retries: unchecked.retries,
             on_error: unchecked.on_error,
             copy: unchecked.copy,
@@ -213,6 +219,13 @@ impl PrintJob {
         }
     }
 
+    /// Wait mode observes every spool job until the spooler releases it.
+    /// Fast mode returns once the spooler accepted the job; it never claims
+    /// that the printer finished. Any value other than `fast` waits.
+    pub fn waits_for_completion(&self) -> bool {
+        self.queue_mode != QUEUE_MODE_FAST
+    }
+
     pub(super) fn normalize_legacy(&mut self, index: usize) {
         if self.job_id.is_empty() {
             self.job_id = format!("legacy-{}", index + 1);
@@ -235,6 +248,9 @@ impl PrintJob {
         if self.timeout_minutes == 0 {
             self.timeout_minutes = DEFAULT_TIMEOUT_MINUTES;
         }
+        if self.queue_mode.is_empty() {
+            self.queue_mode = default_queue_mode();
+        }
         if self.on_error.is_empty() {
             self.on_error = "pause".to_string();
         }
@@ -242,4 +258,8 @@ impl PrintJob {
             self.copy = 1;
         }
     }
+}
+
+fn default_queue_mode() -> String {
+    DEFAULT_QUEUE_MODE.to_string()
 }

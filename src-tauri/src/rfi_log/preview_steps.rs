@@ -120,7 +120,7 @@ pub(super) fn workbook_update_step(
             .file_stem()
             .and_then(|value| value.to_str())
             .unwrap_or("RFI Log"),
-        Local::now().format("%Y%m%d_%H%M%S"),
+        Zoned::now().strftime("%Y%m%d_%H%M%S"),
         &Uuid::new_v4().simple().to_string()[..8],
         extension
     );
@@ -205,8 +205,8 @@ pub(super) fn sheet_batch(
     source: &Source,
     count: usize,
     wrap: bool,
-    issue_day: NaiveDate,
-    start_day: NaiveDate,
+    issue_day: Date,
+    start_day: Date,
     email: Option<&EmailExtraction>,
 ) -> Result<(Batch, usize, Vec<String>), BackendError> {
     let (slots, overflowed) = allocate(&source.occupied, start_day, count, wrap)?;

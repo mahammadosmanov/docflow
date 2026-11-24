@@ -189,6 +189,11 @@ For RFI Log projection, blank means `Pending`, all `Completed` means
 Cancelled and Rejected identifiers are removed before the shared status is
 recomputed. Exact historical compact forms and bounded numeric ranges are
 expanded only when unambiguous; malformed or mixed-discipline values fail closed.
+A Follow Up RFI cell that does not parse is rewritten only when a fixed repair,
+splitting two four-digit numbers typed together (`CIV-13741461` to
+`CIV-1374/1461`) or reading `\`, `;`, `&`, `+`, `|`, commas, spaces and doubled
+slashes as separators, gives RFIs that all exist in the Log; otherwise it
+stays `invalidRfi` Manual Review ([ADR 0056](adr/0056-follow-up-moves-contradicted-placements.md)).
 For supported CIV/MEC routes, including FINAL routes, records synchronize only
 into uniquely matching prepared rows and exact source contexts. If none of a
 record's source contexts matches any prepared row in its intended destination,
@@ -196,12 +201,18 @@ the record is outside the active template scope: omit it from Manual Review and
 propose no RFI or status update, regardless of an unrelated existing placement.
 Leave that existing placement untouched. If any context matches but the target
 cell is unsafe, keep it in Manual Review with the specific target-safety reason.
-A matching cell that already holds an RFI of a different ITP item is unsafe,
+A matching cell that already holds an RFI routed to a different Follow Up
+column is unsafe (items that share one column, such as `2.2.1` and `2.2.2`
+under `2.1&2.2`, are compatible),
 including one row of a multi-row fan-out:
 the record stays in Manual Review and is neither added there nor dropped
-silently. An RFI found both in its matching cell and in another cell
-whose row or column does not match it stays in Manual Review naming that
-other cell; DocFlow never moves or deletes it.
+silently. When the Log pins every matching cell of an RFI (one match, or an
+exact fan-out whose every tag matched), a copy of that RFI in any other safe
+lifecycle cell contradicts the Log: the next approved sync removes it there
+and adds the RFI to its matching cell, recomputing both statuses
+([ADR 0056](adr/0056-follow-up-moves-contradicted-placements.md)). If the
+match is ambiguous or partly unmatched, or the other cell is unsafe, the RFI
+stays in Manual Review naming that other cell.
 Multiple matches remain manual review except when CIV or MEC records map to
 distinct existing rows justified by different exact source contexts.
 
@@ -215,7 +226,14 @@ destination. DocFlow never corrects the source log. No row or section is
 synthesized.
 For CIV, split the source `Tag No` list into exact individual tag contexts. A
 comma-separated tag that exactly names an existing CIV row, such as `A17/1`, is
-that row and is not split at `/`; it never matches the parent `A17` row. Each
+that row and is not split at `/`; it never matches the parent `A17` row. A name
+inside a combined row such as `A1, A1/1, A1/2` is that row. After the first tag
+of a `/` list, a bare number takes the first tag's letters when that row family
+has no `/` sub-rows (`N1/2/3` is N1, N2 and N3), and a note without a row that
+has no digits or reads `Zone n` is dropped (`A2/Zone 2` is A2, `A19/New` is A19).
+A tag with no row of its own but with `/` sub-rows (`A17` with `A17/1` and
+`A17/2`) covers the sub-row named by an Area of `Part n`, otherwise every
+sub-row; a missing sub-row such as `A17/3` stays visible as unmatched. Each
 tag may map to its own distinct, uniquely matching prepared CIV area row; no
 target row is created or guessed. When only some tags have unique prepared rows,
 sync the eligible rows and show an unselectable Manual Review diagnostic naming
@@ -272,11 +290,11 @@ accepted ADR before changing route behavior.
 
 
 A context-mismatched existing placement for an otherwise in-scope record is
-never moved or deleted merely to force a match; it remains Manual Review. The
+moved only under the ADR 0056 rule above; otherwise it remains Manual Review. The
 zero-context template-scope rule above takes precedence and leaves any existing
-placement unchanged without review or status updates. The only automatic
-removal exceptions are the explicitly out-of-scope ITP/item pairs in ADR 0035
-and the CIV `PCS-` rule in ADR 0033. Ambiguous contexts or conflicting source
+placement unchanged without review or status updates. The automatic removal
+exceptions are the explicitly out-of-scope ITP/item pairs in ADR 0035, the CIV
+`PCS-` rule in ADR 0033, and copies the Log contradicts under ADR 0056. Ambiguous contexts or conflicting source
 status cannot authorize a shared-cell status write for that RFI or any other
 RFI represented by the same cell.
 

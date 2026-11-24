@@ -29,7 +29,9 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   post-submission uncertainty is never retried automatically. Transient generic
   driver faults remain under observation; destructive deletion is uncertain.
   A native handler may be bound to its single new spool job without relying on
-  an application-controlled document title.
+  an application-controlled document title. The default `wait` queue mode
+  observes each job until the spooler releases it; the explicit `fast` mode
+  submits the next job once the spooler accepted the current one (ADR 0057).
 - **DF-009 — Least authority:** React has no arbitrary filesystem, process,
   network, credential, Office, or printer authority. Rust owns every effect.
 - **DF-010 — Secret isolation:** access and refresh tokens stay in the native

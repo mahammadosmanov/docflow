@@ -87,6 +87,15 @@ describe("QueueScreen", () => {
     expect(screen.getByRole("button", { name: "Check now" })).toBeDisabled();
   });
 
+  it("shows the page title once, as the only level-1 heading", async () => {
+    const { bridge } = fakeBridge(() => status([]));
+    renderQueue(bridge);
+    await screen.findByText("No previews are waiting");
+    const headings = screen.getAllByRole("heading", { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent(s.t("queue.title"));
+  });
+
   it("tells the user which operations still need folders and opens them to choose", async () => {
     const { bridge } = fakeBridge(() => status([]));
     const onOpenOperation = renderWithOpen(bridge);

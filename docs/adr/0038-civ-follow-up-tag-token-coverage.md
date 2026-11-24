@@ -16,6 +16,15 @@ CIV RFI Log records can list several area tags in one `Tag No` cell, such as `S1
 - Preserve the existing CIV `PCS-` exclusion, including removal of such RFIs from existing Follow Up groups. This decision does not add routes or change ITP/item scope.
 - The source RFI Log remains read-only; the operator corrects an inaccurate source tag there.
 
+## Amendment (2026-11-21)
+
+On the operator's request to clear avoidable Manual Review rows, CIV tags also
+resolve these Log forms: a name inside a combined row (`A1, A1/1, A1/2`),
+number shorthand after the first tag when the row family has no `/` sub-rows
+(`N1/2/3`), notes without a row (`A2/Zone 2`, `A19/New`), and a parent tag whose
+rows are `/` sub-rows (`A17`), narrowed to one sub-row by an Area of `Part n`.
+A missing sub-row such as `A17/3` still matches nothing; no row is created.
+
 ## Consequences
 
 Operators can distinguish missing CIV Follow Up rows from source-log tag errors without losing valid independently mapped rows. The existing zero-match template-scope rule, status conflict checks, and no-row-creation policy remain unchanged. [RFI_DOMAIN.md](../RFI_DOMAIN.md) is the canonical domain contract.

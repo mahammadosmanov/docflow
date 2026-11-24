@@ -37,7 +37,8 @@ pub(crate) fn decode_step_meta(step: &Step) -> Result<FollowUpStepMeta, BackendE
             ) && !crate::ooxml::SIGNED_STATUS_VALUES.contains(&update.proposed_status.as_str()))
             || (!update.proposed_rfi.is_empty() && parse_rfi_group(&update.proposed_rfi).is_none())
             || (!update.target.rfi_cell.value.trim().is_empty()
-                && parse_rfi_group(&update.target.rfi_cell.value).is_none())
+                && parse_rfi_group(&update.target.rfi_cell.value).is_none()
+                && repair_rfi_group(&update.target.rfi_cell.value).is_none())
             || update.target.rfi_cell.formula.is_some()
             || update.target.status_cell.formula.is_some()
         {

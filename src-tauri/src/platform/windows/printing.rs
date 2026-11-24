@@ -540,7 +540,7 @@ fn print_pdf(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), PrintFa
             "Windows could not confirm completion of the PDF spool submission",
         ));
     }
-    wait_for_job(&job.printer, job_id as u32, deadline, cancelled)
+    observe_submitted_job(job, job_id as u32, deadline, cancelled)
 }
 
 fn submit_controlled_pdf(
@@ -575,6 +575,7 @@ struct WindowsControlledSubmitEffects<'a> {
     pages: &'a [u32],
     settings: &'a PrintSettings,
     printer: &'a str,
+    wait_for_completion: bool,
     cancellation: &'a CancellationToken,
     deadline: Instant,
 }
@@ -624,6 +625,9 @@ impl ControlledSubmitEffects for WindowsControlledSubmitEffects<'_> {
     }
 
     fn observe_job(&mut self, job_id: Self::JobId) -> Result<(), PrintFailure> {
+        if !self.wait_for_completion {
+            return Ok(());
+        }
         wait_for_job(self.printer, job_id, self.deadline, &|| {
             self.cancellation.is_cancelled()
         })
@@ -691,6 +695,7 @@ fn submit_controlled_pdf_inner(
         pages: &pages,
         settings: &settings,
         printer: &job.printer,
+        wait_for_completion: job.waits_for_completion(),
         cancellation,
         deadline,
     };
@@ -914,7 +919,7 @@ fn print_image(job: &PrintJob, cancelled: &dyn Fn() -> bool) -> Result<(), Print
             "Windows could not confirm completion of the image spool submission",
         ));
     }
-    wait_for_job(&job.printer, job_id as u32, deadline, cancelled)
+    observe_submitted_job(job, job_id as u32, deadline, cancelled)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1497,7 +1502,7 @@ fn print_with_native_application(
         }
         thread::sleep(POLL_INTERVAL);
     };
-    let result = wait_for_job(&job.printer, job_id, deadline, cancelled);
+    let result = observe_submitted_job(job, job_id, deadline, cancelled);
     if result.is_ok() {
         NATIVE_RECEIPT_PENDING.store(false, Ordering::SeqCst);
     }
@@ -1584,6 +1589,22 @@ fn jobs(printer: &str) -> Result<Vec<SpoolJob>, PrintFailure> {
             document: unsafe { wide_ptr_to_string(entry.pDocument) }.unwrap_or_default(),
         })
         .collect())
+}
+
+/// Fast queue mode stops once the spooler holds an identified job: EndDoc
+/// succeeded or the native application's job was found in the queue. Wait mode
+/// observes the job until the spooler releases it.
+fn observe_submitted_job(
+    job: &PrintJob,
+    job_id: u32,
+    deadline: Instant,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<(), PrintFailure> {
+    if job.waits_for_completion() {
+        wait_for_job(&job.printer, job_id, deadline, cancelled)
+    } else {
+        Ok(())
+    }
 }
 
 fn wait_for_job(

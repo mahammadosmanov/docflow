@@ -259,7 +259,7 @@ impl NativeBackend {
         let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
         let plan = rfi_log::preview(
             &request.values,
-            chrono::Local::now().date_naive(),
+            jiff::Zoned::now().date(),
             Some(&self.gemini),
             progress,
             || cancellation.is_cancelled(),

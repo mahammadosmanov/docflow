@@ -207,7 +207,6 @@ export function HomeScreen({
       <main className="dashboard-pane">
         <section className="page-heading">
           <div>
-            <p className="eyebrow">DOCFLOW</p>
             <h1>{s.t("home.title")}</h1>
             <p>{s.t("home.subtitle")}</p>
           </div>

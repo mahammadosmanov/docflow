@@ -212,6 +212,7 @@ fn params(files: Vec<PathBuf>) -> BatchPrintParams {
         retries: 0,
         on_error: "pause".to_string(),
         timeout_minutes: 30,
+        queue_mode: "wait".to_string(),
     }
 }
 
@@ -1642,6 +1643,72 @@ fn apply_prints_the_pinned_file_bytes_after_the_visible_parent_is_swapped() {
         std::fs::read(pinned_parent.join("approved.pdf")).unwrap(),
         b"ORIGINAL APPROVED PDF"
     );
+}
+
+#[test]
+fn queue_mode_defaults_to_wait_and_fast_reaches_every_submitted_job() {
+    let root = TempDir::new().unwrap();
+    let first = root.path().join("first.pdf");
+    let second = root.path().join("second.pdf");
+    std::fs::write(&first, b"first").unwrap();
+    std::fs::write(&second, b"second").unwrap();
+    let adapter = Arc::new(FakeAdapter::with_printers(
+        &["Office Printer"],
+        Some("Office Printer"),
+    ));
+    let service = print_service(&root, adapter.clone());
+
+    assert_eq!(BatchPrintParams::default().queue_mode, "wait");
+    let waiting = service
+        .preview(&caller(), params(vec![first.clone()]), |_| {})
+        .unwrap();
+    assert_eq!(waiting.meta["editor"]["rows"][0]["queueMode"], "wait");
+    assert_eq!(waiting.meta["jobs"][0]["queueMode"], "wait");
+
+    let mut unknown = params(vec![first.clone()]);
+    unknown.queue_mode = "turbo".to_string();
+    let normalized = service.preview(&caller(), unknown, |_| {}).unwrap();
+    assert_eq!(normalized.meta["jobs"][0]["queueMode"], "wait");
+
+    let mut fast = params(vec![first.clone(), second.clone()]);
+    fast.queue_mode = "fast".to_string();
+    let plan = service.preview(&caller(), fast, |_| {}).unwrap();
+    let result = service.apply(&plan.plan_id, &caller(), |_| {}).unwrap();
+
+    assert_eq!(
+        (result.applied, result.failed),
+        (2, 0),
+        "{:?}",
+        result.errors
+    );
+    let submitted = adapter.submitted.lock().unwrap();
+    assert_eq!(submitted.len(), 2);
+    assert!(submitted.iter().all(|job| job.queue_mode == "fast"));
+    assert!(submitted.iter().all(|job| !job.waits_for_completion()));
+}
+
+#[test]
+fn persisted_queue_mode_defaults_legacy_jobs_to_wait_and_rejects_unknown_values() {
+    let legacy: PrintJob = serde_json::from_value(json!({
+        "jobId": "legacy-c1",
+        "path": "/approved/legacy.pdf",
+        "printer": "Office Printer",
+        "verb": "docflow",
+        "format": "PDF"
+    }))
+    .unwrap();
+    assert_eq!(legacy.queue_mode, "wait");
+    assert!(legacy.waits_for_completion());
+    assert!(validate_job(&legacy).is_ok());
+
+    let mut unknown = legacy.clone();
+    unknown.queue_mode = "turbo".to_string();
+    assert!(validate_job(&unknown).is_err());
+
+    let mut fast = legacy;
+    fast.queue_mode = "fast".to_string();
+    assert!(validate_job(&fast).is_ok());
+    assert!(!fast.waits_for_completion());
 }
 
 #[test]

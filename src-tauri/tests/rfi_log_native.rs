@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::NaiveDate;
 use docflow_lib::{
     fs_ops::{FilesystemAuthority, file_sha256},
     journal::JournalState,
@@ -264,7 +263,7 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
     let fixture = TempDir::new().unwrap();
     let workbook = fixture.path().join("RFI Log.xlsm");
     workbook_fixture(&workbook, true);
-    let today = NaiveDate::from_ymd_opt(2026, 8, 25).unwrap();
+    let today = jiff::civil::date(2026, 8, 25);
     let mut progress = Vec::new();
     let mut params = values(&workbook);
     params.insert("gemini_api_key".to_string(), json!("super-secret-token"));
@@ -361,7 +360,7 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
 fn missing_workbook_error_returns_the_localized_message_key() {
     let error = preview(
         &Map::new(),
-        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        jiff::civil::date(2026, 8, 25),
         None,
         |_| {},
         || false,
@@ -376,7 +375,7 @@ fn native_preview_preserves_multi_sheet_overflow_and_cancellation_contracts() {
     let fixture = TempDir::new().unwrap();
     let workbook = fixture.path().join("RFI Log.xlsx");
     workbook_fixture(&workbook, false);
-    let today = NaiveDate::from_ymd_opt(2026, 8, 25).unwrap();
+    let today = jiff::civil::date(2026, 8, 25);
 
     let mut multi = values(&workbook);
     multi.insert("email_text".to_string(), json!(""));
@@ -446,7 +445,7 @@ fn approved_xlsm_apply_preserves_package_and_undo_restores_exact_hash() {
     let original_members = members(&workbook);
     let plan = preview(
         &values(&workbook),
-        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        jiff::civil::date(2026, 8, 25),
         None,
         |_| {},
         || false,
@@ -527,7 +526,7 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
 
     let collision_plan = preview(
         &values(&workbook),
-        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        jiff::civil::date(2026, 8, 25),
         None,
         |_| {},
         || false,
@@ -544,7 +543,7 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
 
     let cancelled_plan = preview(
         &values(&workbook),
-        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        jiff::civil::date(2026, 8, 25),
         None,
         |_| {},
         || false,
@@ -566,7 +565,7 @@ fn collisions_cancellation_and_later_edits_fail_without_silent_overwrite() {
 
     let applied_plan = preview(
         &values(&workbook),
-        NaiveDate::from_ymd_opt(2026, 8, 25).unwrap(),
+        jiff::civil::date(2026, 8, 25),
         None,
         |_| {},
         || false,
@@ -607,14 +606,8 @@ fn operator_current_rfi_log_add_apply_and_undo_is_lossless() {
         "sheet_counts".to_string(),
         json!({"CIV": 1, "MEC": 0, "ELE": 0, "PRC": 0}),
     );
-    let plan = preview(
-        &params,
-        chrono::Local::now().date_naive(),
-        None,
-        |_| {},
-        || false,
-    )
-    .expect("current workbook should produce a safe preview");
+    let plan = preview(&params, jiff::Zoned::now().date(), None, |_| {}, || false)
+        .expect("current workbook should produce a safe preview");
     assert_eq!(plan.op_id, "rfi.log_add");
     assert_eq!(plan.meta["editor"]["rows"].as_array().unwrap().len(), 1);
 

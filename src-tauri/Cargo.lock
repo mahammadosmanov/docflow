@@ -846,12 +846,12 @@ dependencies = [
 
 [[package]]
 name = "docflow"
-version = "1.51.13"
+version = "1.52.0"
 dependencies = [
  "base64 0.23.1",
  "cc",
- "chrono",
  "flate2",
+ "jiff",
  "libc",
  "percent-encoding",
  "png",

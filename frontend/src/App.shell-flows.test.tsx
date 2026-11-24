@@ -35,6 +35,33 @@ describe("DocFlow shell: sign-in, navigation, recovery and forms", () => {
     expect(screen.getByText(`v${__DOCFLOW_VERSION__}-demo`)).toBeVisible();
   });
 
+  it("moves focus to the Browse button of the field that failed Preview", async () => {
+    const original = MockBridge.prototype.call;
+    vi.spyOn(MockBridge.prototype, "call").mockImplementation(function (
+      this: MockBridge,
+      method,
+      ...args
+    ) {
+      if (method === "engine/preview") {
+        return Promise.reject(new Error("error.param.required.source"));
+      }
+      return Reflect.apply(original, this, [method, ...args]);
+    });
+    render(<App />);
+    await signIn();
+    fireEvent.click(
+      await screen.findByText("Hızlı RFI Taraması", { selector: "strong" }),
+    );
+    fireEvent.click((await screen.findAllByRole("button", { name: "Önizle" }))[0]);
+
+    const browse = await screen.findByRole("button", {
+      name: "Gözat: Kaynak klasör",
+    });
+    await waitFor(() => expect(browse).toHaveFocus());
+    const input = browse.parentElement?.querySelector("input");
+    expect(input).toHaveAttribute("aria-describedby", "operation-error");
+  });
+
   it("signs in and opens the schema-driven operation", async () => {
     render(<App />);
     await signIn();

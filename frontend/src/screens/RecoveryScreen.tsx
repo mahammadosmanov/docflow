@@ -110,7 +110,6 @@ export function RecoveryScreen({
   return (
     <div className="screen">
       <Header
-        title={s.t("recovery.title")}
         onBack={onBack}
         backLabel={s.t("action.back")}
         trailing={

@@ -96,6 +96,23 @@ pub(in crate::rfi_follow_up) fn parse_rfi_group(value: &str) -> Option<Vec<Strin
     (!result.is_empty()).then_some(result)
 }
 
+/// Reads a mistyped RFI group: two numbers run together (`CIV-13741461`),
+/// other separators (`\`, `;`, `&`, `+`, `|`, spaces), or doubled/trailing `/`.
+/// Callers must still confirm every code exists in the RFI Log.
+pub(in crate::rfi_follow_up) fn repair_rfi_group(value: &str) -> Option<Vec<String>> {
+    static RUN_TOGETHER: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\b([0-9]{4})([0-9]{4})\b").expect("static regex is valid"));
+    static SEPARATORS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"[\\;&+|,\s]+").expect("static regex is valid"));
+    static SLASHES: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"/{2,}").expect("static regex is valid"));
+    let upper = normalize_status(value).to_uppercase();
+    let fixed = RUN_TOGETHER.replace_all(&upper, "$1/$2");
+    let fixed = SEPARATORS.replace_all(&fixed, "/");
+    let fixed = SLASHES.replace_all(&fixed, "/");
+    parse_rfi_group(fixed.trim_matches('/'))
+}
+
 pub(in crate::rfi_follow_up) fn format_rfi_group(codes: &[String]) -> Option<String> {
     let mut discipline: Option<String> = None;
     let mut numbers = Vec::new();

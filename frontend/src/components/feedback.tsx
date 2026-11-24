@@ -2,16 +2,19 @@ import { CheckCircle2, CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function Notice({
+  id,
   kind,
   title,
   children,
 }: {
+  id?: string;
   kind: "error" | "warning" | "info";
   title?: string;
   children: ReactNode;
 }) {
   return (
     <div
+      id={id}
       className={`notice ${kind}`}
       role={kind === "info" ? "status" : "alert"}
     >

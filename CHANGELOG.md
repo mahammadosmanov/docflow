@@ -5,65 +5,137 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
-## 1.51.13 - 2026-11-21
+## 1.52.0 - 2026-11-22
+
+### Added
+
+- Batch Print has a new `Print queue mode` option on Windows and macOS. `Wait for each job` (default) keeps the current behavior: DocFlow sends the next file only after the printer queue releases the current one. `Fast` sends the next file as soon as the printer queue accepts the current one, so files no longer wait for the printer to finish. In Fast mode DocFlow does not confirm that the printer finished a job (ADR 0057).
+
+## 1.51.24 - 2026-11-21
+
+### Changed
+
+- A mistyped Follow Up RFI cell, such as `CIV-13741461` with the `/` missing, or numbers separated by spaces, `;`, `\`, `&`, `+`, `|` or doubled slashes, is now rewritten in the standard form (`CIV-1374/1461`) when every number in it exists in the RFI Log. Otherwise it stays in Manual Review as `invalidRfi`.
+
+## 1.51.23 - 2026-11-21
+
+### Changed
+
+- When the RFI Log pins the cell an RFI belongs in, a copy of that RFI in another Follow Up cell is now removed there and the RFI is added to its own cell once you approve the preview (ADR 0056). On the current workbooks this clears CIV-0086/0104/0218 from `CIV!G8`, CIV-0346 from `G10`, CIV-0267 from `G11`, CIV-0200 from `M52` and CIV-0322 from `E75`, moves CIV-0541 from `C13` to `E13`, replaces CIV-0015 in `M68` with CIV-0315, and corrects PCU `H7`, `L7`, `J17`/`L17` (swapped), `F23` and `L29`. Ambiguous or partly unmatched records and formula or merged cells stay in Manual Review.
+
+## 1.51.22 - 2026-11-21
+
+### Fixed
+
+- Items that share one Follow Up column, such as CIV `2.2.1` and `2.2.2` under Site clearing (2.1&2.2), are now added to the same cell. Since 1.51.17 they blocked each other and showed `targetOccupied` in Manual Review.
+
+## 1.51.21 - 2026-11-21
+
+### Fixed
+
+- Follow Up now reads more CIV `Tag No` forms from the RFI Log: shorthand `N1/2/3/…/15` (N1 to N15), notes such as `A2/Zone 2` or `A19/New`, a parent tag like `A17` whose Follow Up rows are `A17/1` and `A17/2` (only `A12/2` when Area says `Part 2`), and a name inside a combined row such as `A1, A1/1, A1/2`. Before, these RFIs sat in Manual Review as ambiguous or partly unmatched (CIV-0005, CIV-0012, CIV-0013, CIV-0028 and CIV-0322 on the current Log) or were silently skipped. A missing sub-row such as `A17/3` still matches nothing.
+
+## 1.51.20 - 2026-11-21
+
+### Fixed
+
+- RFIs of the culvert ITP `CIV-0003_A` (items such as `CIV-3.1.7` and `CIV-3.2.2.x`, locations like `Culvert T-016C`) are now outside Follow Up scope, as confirmed by the operator: Follow Up has no culvert sheet or columns. They no longer fill Manual Review (30 rows on the current Log) and, like the other ADR 0035 exclusions, are removed from any Follow Up cell on the next approved sync.
+
+## 1.51.19 - 2026-11-21
 
 ### Fixed
 
 - When an RFI fans out to several Follow Up rows and one of those cells already holds an RFI of a different ITP item, the RFI is still added to the free rows and now also appears in Manual Review with the reason `targetOccupied`. Before, the blocked row was skipped without a review row.
 
-## 1.51.12 - 2026-11-21
+## 1.51.18 - 2026-11-21
 
 ### Fixed
 
 - An RFI that is in its matching Follow Up cell and also in another cell whose row or column does not match its ITP item or Tag No now appears in Manual Review with the new reason `placedElsewhere` (all four languages), naming the other cell. Before, the extra placement was silently accepted. On the current workbooks this lists CIV-0015 (`CIV!M68`), CIV-0086/0104/0218 (`CIV!G8`), CIV-0267 (`CIV!G11`), CIV-0346 (`CIV!G10`), CIV-0200 (`CIV!M52`), CIV-0322 (`CIV!E75`), CIV-0944 (`PCU!H7`) and CIV-0776 (`PCU!L7`). Nothing is moved or deleted.
 
-## 1.51.11 - 2026-11-21
+## 1.51.17 - 2026-11-21
 
 ### Fixed
 
 - When the only Follow Up cell matching an RFI already holds an RFI of a different ITP item, the RFI now appears in Manual Review with the new reason `targetOccupied` (all four languages). Before, it was skipped with no write and no review row. On the current workbooks this surfaces CIV-0315, whose `A17/1` Final grading cell `M68` holds CIV-0015.
 
-## 1.51.10 - 2026-11-21
+## 1.51.16 - 2026-11-21
 
 ### Fixed
 
 - A CIV RFI Log `Tag No` that exactly names an existing CIV Follow Up row, such as `A17/1` or `A5/1`, now matches that row. Before, the tag was split at `/` into `A17` and `1`: an `A17/1` record could never reach its own row and was skipped without a review row, and a new `A5/1` record could be written into the `A5` row instead. Shorthand tags that name no row, such as `N1/2/3`, are still split.
 
-## 1.51.9 - 2026-11-21
+## 1.51.15 - 2026-11-21
 
 ### Fixed
 
 - A CIV RFI Log `Tag No` such as `PCS–19` or `PCS‑19`, written with an en dash, non-breaking hyphen, or another dash that looks like `-`, is now excluded from Follow Up like `PCS-19` (ADR 0033). Before, such a record could be synchronized into Follow Up.
 
-## 1.51.8 - 2026-11-21
+## 1.51.14 - 2026-11-21
 
 ### Fixed
 
 - Follow Up sync now updates the PV Module FINAL (3.2) RFI/status pair in columns O/P of `Signed By Worley MEC`. Layout discovery stopped at column N, so every ITP MEC-0004 item 4.3.2 record showed as Manual Review with no prepared row, and Worley Signed/Not Signed values in that column were never synchronized. The Worley RFI signature control table from column U on is still not a destination.
 
-## 1.51.7 - 2026-11-21
+## 1.51.13 - 2026-11-21
+
+### Changed
+
+- Dates and timestamps use the `jiff` crate instead of `chrono`, which RustSec now lists as unmaintained (RUSTSEC-2026-0543) and which the supply-chain check rejects. Journal and print-queue timestamps, plan stamps, backup names, RFI Log dates and times, and Excel date conversion produce the same text as before. A two-digit RFI Log year of `69` still reads as 2069. Local dates were checked on macOS only.
+
+## 1.51.12 - 2026-11-21
 
 ### Changed
 
 - The CI frontend job runs the React test suite once, with coverage, instead of once without coverage and again with it. A failing test still fails the job. The application is unchanged.
 
-## 1.51.6 - 2026-11-21
+## 1.51.11 - 2026-11-21
 
 ### Changed
 
 - The full RFI code pattern, the strict `-RFI-` code pattern, and the template code rule each have one definition. Follow Up, RFI file grouping, and the template editor now use the shared patterns instead of their own copies. Matching rules and results are unchanged.
 
-## 1.51.5 - 2026-11-21
+## 1.51.10 - 2026-11-21
 
 ### Changed
 
 - Concrete document generation and template manifest checks compile their fixed text patterns once per run of the app instead of on every call. Generated workbooks and validation results are unchanged. Patterns built from a cell reference are still compiled per cell. No timing was measured.
 
-## 1.51.4 - 2026-11-21
+## 1.51.9 - 2026-11-21
 
 ### Changed
 
 - File hashing uses one shared streaming SHA-256 helper instead of six copies of the same loop. Hash values, file positions after hashing, and error handling are unchanged. Not yet measured on Windows.
+
+## 1.51.8 - 2026-11-15
+
+### Fixed
+
+- The 12px type floor from 1.51.4 missed 20 labels sized between 11.2 and 11.8px. They now use the same 12px size, and the style test rejects anything under 12px. No behaviour changed.
+
+## 1.51.7 - 2026-11-15
+
+### Fixed
+
+- When Preview fails because a required field is empty, the form scrolls to that field and focuses it (its Browse button for folder and file fields). The field is linked to the error message for screen readers. No new text was added and no behaviour changed.
+
+## 1.51.6 - 2026-11-15
+
+### Fixed
+
+- The decorative DOCFLOW label on Home and the success result is removed. Queue, Templates, History, Recovery, Admin, and Review no longer show their title twice (bar and page heading); each page keeps one level-1 heading. Review keeps its bar title while a plan, result, or busy state replaces the page heading. The failure result still shows its warnings label. No behaviour changed.
+
+## 1.51.5 - 2026-11-15
+
+### Fixed
+
+- Focus rings use one shared 2px ring with a 2px offset, and control focus on search bars and table cells is a visible text-coloured border. Corner radii of 4-14px use three shared sizes (6, 8, 12px) so cards, inputs, and chips match. No behaviour changed.
+
+## 1.51.4 - 2026-11-15
+
+### Fixed
+
+- Text that was set below 12px (row metadata, badges, and step labels in review, results, home, and shell) now uses a shared 12px floor token. No layout, behaviour, or colour changed.
 
 ## 1.51.3 - 2026-11-14
 

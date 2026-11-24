@@ -203,14 +203,12 @@ pub(crate) fn excel_date_text(value: &str) -> String {
     if !serial.is_finite() || !(1.0..=2_958_466.0).contains(&serial) {
         return value.to_string();
     }
-    let Some(epoch) = chrono::NaiveDate::from_ymd_opt(1899, 12, 30) else {
-        return value.to_string();
-    };
-    epoch
-        .checked_add_signed(chrono::Duration::days(serial.floor() as i64))
+    use jiff::ToSpan;
+    jiff::civil::date(1899, 12, 30)
+        .checked_add((serial.floor() as i64).days())
         .map_or_else(
-            || value.to_string(),
-            |date| date.format("%d.%m.%Y").to_string(),
+            |_| value.to_string(),
+            |date| date.strftime("%d.%m.%Y").to_string(),
         )
 }
 

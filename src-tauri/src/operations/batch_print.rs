@@ -16,8 +16,8 @@ use crate::{
     },
     page_range::{PageRange, PageRangeCapability, canonical_for},
     print_queue::{
-        BatchPrintParams, FileSignature, PrintAdapter, PrintFailureKind, PrintJob, PrintJobSupport,
-        PrintSettings, PrinterInventory, file_signature_from_open_file,
+        BatchPrintParams, DEFAULT_QUEUE_MODE, FileSignature, PrintAdapter, PrintFailureKind,
+        PrintJob, PrintJobSupport, PrintSettings, PrinterInventory, file_signature_from_open_file,
     },
 };
 
@@ -40,6 +40,7 @@ const SCALING_CHOICES: &[&str] = &["fit", "actual", "shrink"];
 const COLOR_CHOICES: &[&str] = &["printer", "color", "grayscale"];
 const DUPLEX_CHOICES: &[&str] = &["printer", "simplex", "long", "short"];
 const ERROR_ACTION_CHOICES: &[&str] = &["pause", "skip"];
+pub const QUEUE_MODE_CHOICES: &[&str] = &["wait", "fast"];
 
 pub fn preview<A, P>(
     params: &BatchPrintParams,
@@ -405,6 +406,7 @@ pub fn resume_plan(state: &Value, inventory: &PrinterInventory) -> Result<Plan, 
         copy_or_default(&mut row, saved, "retries", json!(0));
         copy_or_default(&mut row, saved, "onError", json!("pause"));
         copy_or_default(&mut row, saved, "timeoutMinutes", json!(30));
+        copy_or_default(&mut row, saved, "queueMode", json!(DEFAULT_QUEUE_MODE));
         copy_or_default(&mut row, saved, "verb", json!(""));
         copy_or_default(&mut row, saved, "signature", json!({}));
         if let Some(worksheet) = saved.get("worksheet") {
@@ -447,6 +449,7 @@ pub fn validate_job(job: &PrintJob) -> Result<(), BackendError> {
         || !COLOR_CHOICES.contains(&job.color.as_str())
         || !DUPLEX_CHOICES.contains(&job.duplex.as_str())
         || !ERROR_ACTION_CHOICES.contains(&job.on_error.as_str())
+        || !QUEUE_MODE_CHOICES.contains(&job.queue_mode.as_str())
         || job.retries > MAX_RETRIES
         || !(MIN_TIMEOUT_MINUTES..=MAX_TIMEOUT_MINUTES).contains(&job.timeout_minutes)
         || job.copy == 0
