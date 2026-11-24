@@ -1,5 +1,6 @@
 use super::*;
-use std::{env, path::PathBuf, time::Instant};
+use identity_check::identity_tail;
+use std::{env, fs, path::PathBuf, time::Instant};
 
 fn is_confirmed_cover(read: &OcrRead) -> bool {
     read.source.starts_with("ocr:fast-cover:confirmed:")
@@ -94,6 +95,32 @@ fn fast_cover_recognizes_ocr_clv_as_civ_with_alias_evidence() {
         .is_none(),
         "alias must not match a five-digit suffix"
     );
+}
+
+#[test]
+fn fast_cover_recovers_a_head_hyphen_swallowed_by_a_table_rule() {
+    let cover = "SUNRISE PROJECT\nREQUEST FOR INSPECTION (RFI)\nDate: 04.11.2026 RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096 Rev: 0";
+    let read = confirmed_cover_read(cover, "test").expect("damaged head cover is confirmed");
+    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-PRC-0096");
+    assert_eq!(read.matched.method, RfiMethod::OcrAlias);
+    assert!(read.source.ends_with(":alias:head"), "{}", read.source);
+    // No label, no recovery.
+    assert!(
+        confirmed_cover_read(
+            "SUNRISE PROJECT\nREQUEST FOR INSPECTION\nAZE-SUN4NT-QMS-RFI-PRC-0096",
+            "test"
+        )
+        .is_none()
+    );
+    // Head too far from the fixed head, unknown discipline, longer serial, two codes.
+    for text in [
+        "RFI No: XYZ-ABC-DEF-GHI-RFI-PRC-0096",
+        "RFI No: AZE-SUN4NT-QMS-RFI-XYZ-0096",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-00961",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096 RFI No: AZE-SUN4NT-QMS-RFI-PRC-0097",
+    ] {
+        assert!(damaged_head_identity(text).is_none(), "{text}");
+    }
 }
 
 #[test]
@@ -384,4 +411,87 @@ fn cover_first_identity_rejects_a_non_strict_match_labelled_as_a_cover() {
     })
     .unwrap();
     assert_eq!(read.source, "ocr:full");
+}
+
+#[test]
+#[ignore = "set DOCFLOW_COVER_LAB_SOURCE_DIR and DOCFLOW_COVER_LAB_TESSERACT to preview a supplied scan folder"]
+fn production_multi_rfi_preview_of_supplied_folder() {
+    let source = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_SOURCE_DIR")
+            .expect("DOCFLOW_COVER_LAB_SOURCE_DIR is required"),
+    );
+    let tesseract = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+            .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+    );
+    let destination = tempfile::tempdir().expect("temporary destination should open");
+    let ocr = NativeOcr::with_tesseract(tesseract);
+    let plan = crate::operations::process_scans::preview_fast_covers(
+        &crate::operations::process_scans::ProcessScansParams {
+            source,
+            destination: destination.path().to_path_buf(),
+            organize_into_rfi_folders: false,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &ocr,
+        |_| {},
+        || false,
+    )
+    .expect("preview should complete");
+    for warning in &plan.warnings {
+        eprintln!("LAB warning {} {}", warning.key, warning.subject);
+    }
+    for step in &plan.steps {
+        eprintln!(
+            "LAB step {:?} dst={:?} meta={:?}",
+            step.kind, step.dst, step.meta
+        );
+    }
+}
+
+#[test]
+#[ignore = "set DOCFLOW_COVER_LAB_PDF, DOCFLOW_COVER_LAB_PAGE and DOCFLOW_COVER_LAB_TESSERACT to check one cover identity cell"]
+fn production_identity_check_of_supplied_cover() {
+    let source = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_PDF").expect("DOCFLOW_COVER_LAB_PDF is required"),
+    );
+    let page = env::var("DOCFLOW_COVER_LAB_PAGE")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let tesseract = PathBuf::from(
+        env::var_os("DOCFLOW_COVER_LAB_TESSERACT")
+            .expect("DOCFLOW_COVER_LAB_TESSERACT is required"),
+    );
+    let check = NativeOcr::with_tesseract(tesseract)
+        .check_cover_identity(&source, page)
+        .expect("identity check should run");
+    eprintln!(
+        "LAB reread_tail={:?} crop_bytes={}",
+        check.reread_tail,
+        check.crop_data_url.as_ref().map_or(0, String::len)
+    );
+    if let (Some(url), Ok(out)) = (check.crop_data_url, env::var("DOCFLOW_COVER_LAB_CROP_OUT")) {
+        let bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            url.trim_start_matches("data:image/png;base64,"),
+        )
+        .unwrap();
+        fs::write(out, bytes).unwrap();
+    }
+}
+
+#[test]
+fn identity_tail_reads_only_an_exact_unique_discipline_and_number() {
+    assert_eq!(
+        identity_tail("RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096").as_deref(),
+        Some("PRC-0096")
+    );
+    assert_eq!(identity_tail("QMS-RFI-ELE-69").as_deref(), Some("ELE-0069"));
+    assert_eq!(identity_tail("RFI-XYZ-0096"), None);
+    assert_eq!(identity_tail("RFI-PRC-00961"), None);
+    assert_eq!(identity_tail("RFI-PRC-0096 RFI-ELE-0069"), None);
 }

@@ -141,6 +141,17 @@ pub(super) fn fast_cover_scans_operation() -> OperationDef {
                 Some("param.organize_into_rfi_folders.help"),
             ),
             parameter(
+                "rfi_log_workbook",
+                ParamKind::File,
+                "param.rfi.processScans.rfiLogWorkbook",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.processScans.rfiLogWorkbook.help"),
+            ),
+            parameter(
                 "keep_original",
                 ParamKind::Bool,
                 "param.keep_original",

@@ -4,7 +4,7 @@ use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
 
 pub const PREFIX: &str = "AZE-SUN-INT-QMS-RFI";
-const PREFIX_HEAD: &str = "AZE-SUN-INT-QMS";
+pub(crate) const PREFIX_HEAD: &str = "AZE-SUN-INT-QMS";
 const DISCIPLINES: [&str; 4] = ["CIV", "ELE", "MEC", "PRC"];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -254,7 +254,7 @@ fn to_digit(character: char) -> char {
     }
 }
 
-fn levenshtein(left: &str, right: &str) -> usize {
+pub(crate) fn levenshtein(left: &str, right: &str) -> usize {
     let right = right.chars().collect::<Vec<_>>();
     let mut previous = (0..=right.len()).collect::<Vec<_>>();
     for (row, left_character) in left.chars().enumerate() {

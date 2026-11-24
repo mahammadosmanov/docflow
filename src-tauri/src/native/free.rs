@@ -236,6 +236,8 @@ pub(super) struct ProcessScansValues {
     pub(super) keep_original: bool,
     #[serde(default = "default_true")]
     pub(super) correct_orientation: bool,
+    #[serde(default)]
+    pub(super) rfi_log_workbook: Option<std::path::PathBuf>,
 }
 
 #[derive(Deserialize)]

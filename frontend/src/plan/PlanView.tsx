@@ -47,6 +47,7 @@ import {
 import {
   SignedPageComparison,
 } from "./SignedPageComparison";
+import { CoverCropStrip } from "./CoverCropStrip";
 import {
   StepRow,
   outlookReplyPreview,
@@ -162,6 +163,7 @@ export function PlanView({
               />
             )}
             {plan.steps.length > 0 && <PlanExactEffects plan={plan} s={s} />}
+            {isScanEditor && <CoverCropStrip rows={editorRows} s={s} />}
           </>
         ) : (
           <>

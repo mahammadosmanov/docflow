@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::operations::process_scans::*;
 
@@ -29,13 +29,15 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             .and_then(|name| name.to_str())
             .unwrap_or_default()
             .to_string();
-        let evidence_key = if step
+        let evidence_source = step
             .meta
             .get("source")
             .and_then(Value::as_str)
-            .is_some_and(|source| source.contains("CLV->CIV"))
-        {
+            .unwrap_or_default();
+        let evidence_key = if evidence_source.contains("CLV->CIV") {
             "rfi.fastScan.evidence.clvToCiv"
+        } else if evidence_source.contains(":alias:head") {
+            "rfi.fastScan.evidence.headRecovered"
         } else {
             "rfi.fastScan.evidence.confirmed"
         };
@@ -43,6 +45,7 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             "_rowId": row_id,
             "sourceFile": source_file,
             "evidenceKey": evidence_key,
+            "confidence": step.meta.get("confidence").cloned().unwrap_or(Value::Null),
             "detectedCode": code,
             "code": code,
             "target": target,
@@ -69,6 +72,7 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             "columns": [
                 {"key": "sourceFile", "labelKey": "rfi.fastScan.column.sourceFile", "kind": "readonly", "width": 170, "bulk": false},
                 {"key": "evidenceKey", "labelKey": "rfi.fastScan.column.evidence", "kind": "readonly", "display": "localizedKey", "width": 170, "bulk": false},
+                {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 150, "bulk": false},
                 {"key": "detectedCode", "labelKey": "rfi.fastScan.column.detectedCode", "kind": "readonly", "width": 270, "bulk": false},
                 {"key": "code", "labelKey": "rfi.fastScan.column.code", "kind": "text", "width": 310, "bulk": false},
                 {"key": "target", "labelKey": "rfi.fastScan.column.target", "kind": "readonly", "width": 360, "bulk": false}
@@ -76,6 +80,244 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             "rows": rows,
         }),
     );
+}
+
+const LOG_WARNING_PREFIX: &str = "warn.rfi.fastScan.log";
+
+/// Optional RFI Log check: Fast RFI Scan only handles `Ongoing` RFIs, so a code whose Log
+/// status is anything else (or that is not in the Log) is flagged. Flags never block Apply.
+pub fn apply_log_check(plan: &mut Plan, statuses: &BTreeMap<String, BTreeSet<String>>) {
+    let Some(editor) = plan.meta.get_mut("editor") else {
+        return;
+    };
+    let Some(columns) = editor.get_mut("columns").and_then(Value::as_array_mut) else {
+        return;
+    };
+    columns.push(serde_json::json!({
+        "key": "logStatusKey", "labelKey": "rfi.fastScan.column.logStatus",
+        "kind": "readonly", "display": "localizedKey", "width": 170, "bulk": false
+    }));
+    if let Some(rows) = editor.get_mut("rows").and_then(Value::as_array_mut) {
+        for row in rows {
+            let code = row.get("code").and_then(Value::as_str).unwrap_or_default();
+            row["logStatusKey"] = Value::String(log_status_key(statuses, code).to_string());
+        }
+    }
+    let stored = statuses
+        .iter()
+        .map(|(code, values)| (code.clone(), serde_json::json!(values)))
+        .collect::<serde_json::Map<_, _>>();
+    if let Some(edit) = plan.meta.get_mut("scanEdit") {
+        edit["logStatuses"] = Value::Object(stored);
+    }
+    refresh_log_warnings(plan, statuses);
+}
+
+fn log_status_key(statuses: &BTreeMap<String, BTreeSet<String>>, code: &str) -> &'static str {
+    match statuses.get(code) {
+        None => "rfi.fastScan.logStatus.notInLog",
+        Some(values)
+            if values
+                .iter()
+                .all(|value| value.eq_ignore_ascii_case("Ongoing")) =>
+        {
+            "rfi.fastScan.logStatus.ongoing"
+        }
+        Some(_) => "rfi.fastScan.logStatus.notOngoing",
+    }
+}
+
+fn refresh_log_warnings(plan: &mut Plan, statuses: &BTreeMap<String, BTreeSet<String>>) {
+    plan.warnings
+        .retain(|warning| !warning.key.starts_with(LOG_WARNING_PREFIX));
+    for code in editor_codes(plan) {
+        match log_status_key(statuses, &code) {
+            "rfi.fastScan.logStatus.notInLog" => plan.warnings.push(Warning {
+                key: "warn.rfi.fastScan.logNotInLog".to_string(),
+                subject: code,
+            }),
+            "rfi.fastScan.logStatus.notOngoing" => {
+                let shown = statuses[&code]
+                    .iter()
+                    .map(|value| if value.is_empty() { "(blank)" } else { value })
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                plan.warnings.push(Warning {
+                    key: "warn.rfi.fastScan.logNotOngoing".to_string(),
+                    subject: format!("{code} — {shown}"),
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+fn editor_codes(plan: &Plan) -> Vec<String> {
+    plan.meta
+        .get("editor")
+        .and_then(|editor| editor.get("rows"))
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| row.get("code").and_then(Value::as_str))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What a second read of the printed identity cell found for one cover.
+pub struct CoverEvidence {
+    pub crop_data_url: Option<String>,
+    pub reread_tail: Option<String>,
+}
+
+const REREAD_WARNING: &str = "warn.rfi.fastScan.rereadDiffers";
+
+/// `DISCIPLINE-NNNN` of a canonical code.
+fn code_tail(code: &str) -> String {
+    let parts = code.rsplitn(3, '-').collect::<Vec<_>>();
+    format!(
+        "{}-{}",
+        parts.get(1).unwrap_or(&""),
+        parts.first().unwrap_or(&"")
+    )
+}
+
+fn reread_key(tail: Option<&str>, code: &str) -> &'static str {
+    match tail {
+        None => "rfi.fastScan.reread.unavailable",
+        Some(tail) if tail == code_tail(code) => "rfi.fastScan.reread.agrees",
+        Some(_) => "rfi.fastScan.reread.differs",
+    }
+}
+
+fn refresh_reread_warnings(plan: &mut Plan, tails: &BTreeMap<String, Option<String>>) {
+    plan.warnings
+        .retain(|warning| warning.key != REREAD_WARNING);
+    let rows = plan
+        .meta
+        .get("editor")
+        .and_then(|editor| editor.get("rows"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for row in rows {
+        let (Some(id), Some(code)) = (
+            row.get("_rowId").and_then(Value::as_str),
+            row.get("code").and_then(Value::as_str),
+        ) else {
+            continue;
+        };
+        let tail = tails.get(id).and_then(|tail| tail.as_deref());
+        if reread_key(tail, code) == "rfi.fastScan.reread.differs" {
+            plan.warnings.push(Warning {
+                key: REREAD_WARNING.to_string(),
+                subject: format!("{code} — {}", tail.unwrap_or_default()),
+            });
+        }
+    }
+}
+
+fn stored_reread_tails(plan: &Plan) -> Option<BTreeMap<String, Option<String>>> {
+    let stored = plan.meta.get("scanEdit")?.get("rereadTails")?.as_object()?;
+    Some(
+        stored
+            .iter()
+            .map(|(id, tail)| (id.clone(), tail.as_str().map(str::to_string)))
+            .collect(),
+    )
+}
+
+/// Adds the cropped identity cell and the second-read verdict to every Preview row.
+/// `check` receives the source PDF and the cover page index of one row.
+pub fn attach_cover_checks<F>(plan: &mut Plan, check: F)
+where
+    F: Fn(&Path, usize) -> Option<CoverEvidence> + Send + Sync,
+{
+    let mut jobs = Vec::<(String, PathBuf, usize)>::new();
+    for step in &plan.steps {
+        let (Some(id), Some(src)) = (
+            step.meta.get("scanEditRowId").and_then(Value::as_str),
+            step.src.as_deref(),
+        ) else {
+            continue;
+        };
+        let page = step
+            .meta
+            .get("pageIndexes")
+            .and_then(Value::as_array)
+            .and_then(|pages| pages.first())
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        jobs.push((id.to_string(), PathBuf::from(src), page));
+    }
+    let results = crate::parallel::bounded_map(&jobs, |(_, path, page)| check(path, *page))
+        .map(|(_, results)| results)
+        .unwrap_or_default();
+    let mut evidence = BTreeMap::<String, CoverEvidence>::new();
+    for ((id, _, _), found) in jobs.into_iter().zip(results) {
+        if let Some(found) = found {
+            evidence.insert(id, found);
+        }
+    }
+    let Some(editor) = plan.meta.get_mut("editor") else {
+        return;
+    };
+    if let Some(columns) = editor.get_mut("columns").and_then(Value::as_array_mut) {
+        columns.push(serde_json::json!({
+            "key": "rereadKey", "labelKey": "rfi.fastScan.column.reread",
+            "kind": "readonly", "display": "localizedKey", "width": 190, "bulk": false
+        }));
+    }
+    let mut tails = serde_json::Map::new();
+    if let Some(rows) = editor.get_mut("rows").and_then(Value::as_array_mut) {
+        for row in rows {
+            let id = row
+                .get("_rowId")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let code = row.get("code").and_then(Value::as_str).unwrap_or_default();
+            let found = evidence.get(&id);
+            let tail = found.and_then(|found| found.reread_tail.as_deref());
+            row["rereadKey"] = Value::String(reread_key(tail, code).to_string());
+            row["coverCrop"] = found
+                .and_then(|found| found.crop_data_url.clone())
+                .map_or(Value::Null, Value::String);
+            tails.insert(
+                id,
+                tail.map_or(Value::Null, |tail| Value::String(tail.to_string())),
+            );
+        }
+    }
+    if let Some(edit) = plan.meta.get_mut("scanEdit") {
+        edit["rereadTails"] = Value::Object(tails);
+    }
+    if let Some(tails) = stored_reread_tails(plan) {
+        refresh_reread_warnings(plan, &tails);
+    }
+}
+
+fn stored_log_statuses(plan: &Plan) -> Option<BTreeMap<String, BTreeSet<String>>> {
+    let stored = plan.meta.get("scanEdit")?.get("logStatuses")?.as_object()?;
+    Some(
+        stored
+            .iter()
+            .map(|(code, values)| {
+                let values = values
+                    .as_array()
+                    .map(|values| {
+                        values
+                            .iter()
+                            .filter_map(|value| value.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                (code.clone(), values)
+            })
+            .collect(),
+    )
 }
 
 pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
@@ -115,6 +357,8 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
         .and_then(Value::as_bool)
         .ok_or_else(|| BackendError::validation("error.rfi.fastScan.revisionInvalid"))?;
 
+    let stored_statuses = stored_log_statuses(plan);
+    let stored_tails = stored_reread_tails(plan);
     let mut originals = BTreeMap::new();
     for row in original_rows {
         let row_id = row
@@ -152,15 +396,25 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
             .ok_or_else(|| BackendError::validation("error.rfi.fastScan.codeInvalid"))?;
         let mut expected = (*original).clone();
         expected["code"] = Value::String(code.clone());
+        if let Some(statuses) = &stored_statuses {
+            expected["logStatusKey"] = Value::String(log_status_key(statuses, &code).to_string());
+        }
+        if let Some(tails) = &stored_tails {
+            let tail = tails.get(row_id).and_then(|tail| tail.as_deref());
+            expected["rereadKey"] = Value::String(reread_key(tail, &code).to_string());
+        }
         let unchanged_except_code =
             submitted
                 .as_object()
                 .zip(expected.as_object())
                 .is_some_and(|(submitted, expected)| {
                     submitted.len() == expected.len()
-                        && expected
-                            .iter()
-                            .all(|(key, value)| key == "code" || submitted.get(key) == Some(value))
+                        && expected.iter().all(|(key, value)| {
+                            key == "code"
+                                || key == "logStatusKey"
+                                || key == "rereadKey"
+                                || submitted.get(key) == Some(value)
+                        })
                 });
         if !unchanged_except_code {
             return Err(BackendError::validation(
@@ -263,13 +517,20 @@ pub fn revise(plan: &Plan, payload: &Value) -> Result<Plan, BackendError> {
     }
     let mut meta = plan.meta.clone();
     meta["editor"]["rows"] = Value::Array(rows);
-    Ok(Plan {
+    let mut revised = Plan {
         plan_id: String::new(),
         op_id: FAST_COVER_OPERATION_ID.to_string(),
         steps,
         warnings: plan.warnings.clone(),
         meta,
-    })
+    };
+    if let Some(statuses) = &stored_statuses {
+        refresh_log_warnings(&mut revised, statuses);
+    }
+    if let Some(tails) = &stored_tails {
+        refresh_reread_warnings(&mut revised, tails);
+    }
+    Ok(revised)
 }
 
 fn scan_edit_folder_exists(destination: &Path, folder: &Path) -> Result<bool, BackendError> {

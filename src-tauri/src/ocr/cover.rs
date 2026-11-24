@@ -43,6 +43,40 @@ pub(super) fn ocr_alias_matches(text: &str) -> Vec<RfiMatch> {
         .collect()
 }
 
+/// OCR-only recovery for a damaged constant head on the labeled cover line. A table rule
+/// can swallow a head hyphen (`SUN-INT` read as `SUN4NT`). The discipline and serial must
+/// still follow an exact `-RFI-` anchor, the head must be within two edits of the fixed
+/// head, and exactly one distinct code may follow an `RFI No` label.
+pub(super) fn damaged_head_identity(text: &str) -> Option<RfiMatch> {
+    static DAMAGED: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"RFI\s*NO\s*[:.]?\s*([A-Z0-9-]{10,18})-RFI-(CIV|ELE|MEC|PRC)-([0-9]{1,4})")
+            .expect("the damaged-head identity pattern is valid")
+    });
+    let normalized = canonical(text);
+    let mut found = std::collections::BTreeSet::new();
+    for captures in DAMAGED.captures_iter(&normalized) {
+        let whole = captures.get(0)?;
+        if normalized[whole.end()..]
+            .chars()
+            .next()
+            .is_some_and(char::is_alphanumeric)
+        {
+            continue;
+        }
+        if (1..=2).contains(&levenshtein(&captures[1], PREFIX_HEAD)) {
+            found.insert(format!("{PREFIX}-{}-{}", &captures[2], &captures[3]));
+        }
+    }
+    let code = (found.len() == 1).then(|| found.into_iter().next())??;
+    let mut matched = find(&code);
+    matched.ok().then(|| {
+        matched.method = RfiMethod::OcrAlias;
+        // Below an exact read, so Preview never shows a recovered head as 100%.
+        matched.confidence = 0.9;
+        matched
+    })
+}
+
 /// The cover's own identity line is `RFI No: <exact code>`. When other RFI codes also
 /// appear on the page (references, remarks), the code printed right after that label is
 /// the cover's identity, but only if exactly one distinct code follows such a label.
@@ -92,7 +126,10 @@ pub(super) fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
         && ((matched.method == RfiMethod::Strict && matched.confidence >= 0.8)
             || aliases.iter().any(|alias| codes.contains(&alias.code))))
         || labeled.as_ref().is_some_and(|code| codes.contains(code));
-    let identity_hint = !codes.is_empty() || matched.ok();
+    let damaged =
+        allow_ocr_alias && codes.is_empty() && damaged_head_identity(&normalized).is_some();
+    let strict_identity = strict_identity || damaged;
+    let identity_hint = !codes.is_empty() || matched.ok() || damaged;
     CoverSignals {
         request_heading,
         template_mark,
@@ -110,11 +147,14 @@ pub(super) fn confirmed_cover_read(text: &str, source: &str) -> Option<OcrRead> 
         .map(|code| find(&code))
         .filter(|labeled| labeled.ok())
         .or_else(|| ocr_alias_matches(text).into_iter().next())
+        .or_else(|| damaged_head_identity(text))
         .unwrap_or_else(|| find(text));
-    let alias_evidence = if matched.method == RfiMethod::OcrAlias {
-        ":alias:CLV->CIV"
-    } else {
+    let alias_evidence = if matched.method != RfiMethod::OcrAlias {
         ""
+    } else if damaged_head_identity(text).as_ref() == Some(&matched) {
+        ":alias:head"
+    } else {
+        ":alias:CLV->CIV"
     };
     Some(OcrRead {
         matched,

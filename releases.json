@@ -1,13 +1,61 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.52.0",
+  "currentVersion": "1.54.1",
   "releases": [
+    {
+      "version": "1.54.1",
+      "tag": "v1.54.1",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Dependency update for RUSTSEC-2026-0592 and RUSTSEC-2026-0594"
+    },
+    {
+      "version": "1.54.0",
+      "tag": "v1.54.0",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Fast RFI Scan reads the RFI number cell a second time and shows it under Preview"
+    },
+    {
+      "version": "1.53.0",
+      "tag": "v1.53.0",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Fast RFI Scan can check scanned RFIs against the RFI Log status"
+    },
+    {
+      "version": "1.52.3",
+      "tag": "v1.52.3",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Fast RFI Scan Preview shows the OCR evidence score again"
+    },
+    {
+      "version": "1.52.2",
+      "tag": "v1.52.2",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Fast RFI Scan reads a cover whose RFI number head was damaged by a table line"
+    },
+    {
+      "version": "1.52.1",
+      "tag": "v1.52.1",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Windows Excel COM plan moves to its own module"
+    },
     {
       "version": "1.52.0",
       "tag": "v1.52.0",
       "date": "2026-11-22",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Batch Print adds a fast queue mode beside waiting for each job"
     },
     {

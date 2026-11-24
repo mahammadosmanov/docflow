@@ -14,7 +14,9 @@ use regex::Regex;
 use crate::{
     operations::pdf_orientation::{OrientationDetection, OrientationDetector},
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
-    rfi_code::{PREFIX, RfiMatch, RfiMethod, canonical, exact_codes, find},
+    rfi_code::{
+        PREFIX, PREFIX_HEAD, RfiMatch, RfiMethod, canonical, exact_codes, find, levenshtein,
+    },
 };
 
 const TEXT_LAYER_MIN_CHARS: usize = 50;
@@ -101,6 +103,7 @@ mod adapter;
 #[cfg(test)]
 use adapter::*;
 mod cover;
+mod identity_check;
 mod image;
 mod orientation;
 mod render;
@@ -108,6 +111,7 @@ mod session;
 mod tesseract;
 pub use cover::take_cover_trace;
 use cover::*;
+pub use identity_check::CoverCheck;
 pub use image::*;
 use orientation::*;
 pub use render::*;

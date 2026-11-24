@@ -5,6 +5,42 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.54.1 - 2026-11-24
+
+### Security
+
+- Updated `url` to 2.5.9 and `cookie` to 0.18.3 for RUSTSEC-2026-0592 and RUSTSEC-2026-0594. No DocFlow code changed.
+
+## 1.54.0 - 2026-11-24
+
+### Added
+
+- Fast RFI Scan finds the printed RFI No. cell on each scanned cover, reads it a second time as one line, and compares the discipline and number with the first read. The Preview table has a `Second read` column (Matches, Differs, Not available). A difference adds a warning that never blocks Apply and updates when the number is corrected in Preview. A small strip under the table shows each cropped RFI No. cell as scanned. The second read adds one extra page render and OCR per scanned RFI, run in parallel.
+
+## 1.53.0 - 2026-11-24
+
+### Added
+
+- Fast RFI Scan has an optional `RFI Log check` file. When selected, the Preview table shows each scanned RFI's Inspection Status from the RFI Log and warns when it is not `Ongoing` (blank counts as not Ongoing) or when the RFI is not in the Log, because Fast RFI Scan is only used for Ongoing RFIs. The warning never blocks Apply, and it updates when the RFI number is corrected in Preview. The RFI Log is only read.
+
+## 1.52.3 - 2026-11-24
+
+### Fixed
+
+- The Fast RFI Scan Preview table shows the OCR evidence score for each RFI again. It is a heuristic consistency score, not an accuracy probability. A number whose fixed start was repaired by OCR shows 90% and the label "OCR repaired a damaged fixed start of the number", never 100%.
+
+## 1.52.2 - 2026-11-24
+
+### Fixed
+
+- Fast RFI Scan no longer sends a whole RFI to review with "RFI number not found" when a table line damages the fixed start of the number on the cover, such as `AZE-SUN4NT-QMS-RFI-PRC-0096` for `AZE-SUN-INT-QMS-RFI-PRC-0096`. The cover is accepted only when the line starts with `RFI No`, the head is within two edits of `AZE-SUN-INT-QMS`, the `-RFI-` anchor, discipline and serial are exact, and one distinct code follows the label. Filenames, text layers and manual corrections do not use this recovery.
+
+## 1.52.1 - 2026-11-24
+
+### Changed
+
+- The Windows Excel COM plan (locked-down launch, dispatch arguments, teardown, path and sheet validation) moved from `excel_windows_contract.rs` into its own module `excel_windows_contract/com_plan.rs`. No behavior change; its tests moved with it.
+
 ## 1.52.0 - 2026-11-22
 
 ### Added
