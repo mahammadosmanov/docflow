@@ -36,8 +36,8 @@ pub(super) fn attach_scan_editor(plan: &mut Plan, destination: &Path, organize: 
             .unwrap_or_default();
         let evidence_key = if evidence_source.contains("CLV->CIV") {
             "rfi.fastScan.evidence.clvToCiv"
-        } else if evidence_source.contains(":alias:head") {
-            "rfi.fastScan.evidence.headRecovered"
+        } else if evidence_source.contains(":alias:repair") {
+            "rfi.fastScan.evidence.ocrRepaired"
         } else {
             "rfi.fastScan.evidence.confirmed"
         };

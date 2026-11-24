@@ -92,7 +92,7 @@ describe("frontend authority boundary", () => {
       "rfi.fastScan.column.target",
       "rfi.fastScan.evidence.clvToCiv",
       "rfi.fastScan.evidence.confirmed",
-      "rfi.fastScan.evidence.headRecovered",
+      "rfi.fastScan.evidence.ocrRepaired",
       "param.rfi.processScans.rfiLogWorkbook",
       "param.rfi.processScans.rfiLogWorkbook.help",
       "rfi.fastScan.column.logStatus",

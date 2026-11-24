@@ -54,9 +54,11 @@ identity or secrets.
 - The approved OCR alias `CLV` is normalized to `CIV`. Filenames, searchable
   PDF text, and manual corrections never use this alias.
 - Fast RFI Scan cover OCR also recovers a damaged fixed head (`AZE-SUN-INT-QMS`
-  read with at most two edits, for example `SUN4NT`) only after an `RFI No`
-  label, with an exact `-RFI-`, discipline, and serial, and one distinct code.
-  Filenames, searchable PDF text, and manual corrections never use it.
+  read with at most two edits, for example `SUN4NT`) and the letter `O` read for
+  the digit `0` in the serial (`O069`), only after an `RFI No` label, with an
+  exact `-RFI-` and discipline, a four-character serial with at least one real digit, and one distinct
+  code. The Preview shows such rows below 100% with their own label and a second
+  read. Filenames, searchable PDF text, and manual corrections never use it.
 - Preview name correction accepts a complete supported RFI code with a
   one-to-four-digit suffix and canonicalizes that suffix to four digits. Rust
   derives the destination from the approved root and folder setting; source

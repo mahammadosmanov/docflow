@@ -5,6 +5,18 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.54.3 - 2026-11-24
+
+### Fixed
+
+- The OCR repair of a damaged RFI number (`O` read for `0`, or a damaged fixed head) now applies only when the serial has exactly four characters, because RFI serials always have four digits. A shorter serial is never repaired.
+
+## 1.54.2 - 2026-11-24
+
+### Fixed
+
+- Fast RFI Scan no longer sends a cover to review with "RFI number not found" when Windows OCR reads the serial's zero as the letter `O` (`ELE-O069` for `ELE-0069`) or misses the "REQUEST FOR INSPECTION" heading on a cover whose `RFI No: <exact code>` line and template mark were read. The `O` repair needs an `RFI No` label, an exact `-RFI-` and discipline, and at least one real digit in the serial; the row shows 90% and the label "OCR repaired a misread character in the number". Found in a Windows activity log.
+
 ## 1.54.1 - 2026-11-24
 
 ### Security

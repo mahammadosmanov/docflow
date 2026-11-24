@@ -103,7 +103,7 @@ fn fast_cover_recovers_a_head_hyphen_swallowed_by_a_table_rule() {
     let read = confirmed_cover_read(cover, "test").expect("damaged head cover is confirmed");
     assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-PRC-0096");
     assert_eq!(read.matched.method, RfiMethod::OcrAlias);
-    assert!(read.source.ends_with(":alias:head"), "{}", read.source);
+    assert!(read.source.ends_with(":alias:repair"), "{}", read.source);
     // No label, no recovery.
     assert!(
         confirmed_cover_read(
@@ -119,7 +119,42 @@ fn fast_cover_recovers_a_head_hyphen_swallowed_by_a_table_rule() {
         "RFI No: AZE-SUN4NT-QMS-RFI-PRC-00961",
         "RFI No: AZE-SUN4NT-QMS-RFI-PRC-0096 RFI No: AZE-SUN4NT-QMS-RFI-PRC-0097",
     ] {
-        assert!(damaged_head_identity(text).is_none(), "{text}");
+        assert!(damaged_identity(text).is_none(), "{text}");
+    }
+}
+
+#[test]
+fn fast_cover_reads_the_windows_o_for_zero_and_missed_heading_cases() {
+    // Logged on Windows: the serial's zero read as the letter O.
+    let o_for_zero = "SUNRISE PROJECT\nREQUEST FOR INSPECTION\nDate: 14.11.2026 RFI No: AZE-SUN-INT-QMS-RFI-ELE-O069 Rev: 0";
+    let read = confirmed_cover_read(o_for_zero, "test").expect("O for 0 is repaired");
+    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-ELE-0069");
+    assert_eq!(read.matched.method, RfiMethod::OcrAlias);
+    assert_eq!(read.matched.confidence, 0.9);
+    // Logged on Windows: heading missed, exact labeled identity and template mark present.
+    let no_heading =
+        "INTEC SUNRISE PROJECT\nDate: 14.11.2026 RFI No: AZE-SUN-INT-QMS-RFI-ELE-0067 Rev: 0";
+    let read = confirmed_cover_read(no_heading, "test").expect("labeled identity confirms");
+    assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-ELE-0067");
+    assert_eq!(read.matched.method, RfiMethod::Strict);
+    // A checklist page that only mentions the code after another report number is no cover.
+    assert!(
+        confirmed_cover_read(
+            "INTEC SUNRISE PROJECT MATERIAL RECEIVING INSPECTION\nREPORT/RFINO. AZE-SUN-MRC-0096 / AZE-SUN-INT-QMS-RFI-PRC-0096",
+            "test"
+        )
+        .is_none()
+    );
+    // Serial with no real digit, or an unrelated letter, is never repaired.
+    for text in [
+        "RFI No: AZE-SUN-INT-QMS-RFI-ELE-OOOO",
+        "RFI No: AZE-SUN-INT-QMS-RFI-ELE-0O6X",
+        "RFI No: AZE-SUN-INT-QMS-RFI-ELE-O0690",
+        // RFI serials always have four digits, so a short serial is never repaired.
+        "RFI No: AZE-SUN-INT-QMS-RFI-ELE-O69",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-96",
+    ] {
+        assert!(damaged_identity(text).is_none(), "{text}");
     }
 }
 
