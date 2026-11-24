@@ -150,6 +150,9 @@ fn fast_cover_reads_the_windows_o_for_zero_and_missed_heading_cases() {
         "RFI No: AZE-SUN-INT-QMS-RFI-ELE-OOOO",
         "RFI No: AZE-SUN-INT-QMS-RFI-ELE-0O6X",
         "RFI No: AZE-SUN-INT-QMS-RFI-ELE-O0690",
+        // RFI serials always have four digits, so a short serial is never repaired.
+        "RFI No: AZE-SUN-INT-QMS-RFI-ELE-O69",
+        "RFI No: AZE-SUN4NT-QMS-RFI-PRC-96",
     ] {
         assert!(damaged_identity(text).is_none(), "{text}");
     }

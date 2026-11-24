@@ -56,7 +56,7 @@ identity or secrets.
 - Fast RFI Scan cover OCR also recovers a damaged fixed head (`AZE-SUN-INT-QMS`
   read with at most two edits, for example `SUN4NT`) and the letter `O` read for
   the digit `0` in the serial (`O069`), only after an `RFI No` label, with an
-  exact `-RFI-` and discipline, at least one real serial digit, and one distinct
+  exact `-RFI-` and discipline, a four-character serial with at least one real digit, and one distinct
   code. The Preview shows such rows below 100% with their own label and a second
   read. Filenames, searchable PDF text, and manual corrections never use it.
 - Preview name correction accepts a complete supported RFI code with a

@@ -47,11 +47,11 @@ pub(super) fn ocr_alias_matches(text: &str) -> Vec<RfiMatch> {
 /// accepted: a damaged constant head (a table rule can swallow a head hyphen, `SUN-INT`
 /// read as `SUN4NT`) and the letter `O` read for the digit `0` in the serial (`O069`).
 /// The discipline must still follow an exact `-RFI-` anchor, the head must be within two
-/// edits of the fixed head, the serial must keep at least one real digit, and exactly one
+/// edits of the fixed head, the serial must be exactly four characters with at least one real digit, and exactly one
 /// distinct code may follow an `RFI No` label.
 pub(super) fn damaged_identity(text: &str) -> Option<RfiMatch> {
     static DAMAGED: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"RFI\s*NO\s*[:.]?\s*([A-Z0-9-]{10,18})-RFI-(CIV|ELE|MEC|PRC)-([0-9O]{1,4})")
+        Regex::new(r"RFI\s*NO\s*[:.]?\s*([A-Z0-9-]{10,18})-RFI-(CIV|ELE|MEC|PRC)-([0-9O]{4})")
             .expect("the damaged identity pattern is valid")
     });
     let normalized = canonical(text);
