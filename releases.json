@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.52.0",
+  "currentVersion": "1.52.1",
   "releases": [
+    {
+      "version": "1.52.1",
+      "tag": "v1.52.1",
+      "date": "2026-11-24",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Windows Excel COM plan moves to its own module"
+    },
     {
       "version": "1.52.0",
       "tag": "v1.52.0",
       "date": "2026-11-22",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Batch Print adds a fast queue mode beside waiting for each job"
     },
     {

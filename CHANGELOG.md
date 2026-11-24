@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.52.1 - 2026-11-24
+
+### Changed
+
+- The Windows Excel COM plan (locked-down launch, dispatch arguments, teardown, path and sheet validation) moved from `excel_windows_contract.rs` into its own module `excel_windows_contract/com_plan.rs`. No behavior change; its tests moved with it.
+
 ## 1.52.0 - 2026-11-22
 
 ### Added
