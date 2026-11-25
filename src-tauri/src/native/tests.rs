@@ -1001,3 +1001,92 @@ fn template_documents_preview_edit_apply_never_overwrite_and_undo() {
         .expect("generated document should be undoable");
     assert!(!written.exists());
 }
+
+#[test]
+fn free_mode_generates_numbered_documents_without_an_rfi_log() {
+    use sha2::{Digest, Sha256};
+    let temporary = tempfile::tempdir().unwrap();
+    let mut backend = test_backend(&temporary);
+    let template = test_ooxml_package(&[
+        ("[Content_Types].xml", "<Types/>"),
+        (
+            "word/document.xml",
+            r#"<w:document><w:body><w:p><w:r><w:t>Work {{work}} on {{day}}</w:t></w:r></w:p></w:body></w:document>"#,
+        ),
+    ]);
+    let sha = Sha256::digest(&template)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let template_id = "11111111-1111-4111-8111-111111111111";
+    backend.templates = Arc::new(crate::templates::TemplateStore::new(
+        temporary.path().join("templates"),
+        Arc::new(ServedTemplate {
+            row: json!({
+                "template_id": template_id, "code": "FREE-FORM", "title": "Free form",
+                "discipline": "GEN", "file_kind": "docx", "version_id": "v1", "version": 1,
+                "file_sha256": sha, "file_size": template.len(),
+                "storage_path": format!("{template_id}/1/{sha}.docx"),
+                "field_map": {"schema": 2, "fileName": "Form {{work}}", "slots": [
+                    {"key": "work", "label": "Work"},
+                    {"key": "day", "type": "date", "format": "yyyy-MM-dd"}
+                ]}
+            }),
+            bytes: template,
+        }),
+    ));
+    backend.templates.sync(1);
+    let output = temporary.path().join("output");
+    std::fs::create_dir_all(&output).unwrap();
+    let caller = backend.caller_identity().unwrap();
+    let operation = crate::template_documents::OPERATION_ID;
+    let folder = backend
+        .selections
+        .issue(
+            &caller,
+            operation,
+            "output_directory",
+            &output,
+            SelectionKind::Folder,
+        )
+        .unwrap();
+    let values = |mode: &str, count: i64| {
+        json!({"opId": operation, "values": {
+            "template": "FREE-FORM", "mode": mode, "document_count": count, "rfi_numbers": "AZE-SUN-INT-QMS-RFI-ELE-0059",
+            "output_directory": folder
+        }})
+    };
+    let plan = backend
+        .preview_template_document(values("free", 2), |_| {})
+        .unwrap();
+    let mut rows = plan["meta"]["editor"]["rows"].as_array().unwrap().clone();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["_rowId"], "document-1");
+    rows[0]["work"] = json!("A");
+    rows[0]["day"] = json!("07.11.2026");
+    rows[1]["work"] = json!("B");
+    let revised = backend
+        .revise_native_plan(json!({"planId": plan["planId"], "rows": rows}))
+        .unwrap();
+    backend
+        .apply_native_plan(revised["planId"].as_str().unwrap(), Some(operation), |_| {})
+        .unwrap();
+    let mut archive =
+        zip::ZipArchive::new(std::fs::File::open(output.join("Form A.docx")).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut archive.by_name("word/document.xml").unwrap(), &mut xml)
+        .unwrap();
+    assert!(xml.contains("Work A on 2026-11-07"), "{xml}");
+    assert!(output.join("Form B.docx").is_file());
+
+    assert!(
+        backend
+            .preview_template_document(values("free", 0), |_| {})
+            .is_err(),
+        "count must be 1 to 100"
+    );
+    let error = backend
+        .preview_template_document(values("rfi", 1), |_| {})
+        .expect_err("RFI mode needs the log");
+    assert_eq!(error.message, "error.param.required.rfi_log_workbook");
+}

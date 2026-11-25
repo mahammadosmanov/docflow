@@ -14,6 +14,7 @@ use std::sync::LazyLock;
 use super::{
     anchors::CellAnchor,
     field_map::{FieldDef, FieldMap, PresetDef},
+    values::FieldKind,
 };
 
 static LOG_TOKEN: LazyLock<Regex> =
@@ -46,6 +47,8 @@ struct Slot {
     source: Option<Source>,
     #[serde(default)]
     options: Vec<String>,
+    #[serde(default)]
+    format: String,
 }
 
 #[derive(Deserialize)]
@@ -83,9 +86,12 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             Some(anchor) if anchor.kind == "cell" => return Err(invalid()),
             Some(_) => return Err(NEWER.to_string()),
         };
-        let multiline = match slot.kind.as_deref() {
-            None | Some("text" | "choice") => false,
-            Some("multiline") => true,
+        let (multiline, kind) = match slot.kind.as_deref() {
+            None | Some("text" | "choice") => (false, FieldKind::Text),
+            Some("multiline") => (true, FieldKind::Text),
+            Some("number") => (false, FieldKind::Number),
+            Some("date") => (false, FieldKind::Date),
+            Some("checkbox") => (false, FieldKind::Checkbox),
             Some(_) => return Err(NEWER.to_string()),
         };
         let start = match slot.source {
@@ -105,6 +111,8 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             options: slot.options,
             multiline,
             anchor,
+            kind,
+            format: slot.format,
         });
     }
     let mut result = FieldMap::default();
@@ -122,14 +130,21 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
 /// cell anchor, otherwise schema 2. An older install reads schema 1 and
 /// lists schema 2 as unsupported, so it never silently skips an anchored cell.
 pub fn to_value(map: &FieldMap) -> Value {
-    if map.fields.iter().all(|field| field.anchor.is_none()) && map.optional_sheets.is_empty() {
+    if map
+        .fields
+        .iter()
+        .all(|field| field.anchor.is_none() && field.kind.is_text())
+        && map.optional_sheets.is_empty()
+    {
         return serde_json::to_value(map).unwrap_or(Value::Null);
     }
     let slots = map
         .fields
         .iter()
         .map(|field| {
-            let kind = if field.multiline {
+            let kind = if !field.kind.is_text() {
+                field.kind.name()
+            } else if field.multiline {
                 "multiline"
             } else if field.options.is_empty() {
                 "text"
@@ -166,6 +181,7 @@ pub fn to_value(map: &FieldMap) -> Value {
                 "anchor": anchor,
                 "source": source,
                 "options": field.options,
+                "format": field.format,
             })
         })
         .collect::<Vec<_>>();

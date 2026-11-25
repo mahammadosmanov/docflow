@@ -35,6 +35,7 @@ pub mod remap;
 pub mod sheets;
 pub mod slots;
 pub mod structure;
+pub mod values;
 const BUCKET: &str = "doc-templates";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

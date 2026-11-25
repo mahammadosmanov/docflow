@@ -664,12 +664,32 @@ impl NativeBackend {
         if map.fields.is_empty() {
             return Err(BackendError::validation("error.templates.noFields"));
         }
-        let rfis =
+        let free = text("mode") == "free";
+        let rfis = if free {
+            Vec::new()
+        } else {
             template_documents::requested_rfis(&text("rfi_numbers"), Some(&entry.discipline))
-                .map_err(template_error)?;
-        let rfi_log = required_selected_path(&request.values, "rfi_log_workbook")?;
+                .map_err(template_error)?
+        };
+        let count = request
+            .values
+            .get("document_count")
+            .and_then(Value::as_i64)
+            .unwrap_or(1);
+        if free && !(1..=template_documents::MAX_RFIS as i64).contains(&count) {
+            return Err(template_error("The document count must be 1 to 100"));
+        }
+        let rfi_log = if free {
+            None
+        } else {
+            Some(
+                required_selected_path(&request.values, "rfi_log_workbook").map_err(|_| {
+                    BackendError::validation("error.param.required.rfi_log_workbook")
+                })?,
+            )
+        };
         let output_directory = required_selected_path(&request.values, "output_directory")?;
-        if !rfi_log.is_file() {
+        if rfi_log.as_ref().is_some_and(|path| !path.is_file()) {
             return Err(template_error(
                 "The selected RFI Log workbook is unavailable",
             ));
@@ -678,14 +698,18 @@ impl NativeBackend {
             return Err(template_error("The output folder is unavailable"));
         }
         let mut roots = Vec::new();
-        add_grant_root(
-            &mut roots,
-            rfi_log
-                .parent()
-                .ok_or_else(|| BackendError::path_invalid("Selected input has no parent folder"))?
-                .to_path_buf(),
-            GrantAccess::Read,
-        );
+        if let Some(rfi_log) = &rfi_log {
+            add_grant_root(
+                &mut roots,
+                rfi_log
+                    .parent()
+                    .ok_or_else(|| {
+                        BackendError::path_invalid("Selected input has no parent folder")
+                    })?
+                    .to_path_buf(),
+                GrantAccess::Read,
+            );
+        }
         add_grant_root(&mut roots, output_directory.clone(), GrantAccess::ReadWrite);
         let caller = self.caller_identity()?;
         let scope = GrantScope::new(
@@ -695,18 +719,23 @@ impl NativeBackend {
             template_documents::OPERATION_ID,
         );
         let provisional = self.filesystem.issue_provisional_grants(&scope, &roots)?;
-        let log_bytes = read_granted_input(&self.filesystem, &provisional, &rfi_log)?;
-        let log = template_documents::read_log_rows(&mut Cursor::new(log_bytes), &rfis)
-            .map_err(template_error)?;
-        let mut warnings = rfis
-            .iter()
-            .filter(|rfi| !log.contains_key(*rfi))
-            .map(|rfi| Warning {
-                key: "warn.templates.rfiNotInLog".to_string(),
-                subject: rfi.clone(),
-            })
-            .collect::<Vec<_>>();
-        let rows = template_documents::initial_rows(&map, &log, &rfis);
+        let mut warnings = Vec::new();
+        let rows = if let Some(rfi_log) = &rfi_log {
+            let log_bytes = read_granted_input(&self.filesystem, &provisional, rfi_log)?;
+            let log = template_documents::read_log_rows(&mut Cursor::new(log_bytes), &rfis)
+                .map_err(template_error)?;
+            warnings = rfis
+                .iter()
+                .filter(|rfi| !log.contains_key(*rfi))
+                .map(|rfi| Warning {
+                    key: "warn.templates.rfiNotInLog".to_string(),
+                    subject: rfi.clone(),
+                })
+                .collect();
+            template_documents::initial_rows(&map, &log, &rfis)
+        } else {
+            template_documents::free_rows(&map, count as usize)
+        };
         if rows.is_empty() {
             return Err(template_error("None of the RFI numbers are in the RFI Log"));
         }

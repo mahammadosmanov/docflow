@@ -66,6 +66,29 @@ describe("TemplateEditor", () => {
     expect(call).toHaveBeenLastCalledWith("templates/publish", { versionId: "v" });
   });
 
+  it("sets a field type and format, and clears lines and choices for a typed field", async () => {
+    const call = vi.fn(async (method: string, params?: { fieldMap?: unknown }) =>
+      method === "templates/saveDraft" ? { ...draft, fieldMap: params?.fieldMap } : { templates: [] },
+    );
+    render(
+      <TemplateEditor bridge={{ call } as unknown as Bridge} s={s} draft={draft} onClose={vi.fn()} />,
+    );
+    const types = screen.getAllByLabelText("Type");
+    expect(types[0]).toHaveValue("text");
+    expect(screen.queryByLabelText(/^Format/)).not.toBeInTheDocument();
+    fireEvent.change(types[0], { target: { value: "date" } });
+    fireEvent.change(screen.getByLabelText(/^Format/), { target: { value: "yyyy-MM-dd" } });
+    fireEvent.change(types[1], { target: { value: "checkbox" } });
+    expect(screen.getAllByLabelText(/^Format/)[1]).toHaveAttribute("placeholder", "☒|☐");
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    await vi.waitFor(() => expect(call).toHaveBeenCalledWith("templates/saveDraft", expect.anything()));
+    const saved = call.mock.calls.find(([method]) => method === "templates/saveDraft")?.[1] as {
+      fieldMap: TemplateDraft["fieldMap"];
+    };
+    expect(saved.fieldMap.fields[0]).toMatchObject({ kind: "date", format: "yyyy-MM-dd" });
+    expect(saved.fieldMap.fields[1]).toMatchObject({ kind: "checkbox", options: [], multiline: false });
+  });
+
   it("renames with the discipline prefix and deletes for everyone", async () => {
     const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
       method === "templates/saveDraft" ? { ...draft, code: params?.code, title: params?.title } : { templates: [] },

@@ -322,6 +322,10 @@ export interface TemplateField {
   value: string;
   options: string[];
   multiline: boolean;
+  /** How the value is checked and written; text when absent. */
+  kind?: "text" | "number" | "date" | "checkbox";
+  /** Date pattern such as `dd.MM.yyyy`, or checkbox texts such as `Yes|No`. */
+  format?: string;
   /** Set when the field is a cell instead of a `{{placeholder}}`. */
   anchor?: CellAnchor;
 }

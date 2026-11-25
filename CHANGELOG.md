@@ -5,6 +5,14 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.64.0 - 2026-11-25
+
+### Added
+
+- Template fields have a type (ADR 0058): Text, Number, Date, and Checkbox. Number accepts digits with a `.` or `,`. Date is read as `dd.MM.yyyy`, `dd/MM/yyyy`, or `yyyy-MM-dd` and written in the field's format (default `dd.MM.yyyy`). A Checkbox is a tick box in Preview and writes the checked or unchecked text you set (default ☒ and ☐). A wrong number or date stops in Preview with the field name. Templates that use a type are stored as schema 2, so install this version on every computer before publishing one.
+- "Create documents" has a Source choice: **RFI Log** (as before) or **Without RFI**. Without RFI needs no RFI Log and no numbers: choose how many documents (1 to 100), fill the fields in Preview, and Apply. Documents are named by the file name pattern; until a name part is filled, a document is named `... document-N` so Preview never shows two equal names.
+- Checkboxes written as form fields, content controls, or symbols inside the file are not changed; only text and cells are written.
+
 ## 1.63.0 - 2026-11-25
 
 ### Added

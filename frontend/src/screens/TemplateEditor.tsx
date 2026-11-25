@@ -451,24 +451,63 @@ export function TemplateEditor({
                     )}
                   </label>
                   <label className="field">
-                    <span>{s.t("templates.editor.options")}</span>
-                    <textarea
-                      rows={2}
-                      value={optionText[field.key] ?? ""}
-                      onChange={(event) =>
-                        setOptionText({ ...optionText, [field.key]: event.target.value })
-                      }
-                    />
+                    <span>{s.t("templates.editor.type")}</span>
+                    <select
+                      value={field.kind ?? "text"}
+                      onChange={(event) => {
+                        const kind = event.target.value as NonNullable<TemplateFieldMap["fields"][number]["kind"]>;
+                        if (kind !== "text") {
+                          setOptionText({ ...optionText, [field.key]: "" });
+                        }
+                        updateField(
+                          index,
+                          kind === "text"
+                            ? { kind, format: "" }
+                            : { kind, format: "", multiline: false },
+                        );
+                      }}
+                    >
+                      {(["text", "number", "date", "checkbox"] as const).map((kind) => (
+                        <option key={kind} value={kind}>
+                          {s.t(`templates.editor.type.${kind}`)}
+                        </option>
+                      ))}
+                    </select>
                   </label>
+                  {(field.kind === "date" || field.kind === "checkbox") && (
+                    <label className="field">
+                      <span>{s.t("templates.editor.format")}</span>
+                      <input
+                        value={field.format ?? ""}
+                        placeholder={field.kind === "date" ? "dd.MM.yyyy" : "☒|☐"}
+                        onChange={(event) => updateField(index, { format: event.target.value })}
+                      />
+                      <small>{s.t(`templates.editor.format.${field.kind}`)}</small>
+                    </label>
+                  )}
+                  {(field.kind ?? "text") === "text" && (
+                    <label className="field">
+                      <span>{s.t("templates.editor.options")}</span>
+                      <textarea
+                        rows={2}
+                        value={optionText[field.key] ?? ""}
+                        onChange={(event) =>
+                          setOptionText({ ...optionText, [field.key]: event.target.value })
+                        }
+                      />
+                    </label>
+                  )}
                 </div>
-                <label className="toggle-inline">
-                  <input
-                    type="checkbox"
-                    checked={field.multiline}
-                    onChange={(event) => updateField(index, { multiline: event.target.checked })}
-                  />
-                  {s.t("templates.editor.multiline")}
-                </label>
+                {(field.kind ?? "text") === "text" && (
+                  <label className="toggle-inline">
+                    <input
+                      type="checkbox"
+                      checked={field.multiline}
+                      onChange={(event) => updateField(index, { multiline: event.target.checked })}
+                    />
+                    {s.t("templates.editor.multiline")}
+                  </label>
+                )}
               </div>
             );
           })}

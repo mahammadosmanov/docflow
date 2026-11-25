@@ -289,3 +289,115 @@ fn edited_with(row: &Value, include: bool) -> Value {
     row["_sheet0"] = json!(include);
     row
 }
+
+fn docx_with(text: &str) -> Vec<u8> {
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, body) in [
+        ("[Content_Types].xml", "<Types/>".to_string()),
+        (
+            "word/document.xml",
+            format!(
+                "<w:document><w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>"
+            ),
+        ),
+    ] {
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(body.as_bytes()).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+fn typed_map() -> FieldMap {
+    FieldMap::parse(&json!({
+        "schema": 2,
+        "fileName": "{{no}}",
+        "slots": [
+            {"key": "no", "type": "number", "source": {"kind": "fixed", "value": "7"}},
+            {"key": "day", "type": "date", "format": "yyyy-MM-dd",
+             "source": {"kind": "log", "token": "dateOfIssue"}},
+            {"key": "ok", "type": "checkbox", "format": "Yes|No",
+             "source": {"kind": "fixed", "value": "yes"}},
+            {"key": "note"}
+        ]
+    }))
+    .expect("typed map")
+}
+
+#[test]
+fn typed_slots_start_typed_and_the_table_edits_them() {
+    let rfis = vec!["AZE-SUN-INT-QMS-RFI-ELE-0059".to_string()];
+    let rows = initial_rows(&typed_map(), &log(), &rfis);
+    assert_eq!(rows[0]["no"], "7");
+    assert_eq!(rows[0]["day"], "07.11.2026");
+    assert_eq!(rows[0]["ok"], json!(true));
+    assert_eq!(rows[0]["note"], "");
+    let editor = editor(&typed_map(), rows.clone());
+    let kinds = editor["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|column| column["kind"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(kinds, ["text", "text", "bool", "text"]);
+
+    let mut edited = rows.clone();
+    edited[0]["ok"] = json!(false);
+    assert!(accept_rows(&rows, &edited).is_ok());
+    edited[0]["ok"] = json!("no");
+    assert!(
+        accept_rows(&rows, &edited).is_err(),
+        "a checkbox stays a boolean"
+    );
+}
+
+#[test]
+fn typed_values_are_checked_and_written_in_their_format() {
+    let template = docx_with("{{no}} {{day}} {{ok}} {{note}}");
+    let row = json!({"_rowId": "d1", "no": "3,5", "day": "07.11.2026", "ok": false, "note": "x"});
+    let (file, _) = render(FileKind::Docx, &template, &typed_map(), &row).expect("render");
+    let mut archive = zip::ZipArchive::new(Cursor::new(file.bytes.clone())).unwrap();
+    let mut text = String::new();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("word/document.xml").unwrap(),
+        &mut text,
+    )
+    .unwrap();
+    assert!(text.contains("3,5 2026-11-07 No x"), "{text}");
+    assert_eq!(file.filename, "3,5.docx");
+
+    let bad = json!({"_rowId": "d1", "no": "abc", "day": "07.11.2026", "ok": true, "note": ""});
+    let error = render(FileKind::Docx, &template, &typed_map(), &bad)
+        .err()
+        .expect("number");
+    assert!(error.contains("must be a number"), "{error}");
+    let bad = json!({"_rowId": "d1", "no": "1", "day": "31.02.2026", "ok": true, "note": ""});
+    assert!(render(FileKind::Docx, &template, &typed_map(), &bad).is_err());
+}
+
+#[test]
+fn free_mode_makes_numbered_empty_documents_with_only_today_known() {
+    let map = map();
+    let rows = free_rows(&map, 3);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0]["_rowId"], "document-1");
+    assert_eq!(rows[2]["_rowId"], "document-3");
+    assert_eq!(rows[0]["rfiNo"], "");
+    assert_eq!(rows[0]["date"], "");
+    assert_eq!(
+        rows[0]["issuer"], "Mahammad Osmanov",
+        "fixed starting text stays"
+    );
+    assert!(free_rows(&map, 0).is_empty());
+}
+
+#[test]
+fn a_free_document_without_a_name_part_is_named_by_its_row() {
+    let template = docx_with("{{rfiNo}}");
+    let rows = free_rows(&map(), 2);
+    let (first, _) = render(FileKind::Docx, &template, &map(), &rows[0]).expect("render");
+    let (second, _) = render(FileKind::Docx, &template, &map(), &rows[1]).expect("render");
+    assert_eq!(first.filename, "document-1.docx");
+    assert_eq!(second.filename, "document-2.docx");
+}

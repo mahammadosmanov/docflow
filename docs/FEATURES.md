@@ -50,7 +50,9 @@
   must run
   `docs/supabase_templates.sql` once before the shared store works. A template
   can have a Category (folder path, up to three levels); the library groups by
-  it and the search box matches it.
+  it and the search box matches it. A field can be typed Text, Number, Date
+  (with a format), or Checkbox, and "Create documents" can run without an RFI
+  Log (Source: Without RFI, 1 to 100 documents filled in Preview).
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.
   The first update-capable release must be installed manually once. macOS

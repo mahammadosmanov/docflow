@@ -185,6 +185,30 @@ anchors other than placeholders.
 - A manifest entry with a category that does not normalize to itself is skipped
   like any other invalid entry.
 
+### Field types and free mode (1.64.0)
+
+- `FieldDef.kind` (`text` default, `number`, `date`, `checkbox`) and `format`
+  (date pattern, or `checked|unchecked` texts) are stored as slot `type` and
+  `format` in schema 2; a map with any non-text type is stored as schema 2, and
+  older installs list it as needing a newer DocFlow. A type cannot be combined
+  with several lines, choices, or a repeating row.
+- `templates::values::convert` checks and writes each value as text at render
+  time: number `^-?[0-9]+([.,][0-9]+)?$`; date read from `dd.MM.yyyy`,
+  `dd/MM/yyyy`, `dd-MM-yyyy`, or `yyyy-MM-dd` (real calendar dates only) and
+  written with `dd`, `MM`, `yyyy`, `yy` parts; checkbox writes the checked or
+  unchecked text (default U+2612 and U+2610). The Preview checkbox is a boolean
+  column; any other value must stay text.
+- `choice` keeps its 1.55.0 meaning (the options are suggestions, not a limit).
+  Restricting a value to its list is not done in this release.
+- The `templates.generate_document` parameters gain `mode` (`rfi` default or
+  `free`) and `document_count` (1 to 100, shown for `free`). The RFI Log and RFI
+  numbers are shown only for `rfi`; the log is checked in Rust for `rfi` mode
+  because the schema's required flag ignores visibility. In `free` mode no RFI Log
+  is read or granted, every RFI Log token is empty (`{today}` is set), and rows are
+  `document-N`.
+- Not done: tick a checkbox stored as a form field, content control, or symbol
+  that the file already holds; those need their own writers.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

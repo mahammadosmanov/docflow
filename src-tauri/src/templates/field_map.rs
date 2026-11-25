@@ -17,7 +17,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-use super::{FileKind, MAX_FIELDS, anchors::CellAnchor};
+use super::{
+    FileKind, MAX_FIELDS,
+    anchors::CellAnchor,
+    values::{FieldKind, check_format},
+};
 
 pub const MAX_PRESETS: usize = 500;
 const MAX_OPTIONAL_SHEETS: usize = 100;
@@ -78,6 +82,12 @@ pub struct FieldDef {
     /// Where the field sits when it is not a `{{placeholder}}` (schema 2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<CellAnchor>,
+    /// How the value is checked and written (schema 2 when not text).
+    #[serde(default, skip_serializing_if = "FieldKind::is_text")]
+    pub kind: FieldKind,
+    /// Date pattern (`dd.MM.yyyy`) or checkbox texts (`Yes|No`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub format: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -162,6 +172,18 @@ impl FieldMap {
                 || field.options.iter().any(|option| long(option))
             {
                 return Err(format!("Field \"{}\" is too long", field.key));
+            }
+            check_format(field.kind, &field.format)
+                .map_err(|error| format!("Field \"{}\": {error}", field.key))?;
+            let repeats = field
+                .anchor
+                .as_ref()
+                .is_some_and(|anchor| anchor.repeat_columns.is_some());
+            if !field.kind.is_text() && (field.multiline || repeats || !field.options.is_empty()) {
+                return Err(format!(
+                    "Field \"{}\" has a type that cannot be combined with lines or choices",
+                    field.key
+                ));
             }
         }
         let mut sheet_names = BTreeSet::new();
@@ -249,6 +271,7 @@ impl FieldMap {
                 options: Vec::new(),
                 multiline: false,
                 anchor: None,
+                ..FieldDef::default()
             });
         }
     }

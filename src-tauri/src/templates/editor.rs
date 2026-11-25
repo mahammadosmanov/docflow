@@ -418,6 +418,7 @@ impl TemplateStore {
                     options: Vec::new(),
                     multiline: false,
                     anchor: None,
+                    ..FieldDef::default()
                 };
                 match field_map.fields.iter_mut().find(|item| item.key == def.key) {
                     Some(existing) => {

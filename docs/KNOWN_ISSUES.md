@@ -32,6 +32,11 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
   sensibly.
+- Template field types and free mode (ADR 0058, 1.64.0) are verified with synthetic
+  files only. A Checkbox writes text (☒ or ☐ or your words); it does not tick a
+  Word form-field or content-control checkbox, and Windows Word/Excel acceptance
+  of the written symbols and fonts is not claimed. A choice list still only
+  suggests values. A template that uses a type needs 1.64.0 on every computer.
 - Template categories (ADR 0058, 1.63.0) need the updated
   `docs/supabase_templates.sql` run once on the live project before the editor can
   list or save templates; the SQL was not run against a live Supabase project here.

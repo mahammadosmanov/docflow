@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::templates::anchors;
+use crate::templates::values::FieldKind;
 
 fn docx(document: &str) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
@@ -223,7 +224,7 @@ fn schema_two_features_this_release_cannot_apply_are_refused() {
     for slot in [
         json!({"key": "a", "anchor": {"kind": "range", "sheet": "S", "address": "A1:B2"}}),
         json!({"key": "a", "type": "computed"}),
-        json!({"key": "a", "type": "checkbox"}),
+        json!({"key": "a", "type": "slider"}),
         json!({"key": "a", "source": {"kind": "other"}}),
     ] {
         let value = json!({"schema": 2, "slots": [slot]});
@@ -544,4 +545,46 @@ fn stale_or_invalid_selections_are_refused() {
         replace_in_block(FileKind::Docx, &bytes, "word/styles.xml", 0, 0..1, "D", "x").is_err()
     );
     assert!(replace_in_block(FileKind::Docx, &bytes, &block.part, 99, 0..1, "D", "x").is_err());
+}
+
+#[test]
+fn typed_slots_round_trip_through_schema_two_and_plain_maps_stay_schema_one() {
+    let typed = json!({"schema": 2, "slots": [
+        {"key": "n", "type": "number"},
+        {"key": "d", "type": "date", "format": "yyyy-MM-dd"},
+        {"key": "c", "type": "checkbox", "format": "Yes|No"},
+        {"key": "t"}
+    ]});
+    let map = FieldMap::parse(&typed).expect("loads");
+    assert_eq!(map.fields[0].kind, FieldKind::Number);
+    assert_eq!(map.fields[1].format, "yyyy-MM-dd");
+    let stored = map.to_value();
+    assert_eq!(stored["schema"], 2);
+    assert_eq!(stored["slots"][2]["type"], "checkbox");
+    assert_eq!(FieldMap::parse(&stored).expect("again"), map);
+    // The editor sends schema 1 JSON with `kind`; it must load and keep it.
+    let from_editor = json!({"schema": 1, "fields": [{"key": "n", "kind": "number"}]});
+    assert_eq!(
+        FieldMap::parse(&from_editor).expect("editor").fields[0].kind,
+        FieldKind::Number
+    );
+    let plain = FieldMap::parse(&json!({"schema": 1, "fields": [{"key": "a"}]})).unwrap();
+    assert_eq!(plain.to_value()["schema"], 1);
+    assert!(plain.to_value()["fields"][0].get("kind").is_none());
+}
+
+#[test]
+fn a_bad_format_or_a_type_mixed_with_choices_is_invalid() {
+    for field in [
+        json!({"key": "d", "kind": "date", "format": "hello"}),
+        json!({"key": "c", "kind": "checkbox", "format": "Yes"}),
+        json!({"key": "t", "format": "dd"}),
+        json!({"key": "n", "kind": "number", "options": ["1"]}),
+        json!({"key": "n", "kind": "number", "multiline": true}),
+    ] {
+        assert!(
+            FieldMap::parse(&json!({"schema": 1, "fields": [field.clone()]})).is_err(),
+            "{field}"
+        );
+    }
 }

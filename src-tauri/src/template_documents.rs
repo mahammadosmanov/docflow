@@ -19,6 +19,7 @@ use crate::{
         FileKind,
         field_map::{FieldMap, fill_text, render_package, resolve_tokens},
         sheets,
+        values::{FieldKind, convert, truthy},
     },
 };
 
@@ -29,6 +30,7 @@ const MAX_VALUE_CHARS: usize = 4_000;
 const PRESET_COLUMN: &str = "_preset";
 const ROW_ID: &str = "_rowId";
 const SHEET_PREFIX: &str = "_sheet";
+const FREE_PREFIX: &str = "document-";
 
 /// The row key of the checkbox for the `index`-th optional sheet.
 fn sheet_key(index: usize) -> String {
@@ -211,27 +213,48 @@ pub fn read_log_rows<R: Read + Seek>(
     Ok(rows)
 }
 
+/// One editable row with every field's starting value.
+fn start_row(map: &FieldMap, id: &str, source: &LogRow) -> Value {
+    let mut row = Map::new();
+    row.insert(ROW_ID.to_string(), json!(id));
+    if !map.presets.is_empty() {
+        row.insert(PRESET_COLUMN.to_string(), json!(""));
+    }
+    for field in &map.fields {
+        let start = resolve_tokens(&field.value, source);
+        let value = if field.kind == FieldKind::Checkbox {
+            json!(truthy(&start))
+        } else {
+            json!(start)
+        };
+        row.insert(field.key.clone(), value);
+    }
+    for index in 0..map.optional_sheets.len() {
+        row.insert(sheet_key(index), json!(true));
+    }
+    Value::Object(row)
+}
+
 /// One editable row per RFI with every field's starting value.
 pub fn initial_rows(map: &FieldMap, log: &BTreeMap<String, LogRow>, rfis: &[String]) -> Vec<Value> {
     rfis.iter()
-        .filter_map(|rfi| {
-            let source = log.get(rfi)?;
-            let mut row = Map::new();
-            row.insert(ROW_ID.to_string(), json!(rfi));
-            if !map.presets.is_empty() {
-                row.insert(PRESET_COLUMN.to_string(), json!(""));
-            }
-            for field in &map.fields {
-                row.insert(
-                    field.key.clone(),
-                    json!(resolve_tokens(&field.value, source)),
-                );
-            }
-            for index in 0..map.optional_sheets.len() {
-                row.insert(sheet_key(index), json!(true));
-            }
-            Some(Value::Object(row))
-        })
+        .filter_map(|rfi| Some(start_row(map, rfi, log.get(rfi)?)))
+        .collect()
+}
+
+/// Free mode: `count` numbered documents with no RFI. Every RFI Log value is
+/// empty (only `{today}` is known), so a field starts from its fixed text.
+pub fn free_rows(map: &FieldMap, count: usize) -> Vec<Value> {
+    let mut source = LogRow::new();
+    for token in crate::templates::field_map::LOG_TOKENS {
+        source.insert(token.to_string(), String::new());
+    }
+    source.insert(
+        "today".to_string(),
+        jiff::Zoned::now().strftime("%d.%m.%Y").to_string(),
+    );
+    (1..=count.min(MAX_RFIS))
+        .map(|number| start_row(map, &format!("{FREE_PREFIX}{number}"), &source))
         .collect()
 }
 
@@ -251,7 +274,9 @@ pub fn editor(map: &FieldMap, rows: Vec<Value>) -> Value {
             .anchor
             .as_ref()
             .is_some_and(|anchor| anchor.repeat_columns.is_some());
-        let (kind, width) = if field.multiline || repeats {
+        let (kind, width) = if field.kind == FieldKind::Checkbox {
+            ("bool", 90)
+        } else if field.multiline || repeats {
             ("multiline", 260)
         } else {
             ("text", 180)
@@ -312,7 +337,9 @@ pub fn accept_rows(original: &[Value], submitted: &[Value]) -> Result<Vec<Value>
         if before.get(ROW_ID) != after.get(ROW_ID)
             || before.keys().collect::<BTreeSet<_>>() != after.keys().collect::<BTreeSet<_>>()
             || after.iter().any(|(key, value)| {
-                if key.starts_with(SHEET_PREFIX) {
+                // A value keeps the kind it was previewed with: a checkbox
+                // stays a boolean, everything else stays text.
+                if before.get(key).is_some_and(Value::is_boolean) {
                     !value.is_boolean()
                 } else {
                     value
@@ -335,13 +362,23 @@ pub(crate) fn render(
     map: &FieldMap,
     row: &Value,
 ) -> Result<(GeneratedFile, BTreeSet<String>), String> {
-    let values = row
+    let mut values = BTreeMap::new();
+    for (key, value) in row
         .as_object()
         .ok_or_else(|| "The document row is invalid".to_string())?
         .iter()
         .filter(|(key, _)| !key.starts_with('_'))
-        .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_string()))
-        .collect::<BTreeMap<_, _>>();
+    {
+        let raw = match value {
+            Value::Bool(flag) => flag.to_string(),
+            other => other.as_str().unwrap_or_default().to_string(),
+        };
+        let text = match map.fields.iter().find(|field| field.key == *key) {
+            Some(field) => convert(field, &raw)?,
+            None => raw,
+        };
+        values.insert(key.clone(), text);
+    }
     let (bytes, missing) = render_package(kind, template, map, &values)?;
     let left_out = map
         .optional_sheets
@@ -355,9 +392,15 @@ pub(crate) fn render(
     } else {
         sheets::remove_sheets(&bytes, &left_out)?
     };
+    let row_id = row[ROW_ID].as_str().unwrap_or("document");
     let stem = safe_file_stem(&fill_text(&map.file_name, &values));
+    // A free-mode document whose name does not yet depend on anything the
+    // operator typed gets its number, so Preview never shows two equal names.
+    let blank = safe_file_stem(&fill_text(&map.file_name, &BTreeMap::new()));
     let stem = if stem.is_empty() {
-        safe_file_stem(row[ROW_ID].as_str().unwrap_or("document"))
+        safe_file_stem(row_id)
+    } else if row_id.starts_with(FREE_PREFIX) && stem == blank {
+        safe_file_stem(&format!("{blank} {row_id}"))
     } else {
         stem
     };
