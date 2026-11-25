@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.55.0",
+  "currentVersion": "1.56.0",
   "releases": [
+    {
+      "version": "1.56.0",
+      "tag": "v1.56.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template slots can sit at a Word table cell or an Excel cell"
+    },
     {
       "version": "1.55.0",
       "tag": "v1.55.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template field maps can be read as schema 2 slots; DocFlow still writes schema 1"
     },
     {

@@ -220,7 +220,7 @@ fn schema_two_and_the_equal_schema_one_map_agree() {
 #[test]
 fn schema_two_features_this_release_cannot_apply_are_refused() {
     for slot in [
-        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}}),
+        json!({"key": "a", "anchor": {"kind": "range", "sheet": "S", "address": "A1:B2"}}),
         json!({"key": "a", "type": "computed"}),
         json!({"key": "a", "type": "checkbox"}),
         json!({"key": "a", "source": {"kind": "other"}}),
@@ -232,6 +232,69 @@ fn schema_two_features_this_release_cannot_apply_are_refused() {
     assert!(FieldMap::parse(&json!({"schema": 3, "slots": []})).is_err());
     let repeated = json!({"schema": 2, "slots": [{"key": "a"}, {"key": "a"}]});
     assert!(FieldMap::parse(&repeated).is_err());
+}
+
+#[test]
+fn schema_two_cell_anchors_load_and_bad_ones_are_invalid() {
+    let word = json!({"key": "a", "anchor": {"kind": "cell", "table": 0, "row": 1, "cell": 2}});
+    let excel = json!({"key": "b", "anchor": {"kind": "cell", "sheet": "Form", "address": "C3"}});
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [word, excel]})).expect("loads");
+    let anchor = |key: &str| {
+        map.fields
+            .iter()
+            .find(|field| field.key == key)
+            .and_then(|field| field.anchor.clone())
+            .expect(key)
+    };
+    assert_eq!(
+        (anchor("a").table, anchor("a").row, anchor("a").cell),
+        (Some(0), Some(1), Some(2))
+    );
+    assert_eq!(anchor("b").address.as_deref(), Some("C3"));
+    for bad in [
+        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S"}}),
+        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A0"}}),
+        json!({"key": "a", "anchor": {"kind": "cell", "table": 0, "row": 0}}),
+    ] {
+        let error = FieldMap::parse(&json!({"schema": 2, "slots": [bad]})).expect_err("invalid");
+        assert!(!error.contains("newer DocFlow"), "{error}");
+    }
+    let shared = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}}
+    ]});
+    assert!(
+        FieldMap::parse(&shared)
+            .expect_err("shared cell")
+            .contains("shares its cell")
+    );
+}
+
+#[test]
+fn render_fills_placeholders_and_anchored_cells_together() {
+    let document = concat!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>"#,
+        r#"<w:p><w:r><w:t>RFI {{rfiNo}}</w:t></w:r></w:p>"#,
+        r#"<w:tbl><w:tr><w:tc><w:p><w:r><w:t>old</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+        r#"</w:body></w:document>"#
+    );
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [
+        {"key": "rfiNo"},
+        {"key": "cellText", "anchor": {"kind": "cell", "table": 0, "row": 0, "cell": 0}}
+    ]}))
+    .expect("map");
+    let values = BTreeMap::from([
+        ("rfiNo".to_string(), "ELE-0049".to_string()),
+        ("cellText".to_string(), "Pour 12".to_string()),
+    ]);
+    let (bytes, missing) =
+        render_package(FileKind::Docx, &docx(document), &map, &values).expect("render");
+    let xml = part(&bytes, "word/document.xml");
+    assert!(
+        xml.contains("RFI ELE-0049") && xml.contains("Pour 12"),
+        "{xml}"
+    );
+    assert!(!xml.contains("old") && missing.is_empty(), "{xml}");
 }
 
 const PLAIN: &str = concat!(

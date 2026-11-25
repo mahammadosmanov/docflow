@@ -17,7 +17,7 @@ use crate::{
     ooxml::{WorksheetData, read_workbook_selective_from_reader},
     templates::{
         FileKind,
-        field_map::{FieldMap, fill_package, fill_text, resolve_tokens},
+        field_map::{FieldMap, fill_text, render_package, resolve_tokens},
     },
 };
 
@@ -320,7 +320,7 @@ pub(crate) fn render(
         .filter(|(key, _)| !key.starts_with('_'))
         .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_string()))
         .collect::<BTreeMap<_, _>>();
-    let (bytes, missing) = fill_package(kind, template, &values)?;
+    let (bytes, missing) = render_package(kind, template, map, &values)?;
     let stem = safe_file_stem(&fill_text(&map.file_name, &values));
     let stem = if stem.is_empty() {
         safe_file_stem(row[ROW_ID].as_str().unwrap_or("document"))

@@ -35,6 +35,24 @@ anchors other than placeholders.
 - Published versions stay immutable. No stored data, journal, cloud, or DTO
   format changes (AGENTS rule 16).
 
+### Cell anchors (1.56.0)
+
+- Anchor `{"kind":"cell", ...}`: Excel uses `sheet` and `address`; Word uses
+  zero-based `table`, `row`, `cell` of body tables. Mixed or incomplete
+  shapes are invalid. Two slots cannot share one cell.
+- Excel writer (`ooxml::patch_template_cells`): plain text, style kept,
+  first cell of a merged range allowed (operator forms are merge-heavy; the
+  guarded Follow Up writer refuses merged cells and is not used). Refused:
+  protected or signed workbook, protected sheet, formula cell, a merged cell
+  that is not the first, a missing sheet. The workbook recalculates on open.
+- Word writer: replaces the cell's content with one paragraph that keeps the
+  cell properties, paragraph properties, and the first run's formatting.
+  Refused: a vertical-merge continuation cell, nested tables, and cells with
+  drawings, content controls, form fields, symbols, or fields.
+- Placeholders and anchored cells fill in one pass (`render_package`).
+- Nothing writes an anchor yet. Anchored templates come from editing the
+  `field_map` by hand until the mark-editable screen ships.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

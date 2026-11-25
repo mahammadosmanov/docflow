@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-use super::{FileKind, MAX_FIELDS};
+use super::{FileKind, MAX_FIELDS, anchors::CellAnchor};
 
 pub const MAX_PRESETS: usize = 500;
 const MAX_TEXT_CHARS: usize = 4_000;
@@ -74,6 +74,9 @@ pub struct FieldDef {
     pub options: Vec<String>,
     #[serde(default)]
     pub multiline: bool,
+    /// Where the field sits when it is not a `{{placeholder}}` (schema 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<CellAnchor>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -151,6 +154,19 @@ impl FieldMap {
                 return Err(format!("Field \"{}\" is too long", field.key));
             }
         }
+        let mut anchors = Vec::new();
+        for field in &self.fields {
+            if let Some(anchor) = &field.anchor {
+                anchor.check_shape()?;
+                if anchors.contains(&anchor) {
+                    return Err(format!(
+                        "Field \"{}\" shares its cell with another field",
+                        field.key
+                    ));
+                }
+                anchors.push(anchor);
+            }
+        }
         let mut names = BTreeSet::new();
         for preset in &self.presets {
             let name = preset.name.trim();
@@ -200,6 +216,7 @@ impl FieldMap {
                 value,
                 options: Vec::new(),
                 multiline: false,
+                anchor: None,
             });
         }
     }
@@ -312,6 +329,26 @@ pub fn scan(
         }
     }
     Ok((keys, defaults))
+}
+
+/// Fills the `{{placeholders}}` and then every anchored field, for a whole
+/// field map. Returns the new package plus placeholder keys without a value.
+pub fn render_package(
+    kind: FileKind,
+    bytes: &[u8],
+    map: &FieldMap,
+    values: &BTreeMap<String, String>,
+) -> Result<(Vec<u8>, BTreeSet<String>), String> {
+    let (filled, missing) = fill_package(kind, bytes, values)?;
+    let anchored = map
+        .fields
+        .iter()
+        .filter_map(|field| {
+            let value = values.get(&field.key).map_or("", String::as_str);
+            field.anchor.as_ref().map(|anchor| (anchor, value))
+        })
+        .collect::<Vec<_>>();
+    Ok((super::anchors::apply(kind, &filled, &anchored)?, missing))
 }
 
 /// Writes `values` into every `{{key}}` and returns the new package plus the
@@ -581,7 +618,7 @@ pub fn replace_in_block(
 }
 
 /// Rebuilds the package, letting `change` rewrite text parts.
-fn rewrite_package<F>(bytes: &[u8], mut change: F) -> Result<Vec<u8>, String>
+pub(super) fn rewrite_package<F>(bytes: &[u8], mut change: F) -> Result<Vec<u8>, String>
 where
     F: FnMut(&str, &str) -> Option<String>,
 {
@@ -616,7 +653,7 @@ where
         .into_inner())
 }
 
-fn escape_text(value: &str, word: bool) -> String {
+pub(super) fn escape_text(value: &str, word: bool) -> String {
     let escaped = value
         .replace('&', "&amp;")
         .replace('<', "&lt;")

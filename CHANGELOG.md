@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.56.0 - 2026-11-25
+
+### Added
+
+- Template slots can sit at a Word table cell or an Excel cell (ADR 0058, second step of the template system redesign). Generation writes the value into that cell and keeps its formatting; the first cell of an Excel merged range is allowed. It refuses a protected or signed workbook, a protected sheet, a formula cell, a merged cell that is not the first, a vertical-merge continuation in Word, nested Word tables, and Word cells holding drawings, controls, or fields. Excel workbooks recalculate on open. No editor writes these anchors yet, so operators see no change; DocFlow still writes schema 1.
+
 ## 1.55.0 - 2026-11-25
 
 ### Added

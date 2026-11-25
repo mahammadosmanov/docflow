@@ -27,6 +27,7 @@ pub const MAX_TEMPLATE_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_TEMPLATES: usize = 500;
 const MAX_FIELDS: usize = 500;
 
+pub mod anchors;
 pub mod editor;
 pub mod field_map;
 pub mod slots;

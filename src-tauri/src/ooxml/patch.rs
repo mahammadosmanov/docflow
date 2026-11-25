@@ -71,6 +71,83 @@ where
     patch_workbook_sheets_guarded_inner(source, destination, updates_by_sheet, true, false)
 }
 
+/// Writes plain text into cells of a template workbook held in memory (ADR 0058).
+///
+/// Unlike the guarded writers this accepts the first cell of a merged range,
+/// because operator forms are merge-heavy. It refuses a protected or signed
+/// workbook, a protected sheet, a formula cell, a cell inside a merge that is
+/// not the merge's first cell, and a missing sheet. Styles are kept, and the
+/// workbook is marked to recalculate on open so mirrored formulas never stay
+/// stale.
+pub fn patch_template_cells(
+    package: &[u8],
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), String>>,
+) -> Result<Vec<u8>, OoxmlError> {
+    if updates_by_sheet.is_empty() {
+        return Ok(package.to_vec());
+    }
+    let mut source = io::Cursor::new(package);
+    let discovery = ordered_workbook_discovery(&mut source)?;
+    if discovery.safety.has_workbook_protection {
+        return Err(OoxmlError::invalid("template workbook is protected"));
+    }
+    source.seek(SeekFrom::Start(0))?;
+    if package_has_signature(&mut source)? {
+        return Err(OoxmlError::invalid("template workbook is signed"));
+    }
+    source.seek(SeekFrom::Start(0))?;
+    let workbook = read_workbook_from_reader(&mut source)?;
+    for (sheet_name, updates) in updates_by_sheet {
+        let sheet = workbook
+            .sheet(sheet_name)
+            .ok_or_else(|| OoxmlError::invalid(format!("worksheet not found: {sheet_name}")))?;
+        if sheet.has_sheet_protection {
+            return Err(OoxmlError::invalid("template worksheet is protected"));
+        }
+        for &(row, column) in updates.keys() {
+            if row == 0 || column == 0 || column > 16_384 {
+                return Err(OoxmlError::invalid("worksheet cell reference is invalid"));
+            }
+            if sheet
+                .cell(row, column)
+                .is_some_and(|cell| cell.formula.is_some())
+            {
+                return Err(OoxmlError::invalid("template cell holds a formula"));
+            }
+            if sheet
+                .merged_range_containing(row, column)
+                .is_some_and(|range| (range.first_row, range.first_column) != (row, column))
+            {
+                return Err(OoxmlError::invalid(
+                    "template cell is inside a merge but is not its first cell",
+                ));
+            }
+        }
+    }
+    let sheet_infos = project_sheet_infos(&discovery);
+    source.seek(SeekFrom::Start(0))?;
+    let mut archive = open_archive(source)?;
+    let mut patched = BTreeMap::<String, Vec<u8>>::new();
+    for (sheet_name, updates) in updates_by_sheet {
+        let info = sheet_infos
+            .get(sheet_name)
+            .ok_or_else(|| OoxmlError::invalid("template worksheet is missing"))?;
+        let raw = read_entry(&mut archive, &info.path)?;
+        let cells = updates
+            .iter()
+            .map(|(coordinate, text)| (*coordinate, CellUpdate::Text(text.clone())))
+            .collect::<BTreeMap<_, _>>();
+        let (xml, _) = patch_sheet_xml(&raw, &cells, None)?;
+        validate_worksheet_structure(&xml)?;
+        patched.insert(info.path.clone(), xml);
+    }
+    let raw = read_entry(&mut archive, WORKBOOK_PART)?;
+    patched.insert(WORKBOOK_PART.to_string(), with_full_calc_on_load(&raw)?);
+    let mut output = io::Cursor::new(Vec::new());
+    write_package_guarded(&mut archive, &mut output, &patched)?;
+    Ok(output.into_inner())
+}
+
 /// Applies arbitrary text replacements while retaining the same exact-cell and
 /// closed-package-delta guarantees as the Follow Up status writer. Callers must
 /// validate their operation-specific replacement vocabulary before invoking it.

@@ -11,7 +11,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::sync::LazyLock;
 
-use super::field_map::{FieldDef, FieldMap, PresetDef};
+use super::{
+    anchors::CellAnchor,
+    field_map::{FieldDef, FieldMap, PresetDef},
+};
 
 static LOG_TOKEN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9]{0,31}$").expect("static token regex"));
@@ -46,6 +49,8 @@ struct Slot {
 #[derive(Deserialize)]
 struct Anchor {
     kind: String,
+    #[serde(flatten)]
+    cell: CellAnchor,
 }
 
 #[derive(Deserialize)]
@@ -61,13 +66,12 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
     let map: SlotMap = serde_json::from_value(value.clone()).map_err(|_| invalid())?;
     let mut fields = Vec::with_capacity(map.slots.len());
     for slot in map.slots {
-        if slot
-            .anchor
-            .as_ref()
-            .is_some_and(|anchor| anchor.kind != "placeholder")
-        {
-            return Err(NEWER.to_string());
-        }
+        let anchor = match slot.anchor {
+            None => None,
+            Some(anchor) if anchor.kind == "placeholder" => None,
+            Some(anchor) if anchor.kind == "cell" => Some(anchor.cell),
+            Some(_) => return Err(NEWER.to_string()),
+        };
         let multiline = match slot.kind.as_deref() {
             None | Some("text" | "choice") => false,
             Some("multiline") => true,
@@ -89,6 +93,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             value: start,
             options: slot.options,
             multiline,
+            anchor,
         });
     }
     let mut result = FieldMap::default();

@@ -276,6 +276,7 @@ impl TemplateStore {
                     value: field.value.clone(),
                     options: Vec::new(),
                     multiline: false,
+                    anchor: None,
                 };
                 match field_map.fields.iter_mut().find(|item| item.key == def.key) {
                     Some(existing) => {
