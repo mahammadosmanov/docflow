@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.57.0 - 2026-11-25
+
+### Added
+
+- Template editors can mark cells. The editor has a new Cells section that shows the template's Word tables or Excel sheets; selecting a cell and choosing "Make editable" adds a field for it, with the cell's own text as the start value. A cell that holds an RFI code is suggested first and keeps its label. Formula cells, merged-cell continuations, protected sheets, and Word cells holding pictures, controls, or fields are shown locked with the reason. Saving a draft checks every marked cell against the file and refuses one that cannot be written. A template with marked cells is stored as schema 2 (ADR 0058); templates without them are stored exactly as before. Publish a template with marked cells only after every DocFlow install runs 1.55.0 or later, because older installs list it as failed.
+
 ## 1.56.0 - 2026-11-25
 
 ### Added

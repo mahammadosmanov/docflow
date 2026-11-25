@@ -31,6 +31,7 @@ pub mod anchors;
 pub mod editor;
 pub mod field_map;
 pub mod slots;
+pub mod structure;
 const BUCKET: &str = "doc-templates";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

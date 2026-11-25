@@ -127,6 +127,11 @@ impl FieldMap {
         Ok(map)
     }
 
+    /// The value stored in the shared store; see [`super::slots::to_value`].
+    pub fn to_value(&self) -> Value {
+        super::slots::to_value(self)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.schema != 1 {
             return Err("The template field map version is not supported".to_string());
@@ -289,6 +294,17 @@ fn read_package(bytes: &[u8]) -> Result<Package, String> {
         entries.push((name, data));
     }
     Ok(Package { comment, entries })
+}
+
+/// One text part of an Office file as text (for example `word/document.xml`).
+pub(super) fn read_text_part(bytes: &[u8], name: &str) -> Result<String, String> {
+    let package = read_package(bytes)?;
+    package
+        .entries
+        .iter()
+        .find(|(entry, _)| entry == name)
+        .map(|(_, data)| String::from_utf8_lossy(data).into_owned())
+        .ok_or_else(|| "Invalid Office file".to_string())
 }
 
 /// Placeholder keys in document order, without repeats.

@@ -28,6 +28,12 @@ static FIRST_PARAGRAPH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?s)<w:p[ >].*?</w:p>|<w:p/>").expect("static paragraph"));
 static FIRST_RUN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?s)<w:r[ >].*?</w:r>").expect("static run"));
+static FIRST_PARAGRAPH_ALL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<w:p[ >].*?</w:p>").expect("static paragraphs"));
+static TEXT_NODE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<w:t(?:\s[^>]*)?>(.*?)</w:t>").expect("static text node"));
+static GRID_SPAN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<w:gridSpan\s+w:val="(\d+)""#).expect("static gridSpan"));
 static VERTICAL_CONTINUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"<w:vMerge\s*/>|<w:vMerge\s+w:val="continue""#).expect("static vMerge")
 });
@@ -205,7 +211,16 @@ fn set_word_cell(xml: &str, anchor: &CellAnchor, value: &str) -> Result<String, 
     Ok(output)
 }
 
-fn rewrite_cell(cell: &str, value: &str) -> Result<String, String> {
+/// A cell split into its parts: markup before the content, the cell
+/// properties, the content, and the closing markup.
+struct CellParts<'a> {
+    open: &'a str,
+    properties: &'a str,
+    inner: &'a str,
+    close: &'a str,
+}
+
+fn split_cell(cell: &str) -> Result<CellParts<'_>, String> {
     let open_end = cell
         .find('>')
         .ok_or("The Word table markup is not supported")?
@@ -215,13 +230,40 @@ fn rewrite_cell(cell: &str, value: &str) -> Result<String, String> {
         .ok_or("The Word table markup is not supported")?;
     let inner = &cell[open_end..close_start];
     let properties = TC_PR.find(inner).map_or("", |found| found.as_str());
-    if VERTICAL_CONTINUE.is_match(properties) {
-        return Err("The Word cell continues a vertically merged cell".to_string());
+    Ok(CellParts {
+        open: &cell[..open_end],
+        properties,
+        inner,
+        close: &cell[close_start..],
+    })
+}
+
+/// Why a cell cannot be written, as a short code the editor translates.
+fn cell_problem(parts: &CellParts<'_>) -> Option<&'static str> {
+    if VERTICAL_CONTINUE.is_match(parts.properties) {
+        Some("verticalMerge")
+    } else if UNSAFE_CONTENT
+        .iter()
+        .any(|marker| parts.inner.contains(marker))
+    {
+        Some("content")
+    } else {
+        None
     }
-    if UNSAFE_CONTENT.iter().any(|marker| inner.contains(marker)) {
-        return Err("The Word cell holds content that cannot be replaced safely".to_string());
+}
+
+fn rewrite_cell(cell: &str, value: &str) -> Result<String, String> {
+    let parts = split_cell(cell)?;
+    match cell_problem(&parts) {
+        Some("verticalMerge") => {
+            return Err("The Word cell continues a vertically merged cell".to_string());
+        }
+        Some(_) => {
+            return Err("The Word cell holds content that cannot be replaced safely".to_string());
+        }
+        None => {}
     }
-    let body = inner.replacen(properties, "", 1);
+    let body = parts.inner.replacen(parts.properties, "", 1);
     let first = FIRST_PARAGRAPH
         .find(&body)
         .map_or("", |found| found.as_str());
@@ -243,11 +285,73 @@ fn rewrite_cell(cell: &str, value: &str) -> Result<String, String> {
         )
     };
     Ok(format!(
-        "{}{properties}{paragraph}{}",
-        &cell[..open_end],
-        &cell[close_start..]
+        "{}{}{paragraph}{}",
+        parts.open, parts.properties, parts.close
     ))
 }
 
+/// One Word table cell as the editor shows it.
+pub struct WordCell {
+    pub text: String,
+    pub col_span: u32,
+    /// `None` when the cell can be written, else a reason code.
+    pub problem: Option<&'static str>,
+}
+
+/// The body tables of `document.xml`: tables, rows, cells.
+pub fn word_tables(xml: &str) -> Result<Vec<Vec<Vec<WordCell>>>, String> {
+    let mut tables = Vec::new();
+    for table in element_ranges(xml, "tbl")? {
+        let table_xml = &xml[table];
+        let mut rows = Vec::new();
+        for row in element_ranges(table_xml, "tr")? {
+            let row_xml = &table_xml[row];
+            let mut cells = Vec::new();
+            for cell in element_ranges(row_xml, "tc")? {
+                let parts = split_cell(&row_xml[cell])?;
+                let text = FIRST_PARAGRAPH_ALL
+                    .find_iter(parts.inner)
+                    .map(|paragraph| run_text(paragraph.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let col_span = GRID_SPAN
+                    .captures(parts.properties)
+                    .and_then(|found| found[1].parse().ok())
+                    .unwrap_or(1);
+                cells.push(WordCell {
+                    text,
+                    col_span,
+                    problem: cell_problem(&parts),
+                });
+            }
+            rows.push(cells);
+        }
+        tables.push(rows);
+    }
+    Ok(tables)
+}
+
+fn run_text(paragraph: &str) -> String {
+    TEXT_NODE
+        .captures_iter(paragraph)
+        .map(|found| {
+            quick_xml::escape::unescape(&found[1])
+                .map_or_else(|_| found[1].to_string(), |text| text.into_owned())
+        })
+        .collect()
+}
+
+/// `(14, 3)` (row, column) becomes `C14`.
+pub fn address_of(row: u32, column: u32) -> String {
+    let mut letters = String::new();
+    let mut rest = column;
+    while rest > 0 {
+        let digit = u8::try_from((rest - 1) % 26).unwrap_or(0);
+        letters.insert(0, char::from(b'A' + digit));
+        rest = (rest - 1) / 26;
+    }
+    format!("{letters}{row}")
+}
+
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

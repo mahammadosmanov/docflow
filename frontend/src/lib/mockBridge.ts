@@ -486,6 +486,25 @@ export class MockBridge implements Bridge {
           ],
         };
         break;
+      case "templates/cells":
+        result = {
+          kind: "docx",
+          suggestions: [],
+          tables: [
+            {
+              truncated: false,
+              rows: [
+                {
+                  cells: [
+                    { text: "RFI No", colSpan: 1, problem: null },
+                    { text: "", colSpan: 1, problem: null },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+        break;
       case "templates/editText":
       case "templates/openDraft":
       case "templates/create":

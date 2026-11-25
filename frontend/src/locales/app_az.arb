@@ -1330,5 +1330,22 @@
   "templates.document.newText": "Yeni mətn",
   "templates.document.apply": "Şablona tətbiq et",
   "templates.document.loading": "Sənəd yüklənir…",
-  "error.templates.noFields": "Bu şablonda hələ sahə yoxdur. Şablonlar bölməsində şablonu redaktə edib sənəddə sahələri işarələyin."
+  "error.templates.noFields": "Bu şablonda hələ sahə yoxdur. Şablonlar bölməsində şablonu redaktə edib sənəddə sahələri işarələyin.",
+  "templates.cells.title": "Xanalar",
+  "templates.cells.help": "Xana seçin, sonra onu redaktə edilə bilən edin. İşarələnmiş xanalar hər sənəd üçün doldurulur. Qalan hər şey olduğu kimi qalır.",
+  "templates.cells.loading": "Fayl oxunur…",
+  "templates.cells.makeEditable": "Redaktə edilə bilən et",
+  "templates.cells.suggested": "Təklif:",
+  "templates.cells.suggest.rfi": "RFI nömrəsi",
+  "templates.cells.selected": "Seçilmiş:",
+  "templates.cells.empty": "Bu faylda işarələnəcək cədvəl və ya xana yoxdur.",
+  "templates.cells.truncated": "Bu vərəqin yalnız ilk hissəsi göstərilir.",
+  "templates.cells.table": "Cədvəl {n}",
+  "templates.cells.sheets": "Vərəqlər",
+  "templates.cells.where.excel": "{sheet} vərəqində {address} xanası",
+  "templates.cells.where.word": "Cədvəl {table}, sətir {row}, xana {cell}",
+  "templates.cells.locked.formula": "Düstur xanası",
+  "templates.cells.locked.protected": "Vərəq qorunur",
+  "templates.cells.locked.verticalMerge": "Şaquli birləşdirilmiş xananın hissəsi",
+  "templates.cells.locked.content": "Şəkil, onay qutusu və ya sahə var"
 }

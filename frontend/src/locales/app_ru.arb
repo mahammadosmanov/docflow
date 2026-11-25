@@ -1330,5 +1330,22 @@
   "templates.document.newText": "Новый текст",
   "templates.document.apply": "Применить к шаблону",
   "templates.document.loading": "Загрузка документа…",
-  "error.templates.noFields": "В этом шаблоне ещё нет полей. Откройте «Шаблоны», измените шаблон и отметьте поля в документе."
+  "error.templates.noFields": "В этом шаблоне ещё нет полей. Откройте «Шаблоны», измените шаблон и отметьте поля в документе.",
+  "templates.cells.title": "Ячейки",
+  "templates.cells.help": "Выберите ячейку и сделайте её редактируемой. Отмеченные ячейки заполняются для каждого документа. Всё остальное остаётся как есть.",
+  "templates.cells.loading": "Чтение файла…",
+  "templates.cells.makeEditable": "Сделать редактируемой",
+  "templates.cells.suggested": "Предложение:",
+  "templates.cells.suggest.rfi": "номер RFI",
+  "templates.cells.selected": "Выбрано:",
+  "templates.cells.empty": "В этом файле нет таблиц или ячеек для отметки.",
+  "templates.cells.truncated": "Показана только первая часть этого листа.",
+  "templates.cells.table": "Таблица {n}",
+  "templates.cells.sheets": "Листы",
+  "templates.cells.where.excel": "Ячейка {address} на листе {sheet}",
+  "templates.cells.where.word": "Таблица {table}, строка {row}, ячейка {cell}",
+  "templates.cells.locked.formula": "Ячейка с формулой",
+  "templates.cells.locked.protected": "Лист защищён",
+  "templates.cells.locked.verticalMerge": "Часть вертикально объединённой ячейки",
+  "templates.cells.locked.content": "Содержит рисунок, флажок или поле"
 }

@@ -1358,5 +1358,22 @@
   "templates.document.newText": "New text",
   "templates.document.apply": "Apply to template",
   "templates.document.loading": "Loading the document…",
-  "error.templates.noFields": "This template has no fields yet. Open Templates, edit it, and mark fields in the document."
+  "error.templates.noFields": "This template has no fields yet. Open Templates, edit it, and mark fields in the document.",
+  "templates.cells.title": "Cells",
+  "templates.cells.help": "Select a cell, then make it editable. Marked cells are filled for each document. Everything else stays as it is.",
+  "templates.cells.loading": "Reading the file…",
+  "templates.cells.makeEditable": "Make editable",
+  "templates.cells.suggested": "Suggested:",
+  "templates.cells.suggest.rfi": "RFI number",
+  "templates.cells.selected": "Selected:",
+  "templates.cells.empty": "This file has no tables or cells to mark.",
+  "templates.cells.truncated": "Only the first part of this sheet is shown.",
+  "templates.cells.table": "Table {n}",
+  "templates.cells.sheets": "Sheets",
+  "templates.cells.where.excel": "Cell {address} on {sheet}",
+  "templates.cells.where.word": "Table {table}, row {row}, cell {cell}",
+  "templates.cells.locked.formula": "Formula cell",
+  "templates.cells.locked.protected": "The sheet is protected",
+  "templates.cells.locked.verticalMerge": "Part of a vertically merged cell",
+  "templates.cells.locked.content": "Holds a picture, checkbox, or field"
 }

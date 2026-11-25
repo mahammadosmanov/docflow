@@ -278,17 +278,19 @@ each form, then each form is switched in its own release.
 2. 1.56.0 cell anchors: Word table cells and Excel cells (merged first cell
    included) are read from schema 2 and written at generation. Still read
    only, no editor; DocFlow still writes schema 1.
-3. 1.57.0 split-view "mark editable" screen, "suggest from filled copies" and
-   the RFI part suggestion. First release that writes schema 2, and only when
-   a template uses a cell anchor. Ship it after 1.55.0 and 1.56.0 have reached
-   every install, because older installs list a schema 2 template as failed.
-4. 1.58.0 edit later: new draft, version restore, replace file with
+3. 1.57.0 mark-cells screen (Word tables, Excel grid), RFI part suggestion,
+   and the first release that writes schema 2, only when a template uses a
+   cell anchor (done). Ship it after 1.55.0 and 1.56.0 have reached every
+   install, because older installs list a schema 2 template as failed.
+4. 1.58.0 "suggest from filled copies" (upload two or more filled copies,
+   Rust proposes the cells that differ) and the side-by-side file preview.
+5. 1.59.0 edit later: new draft, version restore, replace file with
    Found/Moved/Missing check.
-5. 1.59.0 Word/Excel repeating `rows` parts; Excel optional sheets with
+6. 1.60.0 Word/Excel repeating `rows` parts; Excel optional sheets with
    reference check.
-6. 1.60.0 categories, output file name pattern, library search.
-7. 1.61.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
-8. 1.62.0 `computed` parts; then one release per migrated concrete form.
+7. 1.61.0 categories, output file name pattern, library search.
+8. 1.62.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
+9. 1.63.0 `computed` parts; then one release per migrated concrete form.
 
 Every release: four locale keys, traceability/decisions/issues updates, all
 `docs/RELEASE_SAFETY.md` gates. Supabase needs one SQL migration (category

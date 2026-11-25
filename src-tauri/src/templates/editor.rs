@@ -10,8 +10,9 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use super::{
-    FileKind, MAX_TEMPLATE_BYTES, TemplateStore,
+    FileKind, MAX_TEMPLATE_BYTES, TemplateStore, anchors,
     field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
+    structure::{self, Structure},
     verify_package,
 };
 use crate::errors::BackendError;
@@ -258,6 +259,15 @@ impl TemplateStore {
         text_blocks(template.file_kind, &bytes).map_err(invalid)
     }
 
+    /// The draft file's tables or sheets, for marking cells (ADR 0058).
+    pub fn cells(&self, version_id: &str, now: i64) -> Result<Structure, BackendError> {
+        let version = self.version_row(version_id, now)?;
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let bytes = self.version_bytes(&version, now)?;
+        structure::cells(template.file_kind, &bytes).map_err(invalid)
+    }
+
     /// Turns selected text into a field, or changes it, inside the draft's
     /// file. The edited file is uploaded as the draft's new file.
     pub fn edit_text(&self, request: &EditText, now: i64) -> Result<TemplateDraft, BackendError> {
@@ -328,7 +338,7 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": edited.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
@@ -439,7 +449,7 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": bytes.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
@@ -481,7 +491,7 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": bytes.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
@@ -494,6 +504,19 @@ impl TemplateStore {
         let version = self.version_row(&request.version_id, now)?;
         if version.status != "draft" {
             return Err(BackendError::validation("error.templates.notDraft"));
+        }
+        let anchored = field_map
+            .fields
+            .iter()
+            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
+            .collect::<Vec<_>>();
+        if !anchored.is_empty() {
+            // Dry run on the draft's own file: a cell that cannot be written
+            // is refused now, not when someone generates a document.
+            let template =
+                self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+            let bytes = self.version_bytes(&version, now)?;
+            anchors::apply(template.file_kind, &bytes, &anchored).map_err(invalid)?;
         }
         self.remote.rest(
             "PATCH",
@@ -508,7 +531,7 @@ impl TemplateStore {
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
             &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
-            Some(json!({"field_map": field_map})),
+            Some(json!({"field_map": field_map.to_value()})),
             now,
         )?)?;
         let template = self.template_row(&format!("id=eq.{}", version.template_id), now)?;

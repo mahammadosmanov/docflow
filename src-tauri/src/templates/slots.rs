@@ -8,7 +8,7 @@
 
 use regex::Regex;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::sync::LazyLock;
 
 use super::{
@@ -104,4 +104,59 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
     result.presets = map.presets;
     result.validate()?;
     Ok(result)
+}
+
+/// The stored form of a map: schema 1 exactly as before when no field has a
+/// cell anchor, otherwise schema 2. An older install reads schema 1 and
+/// lists schema 2 as unsupported, so it never silently skips an anchored cell.
+pub fn to_value(map: &FieldMap) -> Value {
+    if map.fields.iter().all(|field| field.anchor.is_none()) {
+        return serde_json::to_value(map).unwrap_or(Value::Null);
+    }
+    let slots = map
+        .fields
+        .iter()
+        .map(|field| {
+            let kind = if field.multiline {
+                "multiline"
+            } else if field.options.is_empty() {
+                "text"
+            } else {
+                "choice"
+            };
+            let anchor = field.anchor.as_ref().map_or_else(
+                || json!({"kind": "placeholder"}),
+                |cell| {
+                    let mut value = serde_json::to_value(cell).unwrap_or(Value::Null);
+                    value["kind"] = json!("cell");
+                    value
+                },
+            );
+            let source = match field.value.as_str() {
+                "" => json!({"kind": "manual"}),
+                text => match text
+                    .strip_prefix('{')
+                    .and_then(|rest| rest.strip_suffix('}'))
+                    .filter(|token| LOG_TOKEN.is_match(token))
+                {
+                    Some(token) => json!({"kind": "log", "token": token}),
+                    None => json!({"kind": "fixed", "value": text}),
+                },
+            };
+            json!({
+                "key": field.key,
+                "label": field.label,
+                "type": kind,
+                "anchor": anchor,
+                "source": source,
+                "options": field.options,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "schema": 2,
+        "fileName": map.file_name,
+        "slots": slots,
+        "presets": map.presets,
+    })
 }

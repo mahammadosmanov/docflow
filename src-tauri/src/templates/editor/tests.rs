@@ -315,3 +315,116 @@ fn marking_text_uploads_a_new_draft_file_with_the_field() {
             .is_err()
     );
 }
+
+fn table_docx() -> Vec<u8> {
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    let body = concat!(
+        "<w:document><w:body><w:tbl><w:tr>",
+        "<w:tc><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:tc>",
+        "<w:tc><w:p><w:r><w:t>Old</w:t></w:r></w:p></w:tc>",
+        "</w:tr></w:tbl></w:body></w:document>"
+    );
+    for (name, text) in [
+        ("[Content_Types].xml", "<Types/>"),
+        ("word/document.xml", body),
+    ] {
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .expect("start");
+        writer.write_all(text.as_bytes()).expect("write");
+    }
+    writer.finish().expect("finish").into_inner()
+}
+
+fn draft_store(bytes: &[u8]) -> (Arc<Scripted>, tempfile::TempDir, TemplateStore) {
+    let remote = Arc::new(Scripted::default());
+    let path = format!("{TEMPLATE_ID}/2/{}.docx", sha256_hex(bytes));
+    remote
+        .files
+        .lock()
+        .unwrap()
+        .insert(path.clone(), bytes.to_vec());
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("GET doc_templates".into(), template_row(json!([])));
+    remote.rows.lock().unwrap().insert(
+        "GET doc_template_versions".into(),
+        json!([{"id": VERSION_ID, "template_id": TEMPLATE_ID, "version": 2, "status": "draft",
+                "file_sha256": sha256_hex(bytes), "file_size": bytes.len(), "storage_path": path,
+                "field_map": {"schema": 1, "fields": []}}]),
+    );
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("PATCH doc_templates".into(), json!([]));
+    let (directory, store) = store(remote.clone());
+    (remote, directory, store)
+}
+
+fn save(field_map: Value) -> SaveDraft {
+    SaveDraft {
+        version_id: VERSION_ID.into(),
+        code: "ELE-RFI-COVER".into(),
+        title: "T".into(),
+        discipline: "ELE".into(),
+        field_map,
+    }
+}
+
+#[test]
+fn the_cell_view_of_a_draft_file_comes_from_rust() {
+    let (_remote, _dir, store) = draft_store(&table_docx());
+    let value = serde_json::to_value(store.cells(VERSION_ID, 1).expect("cells")).expect("json");
+    assert_eq!(value["tables"][0]["rows"][0]["cells"][1]["text"], "Old");
+}
+
+#[test]
+fn a_marked_cell_is_saved_as_schema_two_after_a_dry_run_on_the_file() {
+    let (remote, _dir, store) = draft_store(&table_docx());
+    let map = json!({"schema": 1, "fileName": "{{rfiNo}}", "presets": [], "fields": [
+        {"key": "rfiNo", "label": "RFI", "value": "{rfiNo}", "options": [], "multiline": false,
+         "anchor": {"table": 0, "row": 0, "cell": 1}}
+    ]});
+    let draft = store.save_draft(&save(map), 1).expect("saved");
+    assert_eq!(
+        draft.field_map.fields[0]
+            .anchor
+            .as_ref()
+            .and_then(|a| a.cell),
+        Some(1)
+    );
+    let calls = remote.calls.lock().unwrap();
+    let patch = calls
+        .iter()
+        .find(|(method, path, _)| method == "PATCH" && path.starts_with("doc_template_versions"))
+        .and_then(|(_, _, body)| body.clone())
+        .expect("version patch");
+    assert_eq!(patch["field_map"]["schema"], 2);
+    assert_eq!(patch["field_map"]["slots"][0]["anchor"]["kind"], "cell");
+}
+
+#[test]
+fn a_cell_that_cannot_be_written_is_refused_before_anything_is_saved() {
+    let (remote, _dir, store) = draft_store(&table_docx());
+    let map = json!({"schema": 1, "fields": [
+        {"key": "a", "anchor": {"table": 0, "row": 0, "cell": 7}}
+    ]});
+    let error = store.save_draft(&save(map), 1).expect_err("missing cell");
+    assert!(
+        error.message.starts_with("error.templates.invalid"),
+        "{}",
+        error.message
+    );
+    assert!(
+        remote
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(method, _, _)| method != "PATCH"),
+        "nothing was written"
+    );
+}

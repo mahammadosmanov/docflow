@@ -53,6 +53,27 @@ anchors other than placeholders.
 - Nothing writes an anchor yet. Anchored templates come from editing the
   `field_map` by hand until the mark-editable screen ships.
 
+### Mark cells (1.57.0)
+
+- The editor's Cells section shows the draft file's Word tables or Excel
+  sheets (`templates/cells`, read only, bounded: 30 sheets, 300 rows, 80
+  columns, 6,000 cells, 60 tables, 120 characters per cell). Selecting a cell
+  adds a field with a cell anchor to the draft's map; "Save draft" stores it.
+  A cell that cannot be written (formula, merge continuation, protection,
+  unsafe Word content) is shown locked with the reason.
+- Rust dry-runs every anchored field on the draft file when saving. A cell
+  that cannot be written is refused then, before anything is stored.
+- A cell holding an RFI code is suggested first; the start value keeps the
+  cell's own label (`RFI No: {rfiNo}`). The operator confirms; nothing is
+  written or repaired silently (AGENTS rules 10 and 11).
+- **Storage.** A map with no anchors is stored exactly as schema 1, as before.
+  A map with at least one anchor is stored as schema 2 (`FieldMap::to_value`),
+  so an older install lists the template as failed instead of silently
+  skipping the cell. The shared store has no check on `field_map`'s schema,
+  so no SQL change is needed.
+- Not in this release: suggest from filled copies, repeating rows, optional
+  sheets, free mode, computed parts.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

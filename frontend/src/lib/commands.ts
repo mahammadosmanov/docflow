@@ -19,6 +19,7 @@ import type {
   SupportBundlePreview,
   WatchStatus,
   TemplateDraft,
+  TemplateStructure,
   TemplateEditorState,
   TemplateFieldMap,
   TemplateStatus,
@@ -175,6 +176,7 @@ export interface FrontendCommandMap {
     { versionId: string },
     { blocks: { part: string; index: number; text: string }[] }
   >;
+  "templates/cells": CommandSpec<{ versionId: string }, TemplateStructure>;
   "templates/editText": CommandSpec<
     {
       versionId: string;
@@ -254,6 +256,7 @@ export const FRONTEND_METHODS = [
   "templates/archive",
   "templates/blocks",
   "templates/editText",
+  "templates/cells",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

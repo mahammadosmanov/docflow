@@ -7,6 +7,7 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { Modal } from "../components/Modal";
 import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
+import { TemplateCells, cellLocation } from "./TemplateCells";
 import { TemplateDocument } from "./TemplateDocument";
 import {
   type TemplateDraft,
@@ -135,6 +136,11 @@ export function TemplateEditor({
       }),
     }));
 
+  const markCell = (field: TemplateFieldMap["fields"][number]) => {
+    setMap((current) => ({ ...current, fields: [...current.fields, field] }));
+    setSaved(false);
+  };
+
   const preset = map.presets[presetIndex];
   const setPresets = (presets: TemplateFieldMap["presets"], index: number) => {
     setMap((current) => ({ ...current, presets }));
@@ -258,6 +264,15 @@ export function TemplateEditor({
           }}
         />
 
+        <TemplateCells
+          bridge={bridge}
+          s={s}
+          versionId={draft.versionId}
+          fields={map.fields}
+          reloadKey={draft.placeholders.join("|")}
+          onMark={markCell}
+        />
+
         <section className="content-card template-editor-section">
           <h2>{s.t("templates.editor.fields")}</h2>
           <p className="muted">
@@ -269,11 +284,24 @@ export function TemplateEditor({
             <p className="muted">{s.t("templates.editor.noFields")}</p>
           )}
           {map.fields.map((field, index) => {
-            const inFile = draft.placeholders.includes(field.key);
+            const inFile = field.anchor !== undefined || draft.placeholders.includes(field.key);
             return (
               <div className="template-field" key={field.key}>
                 <div className="template-field-head">
-                  <code>{`{{${field.key}}}`}</code>
+                  {field.anchor ? (
+                    <>
+                      <strong>{cellLocation(s, field.anchor)}</strong>
+                      <Button
+                        variant="ghost"
+                        icon={<Trash2 />}
+                        onClick={() => removeField(field.key)}
+                      >
+                        {s.t("templates.editor.removeField")}
+                      </Button>
+                    </>
+                  ) : (
+                    <code>{`{{${field.key}}}`}</code>
+                  )}
                   {!inFile && (
                     <>
                       <span className="status-label warning">

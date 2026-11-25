@@ -303,12 +303,50 @@ export interface TemplateStatus {
 }
 
 /** One fillable value of a template; `value` may hold `{rfiNo}`-style RFI Log tokens. */
+/** Where an editable part sits: an Excel cell, or a Word table cell (zero-based). */
+export interface CellAnchor {
+  sheet?: string;
+  address?: string;
+  table?: number;
+  row?: number;
+  cell?: number;
+}
+
 export interface TemplateField {
   key: string;
   label: string;
   value: string;
   options: string[];
   multiline: boolean;
+  /** Set when the field is a cell instead of a `{{placeholder}}`. */
+  anchor?: CellAnchor;
+}
+
+export interface CellSuggestion {
+  key: string;
+  label: string;
+  value: string;
+  anchor: CellAnchor;
+}
+
+export type CellProblem = "verticalMerge" | "content";
+
+export interface TemplateStructure {
+  kind: "xlsx" | "docx";
+  suggestions: CellSuggestion[];
+  sheets?: {
+    name: string;
+    maxRow: number;
+    maxColumn: number;
+    truncated: boolean;
+    protected: boolean;
+    cells: { row: number; column: number; text: string; formula: boolean }[];
+    merges: { row: number; column: number; rowSpan: number; colSpan: number }[];
+  }[];
+  tables?: {
+    truncated: boolean;
+    rows: { cells: { text: string; colSpan: number; problem: CellProblem | null }[] }[];
+  }[];
 }
 
 /** A named set of field values applied together, such as one ITP stage group. */

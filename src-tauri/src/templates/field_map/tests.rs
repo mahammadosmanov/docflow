@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::templates::anchors;
 
 fn docx(document: &str) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
@@ -295,6 +296,61 @@ fn render_fills_placeholders_and_anchored_cells_together() {
         "{xml}"
     );
     assert!(!xml.contains("old") && missing.is_empty(), "{xml}");
+}
+
+#[test]
+fn a_map_without_anchors_is_still_stored_as_exactly_the_same_schema_one() {
+    let map = FieldMap::parse(&json!({
+        "schema": 1, "fileName": "{{rfiNo}}",
+        "fields": [{"key": "rfiNo", "label": "RFI", "value": "{rfiNo}",
+                    "options": ["a"], "multiline": true}],
+        "presets": []
+    }))
+    .expect("map");
+    assert_eq!(
+        map.to_value(),
+        serde_json::to_value(&map).expect("serialize")
+    );
+    assert_eq!(map.to_value()["schema"], 1);
+    assert!(map.to_value()["fields"][0].get("anchor").is_none());
+}
+
+#[test]
+fn a_map_with_an_anchor_is_stored_as_schema_two_and_loads_back_equal() {
+    let mut map = FieldMap::parse(&slot_map()).expect("map");
+    map.fields.push(FieldDef {
+        key: "pour".to_string(),
+        label: "Pour".to_string(),
+        value: "({area}) {tagNo}".to_string(),
+        options: vec!["A".to_string()],
+        anchor: Some(anchors::CellAnchor {
+            sheet: Some("Form".to_string()),
+            address: Some("C3".to_string()),
+            ..anchors::CellAnchor::default()
+        }),
+        ..FieldDef::default()
+    });
+    map.fields.push(FieldDef {
+        key: "extraNote".to_string(),
+        multiline: true,
+        anchor: Some(anchors::CellAnchor {
+            table: Some(0),
+            row: Some(1),
+            cell: Some(2),
+            ..anchors::CellAnchor::default()
+        }),
+        ..FieldDef::default()
+    });
+    let stored = map.to_value();
+    assert_eq!(stored["schema"], 2);
+    assert_eq!(FieldMap::parse(&stored).expect("loads"), map);
+    let slots = stored["slots"].as_array().expect("slots");
+    assert!(slots.iter().any(|slot| slot["anchor"]["kind"] == "cell"));
+    assert!(
+        slots
+            .iter()
+            .any(|slot| slot["anchor"]["kind"] == "placeholder")
+    );
 }
 
 const PLAIN: &str = concat!(

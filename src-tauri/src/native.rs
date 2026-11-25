@@ -604,6 +604,10 @@ impl NativeBackend {
                     "blocks": self.templates.blocks(&request.version_id, now())?
                 }))
             }
+            BackendMethod::TemplatesCells => {
+                let request: TemplateVersionParams = decode(params)?;
+                encode(self.templates.cells(&request.version_id, now())?)
+            }
             BackendMethod::TemplatesEditText => {
                 let request: crate::templates::editor::EditText = decode(params)?;
                 encode(self.templates.edit_text(&request, now())?)

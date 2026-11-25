@@ -1330,5 +1330,22 @@
   "templates.document.newText": "Yeni metin",
   "templates.document.apply": "Şablona uygula",
   "templates.document.loading": "Belge yükleniyor…",
-  "error.templates.noFields": "Bu şablonda henüz alan yok. Şablonlar'da şablonu düzenle ve belgede alanları işaretle."
+  "error.templates.noFields": "Bu şablonda henüz alan yok. Şablonlar'da şablonu düzenle ve belgede alanları işaretle.",
+  "templates.cells.title": "Hücreler",
+  "templates.cells.help": "Bir hücre seç, sonra düzenlenebilir yap. İşaretli hücreler her belge için doldurulur. Geri kalan her şey olduğu gibi kalır.",
+  "templates.cells.loading": "Dosya okunuyor…",
+  "templates.cells.makeEditable": "Düzenlenebilir yap",
+  "templates.cells.suggested": "Öneri:",
+  "templates.cells.suggest.rfi": "RFI numarası",
+  "templates.cells.selected": "Seçili:",
+  "templates.cells.empty": "Bu dosyada işaretlenecek tablo ya da hücre yok.",
+  "templates.cells.truncated": "Bu sayfanın yalnızca ilk bölümü gösteriliyor.",
+  "templates.cells.table": "Tablo {n}",
+  "templates.cells.sheets": "Sayfalar",
+  "templates.cells.where.excel": "{sheet} sayfasında {address} hücresi",
+  "templates.cells.where.word": "Tablo {table}, satır {row}, hücre {cell}",
+  "templates.cells.locked.formula": "Formül hücresi",
+  "templates.cells.locked.protected": "Sayfa korumalı",
+  "templates.cells.locked.verticalMerge": "Dikey birleştirilmiş hücrenin parçası",
+  "templates.cells.locked.content": "Resim, onay kutusu ya da alan içeriyor"
 }
