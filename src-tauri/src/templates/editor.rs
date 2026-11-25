@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 
 use super::{
     FileKind, MAX_TEMPLATE_BYTES, TemplateStore, anchors,
+    copies::{self, CopySuggestion},
     field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
     structure::{self, Structure},
     verify_package,
@@ -266,6 +267,28 @@ impl TemplateStore {
             self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
         let bytes = self.version_bytes(&version, now)?;
         structure::cells(template.file_kind, &bytes).map_err(invalid)
+    }
+
+    /// Compares the draft file with other filled copies of the same form and
+    /// suggests the cells that change. The copies are only read, never stored.
+    pub fn suggest_from_copies(
+        &self,
+        version_id: &str,
+        files: &[(String, Vec<u8>)],
+        now: i64,
+    ) -> Result<Vec<CopySuggestion>, BackendError> {
+        let version = self.version_row(version_id, now)?;
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let mut copies = Vec::with_capacity(files.len());
+        for (name, bytes) in files {
+            if file_kind_of(name, bytes)? != template.file_kind {
+                return Err(BackendError::validation("error.templates.fileType"));
+            }
+            copies.push(bytes.clone());
+        }
+        let base = self.version_bytes(&version, now)?;
+        copies::compare(template.file_kind, &base, &copies).map_err(invalid)
     }
 
     /// Turns selected text into a field, or changes it, inside the draft's

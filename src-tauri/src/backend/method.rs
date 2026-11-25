@@ -110,6 +110,8 @@ pub(crate) enum BackendMethod {
     TemplatesEditText,
     #[serde(rename = "templates/cells")]
     TemplatesCells,
+    #[serde(rename = "templates/suggestFromCopies")]
+    TemplatesSuggestFromCopies,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -118,7 +120,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 54] = [
+    pub(crate) const ALL: [Self; 55] = [
         Self::AppBootstrap,
         Self::UpdateCheck,
         Self::UpdateInstall,
@@ -173,6 +175,7 @@ impl BackendMethod {
         Self::TemplatesBlocks,
         Self::TemplatesEditText,
         Self::TemplatesCells,
+        Self::TemplatesSuggestFromCopies,
     ];
 
     pub(crate) const fn owner(self) -> MethodOwner {
@@ -235,6 +238,7 @@ impl BackendMethod {
             Self::TemplatesBlocks => "templates/blocks",
             Self::TemplatesEditText => "templates/editText",
             Self::TemplatesCells => "templates/cells",
+            Self::TemplatesSuggestFromCopies => "templates/suggestFromCopies",
         }
     }
 

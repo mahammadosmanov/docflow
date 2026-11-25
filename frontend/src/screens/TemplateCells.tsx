@@ -1,4 +1,4 @@
-import { Tag, X } from "lucide-react";
+import { Files, Tag, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui";
 import { Notice } from "../components/feedback";
@@ -8,6 +8,7 @@ import { humanError } from "../helpers";
 import {
   type CellAnchor,
   type CellProblem,
+  type CopySuggestion,
   type TemplateField,
   type TemplateStructure,
 } from "../types";
@@ -73,6 +74,8 @@ export function TemplateCells({
   const [picked, setPicked] = useState<Picked | null>(null);
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  const [copies, setCopies] = useState<CopySuggestion[] | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -117,6 +120,30 @@ export function TemplateCells({
       value: picked.text.length <= MAX_START_CHARS ? picked.text : "",
       anchor: picked.anchor,
     });
+  };
+
+  const findInCopies = async () => {
+    setCopyBusy(true);
+    setError("");
+    try {
+      const result = await bridge.call("templates/suggestFromCopies", { versionId });
+      if (result) setCopies(result.suggestions);
+    } catch (reason) {
+      setError(humanError(reason, s));
+    } finally {
+      setCopyBusy(false);
+    }
+  };
+
+  const markCopies = (items: CopySuggestion[]) => {
+    const taken = fields.map((field) => field.key);
+    for (const item of items) {
+      const label = item.label || (item.rfi ? "RFI No." : cellLocation(s, item.anchor));
+      const key =
+        item.rfi && !taken.includes("rfiNo") ? "rfiNo" : fieldKey(label, taken);
+      taken.push(key);
+      onMark({ key, label, value: item.value, options: [], multiline: false, anchor: item.anchor });
+    }
   };
 
   const problemTitle = (problem: CellProblem | "formula" | "protected") =>
@@ -281,6 +308,44 @@ export function TemplateCells({
           ))}
         </div>
       )}
+      <div className="template-editor-actions">
+        <Button
+          variant="secondary"
+          icon={<Files />}
+          disabled={copyBusy}
+          onClick={() => void findInCopies()}
+        >
+          {s.t("templates.cells.fromCopies")}
+        </Button>
+      </div>
+      <p className="muted">{s.t("templates.cells.fromCopies.help")}</p>
+      {copies !== null && (() => {
+        const open = copies.filter((item) => !isMarked(item.anchor));
+        return open.length === 0 ? (
+          <p className="muted">{s.t("templates.cells.fromCopies.none")}</p>
+        ) : (
+          <div className="cell-copies">
+            <div className="template-field-head">
+              <strong>{s.t("templates.cells.fromCopies.found")}</strong>
+              <Button variant="secondary" icon={<Tag />} onClick={() => markCopies(open)}>
+                {s.t("templates.cells.markAll")}
+              </Button>
+            </div>
+            {open.map((item) => (
+              <div className="cell-copy" key={cellLocation(s, item.anchor)}>
+                <span>
+                  <strong>{item.label || cellLocation(s, item.anchor)}</strong>
+                  <small>{cellLocation(s, item.anchor)}</small>
+                </span>
+                <span className="muted">{item.samples.join(" · ")}</span>
+                <Button variant="ghost" icon={<Tag />} onClick={() => markCopies([item])}>
+                  {s.t("templates.cells.makeEditable")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {picked && (
         <div className="template-selection" role="status">
           <span>

@@ -317,16 +317,20 @@ fn marking_text_uploads_a_new_draft_file_with_the_field() {
 }
 
 fn table_docx() -> Vec<u8> {
+    table_docx_with("Old")
+}
+
+fn table_docx_with(value: &str) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-    let body = concat!(
-        "<w:document><w:body><w:tbl><w:tr>",
-        "<w:tc><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:tc>",
-        "<w:tc><w:p><w:r><w:t>Old</w:t></w:r></w:p></w:tc>",
-        "</w:tr></w:tbl></w:body></w:document>"
+    let body = format!(
+        "<w:document><w:body><w:tbl><w:tr>\
+         <w:tc><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:tc>\
+         <w:tc><w:p><w:r><w:t>{value}</w:t></w:r></w:p></w:tc>\
+         </w:tr></w:tbl></w:body></w:document>"
     );
     for (name, text) in [
         ("[Content_Types].xml", "<Types/>"),
-        ("word/document.xml", body),
+        ("word/document.xml", body.as_str()),
     ] {
         writer
             .start_file(name, SimpleFileOptions::default())
@@ -426,5 +430,25 @@ fn a_cell_that_cannot_be_written_is_refused_before_anything_is_saved() {
             .iter()
             .all(|(method, _, _)| method != "PATCH"),
         "nothing was written"
+    );
+}
+
+#[test]
+fn other_filled_copies_suggest_the_cells_that_change() {
+    let (_remote, _dir, store) = draft_store(&table_docx());
+    let copies = vec![("copy.docx".to_string(), table_docx_with("New"))];
+    let found = store
+        .suggest_from_copies(VERSION_ID, &copies, 1)
+        .expect("suggestions");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].anchor.cell, Some(1));
+    assert_eq!(found[0].label, "Label");
+    assert_eq!(found[0].samples, ["Old", "New"]);
+
+    let wrong_kind = vec![("copy.xlsx".to_string(), table_docx_with("New"))];
+    assert!(
+        store
+            .suggest_from_copies(VERSION_ID, &wrong_kind, 1)
+            .is_err()
     );
 }

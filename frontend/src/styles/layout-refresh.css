@@ -1040,3 +1040,23 @@ textarea[aria-invalid="true"] {
   flex: 1 1 200px;
   min-width: 160px;
 }
+.cell-copies {
+  display: grid;
+  gap: 0;
+}
+.cell-copy {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 2fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+.cell-copy small {
+  display: block;
+  color: var(--muted);
+}
+.cell-copy > .muted {
+  overflow-wrap: anywhere;
+}

@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.58.0 - 2026-11-25
+
+### Added
+
+- Template editors can find editable cells from other filled copies of a form. In the Cells section, "Suggest from other copies" opens a file picker for up to 10 Word or Excel files of the template's kind. DocFlow compares them with the draft file and lists the cells that differ, with the nearest unchanged label to the left and up to three sample values; cells that hold an RFI code in every copy start as `{rfiNo}`. Editors mark one suggestion or all of them. The copies are read on this computer only and are never uploaded or stored. Formula cells, merged-cell continuations, protected sheets, and unsafe Word cells are never suggested.
+
 ## 1.57.0 - 2026-11-25
 
 ### Added

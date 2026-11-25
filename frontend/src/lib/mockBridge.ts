@@ -505,6 +505,19 @@ export class MockBridge implements Bridge {
           ],
         };
         break;
+      case "templates/suggestFromCopies":
+        result = {
+          suggestions: [
+            {
+              anchor: { table: 0, row: 0, cell: 1 },
+              label: "RFI No",
+              value: "{rfiNo}",
+              samples: ["ELE-0049", "ELE-0050"],
+              rfi: true,
+            },
+          ],
+        };
+        break;
       case "templates/editText":
       case "templates/openDraft":
       case "templates/create":

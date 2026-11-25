@@ -74,6 +74,23 @@ anchors other than placeholders.
 - Not in this release: suggest from filled copies, repeating rows, optional
   sheets, free mode, computed parts.
 
+### Suggest from other copies (1.58.0)
+
+- `templates/suggestFromCopies` opens Rust's own file dialog (up to 10 Word or
+  Excel files of the template's kind, each within the template size limit).
+  Rust compares them with the draft file cell by cell: a Word cell by table,
+  row, and cell position; an Excel cell by sheet name and address. Copies are
+  only read here. They are never uploaded, stored, or sent to the webview
+  beyond up to three short sample values per suggested cell.
+- A cell is suggested when its text differs between the files and it can be
+  written in the draft file (no formula, merge tail, protected sheet, or unsafe
+  Word content). Cells empty in the draft but filled in a copy count. The label
+  is the nearest filled cell to the left that reads the same in every file.
+- When every filled value holds an exact RFI code, the suggestion is marked
+  RFI and its start value writes the code as `{rfiNo}`. The operator still
+  confirms each suggestion or uses "Make all editable"; nothing is applied
+  silently (AGENTS rules 10 and 11).
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

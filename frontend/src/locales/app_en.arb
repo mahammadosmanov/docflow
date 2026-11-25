@@ -1375,5 +1375,11 @@
   "templates.cells.locked.formula": "Formula cell",
   "templates.cells.locked.protected": "The sheet is protected",
   "templates.cells.locked.verticalMerge": "Part of a vertically merged cell",
-  "templates.cells.locked.content": "Holds a picture, checkbox, or field"
+  "templates.cells.locked.content": "Holds a picture, checkbox, or field",
+  "templates.cells.fromCopies": "Suggest from other copies",
+  "templates.cells.fromCopies.help": "Pick other filled copies of this form. DocFlow shows the cells that differ between them. The copies stay on this computer.",
+  "templates.cells.fromCopies.none": "The copies do not differ in any cell you can mark.",
+  "templates.cells.fromCopies.found": "Cells that differ",
+  "templates.cells.markAll": "Make all editable",
+  "error.templates.tooManyCopies": "Pick at most 10 copies."
 }

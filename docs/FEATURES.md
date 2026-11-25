@@ -32,7 +32,9 @@
   another field) or change it, without editing the file in Word. In the Cells
   section editors select a Word table cell or an Excel cell and make it
   editable; formula, merge-continuation, and protected cells show locked, and
-  an RFI cell is suggested first. Editors pick the discipline (ELE, MEC, CIV,
+  an RFI cell is suggested first, and "Suggest from other copies" lists the cells
+  that differ between filled copies of the form (read locally, never uploaded).
+  Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI

@@ -48,9 +48,17 @@ const excel: TemplateStructure = {
   ],
 };
 
-function mount(structure: TemplateStructure, fields = [] as { key: string }[]) {
+function mount(
+  structure: TemplateStructure,
+  fields = [] as { key: string }[],
+  copies: unknown = null,
+) {
   const onMark = vi.fn();
-  const bridge = { call: vi.fn().mockResolvedValue(structure) } as unknown as Bridge;
+  const bridge = {
+    call: vi.fn((method: string) =>
+      Promise.resolve(method === "templates/suggestFromCopies" ? copies : structure),
+    ),
+  } as unknown as Bridge;
   render(
     <TemplateCells
       bridge={bridge}
@@ -127,5 +135,44 @@ describe("TemplateCells", () => {
     mount(word, [{ key: "a", anchor: { table: 0, row: 0, cell: 0 } } as never]);
     const cell = await screen.findByRole("button", { name: "Label" });
     expect(cell.className).toContain("marked");
+  });
+
+  const copies = {
+    suggestions: [
+      { anchor: { table: 0, row: 0, cell: 1 }, label: "RFI", value: "RFI No: {rfiNo}", samples: ["0049", "0050"], rfi: true },
+      { anchor: { table: 0, row: 0, cell: 0 }, label: "Pour", value: "P1", samples: ["P1", "P2", "P3"], rfi: false },
+      { anchor: { table: 0, row: 0, cell: 0 }, label: "Pour", value: "", samples: ["Q"], rfi: false },
+    ],
+  };
+
+  it("suggests cells that differ between copies and marks one with its label", async () => {
+    const { onMark, bridge } = mount(word, [], copies);
+    fireEvent.click(await screen.findByRole("button", { name: "Suggest from other copies" }));
+    expect(await screen.findByText("0049 · 0050")).toBeTruthy();
+    expect(bridge.call).toHaveBeenCalledWith("templates/suggestFromCopies", { versionId: "v" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Make editable" })[0]);
+    expect(onMark).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "rfiNo", label: "RFI", value: "RFI No: {rfiNo}", anchor: { table: 0, row: 0, cell: 1 } }),
+    );
+  });
+
+  it("marks all suggestions with unique keys", async () => {
+    const { onMark } = mount(word, [], copies);
+    fireEvent.click(await screen.findByRole("button", { name: "Suggest from other copies" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Make all editable" }));
+    const keys = onMark.mock.calls.map(([field]) => field.key);
+    expect(keys).toEqual(["rfiNo", "pour", "pour2"]);
+  });
+
+  it("says so when the copies do not differ, and ignores a cancelled pick", async () => {
+    const none = mount(word, [], { suggestions: [] });
+    fireEvent.click(await screen.findByRole("button", { name: "Suggest from other copies" }));
+    expect(await screen.findByText("The copies do not differ in any cell you can mark.")).toBeTruthy();
+    none.onMark.mockClear();
+    cleanup();
+    mount(word, [], null);
+    fireEvent.click(await screen.findByRole("button", { name: "Suggest from other copies" }));
+    await waitFor(() => expect(screen.queryByText("Cells that differ")).toBeNull());
+    expect(screen.queryByText("The copies do not differ in any cell you can mark.")).toBeNull();
   });
 });

@@ -1347,5 +1347,11 @@
   "templates.cells.locked.formula": "Formül hücresi",
   "templates.cells.locked.protected": "Sayfa korumalı",
   "templates.cells.locked.verticalMerge": "Dikey birleştirilmiş hücrenin parçası",
-  "templates.cells.locked.content": "Resim, onay kutusu ya da alan içeriyor"
+  "templates.cells.locked.content": "Resim, onay kutusu ya da alan içeriyor",
+  "templates.cells.fromCopies": "Diğer kopyalardan öner",
+  "templates.cells.fromCopies.help": "Bu formun doldurulmuş diğer kopyalarını seç. DocFlow aralarında farklı olan hücreleri gösterir. Kopyalar bu bilgisayarda kalır.",
+  "templates.cells.fromCopies.none": "Kopyalar, işaretleyebileceğin hiçbir hücrede farklı değil.",
+  "templates.cells.fromCopies.found": "Farklı olan hücreler",
+  "templates.cells.markAll": "Hepsini düzenlenebilir yap",
+  "error.templates.tooManyCopies": "En fazla 10 kopya seç."
 }

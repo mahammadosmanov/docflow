@@ -164,6 +164,7 @@ impl BackendRouter {
             BackendMethod::TemplatesCreate | BackendMethod::TemplatesReplaceFile => {
                 self.template_file(method, params).await
             }
+            BackendMethod::TemplatesSuggestFromCopies => self.template_copies(params).await,
             BackendMethod::RfiPrintFind => {
                 self.run_native("RFI document discovery failed", move |native| {
                     native.find_rfi_print_files(params)

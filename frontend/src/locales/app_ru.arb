@@ -1347,5 +1347,11 @@
   "templates.cells.locked.formula": "Ячейка с формулой",
   "templates.cells.locked.protected": "Лист защищён",
   "templates.cells.locked.verticalMerge": "Часть вертикально объединённой ячейки",
-  "templates.cells.locked.content": "Содержит рисунок, флажок или поле"
+  "templates.cells.locked.content": "Содержит рисунок, флажок или поле",
+  "templates.cells.fromCopies": "Предложить по другим копиям",
+  "templates.cells.fromCopies.help": "Выберите другие заполненные копии этой формы. DocFlow покажет ячейки, которые между ними различаются. Копии остаются на этом компьютере.",
+  "templates.cells.fromCopies.none": "Копии не отличаются ни в одной ячейке, которую можно отметить.",
+  "templates.cells.fromCopies.found": "Различающиеся ячейки",
+  "templates.cells.markAll": "Сделать все редактируемыми",
+  "error.templates.tooManyCopies": "Выберите не более 10 копий."
 }

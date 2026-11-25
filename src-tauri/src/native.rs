@@ -269,6 +269,16 @@ impl NativeBackend {
         )
     }
 
+    pub(crate) fn suggest_template_copies(
+        &self,
+        version_id: &str,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<Value, BackendError> {
+        Ok(serde_json::json!({
+            "suggestions": self.templates.suggest_from_copies(version_id, files, now())?
+        }))
+    }
+
     pub(crate) fn sync_templates(&self) {
         self.templates.sync(now());
     }

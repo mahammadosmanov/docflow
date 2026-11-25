@@ -329,6 +329,16 @@ export interface CellSuggestion {
   anchor: CellAnchor;
 }
 
+/** A cell that changes between filled copies of one form. */
+export interface CopySuggestion {
+  anchor: CellAnchor;
+  label: string;
+  value: string;
+  samples: string[];
+  /** Every filled value holds an RFI code; the value already uses `{rfiNo}`. */
+  rfi: boolean;
+}
+
 export type CellProblem = "verticalMerge" | "content";
 
 export interface TemplateStructure {

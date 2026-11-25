@@ -20,6 +20,7 @@ import type {
   WatchStatus,
   TemplateDraft,
   TemplateStructure,
+  CopySuggestion,
   TemplateEditorState,
   TemplateFieldMap,
   TemplateStatus,
@@ -177,6 +178,10 @@ export interface FrontendCommandMap {
     { blocks: { part: string; index: number; text: string }[] }
   >;
   "templates/cells": CommandSpec<{ versionId: string }, TemplateStructure>;
+  "templates/suggestFromCopies": CommandSpec<
+    { versionId: string },
+    { suggestions: CopySuggestion[] } | null
+  >;
   "templates/editText": CommandSpec<
     {
       versionId: string;
@@ -257,6 +262,7 @@ export const FRONTEND_METHODS = [
   "templates/blocks",
   "templates/editText",
   "templates/cells",
+  "templates/suggestFromCopies",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

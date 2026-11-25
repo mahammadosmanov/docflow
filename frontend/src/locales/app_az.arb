@@ -1347,5 +1347,11 @@
   "templates.cells.locked.formula": "Düstur xanası",
   "templates.cells.locked.protected": "Vərəq qorunur",
   "templates.cells.locked.verticalMerge": "Şaquli birləşdirilmiş xananın hissəsi",
-  "templates.cells.locked.content": "Şəkil, onay qutusu və ya sahə var"
+  "templates.cells.locked.content": "Şəkil, onay qutusu və ya sahə var",
+  "templates.cells.fromCopies": "Digər nüsxələrdən təklif et",
+  "templates.cells.fromCopies.help": "Bu formanın digər doldurulmuş nüsxələrini seçin. DocFlow aralarında fərqlənən xanaları göstərir. Nüsxələr bu kompüterdə qalır.",
+  "templates.cells.fromCopies.none": "Nüsxələr işarələyə biləcəyiniz heç bir xanada fərqlənmir.",
+  "templates.cells.fromCopies.found": "Fərqlənən xanalar",
+  "templates.cells.markAll": "Hamısını redaktə edilə bilən et",
+  "error.templates.tooManyCopies": "Ən çox 10 nüsxə seçin."
 }
