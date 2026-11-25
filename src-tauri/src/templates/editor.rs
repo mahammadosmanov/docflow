@@ -10,8 +10,12 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use super::{
-    FileKind, MAX_TEMPLATE_BYTES, TemplateStore,
+    FileKind, MAX_TEMPLATE_BYTES, TemplateStore, anchors,
+    copies::{self, CopySuggestion},
     field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
+    remap::{self, AnchorCheck},
+    sheets,
+    structure::{self, Structure},
     verify_package,
 };
 use crate::errors::BackendError;
@@ -42,6 +46,37 @@ pub struct TemplateDraft {
     pub file_kind: FileKind,
     pub field_map: FieldMap,
     pub placeholders: Vec<String>,
+    /// After a file replacement: where each marked cell is in the new file.
+    pub checks: Vec<AnchorCheck>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RestoreVersion {
+    pub code: String,
+    pub version_id: String,
+}
+
+/// One version of a template as the version list shows it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionSummary {
+    pub version_id: String,
+    pub version: u32,
+    pub status: String,
+    pub published_at: Option<String>,
+    pub note: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct VersionListRow {
+    id: String,
+    version: u32,
+    status: String,
+    #[serde(default)]
+    published_at: Option<String>,
+    #[serde(default)]
+    note: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -258,6 +293,68 @@ impl TemplateStore {
         text_blocks(template.file_kind, &bytes).map_err(invalid)
     }
 
+    /// Dry run of the map on the draft's own file, so a marked cell that cannot
+    /// be written, or an optional sheet that cannot be left out, is refused when
+    /// the draft is saved or published, not when someone generates a document.
+    fn check_against_file(
+        &self,
+        field_map: &FieldMap,
+        version: &VersionRow,
+        now: i64,
+    ) -> Result<(), BackendError> {
+        let anchored = field_map
+            .fields
+            .iter()
+            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
+            .collect::<Vec<_>>();
+        if anchored.is_empty() && field_map.optional_sheets.is_empty() {
+            return Ok(());
+        }
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        if !field_map.optional_sheets.is_empty() && template.file_kind != FileKind::Xlsx {
+            return Err(invalid("Optional sheets work only in Excel files"));
+        }
+        let bytes = self.version_bytes(version, now)?;
+        anchors::apply(template.file_kind, &bytes, &anchored).map_err(invalid)?;
+        for name in &field_map.optional_sheets {
+            sheets::remove_sheets(&bytes, std::slice::from_ref(name)).map_err(invalid)?;
+        }
+        sheets::remove_sheets(&bytes, &field_map.optional_sheets).map_err(invalid)?;
+        Ok(())
+    }
+
+    /// The draft file's tables or sheets, for marking cells (ADR 0058).
+    pub fn cells(&self, version_id: &str, now: i64) -> Result<Structure, BackendError> {
+        let version = self.version_row(version_id, now)?;
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let bytes = self.version_bytes(&version, now)?;
+        structure::cells(template.file_kind, &bytes).map_err(invalid)
+    }
+
+    /// Compares the draft file with other filled copies of the same form and
+    /// suggests the cells that change. The copies are only read, never stored.
+    pub fn suggest_from_copies(
+        &self,
+        version_id: &str,
+        files: &[(String, Vec<u8>)],
+        now: i64,
+    ) -> Result<Vec<CopySuggestion>, BackendError> {
+        let version = self.version_row(version_id, now)?;
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        let mut copies = Vec::with_capacity(files.len());
+        for (name, bytes) in files {
+            if file_kind_of(name, bytes)? != template.file_kind {
+                return Err(BackendError::validation("error.templates.fileType"));
+            }
+            copies.push(bytes.clone());
+        }
+        let base = self.version_bytes(&version, now)?;
+        copies::compare(template.file_kind, &base, &copies).map_err(invalid)
+    }
+
     /// Turns selected text into a field, or changes it, inside the draft's
     /// file. The edited file is uploaded as the draft's new file.
     pub fn edit_text(&self, request: &EditText, now: i64) -> Result<TemplateDraft, BackendError> {
@@ -276,6 +373,7 @@ impl TemplateStore {
                     value: field.value.clone(),
                     options: Vec::new(),
                     multiline: false,
+                    anchor: None,
                 };
                 match field_map.fields.iter_mut().find(|item| item.key == def.key) {
                     Some(existing) => {
@@ -327,7 +425,7 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": edited.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
@@ -354,6 +452,7 @@ impl TemplateStore {
             file_kind: template.file_kind,
             field_map,
             placeholders: found,
+            checks: Vec::new(),
         })
     }
 
@@ -438,7 +537,7 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": bytes.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
@@ -463,6 +562,23 @@ impl TemplateStore {
         if file_kind_of(file_name, bytes)? != template.file_kind {
             return Err(BackendError::validation("error.templates.fileType"));
         }
+        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
+        let anchored = field_map
+            .fields
+            .iter()
+            .filter_map(|field| {
+                field
+                    .anchor
+                    .clone()
+                    .map(|anchor| (field.key.clone(), anchor))
+            })
+            .collect::<Vec<_>>();
+        let checks = if anchored.is_empty() {
+            Vec::new()
+        } else {
+            let old = self.version_bytes(&version, now)?;
+            remap::check(template.file_kind, &old, bytes, &anchored).map_err(invalid)?
+        };
         let (sha, path) = self.upload_file(
             &template.id,
             version.version,
@@ -470,7 +586,6 @@ impl TemplateStore {
             bytes,
             now,
         )?;
-        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
         let (found, defaults) = scan(template.file_kind, bytes).map_err(invalid)?;
         field_map.merge_placeholders(&found, &defaults);
         let updated = single::<VersionRow>(self.remote.rest(
@@ -480,11 +595,90 @@ impl TemplateStore {
                 "file_sha256": sha,
                 "file_size": bytes.len(),
                 "storage_path": path,
-                "field_map": field_map,
+                "field_map": field_map.to_value(),
             })),
             now,
         )?)?;
-        self.draft_of(&template, updated, now)
+        let mut draft = self.draft_of(&template, updated, now)?;
+        draft.checks = checks;
+        Ok(draft)
+    }
+
+    /// Every version of the template, newest first.
+    pub fn versions(&self, code: &str, now: i64) -> Result<Vec<VersionSummary>, BackendError> {
+        check_identity(Some(code), "x", "GEN")?;
+        let template = self.template_row(&format!("code=eq.{code}"), now)?;
+        let rows: Vec<VersionListRow> = serde_json::from_value(self.remote.rest(
+            "GET",
+            &format!(
+                "doc_template_versions?select=id,version,status,published_at,note\
+                 &template_id=eq.{}&order=version.desc",
+                uuid_ok(&template.id)?
+            ),
+            None,
+            now,
+        )?)
+        .map_err(|_| BackendError::request_failed("template response is invalid"))?;
+        let mut list = rows
+            .into_iter()
+            .map(|row| VersionSummary {
+                version_id: row.id,
+                version: row.version,
+                status: row.status,
+                published_at: row.published_at,
+                note: row.note,
+            })
+            .collect::<Vec<_>>();
+        list.sort_by_key(|item| std::cmp::Reverse(item.version));
+        Ok(list)
+    }
+
+    /// Makes an earlier version the draft again: its file and field map go
+    /// into a new draft after the latest version, or replace the open draft.
+    /// Earlier versions are never changed.
+    pub fn restore_version(
+        &self,
+        code: &str,
+        version_id: &str,
+        now: i64,
+    ) -> Result<TemplateDraft, BackendError> {
+        check_identity(Some(code), "x", "GEN")?;
+        let template = self.template_row(&format!("code=eq.{code}"), now)?;
+        let old = self.version_row(version_id, now)?;
+        if old.template_id != template.id || old.status == "draft" {
+            return Err(BackendError::validation("error.templates.notFound"));
+        }
+        let latest = template
+            .doc_template_versions
+            .iter()
+            .max_by_key(|version| version.version)
+            .ok_or_else(|| BackendError::validation("error.templates.notFound"))?;
+        let copied = json!({
+            "file_sha256": old.file_sha256,
+            "file_size": old.file_size,
+            "storage_path": old.storage_path,
+            "field_map": old.field_map,
+        });
+        let row = if latest.status == "draft" {
+            single::<VersionRow>(self.remote.rest(
+                "PATCH",
+                &format!("doc_template_versions?id=eq.{}&status=eq.draft", latest.id),
+                Some(copied),
+                now,
+            )?)?
+        } else {
+            let mut body = copied;
+            body["template_id"] = json!(template.id);
+            body["version"] = json!(latest.version + 1);
+            body["status"] = json!("draft");
+            single::<VersionRow>(self.remote.rest(
+                "POST",
+                "doc_template_versions",
+                Some(body),
+                now,
+            )?)?
+        };
+        self.draft_of(&template, row, now)
     }
 
     pub fn save_draft(&self, request: &SaveDraft, now: i64) -> Result<TemplateDraft, BackendError> {
@@ -494,6 +688,7 @@ impl TemplateStore {
         if version.status != "draft" {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
+        self.check_against_file(&field_map, &version, now)?;
         self.remote.rest(
             "PATCH",
             &format!("doc_templates?id=eq.{}", uuid_ok(&version.template_id)?),
@@ -507,7 +702,7 @@ impl TemplateStore {
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
             &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
-            Some(json!({"field_map": field_map})),
+            Some(json!({"field_map": field_map.to_value()})),
             now,
         )?)?;
         let template = self.template_row(&format!("id=eq.{}", version.template_id), now)?;
@@ -538,7 +733,9 @@ impl TemplateStore {
         if version.status != "draft" {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
-        FieldMap::parse(&version.field_map).map_err(invalid)?;
+        let field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
+        // Last check before everyone gets the version.
+        self.check_against_file(&field_map, &version, now)?;
         self.remote.rest(
             "POST",
             "rpc/publish_template_version",

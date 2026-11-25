@@ -17,9 +17,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-use super::{FileKind, MAX_FIELDS};
+use super::{FileKind, MAX_FIELDS, anchors::CellAnchor};
 
 pub const MAX_PRESETS: usize = 500;
+const MAX_OPTIONAL_SHEETS: usize = 100;
 const MAX_TEXT_CHARS: usize = 4_000;
 const MAX_OPTIONS: usize = 100;
 const MAX_PACKAGE_ENTRIES: usize = 4_096;
@@ -74,6 +75,9 @@ pub struct FieldDef {
     pub options: Vec<String>,
     #[serde(default)]
     pub multiline: bool,
+    /// Where the field sits when it is not a `{{placeholder}}` (schema 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<CellAnchor>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -96,6 +100,9 @@ pub struct FieldMap {
     pub fields: Vec<FieldDef>,
     #[serde(default)]
     pub presets: Vec<PresetDef>,
+    /// Excel sheets a document may leave out (schema 2). Empty for Word.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional_sheets: Vec<String>,
 }
 
 fn default_file_name() -> String {
@@ -109,16 +116,25 @@ impl Default for FieldMap {
             file_name: default_file_name(),
             fields: Vec::new(),
             presets: Vec::new(),
+            optional_sheets: Vec::new(),
         }
     }
 }
 
 impl FieldMap {
     pub fn parse(value: &Value) -> Result<Self, String> {
+        if value.get("schema").and_then(Value::as_u64) == Some(2) {
+            return super::slots::parse(value);
+        }
         let map: Self = serde_json::from_value(value.clone())
             .map_err(|_| "The template field map is invalid".to_string())?;
         map.validate()?;
         Ok(map)
+    }
+
+    /// The value stored in the shared store; see [`super::slots::to_value`].
+    pub fn to_value(&self) -> Value {
+        super::slots::to_value(self)
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -146,6 +162,29 @@ impl FieldMap {
                 || field.options.iter().any(|option| long(option))
             {
                 return Err(format!("Field \"{}\" is too long", field.key));
+            }
+        }
+        let mut sheet_names = BTreeSet::new();
+        if self.optional_sheets.len() > MAX_OPTIONAL_SHEETS
+            || self.optional_sheets.iter().any(|name| {
+                name.trim().is_empty()
+                    || name.chars().count() > 31
+                    || !sheet_names.insert(name.to_lowercase())
+            })
+        {
+            return Err("The optional sheet list is invalid".to_string());
+        }
+        let mut anchors = Vec::new();
+        for field in &self.fields {
+            if let Some(anchor) = &field.anchor {
+                anchor.check_shape()?;
+                if anchors.contains(&anchor) {
+                    return Err(format!(
+                        "Field \"{}\" shares its cell with another field",
+                        field.key
+                    ));
+                }
+                anchors.push(anchor);
             }
         }
         let mut names = BTreeSet::new();
@@ -197,6 +236,7 @@ impl FieldMap {
                 value,
                 options: Vec::new(),
                 multiline: false,
+                anchor: None,
             });
         }
     }
@@ -236,12 +276,12 @@ fn text_parts(kind: FileKind, name: &str) -> bool {
     }
 }
 
-struct Package {
-    comment: Vec<u8>,
-    entries: Vec<(String, Vec<u8>)>,
+pub(super) struct Package {
+    pub(super) comment: Vec<u8>,
+    pub(super) entries: Vec<(String, Vec<u8>)>,
 }
 
-fn read_package(bytes: &[u8]) -> Result<Package, String> {
+pub(super) fn read_package(bytes: &[u8]) -> Result<Package, String> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).map_err(|_| "Invalid Office file".to_string())?;
     if archive.is_empty() || archive.len() > MAX_PACKAGE_ENTRIES {
@@ -269,6 +309,17 @@ fn read_package(bytes: &[u8]) -> Result<Package, String> {
         entries.push((name, data));
     }
     Ok(Package { comment, entries })
+}
+
+/// One text part of an Office file as text (for example `word/document.xml`).
+pub(super) fn read_text_part(bytes: &[u8], name: &str) -> Result<String, String> {
+    let package = read_package(bytes)?;
+    package
+        .entries
+        .iter()
+        .find(|(entry, _)| entry == name)
+        .map(|(_, data)| String::from_utf8_lossy(data).into_owned())
+        .ok_or_else(|| "Invalid Office file".to_string())
 }
 
 /// Placeholder keys in document order, without repeats.
@@ -309,6 +360,26 @@ pub fn scan(
         }
     }
     Ok((keys, defaults))
+}
+
+/// Fills the `{{placeholders}}` and then every anchored field, for a whole
+/// field map. Returns the new package plus placeholder keys without a value.
+pub fn render_package(
+    kind: FileKind,
+    bytes: &[u8],
+    map: &FieldMap,
+    values: &BTreeMap<String, String>,
+) -> Result<(Vec<u8>, BTreeSet<String>), String> {
+    let (filled, missing) = fill_package(kind, bytes, values)?;
+    let anchored = map
+        .fields
+        .iter()
+        .filter_map(|field| {
+            let value = values.get(&field.key).map_or("", String::as_str);
+            field.anchor.as_ref().map(|anchor| (anchor, value))
+        })
+        .collect::<Vec<_>>();
+    Ok((super::anchors::apply(kind, &filled, &anchored)?, missing))
 }
 
 /// Writes `values` into every `{{key}}` and returns the new package plus the
@@ -578,7 +649,7 @@ pub fn replace_in_block(
 }
 
 /// Rebuilds the package, letting `change` rewrite text parts.
-fn rewrite_package<F>(bytes: &[u8], mut change: F) -> Result<Vec<u8>, String>
+pub(super) fn rewrite_package<F>(bytes: &[u8], mut change: F) -> Result<Vec<u8>, String>
 where
     F: FnMut(&str, &str) -> Option<String>,
 {
@@ -613,7 +684,7 @@ where
         .into_inner())
 }
 
-fn escape_text(value: &str, word: bool) -> String {
+pub(super) fn escape_text(value: &str, word: bool) -> String {
     let escaped = value
         .replace('&', "&amp;")
         .replace('<', "&lt;")

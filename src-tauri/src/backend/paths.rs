@@ -117,6 +117,56 @@ impl BackendRouter {
         .map_err(|_| BackendError::request_failed("template upload task failed"))?
     }
 
+    /// Lets the operator pick other filled copies of the draft's form. Rust
+    /// reads them and compares; the copies are never uploaded or kept.
+    pub(super) async fn template_copies(&self, params: Value) -> Result<Value, BackendError> {
+        let version = serde_json::from_value::<crate::native::TemplateVersionParams>(params)
+            .map_err(|_| BackendError::invalid_params())?;
+        let app = self.app.clone();
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            let files = app
+                .dialog()
+                .file()
+                .add_filter("Word / Excel", &["docx", "xlsx"])
+                .blocking_pick_files()
+                .unwrap_or_default();
+            if files.len() > crate::templates::copies::MAX_COPIES {
+                return Err(BackendError::validation("error.templates.tooManyCopies"));
+            }
+            let mut copies = Vec::with_capacity(files.len());
+            for file in files {
+                let path = file
+                    .into_path()
+                    .map_err(|_| BackendError::path_invalid("selected path is invalid"))?;
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let size = std::fs::metadata(&path)
+                    .map_err(|_| BackendError::path_invalid("selected file is unavailable"))?
+                    .len();
+                if size > crate::templates::MAX_TEMPLATE_BYTES {
+                    return Err(BackendError::validation("error.templates.fileSize"));
+                }
+                let bytes = std::fs::read(&path)
+                    .map_err(|_| BackendError::path_invalid("selected file is unavailable"))?;
+                copies.push((name, bytes));
+            }
+            Ok(copies)
+        })
+        .await
+        .map_err(|_| BackendError::request_failed("template copies task failed"))??;
+        if picked.is_empty() {
+            return Ok(Value::Null);
+        }
+        let native = Arc::clone(&self.native);
+        tauri::async_runtime::spawn_blocking(move || {
+            native.suggest_template_copies(&version.version_id, &picked)
+        })
+        .await
+        .map_err(|_| BackendError::request_failed("template copies task failed"))?
+    }
+
     pub(super) async fn reveal_path(&self, params: Value) -> Result<Value, BackendError> {
         let request: RevealPathParams =
             serde_json::from_value(params).map_err(|_| BackendError::invalid_params())?;

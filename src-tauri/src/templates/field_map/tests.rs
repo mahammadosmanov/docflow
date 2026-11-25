@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::templates::anchors;
 
 fn docx(document: &str) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
@@ -176,6 +177,213 @@ fn invalid_maps_are_rejected() {
     let mut duplicate_preset = base;
     duplicate_preset["presets"] = json!([{"name": "A"}, {"name": "a"}]);
     assert!(FieldMap::parse(&duplicate_preset).is_err());
+}
+
+fn slot_map() -> serde_json::Value {
+    json!({
+        "schema": 2,
+        "fileName": "{{rfiNo}} Pour",
+        "slots": [
+            {"key": "rfiNo", "label": "RFI No.", "type": "text",
+             "anchor": {"kind": "placeholder"},
+             "source": {"kind": "log", "token": "rfiNo"}},
+            {"key": "note", "label": "Note", "type": "multiline",
+             "source": {"kind": "fixed", "value": "({area}) {tagNo}"}},
+            {"key": "issuer", "type": "choice", "options": ["A", "B"],
+             "source": {"kind": "manual"}}
+        ],
+        "presets": [{"name": "ITP 5", "values": {"issuer": "A"}}]
+    })
+}
+
+#[test]
+fn schema_two_slots_load_as_the_same_fields_schema_one_has() {
+    let map = FieldMap::parse(&slot_map()).expect("schema 2 loads");
+    assert_eq!(map.file_name, "{{rfiNo}} Pour");
+    let by_key = |key: &str| map.fields.iter().find(|field| field.key == key).expect(key);
+    assert_eq!(by_key("rfiNo").value, "{rfiNo}");
+    assert_eq!(by_key("rfiNo").label, "RFI No.");
+    assert!(by_key("note").multiline);
+    assert_eq!(by_key("note").value, "({area}) {tagNo}");
+    assert_eq!(by_key("issuer").options, ["A", "B"]);
+    assert_eq!(by_key("issuer").value, "");
+    assert_eq!(map.presets[0].values["issuer"], "A");
+}
+
+#[test]
+fn schema_two_and_the_equal_schema_one_map_agree() {
+    let two = FieldMap::parse(&slot_map()).expect("schema 2 loads");
+    let one = FieldMap::parse(&serde_json::to_value(&two).expect("serialize")).expect("schema 1");
+    assert_eq!(one, two);
+    assert_eq!(one.schema, 1, "this release still writes schema 1");
+}
+
+#[test]
+fn schema_two_features_this_release_cannot_apply_are_refused() {
+    for slot in [
+        json!({"key": "a", "anchor": {"kind": "range", "sheet": "S", "address": "A1:B2"}}),
+        json!({"key": "a", "type": "computed"}),
+        json!({"key": "a", "type": "checkbox"}),
+        json!({"key": "a", "source": {"kind": "other"}}),
+    ] {
+        let value = json!({"schema": 2, "slots": [slot]});
+        let error = FieldMap::parse(&value).expect_err("refused");
+        assert!(error.contains("newer DocFlow"), "{error}");
+    }
+    assert!(FieldMap::parse(&json!({"schema": 3, "slots": []})).is_err());
+    let repeated = json!({"schema": 2, "slots": [{"key": "a"}, {"key": "a"}]});
+    assert!(FieldMap::parse(&repeated).is_err());
+}
+
+#[test]
+fn schema_two_cell_anchors_load_and_bad_ones_are_invalid() {
+    let word = json!({"key": "a", "anchor": {"kind": "cell", "table": 0, "row": 1, "cell": 2}});
+    let excel = json!({"key": "b", "anchor": {"kind": "cell", "sheet": "Form", "address": "C3"}});
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [word, excel]})).expect("loads");
+    let anchor = |key: &str| {
+        map.fields
+            .iter()
+            .find(|field| field.key == key)
+            .and_then(|field| field.anchor.clone())
+            .expect(key)
+    };
+    assert_eq!(
+        (anchor("a").table, anchor("a").row, anchor("a").cell),
+        (Some(0), Some(1), Some(2))
+    );
+    assert_eq!(anchor("b").address.as_deref(), Some("C3"));
+    for bad in [
+        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S"}}),
+        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A0"}}),
+        json!({"key": "a", "anchor": {"kind": "cell", "table": 0, "row": 0}}),
+    ] {
+        let error = FieldMap::parse(&json!({"schema": 2, "slots": [bad]})).expect_err("invalid");
+        assert!(!error.contains("newer DocFlow"), "{error}");
+    }
+    let shared = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}}
+    ]});
+    assert!(
+        FieldMap::parse(&shared)
+            .expect_err("shared cell")
+            .contains("shares its cell")
+    );
+}
+
+#[test]
+fn render_fills_placeholders_and_anchored_cells_together() {
+    let document = concat!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>"#,
+        r#"<w:p><w:r><w:t>RFI {{rfiNo}}</w:t></w:r></w:p>"#,
+        r#"<w:tbl><w:tr><w:tc><w:p><w:r><w:t>old</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+        r#"</w:body></w:document>"#
+    );
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [
+        {"key": "rfiNo"},
+        {"key": "cellText", "anchor": {"kind": "cell", "table": 0, "row": 0, "cell": 0}}
+    ]}))
+    .expect("map");
+    let values = BTreeMap::from([
+        ("rfiNo".to_string(), "ELE-0049".to_string()),
+        ("cellText".to_string(), "Pour 12".to_string()),
+    ]);
+    let (bytes, missing) =
+        render_package(FileKind::Docx, &docx(document), &map, &values).expect("render");
+    let xml = part(&bytes, "word/document.xml");
+    assert!(
+        xml.contains("RFI ELE-0049") && xml.contains("Pour 12"),
+        "{xml}"
+    );
+    assert!(!xml.contains("old") && missing.is_empty(), "{xml}");
+}
+
+#[test]
+fn a_map_without_anchors_is_still_stored_as_exactly_the_same_schema_one() {
+    let map = FieldMap::parse(&json!({
+        "schema": 1, "fileName": "{{rfiNo}}",
+        "fields": [{"key": "rfiNo", "label": "RFI", "value": "{rfiNo}",
+                    "options": ["a"], "multiline": true}],
+        "presets": []
+    }))
+    .expect("map");
+    assert_eq!(
+        map.to_value(),
+        serde_json::to_value(&map).expect("serialize")
+    );
+    assert_eq!(map.to_value()["schema"], 1);
+    assert!(map.to_value()["fields"][0].get("anchor").is_none());
+}
+
+#[test]
+fn a_map_with_an_anchor_is_stored_as_schema_two_and_loads_back_equal() {
+    let mut map = FieldMap::parse(&slot_map()).expect("map");
+    map.fields.push(FieldDef {
+        key: "pour".to_string(),
+        label: "Pour".to_string(),
+        value: "({area}) {tagNo}".to_string(),
+        options: vec!["A".to_string()],
+        anchor: Some(anchors::CellAnchor {
+            sheet: Some("Form".to_string()),
+            address: Some("C3".to_string()),
+            ..anchors::CellAnchor::default()
+        }),
+        ..FieldDef::default()
+    });
+    map.fields.push(FieldDef {
+        key: "extraNote".to_string(),
+        multiline: true,
+        anchor: Some(anchors::CellAnchor {
+            table: Some(0),
+            row: Some(1),
+            cell: Some(2),
+            ..anchors::CellAnchor::default()
+        }),
+        ..FieldDef::default()
+    });
+    let stored = map.to_value();
+    assert_eq!(stored["schema"], 2);
+    assert_eq!(FieldMap::parse(&stored).expect("loads"), map);
+    let slots = stored["slots"].as_array().expect("slots");
+    assert!(slots.iter().any(|slot| slot["anchor"]["kind"] == "cell"));
+    assert!(
+        slots
+            .iter()
+            .any(|slot| slot["anchor"]["kind"] == "placeholder")
+    );
+}
+
+#[test]
+fn optional_sheets_are_stored_as_schema_two_and_checked() {
+    let stored = json!({
+        "schema": 2,
+        "slots": [{"key": "a"}],
+        "optionalSheets": ["Photos", "Extra"]
+    });
+    let map = FieldMap::parse(&stored).expect("loads");
+    assert_eq!(map.optional_sheets, ["Photos", "Extra"]);
+    let written = map.to_value();
+    assert_eq!(written["schema"], 2);
+    assert_eq!(written["optionalSheets"], json!(["Photos", "Extra"]));
+    assert_eq!(FieldMap::parse(&written).expect("round trip"), map);
+
+    let plain = FieldMap::parse(&json!({"schema": 1, "fields": [{"key": "a"}]})).expect("plain");
+    assert_eq!(
+        plain.to_value()["schema"],
+        1,
+        "no optional sheets, no anchors: unchanged"
+    );
+    assert!(plain.to_value().get("optionalSheets").is_none());
+
+    for bad in [
+        json!(["Photos", "photos"]),
+        json!([""]),
+        json!(["x".repeat(32)]),
+        json!((0..101).map(|n| format!("s{n}")).collect::<Vec<_>>()),
+    ] {
+        let value = json!({"schema": 2, "slots": [], "optionalSheets": bad});
+        assert!(FieldMap::parse(&value).is_err(), "{bad}");
+    }
 }
 
 const PLAIN: &str = concat!(

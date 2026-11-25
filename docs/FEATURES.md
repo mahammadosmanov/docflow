@@ -29,7 +29,16 @@
   such as `{rfiNo}`), choices, and presets (for example ITP stage groups),
   then publish to every user. In the editor's Document panel, editors select
   any text and make it a field (typed, from an RFI Log column, or the same as
-  another field) or change it, without editing the file in Word. Editors pick the discipline (ELE, MEC, CIV,
+  another field) or change it, without editing the file in Word. In the Cells
+  section editors select a Word table cell or an Excel cell and make it
+  editable; formula, merge-continuation, and protected cells show locked, and
+  an RFI cell is suggested first, and "Suggest from other copies" lists the cells
+  that differ between filled copies of the form (read locally, never uploaded).
+  Replacing the file checks every marked cell against it (found, moved with
+  its label, or missing) and holds Publish until each is resolved; Version
+  history restores an earlier version as the draft. In an Excel template with
+  several sheets, editors can mark sheets optional; each document then has a
+  checkbox per optional sheet in Preview. Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI

@@ -1,13 +1,61 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.54.3",
+  "currentVersion": "1.60.0",
   "releases": [
+    {
+      "version": "1.60.0",
+      "tag": "v1.60.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Excel templates can mark sheets as optional so a document can leave them out"
+    },
+    {
+      "version": "1.59.0",
+      "tag": "v1.59.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Template files can be replaced with a marked-cell check, and old versions restored as the draft"
+    },
+    {
+      "version": "1.58.0",
+      "tag": "v1.58.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Template editors can find editable cells from other filled copies of a form"
+    },
+    {
+      "version": "1.57.0",
+      "tag": "v1.57.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Template editors can mark Word and Excel cells as editable parts"
+    },
+    {
+      "version": "1.56.0",
+      "tag": "v1.56.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Template slots can sit at a Word table cell or an Excel cell"
+    },
+    {
+      "version": "1.55.0",
+      "tag": "v1.55.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "superseded",
+      "summary": "Template field maps can be read as schema 2 slots; DocFlow still writes schema 1"
+    },
     {
       "version": "1.54.3",
       "tag": "v1.54.3",
       "date": "2026-11-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "OCR repairs of a damaged RFI number apply only to four-character serials"
     },
     {

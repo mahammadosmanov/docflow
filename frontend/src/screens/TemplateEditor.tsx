@@ -1,4 +1,4 @@
-import { Copy, FileUp, Plus, Save, Send, Trash2 } from "lucide-react";
+import { Copy, FileUp, History, Plus, Save, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button, Header } from "../components/ui";
 import { Notice } from "../components/feedback";
@@ -7,11 +7,14 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { Modal } from "../components/Modal";
 import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
+import { TemplateCells, cellLocation } from "./TemplateCells";
 import { TemplateDocument } from "./TemplateDocument";
 import {
+  type AnchorCheck,
   type TemplateDraft,
   type TemplateFieldMap,
   type TemplateStatus,
+  type VersionSummary,
 } from "../types";
 
 /** RFI Log values a starting value can use, shown as help. */
@@ -66,6 +69,9 @@ export function TemplateEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [checks, setChecks] = useState<AnchorCheck[]>(initial.checks ?? []);
+  const [versions, setVersions] = useState<VersionSummary[] | null>(null);
+  const [versionsOpen, setVersionsOpen] = useState(false);
 
   const load = (next: TemplateDraft) => {
     setDraft(next);
@@ -134,6 +140,46 @@ export function TemplateEditor({
         return { ...preset, values };
       }),
     }));
+
+  const toggleSheet = (name: string, optional: boolean) =>
+    setMap((current) => {
+      const rest = (current.optionalSheets ?? []).filter((item) => item !== name);
+      return { ...current, optionalSheets: optional ? [...rest, name] : rest };
+    });
+  const settle = (key: string) => setChecks((current) => current.filter((item) => item.key !== key));
+  const unresolved = checks.filter((item) => item.status !== "found");
+  const fieldLabel = (key: string) => {
+    const field = map.fields.find((item) => item.key === key);
+    return field?.label || key;
+  };
+  const moveCheck = (check: AnchorCheck) => {
+    if (!check.movedTo) return;
+    const anchor = check.movedTo;
+    setMap((current) => ({
+      ...current,
+      fields: current.fields.map((field) => (field.key === check.key ? { ...field, anchor } : field)),
+    }));
+    settle(check.key);
+    setSaved(false);
+  };
+  const openVersions = () =>
+    void run(async () => {
+      const result = await bridge.call("templates/versions", { code: draft.code });
+      setVersions(result.versions);
+      setVersionsOpen(true);
+    });
+  const restoreVersion = (versionId: string) =>
+    void run(async () => {
+      const next = await bridge.call("templates/restoreVersion", { code: draft.code, versionId });
+      load(next);
+      setChecks([]);
+      setVersionsOpen(false);
+    });
+
+  const markCell = (field: TemplateFieldMap["fields"][number]) => {
+    setMap((current) => ({ ...current, fields: [...current.fields, field] }));
+    setSaved(false);
+  };
 
   const preset = map.presets[presetIndex];
   const setPresets = (presets: TemplateFieldMap["presets"], index: number) => {
@@ -212,18 +258,24 @@ export function TemplateEditor({
                   const next = await bridge.call("templates/replaceFile", {
                     versionId: draft.versionId,
                   });
-                  if (next) load(next);
+                  if (next) {
+                    load(next);
+                    setChecks(next.checks ?? []);
+                  }
                 })
               }
             >
               {s.t("templates.editor.replaceFile")}
+            </Button>
+            <Button variant="secondary" icon={<History />} disabled={busy} onClick={openVersions}>
+              {s.t("templates.versions.open")}
             </Button>
             <Button variant="secondary" icon={<Save />} disabled={busy} onClick={() => void run(save)}>
               {s.t("templates.editor.save")}
             </Button>
             <Button
               icon={<Send />}
-              disabled={busy}
+              disabled={busy || unresolved.length > 0}
               onClick={() =>
                 void run(async () => {
                   await save();
@@ -242,9 +294,57 @@ export function TemplateEditor({
               {s.t("templates.editor.delete")}
             </Button>
           </div>
+          {unresolved.length > 0 && (
+            <Notice kind="info">{s.t("templates.check.blocked")}</Notice>
+          )}
           {saved && <Notice kind="info">{s.t("templates.editor.saved")}</Notice>}
           {error && <Notice kind="error">{error}</Notice>}
         </section>
+
+        {checks.length > 0 && (
+          <section className="content-card template-editor-section">
+            <h2>{s.t("templates.check.title")}</h2>
+            <p className="muted">{s.t("templates.check.help")}</p>
+            {checks.some((item) => item.status === "found") && (
+              <p className="muted">
+                {s.t("templates.check.found", {
+                  count: checks.filter((item) => item.status === "found").length,
+                })}
+              </p>
+            )}
+            {unresolved.map((check) => (
+              <div className="template-field" key={check.key}>
+                <p>
+                  {check.status === "moved" && check.movedTo
+                    ? s.t("templates.check.moved", {
+                        label: fieldLabel(check.key),
+                        where: cellLocation(s, check.movedTo),
+                      })
+                    : s.t("templates.check.missing", { label: fieldLabel(check.key) })}
+                </p>
+                <div className="template-editor-actions">
+                  {check.status === "moved" && check.movedTo ? (
+                    <Button onClick={() => moveCheck(check)}>{s.t("templates.check.move")}</Button>
+                  ) : (
+                    <Button variant="secondary" onClick={() => settle(check.key)}>
+                      {s.t("templates.check.keep")}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    icon={<Trash2 />}
+                    onClick={() => {
+                      removeField(check.key);
+                      settle(check.key);
+                    }}
+                  >
+                    {s.t("templates.editor.removeField")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
 
         <TemplateDocument
           bridge={bridge}
@@ -258,6 +358,18 @@ export function TemplateEditor({
           }}
         />
 
+        <TemplateCells
+          bridge={bridge}
+          s={s}
+          versionId={draft.versionId}
+          fields={map.fields}
+          reloadKey={draft.placeholders.join("|")}
+          onMark={markCell}
+          onRemove={removeField}
+          optionalSheets={map.optionalSheets ?? []}
+          onToggleSheet={toggleSheet}
+        />
+
         <section className="content-card template-editor-section">
           <h2>{s.t("templates.editor.fields")}</h2>
           <p className="muted">
@@ -269,11 +381,24 @@ export function TemplateEditor({
             <p className="muted">{s.t("templates.editor.noFields")}</p>
           )}
           {map.fields.map((field, index) => {
-            const inFile = draft.placeholders.includes(field.key);
+            const inFile = field.anchor !== undefined || draft.placeholders.includes(field.key);
             return (
               <div className="template-field" key={field.key}>
                 <div className="template-field-head">
-                  <code>{`{{${field.key}}}`}</code>
+                  {field.anchor ? (
+                    <>
+                      <strong>{cellLocation(s, field.anchor)}</strong>
+                      <Button
+                        variant="ghost"
+                        icon={<Trash2 />}
+                        onClick={() => removeField(field.key)}
+                      >
+                        {s.t("templates.editor.removeField")}
+                      </Button>
+                    </>
+                  ) : (
+                    <code>{`{{${field.key}}}`}</code>
+                  )}
                   {!inFile && (
                     <>
                       <span className="status-label warning">
@@ -434,6 +559,37 @@ export function TemplateEditor({
           )}
         </section>
       </main>
+      {versionsOpen && versions && (
+        <Modal
+          title={s.t("templates.versions.title", { code: draft.code })}
+          closeLabel={s.t("action.cancel")}
+          onClose={() => setVersionsOpen(false)}
+        >
+          <div className="template-new">
+            {versions[0]?.status === "draft" && (
+              <p className="muted">{s.t("templates.versions.replaceWarning")}</p>
+            )}
+            {versions.map((item) => (
+              <div className="template-field-head" key={item.versionId}>
+                <strong>{s.t("templates.versions.version", { version: item.version })}</strong>
+                <span className="status-label">{s.t(`templates.versions.status.${item.status}`)}</span>
+                {item.publishedAt && (
+                  <span className="muted">{new Date(item.publishedAt).toLocaleDateString()}</span>
+                )}
+                {item.status !== "draft" && (
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => restoreVersion(item.versionId)}
+                  >
+                    {s.t("templates.versions.restore")}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
       {confirmDelete && (
         <Modal
           title={s.t("templates.editor.delete.title", { code: draft.code })}

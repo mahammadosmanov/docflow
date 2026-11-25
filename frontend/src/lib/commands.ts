@@ -19,6 +19,9 @@ import type {
   SupportBundlePreview,
   WatchStatus,
   TemplateDraft,
+  TemplateStructure,
+  CopySuggestion,
+  VersionSummary,
   TemplateEditorState,
   TemplateFieldMap,
   TemplateStatus,
@@ -175,6 +178,13 @@ export interface FrontendCommandMap {
     { versionId: string },
     { blocks: { part: string; index: number; text: string }[] }
   >;
+  "templates/cells": CommandSpec<{ versionId: string }, TemplateStructure>;
+  "templates/suggestFromCopies": CommandSpec<
+    { versionId: string },
+    { suggestions: CopySuggestion[] } | null
+  >;
+  "templates/versions": CommandSpec<{ code: string }, { versions: VersionSummary[] }>;
+  "templates/restoreVersion": CommandSpec<{ code: string; versionId: string }, TemplateDraft>;
   "templates/editText": CommandSpec<
     {
       versionId: string;
@@ -254,6 +264,10 @@ export const FRONTEND_METHODS = [
   "templates/archive",
   "templates/blocks",
   "templates/editText",
+  "templates/cells",
+  "templates/suggestFromCopies",
+  "templates/versions",
+  "templates/restoreVersion",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

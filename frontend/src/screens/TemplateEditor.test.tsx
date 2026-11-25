@@ -94,4 +94,85 @@ describe("TemplateEditor", () => {
     );
     expect(onClose).toHaveBeenCalled();
   });
+
+  const anchored: TemplateDraft = {
+    ...draft,
+    placeholders: [],
+    fieldMap: {
+      schema: 1,
+      fileName: "{{rfiNo}}",
+      fields: [
+        { key: "pour", label: "Pour", value: "", options: [], multiline: false, anchor: { table: 0, row: 0, cell: 1 } },
+        { key: "rfi", label: "RFI", value: "", options: [], multiline: false, anchor: { table: 0, row: 1, cell: 1 } },
+      ],
+      presets: [],
+    },
+  };
+
+  it("holds publishing until every marked cell is resolved after a file replacement", async () => {
+    const replaced: TemplateDraft = {
+      ...anchored,
+      checks: [
+        { key: "pour", status: "moved", movedTo: { table: 0, row: 3, cell: 1 } },
+        { key: "rfi", status: "missing", movedTo: null },
+      ],
+    };
+    const call = vi.fn(async (method: string, params?: { fieldMap?: unknown }) => {
+      if (method === "templates/replaceFile") return replaced;
+      if (method === "templates/saveDraft") return { ...anchored, fieldMap: params?.fieldMap };
+      return { templates: [] };
+    });
+    render(
+      <TemplateEditor bridge={{ call } as unknown as Bridge} s={s} draft={anchored} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Replace file/ }));
+    expect(await screen.findByText("Pour moved to Table 1, row 4, cell 2.")).toBeInTheDocument();
+    expect(screen.getByText("RFI was not found in the new file.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Publish to everyone/ })).toBeDisabled();
+    expect(screen.getByText("Resolve the file check before publishing.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep here" }));
+    expect(screen.queryByText("RFI was not found in the new file.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Publish to everyone/ })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    await vi.waitFor(() => expect(call).toHaveBeenCalledWith("templates/saveDraft", expect.anything()));
+    const saved = call.mock.calls.find(([method]) => method === "templates/saveDraft")?.[1] as {
+      fieldMap: TemplateDraft["fieldMap"];
+    };
+    expect(saved.fieldMap.fields[0].anchor).toEqual({ table: 0, row: 3, cell: 1 });
+  });
+
+  it("lists versions and restores an old one as the draft", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === "templates/versions") {
+        return {
+          versions: [
+            { versionId: "v3", version: 3, status: "draft", publishedAt: null, note: "" },
+            { versionId: "v2", version: 2, status: "published", publishedAt: "2026-11-20T00:00:00Z", note: "" },
+            { versionId: "v1", version: 1, status: "retired", publishedAt: "2026-11-01T00:00:00Z", note: "" },
+          ],
+        };
+      }
+      if (method === "templates/restoreVersion") return { ...draft, version: 4 };
+      return { templates: [] };
+    });
+    render(
+      <TemplateEditor bridge={{ call } as unknown as Bridge} s={s} draft={draft} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Version history/ }));
+    expect(await screen.findByText("Versions of RFI-COVER-ELE")).toBeInTheDocument();
+    expect(call).toHaveBeenCalledWith("templates/versions", { code: "RFI-COVER-ELE" });
+    expect(screen.getAllByRole("button", { name: "Restore as draft" })).toHaveLength(2);
+    expect(screen.getByText(/replaces the draft you have open/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Restore as draft" })[1]);
+    await vi.waitFor(() =>
+      expect(call).toHaveBeenCalledWith("templates/restoreVersion", {
+        code: "RFI-COVER-ELE",
+        versionId: "v1",
+      }),
+    );
+    expect(await screen.findByText(/Draft v4/)).toBeInTheDocument();
+  });
 });

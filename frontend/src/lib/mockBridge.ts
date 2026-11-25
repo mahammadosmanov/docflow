@@ -486,6 +486,50 @@ export class MockBridge implements Bridge {
           ],
         };
         break;
+      case "templates/cells":
+        result = {
+          kind: "docx",
+          suggestions: [],
+          tables: [
+            {
+              truncated: false,
+              rows: [
+                {
+                  cells: [
+                    { text: "RFI No", colSpan: 1, problem: null },
+                    { text: "", colSpan: 1, problem: null },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+        break;
+      case "templates/versions":
+        result = {
+          versions: [
+            { versionId: "demo-v3", version: 3, status: "draft", publishedAt: null, note: "" },
+            { versionId: "demo-v2", version: 2, status: "published", publishedAt: "2026-11-20T09:00:00Z", note: "" },
+            { versionId: "demo-v1", version: 1, status: "retired", publishedAt: "2026-11-01T09:00:00Z", note: "" },
+          ],
+        };
+        break;
+      case "templates/restoreVersion":
+        result = this.templateDraft(params);
+        break;
+      case "templates/suggestFromCopies":
+        result = {
+          suggestions: [
+            {
+              anchor: { table: 0, row: 0, cell: 1 },
+              label: "RFI No",
+              value: "{rfiNo}",
+              samples: ["ELE-0049", "ELE-0050"],
+              rfi: true,
+            },
+          ],
+        };
+        break;
       case "templates/editText":
       case "templates/openDraft":
       case "templates/create":

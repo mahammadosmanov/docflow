@@ -303,12 +303,60 @@ export interface TemplateStatus {
 }
 
 /** One fillable value of a template; `value` may hold `{rfiNo}`-style RFI Log tokens. */
+/** Where an editable part sits: an Excel cell, or a Word table cell (zero-based). */
+export interface CellAnchor {
+  sheet?: string;
+  address?: string;
+  table?: number;
+  row?: number;
+  cell?: number;
+}
+
 export interface TemplateField {
   key: string;
   label: string;
   value: string;
   options: string[];
   multiline: boolean;
+  /** Set when the field is a cell instead of a `{{placeholder}}`. */
+  anchor?: CellAnchor;
+}
+
+export interface CellSuggestion {
+  key: string;
+  label: string;
+  value: string;
+  anchor: CellAnchor;
+}
+
+/** A cell that changes between filled copies of one form. */
+export interface CopySuggestion {
+  anchor: CellAnchor;
+  label: string;
+  value: string;
+  samples: string[];
+  /** Every filled value holds an RFI code; the value already uses `{rfiNo}`. */
+  rfi: boolean;
+}
+
+export type CellProblem = "verticalMerge" | "content";
+
+export interface TemplateStructure {
+  kind: "xlsx" | "docx";
+  suggestions: CellSuggestion[];
+  sheets?: {
+    name: string;
+    maxRow: number;
+    maxColumn: number;
+    truncated: boolean;
+    protected: boolean;
+    cells: { row: number; column: number; text: string; formula: boolean }[];
+    merges: { row: number; column: number; rowSpan: number; colSpan: number }[];
+  }[];
+  tables?: {
+    truncated: boolean;
+    rows: { cells: { text: string; colSpan: number; problem: CellProblem | null }[] }[];
+  }[];
 }
 
 /** A named set of field values applied together, such as one ITP stage group. */
@@ -317,11 +365,28 @@ export interface TemplatePreset {
   values: Record<string, string>;
 }
 
+/** Where a marked cell is in a replaced file. */
+export interface AnchorCheck {
+  key: string;
+  status: "found" | "moved" | "missing";
+  movedTo: CellAnchor | null;
+}
+
+export interface VersionSummary {
+  versionId: string;
+  version: number;
+  status: "draft" | "published" | "retired";
+  publishedAt: string | null;
+  note: string;
+}
+
 export interface TemplateFieldMap {
   schema: 1;
   fileName: string;
   fields: TemplateField[];
   presets: TemplatePreset[];
+  /** Excel sheets a document may leave out. */
+  optionalSheets?: string[];
 }
 
 export interface EditableTemplate {
@@ -349,6 +414,8 @@ export interface TemplateDraft {
   fileKind: "xlsx" | "docx";
   fieldMap: TemplateFieldMap;
   placeholders: string[];
+  /** Only after a file replacement. */
+  checks?: AnchorCheck[];
 }
 
 export interface WatchStatus {

@@ -5,6 +5,42 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.60.0 - 2026-11-25
+
+### Added
+
+- Excel templates can mark sheets as optional (ADR 0058). In the Cells section a workbook with several sheets shows "Documents can leave this sheet out" for each sheet; saving and publishing check that each optional sheet can really be removed. When documents are generated, every optional sheet is a checkbox column in the Preview table, ticked by default; an unticked sheet is removed with its drawing, pictures only it used, names scoped to it, and the calculation chain. A sheet that a formula on a kept sheet or a workbook-wide name uses is never removed, nor the last visible sheet. A template with optional sheets is stored as schema 2.
+
+## 1.59.0 - 2026-11-25
+
+### Added
+
+- Template editing can be changed later. Replacing a template's file now checks every marked cell against the new file: a cell is found when the same label still stands beside it, moved when its label is somewhere else exactly once, and missing otherwise. The editor lists the moved and missing cells; each can be moved, kept, or removed, and Publish stays disabled until none is left. Publishing also refuses a draft whose marked cell cannot be written in its file. The new Version history lists every version and restores an earlier one as the draft (replacing an open draft after a warning); earlier versions are never changed. The Cells section shows the marked cells in a list beside the file view.
+
+## 1.58.0 - 2026-11-25
+
+### Added
+
+- Template editors can find editable cells from other filled copies of a form. In the Cells section, "Suggest from other copies" opens a file picker for up to 10 Word or Excel files of the template's kind. DocFlow compares them with the draft file and lists the cells that differ, with the nearest unchanged label to the left and up to three sample values; cells that hold an RFI code in every copy start as `{rfiNo}`. Editors mark one suggestion or all of them. The copies are read on this computer only and are never uploaded or stored. Formula cells, merged-cell continuations, protected sheets, and unsafe Word cells are never suggested.
+
+## 1.57.0 - 2026-11-25
+
+### Added
+
+- Template editors can mark cells. The editor has a new Cells section that shows the template's Word tables or Excel sheets; selecting a cell and choosing "Make editable" adds a field for it, with the cell's own text as the start value. A cell that holds an RFI code is suggested first and keeps its label. Formula cells, merged-cell continuations, protected sheets, and Word cells holding pictures, controls, or fields are shown locked with the reason. Saving a draft checks every marked cell against the file and refuses one that cannot be written. A template with marked cells is stored as schema 2 (ADR 0058); templates without them are stored exactly as before. Publish a template with marked cells only after every DocFlow install runs 1.55.0 or later, because older installs list it as failed.
+
+## 1.56.0 - 2026-11-25
+
+### Added
+
+- Template slots can sit at a Word table cell or an Excel cell (ADR 0058, second step of the template system redesign). Generation writes the value into that cell and keeps its formatting; the first cell of an Excel merged range is allowed. It refuses a protected or signed workbook, a protected sheet, a formula cell, a merged cell that is not the first, a vertical-merge continuation in Word, nested Word tables, and Word cells holding drawings, controls, or fields. Excel workbooks recalculate on open. No editor writes these anchors yet, so operators see no change; DocFlow still writes schema 1.
+
+## 1.55.0 - 2026-11-25
+
+### Added
+
+- Template field maps can now be written as schema 2 `slots` (ADR 0058, first step of the template system redesign). This release only reads them: Rust converts a schema 2 map to the schema 1 fields every renderer uses, and DocFlow still writes schema 1 so installs that have not updated keep working. A schema 2 slot that needs a later release (a cell anchor, a computed or checkbox value) is refused with "The template needs a newer DocFlow version". The template sync check accepts both schemas and still rejects any other. Operators see no change.
+
 ## 1.54.3 - 2026-11-24
 
 ### Fixed

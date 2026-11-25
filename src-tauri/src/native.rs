@@ -269,6 +269,16 @@ impl NativeBackend {
         )
     }
 
+    pub(crate) fn suggest_template_copies(
+        &self,
+        version_id: &str,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<Value, BackendError> {
+        Ok(serde_json::json!({
+            "suggestions": self.templates.suggest_from_copies(version_id, files, now())?
+        }))
+    }
+
     pub(crate) fn sync_templates(&self) {
         self.templates.sync(now());
     }
@@ -603,6 +613,23 @@ impl NativeBackend {
                 Ok(serde_json::json!({
                     "blocks": self.templates.blocks(&request.version_id, now())?
                 }))
+            }
+            BackendMethod::TemplatesVersions => {
+                let request: TemplateCodeParams = decode(params)?;
+                Ok(serde_json::json!({
+                    "versions": self.templates.versions(&request.code, now())?
+                }))
+            }
+            BackendMethod::TemplatesRestoreVersion => {
+                let request: crate::templates::editor::RestoreVersion = decode(params)?;
+                encode(
+                    self.templates
+                        .restore_version(&request.code, &request.version_id, now())?,
+                )
+            }
+            BackendMethod::TemplatesCells => {
+                let request: TemplateVersionParams = decode(params)?;
+                encode(self.templates.cells(&request.version_id, now())?)
             }
             BackendMethod::TemplatesEditText => {
                 let request: crate::templates::editor::EditText = decode(params)?;

@@ -23,6 +23,15 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 - File and folder drops onto operation fields (ADR 0054) need native Windows
   acceptance: drag from Explorer, OneDrive, and network folders, check the
   field highlight under display scaling, and confirm wrong-kind drops are refused.
+- Marked template cells (ADR 0058, 1.56.0 and 1.57.0) are verified with synthetic
+  files and macOS tests only. They need Windows acceptance in Word and Excel:
+  open a generated file with merged cells, a styled empty cell, and a formula
+  sheet. Publish a template with marked cells only after every install runs
+  1.55.0 or later.
+- Optional Excel sheets (ADR 0058, 1.60.0) are verified with synthetic workbooks only.
+  Windows acceptance: generate a damage workbook with a photo sheet left out and
+  confirm Excel opens it without a repair prompt; conditional formatting, data
+  validation, or charts that point at a removed sheet are not checked.
 - Shared templates (ADR 0055) need `docs/supabase_templates.sql` applied to the
   live Supabase project, then a two-user check of sync, offline start, and
   update pickup. Until then the Templates screen reports that the store is not
