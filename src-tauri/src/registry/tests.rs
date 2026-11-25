@@ -199,6 +199,11 @@ fn template_generation_has_a_mode_and_only_shows_what_the_mode_needs() {
     assert_eq!(param("rfi_log_workbook").visible_when["mode"], "rfi");
     assert_eq!(param("rfi_numbers").visible_when["mode"], "rfi");
     assert_eq!(param("document_count").visible_when["mode"], "free");
+    assert_eq!(param("follow_up_workbook").visible_when["mode"], "rfi");
+    assert!(
+        !param("follow_up_workbook").required,
+        "the Follow-Up workbook is optional"
+    );
     assert_eq!(
         (param("document_count").min, param("document_count").max),
         (Some(1), Some(100))

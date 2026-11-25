@@ -63,6 +63,78 @@ const DATE_TOKENS: [&str; 3] = ["dateOfIssue", "inspectionDate", "expiryDate"];
 
 pub type LogRow = BTreeMap<String, String>;
 
+/// Concrete Specimen Test Follow-Up columns a field can start from, as
+/// `{token}` (ADR 0058). A repeating row gets one line per batch.
+const FOLLOW_UP_TOKENS: [(&str, &str); 19] = [
+    ("drawing", "fuDrawing"),
+    ("pour_date", "fuPourDate"),
+    ("concrete_class", "fuConcreteClass"),
+    ("location", "fuLocation"),
+    ("structure", "fuStructure"),
+    ("supplier", "fuSupplier"),
+    ("batch_ticket", "fuBatchTicket"),
+    ("truck", "fuTruck"),
+    ("batch_time", "fuBatchTime"),
+    ("start_time", "fuStartTime"),
+    ("end_time", "fuEndTime"),
+    ("quantity", "fuQuantity"),
+    ("total_quantity", "fuTotalQuantity"),
+    ("plant_slump", "fuPlantSlump"),
+    ("in_situ_slump", "fuInSituSlump"),
+    ("plant_temp", "fuPlantTemp"),
+    ("in_situ_temp", "fuInSituTemp"),
+    ("samples", "fuSamples"),
+    ("water_cement_ratio", "fuWaterCementRatio"),
+];
+
+/// Every Follow-Up token empty, so none stays literal in a document.
+fn empty_follow_up(row: &mut LogRow) {
+    for (_, token) in FOLLOW_UP_TOKENS {
+        row.insert(token.to_string(), String::new());
+    }
+    row.insert("fuBatchNo".to_string(), String::new());
+    row.insert("fuBatchCount".to_string(), "0".to_string());
+}
+
+/// Reads the Follow-Up workbook into one token row per batch of each RFI.
+/// RFIs without a row get no entry.
+pub fn read_follow_up_batches<R: Read + Seek>(
+    reader: &mut R,
+    rfis: &[String],
+) -> Result<BTreeMap<String, Vec<LogRow>>, String> {
+    let records = crate::concrete_document_sources::read_follow_up_records(reader, rfis)?;
+    let mut batches = BTreeMap::new();
+    for (rfi, rows) in records {
+        let count = rows.len().to_string();
+        let lines = rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                let mut values = LogRow::new();
+                empty_follow_up(&mut values);
+                for (name, token) in FOLLOW_UP_TOKENS {
+                    let raw = row.get(name).map_or("", |text| text.trim());
+                    let value = match name {
+                        "pour_date" => crate::native::excel_date_text(raw),
+                        "batch_time" | "start_time" | "end_time" => {
+                            crate::native::excel_time_text(raw)
+                        }
+                        _ => raw.to_string(),
+                    };
+                    values.insert(token.to_string(), plain_dashes(&value));
+                }
+                values.insert("fuBatchNo".to_string(), (index + 1).to_string());
+                values.insert("fuBatchCount".to_string(), count.clone());
+                values
+            })
+            .collect::<Vec<_>>();
+        if !lines.is_empty() {
+            batches.insert(rfi, lines);
+        }
+    }
+    Ok(batches)
+}
+
 /// The four RFI disciplines; a template of one of them lets users type
 /// only the number (`49` means `AZE-SUN-INT-QMS-RFI-ELE-0049`).
 pub const DISCIPLINES: [&str; 4] = ["CIV", "MEC", "ELE", "PRC"];
@@ -205,6 +277,7 @@ pub fn read_log_rows<R: Read + Seek>(
                 };
                 values.insert((*token).to_string(), plain_dashes(&value));
             }
+            empty_follow_up(&mut values);
             values.insert("rfiNo".to_string(), rfi.clone());
             values.insert("today".to_string(), today.clone());
             rows.insert(rfi.clone(), values);
@@ -213,15 +286,42 @@ pub fn read_log_rows<R: Read + Seek>(
     Ok(rows)
 }
 
-/// One editable row with every field's starting value.
-fn start_row(map: &FieldMap, id: &str, source: &LogRow) -> Value {
+/// One editable row with every field's starting value. `batches` are the
+/// Follow-Up rows of this document: a field starts from the first, and a
+/// repeating row that uses Follow-Up tokens gets one line per batch.
+fn start_row(map: &FieldMap, id: &str, source: &LogRow, batches: &[LogRow]) -> Value {
     let mut row = Map::new();
     row.insert(ROW_ID.to_string(), json!(id));
     if !map.presets.is_empty() {
         row.insert(PRESET_COLUMN.to_string(), json!(""));
     }
+    let with_batch = |batch: Option<&LogRow>| {
+        let mut merged = source.clone();
+        empty_follow_up(&mut merged);
+        if let Some(batch) = batch {
+            merged.extend(batch.clone());
+        }
+        merged
+    };
+    let first = with_batch(batches.first());
     for field in &map.fields {
-        let start = resolve_tokens(&field.value, source);
+        let repeats = field
+            .anchor
+            .as_ref()
+            .is_some_and(|anchor| anchor.repeat_columns.is_some());
+        let start = if repeats && field.value.contains("{fu") {
+            if batches.is_empty() {
+                resolve_tokens(&field.value, &first)
+            } else {
+                batches
+                    .iter()
+                    .map(|batch| resolve_tokens(&field.value, &with_batch(Some(batch))))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        } else {
+            resolve_tokens(&field.value, &first)
+        };
         let value = if field.kind == FieldKind::Checkbox {
             json!(truthy(&start))
         } else {
@@ -237,9 +337,22 @@ fn start_row(map: &FieldMap, id: &str, source: &LogRow) -> Value {
 
 /// One editable row per RFI with every field's starting value.
 pub fn initial_rows(map: &FieldMap, log: &BTreeMap<String, LogRow>, rfis: &[String]) -> Vec<Value> {
+    initial_rows_with(map, log, &BTreeMap::new(), rfis)
+}
+
+/// Like [`initial_rows`], with the Follow-Up batches of each RFI.
+pub fn initial_rows_with(
+    map: &FieldMap,
+    log: &BTreeMap<String, LogRow>,
+    follow_up: &BTreeMap<String, Vec<LogRow>>,
+    rfis: &[String],
+) -> Vec<Value> {
     let rows = rfis
         .iter()
-        .filter_map(|rfi| Some(start_row(map, rfi, log.get(rfi)?)))
+        .filter_map(|rfi| {
+            let batches = follow_up.get(rfi).map_or(&[][..], Vec::as_slice);
+            Some(start_row(map, rfi, log.get(rfi)?, batches))
+        })
         .collect();
     with_computed(map, rows)
 }
@@ -256,7 +369,7 @@ pub fn free_rows(map: &FieldMap, count: usize) -> Vec<Value> {
         jiff::Zoned::now().strftime("%d.%m.%Y").to_string(),
     );
     let rows = (1..=count.min(MAX_RFIS))
-        .map(|number| start_row(map, &format!("{FREE_PREFIX}{number}"), &source))
+        .map(|number| start_row(map, &format!("{FREE_PREFIX}{number}"), &source, &[]))
         .collect();
     with_computed(map, rows)
 }

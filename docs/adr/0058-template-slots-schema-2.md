@@ -246,6 +246,27 @@ anchors other than placeholders.
 - Migration path for CON-CIV-010: this release closes the number/time gap; the
   Follow-Up data source and the ambient temperature rule are still open.
 
+### Follow-Up source (1.67.0)
+
+- `templates.generate_document` gains the optional file parameter
+  `follow_up_workbook` (shown for `rfi` mode). It is read through the legacy
+  `read_follow_up_records` (header detection, continuation rows, composite RFI
+  cells), then turned into token rows by `template_documents::read_follow_up_batches`.
+- Tokens: `fuDrawing`, `fuPourDate`, `fuConcreteClass`, `fuLocation`,
+  `fuStructure`, `fuSupplier`, `fuBatchTicket`, `fuTruck`, `fuBatchTime`,
+  `fuStartTime`, `fuEndTime`, `fuQuantity`, `fuTotalQuantity`, `fuPlantSlump`,
+  `fuInSituSlump`, `fuPlantTemp`, `fuInSituTemp`, `fuSamples`,
+  `fuWaterCementRatio`, plus `fuBatchNo` and `fuBatchCount`. Dates and times use
+  the RFI Log formats. Every token is empty (`fuBatchCount` is `0`) when there is no
+  workbook or no row, so none stays literal in a document, in free mode too.
+- A field starts from the first batch. A repeating-row field whose start value
+  contains `{fu...}` is expanded once per batch and the lines are joined with
+  newlines (Tab between columns). An RFI present in the RFI Log but absent from
+  the Follow-Up workbook gets the warning `warn.templates.followUpMissing` and
+  empty values; it is kept in the plan, unlike the legacy CON-CIV-010 which skips it.
+- Only Civil RFIs match (legacy reader). Open for the CON-CIV-010 migration: the
+  two-row batch stride and the ambient temperature rule.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

@@ -37,6 +37,28 @@ const LOG_TOKENS = [
   "today",
 ];
 
+/** Concrete Specimen Test Follow-Up values (one line per batch in a repeating row). */
+const FOLLOW_UP_TOKENS = [
+  "fuBatchTicket",
+  "fuTruck",
+  "fuConcreteClass",
+  "fuSupplier",
+  "fuBatchTime",
+  "fuStartTime",
+  "fuEndTime",
+  "fuQuantity",
+  "fuTotalQuantity",
+  "fuPlantSlump",
+  "fuInSituSlump",
+  "fuPlantTemp",
+  "fuInSituTemp",
+  "fuSamples",
+  "fuDrawing",
+  "fuPourDate",
+  "fuBatchNo",
+  "fuBatchCount",
+];
+
 const lines = (text: string) =>
   text
     .split("\n")
@@ -389,6 +411,11 @@ export function TemplateEditor({
           <p className="muted">
             {s.t("templates.editor.fields.help", {
               tokens: LOG_TOKENS.map((token) => `{${token}}`).join(" "),
+            })}
+          </p>
+          <p className="muted">
+            {s.t("templates.editor.fields.followUpHelp", {
+              tokens: FOLLOW_UP_TOKENS.map((token) => `{${token}}`).join(" "),
             })}
           </p>
           {map.fields.length === 0 && (

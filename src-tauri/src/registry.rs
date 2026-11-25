@@ -217,6 +217,17 @@ fn template_document_operation(templates: &[String]) -> OperationDef {
                 when("rfi"),
                 None,
             ),
+            parameter(
+                "follow_up_workbook",
+                ParamKind::File,
+                "param.templates.followUp",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                when("rfi"),
+                Some("param.templates.followUp.help"),
+            ),
             rfi_numbers,
             count,
             parameter(

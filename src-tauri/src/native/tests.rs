@@ -1090,3 +1090,119 @@ fn free_mode_generates_numbered_documents_without_an_rfi_log() {
         .expect_err("RFI mode needs the log");
     assert_eq!(error.message, "error.param.required.rfi_log_workbook");
 }
+
+#[test]
+fn template_documents_can_start_from_the_concrete_follow_up_workbook() {
+    use sha2::{Digest, Sha256};
+    let temporary = tempfile::tempdir().unwrap();
+    let mut backend = test_backend(&temporary);
+    let template = test_ooxml_package(&[
+        ("[Content_Types].xml", "<Types/>"),
+        (
+            "word/document.xml",
+            r#"<w:document><w:body><w:p><w:r><w:t>Ticket {{ticket}} of {{count}}</w:t></w:r></w:p></w:body></w:document>"#,
+        ),
+    ]);
+    let sha = Sha256::digest(&template)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let template_id = "11111111-1111-4111-8111-111111111111";
+    backend.templates = Arc::new(crate::templates::TemplateStore::new(
+        temporary.path().join("templates"),
+        Arc::new(ServedTemplate {
+            row: json!({
+                "template_id": template_id, "code": "CIV-POUR", "title": "Pour",
+                "discipline": "CIV", "file_kind": "docx", "version_id": "v1", "version": 1,
+                "file_sha256": sha, "file_size": template.len(),
+                "storage_path": format!("{template_id}/1/{sha}.docx"),
+                "field_map": {"schema": 2, "fileName": "{{rfiNo}}", "slots": [
+                    {"key": "rfiNo", "source": {"kind": "log", "token": "rfiNo"}},
+                    {"key": "ticket", "source": {"kind": "log", "token": "fuBatchTicket"}},
+                    {"key": "count", "source": {"kind": "log", "token": "fuBatchCount"}}
+                ]}
+            }),
+            bytes: template,
+        }),
+    ));
+    backend.templates.sync(1);
+    let input = temporary.path().join("inputs");
+    let output = temporary.path().join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    std::fs::create_dir_all(&output).unwrap();
+    let text = |reference: &str, value: &str| {
+        format!(r#"<c r="{reference}" t="inlineStr"><is><t>{value}</t></is></c>"#)
+    };
+    let rfi_log = input.join("RFI Log.xlsx");
+    std::fs::write(
+        &rfi_log,
+        test_xlsx(
+            "CIV",
+            &format!(
+                r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">{}</row><row r="2">{}</row></sheetData></worksheet>"#,
+                text("A1", "RFI No."),
+                text("A2", "AZE-SUN-INT-QMS-RFI-CIV-0123"),
+            ),
+        ),
+    )
+    .unwrap();
+    let follow_up = input.join("Follow Up.xlsx");
+    std::fs::write(
+        &follow_up,
+        test_xlsx(
+            "Follow Up",
+            &format!(
+                r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">{}{}{}</row><row r="2">{}{}{}</row><row r="3">{}{}{}</row></sheetData></worksheet>"#,
+                text("A1", "RFI No"),
+                text("B1", "Concrete Class"),
+                text("C1", "Batch Ticket No"),
+                text("A2", "CIV-0123"),
+                text("B2", "C40"),
+                text("C2", "A-1"),
+                text("A3", ""),
+                text("B3", "C40"),
+                text("C3", "A-2"),
+            ),
+        ),
+    )
+    .unwrap();
+    let caller = backend.caller_identity().unwrap();
+    let operation = crate::template_documents::OPERATION_ID;
+    let issue = |name: &str, path: &Path, kind| {
+        backend
+            .selections
+            .issue(&caller, operation, name, path, kind)
+            .unwrap()
+    };
+    let plan = backend
+        .preview_template_document(
+            json!({"opId": operation, "values": {
+                "template": "CIV-POUR", "mode": "rfi",
+                "rfi_numbers": "AZE-SUN-INT-QMS-RFI-CIV-0123",
+                "rfi_log_workbook": issue("rfi_log_workbook", &rfi_log, SelectionKind::File),
+                "follow_up_workbook": issue("follow_up_workbook", &follow_up, SelectionKind::File),
+                "output_directory": issue("output_directory", &output, SelectionKind::Folder)
+            }}),
+            |_| {},
+        )
+        .unwrap();
+    let rows = plan["meta"]["editor"]["rows"].as_array().unwrap();
+    assert_eq!(rows[0]["ticket"], "A-1");
+    assert_eq!(rows[0]["count"], "2");
+    assert!(plan["warnings"].as_array().unwrap().is_empty());
+
+    // Without the workbook the tokens are empty, never literal.
+    let plain = backend
+        .preview_template_document(
+            json!({"opId": operation, "values": {
+                "template": "CIV-POUR", "mode": "rfi",
+                "rfi_numbers": "AZE-SUN-INT-QMS-RFI-CIV-0123",
+                "rfi_log_workbook": issue("rfi_log_workbook", &rfi_log, SelectionKind::File),
+                "output_directory": issue("output_directory", &output, SelectionKind::Folder)
+            }}),
+            |_| {},
+        )
+        .unwrap();
+    assert_eq!(plain["meta"]["editor"]["rows"][0]["ticket"], "");
+    assert_eq!(plain["meta"]["editor"]["rows"][0]["count"], "0");
+}

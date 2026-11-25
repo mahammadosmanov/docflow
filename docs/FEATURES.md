@@ -54,7 +54,8 @@
   (with a format), or Checkbox, and "Create documents" can run without an RFI
   Log (Source: Without RFI, 1 to 100 documents filled in Preview). A field can
   also be Computed from other fields (sum, difference, add a fixed number, round,
-  copy, join text); Preview shows it read-only.
+  copy, join text); Preview shows it read-only. In RFI Log mode an optional
+  Follow-Up workbook gives fields batch values such as `{fuBatchTicket}`.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.
   The first update-capable release must be installed manually once. macOS

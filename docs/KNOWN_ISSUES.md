@@ -32,6 +32,11 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
   sensibly.
+- The Follow-Up source (ADR 0058, 1.67.0) is verified with synthetic workbooks only.
+  It uses the legacy Follow-Up reader, so it matches Civil (CIV) RFIs only. The
+  legacy CON-CIV-010 form puts each batch on every second worksheet row (19, 21,
+  23, ...); a repeating row inserts adjacent rows and refuses vertical merges, so
+  that two-row layout may not fit and needs the real form to decide.
 - Number and time cells (ADR 0058, 1.66.0) are verified with synthetic workbooks
   only. A time is stored as the fraction of a day with 15 decimals, as the legacy
   CON-CIV-010 writer does; the cell must already have a time number format, which

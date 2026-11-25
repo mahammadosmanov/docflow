@@ -14,6 +14,10 @@ fn cell(reference: &str, value: &str) -> String {
 }
 
 fn rfi_log(rows: &[&[&str]]) -> Vec<u8> {
+    book_named("ELE", rows)
+}
+
+fn book_named(sheet_name: &str, rows: &[&[&str]]) -> Vec<u8> {
     let mut sheet = String::new();
     for (index, values) in rows.iter().enumerate() {
         let row = index + 1;
@@ -27,7 +31,9 @@ fn rfi_log(rows: &[&[&str]]) -> Vec<u8> {
     let worksheet = format!(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet}</sheetData></worksheet>"#
     );
-    let workbook = r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="ELE" sheetId="1" r:id="rId1"/></sheets></workbook>"#;
+    let workbook = format!(
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
     let relationships = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#;
     let package = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
@@ -35,7 +41,7 @@ fn rfi_log(rows: &[&[&str]]) -> Vec<u8> {
     for (name, contents) in [
         ("[Content_Types].xml", "content-types"),
         ("_rels/.rels", package),
-        ("xl/workbook.xml", workbook),
+        ("xl/workbook.xml", workbook.as_str()),
         ("xl/_rels/workbook.xml.rels", relationships),
         ("xl/worksheets/sheet1.xml", worksheet.as_str()),
     ] {
@@ -475,4 +481,125 @@ fn a_time_field_is_text_in_preview_and_checked_when_rendered() {
     let good = json!({"_rowId": "document-1", "at": "9:05"});
     assert!(render(FileKind::Docx, &docx_with("{{at}}"), &map, &good).is_ok());
     assert_eq!(rows[0]["at"], "");
+}
+
+const CIV_RFI: &str = "AZE-SUN-INT-QMS-RFI-CIV-0123";
+
+fn follow_up_book() -> Vec<u8> {
+    book_named(
+        "Follow Up",
+        &[
+            &[
+                "RFI No",
+                "Concrete Class",
+                "Batch Ticket No",
+                "Truck No",
+                "Time of Loading",
+                "Pouring Date",
+                "Temperature in plant (C)",
+            ],
+            // 46333 = 07.11.2026, 0.3958333333 = 09:30
+            &[
+                "CIV-0123",
+                "C40",
+                "A-1",
+                "T1",
+                "0.3958333333",
+                "46333",
+                "24.5",
+            ],
+            &["", "C40", "A-2", "T2", "0.4166666667", "46333", "24,0"],
+            &["CIV-0999", "C25", "Z-1", "T9", "0.5", "46334", "20"],
+        ],
+    )
+}
+
+fn follow_up() -> BTreeMap<String, Vec<LogRow>> {
+    read_follow_up_batches(
+        &mut Cursor::new(follow_up_book()),
+        &[
+            CIV_RFI.to_string(),
+            "AZE-SUN-INT-QMS-RFI-CIV-0200".to_string(),
+        ],
+    )
+    .expect("follow up")
+}
+
+#[test]
+fn follow_up_rows_become_batches_with_log_style_dates_and_times() {
+    let batches = follow_up();
+    let rows = &batches[CIV_RFI];
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["fuBatchTicket"], "A-1");
+    assert_eq!(rows[1]["fuBatchTicket"], "A-2");
+    assert_eq!(rows[0]["fuBatchTime"], "09:30");
+    assert_eq!(rows[0]["fuPourDate"], "07.11.2026");
+    assert_eq!(rows[1]["fuPlantTemp"], "24,0");
+    assert_eq!(
+        (
+            rows[0]["fuBatchNo"].as_str(),
+            rows[0]["fuBatchCount"].as_str()
+        ),
+        ("1", "2")
+    );
+    assert_eq!(rows[1]["fuBatchNo"], "2");
+    assert_eq!(
+        rows[0]["fuStructure"], "",
+        "a column the sheet lacks is empty"
+    );
+    assert!(
+        !batches.contains_key("AZE-SUN-INT-QMS-RFI-CIV-0200"),
+        "no rows, no entry"
+    );
+    assert!(
+        !batches.contains_key("AZE-SUN-INT-QMS-RFI-CIV-0999"),
+        "not requested"
+    );
+}
+
+fn follow_up_map() -> FieldMap {
+    FieldMap::parse(&json!({"schema": 2, "slots": [
+        {"key": "ticket", "source": {"kind": "fixed", "value": "{fuBatchTicket}"}},
+        {"key": "count", "source": {"kind": "fixed", "value": "{fuBatchCount}"}},
+        {"key": "batches",
+         "anchor": {"kind": "rows", "sheet": "Form", "address": "A19", "repeatColumns": 3},
+         "source": {"kind": "fixed", "value": "{fuBatchNo}\t{fuBatchTicket}\t{fuTruck}"}}
+    ]}))
+    .expect("map")
+}
+
+fn civ_log() -> BTreeMap<String, LogRow> {
+    BTreeMap::from([(CIV_RFI.to_string(), LogRow::new())])
+}
+
+#[test]
+fn a_field_starts_from_the_first_batch_and_a_repeating_row_gets_one_line_per_batch() {
+    let rows = initial_rows_with(
+        &follow_up_map(),
+        &civ_log(),
+        &follow_up(),
+        &[CIV_RFI.to_string()],
+    );
+    assert_eq!(rows[0]["ticket"], "A-1");
+    assert_eq!(rows[0]["count"], "2");
+    assert_eq!(rows[0]["batches"], "1\tA-1\tT1\n2\tA-2\tT2");
+}
+
+#[test]
+fn without_follow_up_rows_the_batch_tokens_are_empty_and_nothing_stays_literal() {
+    let rows = initial_rows_with(
+        &follow_up_map(),
+        &civ_log(),
+        &BTreeMap::new(),
+        &[CIV_RFI.to_string()],
+    );
+    assert_eq!(rows[0]["ticket"], "");
+    assert_eq!(rows[0]["count"], "0");
+    assert_eq!(rows[0]["batches"], "\t\t");
+    // The plain entry point (no Follow-Up workbook) behaves the same.
+    let plain = initial_rows(&follow_up_map(), &civ_log(), &[CIV_RFI.to_string()]);
+    assert_eq!(plain[0]["ticket"], "");
+    let free = free_rows(&follow_up_map(), 1);
+    assert_eq!(free[0]["ticket"], "");
+    assert_eq!(free[0]["batches"], "\t\t");
 }

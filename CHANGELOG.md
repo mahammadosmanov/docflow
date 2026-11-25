@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.67.0 - 2026-11-25
+
+### Added
+
+- "Create documents" can read the Concrete Specimen Test Follow-Up workbook (ADR 0058). In RFI Log mode, choose the optional Follow-Up workbook; a template field can then start from its values, for example `{fuBatchTicket}`, `{fuTruck}`, `{fuPlantTemp}`, `{fuPourDate}`, with dates and times shown like RFI Log values. A field starts from the first batch of the RFI; `{fuBatchCount}` is the number of batches. A repeating row whose start value uses these values gets one line per batch (separate columns with a Tab), for example `{fuBatchNo}<Tab>{fuBatchTicket}<Tab>{fuTruck}`. An RFI with no Follow-Up row shows a warning and starts empty, so you can fill it in Preview. Without the workbook these values are empty.
+
 ## 1.66.0 - 2026-11-25
 
 ### Added

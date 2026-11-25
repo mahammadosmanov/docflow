@@ -697,11 +697,21 @@ impl NativeBackend {
         if !output_directory.is_dir() {
             return Err(template_error("The output folder is unavailable"));
         }
+        let follow_up = if free {
+            None
+        } else {
+            optional_selected_path(&request.values, "follow_up_workbook")
+        };
+        if follow_up.as_ref().is_some_and(|path| !path.is_file()) {
+            return Err(template_error(
+                "The selected Follow-Up workbook is unavailable",
+            ));
+        }
         let mut roots = Vec::new();
-        if let Some(rfi_log) = &rfi_log {
+        for input in rfi_log.iter().chain(follow_up.iter()) {
             add_grant_root(
                 &mut roots,
-                rfi_log
+                input
                     .parent()
                     .ok_or_else(|| {
                         BackendError::path_invalid("Selected input has no parent folder")
@@ -732,7 +742,25 @@ impl NativeBackend {
                     subject: rfi.clone(),
                 })
                 .collect();
-            template_documents::initial_rows(&map, &log, &rfis)
+            let batches = match &follow_up {
+                Some(path) => {
+                    let bytes = read_granted_input(&self.filesystem, &provisional, path)?;
+                    let batches =
+                        template_documents::read_follow_up_batches(&mut Cursor::new(bytes), &rfis)
+                            .map_err(template_error)?;
+                    warnings.extend(
+                        rfis.iter()
+                            .filter(|rfi| log.contains_key(*rfi) && !batches.contains_key(*rfi))
+                            .map(|rfi| Warning {
+                                key: "warn.templates.followUpMissing".to_string(),
+                                subject: rfi.clone(),
+                            }),
+                    );
+                    batches
+                }
+                None => std::collections::BTreeMap::new(),
+            };
+            template_documents::initial_rows_with(&map, &log, &batches, &rfis)
         } else {
             template_documents::free_rows(&map, count as usize)
         };
@@ -817,7 +845,12 @@ impl NativeBackend {
         let mut warnings = plan
             .warnings
             .iter()
-            .filter(|warning| warning.key == "warn.templates.rfiNotInLog")
+            .filter(|warning| {
+                matches!(
+                    warning.key.as_str(),
+                    "warn.templates.rfiNotInLog" | "warn.templates.followUpMissing"
+                )
+            })
             .cloned()
             .collect::<Vec<_>>();
         let steps = template_steps(
