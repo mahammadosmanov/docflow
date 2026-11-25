@@ -20,6 +20,7 @@ use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 use super::{
     FileKind, MAX_FIELDS,
     anchors::CellAnchor,
+    compute::Compute,
     values::{FieldKind, check_format},
 };
 
@@ -88,6 +89,9 @@ pub struct FieldDef {
     /// Date pattern (`dd.MM.yyyy`) or checkbox texts (`Yes|No`).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub format: String,
+    /// How a `computed` field is made; required for that kind, refused otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compute: Option<Compute>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -186,6 +190,41 @@ impl FieldMap {
                 ));
             }
         }
+        for field in &self.fields {
+            let is_computed = field.kind == FieldKind::Computed;
+            if is_computed != field.compute.is_some() {
+                return Err(format!(
+                    "Field \"{}\" needs a computation exactly when its type is computed",
+                    field.key
+                ));
+            }
+            if let Some(compute) = &field.compute {
+                compute
+                    .check()
+                    .map_err(|error| format!("Field \"{}\": {error}", field.key))?;
+                if !field.value.is_empty() {
+                    return Err(format!(
+                        "Field \"{}\" is computed and has no start",
+                        field.key
+                    ));
+                }
+                let usable = |key: &String| {
+                    key != &field.key
+                        && self
+                            .fields
+                            .iter()
+                            .any(|other| &other.key == key && other.kind != FieldKind::Computed)
+                };
+                let unique =
+                    compute.inputs.iter().collect::<BTreeSet<_>>().len() == compute.inputs.len();
+                if !unique || !compute.inputs.iter().all(usable) {
+                    return Err(format!(
+                        "Field \"{}\" must use other fields that are not computed",
+                        field.key
+                    ));
+                }
+            }
+        }
         let mut sheet_names = BTreeSet::new();
         if self.optional_sheets.len() > MAX_OPTIONAL_SHEETS
             || self.optional_sheets.iter().any(|name| {
@@ -228,7 +267,11 @@ impl FieldMap {
                 return Err(format!("Preset \"{}\" is empty or repeated", preset.name));
             }
             for (key, value) in &preset.values {
-                if !keys.contains(key.as_str()) || long(value) {
+                let computed = self
+                    .fields
+                    .iter()
+                    .any(|field| &field.key == key && field.kind == FieldKind::Computed);
+                if !keys.contains(key.as_str()) || computed || long(value) {
                     return Err(format!(
                         "Preset \"{}\" sets an unknown field \"{key}\"",
                         preset.name

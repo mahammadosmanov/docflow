@@ -237,9 +237,11 @@ fn start_row(map: &FieldMap, id: &str, source: &LogRow) -> Value {
 
 /// One editable row per RFI with every field's starting value.
 pub fn initial_rows(map: &FieldMap, log: &BTreeMap<String, LogRow>, rfis: &[String]) -> Vec<Value> {
-    rfis.iter()
+    let rows = rfis
+        .iter()
         .filter_map(|rfi| Some(start_row(map, rfi, log.get(rfi)?)))
-        .collect()
+        .collect();
+    with_computed(map, rows)
 }
 
 /// Free mode: `count` numbered documents with no RFI. Every RFI Log value is
@@ -253,9 +255,10 @@ pub fn free_rows(map: &FieldMap, count: usize) -> Vec<Value> {
         "today".to_string(),
         jiff::Zoned::now().strftime("%d.%m.%Y").to_string(),
     );
-    (1..=count.min(MAX_RFIS))
+    let rows = (1..=count.min(MAX_RFIS))
         .map(|number| start_row(map, &format!("{FREE_PREFIX}{number}"), &source))
-        .collect()
+        .collect();
+    with_computed(map, rows)
 }
 
 /// The editable table shown in Preview. Choosing a preset fills its fields.
@@ -274,7 +277,9 @@ pub fn editor(map: &FieldMap, rows: Vec<Value>) -> Value {
             .anchor
             .as_ref()
             .is_some_and(|anchor| anchor.repeat_columns.is_some());
-        let (kind, width) = if field.kind == FieldKind::Checkbox {
+        let (kind, width) = if field.kind == FieldKind::Computed {
+            ("readonly", 120)
+        } else if field.kind == FieldKind::Checkbox {
             ("bool", 90)
         } else if field.multiline || repeats {
             ("multiline", 260)
@@ -355,13 +360,9 @@ pub fn accept_rows(original: &[Value], submitted: &[Value]) -> Result<Vec<Value>
     Ok(accepted)
 }
 
-/// Renders one row into a new document.
-pub(crate) fn render(
-    kind: FileKind,
-    template: &[u8],
-    map: &FieldMap,
-    row: &Value,
-) -> Result<(GeneratedFile, BTreeSet<String>), String> {
+/// The text of every field of a row: typed values converted, computed values
+/// made from them. A submitted computed value is never used.
+fn row_values(map: &FieldMap, row: &Value) -> Result<BTreeMap<String, String>, String> {
     let mut values = BTreeMap::new();
     for (key, value) in row
         .as_object()
@@ -374,11 +375,57 @@ pub(crate) fn render(
             other => other.as_str().unwrap_or_default().to_string(),
         };
         let text = match map.fields.iter().find(|field| field.key == *key) {
+            Some(field) if field.kind == FieldKind::Computed => continue,
             Some(field) => convert(field, &raw)?,
             None => raw,
         };
         values.insert(key.clone(), text);
     }
+    for field in &map.fields {
+        if let Some(compute) = &field.compute {
+            let label = if field.label.trim().is_empty() {
+                &field.key
+            } else {
+                &field.label
+            };
+            let text = compute.evaluate(label, &values)?;
+            values.insert(field.key.clone(), text);
+        }
+    }
+    Ok(values)
+}
+
+/// Puts each computed field's current value into the rows shown in Preview.
+/// A row whose values cannot be computed shows an empty value; the error is
+/// reported when the document is rendered.
+pub fn with_computed(map: &FieldMap, rows: Vec<Value>) -> Vec<Value> {
+    if map.fields.iter().all(|field| field.compute.is_none()) {
+        return rows;
+    }
+    rows.into_iter()
+        .map(|mut row| {
+            let values = row_values(map, &row).ok();
+            for field in map.fields.iter().filter(|field| field.compute.is_some()) {
+                let text = values
+                    .as_ref()
+                    .and_then(|values| values.get(&field.key))
+                    .cloned()
+                    .unwrap_or_default();
+                row[field.key.as_str()] = json!(text);
+            }
+            row
+        })
+        .collect()
+}
+
+/// Renders one row into a new document.
+pub(crate) fn render(
+    kind: FileKind,
+    template: &[u8],
+    map: &FieldMap,
+    row: &Value,
+) -> Result<(GeneratedFile, BTreeSet<String>), String> {
+    let values = row_values(map, row)?;
     let (bytes, missing) = render_package(kind, template, map, &values)?;
     let left_out = map
         .optional_sheets

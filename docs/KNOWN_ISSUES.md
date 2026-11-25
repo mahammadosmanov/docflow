@@ -32,6 +32,11 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
   sensibly.
+- Computed template fields (ADR 0058, 1.65.0) are verified with synthetic files
+  only and are not yet used by CON-CIV-010/011/013/014. The legacy ambient
+  temperature picks a pseudo-random offset per record; a template can only add
+  one fixed number, so it cannot reproduce that exactly. Numbers are computed in
+  floating point and rounded half away from zero to at most 6 decimals.
 - Template field types and free mode (ADR 0058, 1.64.0) are verified with synthetic
   files only. A Checkbox writes text (☒ or ☐ or your words); it does not tick a
   Word form-field or content-control checkbox, and Windows Word/Excel acceptance

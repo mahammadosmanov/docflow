@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.64.0",
+  "currentVersion": "1.65.0",
   "releases": [
+    {
+      "version": "1.65.0",
+      "tag": "v1.65.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template fields can be computed from other fields"
+    },
     {
       "version": "1.64.0",
       "tag": "v1.64.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template field types (number, date, checkbox) and creating documents without an RFI"
     },
     {

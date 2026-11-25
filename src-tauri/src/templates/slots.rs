@@ -13,6 +13,7 @@ use std::sync::LazyLock;
 
 use super::{
     anchors::CellAnchor,
+    compute::Compute,
     field_map::{FieldDef, FieldMap, PresetDef},
     values::FieldKind,
 };
@@ -49,6 +50,8 @@ struct Slot {
     options: Vec<String>,
     #[serde(default)]
     format: String,
+    #[serde(default)]
+    compute: Option<Compute>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +95,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             Some("number") => (false, FieldKind::Number),
             Some("date") => (false, FieldKind::Date),
             Some("checkbox") => (false, FieldKind::Checkbox),
+            Some("computed") => (false, FieldKind::Computed),
             Some(_) => return Err(NEWER.to_string()),
         };
         let start = match slot.source {
@@ -113,6 +117,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             anchor,
             kind,
             format: slot.format,
+            compute: slot.compute,
         });
     }
     let mut result = FieldMap::default();
@@ -182,6 +187,7 @@ pub fn to_value(map: &FieldMap) -> Value {
                 "source": source,
                 "options": field.options,
                 "format": field.format,
+                "compute": field.compute,
             })
         })
         .collect::<Vec<_>>();

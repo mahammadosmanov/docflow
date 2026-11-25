@@ -33,6 +33,8 @@ pub enum FieldKind {
     Number,
     Date,
     Checkbox,
+    /// Made from other fields; see `templates::compute`.
+    Computed,
 }
 
 impl FieldKind {
@@ -47,6 +49,7 @@ impl FieldKind {
             Self::Number => "number",
             Self::Date => "date",
             Self::Checkbox => "checkbox",
+            Self::Computed => "computed",
         }
     }
 }
@@ -63,8 +66,8 @@ pub fn truthy(raw: &str) -> bool {
 pub fn check_format(kind: FieldKind, format: &str) -> Result<(), String> {
     let invalid = || "A field format is invalid".to_string();
     match kind {
-        FieldKind::Text | FieldKind::Number if format.is_empty() => Ok(()),
-        FieldKind::Text | FieldKind::Number => Err(invalid()),
+        FieldKind::Text | FieldKind::Number | FieldKind::Computed if format.is_empty() => Ok(()),
+        FieldKind::Text | FieldKind::Number | FieldKind::Computed => Err(invalid()),
         FieldKind::Date => {
             let clean = format.chars().count() <= MAX_FORMAT_CHARS
                 && !format
@@ -159,7 +162,7 @@ fn write_date(format: &str, (year, month, day): (u32, u32, u32)) -> String {
 /// checkbox's `raw` is `"true"` or `"false"`.
 pub fn convert(field: &FieldDef, raw: &str) -> Result<String, String> {
     match field.kind {
-        FieldKind::Text => Ok(raw.to_string()),
+        FieldKind::Text | FieldKind::Computed => Ok(raw.to_string()),
         FieldKind::Number => {
             let text = raw.trim();
             if text.is_empty() || NUMBER.is_match(text) {

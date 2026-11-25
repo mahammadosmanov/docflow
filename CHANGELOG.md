@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.65.0 - 2026-11-25
+
+### Added
+
+- A template field can be Computed (ADR 0058): its value is made from other fields, so the operator types less. Choose the type Computed, one operation, and the fields it uses. Operations: Sum, Difference (first minus second), Add a fixed number (can be negative, for example plant temperature minus 0.6), Round, Copy, and Join text. In Preview a computed value is read-only and updates when its inputs change; the file always gets the freshly computed value. A number keeps the decimals of its inputs unless you set them, and an empty input gives an empty result. A computed field cannot use another computed field. Templates that use it are stored as schema 2, so install this version on every computer before publishing one.
+
 ## 1.64.0 - 2026-11-25
 
 ### Added

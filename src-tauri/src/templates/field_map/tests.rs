@@ -223,7 +223,6 @@ fn schema_two_and_the_equal_schema_one_map_agree() {
 fn schema_two_features_this_release_cannot_apply_are_refused() {
     for slot in [
         json!({"key": "a", "anchor": {"kind": "range", "sheet": "S", "address": "A1:B2"}}),
-        json!({"key": "a", "type": "computed"}),
         json!({"key": "a", "type": "slider"}),
         json!({"key": "a", "source": {"kind": "other"}}),
     ] {
@@ -587,4 +586,58 @@ fn a_bad_format_or_a_type_mixed_with_choices_is_invalid() {
             "{field}"
         );
     }
+}
+
+fn computed_map(compute: Value) -> Value {
+    json!({"schema": 2, "slots": [
+        {"key": "plant", "type": "number"},
+        {"key": "other", "type": "number"},
+        {"key": "ambient", "type": "computed", "compute": compute}
+    ]})
+}
+
+#[test]
+fn computed_slots_round_trip_and_are_checked() {
+    let offset = json!({"op": "offset", "inputs": ["plant"], "by": "-0.6"});
+    let map = FieldMap::parse(&computed_map(offset.clone())).expect("loads");
+    assert_eq!(map.fields[2].kind, FieldKind::Computed);
+    assert_eq!(map.fields[2].compute.as_ref().unwrap().by, "-0.6");
+    let stored = map.to_value();
+    assert_eq!(stored["slots"][2]["type"], "computed");
+    assert_eq!(stored["slots"][2]["compute"]["op"], "offset");
+    assert_eq!(FieldMap::parse(&stored).expect("again"), map);
+
+    for bad in [
+        json!({"op": "offset", "inputs": ["ambient"], "by": "1"}),
+        json!({"op": "sum", "inputs": ["missing"]}),
+        json!({"op": "sum", "inputs": ["plant", "plant"]}),
+        json!({"op": "offset", "inputs": ["plant"]}),
+        json!({"op": "median", "inputs": ["plant"]}),
+    ] {
+        assert!(
+            FieldMap::parse(&computed_map(bad.clone())).is_err(),
+            "{bad}"
+        );
+    }
+    let no_compute = json!({"schema": 2, "slots": [{"key": "a", "type": "computed"}]});
+    assert!(FieldMap::parse(&no_compute).is_err());
+    let loose =
+        json!({"schema": 1, "fields": [{"key": "a", "compute": {"op": "copy", "inputs": ["a"]}}]});
+    assert!(
+        FieldMap::parse(&loose).is_err(),
+        "compute needs the computed kind"
+    );
+}
+
+#[test]
+fn a_computed_field_cannot_depend_on_another_one_or_be_set_by_a_preset() {
+    let chained = json!({"schema": 2, "slots": [
+        {"key": "a", "type": "number"},
+        {"key": "b", "type": "computed", "compute": {"op": "copy", "inputs": ["a"]}},
+        {"key": "c", "type": "computed", "compute": {"op": "copy", "inputs": ["b"]}}
+    ]});
+    assert!(FieldMap::parse(&chained).is_err());
+    let mut with_preset = computed_map(json!({"op": "copy", "inputs": ["plant"]}));
+    with_preset["presets"] = json!([{"name": "P", "values": {"ambient": "5"}}]);
+    assert!(FieldMap::parse(&with_preset).is_err());
 }

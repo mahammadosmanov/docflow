@@ -316,6 +316,16 @@ export interface CellAnchor {
   repeatColumns?: number;
 }
 
+export type ComputeOp = "sum" | "difference" | "offset" | "round" | "copy" | "concat";
+
+export interface FieldCompute {
+  op: ComputeOp;
+  inputs: string[];
+  by?: string;
+  decimals?: number;
+  separator?: string;
+}
+
 export interface TemplateField {
   key: string;
   label: string;
@@ -323,7 +333,9 @@ export interface TemplateField {
   options: string[];
   multiline: boolean;
   /** How the value is checked and written; text when absent. */
-  kind?: "text" | "number" | "date" | "checkbox";
+  kind?: "text" | "number" | "date" | "checkbox" | "computed";
+  /** Present exactly when `kind` is `computed`. */
+  compute?: FieldCompute;
   /** Date pattern such as `dd.MM.yyyy`, or checkbox texts such as `Yes|No`. */
   format?: string;
   /** Set when the field is a cell instead of a `{{placeholder}}`. */

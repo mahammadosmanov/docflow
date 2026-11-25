@@ -89,6 +89,32 @@ describe("TemplateEditor", () => {
     expect(saved.fieldMap.fields[1]).toMatchObject({ kind: "checkbox", options: [], multiline: false });
   });
 
+  it("builds a computed field from other fields", async () => {
+    const call = vi.fn(async (method: string, params?: { fieldMap?: unknown }) =>
+      method === "templates/saveDraft" ? { ...draft, fieldMap: params?.fieldMap } : { templates: [] },
+    );
+    render(
+      <TemplateEditor bridge={{ call } as unknown as Bridge} s={s} draft={draft} onClose={vi.fn()} />,
+    );
+    const types = screen.getAllByLabelText("Type");
+    fireEvent.change(types[0], { target: { value: "number" } });
+    fireEvent.change(types[1], { target: { value: "computed" } });
+    expect(screen.queryByRole("checkbox", { name: "Issuer" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "RFI No" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "offset" } });
+    fireEvent.change(screen.getByLabelText(/^Number to add/), { target: { value: "-0.6" } });
+    fireEvent.change(screen.getByLabelText(/^Decimals/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    await vi.waitFor(() => expect(call).toHaveBeenCalledWith("templates/saveDraft", expect.anything()));
+    const saved = call.mock.calls.find(([method]) => method === "templates/saveDraft")?.[1] as {
+      fieldMap: TemplateDraft["fieldMap"];
+    };
+    expect(saved.fieldMap.fields[1]).toMatchObject({
+      kind: "computed",
+      compute: { op: "offset", inputs: ["rfiNo"], by: "-0.6", decimals: 1 },
+    });
+  });
+
   it("renames with the discipline prefix and deletes for everyone", async () => {
     const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
       method === "templates/saveDraft" ? { ...draft, code: params?.code, title: params?.title } : { templates: [] },

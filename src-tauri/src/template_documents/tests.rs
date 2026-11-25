@@ -401,3 +401,66 @@ fn a_free_document_without_a_name_part_is_named_by_its_row() {
     assert_eq!(first.filename, "document-1.docx");
     assert_eq!(second.filename, "document-2.docx");
 }
+
+fn computed_doc_map() -> FieldMap {
+    FieldMap::parse(&json!({
+        "schema": 2,
+        "fileName": "{{label}}",
+        "slots": [
+            {"key": "plant", "type": "number", "source": {"kind": "fixed", "value": "24.0"}},
+            {"key": "ambient", "type": "computed",
+             "compute": {"op": "offset", "inputs": ["plant"], "by": "-0.6"}},
+            {"key": "label", "type": "computed",
+             "compute": {"op": "concat", "inputs": ["plant"], "separator": ""}}
+        ]
+    }))
+    .expect("map")
+}
+
+#[test]
+fn computed_values_show_in_preview_as_read_only_and_follow_edits() {
+    let map = computed_doc_map();
+    let rows = free_rows(&map, 1);
+    assert_eq!(rows[0]["ambient"], "23.4");
+    let editor = editor(&map, rows.clone());
+    let kinds = editor["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|column| column["kind"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(kinds, ["text", "readonly", "readonly"]);
+
+    let mut edited = rows.clone();
+    edited[0]["plant"] = json!("30");
+    let updated = with_computed(&map, edited);
+    assert_eq!(updated[0]["ambient"], "29.4");
+    let mut broken = rows;
+    broken[0]["plant"] = json!("abc");
+    assert_eq!(
+        with_computed(&map, broken)[0]["ambient"],
+        "",
+        "errors surface at render"
+    );
+}
+
+#[test]
+fn rendering_recomputes_and_ignores_a_submitted_computed_value() {
+    let template = docx_with("{{plant}} {{ambient}}");
+    let row = json!({"_rowId": "document-1", "plant": "30", "ambient": "999", "label": "x"});
+    let (file, _) = render(FileKind::Docx, &template, &computed_doc_map(), &row).expect("render");
+    let mut archive = zip::ZipArchive::new(Cursor::new(file.bytes.clone())).unwrap();
+    let mut text = String::new();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("word/document.xml").unwrap(),
+        &mut text,
+    )
+    .unwrap();
+    assert!(text.contains("30 29.4"), "{text}");
+    assert_eq!(
+        file.filename, "30.docx",
+        "a computed value can be in the file name"
+    );
+    let bad = json!({"_rowId": "document-1", "plant": "abc", "ambient": "", "label": ""});
+    assert!(render(FileKind::Docx, &template, &computed_doc_map(), &bad).is_err());
+}

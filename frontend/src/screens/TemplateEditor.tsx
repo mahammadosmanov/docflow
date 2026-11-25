@@ -7,6 +7,7 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { Modal } from "../components/Modal";
 import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
+import { TemplateCompute } from "./TemplateCompute";
 import { TemplateCells, cellLocation } from "./TemplateCells";
 import { TemplateDocument } from "./TemplateDocument";
 import {
@@ -462,12 +463,21 @@ export function TemplateEditor({
                         updateField(
                           index,
                           kind === "text"
-                            ? { kind, format: "" }
-                            : { kind, format: "", multiline: false },
+                            ? { kind, format: "", compute: undefined }
+                            : {
+                                kind,
+                                format: "",
+                                multiline: false,
+                                value: kind === "computed" ? "" : field.value,
+                                compute:
+                                  kind === "computed"
+                                    ? (field.compute ?? { op: "sum", inputs: [] })
+                                    : undefined,
+                              },
                         );
                       }}
                     >
-                      {(["text", "number", "date", "checkbox"] as const).map((kind) => (
+                      {(["text", "number", "date", "checkbox", "computed"] as const).map((kind) => (
                         <option key={kind} value={kind}>
                           {s.t(`templates.editor.type.${kind}`)}
                         </option>
@@ -498,6 +508,16 @@ export function TemplateEditor({
                     </label>
                   )}
                 </div>
+                {field.kind === "computed" && (
+                  <TemplateCompute
+                    s={s}
+                    field={field}
+                    others={map.fields.filter(
+                      (other) => other.key !== field.key && other.kind !== "computed",
+                    )}
+                    onChange={(compute) => updateField(index, { compute })}
+                  />
+                )}
                 {(field.kind ?? "text") === "text" && (
                   <label className="toggle-inline">
                     <input

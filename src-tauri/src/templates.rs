@@ -28,6 +28,7 @@ const MAX_TEMPLATES: usize = 500;
 const MAX_FIELDS: usize = 500;
 
 pub mod anchors;
+pub mod compute;
 pub mod copies;
 pub mod editor;
 pub mod field_map;

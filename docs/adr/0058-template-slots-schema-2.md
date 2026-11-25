@@ -209,6 +209,27 @@ anchors other than placeholders.
 - Not done: tick a checkbox stored as a form field, content control, or symbol
   that the file already holds; those need their own writers.
 
+### Computed fields (1.65.0)
+
+- Field kind `computed` carries `compute`: `op` (`sum`, `difference`, `offset`,
+  `round`, `copy`, `concat`), `inputs` (1 to 10 other field keys), `by` (offset
+  only), `decimals` (0 to 6; required for `round`), and `separator` (concat only).
+  Stored as slot `type: "computed"` with `compute` in schema 2.
+- `templates::compute` is the whole interpreter: a closed Rust enum, no
+  expression text. Inputs must be non-computed fields (no chains, no cycles);
+  a preset cannot set a computed field; a computed field has no start value.
+- Numbers use `^-?[0-9]+([.,][0-9]+)?$`. The result keeps the largest decimals of
+  its inputs (and of `by`) unless `decimals` is set, uses a comma when an input
+  used one, and is empty when any numeric input is empty. `concat` skips empty
+  parts; `copy` copies the text.
+- At render the typed values are converted first, then computed values are made
+  from them; a submitted computed value is ignored. Preview shows computed
+  columns read-only and refreshes them on every revise; a row that cannot be
+  computed shows an empty value and the error is reported when documents are
+  rendered. A computed value may be used in the output file name.
+- Not done: moving CON-CIV-010/011/013/014 onto templates (one release each), and
+  the legacy per-record pseudo-random ambient offset.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

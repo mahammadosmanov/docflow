@@ -812,6 +812,7 @@ impl NativeBackend {
             .ok_or_else(invalid)?;
         let submitted = payload["rows"].as_array().ok_or_else(invalid)?;
         let rows = template_documents::accept_rows(original, submitted).map_err(|_| invalid())?;
+        let rows = template_documents::with_computed(&map, rows);
         let output_directory = PathBuf::from(meta_text("outputDirectory"));
         let mut warnings = plan
             .warnings
