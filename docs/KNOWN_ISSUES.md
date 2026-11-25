@@ -28,6 +28,10 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   open a generated file with merged cells, a styled empty cell, and a formula
   sheet. Publish a template with marked cells only after every install runs
   1.55.0 or later.
+- Optional Excel sheets (ADR 0058, 1.60.0) are verified with synthetic workbooks only.
+  Windows acceptance: generate a damage workbook with a photo sheet left out and
+  confirm Excel opens it without a repair prompt; conditional formatting, data
+  validation, or charts that point at a removed sheet are not checked.
 - Shared templates (ADR 0055) need `docs/supabase_templates.sql` applied to the
   live Supabase project, then a two-user check of sync, offline start, and
   update pickup. Until then the Templates screen reports that the store is not

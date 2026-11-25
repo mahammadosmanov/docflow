@@ -353,6 +353,39 @@ fn a_map_with_an_anchor_is_stored_as_schema_two_and_loads_back_equal() {
     );
 }
 
+#[test]
+fn optional_sheets_are_stored_as_schema_two_and_checked() {
+    let stored = json!({
+        "schema": 2,
+        "slots": [{"key": "a"}],
+        "optionalSheets": ["Photos", "Extra"]
+    });
+    let map = FieldMap::parse(&stored).expect("loads");
+    assert_eq!(map.optional_sheets, ["Photos", "Extra"]);
+    let written = map.to_value();
+    assert_eq!(written["schema"], 2);
+    assert_eq!(written["optionalSheets"], json!(["Photos", "Extra"]));
+    assert_eq!(FieldMap::parse(&written).expect("round trip"), map);
+
+    let plain = FieldMap::parse(&json!({"schema": 1, "fields": [{"key": "a"}]})).expect("plain");
+    assert_eq!(
+        plain.to_value()["schema"],
+        1,
+        "no optional sheets, no anchors: unchanged"
+    );
+    assert!(plain.to_value().get("optionalSheets").is_none());
+
+    for bad in [
+        json!(["Photos", "photos"]),
+        json!([""]),
+        json!(["x".repeat(32)]),
+        json!((0..101).map(|n| format!("s{n}")).collect::<Vec<_>>()),
+    ] {
+        let value = json!({"schema": 2, "slots": [], "optionalSheets": bad});
+        assert!(FieldMap::parse(&value).is_err(), "{bad}");
+    }
+}
+
 const PLAIN: &str = concat!(
     r#"<w:document><w:body>"#,
     r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,

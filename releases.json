@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.59.0",
+  "currentVersion": "1.60.0",
   "releases": [
+    {
+      "version": "1.60.0",
+      "tag": "v1.60.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Excel templates can mark sheets as optional so a document can leave them out"
+    },
     {
       "version": "1.59.0",
       "tag": "v1.59.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template files can be replaced with a marked-cell check, and old versions restored as the draft"
     },
     {

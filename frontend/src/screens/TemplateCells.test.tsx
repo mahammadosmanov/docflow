@@ -52,8 +52,10 @@ function mount(
   structure: TemplateStructure,
   fields = [] as { key: string }[],
   copies: unknown = null,
+  optionalSheets: string[] = [],
 ) {
   const onMark = vi.fn();
+  const onToggleSheet = vi.fn();
   const bridge = {
     call: vi.fn((method: string) =>
       Promise.resolve(method === "templates/suggestFromCopies" ? copies : structure),
@@ -68,9 +70,11 @@ function mount(
       reloadKey=""
       onMark={onMark}
       onRemove={vi.fn()}
+      optionalSheets={optionalSheets}
+      onToggleSheet={onToggleSheet}
     />,
   );
-  return { onMark, bridge };
+  return { onMark, bridge, onToggleSheet };
 }
 
 describe("TemplateCells", () => {
@@ -175,5 +179,34 @@ describe("TemplateCells", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Suggest from other copies" }));
     await waitFor(() => expect(screen.queryByText("Cells that differ")).toBeNull());
     expect(screen.queryByText("The copies do not differ in any cell you can mark.")).toBeNull();
+  });
+
+  const twoSheets: TemplateStructure = {
+    kind: "xlsx",
+    suggestions: [],
+    sheets: [
+      { name: "Form", maxRow: 1, maxColumn: 1, truncated: false, protected: false, cells: [], merges: [] },
+      { name: "Photos", maxRow: 1, maxColumn: 1, truncated: false, protected: false, cells: [], merges: [] },
+    ],
+  };
+
+  it("lets a sheet be marked optional when the workbook has several", async () => {
+    const { onToggleSheet } = mount(twoSheets);
+    const box = await screen.findByRole("checkbox", { name: "Documents can leave this sheet out" });
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    expect(onToggleSheet).toHaveBeenCalledWith("Form", true);
+    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Documents can leave this sheet out" }));
+    expect(onToggleSheet).toHaveBeenLastCalledWith("Photos", true);
+  });
+
+  it("shows a sheet that is already optional as checked, and offers nothing for a single sheet", async () => {
+    mount(twoSheets, [], null, ["Form"]);
+    expect(await screen.findByRole("checkbox", { name: "Documents can leave this sheet out" })).toBeChecked();
+    cleanup();
+    mount(excel);
+    await screen.findByRole("button", { name: "Title" });
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

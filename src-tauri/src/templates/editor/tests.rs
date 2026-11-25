@@ -576,3 +576,25 @@ fn versions_are_listed_newest_first_and_an_old_one_can_become_the_draft() {
     assert_eq!(post["status"], "draft");
     assert_eq!(post["version"], 2);
 }
+
+#[test]
+fn optional_sheets_are_refused_for_a_word_template_before_anything_is_saved() {
+    let (remote, _dir, store) = draft_store(&table_docx());
+    let map = json!({"schema": 2, "slots": [{"key": "a"}], "optionalSheets": ["Photos"]});
+    let error = store
+        .save_draft(&save(map), 1)
+        .expect_err("word has no sheets");
+    assert!(
+        error.message.starts_with("error.templates.invalid"),
+        "{}",
+        error.message
+    );
+    assert!(
+        remote
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(method, _, _)| method != "PATCH")
+    );
+}

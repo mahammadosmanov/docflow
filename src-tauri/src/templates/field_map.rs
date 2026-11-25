@@ -20,6 +20,7 @@ use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 use super::{FileKind, MAX_FIELDS, anchors::CellAnchor};
 
 pub const MAX_PRESETS: usize = 500;
+const MAX_OPTIONAL_SHEETS: usize = 100;
 const MAX_TEXT_CHARS: usize = 4_000;
 const MAX_OPTIONS: usize = 100;
 const MAX_PACKAGE_ENTRIES: usize = 4_096;
@@ -99,6 +100,9 @@ pub struct FieldMap {
     pub fields: Vec<FieldDef>,
     #[serde(default)]
     pub presets: Vec<PresetDef>,
+    /// Excel sheets a document may leave out (schema 2). Empty for Word.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional_sheets: Vec<String>,
 }
 
 fn default_file_name() -> String {
@@ -112,6 +116,7 @@ impl Default for FieldMap {
             file_name: default_file_name(),
             fields: Vec::new(),
             presets: Vec::new(),
+            optional_sheets: Vec::new(),
         }
     }
 }
@@ -158,6 +163,16 @@ impl FieldMap {
             {
                 return Err(format!("Field \"{}\" is too long", field.key));
             }
+        }
+        let mut sheet_names = BTreeSet::new();
+        if self.optional_sheets.len() > MAX_OPTIONAL_SHEETS
+            || self.optional_sheets.iter().any(|name| {
+                name.trim().is_empty()
+                    || name.chars().count() > 31
+                    || !sheet_names.insert(name.to_lowercase())
+            })
+        {
+            return Err("The optional sheet list is invalid".to_string());
         }
         let mut anchors = Vec::new();
         for field in &self.fields {
@@ -261,12 +276,12 @@ fn text_parts(kind: FileKind, name: &str) -> bool {
     }
 }
 
-struct Package {
-    comment: Vec<u8>,
-    entries: Vec<(String, Vec<u8>)>,
+pub(super) struct Package {
+    pub(super) comment: Vec<u8>,
+    pub(super) entries: Vec<(String, Vec<u8>)>,
 }
 
-fn read_package(bytes: &[u8]) -> Result<Package, String> {
+pub(super) fn read_package(bytes: &[u8]) -> Result<Package, String> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).map_err(|_| "Invalid Office file".to_string())?;
     if archive.is_empty() || archive.len() > MAX_PACKAGE_ENTRIES {

@@ -385,6 +385,8 @@ export interface TemplateFieldMap {
   fileName: string;
   fields: TemplateField[];
   presets: TemplatePreset[];
+  /** Excel sheets a document may leave out. */
+  optionalSheets?: string[];
 }
 
 export interface EditableTemplate {

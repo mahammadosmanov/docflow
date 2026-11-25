@@ -1371,5 +1371,7 @@
   "templates.versions.replaceWarning": "Bərpa açıq qaralamanın yerinə keçir. Saxlamaq istədiklərinizi əvvəlcə yadda saxlayın.",
   "templates.versions.version": "Versiya {version}",
   "templates.cells.marked": "İşarələnmiş xanalar",
-  "templates.cells.markedNone": "Hələ işarələnmiş xana yoxdur."
+  "templates.cells.markedNone": "Hələ işarələnmiş xana yoxdur.",
+  "templates.cells.sheetOptional": "Sənədlər bu vərəqi kənarda qoya bilər",
+  "templates.cells.sheetOptional.help": "Vərəq şəkilləri ilə birlikdə çıxır. Başqa vərəqdəki düsturun istifadə etdiyi vərəq kənarda qoyula bilməz; yadda saxlayanda bildirilir."
 }

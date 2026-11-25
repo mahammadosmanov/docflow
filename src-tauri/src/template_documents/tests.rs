@@ -232,3 +232,60 @@ fn short_rfi_numbers_use_the_template_discipline() {
     );
     assert!(requested_rfis("12345", Some("ELE")).is_err());
 }
+
+fn sheet_map() -> FieldMap {
+    FieldMap::parse(&json!({
+        "schema": 2,
+        "slots": [{"key": "name"}],
+        "optionalSheets": ["Photos"]
+    }))
+    .expect("map")
+}
+
+#[test]
+fn an_optional_sheet_is_a_checkbox_per_document_and_can_be_left_out() {
+    let map = sheet_map();
+    let log = BTreeMap::from([("RFI-1".to_string(), LogRow::new())]);
+    let rows = initial_rows(&map, &log, &["RFI-1".to_string()]);
+    assert_eq!(rows[0]["_sheet0"], json!(true));
+    let editor = editor(&map, rows.clone());
+    let column = editor["columns"]
+        .as_array()
+        .expect("columns")
+        .iter()
+        .find(|column| column["key"] == "_sheet0")
+        .expect("sheet column");
+    assert_eq!(column["kind"], "bool");
+    assert_eq!(column["labelKey"], "Photos");
+
+    let mut edited = rows.clone();
+    edited[0]["_sheet0"] = json!(false);
+    assert!(accept_rows(&rows, &edited).is_ok(), "a checkbox may change");
+    edited[0]["name"] = json!(true);
+    assert!(
+        accept_rows(&rows, &edited).is_err(),
+        "other cells stay text"
+    );
+
+    let book = crate::templates::sheets::tests::book("", "", false);
+    let keep = render(FileKind::Xlsx, &book, &map, &rows[0])
+        .expect("render")
+        .0;
+    let leave_out = render(FileKind::Xlsx, &book, &map, &edited_with(&rows[0], false))
+        .expect("render")
+        .0;
+    let count = |bytes: &[u8]| {
+        crate::ooxml::ordered_workbook_discovery(&mut Cursor::new(bytes))
+            .expect("discovery")
+            .worksheets
+            .len()
+    };
+    assert_eq!(count(&keep.bytes), 3);
+    assert_eq!(count(&leave_out.bytes), 2);
+}
+
+fn edited_with(row: &Value, include: bool) -> Value {
+    let mut row = row.clone();
+    row["_sheet0"] = json!(include);
+    row
+}

@@ -112,6 +112,29 @@ anchors other than placeholders.
 - **Marked cells list.** The Cells section shows the marked cells beside the
   file view (below it on narrow windows) with a remove button each.
 
+### Optional sheets (1.60.0)
+
+- Schema 2 adds `optionalSheets`: names of Excel sheets a document may leave
+  out. Such a template is stored as schema 2, so an older install lists it as
+  failed instead of ignoring the list. The editor shows a checkbox per sheet
+  (workbooks with more than one sheet); saving checks each optional sheet on
+  its own and all of them together against the draft file, and publishing
+  checks again. A Word template with optional sheets is refused.
+- Generation adds one checkbox column per optional sheet (record table kind
+  `bool`, all on). An unticked sheet is removed whole by
+  `templates::sheets::remove_sheets`: the sheet, its relationships, its
+  drawing and comments, pictures no kept part uses, names scoped to it, and
+  the calculation chain (Excel rebuilds it). Names after it shift their sheet
+  index; the open tab resets to the first sheet.
+- Refused: a sheet that a formula on a kept sheet uses, a workbook name that
+  is not scoped to the sheet and uses it, a protected or signed workbook, an
+  unknown sheet, and removing every visible sheet. References from conditional
+  formatting, data validation, charts, or pivot tables to a removed sheet are
+  not checked; the damage workbooks in the operator's sample have none, and
+  Windows Excel acceptance must confirm a generated file opens without repair.
+- The picked choice is part of the Preview rows and the journal like every
+  other edited value; Undo removes the generated file as usual.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

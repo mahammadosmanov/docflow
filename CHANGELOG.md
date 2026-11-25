@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.60.0 - 2026-11-25
+
+### Added
+
+- Excel templates can mark sheets as optional (ADR 0058). In the Cells section a workbook with several sheets shows "Documents can leave this sheet out" for each sheet; saving and publishing check that each optional sheet can really be removed. When documents are generated, every optional sheet is a checkbox column in the Preview table, ticked by default; an unticked sheet is removed with its drawing, pictures only it used, names scoped to it, and the calculation chain. A sheet that a formula on a kept sheet or a workbook-wide name uses is never removed, nor the last visible sheet. A template with optional sheets is stored as schema 2.
+
 ## 1.59.0 - 2026-11-25
 
 ### Added

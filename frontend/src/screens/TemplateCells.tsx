@@ -61,6 +61,8 @@ export function TemplateCells({
   reloadKey,
   onMark,
   onRemove,
+  optionalSheets,
+  onToggleSheet,
 }: {
   bridge: Bridge;
   s: Strings;
@@ -70,6 +72,8 @@ export function TemplateCells({
   reloadKey: string;
   onMark: (field: TemplateField) => void;
   onRemove: (key: string) => void;
+  optionalSheets: string[];
+  onToggleSheet: (name: string, optional: boolean) => void;
 }) {
   const [structure, setStructure] = useState<TemplateStructure | null | undefined>(undefined);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -199,6 +203,19 @@ export function TemplateCells({
               </button>
             ))}
           </div>
+        )}
+        {sheets.length > 1 && (
+          <label className="toggle-inline">
+            <input
+              type="checkbox"
+              checked={optionalSheets.includes(sheet.name)}
+              onChange={(event) => onToggleSheet(sheet.name, event.target.checked)}
+            />
+            {s.t("templates.cells.sheetOptional")}
+          </label>
+        )}
+        {sheets.length > 1 && (
+          <small className="muted">{s.t("templates.cells.sheetOptional.help")}</small>
         )}
         {sheet.truncated && <p className="muted">{s.t("templates.cells.truncated")}</p>}
         <div className="cell-grid-scroll">

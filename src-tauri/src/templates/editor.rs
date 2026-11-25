@@ -14,6 +14,7 @@ use super::{
     copies::{self, CopySuggestion},
     field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
     remap::{self, AnchorCheck},
+    sheets,
     structure::{self, Structure},
     verify_package,
 };
@@ -290,6 +291,37 @@ impl TemplateStore {
             self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
         let bytes = self.version_bytes(&version, now)?;
         text_blocks(template.file_kind, &bytes).map_err(invalid)
+    }
+
+    /// Dry run of the map on the draft's own file, so a marked cell that cannot
+    /// be written, or an optional sheet that cannot be left out, is refused when
+    /// the draft is saved or published, not when someone generates a document.
+    fn check_against_file(
+        &self,
+        field_map: &FieldMap,
+        version: &VersionRow,
+        now: i64,
+    ) -> Result<(), BackendError> {
+        let anchored = field_map
+            .fields
+            .iter()
+            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
+            .collect::<Vec<_>>();
+        if anchored.is_empty() && field_map.optional_sheets.is_empty() {
+            return Ok(());
+        }
+        let template =
+            self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
+        if !field_map.optional_sheets.is_empty() && template.file_kind != FileKind::Xlsx {
+            return Err(invalid("Optional sheets work only in Excel files"));
+        }
+        let bytes = self.version_bytes(version, now)?;
+        anchors::apply(template.file_kind, &bytes, &anchored).map_err(invalid)?;
+        for name in &field_map.optional_sheets {
+            sheets::remove_sheets(&bytes, std::slice::from_ref(name)).map_err(invalid)?;
+        }
+        sheets::remove_sheets(&bytes, &field_map.optional_sheets).map_err(invalid)?;
+        Ok(())
     }
 
     /// The draft file's tables or sheets, for marking cells (ADR 0058).
@@ -656,19 +688,7 @@ impl TemplateStore {
         if version.status != "draft" {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
-        let anchored = field_map
-            .fields
-            .iter()
-            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
-            .collect::<Vec<_>>();
-        if !anchored.is_empty() {
-            // Dry run on the draft's own file: a cell that cannot be written
-            // is refused now, not when someone generates a document.
-            let template =
-                self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
-            let bytes = self.version_bytes(&version, now)?;
-            anchors::apply(template.file_kind, &bytes, &anchored).map_err(invalid)?;
-        }
+        self.check_against_file(&field_map, &version, now)?;
         self.remote.rest(
             "PATCH",
             &format!("doc_templates?id=eq.{}", uuid_ok(&version.template_id)?),
@@ -714,19 +734,8 @@ impl TemplateStore {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
         let field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
-        let anchored = field_map
-            .fields
-            .iter()
-            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
-            .collect::<Vec<_>>();
-        if !anchored.is_empty() {
-            // Last check before everyone gets the version: every marked cell
-            // must still be writable in the draft's own file.
-            let template =
-                self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
-            let bytes = self.version_bytes(&version, now)?;
-            anchors::apply(template.file_kind, &bytes, &anchored).map_err(invalid)?;
-        }
+        // Last check before everyone gets the version.
+        self.check_against_file(&field_map, &version, now)?;
         self.remote.rest(
             "POST",
             "rpc/publish_template_version",

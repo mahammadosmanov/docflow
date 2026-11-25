@@ -354,4 +354,4 @@ pub fn address_of(row: u32, column: u32) -> String {
 }
 
 #[cfg(test)]
-pub(super) mod tests;
+pub(crate) mod tests;

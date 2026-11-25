@@ -1371,5 +1371,7 @@
   "templates.versions.replaceWarning": "Geri yükleme, açık olan taslağın yerine geçer. Saklamak istediklerini önce kaydet.",
   "templates.versions.version": "Sürüm {version}",
   "templates.cells.marked": "İşaretli hücreler",
-  "templates.cells.markedNone": "Henüz işaretli hücre yok."
+  "templates.cells.markedNone": "Henüz işaretli hücre yok.",
+  "templates.cells.sheetOptional": "Belgeler bu sayfayı dışarıda bırakabilir",
+  "templates.cells.sheetOptional.help": "Sayfa resimleriyle birlikte çıkar. Başka bir sayfadaki formülün kullandığı sayfa dışarıda bırakılamaz; kaydederken bildirilir."
 }

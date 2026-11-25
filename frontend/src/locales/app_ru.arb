@@ -1371,5 +1371,7 @@
   "templates.versions.replaceWarning": "Восстановление заменяет открытый черновик. Сначала сохраните то, что нужно оставить.",
   "templates.versions.version": "Версия {version}",
   "templates.cells.marked": "Отмеченные ячейки",
-  "templates.cells.markedNone": "Отмеченных ячеек пока нет."
+  "templates.cells.markedNone": "Отмеченных ячеек пока нет.",
+  "templates.cells.sheetOptional": "Документы могут исключать этот лист",
+  "templates.cells.sheetOptional.help": "Лист удаляется вместе с рисунками. Лист, который использует формула на другом листе, исключить нельзя; при сохранении вы увидите это."
 }

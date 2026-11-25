@@ -365,7 +365,7 @@ mod xml;
 use archive::*;
 pub use patch::*;
 pub use read::*;
-pub use refs::{RowShift, translate_formula};
+pub use refs::{RowShift, references_sheet, translate_formula};
 use relationships::*;
 use rich::*;
 pub use rows::{CellText, RowOp, apply_row_ops};

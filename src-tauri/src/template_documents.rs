@@ -18,6 +18,7 @@ use crate::{
     templates::{
         FileKind,
         field_map::{FieldMap, fill_text, render_package, resolve_tokens},
+        sheets,
     },
 };
 
@@ -27,6 +28,12 @@ pub const MAX_RFIS: usize = 100;
 const MAX_VALUE_CHARS: usize = 4_000;
 const PRESET_COLUMN: &str = "_preset";
 const ROW_ID: &str = "_rowId";
+const SHEET_PREFIX: &str = "_sheet";
+
+/// The row key of the checkbox for the `index`-th optional sheet.
+fn sheet_key(index: usize) -> String {
+    format!("{SHEET_PREFIX}{index}")
+}
 
 /// RFI Log headers (normalized) for each token, in preference order.
 const LOG_COLUMNS: [(&str, &[&str]); 16] = [
@@ -220,6 +227,9 @@ pub fn initial_rows(map: &FieldMap, log: &BTreeMap<String, LogRow>, rfis: &[Stri
                     json!(resolve_tokens(&field.value, source)),
                 );
             }
+            for index in 0..map.optional_sheets.len() {
+                row.insert(sheet_key(index), json!(true));
+            }
             Some(Value::Object(row))
         })
         .collect()
@@ -243,6 +253,10 @@ pub fn editor(map: &FieldMap, rows: Vec<Value>) -> Value {
             ("text", 180)
         };
         columns.push(json!({"key": field.key, "labelKey": label, "kind": kind, "width": width}));
+    }
+    for (index, name) in map.optional_sheets.iter().enumerate() {
+        columns
+            .push(json!({"key": sheet_key(index), "labelKey": name, "kind": "bool", "width": 90}));
     }
     let autocomplete = map
         .fields
@@ -293,10 +307,14 @@ pub fn accept_rows(original: &[Value], submitted: &[Value]) -> Result<Vec<Value>
         };
         if before.get(ROW_ID) != after.get(ROW_ID)
             || before.keys().collect::<BTreeSet<_>>() != after.keys().collect::<BTreeSet<_>>()
-            || after.values().any(|value| {
-                value
-                    .as_str()
-                    .is_none_or(|text| text.chars().count() > MAX_VALUE_CHARS)
+            || after.iter().any(|(key, value)| {
+                if key.starts_with(SHEET_PREFIX) {
+                    !value.is_boolean()
+                } else {
+                    value
+                        .as_str()
+                        .is_none_or(|text| text.chars().count() > MAX_VALUE_CHARS)
+                }
             })
         {
             return Err(invalid());
@@ -321,6 +339,18 @@ pub(crate) fn render(
         .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_string()))
         .collect::<BTreeMap<_, _>>();
     let (bytes, missing) = render_package(kind, template, map, &values)?;
+    let left_out = map
+        .optional_sheets
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| row.get(sheet_key(*index)).and_then(Value::as_bool) == Some(false))
+        .map(|(_, name)| name.clone())
+        .collect::<Vec<_>>();
+    let bytes = if left_out.is_empty() {
+        bytes
+    } else {
+        sheets::remove_sheets(&bytes, &left_out)?
+    };
     let stem = safe_file_stem(&fill_text(&map.file_name, &values));
     let stem = if stem.is_empty() {
         safe_file_stem(row[ROW_ID].as_str().unwrap_or("document"))

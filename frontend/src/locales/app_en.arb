@@ -1399,5 +1399,7 @@
   "templates.versions.replaceWarning": "Restoring replaces the draft you have open. Save anything you want to keep first.",
   "templates.versions.version": "Version {version}",
   "templates.cells.marked": "Marked cells",
-  "templates.cells.markedNone": "No cells marked yet."
+  "templates.cells.markedNone": "No cells marked yet.",
+  "templates.cells.sheetOptional": "Documents can leave this sheet out",
+  "templates.cells.sheetOptional.help": "The sheet leaves with its pictures. A sheet that a formula on another sheet uses cannot be left out; saving tells you."
 }

@@ -29,6 +29,8 @@ struct SlotMap {
     slots: Vec<Slot>,
     #[serde(default)]
     presets: Vec<PresetDef>,
+    #[serde(default)]
+    optional_sheets: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +104,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
     }
     result.fields = fields;
     result.presets = map.presets;
+    result.optional_sheets = map.optional_sheets;
     result.validate()?;
     Ok(result)
 }
@@ -110,7 +113,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
 /// cell anchor, otherwise schema 2. An older install reads schema 1 and
 /// lists schema 2 as unsupported, so it never silently skips an anchored cell.
 pub fn to_value(map: &FieldMap) -> Value {
-    if map.fields.iter().all(|field| field.anchor.is_none()) {
+    if map.fields.iter().all(|field| field.anchor.is_none()) && map.optional_sheets.is_empty() {
         return serde_json::to_value(map).unwrap_or(Value::Null);
     }
     let slots = map
@@ -158,5 +161,6 @@ pub fn to_value(map: &FieldMap) -> Value {
         "fileName": map.file_name,
         "slots": slots,
         "presets": map.presets,
+        "optionalSheets": map.optional_sheets,
     })
 }

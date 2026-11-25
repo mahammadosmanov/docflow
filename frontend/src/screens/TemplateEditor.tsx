@@ -141,6 +141,11 @@ export function TemplateEditor({
       }),
     }));
 
+  const toggleSheet = (name: string, optional: boolean) =>
+    setMap((current) => {
+      const rest = (current.optionalSheets ?? []).filter((item) => item !== name);
+      return { ...current, optionalSheets: optional ? [...rest, name] : rest };
+    });
   const settle = (key: string) => setChecks((current) => current.filter((item) => item.key !== key));
   const unresolved = checks.filter((item) => item.status !== "found");
   const fieldLabel = (key: string) => {
@@ -361,6 +366,8 @@ export function TemplateEditor({
           reloadKey={draft.placeholders.join("|")}
           onMark={markCell}
           onRemove={removeField}
+          optionalSheets={map.optionalSheets ?? []}
+          onToggleSheet={toggleSheet}
         />
 
         <section className="content-card template-editor-section">
