@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.55.0 - 2026-11-25
+
+### Added
+
+- Template field maps can now be written as schema 2 `slots` (ADR 0058, first step of the template system redesign). This release only reads them: Rust converts a schema 2 map to the schema 1 fields every renderer uses, and DocFlow still writes schema 1 so installs that have not updated keep working. A schema 2 slot that needs a later release (a cell anchor, a computed or checkbox value) is refused with "The template needs a newer DocFlow version". The template sync check accepts both schemas and still rejects any other. Operators see no change.
+
 ## 1.54.3 - 2026-11-24
 
 ### Fixed

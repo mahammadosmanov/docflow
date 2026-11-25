@@ -126,6 +126,33 @@ fn sync_downloads_verifies_and_caches_published_templates() {
 }
 
 #[test]
+fn sync_accepts_a_schema_two_template_and_counts_its_slots() {
+    let (_directory, remote, store) = store();
+    let bytes = package(FileKind::Xlsx, "v1");
+    let mut first = row("QM-FRM-002", 1, &bytes);
+    first["field_map"] = json!({"schema": 2, "slots": [{"key": "a"}, {"key": "b"}]});
+    remote.serve(vec![first.clone()], &[(&first, &bytes)]);
+
+    let status = store.sync(100);
+    assert!(status.failed_codes.is_empty(), "{:?}", status.failed_codes);
+    assert_eq!(status.templates.len(), 1);
+    assert_eq!(status.templates[0].field_count, 2);
+}
+
+#[test]
+fn sync_still_rejects_an_unknown_schema() {
+    let (_directory, remote, store) = store();
+    let bytes = package(FileKind::Xlsx, "v1");
+    let mut first = row("QM-FRM-003", 1, &bytes);
+    first["field_map"] = json!({"schema": 3, "slots": []});
+    remote.serve(vec![first.clone()], &[(&first, &bytes)]);
+
+    let status = store.sync(100);
+    assert!(status.templates.is_empty());
+    assert_eq!(status.failed_codes, ["QM-FRM-003"]);
+}
+
+#[test]
 fn offline_sync_keeps_the_cached_manifest() {
     let (_directory, remote, store) = store();
     let bytes = package(FileKind::Xlsx, "v1");

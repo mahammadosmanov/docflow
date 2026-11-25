@@ -29,6 +29,7 @@ const MAX_FIELDS: usize = 500;
 
 pub mod editor;
 pub mod field_map;
+pub mod slots;
 const BUCKET: &str = "doc-templates";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -536,11 +537,18 @@ fn row_code(row: &Value) -> String {
         .to_string()
 }
 
+/// The editable parts of a field map: `fields` (schema 1) or `slots` (schema 2).
+fn field_list(field_map: &Value) -> Option<&Vec<Value>> {
+    let key = match field_map.get("schema").and_then(Value::as_u64) {
+        Some(1) => "fields",
+        Some(2) => "slots",
+        _ => return None,
+    };
+    field_map.get(key).and_then(Value::as_array)
+}
+
 fn field_count(field_map: &Value) -> usize {
-    field_map
-        .get("fields")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
+    field_list(field_map).map_or(0, Vec::len)
 }
 
 /// Template code rule shared by the manifest check and the editor.
@@ -569,12 +577,7 @@ fn validate_entry(entry: &TemplateEntry) -> Result<(), BackendError> {
             .all(|part| segment.is_match(part) && *part != "..")
         && segments[0] == entry.template_id
         && segments[2].starts_with(&entry.file_sha256)
-        && entry.field_map.get("schema").and_then(Value::as_u64) == Some(1)
-        && entry
-            .field_map
-            .get("fields")
-            .and_then(Value::as_array)
-            .is_some_and(|fields| fields.len() <= MAX_FIELDS);
+        && field_list(&entry.field_map).is_some_and(|fields| fields.len() <= MAX_FIELDS);
     valid.then_some(()).ok_or_else(invalid)
 }
 

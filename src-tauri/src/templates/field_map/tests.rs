@@ -178,6 +178,62 @@ fn invalid_maps_are_rejected() {
     assert!(FieldMap::parse(&duplicate_preset).is_err());
 }
 
+fn slot_map() -> serde_json::Value {
+    json!({
+        "schema": 2,
+        "fileName": "{{rfiNo}} Pour",
+        "slots": [
+            {"key": "rfiNo", "label": "RFI No.", "type": "text",
+             "anchor": {"kind": "placeholder"},
+             "source": {"kind": "log", "token": "rfiNo"}},
+            {"key": "note", "label": "Note", "type": "multiline",
+             "source": {"kind": "fixed", "value": "({area}) {tagNo}"}},
+            {"key": "issuer", "type": "choice", "options": ["A", "B"],
+             "source": {"kind": "manual"}}
+        ],
+        "presets": [{"name": "ITP 5", "values": {"issuer": "A"}}]
+    })
+}
+
+#[test]
+fn schema_two_slots_load_as_the_same_fields_schema_one_has() {
+    let map = FieldMap::parse(&slot_map()).expect("schema 2 loads");
+    assert_eq!(map.file_name, "{{rfiNo}} Pour");
+    let by_key = |key: &str| map.fields.iter().find(|field| field.key == key).expect(key);
+    assert_eq!(by_key("rfiNo").value, "{rfiNo}");
+    assert_eq!(by_key("rfiNo").label, "RFI No.");
+    assert!(by_key("note").multiline);
+    assert_eq!(by_key("note").value, "({area}) {tagNo}");
+    assert_eq!(by_key("issuer").options, ["A", "B"]);
+    assert_eq!(by_key("issuer").value, "");
+    assert_eq!(map.presets[0].values["issuer"], "A");
+}
+
+#[test]
+fn schema_two_and_the_equal_schema_one_map_agree() {
+    let two = FieldMap::parse(&slot_map()).expect("schema 2 loads");
+    let one = FieldMap::parse(&serde_json::to_value(&two).expect("serialize")).expect("schema 1");
+    assert_eq!(one, two);
+    assert_eq!(one.schema, 1, "this release still writes schema 1");
+}
+
+#[test]
+fn schema_two_features_this_release_cannot_apply_are_refused() {
+    for slot in [
+        json!({"key": "a", "anchor": {"kind": "cell", "sheet": "S", "address": "A1"}}),
+        json!({"key": "a", "type": "computed"}),
+        json!({"key": "a", "type": "checkbox"}),
+        json!({"key": "a", "source": {"kind": "other"}}),
+    ] {
+        let value = json!({"schema": 2, "slots": [slot]});
+        let error = FieldMap::parse(&value).expect_err("refused");
+        assert!(error.contains("newer DocFlow"), "{error}");
+    }
+    assert!(FieldMap::parse(&json!({"schema": 3, "slots": []})).is_err());
+    let repeated = json!({"schema": 2, "slots": [{"key": "a"}, {"key": "a"}]});
+    assert!(FieldMap::parse(&repeated).is_err());
+}
+
 const PLAIN: &str = concat!(
     r#"<w:document><w:body>"#,
     r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,

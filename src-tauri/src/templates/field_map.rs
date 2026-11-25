@@ -115,6 +115,9 @@ impl Default for FieldMap {
 
 impl FieldMap {
     pub fn parse(value: &Value) -> Result<Self, String> {
+        if value.get("schema").and_then(Value::as_u64) == Some(2) {
+            return super::slots::parse(value);
+        }
         let map: Self = serde_json::from_value(value.clone())
             .map_err(|_| "The template field map is invalid".to_string())?;
         map.validate()?;

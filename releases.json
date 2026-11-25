@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.54.3",
+  "currentVersion": "1.55.0",
   "releases": [
+    {
+      "version": "1.55.0",
+      "tag": "v1.55.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template field maps can be read as schema 2 slots; DocFlow still writes schema 1"
+    },
     {
       "version": "1.54.3",
       "tag": "v1.54.3",
       "date": "2026-11-24",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "OCR repairs of a damaged RFI number apply only to four-character serials"
     },
     {
