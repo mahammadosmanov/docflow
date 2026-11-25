@@ -386,6 +386,68 @@ fn optional_sheets_are_stored_as_schema_two_and_checked() {
     }
 }
 
+#[test]
+fn repeating_rows_are_stored_as_schema_two_rows_and_checked() {
+    let stored = json!({"schema": 2, "slots": [
+        {"key": "samples", "type": "multiline",
+         "anchor": {"kind": "rows", "table": 0, "row": 3, "cell": 0, "repeatColumns": 3}},
+        {"key": "title", "anchor": {"kind": "cell", "table": 0, "row": 0, "cell": 0}}
+    ]});
+    let map = FieldMap::parse(&stored).expect("loads");
+    let samples = map.fields[0].anchor.as_ref().expect("anchor");
+    assert_eq!(
+        (samples.row, samples.cell, samples.repeat_columns),
+        (Some(3), Some(0), Some(3))
+    );
+    let written = map.to_value();
+    assert_eq!(written["slots"][0]["anchor"]["kind"], "rows");
+    assert_eq!(written["slots"][0]["anchor"]["repeatColumns"], 3);
+    assert_eq!(written["slots"][1]["anchor"]["kind"], "cell");
+    assert_eq!(FieldMap::parse(&written).expect("round trip"), map);
+
+    let slot =
+        |anchor: serde_json::Value| json!({"schema": 2, "slots": [{"key": "a", "anchor": anchor}]});
+    let plain_cell_with_repeat =
+        slot(json!({"kind": "cell", "table": 0, "row": 0, "cell": 0, "repeatColumns": 2}));
+    assert!(
+        !FieldMap::parse(&plain_cell_with_repeat)
+            .expect_err("invalid")
+            .contains("newer")
+    );
+    let rows_without_count = slot(json!({"kind": "rows", "table": 0, "row": 0, "cell": 0}));
+    assert!(
+        !FieldMap::parse(&rows_without_count)
+            .expect_err("invalid")
+            .contains("newer")
+    );
+    let excel_rows =
+        slot(json!({"kind": "rows", "sheet": "S", "address": "A1", "repeatColumns": 2}));
+    assert!(
+        FieldMap::parse(&excel_rows)
+            .expect_err("later release")
+            .contains("newer DocFlow")
+    );
+    let too_wide =
+        slot(json!({"kind": "rows", "table": 0, "row": 0, "cell": 0, "repeatColumns": 21}));
+    assert!(FieldMap::parse(&too_wide).is_err());
+
+    let same_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "table": 0, "row": 2, "cell": 0, "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "table": 0, "row": 2, "cell": 3}}
+    ]});
+    assert!(
+        FieldMap::parse(&same_row)
+            .expect_err("same row")
+            .contains("shares its row")
+    );
+    let other_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "table": 0, "row": 2, "cell": 0, "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "table": 0, "row": 3, "cell": 0}},
+        {"key": "c", "anchor": {"kind": "cell", "table": 1, "row": 2, "cell": 0}}
+    ]});
+    assert!(FieldMap::parse(&other_row).is_ok());
+}
+
 const PLAIN: &str = concat!(
     r#"<w:document><w:body>"#,
     r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,

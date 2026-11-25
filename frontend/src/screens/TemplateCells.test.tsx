@@ -209,4 +209,31 @@ describe("TemplateCells", () => {
     await screen.findByRole("button", { name: "Title" });
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
+
+  it("describes a repeating row", () => {
+    expect(cellLocation(s, { table: 0, row: 1, cell: 0, repeatColumns: 3 })).toBe(
+      "Table 1, row 2, 3 columns from cell 1, repeating",
+    );
+  });
+
+  it("marks a Word row as repeating with its column count", async () => {
+    const { onMark } = mount(word);
+    fireEvent.click(await screen.findByRole("button", { name: "Label" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "This row repeats for each line" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Columns" }), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Make editable" }));
+    expect(onMark).toHaveBeenCalledWith(
+      expect.objectContaining({
+        multiline: true,
+        value: "",
+        anchor: { table: 0, row: 0, cell: 0, repeatColumns: 3 },
+      }),
+    );
+  });
+
+  it("offers repeating rows for Word only", async () => {
+    mount(excel);
+    fireEvent.click(await screen.findByRole("button", { name: "Title" }));
+    expect(screen.queryByRole("checkbox", { name: "This row repeats for each line" })).toBeNull();
+  });
 });

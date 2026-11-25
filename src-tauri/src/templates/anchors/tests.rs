@@ -180,3 +180,154 @@ fn an_anchor_must_match_the_file_kind() {
     };
     assert!(mixed.check_shape().is_err());
 }
+
+fn tc(text: &str) -> String {
+    format!("<w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>{text}</w:t></w:r></w:p></w:tc>")
+}
+
+fn rows_docx(template_row: &str) -> Vec<u8> {
+    let body = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr>{}</w:tr><w:tr>{}</w:tr><w:tr>{}</w:tr></w:tbl></w:body></w:document>"#,
+        tc("Header"),
+        template_row,
+        tc("Footer")
+    );
+    zip(&[
+        ("[Content_Types].xml", "<Types/>"),
+        ("word/document.xml", &body),
+    ])
+}
+
+fn plain_template_row() -> String {
+    format!("{}{}{}{}", tc("a"), tc("b"), tc("c"), tc("mm"))
+}
+
+fn repeating(row: u32, columns: u32) -> CellAnchor {
+    CellAnchor {
+        table: Some(0),
+        row: Some(row),
+        cell: Some(0),
+        repeat_columns: Some(columns),
+        ..CellAnchor::default()
+    }
+}
+
+#[test]
+fn a_repeating_row_becomes_one_row_per_line_and_keeps_the_rest_of_the_row() {
+    let anchor = repeating(1, 3);
+    let out = apply(
+        FileKind::Docx,
+        &rows_docx(&plain_template_row()),
+        &[(&anchor, "1\tx\tp\n2\ty\tq\n3")],
+    )
+    .expect("apply");
+    let xml = part(&out, "word/document.xml");
+    assert_eq!(
+        xml.matches("<w:tr>").count(),
+        5,
+        "header, three rows, footer: {xml}"
+    );
+    assert_eq!(
+        xml.matches(">mm<").count(),
+        3,
+        "the unit cell is cloned unchanged"
+    );
+    // Header and footer, ten filled cells; the two cells left empty on the last
+    // line hold no run, so they carry no run formatting.
+    assert_eq!(
+        xml.matches("<w:b/>").count(),
+        1 + (3 * 4 - 2) + 1,
+        "formatting kept in every filled cell"
+    );
+    let order = [
+        "Header", ">1<", ">x<", ">p<", ">2<", ">y<", ">q<", ">3<", "Footer",
+    ]
+    .map(|needle| xml.find(needle).expect(needle));
+    assert!(
+        order.windows(2).all(|pair| pair[0] < pair[1]),
+        "rows stay in order: {xml}"
+    );
+    assert!(
+        !xml.contains(">a<") && !xml.contains(">b<") && !xml.contains(">c<"),
+        "{xml}"
+    );
+}
+
+#[test]
+fn an_empty_value_keeps_one_empty_row_and_other_cells_still_use_their_own_place() {
+    let anchor = repeating(1, 3);
+    let single = word(0, 0, 0);
+    let out = apply(
+        FileKind::Docx,
+        &rows_docx(&plain_template_row()),
+        &[(&anchor, ""), (&single, "Changed header")],
+    )
+    .expect("apply");
+    let xml = part(&out, "word/document.xml");
+    assert_eq!(xml.matches("<w:tr>").count(), 3);
+    assert!(
+        xml.contains("Changed header") && xml.contains("Footer"),
+        "{xml}"
+    );
+}
+
+#[test]
+fn a_repeating_row_that_cannot_be_cloned_safely_is_refused() {
+    let wide = apply(
+        FileKind::Docx,
+        &rows_docx(&plain_template_row()),
+        &[(&repeating(1, 3), "1\t2\t3\t4")],
+    )
+    .expect_err("four values for three columns");
+    assert!(wide.contains("columns"), "{wide}");
+    let merged = format!(
+        "{}{}",
+        tc("a"),
+        "<w:tc><w:tcPr><w:vMerge w:val=\"restart\"/></w:tcPr><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc>"
+    );
+    let error = apply(
+        FileKind::Docx,
+        &rows_docx(&merged),
+        &[(&repeating(1, 1), "x")],
+    )
+    .expect_err("vertical merge");
+    assert!(error.contains("vertically merged"), "{error}");
+    let drawing = format!("{}<w:tc><w:p><w:r><w:drawing/></w:r></w:p></w:tc>", tc("a"));
+    let error = apply(
+        FileKind::Docx,
+        &rows_docx(&drawing),
+        &[(&repeating(1, 2), "x\ty")],
+    )
+    .expect_err("drawing in a mapped cell");
+    assert!(error.contains("cannot be replaced"), "{error}");
+    let too_few = apply(
+        FileKind::Docx,
+        &rows_docx(&tc("a")),
+        &[(&repeating(1, 3), "x")],
+    )
+    .expect_err("row has one cell");
+    assert!(too_few.contains("not found"), "{too_few}");
+    assert!(
+        apply(
+            FileKind::Docx,
+            &rows_docx(&plain_template_row()),
+            &[(&repeating(9, 1), "x")]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn only_word_rows_can_repeat_and_the_column_count_is_bounded() {
+    assert!(repeating(1, 3).check_shape().is_ok());
+    assert!(repeating(1, 0).check_shape().is_err());
+    assert!(repeating(1, 21).check_shape().is_err());
+    let excel_rows = CellAnchor {
+        repeat_columns: Some(2),
+        ..excel("Form", "A1")
+    };
+    assert!(
+        excel_rows.check_shape().is_err(),
+        "Excel rows come in a later release"
+    );
+}

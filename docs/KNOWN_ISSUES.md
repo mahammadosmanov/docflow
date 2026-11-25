@@ -28,6 +28,10 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   open a generated file with merged cells, a styled empty cell, and a formula
   sheet. Publish a template with marked cells only after every install runs
   1.55.0 or later.
+- Repeating Word rows (ADR 0058, 1.61.0) are verified with synthetic tables only.
+  Windows acceptance: generate a document from a real form with a repeating row
+  and confirm Word opens it, the row formatting survives, and the page breaks
+  sensibly. Excel repeating rows are not available yet.
 - Optional Excel sheets (ADR 0058, 1.60.0) are verified with synthetic workbooks only.
   Windows acceptance: generate a damage workbook with a photo sheet left out and
   confirm Excel opens it without a repair prompt; conditional formatting, data

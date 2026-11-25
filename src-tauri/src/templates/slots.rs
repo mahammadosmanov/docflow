@@ -71,7 +71,20 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
         let anchor = match slot.anchor {
             None => None,
             Some(anchor) if anchor.kind == "placeholder" => None,
-            Some(anchor) if anchor.kind == "cell" => Some(anchor.cell),
+            Some(anchor) if anchor.kind == "cell" && anchor.cell.repeat_columns.is_none() => {
+                Some(anchor.cell)
+            }
+            Some(anchor) if anchor.kind == "rows" => {
+                if anchor.cell.repeat_columns.is_none() {
+                    return Err(invalid());
+                }
+                if anchor.cell.sheet.is_some() {
+                    // Excel rows come in a later release.
+                    return Err(NEWER.to_string());
+                }
+                Some(anchor.cell)
+            }
+            Some(anchor) if anchor.kind == "cell" => return Err(invalid()),
             Some(_) => return Err(NEWER.to_string()),
         };
         let multiline = match slot.kind.as_deref() {
@@ -131,7 +144,11 @@ pub fn to_value(map: &FieldMap) -> Value {
                 || json!({"kind": "placeholder"}),
                 |cell| {
                     let mut value = serde_json::to_value(cell).unwrap_or(Value::Null);
-                    value["kind"] = json!("cell");
+                    value["kind"] = json!(if cell.repeat_columns.is_some() {
+                        "rows"
+                    } else {
+                        "cell"
+                    });
                     value
                 },
             );

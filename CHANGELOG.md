@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.61.0 - 2026-11-25
+
+### Added
+
+- Word templates can mark a table row as repeating (ADR 0058). Select a cell in the Cells section, tick "This row repeats for each line", and set how many columns it covers. When documents are generated that field is a multiline value: each line becomes one table row and a Tab separates the columns, so rows copied from Excel paste as they are. The rest of the row, including the other cells and all formatting, is cloned unchanged; up to 200 rows and 20 columns. Rows with vertically merged cells, mapped cells holding pictures, controls, or fields, and a second marked cell in the same row are refused when the draft is saved. Excel repeating rows follow in a later release. A template with a repeating row is stored as schema 2.
+
 ## 1.60.0 - 2026-11-25
 
 ### Added

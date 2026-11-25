@@ -1373,5 +1373,9 @@
   "templates.cells.marked": "İşarələnmiş xanalar",
   "templates.cells.markedNone": "Hələ işarələnmiş xana yoxdur.",
   "templates.cells.sheetOptional": "Sənədlər bu vərəqi kənarda qoya bilər",
-  "templates.cells.sheetOptional.help": "Vərəq şəkilləri ilə birlikdə çıxır. Başqa vərəqdəki düsturun istifadə etdiyi vərəq kənarda qoyula bilməz; yadda saxlayanda bildirilir."
+  "templates.cells.sheetOptional.help": "Vərəq şəkilləri ilə birlikdə çıxır. Başqa vərəqdəki düsturun istifadə etdiyi vərəq kənarda qoyula bilməz; yadda saxlayanda bildirilir.",
+  "templates.cells.where.rows": "Cədvəl {table}, sətir {row}, {cell}. xanadan başlayan {count} sütun, təkrarlanan",
+  "templates.cells.repeat": "Bu sətir hər sətir üçün təkrarlanır",
+  "templates.cells.repeat.columns": "Sütun",
+  "templates.cells.repeat.help": "Önizləmədə hər sətir cədvəl sətri olur, sütunları Tab ayırır. Excel-dən köçürülmüş sətirləri yapışdıra bilərsiniz."
 }

@@ -135,6 +135,26 @@ anchors other than placeholders.
 - The picked choice is part of the Preview rows and the journal like every
   other edited value; Undo removes the generated file as usual.
 
+### Repeating Word rows (1.61.0)
+
+- A cell can be marked as the start of a repeating row: anchor kind `rows`
+  with `table`, `row`, `cell`, and `repeatColumns` (1 to 20). Everything else in
+  the row is cloned unchanged. In Preview the field is one multiline value:
+  each line becomes a row, a Tab separates the columns (rows copied from Excel
+  paste as they are). An empty value is one empty row; trailing empty lines are
+  dropped; at most 200 rows; a line with more values than columns is refused.
+- Rendering writes single cells first, then expands repeating rows from the
+  lowest row up, so a row above is not moved by rows added below it. Each cell
+  keeps its cell, paragraph, and first-run formatting; a cell left empty keeps
+  its paragraph properties but holds no run.
+- Refused: a row with any vertically merged cell, a row with fewer cells than
+  `from + count`, a mapped cell with a drawing, control, form field, symbol, or
+  field, and any other marked cell in the same table row. Saving tries the row
+  with two lines on the draft file; publishing checks again.
+- Stored as schema 2 (`rows` is unknown to 1.55.0 to 1.60.0, which refuse the
+  template with the usual message). Excel repeating rows are not supported yet:
+  an Excel `rows` anchor is refused as needing a newer DocFlow.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

@@ -247,7 +247,11 @@ pub fn editor(map: &FieldMap, rows: Vec<Value>) -> Value {
         } else {
             &field.label
         };
-        let (kind, width) = if field.multiline {
+        let repeats = field
+            .anchor
+            .as_ref()
+            .is_some_and(|anchor| anchor.repeat_columns.is_some());
+        let (kind, width) = if field.multiline || repeats {
             ("multiline", 260)
         } else {
             ("text", 180)

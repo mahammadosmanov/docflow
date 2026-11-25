@@ -184,6 +184,19 @@ impl FieldMap {
                         field.key
                     ));
                 }
+                // A repeating row is cloned whole, so nothing else may sit in it.
+                let same_row = |other: &CellAnchor| {
+                    other.table.is_some()
+                        && other.table == anchor.table
+                        && other.row == anchor.row
+                        && (other.repeat_columns.is_some() || anchor.repeat_columns.is_some())
+                };
+                if anchors.iter().any(|other| same_row(other)) {
+                    return Err(format!(
+                        "Field \"{}\" shares its row with a repeating row",
+                        field.key
+                    ));
+                }
                 anchors.push(anchor);
             }
         }

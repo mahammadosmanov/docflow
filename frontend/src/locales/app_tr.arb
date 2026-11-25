@@ -1373,5 +1373,9 @@
   "templates.cells.marked": "İşaretli hücreler",
   "templates.cells.markedNone": "Henüz işaretli hücre yok.",
   "templates.cells.sheetOptional": "Belgeler bu sayfayı dışarıda bırakabilir",
-  "templates.cells.sheetOptional.help": "Sayfa resimleriyle birlikte çıkar. Başka bir sayfadaki formülün kullandığı sayfa dışarıda bırakılamaz; kaydederken bildirilir."
+  "templates.cells.sheetOptional.help": "Sayfa resimleriyle birlikte çıkar. Başka bir sayfadaki formülün kullandığı sayfa dışarıda bırakılamaz; kaydederken bildirilir.",
+  "templates.cells.where.rows": "Tablo {table}, satır {row}, {cell}. hücreden başlayan {count} sütun, tekrarlı",
+  "templates.cells.repeat": "Bu satır her satır için tekrarlanır",
+  "templates.cells.repeat.columns": "Sütun",
+  "templates.cells.repeat.help": "Önizlemede her satır bir tablo satırı olur, sütunları Tab ayırır. Excel'den kopyalanan satırları yapıştırabilirsin."
 }

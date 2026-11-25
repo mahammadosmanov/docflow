@@ -289,10 +289,13 @@ each form, then each form is switched in its own release.
    with Found/Moved/Missing check, marked-cells list beside the file view
    (done).
 6. 1.60.0 Excel optional sheets with the reference check (done).
-7. 1.61.0 Word/Excel repeating `rows` parts.
-8. 1.62.0 categories, output file name pattern, library search.
-9. 1.63.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
-10. 1.64.0 `computed` parts; then one release per migrated concrete form.
+7. 1.61.0 Word repeating rows (done).
+8. 1.62.0 Excel repeating rows. The row insert engine built for Follow Up
+   shifts references but does not clone merged ranges, and operator forms are
+   merge-heavy, so this needs its own merge handling first.
+9. 1.63.0 categories, output file name pattern, library search.
+10. 1.64.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
+11. 1.65.0 `computed` parts; then one release per migrated concrete form.
 
 Every release: four locale keys, traceability/decisions/issues updates, all
 `docs/RELEASE_SAFETY.md` gates. Supabase needs one SQL migration (category

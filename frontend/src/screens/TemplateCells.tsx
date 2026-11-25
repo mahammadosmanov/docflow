@@ -33,6 +33,14 @@ export function cellLocation(s: Strings, anchor: CellAnchor): string {
       sheet: anchor.sheet,
     });
   }
+  if (anchor.repeatColumns !== undefined) {
+    return s.t("templates.cells.where.rows", {
+      table: (anchor.table ?? 0) + 1,
+      row: (anchor.row ?? 0) + 1,
+      count: anchor.repeatColumns,
+      cell: (anchor.cell ?? 0) + 1,
+    });
+  }
   return s.t("templates.cells.where.word", {
     table: (anchor.table ?? 0) + 1,
     row: (anchor.row ?? 0) + 1,
@@ -79,6 +87,8 @@ export function TemplateCells({
   const [sheetIndex, setSheetIndex] = useState(0);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [label, setLabel] = useState("");
+  const [repeats, setRepeats] = useState(false);
+  const [columns, setColumns] = useState(1);
   const [error, setError] = useState("");
   const [copies, setCopies] = useState<CopySuggestion[] | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
@@ -110,21 +120,27 @@ export function TemplateCells({
   const choose = (anchor: CellAnchor, text: string) => {
     setPicked({ anchor, text });
     setLabel(text.trim().slice(0, 40));
+    setRepeats(false);
+    setColumns(1);
   };
 
-  const mark = (field: Omit<TemplateField, "options" | "multiline">) => {
+  const mark = (field: Omit<TemplateField, "options" | "multiline"> & { multiline?: boolean }) => {
     onMark({ options: [], multiline: false, ...field });
     setPicked(null);
   };
 
   const makeEditable = () => {
     if (!picked) return;
-    const name = label.trim() || cellLocation(s, picked.anchor);
+    const repeating = repeats && picked.anchor.table !== undefined;
+    const anchor = repeating ? { ...picked.anchor, repeatColumns: columns } : picked.anchor;
+    const name = label.trim() || cellLocation(s, anchor);
     mark({
       key: fieldKey(name, fields.map((field) => field.key)),
       label: name,
-      value: picked.text.length <= MAX_START_CHARS ? picked.text : "",
-      anchor: picked.anchor,
+      // A repeating row starts empty: each line typed in Preview becomes a row.
+      value: !repeating && picked.text.length <= MAX_START_CHARS ? picked.text : "",
+      anchor,
+      ...(repeating ? { multiline: true } : {}),
     });
   };
 
@@ -374,6 +390,31 @@ export function TemplateCells({
             <span>{s.t("templates.editor.label")}</span>
             <input value={label} onChange={(event) => setLabel(event.target.value)} />
           </label>
+          {picked.anchor.table !== undefined && (
+            <label className="toggle-inline">
+              <input
+                type="checkbox"
+                checked={repeats}
+                onChange={(event) => setRepeats(event.target.checked)}
+              />
+              {s.t("templates.cells.repeat")}
+            </label>
+          )}
+          {repeats && (
+            <label className="field cell-columns">
+              <span>{s.t("templates.cells.repeat.columns")}</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={columns}
+                onChange={(event) =>
+                  setColumns(Math.max(1, Math.min(20, Number(event.target.value) || 1)))
+                }
+              />
+            </label>
+          )}
+          {repeats && <small className="muted">{s.t("templates.cells.repeat.help")}</small>}
           <Button icon={<Tag />} onClick={makeEditable}>
             {s.t("templates.cells.makeEditable")}
           </Button>

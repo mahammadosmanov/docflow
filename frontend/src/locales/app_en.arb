@@ -1401,5 +1401,9 @@
   "templates.cells.marked": "Marked cells",
   "templates.cells.markedNone": "No cells marked yet.",
   "templates.cells.sheetOptional": "Documents can leave this sheet out",
-  "templates.cells.sheetOptional.help": "The sheet leaves with its pictures. A sheet that a formula on another sheet uses cannot be left out; saving tells you."
+  "templates.cells.sheetOptional.help": "The sheet leaves with its pictures. A sheet that a formula on another sheet uses cannot be left out; saving tells you.",
+  "templates.cells.where.rows": "Table {table}, row {row}, {count} columns from cell {cell}, repeating",
+  "templates.cells.repeat": "This row repeats for each line",
+  "templates.cells.repeat.columns": "Columns",
+  "templates.cells.repeat.help": "In Preview, each line becomes one row and Tab separates the columns. Paste rows copied from Excel."
 }

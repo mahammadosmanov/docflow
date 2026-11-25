@@ -310,6 +310,8 @@ export interface CellAnchor {
   table?: number;
   row?: number;
   cell?: number;
+  /** Word only: this many cells from `cell` repeat once per line. */
+  repeatColumns?: number;
 }
 
 export interface TemplateField {

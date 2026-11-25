@@ -302,10 +302,22 @@ impl TemplateStore {
         version: &VersionRow,
         now: i64,
     ) -> Result<(), BackendError> {
+        // A repeating row is tried with two lines, so cloning it is checked too.
         let anchored = field_map
             .fields
             .iter()
-            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
+            .filter_map(|field| {
+                field.anchor.as_ref().map(|anchor| {
+                    (
+                        anchor,
+                        if anchor.repeat_columns.is_some() {
+                            "\n"
+                        } else {
+                            ""
+                        },
+                    )
+                })
+            })
             .collect::<Vec<_>>();
         if anchored.is_empty() && field_map.optional_sheets.is_empty() {
             return Ok(());

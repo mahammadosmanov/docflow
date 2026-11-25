@@ -598,3 +598,40 @@ fn optional_sheets_are_refused_for_a_word_template_before_anything_is_saved() {
             .all(|(method, _, _)| method != "PATCH")
     );
 }
+
+#[test]
+fn a_repeating_row_is_checked_with_two_lines_before_it_is_saved() {
+    let (remote, _dir, store) = draft_store(&table_docx());
+    let rows = |columns: u32| {
+        json!({"schema": 1, "fields": [
+            {"key": "samples", "multiline": true,
+             "anchor": {"table": 0, "row": 0, "cell": 0, "repeatColumns": columns}}
+        ]})
+    };
+    let draft = store
+        .save_draft(&save(rows(2)), 1)
+        .expect("two cells exist");
+    assert_eq!(
+        draft.field_map.fields[0]
+            .anchor
+            .as_ref()
+            .and_then(|a| a.repeat_columns),
+        Some(2)
+    );
+    let calls = remote.calls.lock().unwrap();
+    let patch = calls
+        .iter()
+        .find(|(method, path, _)| method == "PATCH" && path.starts_with("doc_template_versions"))
+        .and_then(|(_, _, body)| body.clone())
+        .expect("patch");
+    assert_eq!(patch["field_map"]["slots"][0]["anchor"]["kind"], "rows");
+    drop(calls);
+    let error = store
+        .save_draft(&save(rows(5)), 1)
+        .expect_err("only two cells");
+    assert!(
+        error.message.starts_with("error.templates.invalid"),
+        "{}",
+        error.message
+    );
+}
