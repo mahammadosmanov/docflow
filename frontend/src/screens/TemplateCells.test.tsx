@@ -67,6 +67,7 @@ function mount(
       fields={fields as never}
       reloadKey=""
       onMark={onMark}
+      onRemove={vi.fn()}
     />,
   );
   return { onMark, bridge };

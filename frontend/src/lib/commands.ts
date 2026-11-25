@@ -21,6 +21,7 @@ import type {
   TemplateDraft,
   TemplateStructure,
   CopySuggestion,
+  VersionSummary,
   TemplateEditorState,
   TemplateFieldMap,
   TemplateStatus,
@@ -182,6 +183,8 @@ export interface FrontendCommandMap {
     { versionId: string },
     { suggestions: CopySuggestion[] } | null
   >;
+  "templates/versions": CommandSpec<{ code: string }, { versions: VersionSummary[] }>;
+  "templates/restoreVersion": CommandSpec<{ code: string; versionId: string }, TemplateDraft>;
   "templates/editText": CommandSpec<
     {
       versionId: string;
@@ -263,6 +266,8 @@ export const FRONTEND_METHODS = [
   "templates/editText",
   "templates/cells",
   "templates/suggestFromCopies",
+  "templates/versions",
+  "templates/restoreVersion",
 ] as const satisfies readonly (keyof FrontendCommandMap)[];
 // END RUST-VERIFIED FRONTEND METHODS
 

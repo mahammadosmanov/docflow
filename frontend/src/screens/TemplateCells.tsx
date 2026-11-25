@@ -60,6 +60,7 @@ export function TemplateCells({
   fields,
   reloadKey,
   onMark,
+  onRemove,
 }: {
   bridge: Bridge;
   s: Strings;
@@ -68,6 +69,7 @@ export function TemplateCells({
   /** Changes when the draft's file changes, so the view reloads. */
   reloadKey: string;
   onMark: (field: TemplateField) => void;
+  onRemove: (key: string) => void;
 }) {
   const [structure, setStructure] = useState<TemplateStructure | null | undefined>(undefined);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -365,7 +367,33 @@ export function TemplateCells({
       )}
       {error && <Notice kind="error">{error}</Notice>}
       {structure === undefined && <p className="muted">{s.t("templates.cells.loading")}</p>}
-      {structure && (structure.kind === "xlsx" ? renderExcel() : renderWord())}
+      {structure && (
+        <div className="cell-workspace">
+          <div className="cell-workspace-file">
+            {structure.kind === "xlsx" ? renderExcel() : renderWord()}
+          </div>
+          <aside className="cell-workspace-list" aria-label={s.t("templates.cells.marked")}>
+            <h3>{s.t("templates.cells.marked")}</h3>
+            {marked.length === 0 && <p className="muted">{s.t("templates.cells.markedNone")}</p>}
+            {fields
+              .filter((field) => field.anchor)
+              .map((field) => (
+                <div className="cell-marked" key={field.key}>
+                  <span>
+                    <strong>{field.label || field.key}</strong>
+                    <small>{field.anchor ? cellLocation(s, field.anchor) : ""}</small>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    icon={<X />}
+                    aria-label={`${s.t("templates.editor.removeField")} ${field.label || field.key}`}
+                    onClick={() => onRemove(field.key)}
+                  />
+                </div>
+              ))}
+          </aside>
+        </div>
+      )}
     </section>
   );
 }

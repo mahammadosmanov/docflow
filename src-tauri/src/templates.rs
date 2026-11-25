@@ -31,6 +31,7 @@ pub mod anchors;
 pub mod copies;
 pub mod editor;
 pub mod field_map;
+pub mod remap;
 pub mod slots;
 pub mod structure;
 const BUCKET: &str = "doc-templates";

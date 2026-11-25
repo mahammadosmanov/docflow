@@ -614,6 +614,19 @@ impl NativeBackend {
                     "blocks": self.templates.blocks(&request.version_id, now())?
                 }))
             }
+            BackendMethod::TemplatesVersions => {
+                let request: TemplateCodeParams = decode(params)?;
+                Ok(serde_json::json!({
+                    "versions": self.templates.versions(&request.code, now())?
+                }))
+            }
+            BackendMethod::TemplatesRestoreVersion => {
+                let request: crate::templates::editor::RestoreVersion = decode(params)?;
+                encode(
+                    self.templates
+                        .restore_version(&request.code, &request.version_id, now())?,
+                )
+            }
             BackendMethod::TemplatesCells => {
                 let request: TemplateVersionParams = decode(params)?;
                 encode(self.templates.cells(&request.version_id, now())?)

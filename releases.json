@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.58.0",
+  "currentVersion": "1.59.0",
   "releases": [
+    {
+      "version": "1.59.0",
+      "tag": "v1.59.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Template files can be replaced with a marked-cell check, and old versions restored as the draft"
+    },
     {
       "version": "1.58.0",
       "tag": "v1.58.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template editors can find editable cells from other filled copies of a form"
     },
     {

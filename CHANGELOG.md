@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.59.0 - 2026-11-25
+
+### Added
+
+- Template editing can be changed later. Replacing a template's file now checks every marked cell against the new file: a cell is found when the same label still stands beside it, moved when its label is somewhere else exactly once, and missing otherwise. The editor lists the moved and missing cells; each can be moved, kept, or removed, and Publish stays disabled until none is left. Publishing also refuses a draft whose marked cell cannot be written in its file. The new Version history lists every version and restores an earlier one as the draft (replacing an open draft after a warning); earlier versions are never changed. The Cells section shows the marked cells in a list beside the file view.
+
 ## 1.58.0 - 2026-11-25
 
 ### Added

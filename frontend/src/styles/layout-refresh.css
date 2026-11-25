@@ -1060,3 +1060,40 @@ textarea[aria-invalid="true"] {
 .cell-copy > .muted {
   overflow-wrap: anywhere;
 }
+.cell-workspace {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 1100px) {
+  .cell-workspace {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    align-items: start;
+  }
+}
+.cell-workspace-file {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.cell-workspace-list {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.cell-workspace-list h3 {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+}
+.cell-marked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+.cell-marked small {
+  display: block;
+  color: var(--muted);
+}

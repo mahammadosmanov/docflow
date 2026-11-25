@@ -34,7 +34,9 @@
   editable; formula, merge-continuation, and protected cells show locked, and
   an RFI cell is suggested first, and "Suggest from other copies" lists the cells
   that differ between filled copies of the form (read locally, never uploaded).
-  Editors pick the discipline (ELE, MEC, CIV,
+  Replacing the file checks every marked cell against it (found, moved with
+  its label, or missing) and holds Publish until each is resolved; Version
+  history restores an earlier version as the draft. Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI

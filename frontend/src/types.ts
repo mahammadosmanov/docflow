@@ -365,6 +365,21 @@ export interface TemplatePreset {
   values: Record<string, string>;
 }
 
+/** Where a marked cell is in a replaced file. */
+export interface AnchorCheck {
+  key: string;
+  status: "found" | "moved" | "missing";
+  movedTo: CellAnchor | null;
+}
+
+export interface VersionSummary {
+  versionId: string;
+  version: number;
+  status: "draft" | "published" | "retired";
+  publishedAt: string | null;
+  note: string;
+}
+
 export interface TemplateFieldMap {
   schema: 1;
   fileName: string;
@@ -397,6 +412,8 @@ export interface TemplateDraft {
   fileKind: "xlsx" | "docx";
   fieldMap: TemplateFieldMap;
   placeholders: string[];
+  /** Only after a file replacement. */
+  checks?: AnchorCheck[];
 }
 
 export interface WatchStatus {

@@ -91,6 +91,27 @@ anchors other than placeholders.
   confirms each suggestion or uses "Make all editable"; nothing is applied
   silently (AGENTS rules 10 and 11).
 
+### Edit later (1.59.0)
+
+- **Replace the file.** After the new file is stored, Rust checks every marked
+  cell against it (`templates/replaceFile` now returns `checks`). A value cell
+  changes from copy to copy, so a cell is matched by its label, the nearest
+  filled cell to its left in the same row. Same label beside the same place:
+  found. The label elsewhere, exactly once, and the target writable: moved.
+  Anything else, including a label that appears twice: missing. The editor
+  lists moved and missing cells; the operator moves, keeps, or removes each
+  one, and Publish stays disabled until none is left. Rust's own backstop:
+  publishing refuses a draft whose marked cell cannot be written in its file.
+  A kept cell whose label changed but whose place is still writable is the
+  operator's decision; Rust cannot tell it from a correct one.
+- **Version history.** `templates/versions` lists every version, newest first.
+  `templates/restoreVersion` copies an earlier published or retired version's
+  file and field map into a new draft after the latest version, or into the
+  open draft (the editor warns first). Earlier versions are never changed, so
+  documents already generated stay traceable.
+- **Marked cells list.** The Cells section shows the marked cells beside the
+  file view (below it on narrow windows) with a remove button each.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

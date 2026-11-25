@@ -96,7 +96,7 @@ impl CellAnchor {
 }
 
 /// `C14` becomes `(14, 3)` (row, column).
-fn cell_coordinate(address: &str) -> Option<(u32, u32)> {
+pub(super) fn cell_coordinate(address: &str) -> Option<(u32, u32)> {
     let captures = ADDRESS.captures(address)?;
     let column = captures[1].bytes().fold(0_u32, |total, letter| {
         total * 26 + u32::from(letter - b'A' + 1)

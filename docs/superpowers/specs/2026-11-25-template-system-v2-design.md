@@ -285,8 +285,9 @@ each form, then each form is switched in its own release.
 4. 1.58.0 "suggest from other copies": the operator picks other filled
    copies, Rust proposes the cells that differ (done). The side-by-side file
    preview moves to 1.59.0.
-5. 1.59.0 edit later: new draft, version restore, replace file with
-   Found/Moved/Missing check, side-by-side file preview.
+5. 1.59.0 edit later: version history and restore as draft, replace file
+   with Found/Moved/Missing check, marked-cells list beside the file view
+   (done).
 6. 1.60.0 Word/Excel repeating `rows` parts; Excel optional sheets with
    reference check.
 7. 1.61.0 categories, output file name pattern, library search.

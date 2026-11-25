@@ -39,17 +39,17 @@ pub struct CopySuggestion {
 /// Cells of one sheet or table: `(row, column)` to text. Excel is one-based,
 /// Word zero-based.
 #[derive(Default)]
-struct Group {
-    name: String,
-    texts: BTreeMap<(u32, u32), String>,
+pub(super) struct Group {
+    pub(super) name: String,
+    pub(super) texts: BTreeMap<(u32, u32), String>,
     /// Cells that cannot be written (formula, merge tail, protection, unsafe).
-    locked: BTreeSet<(u32, u32)>,
-    protected: bool,
-    merges: Vec<(u32, u32, u32, u32)>,
+    pub(super) locked: BTreeSet<(u32, u32)>,
+    pub(super) protected: bool,
+    pub(super) merges: Vec<(u32, u32, u32, u32)>,
 }
 
 impl Group {
-    fn writable(&self, place: (u32, u32)) -> bool {
+    pub(super) fn writable(&self, place: (u32, u32)) -> bool {
         !self.protected
             && !self.locked.contains(&place)
             && !self
@@ -63,7 +63,7 @@ impl Group {
     }
 }
 
-fn read(kind: FileKind, bytes: &[u8]) -> Result<Vec<Group>, String> {
+pub(super) fn read(kind: FileKind, bytes: &[u8]) -> Result<Vec<Group>, String> {
     verify_package(kind, bytes)
         .map_err(|_| "A copy is not a valid Word or Excel file".to_string())?;
     match kind {

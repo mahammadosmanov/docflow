@@ -452,3 +452,127 @@ fn other_filled_copies_suggest_the_cells_that_change() {
             .is_err()
     );
 }
+
+fn rows_docx(rows: &[(&str, &str)]) -> Vec<u8> {
+    let body: String = rows
+        .iter()
+        .map(|(label, value)| {
+            format!(
+                "<w:tr><w:tc><w:p><w:r><w:t>{label}</w:t></w:r></w:p></w:tc>\
+                 <w:tc><w:p><w:r><w:t>{value}</w:t></w:r></w:p></w:tc></w:tr>"
+            )
+        })
+        .collect();
+    let xml = format!("<w:document><w:body><w:tbl>{body}</w:tbl></w:body></w:document>");
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, text) in [
+        ("[Content_Types].xml", "<Types/>"),
+        ("word/document.xml", xml.as_str()),
+    ] {
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .expect("start");
+        writer.write_all(text.as_bytes()).expect("write");
+    }
+    writer.finish().expect("finish").into_inner()
+}
+
+fn anchored_draft_store(bytes: &[u8]) -> (Arc<Scripted>, tempfile::TempDir, TemplateStore) {
+    let (remote, dir, store) = draft_store(bytes);
+    let mut rows = remote.rows.lock().unwrap();
+    let row = rows.get_mut("GET doc_template_versions").expect("row");
+    row[0]["field_map"] = json!({"schema": 2, "slots": [
+        {"key": "poured", "anchor": {"kind": "cell", "table": 0, "row": 0, "cell": 1}}
+    ]});
+    drop(rows);
+    (remote, dir, store)
+}
+
+#[test]
+fn replacing_the_file_reports_where_each_marked_cell_went() {
+    let (_remote, _dir, store) = anchored_draft_store(&rows_docx(&[("Pour no:", "P1")]));
+    let new = rows_docx(&[("Header", ""), ("Pour no:", "P2")]);
+    let draft = store
+        .replace_file(VERSION_ID, "new.docx", &new, 1)
+        .expect("replaced");
+    assert_eq!(draft.checks.len(), 1);
+    assert_eq!(draft.checks[0].key, "poured");
+    assert_eq!(
+        draft.checks[0].status,
+        crate::templates::remap::CheckStatus::Moved
+    );
+    assert_eq!(
+        draft.checks[0].moved_to.as_ref().and_then(|a| a.row),
+        Some(1)
+    );
+
+    let gone = rows_docx(&[("Something else:", "x")]);
+    let draft = store
+        .replace_file(VERSION_ID, "new.docx", &gone, 1)
+        .expect("replaced");
+    assert_eq!(
+        draft.checks[0].status,
+        crate::templates::remap::CheckStatus::Missing
+    );
+}
+
+#[test]
+fn publishing_refuses_a_marked_cell_the_file_cannot_write() {
+    let (remote, _dir, store) = anchored_draft_store(&rows_docx(&[("Pour no:", "P1")]));
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .get_mut("GET doc_template_versions")
+        .unwrap()[0]["field_map"] = json!({"schema": 2, "slots": [
+        {"key": "poured", "anchor": {"kind": "cell", "table": 0, "row": 5, "cell": 1}}
+    ]});
+    let error = store.publish(VERSION_ID, 1).expect_err("unwritable");
+    assert!(
+        error.message.starts_with("error.templates.invalid"),
+        "{}",
+        error.message
+    );
+    assert!(
+        remote
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, path, _)| !path.contains("publish_template_version")),
+        "nothing was published"
+    );
+}
+
+#[test]
+fn versions_are_listed_newest_first_and_an_old_one_can_become_the_draft() {
+    let (remote, _dir, store) = draft_store(&rows_docx(&[("A:", "1")]));
+    {
+        let mut rows = remote.rows.lock().unwrap();
+        let mut old = rows.get("GET doc_template_versions").unwrap()[0].clone();
+        old["status"] = json!("published");
+        old["version"] = json!(1);
+        old["published_at"] = json!("2026-11-07T00:00:00Z");
+        rows.insert("GET doc_template_versions".into(), json!([old]));
+        rows.insert(
+            "GET doc_templates".into(),
+            template_row(json!([{"id": VERSION_ID, "version": 1, "status": "published"}])),
+        );
+    }
+    let list = store.versions("RFI-ELE", 1).expect("versions");
+    assert_eq!(list[0].version, 1);
+    assert_eq!(list[0].status, "published");
+
+    let draft = store
+        .restore_version("RFI-ELE", VERSION_ID, 1)
+        .expect("restored");
+    assert_eq!(draft.version, 2, "a new draft after the latest version");
+    let calls = remote.calls.lock().unwrap();
+    let post = calls
+        .iter()
+        .find(|(method, path, _)| method == "POST" && path == "doc_template_versions")
+        .and_then(|(_, _, body)| body.clone())
+        .expect("draft created");
+    assert_eq!(post["status"], "draft");
+    assert_eq!(post["version"], 2);
+}
