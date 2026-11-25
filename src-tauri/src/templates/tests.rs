@@ -247,3 +247,33 @@ fn missing_supabase_setup_is_reported_as_not_configured() {
     remote.fail(BackendError::auth_required());
     assert_eq!(store.sync(2).last_error.as_deref(), Some("signedOut"));
 }
+
+#[test]
+fn the_manifest_category_reaches_the_library_and_defaults_to_empty() {
+    let (_directory, remote, store) = store();
+    let bytes = package(FileKind::Xlsx, "v1");
+    let plain = row("QM-FRM-001", 1, &bytes);
+    let mut filed = row("QM-FRM-002", 1, &bytes);
+    filed["category"] = json!("Concrete/Civil");
+    remote.serve(
+        vec![plain.clone(), filed.clone()],
+        &[(&plain, &bytes), (&filed, &bytes)],
+    );
+
+    let status = store.sync(100);
+    assert_eq!(status.templates[0].category, "");
+    assert_eq!(status.templates[1].category, "Concrete/Civil");
+}
+
+#[test]
+fn a_manifest_entry_with_an_unsafe_category_is_skipped() {
+    let (_directory, remote, store) = store();
+    let bytes = package(FileKind::Xlsx, "v1");
+    let mut bad = row("QM-FRM-001", 1, &bytes);
+    bad["category"] = json!("A/B/C/D");
+    remote.serve(vec![bad], &[]);
+
+    let status = store.sync(100);
+    assert_eq!(status.failed_codes.len(), 1);
+    assert!(status.templates.is_empty());
+}

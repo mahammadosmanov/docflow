@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.63.0 - 2026-11-25
+
+### Added
+
+- Templates have an optional Category, a folder path of up to three levels such as `Concrete/Civil` (ADR 0058). Set it when you create a template or in the editor; the library groups templates by category (by discipline when none is set), and the search box also matches the category. **Before using it, an admin runs the updated `docs/supabase_templates.sql` once** (it adds the `category` column and puts it in the manifest view); until then editing templates fails with a request error. Older DocFlow versions ignore the category.
+
 ## 1.62.0 - 2026-11-25
 
 ### Added

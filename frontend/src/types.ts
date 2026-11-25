@@ -285,6 +285,8 @@ export interface TemplateSummary {
   code: string;
   title: string;
   discipline: string;
+  /** Folder path such as `Concrete/Civil`; empty when none is set. */
+  category: string;
   fileKind: "xlsx" | "docx";
   version: number;
   publishedAt: string | null;
@@ -396,6 +398,7 @@ export interface EditableTemplate {
   code: string;
   title: string;
   discipline: string;
+  category: string;
   fileKind: "xlsx" | "docx";
   currentVersion: number | null;
   draftVersion: number | null;
@@ -413,6 +416,7 @@ export interface TemplateDraft {
   code: string;
   title: string;
   discipline: string;
+  category: string;
   fileKind: "xlsx" | "docx";
   fieldMap: TemplateFieldMap;
   placeholders: string[];

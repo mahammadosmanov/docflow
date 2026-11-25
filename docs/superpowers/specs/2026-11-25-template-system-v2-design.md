@@ -291,7 +291,7 @@ each form, then each form is switched in its own release.
 6. 1.60.0 Excel optional sheets with the reference check (done).
 7. 1.61.0 Word repeating rows (done).
 8. 1.62.0 Excel repeating rows with cloned merges (done).
-9. 1.63.0 categories, output file name pattern, library search.
+9. 1.63.0 categories, library search (done; the output name pattern already existed).
 10. 1.64.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
 11. 1.65.0 `computed` parts; then one release per migrated concrete form.
 

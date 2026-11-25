@@ -67,6 +67,9 @@ pub struct TemplateEntry {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    /// Folder path set by an editor; empty before the category migration.
+    #[serde(default)]
+    pub category: String,
     pub file_kind: FileKind,
     pub version_id: String,
     pub version: u32,
@@ -102,6 +105,7 @@ pub struct TemplateSummary {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    pub category: String,
     pub file_kind: FileKind,
     pub version: u32,
     pub published_at: Option<String>,
@@ -403,6 +407,7 @@ impl TemplateStore {
                     code: entry.code.clone(),
                     title: entry.title.clone(),
                     discipline: entry.discipline.clone(),
+                    category: entry.category.clone(),
                     file_kind: entry.file_kind,
                     version: entry.version,
                     published_at: entry.published_at.clone(),
@@ -573,6 +578,7 @@ fn validate_entry(entry: &TemplateEntry) -> Result<(), BackendError> {
         && !entry.title.trim().is_empty()
         && entry.title.chars().count() <= 200
         && entry.discipline.len() <= 8
+        && editor::normalize_category(&entry.category).is_ok_and(|clean| clean == entry.category)
         && hex.is_match(&entry.file_sha256)
         && (1..=MAX_TEMPLATE_BYTES).contains(&entry.file_size)
         && entry.version > 0

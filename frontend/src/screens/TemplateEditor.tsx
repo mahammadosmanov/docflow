@@ -59,6 +59,7 @@ export function TemplateEditor({
   const [title, setTitle] = useState(initial.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [discipline, setDiscipline] = useState(initial.discipline);
+  const [category, setCategory] = useState(initial.category);
   const [map, setMap] = useState<TemplateFieldMap>(initial.fieldMap);
   const [optionText, setOptionText] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -78,6 +79,7 @@ export function TemplateEditor({
     setCode(next.code);
     setTitle(next.title);
     setDiscipline(next.discipline);
+    setCategory(next.category);
     setMap(next.fieldMap);
     setOptionText(
       Object.fromEntries(
@@ -119,6 +121,7 @@ export function TemplateEditor({
       code: code.trim(),
       title: title.trim(),
       discipline: discipline.trim().toUpperCase(),
+      category: category.trim(),
       fieldMap: currentMap(),
     });
     load(next);
@@ -230,6 +233,16 @@ export function TemplateEditor({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="field">
+              <span>{s.t("templates.editor.category")}</span>
+              <input
+                value={category}
+                placeholder="Concrete/Civil"
+                maxLength={122}
+                onChange={(event) => setCategory(event.target.value)}
+              />
+              <small>{s.t("templates.editor.category.help")}</small>
             </label>
             <label className="field">
               <span>{s.t("templates.editor.code")}</span>

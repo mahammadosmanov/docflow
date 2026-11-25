@@ -48,7 +48,9 @@
   added); Preview lets the user pick a preset and edit any
   value per document, and Apply writes new files only, with Undo. An admin
   must run
-  `docs/supabase_templates.sql` once before the shared store works.
+  `docs/supabase_templates.sql` once before the shared store works. A template
+  can have a Category (folder path, up to three levels); the library groups by
+  it and the search box matches it.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.
   The first update-capable release must be installed manually once. macOS

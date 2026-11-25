@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.62.0",
+  "currentVersion": "1.63.0",
   "releases": [
+    {
+      "version": "1.63.0",
+      "tag": "v1.63.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Templates can have a category folder path; the library groups and searches by it"
+    },
     {
       "version": "1.62.0",
       "tag": "v1.62.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Excel templates can mark a row as repeating, one row per line"
     },
     {

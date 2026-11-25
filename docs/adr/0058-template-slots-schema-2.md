@@ -172,6 +172,19 @@ anchors other than placeholders.
 - Not handled: data validation, hyperlinks, and drawings anchored to the
   template row are not cloned; images anchored below the row keep their position.
 
+### Categories (1.63.0)
+
+- `doc_templates.category` is a text column (default empty) holding a folder path:
+  up to three levels, each 1 to 40 characters, no `\ : * ? " < > |` or control
+  characters, no `.` or `..` level. Rust (`normalize_category`) trims the levels,
+  joins them with `/`, and refuses the rest; a SQL check repeats the rule. The
+  manifest view returns it as the last column, so older clients ignore it.
+- `discipline` stays: it is still required and drives RFI number shorthand. The
+  library shows and groups by `category`, falling back to `discipline`. The
+  output file name pattern already exists (`fileName`) and is unchanged.
+- A manifest entry with a category that does not normalize to itself is skipped
+  like any other invalid entry.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

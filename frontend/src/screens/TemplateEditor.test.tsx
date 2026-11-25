@@ -15,6 +15,7 @@ const draft: TemplateDraft = {
   code: "RFI-COVER-ELE",
   title: "RFI Cover (ELE)",
   discipline: "ELE",
+  category: "Covers",
   fileKind: "docx",
   placeholders: ["rfiNo", "issuer"],
   fieldMap: {
@@ -75,13 +76,19 @@ describe("TemplateEditor", () => {
     );
     fireEvent.change(screen.getByLabelText("Code"), { target: { value: "RFI-COVER" } });
     fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "MEC" } });
+    expect(screen.getByLabelText(/^Category/)).toHaveValue("Covers");
+    fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: " Covers / RFI " } });
     expect(screen.getByLabelText("Code")).toHaveValue("MEC-RFI-COVER");
     expect(screen.getByLabelText("Name")).toHaveValue("MEC-RFI Cover (ELE)");
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
     await vi.waitFor(() =>
       expect(call).toHaveBeenCalledWith(
         "templates/saveDraft",
-        expect.objectContaining({ code: "MEC-RFI-COVER", discipline: "MEC" }),
+        expect.objectContaining({
+          code: "MEC-RFI-COVER",
+          discipline: "MEC",
+          category: "Covers / RFI",
+        }),
       ),
     );
 

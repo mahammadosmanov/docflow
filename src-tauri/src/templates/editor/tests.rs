@@ -125,6 +125,7 @@ fn creating_a_template_uploads_once_and_prefills_known_placeholders() {
                 code: "RFI-ELE".into(),
                 title: "RFI Cover ELE".into(),
                 discipline: "ELE".into(),
+                category: " Concrete / Civil ".into(),
             },
             "cover.docx",
             &bytes,
@@ -132,6 +133,13 @@ fn creating_a_template_uploads_once_and_prefills_known_placeholders() {
         )
         .expect("created");
     assert_eq!(draft.version, 1);
+    let calls = remote.calls.lock().unwrap();
+    let created = calls
+        .iter()
+        .find(|(method, path, _)| method == "POST" && path == "doc_templates")
+        .expect("insert");
+    assert_eq!(created.2.as_ref().unwrap()["category"], "Concrete/Civil");
+    drop(calls);
     assert_eq!(draft.placeholders, ["rfiNo", "stage"]);
     assert_eq!(draft.field_map.fields[0].value, "{rfiNo}");
     let files = remote.files.lock().unwrap();
@@ -191,6 +199,7 @@ fn published_versions_and_bad_maps_are_refused() {
                 code: "ELE-RFI-COVER".into(),
                 title: "T".into(),
                 discipline: "ELE".into(),
+                category: String::new(),
                 field_map: json!({"schema": 1, "fields": [{"key": "a"}, {"key": "a"}]}),
             },
             1,
@@ -374,6 +383,7 @@ fn save(field_map: Value) -> SaveDraft {
         code: "ELE-RFI-COVER".into(),
         title: "T".into(),
         discipline: "ELE".into(),
+        category: String::new(),
         field_map,
     }
 }
@@ -650,5 +660,96 @@ fn an_excel_row_that_cannot_be_cloned_is_refused_when_saving() {
         error.message.starts_with("error.templates.invalid"),
         "{}",
         error.message
+    );
+}
+
+#[test]
+fn categories_are_short_folder_paths_without_path_characters() {
+    assert_eq!(normalize_category("").unwrap(), "");
+    assert_eq!(normalize_category("  ").unwrap(), "");
+    assert_eq!(
+        normalize_category(" Concrete / Civil ").unwrap(),
+        "Concrete/Civil"
+    );
+    assert_eq!(normalize_category("A/B/C").unwrap(), "A/B/C");
+    for bad in [
+        "A/B/C/D",
+        "A//B",
+        "/A",
+        "A/",
+        "A\\B",
+        "A:B",
+        "A*",
+        "A?",
+        "A\"B",
+        "A<B",
+        "A|B",
+        "A\nB",
+        "..",
+        "A/..",
+        &"x".repeat(41),
+    ] {
+        let error = normalize_category(bad).expect_err(bad);
+        assert_eq!(error.message, "error.templates.categoryInvalid", "{bad}");
+    }
+}
+
+#[test]
+fn saving_a_draft_stores_the_normalized_category() {
+    let remote = Arc::new(Scripted::default());
+    let bytes = docx("{{rfiNo}}");
+    let path = format!("{TEMPLATE_ID}/1/{}.docx", sha256_hex(&bytes));
+    remote
+        .files
+        .lock()
+        .unwrap()
+        .insert(path.clone(), bytes.clone());
+    remote.rows.lock().unwrap().insert(
+        "GET doc_template_versions".into(),
+        json!([{"id": VERSION_ID, "template_id": TEMPLATE_ID, "version": 2, "status": "draft",
+                "file_sha256": sha256_hex(&bytes), "file_size": bytes.len(), "storage_path": path,
+                "field_map": {"schema": 1}}]),
+    );
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("PATCH doc_templates".into(), template_row(json!([])));
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("GET doc_templates".into(), template_row(json!([])));
+    let (_dir, store) = store(remote.clone());
+    store
+        .save_draft(
+            &SaveDraft {
+                version_id: VERSION_ID.into(),
+                code: "RFI-ELE".into(),
+                title: "T".into(),
+                discipline: "ELE".into(),
+                category: "Concrete / Civil".into(),
+                field_map: json!({"schema": 1, "fields": [{"key": "rfiNo", "label": "RFI", "value": "{rfiNo}"}]}),
+            },
+            1,
+        )
+        .expect("saved");
+    let calls = remote.calls.lock().unwrap();
+    let patch = calls
+        .iter()
+        .find(|(method, path, _)| method == "PATCH" && path.starts_with("doc_templates"))
+        .expect("patch");
+    assert_eq!(patch.2.as_ref().unwrap()["category"], "Concrete/Civil");
+    let bad = SaveDraft {
+        version_id: VERSION_ID.into(),
+        code: "RFI-ELE".into(),
+        title: "T".into(),
+        discipline: "ELE".into(),
+        category: "A/B/C/D".into(),
+        field_map: json!({"schema": 1}),
+    };
+    assert_eq!(
+        store.save_draft(&bad, 1).expect_err("deep").message,
+        "error.templates.categoryInvalid"
     );
 }

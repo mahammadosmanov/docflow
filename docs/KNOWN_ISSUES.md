@@ -32,6 +32,11 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
   sensibly.
+- Template categories (ADR 0058, 1.63.0) need the updated
+  `docs/supabase_templates.sql` run once on the live project before the editor can
+  list or save templates; the SQL was not run against a live Supabase project here.
+  The discipline stays required (2 to 8 capital letters) and still drives RFI number
+  shorthand; the category is only for grouping.
 - Repeating Excel rows (ADR 0058, 1.62.0) are verified with synthetic workbooks only.
   Windows acceptance: generate a CON-CIV-010 style sheet with several rows, check
   merges, borders, formulas, row heights, print area, and that Excel opens it
