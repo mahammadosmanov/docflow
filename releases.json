@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.65.0",
+  "currentVersion": "1.66.0",
   "releases": [
+    {
+      "version": "1.66.0",
+      "tag": "v1.66.0",
+      "date": "2026-11-25",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Time fields and real numbers in Excel template cells"
+    },
     {
       "version": "1.65.0",
       "tag": "v1.65.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template fields can be computed from other fields"
     },
     {

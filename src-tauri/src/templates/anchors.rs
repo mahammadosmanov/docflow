@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeMap, sync::LazyLock};
 
+use crate::ooxml::CellUpdate;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -117,40 +118,64 @@ pub(super) fn cell_coordinate(address: &str) -> Option<(u32, u32)> {
     (column <= 16_384 && row <= 1_048_576).then_some((row, column))
 }
 
-/// Writes each value into its anchored cell and returns the new package.
+/// Writes each value into its anchored cell as text and returns the new package.
 pub fn apply(
     kind: FileKind,
     package: &[u8],
     anchored: &[(&CellAnchor, &str)],
 ) -> Result<Vec<u8>, String> {
+    let cells = anchored
+        .iter()
+        .map(|(anchor, value)| (*anchor, *value, false))
+        .collect::<Vec<_>>();
+    apply_cells(kind, package, &cells)
+}
+
+/// Like [`apply`]; a `true` flag writes the value into an Excel cell as a
+/// number (the value must then be a plain number). Word always gets text.
+pub fn apply_cells(
+    kind: FileKind,
+    package: &[u8],
+    anchored: &[(&CellAnchor, &str, bool)],
+) -> Result<Vec<u8>, String> {
     if anchored.is_empty() {
         return Ok(package.to_vec());
     }
-    for (anchor, _) in anchored {
+    for (anchor, _, _) in anchored {
         if anchor.kind()? != kind {
             return Err("A cell anchor does not match the template file type".to_string());
         }
     }
     match kind {
         FileKind::Xlsx => apply_excel(package, anchored),
-        FileKind::Docx => apply_word(package, anchored),
+        FileKind::Docx => {
+            let text = anchored
+                .iter()
+                .map(|(anchor, value, _)| (*anchor, *value))
+                .collect::<Vec<_>>();
+            apply_word(package, &text)
+        }
     }
 }
 
-fn apply_excel(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8>, String> {
-    let mut updates = BTreeMap::<String, BTreeMap<(u32, u32), String>>::new();
+fn apply_excel(package: &[u8], anchored: &[(&CellAnchor, &str, bool)]) -> Result<Vec<u8>, String> {
+    let mut updates = BTreeMap::<String, BTreeMap<(u32, u32), CellUpdate>>::new();
     let mut repeats = Vec::new();
-    for (anchor, value) in anchored {
+    for (anchor, value, numeric) in anchored {
         let (Some(sheet), Some(address)) = (&anchor.sheet, &anchor.address) else {
             return Err("The cell anchor is invalid".to_string());
         };
         let (row, column) = cell_coordinate(address).ok_or("The cell anchor is invalid")?;
         match anchor.repeat_columns {
             None => {
-                updates
-                    .entry(sheet.clone())
-                    .or_default()
-                    .insert((row, column), (*value).to_string());
+                updates.entry(sheet.clone()).or_default().insert(
+                    (row, column),
+                    if *numeric {
+                        CellUpdate::Number((*value).to_string())
+                    } else {
+                        CellUpdate::Text((*value).to_string())
+                    },
+                );
             }
             Some(columns) => repeats.push(crate::ooxml::RowRepeat {
                 sheet: sheet.clone(),

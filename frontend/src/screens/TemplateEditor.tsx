@@ -477,7 +477,7 @@ export function TemplateEditor({
                         );
                       }}
                     >
-                      {(["text", "number", "date", "checkbox", "computed"] as const).map((kind) => (
+                      {(["text", "number", "date", "time", "checkbox", "computed"] as const).map((kind) => (
                         <option key={kind} value={kind}>
                           {s.t(`templates.editor.type.${kind}`)}
                         </option>

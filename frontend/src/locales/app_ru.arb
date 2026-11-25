@@ -1260,6 +1260,7 @@
   "templates.editor.type.text": "Текст",
   "templates.editor.type.number": "Число",
   "templates.editor.type.date": "Дата",
+  "templates.editor.type.time": "Время",
   "templates.editor.type.checkbox": "Флажок",
   "templates.editor.format": "Формат",
   "templates.editor.format.date": "День dd, месяц MM, год yyyy или yy. Пример: dd.MM.yyyy",

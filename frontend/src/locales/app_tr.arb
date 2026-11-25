@@ -1260,6 +1260,7 @@
   "templates.editor.type.text": "Metin",
   "templates.editor.type.number": "Sayı",
   "templates.editor.type.date": "Tarih",
+  "templates.editor.type.time": "Saat",
   "templates.editor.type.checkbox": "Onay kutusu",
   "templates.editor.format": "Biçim",
   "templates.editor.format.date": "gg → dd, ay → MM, yıl → yyyy veya yy. Örnek: dd.MM.yyyy",

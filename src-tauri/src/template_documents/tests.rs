@@ -464,3 +464,15 @@ fn rendering_recomputes_and_ignores_a_submitted_computed_value() {
     let bad = json!({"_rowId": "document-1", "plant": "abc", "ambient": "", "label": ""});
     assert!(render(FileKind::Docx, &template, &computed_doc_map(), &bad).is_err());
 }
+
+#[test]
+fn a_time_field_is_text_in_preview_and_checked_when_rendered() {
+    let map =
+        FieldMap::parse(&json!({"schema": 2, "slots": [{"key": "at", "type": "time"}]})).unwrap();
+    let rows = free_rows(&map, 1);
+    let bad = json!({"_rowId": "document-1", "at": "25:00"});
+    assert!(render(FileKind::Docx, &docx_with("{{at}}"), &map, &bad).is_err());
+    let good = json!({"_rowId": "document-1", "at": "9:05"});
+    assert!(render(FileKind::Docx, &docx_with("{{at}}"), &map, &good).is_ok());
+    assert_eq!(rows[0]["at"], "");
+}

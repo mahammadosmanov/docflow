@@ -21,7 +21,7 @@ use super::{
     FileKind, MAX_FIELDS,
     anchors::CellAnchor,
     compute::Compute,
-    values::{FieldKind, check_format},
+    values::{FieldKind, cell_number, check_format},
 };
 
 pub const MAX_PRESETS: usize = 500;
@@ -465,10 +465,23 @@ pub fn render_package(
         .iter()
         .filter_map(|field| {
             let value = values.get(&field.key).map_or("", String::as_str);
-            field.anchor.as_ref().map(|anchor| (anchor, value))
+            field.anchor.as_ref().map(|anchor| {
+                // A number or time in an Excel cell is a number, not text.
+                match cell_number(field, value) {
+                    Some(number) if anchor.repeat_columns.is_none() => (anchor, number, true),
+                    _ => (anchor, value.to_string(), false),
+                }
+            })
         })
         .collect::<Vec<_>>();
-    Ok((super::anchors::apply(kind, &filled, &anchored)?, missing))
+    let anchored = anchored
+        .iter()
+        .map(|(anchor, value, numeric)| (*anchor, value.as_str(), *numeric))
+        .collect::<Vec<_>>();
+    Ok((
+        super::anchors::apply_cells(kind, &filled, &anchored)?,
+        missing,
+    ))
 }
 
 /// Writes `values` into every `{{key}}` and returns the new package plus the

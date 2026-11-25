@@ -78,6 +78,7 @@ describe("TemplateEditor", () => {
     expect(screen.queryByLabelText(/^Format/)).not.toBeInTheDocument();
     fireEvent.change(types[0], { target: { value: "date" } });
     fireEvent.change(screen.getByLabelText(/^Format/), { target: { value: "yyyy-MM-dd" } });
+    expect(Array.from((types[0] as HTMLSelectElement).options).map((option) => option.value)).toContain("time");
     fireEvent.change(types[1], { target: { value: "checkbox" } });
     expect(screen.getAllByLabelText(/^Format/)[1]).toHaveAttribute("placeholder", "☒|☐");
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));

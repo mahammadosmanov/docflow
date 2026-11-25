@@ -333,7 +333,7 @@ export interface TemplateField {
   options: string[];
   multiline: boolean;
   /** How the value is checked and written; text when absent. */
-  kind?: "text" | "number" | "date" | "checkbox" | "computed";
+  kind?: "text" | "number" | "date" | "time" | "checkbox" | "computed";
   /** Present exactly when `kind` is `computed`. */
   compute?: FieldCompute;
   /** Date pattern such as `dd.MM.yyyy`, or checkbox texts such as `Yes|No`. */

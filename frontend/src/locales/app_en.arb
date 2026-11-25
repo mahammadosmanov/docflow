@@ -1288,6 +1288,7 @@
   "templates.editor.type.text": "Text",
   "templates.editor.type.number": "Number",
   "templates.editor.type.date": "Date",
+  "templates.editor.type.time": "Time",
   "templates.editor.type.checkbox": "Checkbox",
   "templates.editor.format": "Format",
   "templates.editor.format.date": "Day dd, month MM, year yyyy or yy. Example: dd.MM.yyyy",

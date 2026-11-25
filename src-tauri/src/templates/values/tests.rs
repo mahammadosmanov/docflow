@@ -90,3 +90,44 @@ fn formats_are_checked_when_the_map_is_saved() {
     assert!(check_format(FieldKind::Number, "x").is_err());
     assert!(check_format(FieldKind::Number, "").is_ok());
 }
+
+#[test]
+fn times_are_read_as_hours_and_minutes_and_written_as_hh_mm() {
+    let time = field(FieldKind::Time, "");
+    assert_eq!(convert(&time, "").unwrap(), "");
+    assert_eq!(convert(&time, "9:30").unwrap(), "09:30");
+    assert_eq!(convert(&time, " 23:05 ").unwrap(), "23:05");
+    for bad in ["24:00", "12:60", "9", "9:5", "ab:cd", "9.30", "09:30:00"] {
+        assert!(convert(&time, bad).is_err(), "{bad}");
+    }
+    assert!(check_format(FieldKind::Time, "").is_ok());
+    assert!(check_format(FieldKind::Time, "hh:mm").is_err());
+}
+
+#[test]
+fn an_excel_cell_gets_a_real_number_or_a_day_fraction() {
+    assert_eq!(
+        cell_number(&field(FieldKind::Number, ""), "3,5"),
+        Some("3.5".into())
+    );
+    assert_eq!(
+        cell_number(&field(FieldKind::Number, ""), "-12"),
+        Some("-12".into())
+    );
+    assert_eq!(cell_number(&field(FieldKind::Number, ""), ""), None);
+    let time = field(FieldKind::Time, "");
+    assert_eq!(
+        cell_number(&time, "09:30"),
+        Some("0.395833333333333".into())
+    );
+    assert_eq!(
+        cell_number(&time, "00:00"),
+        Some("0.000000000000000".into())
+    );
+    assert_eq!(
+        cell_number(&time, "12:00"),
+        Some("0.500000000000000".into())
+    );
+    assert_eq!(cell_number(&field(FieldKind::Date, ""), "07.11.2026"), None);
+    assert_eq!(cell_number(&field(FieldKind::Text, ""), "5"), None);
+}

@@ -334,7 +334,7 @@ pub fn repeat_template_rows(package: &[u8], repeats: &[RowRepeat]) -> Result<Vec
             .map(|(offset, text)| {
                 (
                     (repeat.row, repeat.first_column + offset as u32),
-                    text.clone(),
+                    CellUpdate::Text(text.clone()),
                 )
             })
             .collect::<BTreeMap<_, _>>();

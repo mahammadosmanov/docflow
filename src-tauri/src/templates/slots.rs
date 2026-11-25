@@ -94,6 +94,7 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             Some("multiline") => (true, FieldKind::Text),
             Some("number") => (false, FieldKind::Number),
             Some("date") => (false, FieldKind::Date),
+            Some("time") => (false, FieldKind::Time),
             Some("checkbox") => (false, FieldKind::Checkbox),
             Some("computed") => (false, FieldKind::Computed),
             Some(_) => return Err(NEWER.to_string()),

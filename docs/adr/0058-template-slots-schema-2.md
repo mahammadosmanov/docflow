@@ -230,6 +230,22 @@ anchors other than placeholders.
 - Not done: moving CON-CIV-010/011/013/014 onto templates (one release each), and
   the legacy per-record pseudo-random ambient offset.
 
+### Number and time cells (1.66.0)
+
+- `FieldKind::Time` (slot type `time`): input `h:mm` or `hh:mm` with hour below 24
+  and minute below 60, written as `hh:mm` text everywhere except a single Excel
+  cell.
+- A single (not repeating) Excel cell anchored to a Number or Time field gets a
+  numeric cell (`<v>`, no `t` attribute, existing style kept): a Number as typed
+  with `,` turned into `.`; a Time as `(hour*60+minute)/1440` with 15 decimals,
+  the format the legacy CON-CIV-010 writer used. An empty value stays an empty
+  text cell. `ooxml::patch_template_cells` now takes `CellUpdate::Text` or
+  `CellUpdate::Number` and refuses any other kind. Word, placeholders, and
+  repeating rows always get text.
+- This changes a 1.64.0 behavior: a Number field in an Excel cell was text.
+- Migration path for CON-CIV-010: this release closes the number/time gap; the
+  Follow-Up data source and the ambient temperature rule are still open.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

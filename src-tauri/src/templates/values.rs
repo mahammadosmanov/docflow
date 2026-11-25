@@ -17,6 +17,8 @@ const MAX_FORMAT_CHARS: usize = 40;
 
 static NUMBER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^-?[0-9]+([.,][0-9]+)?$").expect("static number regex"));
+static TIME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([0-9]{1,2}):([0-9]{2})$").expect("static time regex"));
 static DAY_FIRST: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^([0-9]{1,2})[./-]([0-9]{1,2})[./-]([0-9]{4})$").expect("static date regex")
 });
@@ -32,6 +34,8 @@ pub enum FieldKind {
     Text,
     Number,
     Date,
+    /// Hours and minutes, `hh:mm`; an Excel cell gets the day fraction.
+    Time,
     Checkbox,
     /// Made from other fields; see `templates::compute`.
     Computed,
@@ -48,6 +52,7 @@ impl FieldKind {
             Self::Text => "text",
             Self::Number => "number",
             Self::Date => "date",
+            Self::Time => "time",
             Self::Checkbox => "checkbox",
             Self::Computed => "computed",
         }
@@ -66,8 +71,14 @@ pub fn truthy(raw: &str) -> bool {
 pub fn check_format(kind: FieldKind, format: &str) -> Result<(), String> {
     let invalid = || "A field format is invalid".to_string();
     match kind {
-        FieldKind::Text | FieldKind::Number | FieldKind::Computed if format.is_empty() => Ok(()),
-        FieldKind::Text | FieldKind::Number | FieldKind::Computed => Err(invalid()),
+        FieldKind::Text | FieldKind::Number | FieldKind::Time | FieldKind::Computed
+            if format.is_empty() =>
+        {
+            Ok(())
+        }
+        FieldKind::Text | FieldKind::Number | FieldKind::Time | FieldKind::Computed => {
+            Err(invalid())
+        }
         FieldKind::Date => {
             let clean = format.chars().count() <= MAX_FORMAT_CHARS
                 && !format
@@ -158,6 +169,25 @@ fn write_date(format: &str, (year, month, day): (u32, u32, u32)) -> String {
     out
 }
 
+fn read_time(text: &str) -> Option<(u32, u32)> {
+    let found = TIME.captures(text)?;
+    let (hour, minute) = (found[1].parse().ok()?, found[2].parse().ok()?);
+    (hour < 24 && minute < 60).then_some((hour, minute))
+}
+
+/// The number an Excel cell holds for `raw`, when the field's type is stored
+/// as a number: a number as typed (with a dot), a time as the fraction of a day.
+/// `None` means the cell gets text.
+pub fn cell_number(field: &FieldDef, raw: &str) -> Option<String> {
+    let text = raw.trim();
+    match field.kind {
+        FieldKind::Number if NUMBER.is_match(text) => Some(text.replace(',', ".")),
+        FieldKind::Time => read_time(text)
+            .map(|(hour, minute)| format!("{:.15}", f64::from(hour * 60 + minute) / 1440.0)),
+        _ => None,
+    }
+}
+
 /// The text to write for `raw`, or why the operator's value is refused. A
 /// checkbox's `raw` is `"true"` or `"false"`.
 pub fn convert(field: &FieldDef, raw: &str) -> Result<String, String> {
@@ -187,6 +217,15 @@ pub fn convert(field: &FieldDef, raw: &str) -> Result<String, String> {
                 &field.format
             };
             Ok(write_date(format, parts))
+        }
+        FieldKind::Time => {
+            let text = raw.trim();
+            if text.is_empty() {
+                return Ok(String::new());
+            }
+            read_time(text)
+                .map(|(hour, minute)| format!("{hour:02}:{minute:02}"))
+                .ok_or_else(|| format!("{} must be a time such as 09:30", name_of(field)))
         }
         FieldKind::Checkbox => {
             let format = if field.format.is_empty() {

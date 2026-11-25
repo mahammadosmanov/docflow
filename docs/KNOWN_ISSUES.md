@@ -32,6 +32,10 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
   sensibly.
+- Number and time cells (ADR 0058, 1.66.0) are verified with synthetic workbooks
+  only. A time is stored as the fraction of a day with 15 decimals, as the legacy
+  CON-CIV-010 writer does; the cell must already have a time number format, which
+  the writer does not set. Windows Excel acceptance is not claimed.
 - Computed template fields (ADR 0058, 1.65.0) are verified with synthetic files
   only and are not yet used by CON-CIV-010/011/013/014. The legacy ambient
   temperature picks a pseudo-random offset per record; a template can only add

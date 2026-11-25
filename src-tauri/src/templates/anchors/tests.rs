@@ -461,3 +461,41 @@ fn excel_rows_that_cannot_be_cloned_safely_are_refused() {
     .expect_err("wide");
     assert!(wide.contains("columns"), "{wide}");
 }
+
+#[test]
+fn an_excel_cell_can_get_a_real_number_instead_of_text() {
+    let book = xlsx("", "");
+    let out = apply_cells(
+        FileKind::Xlsx,
+        &book,
+        &[
+            (&excel("Form", "B2"), "3.5", true),
+            (&excel("Form", "D5"), "x", false),
+        ],
+    )
+    .expect("apply");
+    let xml = part(&out, "xl/worksheets/sheet1.xml");
+    assert!(
+        xml.contains(r#"r="B2""#) && xml.contains("<v>3.5</v>"),
+        "{xml}"
+    );
+    let cell = xml
+        .split(r#"r="B2""#)
+        .nth(1)
+        .unwrap()
+        .split("</c>")
+        .next()
+        .unwrap();
+    assert!(!cell.contains("inlineStr"), "{cell}");
+    assert!(xml.contains("inlineStr"), "the text cell stays text: {xml}");
+    // The plain entry point still writes text.
+    let text = apply(FileKind::Xlsx, &book, &[(&excel("Form", "B2"), "3.5")]).expect("apply");
+    assert!(part(&text, "xl/worksheets/sheet1.xml").contains("<is><t>3.5</t></is>"));
+}
+
+#[test]
+fn a_number_flag_is_ignored_in_word() {
+    let anchor = word(0, 0, 1);
+    let out = apply_cells(FileKind::Docx, &docx(), &[(&anchor, "7", true)]).expect("apply");
+    assert!(part(&out, "word/document.xml").contains(">7</w:t>"));
+}

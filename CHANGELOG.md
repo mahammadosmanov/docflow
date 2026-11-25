@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.66.0 - 2026-11-25
+
+### Added
+
+- A new field type, Time (`hh:mm`, for example 09:30), and real numbers in Excel cells (ADR 0058). A Number or Time field that sits in an Excel cell is now written as a number, not as text: a Number keeps its value with a dot as decimal point, and a Time becomes the fraction of a day, so the cell's own number format shows it as a time. In Word, in `{{placeholders}}`, and in repeating rows these fields are still written as text. **A Number field already placed in an Excel cell now writes a number instead of text** (the cell's number format decides how it shows). Templates that use Time are stored as schema 2, so install this version on every computer before publishing one.
+
 ## 1.65.0 - 2026-11-25
 
 ### Added

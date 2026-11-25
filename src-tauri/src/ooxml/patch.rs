@@ -81,10 +81,19 @@ where
 /// stale.
 pub fn patch_template_cells(
     package: &[u8],
-    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), String>>,
+    updates_by_sheet: &BTreeMap<String, BTreeMap<(u32, u32), CellUpdate>>,
 ) -> Result<Vec<u8>, OoxmlError> {
     if updates_by_sheet.is_empty() {
         return Ok(package.to_vec());
+    }
+    if updates_by_sheet
+        .values()
+        .flat_map(BTreeMap::values)
+        .any(|update| !matches!(update, CellUpdate::Text(_) | CellUpdate::Number(_)))
+    {
+        return Err(OoxmlError::invalid(
+            "template cells take only text or numbers",
+        ));
     }
     let mut source = io::Cursor::new(package);
     let discovery = ordered_workbook_discovery(&mut source)?;
@@ -135,7 +144,7 @@ pub fn patch_template_cells(
         let raw = read_entry(&mut archive, &info.path)?;
         let cells = updates
             .iter()
-            .map(|(coordinate, text)| (*coordinate, CellUpdate::Text(text.clone())))
+            .map(|(coordinate, update)| (*coordinate, update.clone()))
             .collect::<BTreeMap<_, _>>();
         let (xml, _) = patch_sheet_xml(&raw, &cells, None)?;
         validate_worksheet_structure(&xml)?;

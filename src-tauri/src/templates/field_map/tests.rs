@@ -641,3 +641,32 @@ fn a_computed_field_cannot_depend_on_another_one_or_be_set_by_a_preset() {
     with_preset["presets"] = json!([{"name": "P", "values": {"ambient": "5"}}]);
     assert!(FieldMap::parse(&with_preset).is_err());
 }
+
+#[test]
+fn render_writes_numbers_and_times_into_excel_cells_as_numbers() {
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [
+        {"key": "qty", "type": "number", "anchor": {"kind": "cell", "sheet": "Form", "address": "B2"}},
+        {"key": "at", "type": "time", "anchor": {"kind": "cell", "sheet": "Form", "address": "D5"}},
+        {"key": "note", "anchor": {"kind": "cell", "sheet": "Form", "address": "E5"}}
+    ]}))
+    .expect("map");
+    let book = anchors::tests::xlsx("", "");
+    let values = [("qty", "3,5"), ("at", "09:30"), ("note", "3,5")]
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    let (out, _) = render_package(FileKind::Xlsx, &book, &map, &values).expect("render");
+    let mut archive = zip::ZipArchive::new(Cursor::new(out)).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("xl/worksheets/sheet1.xml").unwrap(),
+        &mut xml,
+    )
+    .unwrap();
+    assert!(xml.contains("<v>3.5</v>"), "{xml}");
+    assert!(xml.contains("<v>0.395833333333333</v>"), "{xml}");
+    assert!(
+        xml.contains("<is><t>3,5</t></is>"),
+        "a text field stays text: {xml}"
+    );
+}

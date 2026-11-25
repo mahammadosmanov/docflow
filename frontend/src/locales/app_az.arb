@@ -1260,6 +1260,7 @@
   "templates.editor.type.text": "Mətn",
   "templates.editor.type.number": "Rəqəm",
   "templates.editor.type.date": "Tarix",
+  "templates.editor.type.time": "Saat",
   "templates.editor.type.checkbox": "Qeyd qutusu",
   "templates.editor.format": "Format",
   "templates.editor.format.date": "Gün dd, ay MM, il yyyy və ya yy. Nümunə: dd.MM.yyyy",
