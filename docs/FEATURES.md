@@ -38,7 +38,7 @@
   its label, or missing) and holds Publish until each is resolved; Version
   history restores an earlier version as the draft. In an Excel template with
   several sheets, editors can mark sheets optional; each document then has a
-  checkbox per optional sheet in Preview. In a Word table, a row can repeat:
+  checkbox per optional sheet in Preview. A Word table row or an Excel row can repeat:
   each line typed or pasted in Preview becomes a row, Tab separating columns.
   Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete

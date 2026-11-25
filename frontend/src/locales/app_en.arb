@@ -1405,5 +1405,6 @@
   "templates.cells.where.rows": "Table {table}, row {row}, {count} columns from cell {cell}, repeating",
   "templates.cells.repeat": "This row repeats for each line",
   "templates.cells.repeat.columns": "Columns",
-  "templates.cells.repeat.help": "In Preview, each line becomes one row and Tab separates the columns. Paste rows copied from Excel."
+  "templates.cells.repeat.help": "In Preview, each line becomes one row and Tab separates the columns. Paste rows copied from Excel.",
+  "templates.cells.where.excelRows": "Cell {address} on {sheet}, {count} columns, repeating"
 }

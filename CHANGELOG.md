@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.62.0 - 2026-11-25
+
+### Added
+
+- Excel templates can mark a row as repeating, like Word (ADR 0058). In the Cells section select the first cell of the row, tick "This row repeats for each line", and set how many columns it covers; in Preview each line becomes one row and a Tab separates the columns. The rows below move down with their formulas, ranges, conditional formatting, and names as Excel's Insert Row moves them; the cloned rows keep the template row's other cells, translated formulas, and single-row merged cells. A row crossed by a vertical merge, a protected sheet, a mapped cell with a formula or inside a merge but not its first cell, and a second marked cell in the same row are refused when the draft is saved.
+
 ## 1.61.0 - 2026-11-25
 
 ### Added

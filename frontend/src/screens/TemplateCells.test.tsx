@@ -231,9 +231,21 @@ describe("TemplateCells", () => {
     );
   });
 
-  it("offers repeating rows for Word only", async () => {
-    mount(excel);
+  it("marks an Excel row as repeating too", async () => {
+    const { onMark } = mount(excel);
     fireEvent.click(await screen.findByRole("button", { name: "Title" }));
-    expect(screen.queryByRole("checkbox", { name: "This row repeats for each line" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "This row repeats for each line" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Columns" }), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Make editable" }));
+    expect(onMark).toHaveBeenCalledWith(
+      expect.objectContaining({
+        multiline: true,
+        value: "",
+        anchor: { sheet: "Form", address: "A1", repeatColumns: 2 },
+      }),
+    );
+    expect(cellLocation(s, { sheet: "Form", address: "A1", repeatColumns: 2 })).toBe(
+      "Cell A1 on Form, 2 columns, repeating",
+    );
   });
 });

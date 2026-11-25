@@ -186,9 +186,8 @@ impl FieldMap {
                 }
                 // A repeating row is cloned whole, so nothing else may sit in it.
                 let same_row = |other: &CellAnchor| {
-                    other.table.is_some()
-                        && other.table == anchor.table
-                        && other.row == anchor.row
+                    anchor_row(other).is_some()
+                        && anchor_row(other) == anchor_row(anchor)
                         && (other.repeat_columns.is_some() || anchor.repeat_columns.is_some())
                 };
                 if anchors.iter().any(|other| same_row(other)) {
@@ -252,6 +251,17 @@ impl FieldMap {
                 anchor: None,
             });
         }
+    }
+}
+
+/// The table or sheet and the row an anchor sits in.
+fn anchor_row(anchor: &CellAnchor) -> Option<(String, u32)> {
+    match (&anchor.sheet, &anchor.address, anchor.table, anchor.row) {
+        (Some(sheet), Some(address), _, _) => {
+            super::anchors::cell_coordinate(address).map(|(row, _)| (format!("s:{sheet}"), row))
+        }
+        (_, _, Some(table), Some(row)) => Some((format!("t:{table}"), row)),
+        _ => None,
     }
 }
 

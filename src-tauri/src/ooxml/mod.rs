@@ -368,7 +368,7 @@ pub use read::*;
 pub use refs::{RowShift, references_sheet, translate_formula};
 use relationships::*;
 use rich::*;
-pub use rows::{CellText, RowOp, apply_row_ops};
+pub use rows::{CellText, RowOp, RowRepeat, apply_row_ops, repeat_template_rows};
 use sheet_patch::*;
 use validate::*;
 use worksheet::*;

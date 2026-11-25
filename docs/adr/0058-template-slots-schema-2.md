@@ -152,8 +152,25 @@ anchors other than placeholders.
   field, and any other marked cell in the same table row. Saving tries the row
   with two lines on the draft file; publishing checks again.
 - Stored as schema 2 (`rows` is unknown to 1.55.0 to 1.60.0, which refuse the
-  template with the usual message). Excel repeating rows are not supported yet:
-  an Excel `rows` anchor is refused as needing a newer DocFlow.
+  template with the usual message).
+
+### Repeating Excel rows (1.62.0)
+
+- The same `rows` anchor works in Excel with `sheet`, `address` (the first mapped
+  column of the template row), and `repeatColumns`. The value format is the same
+  (a line per row, Tab between columns).
+- `ooxml::repeat_template_rows` writes the first line into the template row, then
+  inserts the other rows with the engine built for Follow Up (rows below,
+  formulas, ranges, conditional formatting, and defined names move as Excel's
+  Insert Row moves them; unmapped cells are cloned and their formulas
+  translated; the calculation chain is dropped). That engine does not clone
+  merged ranges, so the template row's single-row merges are cloned onto each new
+  row afterwards. Rows lower on a sheet are expanded first.
+- Refused: a missing template row, a protected sheet, a row crossed by a
+  vertical merge, a mapped cell that holds a formula or sits inside a merge but is
+  not its first cell, and any other marked cell in the same row.
+- Not handled: data validation, hyperlinks, and drawings anchored to the
+  template row are not cloned; images anchored below the row keep their position.
 
 ## Consequences
 

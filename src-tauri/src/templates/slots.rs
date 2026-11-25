@@ -78,10 +78,6 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
                 if anchor.cell.repeat_columns.is_none() {
                     return Err(invalid());
                 }
-                if anchor.cell.sheet.is_some() {
-                    // Excel rows come in a later release.
-                    return Err(NEWER.to_string());
-                }
                 Some(anchor.cell)
             }
             Some(anchor) if anchor.kind == "cell" => return Err(invalid()),

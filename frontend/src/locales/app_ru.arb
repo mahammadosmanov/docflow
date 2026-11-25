@@ -1377,5 +1377,6 @@
   "templates.cells.where.rows": "Таблица {table}, строка {row}, столбцов: {count}, начиная с ячейки {cell}, повторяется",
   "templates.cells.repeat": "Эта строка повторяется для каждой строки",
   "templates.cells.repeat.columns": "Столбцы",
-  "templates.cells.repeat.help": "В предпросмотре каждая строка превращается в строку таблицы, столбцы разделяются Tab. Можно вставить строки, скопированные из Excel."
+  "templates.cells.repeat.help": "В предпросмотре каждая строка превращается в строку таблицы, столбцы разделяются Tab. Можно вставить строки, скопированные из Excel.",
+  "templates.cells.where.excelRows": "Ячейка {address} на листе {sheet}, столбцов: {count}, повторяется"
 }

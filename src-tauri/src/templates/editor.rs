@@ -311,7 +311,7 @@ impl TemplateStore {
                     (
                         anchor,
                         if anchor.repeat_columns.is_some() {
-                            "\n"
+                            "x\nx"
                         } else {
                             ""
                         },

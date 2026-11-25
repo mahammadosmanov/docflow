@@ -422,10 +422,13 @@ fn repeating_rows_are_stored_as_schema_two_rows_and_checked() {
     );
     let excel_rows =
         slot(json!({"kind": "rows", "sheet": "S", "address": "A1", "repeatColumns": 2}));
-    assert!(
-        FieldMap::parse(&excel_rows)
-            .expect_err("later release")
-            .contains("newer DocFlow")
+    let excel = FieldMap::parse(&excel_rows).expect("Excel rows load");
+    assert_eq!(
+        excel.fields[0]
+            .anchor
+            .as_ref()
+            .and_then(|anchor| anchor.repeat_columns),
+        Some(2)
     );
     let too_wide =
         slot(json!({"kind": "rows", "table": 0, "row": 0, "cell": 0, "repeatColumns": 21}));
@@ -440,6 +443,21 @@ fn repeating_rows_are_stored_as_schema_two_rows_and_checked() {
             .expect_err("same row")
             .contains("shares its row")
     );
+    let excel_same_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "sheet": "S", "address": "A5", "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "F5"}}
+    ]});
+    assert!(
+        FieldMap::parse(&excel_same_row)
+            .expect_err("same row")
+            .contains("shares its row")
+    );
+    let excel_other = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "sheet": "S", "address": "A5", "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "F6"}},
+        {"key": "c", "anchor": {"kind": "cell", "sheet": "T", "address": "F5"}}
+    ]});
+    assert!(FieldMap::parse(&excel_other).is_ok());
     let other_row = json!({"schema": 2, "slots": [
         {"key": "a", "anchor": {"kind": "rows", "table": 0, "row": 2, "cell": 0, "repeatColumns": 2}},
         {"key": "b", "anchor": {"kind": "cell", "table": 0, "row": 3, "cell": 0}},

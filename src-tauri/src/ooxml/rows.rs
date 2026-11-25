@@ -194,6 +194,189 @@ fn set_text(
     Ok(())
 }
 
+/// Gives each of `new_rows` the single-row merged ranges that `template_row`
+/// has; an inserted row is cloned without them.
+fn clone_merges(
+    package: &[u8],
+    sheet: &str,
+    template_row: u32,
+    new_rows: &[u32],
+) -> Result<Vec<u8>, OoxmlError> {
+    let mut source = Cursor::new(package);
+    let discovery = ordered_workbook_discovery(&mut source)?;
+    let sheets = project_sheet_infos(&discovery);
+    let path = sheet_path(&sheets, sheet)?;
+    source.seek(SeekFrom::Start(0))?;
+    let mut archive = open_archive(source)?;
+    let mut document = parse_document(&read_entry(&mut archive, &path)?)?;
+    if let Some(merge_cells) = find_element_mut(&mut document.nodes, b"mergeCells") {
+        let mut added = Vec::new();
+        for node in &merge_cells.children {
+            let XmlNode::Element(merge) = node else {
+                continue;
+            };
+            if !has_local_name(merge, b"mergeCell") {
+                continue;
+            }
+            let Some((first, last)) = attribute(merge, b"ref")
+                .as_deref()
+                .and_then(|range| range.split_once(':'))
+                .and_then(|(first, last)| Some((parse_reference(first)?, parse_reference(last)?)))
+            else {
+                continue;
+            };
+            if first.0 != template_row || last.0 != template_row {
+                continue;
+            }
+            for new_row in new_rows {
+                let mut copy = merge.clone();
+                let range = format!(
+                    "{}:{}",
+                    cell_reference(*new_row, first.1),
+                    cell_reference(*new_row, last.1)
+                );
+                set_attribute(&mut copy, b"ref", &range);
+                added.push(copy);
+            }
+        }
+        merge_cells
+            .children
+            .extend(added.into_iter().map(XmlNode::Element));
+        let count = merge_cells
+            .children
+            .iter()
+            .filter(|node| {
+                matches!(node, XmlNode::Element(merge) if has_local_name(merge, b"mergeCell"))
+            })
+            .count();
+        set_attribute(merge_cells, b"count", &count.to_string());
+    }
+    let bytes = serialize_document(&document)?;
+    validate_worksheet_structure(&bytes)?;
+    let patched = BTreeMap::from([(path, bytes)]);
+    let mut output = Cursor::new(Vec::new());
+    write_package_guarded(&mut archive, &mut output, &patched)?;
+    Ok(output.into_inner())
+}
+
+/// One repeating row of a template workbook: the template row, the first mapped
+/// column, and one text per mapped column for every line.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RowRepeat {
+    pub sheet: String,
+    pub row: u32,
+    pub first_column: u32,
+    pub lines: Vec<Vec<String>>,
+}
+
+/// Turns each template row into one row per line (ADR 0058). Rows lower on a
+/// sheet are expanded first so a row above is not moved by rows added below
+/// it. The rows below, their formulas and references, conditional formatting,
+/// and defined names move the way Excel's Insert Row moves them; the template
+/// row's single-row merges and unmapped cells (formulas translated) are cloned.
+///
+/// Refused: a missing sheet or row, a protected sheet, a row with a vertical
+/// merge, a mapped cell that holds a formula or is inside a merge but is not its
+/// first cell.
+pub fn repeat_template_rows(package: &[u8], repeats: &[RowRepeat]) -> Result<Vec<u8>, OoxmlError> {
+    let mut order = repeats.iter().collect::<Vec<_>>();
+    order.sort_by(|a, b| {
+        (&a.sheet, std::cmp::Reverse(a.row)).cmp(&(&b.sheet, std::cmp::Reverse(b.row)))
+    });
+    let mut current = package.to_vec();
+    for repeat in order {
+        let Some(width) = repeat
+            .lines
+            .first()
+            .map(|line| u32::try_from(line.len()).unwrap_or(0))
+            .filter(|width| *width > 0)
+        else {
+            continue;
+        };
+        let workbook = read_workbook_from_reader(&mut Cursor::new(current.as_slice()))?;
+        let sheet = workbook
+            .sheet(&repeat.sheet)
+            .ok_or_else(|| OoxmlError::invalid(format!("worksheet not found: {}", repeat.sheet)))?;
+        if sheet.has_sheet_protection {
+            return Err(OoxmlError::invalid("template worksheet is protected"));
+        }
+        if !sheet.cells.keys().any(|(row, _)| *row == repeat.row) {
+            return Err(OoxmlError::invalid("the template row was not found"));
+        }
+        if sheet.merged_ranges.iter().any(|range| {
+            range.first_row < range.last_row
+                && (range.first_row..=range.last_row).contains(&repeat.row)
+        }) {
+            return Err(OoxmlError::invalid(
+                "the Excel row has vertically merged cells and cannot repeat",
+            ));
+        }
+        let mapped = repeat.first_column..repeat.first_column + width;
+        for column in mapped.clone() {
+            if sheet
+                .cell(repeat.row, column)
+                .is_some_and(|cell| cell.formula.is_some())
+            {
+                return Err(OoxmlError::invalid("template cell holds a formula"));
+            }
+            if sheet
+                .merged_range_containing(repeat.row, column)
+                .is_some_and(|range| range.first_column != column)
+            {
+                return Err(OoxmlError::invalid(
+                    "template cell is inside a merge but is not its first cell",
+                ));
+            }
+        }
+        let first_line = repeat.lines[0]
+            .iter()
+            .enumerate()
+            .map(|(offset, text)| {
+                (
+                    (repeat.row, repeat.first_column + offset as u32),
+                    text.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        current = patch_template_cells(
+            &current,
+            &BTreeMap::from([(repeat.sheet.clone(), first_line)]),
+        )?;
+        if repeat.lines.len() < 2 {
+            continue;
+        }
+        let copy_columns = sheet
+            .cells
+            .keys()
+            .filter(|(row, column)| *row == repeat.row && !mapped.contains(column))
+            .map(|(_, column)| *column)
+            .collect::<Vec<_>>();
+        let mut ops = Vec::new();
+        let mut new_rows = Vec::new();
+        for (index, line) in repeat.lines.iter().enumerate().skip(1) {
+            let index = index as u32;
+            ops.push(RowOp::InsertRow {
+                sheet: repeat.sheet.clone(),
+                after_row: repeat.row + index - 1,
+                template_row: repeat.row,
+                copy_columns: copy_columns.clone(),
+                texts: line
+                    .iter()
+                    .enumerate()
+                    .map(|(offset, text)| CellText {
+                        column: repeat.first_column + offset as u32,
+                        text: text.clone(),
+                    })
+                    .collect(),
+            });
+            new_rows.push(repeat.row + index);
+        }
+        current = apply_row_ops(&mut Cursor::new(current), &ops)?;
+        current = clone_merges(&current, &repeat.sheet, repeat.row, &new_rows)?;
+    }
+    Ok(current)
+}
+
 fn set_inline_text(cell: &mut XmlElement, text: &str) {
     set_attribute(cell, b"t", "inlineStr");
     let mut inline = XmlElement::new("is");

@@ -27,6 +27,13 @@ function columnLetters(column: number): string {
 
 /** Plain-language place of a marked cell, for the field list and the toolbar. */
 export function cellLocation(s: Strings, anchor: CellAnchor): string {
+  if (anchor.sheet !== undefined && anchor.repeatColumns !== undefined) {
+    return s.t("templates.cells.where.excelRows", {
+      address: anchor.address ?? "",
+      sheet: anchor.sheet,
+      count: anchor.repeatColumns,
+    });
+  }
   if (anchor.sheet !== undefined) {
     return s.t("templates.cells.where.excel", {
       address: anchor.address ?? "",
@@ -131,7 +138,7 @@ export function TemplateCells({
 
   const makeEditable = () => {
     if (!picked) return;
-    const repeating = repeats && picked.anchor.table !== undefined;
+    const repeating = repeats;
     const anchor = repeating ? { ...picked.anchor, repeatColumns: columns } : picked.anchor;
     const name = label.trim() || cellLocation(s, anchor);
     mark({
@@ -390,16 +397,14 @@ export function TemplateCells({
             <span>{s.t("templates.editor.label")}</span>
             <input value={label} onChange={(event) => setLabel(event.target.value)} />
           </label>
-          {picked.anchor.table !== undefined && (
-            <label className="toggle-inline">
-              <input
-                type="checkbox"
-                checked={repeats}
-                onChange={(event) => setRepeats(event.target.checked)}
-              />
-              {s.t("templates.cells.repeat")}
-            </label>
-          )}
+          <label className="toggle-inline">
+            <input
+              type="checkbox"
+              checked={repeats}
+              onChange={(event) => setRepeats(event.target.checked)}
+            />
+            {s.t("templates.cells.repeat")}
+          </label>
           {repeats && (
             <label className="field cell-columns">
               <span>{s.t("templates.cells.repeat.columns")}</span>

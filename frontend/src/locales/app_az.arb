@@ -1377,5 +1377,6 @@
   "templates.cells.where.rows": "Cədvəl {table}, sətir {row}, {cell}. xanadan başlayan {count} sütun, təkrarlanan",
   "templates.cells.repeat": "Bu sətir hər sətir üçün təkrarlanır",
   "templates.cells.repeat.columns": "Sütun",
-  "templates.cells.repeat.help": "Önizləmədə hər sətir cədvəl sətri olur, sütunları Tab ayırır. Excel-dən köçürülmüş sətirləri yapışdıra bilərsiniz."
+  "templates.cells.repeat.help": "Önizləmədə hər sətir cədvəl sətri olur, sütunları Tab ayırır. Excel-dən köçürülmüş sətirləri yapışdıra bilərsiniz.",
+  "templates.cells.where.excelRows": "{sheet} vərəqində {address} xanası, {count} sütun, təkrarlanan"
 }

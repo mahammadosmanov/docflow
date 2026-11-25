@@ -79,13 +79,17 @@ impl CellAnchor {
     pub fn kind(&self) -> Result<FileKind, String> {
         let invalid = || "The cell anchor is invalid".to_string();
         match (&self.sheet, &self.address, self.table, self.row, self.cell) {
-            (Some(sheet), Some(address), None, None, None) if self.repeat_columns.is_none() => {
+            (Some(sheet), Some(address), None, None, None) => {
                 let name_ok = !sheet.trim().is_empty()
                     && sheet.chars().count() <= 31
                     && !sheet.contains(['[', ']', ':', '*', '?', '/', '\\']);
-                (name_ok && cell_coordinate(address).is_some())
-                    .then_some(FileKind::Xlsx)
-                    .ok_or_else(invalid)
+                let columns = self.repeat_columns.unwrap_or(1);
+                (name_ok
+                    && (1..=MAX_REPEAT_COLUMNS).contains(&columns)
+                    && cell_coordinate(address)
+                        .is_some_and(|(_, column)| column + columns - 1 <= 16_384))
+                .then_some(FileKind::Xlsx)
+                .ok_or_else(invalid)
             }
             (None, None, Some(table), Some(row), Some(cell)) => {
                 let columns = self.repeat_columns.unwrap_or(1);
@@ -135,18 +139,35 @@ pub fn apply(
 
 fn apply_excel(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8>, String> {
     let mut updates = BTreeMap::<String, BTreeMap<(u32, u32), String>>::new();
+    let mut repeats = Vec::new();
     for (anchor, value) in anchored {
         let (Some(sheet), Some(address)) = (&anchor.sheet, &anchor.address) else {
             return Err("The cell anchor is invalid".to_string());
         };
-        let coordinate = cell_coordinate(address).ok_or("The cell anchor is invalid")?;
-        updates
-            .entry(sheet.clone())
-            .or_default()
-            .insert(coordinate, (*value).to_string());
+        let (row, column) = cell_coordinate(address).ok_or("The cell anchor is invalid")?;
+        match anchor.repeat_columns {
+            None => {
+                updates
+                    .entry(sheet.clone())
+                    .or_default()
+                    .insert((row, column), (*value).to_string());
+            }
+            Some(columns) => repeats.push(crate::ooxml::RowRepeat {
+                sheet: sheet.clone(),
+                row,
+                first_column: column,
+                lines: rows_of(value, columns)?,
+            }),
+        }
     }
-    crate::ooxml::patch_template_cells(package, &updates)
-        .map_err(|error| format!("Cannot write the template cells: {error}"))
+    let written = crate::ooxml::patch_template_cells(package, &updates)
+        .map_err(|error| format!("Cannot write the template cells: {error}"))?;
+    if repeats.is_empty() {
+        return Ok(written);
+    }
+    // Single cells are written first; rows below a repeating row move with it.
+    crate::ooxml::repeat_template_rows(&written, &repeats)
+        .map_err(|error| format!("Cannot repeat the template rows: {error}"))
 }
 
 fn apply_word(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8>, String> {

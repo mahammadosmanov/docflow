@@ -635,3 +635,20 @@ fn a_repeating_row_is_checked_with_two_lines_before_it_is_saved() {
         error.message
     );
 }
+
+#[test]
+fn an_excel_row_that_cannot_be_cloned_is_refused_when_saving() {
+    // The draft file is a Word table, so an Excel anchor cannot be written in it.
+    let (_remote, _dir, store) = draft_store(&table_docx());
+    let map = json!({"schema": 1, "fields": [
+        {"key": "rows", "anchor": {"sheet": "Form", "address": "A2", "repeatColumns": 2}}
+    ]});
+    let error = store
+        .save_draft(&save(map), 1)
+        .expect_err("wrong file kind");
+    assert!(
+        error.message.starts_with("error.templates.invalid"),
+        "{}",
+        error.message
+    );
+}

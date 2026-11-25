@@ -1377,5 +1377,6 @@
   "templates.cells.where.rows": "Tablo {table}, satır {row}, {cell}. hücreden başlayan {count} sütun, tekrarlı",
   "templates.cells.repeat": "Bu satır her satır için tekrarlanır",
   "templates.cells.repeat.columns": "Sütun",
-  "templates.cells.repeat.help": "Önizlemede her satır bir tablo satırı olur, sütunları Tab ayırır. Excel'den kopyalanan satırları yapıştırabilirsin."
+  "templates.cells.repeat.help": "Önizlemede her satır bir tablo satırı olur, sütunları Tab ayırır. Excel'den kopyalanan satırları yapıştırabilirsin.",
+  "templates.cells.where.excelRows": "{sheet} sayfasında {address} hücresi, {count} sütun, tekrarlı"
 }

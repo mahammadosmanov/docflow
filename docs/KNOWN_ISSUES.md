@@ -31,7 +31,12 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 - Repeating Word rows (ADR 0058, 1.61.0) are verified with synthetic tables only.
   Windows acceptance: generate a document from a real form with a repeating row
   and confirm Word opens it, the row formatting survives, and the page breaks
-  sensibly. Excel repeating rows are not available yet.
+  sensibly.
+- Repeating Excel rows (ADR 0058, 1.62.0) are verified with synthetic workbooks only.
+  Windows acceptance: generate a CON-CIV-010 style sheet with several rows, check
+  merges, borders, formulas, row heights, print area, and that Excel opens it
+  without a repair prompt. Data validation, hyperlinks, and drawings on the
+  template row are not cloned.
 - Optional Excel sheets (ADR 0058, 1.60.0) are verified with synthetic workbooks only.
   Windows acceptance: generate a damage workbook with a photo sheet left out and
   confirm Excel opens it without a repair prompt; conditional formatting, data
