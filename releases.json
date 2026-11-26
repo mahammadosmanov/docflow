@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.67.0",
+  "currentVersion": "1.68.0",
   "releases": [
+    {
+      "version": "1.68.0",
+      "tag": "v1.68.0",
+      "date": "2026-11-26",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up sync can leave wrongly logged RFIs alone"
+    },
     {
       "version": "1.67.0",
       "tag": "v1.67.0",
       "date": "2026-11-25",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Template documents can start from the Concrete Specimen Test Follow-Up workbook"
     },
     {

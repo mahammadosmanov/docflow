@@ -101,10 +101,13 @@ impl NativeBackend {
                 .to_string_lossy()
                 .into_owned(),
         });
-        let mut plan = rfi_follow_up::preview_from_open_files_with_backup(
+        let exceptions =
+            self.resolve_follow_up_exceptions(request.values.exception_rfis.as_deref())?;
+        let mut plan = rfi_follow_up::preview_from_open_files_with_exceptions(
             &request.values.rfi_log_workbook,
             &request.values.follow_up_workbook,
             backup_directory.as_deref(),
+            &exceptions,
             &mut source,
             &mut target,
         )?;

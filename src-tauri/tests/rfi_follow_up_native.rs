@@ -13,8 +13,9 @@ use docflow_lib::{
     paths::{CallerIdentity, GrantAccess, GrantScope},
     plan_store::{BackendOrigin, PlanBinding},
     rfi_follow_up::{
-        canonical_follow_up_rfi, canonical_rfi, classify_workbooks, guarded_updates,
-        mapped_follow_up_status, preview_from_open_files, revise_from_open_files,
+        canonical_follow_up_rfi, canonical_rfi, classify_workbooks, classify_workbooks_excepting,
+        guarded_updates, mapped_follow_up_status, preview_from_open_files,
+        preview_from_open_files_with_exceptions, revise_from_open_files,
     },
 };
 use serde_json::{Value, json};
@@ -5400,6 +5401,10 @@ fn partless_road_row_still_matches_a_partless_tag() {
 }
 
 fn deleted_rfi_review(extra_log_rows: Vec<String>, target_cell: &str) -> Value {
+    excepting_review(extra_log_rows, target_cell, &[])
+}
+
+fn excepting_review(extra_log_rows: Vec<String>, target_cell: &str, exceptions: &[&str]) -> Value {
     let mut civ = vec![full_schema_record_with_status(
         10,
         "1222",
@@ -5435,7 +5440,21 @@ fn deleted_rfi_review(extra_log_rows: Vec<String>, target_cell: &str) -> Value {
             &[],
         ),
     )]);
-    classify(full_schema_source(civ), target).unwrap()
+    let (source_discovery, source_workbook) = parsed(full_schema_source(civ));
+    let (target_discovery, target_workbook) = parsed(target);
+    let exceptions = exceptions
+        .iter()
+        .map(|code| canonical_follow_up_rfi(code).unwrap().0)
+        .collect();
+    classify_workbooks_excepting(
+        &source_discovery,
+        &source_workbook,
+        &target_discovery,
+        &target_workbook,
+        false,
+        &exceptions,
+    )
+    .unwrap()
 }
 
 fn proposed_rfis(review: &Value) -> Vec<String> {
@@ -6605,4 +6624,107 @@ fn full_sync_repairs_a_mistyped_rfi_cell_only_when_the_log_has_every_number() {
             ),
         "a number missing from the Log stays manual: {unknown}"
     );
+}
+
+#[test]
+fn an_exception_rfi_missing_from_the_log_is_kept_in_a_shared_cell() {
+    let review = excepting_review(Vec::new(), "CIV-1222/0099", &["CIV-0099"]);
+
+    // The other RFI still syncs; the exception keeps its place in the cell.
+    assert_eq!(proposed_rfis(&review), ["CIV-1222/0099"]);
+    assert_eq!(review["rows"][0]["proposedStatus"], "Completed");
+}
+
+#[test]
+fn a_cell_holding_only_exception_rfis_is_left_untouched() {
+    let review = excepting_review(Vec::new(), "CIV-0099", &["CIV-0099"]);
+
+    assert!(proposed_rfis(&review).is_empty(), "{review}");
+    // Only the unrelated Log record is left, as manual review: nothing is selectable.
+    assert!(
+        review["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["selectable"] == false),
+        "{review}"
+    );
+}
+
+#[test]
+fn an_exception_rfi_that_is_not_in_a_cell_changes_nothing() {
+    let without = excepting_review(Vec::new(), "CIV-1222/0099", &[]);
+    let unrelated = excepting_review(Vec::new(), "CIV-1222/0099", &["CIV-0777"]);
+
+    assert_eq!(without, unrelated);
+}
+
+#[test]
+fn exceptions_stay_in_the_plan_so_revision_classifies_the_same_way() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source_path = fixture.path().join("RFI Log.xlsx");
+    let target_path = fixture.path().join("Follow Up.xlsx");
+    let exception = "AZE-SUN-INT-QMS-RFI-CIV-0777";
+    let civ = vec![full_schema_record_with_status(
+        10,
+        "1222",
+        "AZE-SUN-INT-QMS-ITP-CIV-0002",
+        "CIV-1.5",
+        "AREA-1",
+        "Completed",
+        "",
+    )];
+    std::fs::write(&source_path, full_schema_source(civ).into_inner()).unwrap();
+    let target = package(&[(
+        "CIV",
+        None,
+        worksheet(
+            [
+                row(
+                    1,
+                    [
+                        inline("B1", "Tag"),
+                        inline("C1", "RFI No."),
+                        inline("D1", "STATUS"),
+                    ],
+                ),
+                row(
+                    2,
+                    [
+                        inline("B2", "AREA-1"),
+                        inline("C2", "CIV-1222"),
+                        inline("D2", "In Progress"),
+                    ],
+                ),
+            ],
+            &[],
+        ),
+    )]);
+    std::fs::write(&target_path, target.into_inner()).unwrap();
+    let mut source = File::open(&source_path).unwrap();
+    let mut target = File::options()
+        .read(true)
+        .write(true)
+        .open(&target_path)
+        .unwrap();
+    let exceptions = std::collections::BTreeSet::from([exception.to_string()]);
+    let plan = preview_from_open_files_with_exceptions(
+        &source_path,
+        &target_path,
+        None,
+        &exceptions,
+        &mut source,
+        &mut target,
+    )
+    .unwrap();
+    assert_eq!(plan.meta["rfiFollowUp"]["exceptions"], json!([exception]));
+    let rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
+
+    let revised = revise_from_open_files(&plan, &rows, &mut source, &mut target).unwrap();
+
+    assert_eq!(
+        revised.meta["rfiFollowUp"]["exceptions"],
+        json!([exception])
+    );
+    assert_eq!(revised.steps.len(), plan.steps.len());
 }

@@ -101,6 +101,29 @@ fn build_slots(
     Ok(slots)
 }
 
+/// Takes exception RFIs out of the slots' working codes so no step can change
+/// or remove them; `row_from_slot` puts them back in place. A cell that holds
+/// only exception RFIs leaves the map and is never touched.
+fn hold_exception_codes(slots: &mut SlotMap, exceptions: &BTreeSet<String>) {
+    if exceptions.is_empty() {
+        return;
+    }
+    slots.retain(|_, slot| {
+        let held = slot
+            .codes
+            .iter()
+            .filter(|code| exceptions.contains(*code))
+            .cloned()
+            .collect::<Vec<_>>();
+        if held.is_empty() {
+            return true;
+        }
+        slot.codes.retain(|code| !exceptions.contains(code));
+        slot.held = held;
+        !slot.codes.is_empty()
+    });
+}
+
 /// Rewrites a mistyped RFI cell (`CIV-13741461` -> `CIV-1374/1461`) only when
 /// every repaired code exists in the RFI Log; otherwise it stays `invalidRfi`.
 fn repair_mistyped_slots(
@@ -277,8 +300,9 @@ pub(super) fn classify_workbooks_full(
     target_discovery: &OrderedWorkbookDiscovery,
     target_workbook: &WorkbookData,
     target_has_signature: bool,
+    exceptions: &BTreeSet<String>,
 ) -> Result<Value, BackendError> {
-    let records = scan_source_records(source_discovery, source_workbook)?;
+    let records = scan_source_records(source_discovery, source_workbook, exceptions)?;
     let logged_numbers = scan_logged_rfi_numbers(source_discovery, source_workbook);
     let mut merge_budget = MergeQueryBudget {
         remaining: MAX_FOLLOW_UP_MERGE_COMPARISONS,
@@ -290,6 +314,7 @@ pub(super) fn classify_workbooks_full(
         &mut merge_budget,
     )?;
     let mut slots = build_slots(&layouts, target_workbook, &mut merge_budget)?;
+    hold_exception_codes(&mut slots, exceptions);
     repair_mistyped_slots(&mut slots, &records, &logged_numbers);
     let (deleted_count, mass_deletion) = deletion_evidence(&slots, &records, &logged_numbers);
     let mut manual_rows = Vec::new();

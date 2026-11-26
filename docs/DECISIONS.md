@@ -57,6 +57,7 @@ and versioned with the code they govern.
 | Follow Up moves placements the RFI Log contradicts and repairs mistyped RFI cells | Accepted | [`adr/0056-follow-up-moves-contradicted-placements.md`](adr/0056-follow-up-moves-contradicted-placements.md) |
 | Batch Print fast queue mode beside the default wait mode | Accepted | [`adr/0057-print-queue-mode.md`](adr/0057-print-queue-mode.md) |
 | Template field map schema 2 (slots), read before it is written | Accepted | [`adr/0058-template-slots-schema-2.md`](adr/0058-template-slots-schema-2.md) |
+| Follow Up sync leaves exception RFIs alone | Accepted | [`adr/0059-follow-up-exception-rfis.md`](adr/0059-follow-up-exception-rfis.md) |
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |

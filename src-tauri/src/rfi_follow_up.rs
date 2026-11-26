@@ -190,6 +190,9 @@ struct FollowUpPlanMeta {
     layouts: Vec<FollowUpLayout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     structure: Vec<RowOp>,
+    /// RFIs the Log records wrongly; revision must classify with the same set.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    exceptions: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -401,6 +404,7 @@ impl MergeQueryBudget {
 mod apply;
 mod classify;
 mod codes;
+mod exceptions;
 mod formula_rows;
 mod preview;
 mod remark;
@@ -414,6 +418,7 @@ mod structure_rows;
 pub use apply::*;
 pub use classify::*;
 pub use codes::*;
+pub use exceptions::*;
 use formula_rows::*;
 pub use preview::*;
 use remark::*;

@@ -317,6 +317,17 @@ impl TemplateStore {
         }
     }
 
+    /// An authenticated PostgREST call for other cloud-backed lists.
+    pub fn rest(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        now: i64,
+    ) -> Result<Value, BackendError> {
+        self.remote.rest(method, path, body, now)
+    }
+
     fn state(&self) -> std::sync::MutexGuard<'_, SyncState> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }

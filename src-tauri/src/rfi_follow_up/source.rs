@@ -144,9 +144,12 @@ fn merge_source_record(records: &mut BTreeMap<String, SourceRecord>, incoming: S
     existing.evidence.extend(incoming.evidence);
 }
 
+/// `exceptions` are RFIs the Log records wrongly: they leave the result, so no
+/// sync step can place, change or remove them.
 pub(super) fn scan_source_records(
     discovery: &OrderedWorkbookDiscovery,
     workbook: &WorkbookData,
+    exceptions: &BTreeSet<String>,
 ) -> Result<BTreeMap<String, SourceRecord>, BackendError> {
     if discovery.safety.has_workbook_protection {
         return Err(protected());
@@ -277,6 +280,7 @@ pub(super) fn scan_source_records(
             merge_source_record(&mut records, incoming);
         }
     }
+    records.retain(|code, _| !exceptions.contains(code));
     Ok(records)
 }
 

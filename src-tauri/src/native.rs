@@ -709,6 +709,7 @@ impl NativeBackend {
     }
 }
 
+mod follow_up_exceptions;
 mod free;
 mod params;
 mod plan;
