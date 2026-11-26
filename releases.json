@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.68.0",
+  "currentVersion": "1.68.1",
   "releases": [
+    {
+      "version": "1.68.1",
+      "tag": "v1.68.1",
+      "date": "2026-11-26",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Follow Up exception list is shown and shared by every user"
+    },
     {
       "version": "1.68.0",
       "tag": "v1.68.0",
       "date": "2026-11-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up sync can leave wrongly logged RFIs alone"
     },
     {

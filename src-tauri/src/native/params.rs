@@ -46,6 +46,13 @@ impl NativeBackend {
         let saved = self.settings.params_for(operation_id);
 
         let mut result = Map::new();
+        if operation_id == rfi_follow_up::OPERATION_ID {
+            // Long text is never remembered; the exception list is shared, so show it.
+            let text = self.follow_up_exception_text();
+            if !text.is_empty() {
+                result.insert("exception_rfis".to_string(), json!(text));
+            }
+        }
         for param in operation.schema.params {
             if !param.remember {
                 continue;

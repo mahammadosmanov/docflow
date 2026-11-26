@@ -18,8 +18,12 @@ that skipped exceptions need no warning.
 
 - `rfi.follow_up_sync` has an optional `exception_rfis` long-text parameter. One
   code per line, comma or semicolon; full (`AZE-SUN-INT-QMS-RFI-CIV-1374`) or
-  short (`CIV-1374`) form. `-CODE` removes a code from the stored list.
-- The effective list is `(local ∪ cloud ∪ added) − removed`. It is saved to the
+  short (`CIV-1374`) form. The field is pre-filled with the stored list
+  (local ∪ cloud), so every user sees the same list. Codes in the field replace
+  the stored list; an empty field changes nothing; `-CODE` also removes a code.
+  (1.68.1: 1.68.0 kept the list but never showed it, because long-text values are
+  not remembered.)
+- The effective list is saved to the
   settings section `followUpExceptions` and to the Supabase table
   `follow_up_exceptions` (`docs/supabase_follow_up_exceptions.sql`). Offline, the
   local list applies; additions reach the cloud on the next online run. A removal

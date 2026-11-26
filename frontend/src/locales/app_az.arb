@@ -512,7 +512,7 @@
   "param.rfi.followUp.backupDirectory.help": "Follow Up iş kitabının ehtiyat nüsxəsi üçün qovluq. Boş qalsa, nüsxə iş kitabının yanında saxlanılır.",
   "error.rfi.followUp.backupDirectoryInvalid": "Mövcud ehtiyat qovluğunu seçin.",
   "param.rfi.followUp.exceptionRfis": "Toxunulmayacaq RFI-lar (istəyə bağlı)",
-  "param.rfi.followUp.exceptionRfis.help": "RFI Log-da yanlış qeyd olunmuş və düzəldilə bilməyən RFI-lar üçün hər sətirdə bir RFI kodu. Sinxronizasiya onları dəyişmir, silmir, əlavə etmir; eyni xanadakı digər RFI-lar yenə sinxronlaşır. Siyahıdan çıxarmaq üçün kodun qarşısına - yazın. Siyahı bu kompüterdə və buludda saxlanılır.",
+  "param.rfi.followUp.exceptionRfis.help": "RFI Log-da yanlış qeyd olunmuş və düzəldilə bilməyən RFI-lar üçün hər sətirdə bir RFI kodu. Sinxronizasiya onları dəyişmir, silmir, əlavə etmir; eyni xanadakı digər RFI-lar yenə sinxronlaşır. Sahə bu kompüterdə və buludda saxlanılan, bütün istifadəçilər üçün ortaq siyahını göstərir. Kod əlavə etmək üçün sətir əlavə edin; çıxarmaq üçün sətri silin (bulud bağlantısı lazımdır).",
   "error.rfi.followUp.exceptionInvalid": "Bu RFI kodu oxunmadı. CIV-1374 kimi kod yazın; çıxarmaq üçün -CIV-1374.",
   "error.rfi.followUp.exceptionsUnsupported": "RFI-lara toxunmamaq üçün tam RFI Log formatı lazımdır.",
   "error.rfi.followUp.exceptionCloudUnavailable": "RFI-ı siyahıdan çıxarmaq üçün bulud bağlantısı lazımdır. Qoşulub yenidən cəhd edin.",

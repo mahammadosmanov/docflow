@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.68.1 - 2026-11-26
+
+### Fixed
+
+- The Follow Up field "RFIs to leave alone" now shows the saved list every time you open it, the same for every user, because it reads the list kept on this computer and in the cloud. Before, the list was kept but the field looked empty, so it seemed forgotten. The field is now the whole list: add a line to add an RFI, delete a line to remove it (removing needs a cloud connection). An empty field changes nothing.
+
 ## 1.68.0 - 2026-11-26
 
 ### Added

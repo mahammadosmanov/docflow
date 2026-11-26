@@ -540,7 +540,7 @@
   "param.rfi.followUp.backupDirectory.help": "Folder for the backup copy of the Follow Up workbook. Leave empty to keep it beside the workbook.",
   "error.rfi.followUp.backupDirectoryInvalid": "Select an existing backup folder.",
   "param.rfi.followUp.exceptionRfis": "RFIs to leave alone (optional)",
-  "param.rfi.followUp.exceptionRfis.help": "One RFI code per line, for RFIs the RFI Log records wrongly and cannot be fixed. Sync never changes, removes or adds them; other RFIs in the same cell still sync. Put - before a code to remove it. The list is saved on this computer and in the cloud.",
+  "param.rfi.followUp.exceptionRfis.help": "One RFI code per line, for RFIs the RFI Log records wrongly and cannot be fixed. Sync never changes, removes or adds them; other RFIs in the same cell still sync. The field shows the list saved on this computer and in the cloud, shared by all users. Add a line to add a code; delete a line to remove it (needs a cloud connection).",
   "error.rfi.followUp.exceptionInvalid": "Cannot read this RFI code. Use a code such as CIV-1374 or -CIV-1374 to remove it.",
   "error.rfi.followUp.exceptionsUnsupported": "Leaving RFIs alone needs the full RFI Log format.",
   "error.rfi.followUp.exceptionCloudUnavailable": "Removing an RFI from the list needs a cloud connection. Connect and try again.",

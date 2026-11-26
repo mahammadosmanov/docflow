@@ -305,3 +305,36 @@ fn saved_operation_params_preserve_paths_and_reissue_active_selections_for_calle
     assert!(restored2.contains_key("dest"));
     assert_eq!(restored2.get("keep_original"), Some(&json!(true)));
 }
+
+#[test]
+fn follow_up_exception_list_is_shown_in_the_field_and_replaced_by_it() {
+    let temporary = tempfile::tempdir().unwrap();
+    let backend = test_backend(&temporary);
+    assert!(
+        !backend
+            .selected_params("rfi.follow_up_sync")
+            .unwrap()
+            .contains_key("exception_rfis")
+    );
+
+    let exceptions = backend
+        .resolve_follow_up_exceptions(Some("CIV-0346\nCIV-0267"))
+        .unwrap();
+    assert_eq!(exceptions.len(), 2);
+
+    let shown = backend.selected_params("rfi.follow_up_sync").unwrap();
+    assert_eq!(shown["exception_rfis"], json!("CIV-0267\nCIV-0346"));
+    // An empty field keeps the list; removing needs the cloud, which is offline here.
+    assert_eq!(
+        backend.resolve_follow_up_exceptions(None).unwrap(),
+        exceptions
+    );
+    let offline = backend
+        .resolve_follow_up_exceptions(Some("CIV-0346"))
+        .unwrap_err();
+    assert!(offline.message.contains("exceptionCloudUnavailable"));
+    assert_eq!(
+        backend.resolve_follow_up_exceptions(None).unwrap(),
+        exceptions
+    );
+}
