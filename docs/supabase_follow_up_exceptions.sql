@@ -28,5 +28,7 @@ drop policy if exists follow_up_exceptions_remove on public.follow_up_exceptions
 create policy follow_up_exceptions_remove on public.follow_up_exceptions
   for delete to authenticated using ( (select public.is_allowed()) );
 
-revoke all on public.follow_up_exceptions from anon;
+-- Supabase grants every table privilege to these roles by default; keep only what the
+-- app needs (RLS does not cover TRUNCATE).
+revoke all on public.follow_up_exceptions from anon, authenticated;
 grant select, insert, delete on public.follow_up_exceptions to authenticated;
