@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::templates::anchors;
+use crate::templates::values::FieldKind;
 
 fn docx(document: &str) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
@@ -222,8 +223,7 @@ fn schema_two_and_the_equal_schema_one_map_agree() {
 fn schema_two_features_this_release_cannot_apply_are_refused() {
     for slot in [
         json!({"key": "a", "anchor": {"kind": "range", "sheet": "S", "address": "A1:B2"}}),
-        json!({"key": "a", "type": "computed"}),
-        json!({"key": "a", "type": "checkbox"}),
+        json!({"key": "a", "type": "slider"}),
         json!({"key": "a", "source": {"kind": "other"}}),
     ] {
         let value = json!({"schema": 2, "slots": [slot]});
@@ -386,6 +386,86 @@ fn optional_sheets_are_stored_as_schema_two_and_checked() {
     }
 }
 
+#[test]
+fn repeating_rows_are_stored_as_schema_two_rows_and_checked() {
+    let stored = json!({"schema": 2, "slots": [
+        {"key": "samples", "type": "multiline",
+         "anchor": {"kind": "rows", "table": 0, "row": 3, "cell": 0, "repeatColumns": 3}},
+        {"key": "title", "anchor": {"kind": "cell", "table": 0, "row": 0, "cell": 0}}
+    ]});
+    let map = FieldMap::parse(&stored).expect("loads");
+    let samples = map.fields[0].anchor.as_ref().expect("anchor");
+    assert_eq!(
+        (samples.row, samples.cell, samples.repeat_columns),
+        (Some(3), Some(0), Some(3))
+    );
+    let written = map.to_value();
+    assert_eq!(written["slots"][0]["anchor"]["kind"], "rows");
+    assert_eq!(written["slots"][0]["anchor"]["repeatColumns"], 3);
+    assert_eq!(written["slots"][1]["anchor"]["kind"], "cell");
+    assert_eq!(FieldMap::parse(&written).expect("round trip"), map);
+
+    let slot =
+        |anchor: serde_json::Value| json!({"schema": 2, "slots": [{"key": "a", "anchor": anchor}]});
+    let plain_cell_with_repeat =
+        slot(json!({"kind": "cell", "table": 0, "row": 0, "cell": 0, "repeatColumns": 2}));
+    assert!(
+        !FieldMap::parse(&plain_cell_with_repeat)
+            .expect_err("invalid")
+            .contains("newer")
+    );
+    let rows_without_count = slot(json!({"kind": "rows", "table": 0, "row": 0, "cell": 0}));
+    assert!(
+        !FieldMap::parse(&rows_without_count)
+            .expect_err("invalid")
+            .contains("newer")
+    );
+    let excel_rows =
+        slot(json!({"kind": "rows", "sheet": "S", "address": "A1", "repeatColumns": 2}));
+    let excel = FieldMap::parse(&excel_rows).expect("Excel rows load");
+    assert_eq!(
+        excel.fields[0]
+            .anchor
+            .as_ref()
+            .and_then(|anchor| anchor.repeat_columns),
+        Some(2)
+    );
+    let too_wide =
+        slot(json!({"kind": "rows", "table": 0, "row": 0, "cell": 0, "repeatColumns": 21}));
+    assert!(FieldMap::parse(&too_wide).is_err());
+
+    let same_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "table": 0, "row": 2, "cell": 0, "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "table": 0, "row": 2, "cell": 3}}
+    ]});
+    assert!(
+        FieldMap::parse(&same_row)
+            .expect_err("same row")
+            .contains("shares its row")
+    );
+    let excel_same_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "sheet": "S", "address": "A5", "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "F5"}}
+    ]});
+    assert!(
+        FieldMap::parse(&excel_same_row)
+            .expect_err("same row")
+            .contains("shares its row")
+    );
+    let excel_other = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "sheet": "S", "address": "A5", "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "sheet": "S", "address": "F6"}},
+        {"key": "c", "anchor": {"kind": "cell", "sheet": "T", "address": "F5"}}
+    ]});
+    assert!(FieldMap::parse(&excel_other).is_ok());
+    let other_row = json!({"schema": 2, "slots": [
+        {"key": "a", "anchor": {"kind": "rows", "table": 0, "row": 2, "cell": 0, "repeatColumns": 2}},
+        {"key": "b", "anchor": {"kind": "cell", "table": 0, "row": 3, "cell": 0}},
+        {"key": "c", "anchor": {"kind": "cell", "table": 1, "row": 2, "cell": 0}}
+    ]});
+    assert!(FieldMap::parse(&other_row).is_ok());
+}
+
 const PLAIN: &str = concat!(
     r#"<w:document><w:body>"#,
     r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Date: </w:t></w:r>"#,
@@ -464,4 +544,129 @@ fn stale_or_invalid_selections_are_refused() {
         replace_in_block(FileKind::Docx, &bytes, "word/styles.xml", 0, 0..1, "D", "x").is_err()
     );
     assert!(replace_in_block(FileKind::Docx, &bytes, &block.part, 99, 0..1, "D", "x").is_err());
+}
+
+#[test]
+fn typed_slots_round_trip_through_schema_two_and_plain_maps_stay_schema_one() {
+    let typed = json!({"schema": 2, "slots": [
+        {"key": "n", "type": "number"},
+        {"key": "d", "type": "date", "format": "yyyy-MM-dd"},
+        {"key": "c", "type": "checkbox", "format": "Yes|No"},
+        {"key": "t"}
+    ]});
+    let map = FieldMap::parse(&typed).expect("loads");
+    assert_eq!(map.fields[0].kind, FieldKind::Number);
+    assert_eq!(map.fields[1].format, "yyyy-MM-dd");
+    let stored = map.to_value();
+    assert_eq!(stored["schema"], 2);
+    assert_eq!(stored["slots"][2]["type"], "checkbox");
+    assert_eq!(FieldMap::parse(&stored).expect("again"), map);
+    // The editor sends schema 1 JSON with `kind`; it must load and keep it.
+    let from_editor = json!({"schema": 1, "fields": [{"key": "n", "kind": "number"}]});
+    assert_eq!(
+        FieldMap::parse(&from_editor).expect("editor").fields[0].kind,
+        FieldKind::Number
+    );
+    let plain = FieldMap::parse(&json!({"schema": 1, "fields": [{"key": "a"}]})).unwrap();
+    assert_eq!(plain.to_value()["schema"], 1);
+    assert!(plain.to_value()["fields"][0].get("kind").is_none());
+}
+
+#[test]
+fn a_bad_format_or_a_type_mixed_with_choices_is_invalid() {
+    for field in [
+        json!({"key": "d", "kind": "date", "format": "hello"}),
+        json!({"key": "c", "kind": "checkbox", "format": "Yes"}),
+        json!({"key": "t", "format": "dd"}),
+        json!({"key": "n", "kind": "number", "options": ["1"]}),
+        json!({"key": "n", "kind": "number", "multiline": true}),
+    ] {
+        assert!(
+            FieldMap::parse(&json!({"schema": 1, "fields": [field.clone()]})).is_err(),
+            "{field}"
+        );
+    }
+}
+
+fn computed_map(compute: Value) -> Value {
+    json!({"schema": 2, "slots": [
+        {"key": "plant", "type": "number"},
+        {"key": "other", "type": "number"},
+        {"key": "ambient", "type": "computed", "compute": compute}
+    ]})
+}
+
+#[test]
+fn computed_slots_round_trip_and_are_checked() {
+    let offset = json!({"op": "offset", "inputs": ["plant"], "by": "-0.6"});
+    let map = FieldMap::parse(&computed_map(offset.clone())).expect("loads");
+    assert_eq!(map.fields[2].kind, FieldKind::Computed);
+    assert_eq!(map.fields[2].compute.as_ref().unwrap().by, "-0.6");
+    let stored = map.to_value();
+    assert_eq!(stored["slots"][2]["type"], "computed");
+    assert_eq!(stored["slots"][2]["compute"]["op"], "offset");
+    assert_eq!(FieldMap::parse(&stored).expect("again"), map);
+
+    for bad in [
+        json!({"op": "offset", "inputs": ["ambient"], "by": "1"}),
+        json!({"op": "sum", "inputs": ["missing"]}),
+        json!({"op": "sum", "inputs": ["plant", "plant"]}),
+        json!({"op": "offset", "inputs": ["plant"]}),
+        json!({"op": "median", "inputs": ["plant"]}),
+    ] {
+        assert!(
+            FieldMap::parse(&computed_map(bad.clone())).is_err(),
+            "{bad}"
+        );
+    }
+    let no_compute = json!({"schema": 2, "slots": [{"key": "a", "type": "computed"}]});
+    assert!(FieldMap::parse(&no_compute).is_err());
+    let loose =
+        json!({"schema": 1, "fields": [{"key": "a", "compute": {"op": "copy", "inputs": ["a"]}}]});
+    assert!(
+        FieldMap::parse(&loose).is_err(),
+        "compute needs the computed kind"
+    );
+}
+
+#[test]
+fn a_computed_field_cannot_depend_on_another_one_or_be_set_by_a_preset() {
+    let chained = json!({"schema": 2, "slots": [
+        {"key": "a", "type": "number"},
+        {"key": "b", "type": "computed", "compute": {"op": "copy", "inputs": ["a"]}},
+        {"key": "c", "type": "computed", "compute": {"op": "copy", "inputs": ["b"]}}
+    ]});
+    assert!(FieldMap::parse(&chained).is_err());
+    let mut with_preset = computed_map(json!({"op": "copy", "inputs": ["plant"]}));
+    with_preset["presets"] = json!([{"name": "P", "values": {"ambient": "5"}}]);
+    assert!(FieldMap::parse(&with_preset).is_err());
+}
+
+#[test]
+fn render_writes_numbers_and_times_into_excel_cells_as_numbers() {
+    let map = FieldMap::parse(&json!({"schema": 2, "slots": [
+        {"key": "qty", "type": "number", "anchor": {"kind": "cell", "sheet": "Form", "address": "B2"}},
+        {"key": "at", "type": "time", "anchor": {"kind": "cell", "sheet": "Form", "address": "D5"}},
+        {"key": "note", "anchor": {"kind": "cell", "sheet": "Form", "address": "E5"}}
+    ]}))
+    .expect("map");
+    let book = anchors::tests::xlsx("", "");
+    let values = [("qty", "3,5"), ("at", "09:30"), ("note", "3,5")]
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    let (out, _) = render_package(FileKind::Xlsx, &book, &map, &values).expect("render");
+    let mut archive = zip::ZipArchive::new(Cursor::new(out)).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("xl/worksheets/sheet1.xml").unwrap(),
+        &mut xml,
+    )
+    .unwrap();
+    assert!(xml.contains("<v>3.5</v>"), "{xml}");
+    assert!(xml.contains("<v>0.395833333333333</v>"), "{xml}");
+    assert!(
+        xml.contains("<is><t>3,5</t></is>"),
+        "a text field stays text: {xml}"
+    );
 }

@@ -289,10 +289,11 @@ each form, then each form is switched in its own release.
    with Found/Moved/Missing check, marked-cells list beside the file view
    (done).
 6. 1.60.0 Excel optional sheets with the reference check (done).
-7. 1.61.0 Word/Excel repeating `rows` parts.
-8. 1.62.0 categories, output file name pattern, library search.
-9. 1.63.0 `free` mode, `number`/`date`/`choice`/`checkbox` types.
-10. 1.64.0 `computed` parts; then one release per migrated concrete form.
+7. 1.61.0 Word repeating rows (done).
+8. 1.62.0 Excel repeating rows with cloned merges (done).
+9. 1.63.0 categories, library search (done; the output name pattern already existed).
+10. 1.64.0 `free` mode, `number`/`date`/`checkbox` types (done; `choice` stays a suggestion list, checkbox writes text only).
+11. 1.65.0 `computed` parts (done); 1.66.0 numeric and time Excel cells (done); 1.67.0 Follow-Up data source (done); next: ambient temperature rule, then the CON-CIV-010 template; then one release per migrated concrete form.
 
 Every release: four locale keys, traceability/decisions/issues updates, all
 `docs/RELEASE_SAFETY.md` gates. Supabase needs one SQL migration (category

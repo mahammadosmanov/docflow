@@ -5,6 +5,50 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.67.0 - 2026-11-25
+
+### Added
+
+- "Create documents" can read the Concrete Specimen Test Follow-Up workbook (ADR 0058). In RFI Log mode, choose the optional Follow-Up workbook; a template field can then start from its values, for example `{fuBatchTicket}`, `{fuTruck}`, `{fuPlantTemp}`, `{fuPourDate}`, with dates and times shown like RFI Log values. A field starts from the first batch of the RFI; `{fuBatchCount}` is the number of batches. A repeating row whose start value uses these values gets one line per batch (separate columns with a Tab), for example `{fuBatchNo}<Tab>{fuBatchTicket}<Tab>{fuTruck}`. An RFI with no Follow-Up row shows a warning and starts empty, so you can fill it in Preview. Without the workbook these values are empty.
+
+## 1.66.0 - 2026-11-25
+
+### Added
+
+- A new field type, Time (`hh:mm`, for example 09:30), and real numbers in Excel cells (ADR 0058). A Number or Time field that sits in an Excel cell is now written as a number, not as text: a Number keeps its value with a dot as decimal point, and a Time becomes the fraction of a day, so the cell's own number format shows it as a time. In Word, in `{{placeholders}}`, and in repeating rows these fields are still written as text. **A Number field already placed in an Excel cell now writes a number instead of text** (the cell's number format decides how it shows). Templates that use Time are stored as schema 2, so install this version on every computer before publishing one.
+
+## 1.65.0 - 2026-11-25
+
+### Added
+
+- A template field can be Computed (ADR 0058): its value is made from other fields, so the operator types less. Choose the type Computed, one operation, and the fields it uses. Operations: Sum, Difference (first minus second), Add a fixed number (can be negative, for example plant temperature minus 0.6), Round, Copy, and Join text. In Preview a computed value is read-only and updates when its inputs change; the file always gets the freshly computed value. A number keeps the decimals of its inputs unless you set them, and an empty input gives an empty result. A computed field cannot use another computed field. Templates that use it are stored as schema 2, so install this version on every computer before publishing one.
+
+## 1.64.0 - 2026-11-25
+
+### Added
+
+- Template fields have a type (ADR 0058): Text, Number, Date, and Checkbox. Number accepts digits with a `.` or `,`. Date is read as `dd.MM.yyyy`, `dd/MM/yyyy`, or `yyyy-MM-dd` and written in the field's format (default `dd.MM.yyyy`). A Checkbox is a tick box in Preview and writes the checked or unchecked text you set (default ☒ and ☐). A wrong number or date stops in Preview with the field name. Templates that use a type are stored as schema 2, so install this version on every computer before publishing one.
+- "Create documents" has a Source choice: **RFI Log** (as before) or **Without RFI**. Without RFI needs no RFI Log and no numbers: choose how many documents (1 to 100), fill the fields in Preview, and Apply. Documents are named by the file name pattern; until a name part is filled, a document is named `... document-N` so Preview never shows two equal names.
+- Checkboxes written as form fields, content controls, or symbols inside the file are not changed; only text and cells are written.
+
+## 1.63.0 - 2026-11-25
+
+### Added
+
+- Templates have an optional Category, a folder path of up to three levels such as `Concrete/Civil` (ADR 0058). Set it when you create a template or in the editor; the library groups templates by category (by discipline when none is set), and the search box also matches the category. **Before using it, an admin runs the updated `docs/supabase_templates.sql` once** (it adds the `category` column and puts it in the manifest view); until then editing templates fails with a request error. Older DocFlow versions ignore the category.
+
+## 1.62.0 - 2026-11-25
+
+### Added
+
+- Excel templates can mark a row as repeating, like Word (ADR 0058). In the Cells section select the first cell of the row, tick "This row repeats for each line", and set how many columns it covers; in Preview each line becomes one row and a Tab separates the columns. The rows below move down with their formulas, ranges, conditional formatting, and names as Excel's Insert Row moves them; the cloned rows keep the template row's other cells, translated formulas, and single-row merged cells. A row crossed by a vertical merge, a protected sheet, a mapped cell with a formula or inside a merge but not its first cell, and a second marked cell in the same row are refused when the draft is saved.
+
+## 1.61.0 - 2026-11-25
+
+### Added
+
+- Word templates can mark a table row as repeating (ADR 0058). Select a cell in the Cells section, tick "This row repeats for each line", and set how many columns it covers. When documents are generated that field is a multiline value: each line becomes one table row and a Tab separates the columns, so rows copied from Excel paste as they are. The rest of the row, including the other cells and all formatting, is cloned unchanged; up to 200 rows and 20 columns. Rows with vertically merged cells, mapped cells holding pictures, controls, or fields, and a second marked cell in the same row are refused when the draft is saved. Excel repeating rows follow in a later release. A template with a repeating row is stored as schema 2.
+
 ## 1.60.0 - 2026-11-25
 
 ### Added

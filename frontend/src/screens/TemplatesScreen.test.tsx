@@ -19,6 +19,7 @@ const status = (overrides: Partial<TemplateStatus> = {}): TemplateStatus => ({
       code: "QM-FRM-001",
       title: "RFI Form",
       discipline: "GEN",
+      category: "",
       fileKind: "xlsx",
       version: 3,
       publishedAt: null,
@@ -29,6 +30,7 @@ const status = (overrides: Partial<TemplateStatus> = {}): TemplateStatus => ({
       code: "CON-ELE-004",
       title: "Earthing System Resistance Test Report",
       discipline: "ELE",
+      category: "Earthing/Tests",
       fileKind: "docx",
       version: 2,
       publishedAt: null,
@@ -65,7 +67,7 @@ describe("TemplatesScreen", () => {
     render(<TemplatesScreen bridge={bridge} s={s} onBack={vi.fn()} />);
     await screen.findByText("QM-FRM-001");
 
-    fireEvent.click(screen.getByRole("button", { name: /ELE/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Earthing/ }));
     expect(screen.queryByText("QM-FRM-001")).not.toBeInTheDocument();
     expect(screen.getByText("CON-ELE-004")).toBeInTheDocument();
 
@@ -75,6 +77,22 @@ describe("TemplatesScreen", () => {
     });
     expect(screen.getByText("QM-FRM-001")).toBeInTheDocument();
     expect(screen.queryByText("CON-ELE-004")).not.toBeInTheDocument();
+  });
+
+  it("groups by category, falling back to discipline, and searches categories", async () => {
+    const { bridge } = bridgeWith(status({ online: true, lastError: null }));
+    render(<TemplatesScreen bridge={bridge} s={s} onBack={vi.fn()} />);
+    await screen.findByText("QM-FRM-001");
+
+    expect(screen.getByRole("button", { name: /Earthing\/Tests/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /GEN/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^ELE/ })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search by code or title…"), {
+      target: { value: "earthing/te" },
+    });
+    expect(screen.queryByText("QM-FRM-001")).not.toBeInTheDocument();
+    expect(screen.getByText("CON-ELE-004")).toBeInTheDocument();
   });
 
   it("explains when the shared store is not set up", async () => {

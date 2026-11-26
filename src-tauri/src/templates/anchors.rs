@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeMap, sync::LazyLock};
 
+use crate::ooxml::CellUpdate;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,8 @@ use super::{
 };
 
 const MAX_INDEX: u32 = 10_000;
+pub const MAX_REPEAT_COLUMNS: u32 = 20;
+pub const MAX_REPEAT_ROWS: usize = 200;
 
 static ADDRESS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^([A-Z]{1,3})([1-9][0-9]{0,6})$").expect("static address regex"));
@@ -66,6 +69,9 @@ pub struct CellAnchor {
     pub row: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cell: Option<u32>,
+    /// Word only: this many cells from `cell` repeat once per line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat_columns: Option<u32>,
 }
 
 impl CellAnchor {
@@ -78,14 +84,21 @@ impl CellAnchor {
                 let name_ok = !sheet.trim().is_empty()
                     && sheet.chars().count() <= 31
                     && !sheet.contains(['[', ']', ':', '*', '?', '/', '\\']);
-                (name_ok && cell_coordinate(address).is_some())
-                    .then_some(FileKind::Xlsx)
+                let columns = self.repeat_columns.unwrap_or(1);
+                (name_ok
+                    && (1..=MAX_REPEAT_COLUMNS).contains(&columns)
+                    && cell_coordinate(address)
+                        .is_some_and(|(_, column)| column + columns - 1 <= 16_384))
+                .then_some(FileKind::Xlsx)
+                .ok_or_else(invalid)
+            }
+            (None, None, Some(table), Some(row), Some(cell)) => {
+                let columns = self.repeat_columns.unwrap_or(1);
+                ((1..=MAX_REPEAT_COLUMNS).contains(&columns)
+                    && table.max(row).max(cell.saturating_add(columns)) <= MAX_INDEX)
+                    .then_some(FileKind::Docx)
                     .ok_or_else(invalid)
             }
-            (None, None, Some(table), Some(row), Some(cell)) => (table.max(row).max(cell)
-                <= MAX_INDEX)
-                .then_some(FileKind::Docx)
-                .ok_or_else(invalid),
             _ => Err(invalid()),
         }
     }
@@ -105,51 +118,108 @@ pub(super) fn cell_coordinate(address: &str) -> Option<(u32, u32)> {
     (column <= 16_384 && row <= 1_048_576).then_some((row, column))
 }
 
-/// Writes each value into its anchored cell and returns the new package.
+/// Writes each value into its anchored cell as text and returns the new package.
 pub fn apply(
     kind: FileKind,
     package: &[u8],
     anchored: &[(&CellAnchor, &str)],
 ) -> Result<Vec<u8>, String> {
+    let cells = anchored
+        .iter()
+        .map(|(anchor, value)| (*anchor, *value, false))
+        .collect::<Vec<_>>();
+    apply_cells(kind, package, &cells)
+}
+
+/// Like [`apply`]; a `true` flag writes the value into an Excel cell as a
+/// number (the value must then be a plain number). Word always gets text.
+pub fn apply_cells(
+    kind: FileKind,
+    package: &[u8],
+    anchored: &[(&CellAnchor, &str, bool)],
+) -> Result<Vec<u8>, String> {
     if anchored.is_empty() {
         return Ok(package.to_vec());
     }
-    for (anchor, _) in anchored {
+    for (anchor, _, _) in anchored {
         if anchor.kind()? != kind {
             return Err("A cell anchor does not match the template file type".to_string());
         }
     }
     match kind {
         FileKind::Xlsx => apply_excel(package, anchored),
-        FileKind::Docx => apply_word(package, anchored),
+        FileKind::Docx => {
+            let text = anchored
+                .iter()
+                .map(|(anchor, value, _)| (*anchor, *value))
+                .collect::<Vec<_>>();
+            apply_word(package, &text)
+        }
     }
 }
 
-fn apply_excel(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8>, String> {
-    let mut updates = BTreeMap::<String, BTreeMap<(u32, u32), String>>::new();
-    for (anchor, value) in anchored {
+fn apply_excel(package: &[u8], anchored: &[(&CellAnchor, &str, bool)]) -> Result<Vec<u8>, String> {
+    let mut updates = BTreeMap::<String, BTreeMap<(u32, u32), CellUpdate>>::new();
+    let mut repeats = Vec::new();
+    for (anchor, value, numeric) in anchored {
         let (Some(sheet), Some(address)) = (&anchor.sheet, &anchor.address) else {
             return Err("The cell anchor is invalid".to_string());
         };
-        let coordinate = cell_coordinate(address).ok_or("The cell anchor is invalid")?;
-        updates
-            .entry(sheet.clone())
-            .or_default()
-            .insert(coordinate, (*value).to_string());
+        let (row, column) = cell_coordinate(address).ok_or("The cell anchor is invalid")?;
+        match anchor.repeat_columns {
+            None => {
+                updates.entry(sheet.clone()).or_default().insert(
+                    (row, column),
+                    if *numeric {
+                        CellUpdate::Number((*value).to_string())
+                    } else {
+                        CellUpdate::Text((*value).to_string())
+                    },
+                );
+            }
+            Some(columns) => repeats.push(crate::ooxml::RowRepeat {
+                sheet: sheet.clone(),
+                row,
+                first_column: column,
+                lines: rows_of(value, columns)?,
+            }),
+        }
     }
-    crate::ooxml::patch_template_cells(package, &updates)
-        .map_err(|error| format!("Cannot write the template cells: {error}"))
+    let written = crate::ooxml::patch_template_cells(package, &updates)
+        .map_err(|error| format!("Cannot write the template cells: {error}"))?;
+    if repeats.is_empty() {
+        return Ok(written);
+    }
+    // Single cells are written first; rows below a repeating row move with it.
+    crate::ooxml::repeat_template_rows(&written, &repeats)
+        .map_err(|error| format!("Cannot repeat the template rows: {error}"))
 }
 
 fn apply_word(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8>, String> {
+    let (repeats, singles): (Vec<_>, Vec<_>) = anchored
+        .iter()
+        .partition(|(anchor, _)| anchor.repeat_columns.is_some());
+    // Rows lower in a table are expanded first, so a row above is not moved by
+    // the rows added below it. Single cells are written before any expansion.
+    let mut repeats = repeats;
+    repeats.sort_by_key(|(anchor, _)| std::cmp::Reverse((anchor.table, anchor.row)));
     let mut failure: Option<String> = None;
     let output = rewrite_package(package, |name, xml| {
         if name != "word/document.xml" {
             return None;
         }
         let mut current = xml.to_string();
-        for (anchor, value) in anchored {
+        for (anchor, value) in &singles {
             match set_word_cell(&current, anchor, value) {
+                Ok(next) => current = next,
+                Err(error) => {
+                    failure = Some(error);
+                    return None;
+                }
+            }
+        }
+        for (anchor, value) in &repeats {
+            match repeat_word_row(&current, anchor, value) {
                 Ok(next) => current = next,
                 Err(error) => {
                     failure = Some(error);
@@ -160,6 +230,79 @@ fn apply_word(package: &[u8], anchored: &[(&CellAnchor, &str)]) -> Result<Vec<u8
         Some(current)
     })?;
     failure.map_or(Ok(output), Err)
+}
+
+/// Lines become rows and tabs separate the columns. An empty value is one
+/// empty row; trailing empty lines are dropped.
+fn rows_of(value: &str, columns: u32) -> Result<Vec<Vec<String>>, String> {
+    let mut lines = value
+        .split('\n')
+        .map(|line| line.trim_end_matches('\r'))
+        .collect::<Vec<_>>();
+    while lines.len() > 1 && lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    if lines.len() > MAX_REPEAT_ROWS {
+        return Err(format!(
+            "At most {MAX_REPEAT_ROWS} repeated rows are allowed"
+        ));
+    }
+    let width = columns as usize;
+    lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let mut cells = line.split('\t').map(str::to_string).collect::<Vec<_>>();
+            if cells.len() > width {
+                return Err(format!(
+                    "Line {} has more than {columns} columns",
+                    index + 1
+                ));
+            }
+            cells.resize(width, String::new());
+            Ok(cells)
+        })
+        .collect()
+}
+
+/// Replaces the template row with one copy per line, each cell rewritten.
+fn repeat_word_row(xml: &str, anchor: &CellAnchor, value: &str) -> Result<String, String> {
+    let missing = || "The Word table cell was not found in the template".to_string();
+    let (Some(table), Some(row), Some(first), Some(columns)) =
+        (anchor.table, anchor.row, anchor.cell, anchor.repeat_columns)
+    else {
+        return Err("The cell anchor is invalid".to_string());
+    };
+    let tables = element_ranges(xml, "tbl")?;
+    let table_range = tables.get(table as usize).ok_or_else(missing)?.clone();
+    let rows = element_ranges(&xml[table_range.clone()], "tr")?;
+    let row_range = rows.get(row as usize).ok_or_else(missing)?.clone();
+    let start = table_range.start + row_range.start;
+    let end = table_range.start + row_range.end;
+    let row_xml = &xml[start..end];
+    if row_xml.contains("<w:vMerge") {
+        return Err("The Word row has vertically merged cells and cannot repeat".to_string());
+    }
+    let cells = element_ranges(row_xml, "tc")?;
+    if (first + columns) as usize > cells.len() {
+        return Err(missing());
+    }
+    let data = rows_of(value, columns)?;
+    let mut copies = String::with_capacity(row_xml.len() * data.len());
+    for line in &data {
+        let mut copy = row_xml.to_string();
+        for (offset, text) in line.iter().enumerate().rev() {
+            let range = cells[first as usize + offset].clone();
+            let rewritten = rewrite_cell(&row_xml[range.clone()], text)?;
+            copy.replace_range(range, &rewritten);
+        }
+        copies.push_str(&copy);
+    }
+    let mut output = String::with_capacity(xml.len() + copies.len());
+    output.push_str(&xml[..start]);
+    output.push_str(&copies);
+    output.push_str(&xml[end..]);
+    Ok(output)
 }
 
 /// Byte ranges of the `index`-th element of `tag` in `xml`, where the

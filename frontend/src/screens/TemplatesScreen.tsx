@@ -67,7 +67,12 @@ export function TemplatesScreen({
   const [editor, setEditor] = useState<TemplateEditorState | null>(null);
   const [editing, setEditing] = useState<TemplateDraft | null>(null);
   const [creating, setCreating] = useState(false);
-  const [newTemplate, setNewTemplate] = useState({ code: "", title: "", discipline: "" });
+  const [newTemplate, setNewTemplate] = useState({
+    code: "",
+    title: "",
+    discipline: "",
+    category: "",
+  });
 
   const run = useCallback(
     async (sync: boolean) => {
@@ -118,10 +123,11 @@ export function TemplatesScreen({
         code: newTemplate.code.trim(),
         title: newTemplate.title.trim(),
         discipline: newTemplate.discipline.trim().toUpperCase(),
+        category: newTemplate.category.trim(),
       });
       if (draft) {
         setCreating(false);
-        setNewTemplate({ code: "", title: "", discipline: "" });
+        setNewTemplate({ code: "", title: "", discipline: "", category: "" });
         setEditing(draft);
       }
     } catch (reason) {
@@ -134,17 +140,20 @@ export function TemplatesScreen({
     (item) => !status?.templates.some((cached) => cached.code === item.code),
   );
 
-  const disciplines = useMemo(
-    () => [...new Set(status?.templates.map((item) => item.discipline))].sort(),
+  const groupOf = (item: { category: string; discipline: string }) =>
+    item.category || item.discipline;
+  const groups = useMemo(
+    () => [...new Set(status?.templates.map(groupOf))].sort(),
     [status],
   );
   const needle = query.trim().toLowerCase();
   const visible = (status?.templates ?? []).filter(
     (item) =>
-      (discipline === "all" || item.discipline === discipline) &&
+      (discipline === "all" || groupOf(item) === discipline) &&
       (!needle ||
         item.code.toLowerCase().includes(needle) ||
-        item.title.toLowerCase().includes(needle)),
+        item.title.toLowerCase().includes(needle) ||
+        groupOf(item).toLowerCase().includes(needle)),
   );
   const lastSynced =
     status?.lastSyncedAt != null
@@ -259,7 +268,7 @@ export function TemplatesScreen({
               )}
             </div>
             <div className="category-filter-chips">
-              {["all", ...disciplines].map((value) => (
+              {["all", ...groups].map((value) => (
                 <button
                   key={value}
                   type="button"
@@ -272,7 +281,7 @@ export function TemplatesScreen({
                     {value === "all"
                       ? status.templates.length
                       : status.templates.filter(
-                          (item) => item.discipline === value,
+                          (item) => groupOf(item) === value,
                         ).length}
                   </span>
                 </button>
@@ -288,7 +297,7 @@ export function TemplatesScreen({
                   <small>{item.title}</small>
                 </div>
                 <span className="template-meta">
-                  <span className="category-tag">{item.discipline}</span>
+                  <span className="category-tag">{groupOf(item)}</span>
                   <span className="status-label">
                     {s.t("templates.version", { version: item.version })}
                   </span>
@@ -370,6 +379,7 @@ export function TemplatesScreen({
               onChange={(event) => {
                 const discipline = event.target.value;
                 setNewTemplate({
+                  ...newTemplate,
                   discipline,
                   code: withDisciplinePrefix(newTemplate.code, discipline),
                   title: withDisciplinePrefix(newTemplate.title, discipline),
@@ -385,6 +395,18 @@ export function TemplatesScreen({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="field">
+            <span>{s.t("templates.editor.category")}</span>
+            <input
+              value={newTemplate.category}
+              placeholder="Concrete/Civil"
+              maxLength={122}
+              onChange={(event) =>
+                setNewTemplate({ ...newTemplate, category: event.target.value })
+              }
+            />
+            <small>{s.t("templates.editor.category.help")}</small>
           </label>
           <label className="field">
             <span>{s.t("templates.editor.code")}</span>

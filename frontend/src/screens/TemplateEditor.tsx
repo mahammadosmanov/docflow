@@ -7,6 +7,7 @@ import { type Bridge } from "../lib/bridge";
 import { humanError } from "../helpers";
 import { Modal } from "../components/Modal";
 import { TEMPLATE_DISCIPLINES, withDisciplinePrefix } from "../lib/templateDiscipline";
+import { TemplateCompute } from "./TemplateCompute";
 import { TemplateCells, cellLocation } from "./TemplateCells";
 import { TemplateDocument } from "./TemplateDocument";
 import {
@@ -36,6 +37,28 @@ const LOG_TOKENS = [
   "today",
 ];
 
+/** Concrete Specimen Test Follow-Up values (one line per batch in a repeating row). */
+const FOLLOW_UP_TOKENS = [
+  "fuBatchTicket",
+  "fuTruck",
+  "fuConcreteClass",
+  "fuSupplier",
+  "fuBatchTime",
+  "fuStartTime",
+  "fuEndTime",
+  "fuQuantity",
+  "fuTotalQuantity",
+  "fuPlantSlump",
+  "fuInSituSlump",
+  "fuPlantTemp",
+  "fuInSituTemp",
+  "fuSamples",
+  "fuDrawing",
+  "fuPourDate",
+  "fuBatchNo",
+  "fuBatchCount",
+];
+
 const lines = (text: string) =>
   text
     .split("\n")
@@ -59,6 +82,7 @@ export function TemplateEditor({
   const [title, setTitle] = useState(initial.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [discipline, setDiscipline] = useState(initial.discipline);
+  const [category, setCategory] = useState(initial.category);
   const [map, setMap] = useState<TemplateFieldMap>(initial.fieldMap);
   const [optionText, setOptionText] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -78,6 +102,7 @@ export function TemplateEditor({
     setCode(next.code);
     setTitle(next.title);
     setDiscipline(next.discipline);
+    setCategory(next.category);
     setMap(next.fieldMap);
     setOptionText(
       Object.fromEntries(
@@ -119,6 +144,7 @@ export function TemplateEditor({
       code: code.trim(),
       title: title.trim(),
       discipline: discipline.trim().toUpperCase(),
+      category: category.trim(),
       fieldMap: currentMap(),
     });
     load(next);
@@ -230,6 +256,16 @@ export function TemplateEditor({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="field">
+              <span>{s.t("templates.editor.category")}</span>
+              <input
+                value={category}
+                placeholder="Concrete/Civil"
+                maxLength={122}
+                onChange={(event) => setCategory(event.target.value)}
+              />
+              <small>{s.t("templates.editor.category.help")}</small>
             </label>
             <label className="field">
               <span>{s.t("templates.editor.code")}</span>
@@ -377,6 +413,11 @@ export function TemplateEditor({
               tokens: LOG_TOKENS.map((token) => `{${token}}`).join(" "),
             })}
           </p>
+          <p className="muted">
+            {s.t("templates.editor.fields.followUpHelp", {
+              tokens: FOLLOW_UP_TOKENS.map((token) => `{${token}}`).join(" "),
+            })}
+          </p>
           {map.fields.length === 0 && (
             <p className="muted">{s.t("templates.editor.noFields")}</p>
           )}
@@ -438,24 +479,82 @@ export function TemplateEditor({
                     )}
                   </label>
                   <label className="field">
-                    <span>{s.t("templates.editor.options")}</span>
-                    <textarea
-                      rows={2}
-                      value={optionText[field.key] ?? ""}
-                      onChange={(event) =>
-                        setOptionText({ ...optionText, [field.key]: event.target.value })
-                      }
-                    />
+                    <span>{s.t("templates.editor.type")}</span>
+                    <select
+                      value={field.kind ?? "text"}
+                      onChange={(event) => {
+                        const kind = event.target.value as NonNullable<TemplateFieldMap["fields"][number]["kind"]>;
+                        if (kind !== "text") {
+                          setOptionText({ ...optionText, [field.key]: "" });
+                        }
+                        updateField(
+                          index,
+                          kind === "text"
+                            ? { kind, format: "", compute: undefined }
+                            : {
+                                kind,
+                                format: "",
+                                multiline: false,
+                                value: kind === "computed" ? "" : field.value,
+                                compute:
+                                  kind === "computed"
+                                    ? (field.compute ?? { op: "sum", inputs: [] })
+                                    : undefined,
+                              },
+                        );
+                      }}
+                    >
+                      {(["text", "number", "date", "time", "checkbox", "computed"] as const).map((kind) => (
+                        <option key={kind} value={kind}>
+                          {s.t(`templates.editor.type.${kind}`)}
+                        </option>
+                      ))}
+                    </select>
                   </label>
+                  {(field.kind === "date" || field.kind === "checkbox") && (
+                    <label className="field">
+                      <span>{s.t("templates.editor.format")}</span>
+                      <input
+                        value={field.format ?? ""}
+                        placeholder={field.kind === "date" ? "dd.MM.yyyy" : "☒|☐"}
+                        onChange={(event) => updateField(index, { format: event.target.value })}
+                      />
+                      <small>{s.t(`templates.editor.format.${field.kind}`)}</small>
+                    </label>
+                  )}
+                  {(field.kind ?? "text") === "text" && (
+                    <label className="field">
+                      <span>{s.t("templates.editor.options")}</span>
+                      <textarea
+                        rows={2}
+                        value={optionText[field.key] ?? ""}
+                        onChange={(event) =>
+                          setOptionText({ ...optionText, [field.key]: event.target.value })
+                        }
+                      />
+                    </label>
+                  )}
                 </div>
-                <label className="toggle-inline">
-                  <input
-                    type="checkbox"
-                    checked={field.multiline}
-                    onChange={(event) => updateField(index, { multiline: event.target.checked })}
+                {field.kind === "computed" && (
+                  <TemplateCompute
+                    s={s}
+                    field={field}
+                    others={map.fields.filter(
+                      (other) => other.key !== field.key && other.kind !== "computed",
+                    )}
+                    onChange={(compute) => updateField(index, { compute })}
                   />
-                  {s.t("templates.editor.multiline")}
-                </label>
+                )}
+                {(field.kind ?? "text") === "text" && (
+                  <label className="toggle-inline">
+                    <input
+                      type="checkbox"
+                      checked={field.multiline}
+                      onChange={(event) => updateField(index, { multiline: event.target.checked })}
+                    />
+                    {s.t("templates.editor.multiline")}
+                  </label>
+                )}
               </div>
             );
           })}

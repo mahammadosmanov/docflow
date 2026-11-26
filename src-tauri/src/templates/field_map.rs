@@ -17,7 +17,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-use super::{FileKind, MAX_FIELDS, anchors::CellAnchor};
+use super::{
+    FileKind, MAX_FIELDS,
+    anchors::CellAnchor,
+    compute::Compute,
+    values::{FieldKind, cell_number, check_format},
+};
 
 pub const MAX_PRESETS: usize = 500;
 const MAX_OPTIONAL_SHEETS: usize = 100;
@@ -78,6 +83,15 @@ pub struct FieldDef {
     /// Where the field sits when it is not a `{{placeholder}}` (schema 2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<CellAnchor>,
+    /// How the value is checked and written (schema 2 when not text).
+    #[serde(default, skip_serializing_if = "FieldKind::is_text")]
+    pub kind: FieldKind,
+    /// Date pattern (`dd.MM.yyyy`) or checkbox texts (`Yes|No`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub format: String,
+    /// How a `computed` field is made; required for that kind, refused otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compute: Option<Compute>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -163,6 +177,53 @@ impl FieldMap {
             {
                 return Err(format!("Field \"{}\" is too long", field.key));
             }
+            check_format(field.kind, &field.format)
+                .map_err(|error| format!("Field \"{}\": {error}", field.key))?;
+            let repeats = field
+                .anchor
+                .as_ref()
+                .is_some_and(|anchor| anchor.repeat_columns.is_some());
+            if !field.kind.is_text() && (field.multiline || repeats || !field.options.is_empty()) {
+                return Err(format!(
+                    "Field \"{}\" has a type that cannot be combined with lines or choices",
+                    field.key
+                ));
+            }
+        }
+        for field in &self.fields {
+            let is_computed = field.kind == FieldKind::Computed;
+            if is_computed != field.compute.is_some() {
+                return Err(format!(
+                    "Field \"{}\" needs a computation exactly when its type is computed",
+                    field.key
+                ));
+            }
+            if let Some(compute) = &field.compute {
+                compute
+                    .check()
+                    .map_err(|error| format!("Field \"{}\": {error}", field.key))?;
+                if !field.value.is_empty() {
+                    return Err(format!(
+                        "Field \"{}\" is computed and has no start",
+                        field.key
+                    ));
+                }
+                let usable = |key: &String| {
+                    key != &field.key
+                        && self
+                            .fields
+                            .iter()
+                            .any(|other| &other.key == key && other.kind != FieldKind::Computed)
+                };
+                let unique =
+                    compute.inputs.iter().collect::<BTreeSet<_>>().len() == compute.inputs.len();
+                if !unique || !compute.inputs.iter().all(usable) {
+                    return Err(format!(
+                        "Field \"{}\" must use other fields that are not computed",
+                        field.key
+                    ));
+                }
+            }
         }
         let mut sheet_names = BTreeSet::new();
         if self.optional_sheets.len() > MAX_OPTIONAL_SHEETS
@@ -184,6 +245,18 @@ impl FieldMap {
                         field.key
                     ));
                 }
+                // A repeating row is cloned whole, so nothing else may sit in it.
+                let same_row = |other: &CellAnchor| {
+                    anchor_row(other).is_some()
+                        && anchor_row(other) == anchor_row(anchor)
+                        && (other.repeat_columns.is_some() || anchor.repeat_columns.is_some())
+                };
+                if anchors.iter().any(|other| same_row(other)) {
+                    return Err(format!(
+                        "Field \"{}\" shares its row with a repeating row",
+                        field.key
+                    ));
+                }
                 anchors.push(anchor);
             }
         }
@@ -194,7 +267,11 @@ impl FieldMap {
                 return Err(format!("Preset \"{}\" is empty or repeated", preset.name));
             }
             for (key, value) in &preset.values {
-                if !keys.contains(key.as_str()) || long(value) {
+                let computed = self
+                    .fields
+                    .iter()
+                    .any(|field| &field.key == key && field.kind == FieldKind::Computed);
+                if !keys.contains(key.as_str()) || computed || long(value) {
                     return Err(format!(
                         "Preset \"{}\" sets an unknown field \"{key}\"",
                         preset.name
@@ -237,8 +314,20 @@ impl FieldMap {
                 options: Vec::new(),
                 multiline: false,
                 anchor: None,
+                ..FieldDef::default()
             });
         }
+    }
+}
+
+/// The table or sheet and the row an anchor sits in.
+fn anchor_row(anchor: &CellAnchor) -> Option<(String, u32)> {
+    match (&anchor.sheet, &anchor.address, anchor.table, anchor.row) {
+        (Some(sheet), Some(address), _, _) => {
+            super::anchors::cell_coordinate(address).map(|(row, _)| (format!("s:{sheet}"), row))
+        }
+        (_, _, Some(table), Some(row)) => Some((format!("t:{table}"), row)),
+        _ => None,
     }
 }
 
@@ -376,10 +465,23 @@ pub fn render_package(
         .iter()
         .filter_map(|field| {
             let value = values.get(&field.key).map_or("", String::as_str);
-            field.anchor.as_ref().map(|anchor| (anchor, value))
+            field.anchor.as_ref().map(|anchor| {
+                // A number or time in an Excel cell is a number, not text.
+                match cell_number(field, value) {
+                    Some(number) if anchor.repeat_columns.is_none() => (anchor, number, true),
+                    _ => (anchor, value.to_string(), false),
+                }
+            })
         })
         .collect::<Vec<_>>();
-    Ok((super::anchors::apply(kind, &filled, &anchored)?, missing))
+    let anchored = anchored
+        .iter()
+        .map(|(anchor, value, numeric)| (*anchor, value.as_str(), *numeric))
+        .collect::<Vec<_>>();
+    Ok((
+        super::anchors::apply_cells(kind, &filled, &anchored)?,
+        missing,
+    ))
 }
 
 /// Writes `values` into every `{{key}}` and returns the new package plus the

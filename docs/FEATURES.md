@@ -38,7 +38,9 @@
   its label, or missing) and holds Publish until each is resolved; Version
   history restores an earlier version as the draft. In an Excel template with
   several sheets, editors can mark sheets optional; each document then has a
-  checkbox per optional sheet in Preview. Editors pick the discipline (ELE, MEC, CIV,
+  checkbox per optional sheet in Preview. A Word table row or an Excel row can repeat:
+  each line typed or pasted in Preview becomes a row, Tab separating columns.
+  Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
   (`templates.generate_document`) fills a cached template for one or more RFI
@@ -46,7 +48,14 @@
   added); Preview lets the user pick a preset and edit any
   value per document, and Apply writes new files only, with Undo. An admin
   must run
-  `docs/supabase_templates.sql` once before the shared store works.
+  `docs/supabase_templates.sql` once before the shared store works. A template
+  can have a Category (folder path, up to three levels); the library groups by
+  it and the search box matches it. A field can be typed Text, Number, Date
+  (with a format), or Checkbox, and "Create documents" can run without an RFI
+  Log (Source: Without RFI, 1 to 100 documents filled in Preview). A field can
+  also be Computed from other fields (sum, difference, add a fixed number, round,
+  copy, join text); Preview shows it read-only. In RFI Log mode an optional
+  Follow-Up workbook gives fields batch values such as `{fuBatchTicket}`.
 - Windows x64 checks the latest stable GitHub Release on startup and lets the
   user inspect release notes and install a cryptographically signed update.
   The first update-capable release must be installed manually once. macOS

@@ -1097,3 +1097,7 @@ textarea[aria-invalid="true"] {
   display: block;
   color: var(--muted);
 }
+.cell-columns {
+  flex: 0 0 90px;
+  min-width: 80px;
+}

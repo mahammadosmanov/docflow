@@ -13,7 +13,9 @@ use std::sync::LazyLock;
 
 use super::{
     anchors::CellAnchor,
+    compute::Compute,
     field_map::{FieldDef, FieldMap, PresetDef},
+    values::FieldKind,
 };
 
 static LOG_TOKEN: LazyLock<Regex> =
@@ -46,6 +48,10 @@ struct Slot {
     source: Option<Source>,
     #[serde(default)]
     options: Vec<String>,
+    #[serde(default)]
+    format: String,
+    #[serde(default)]
+    compute: Option<Compute>,
 }
 
 #[derive(Deserialize)]
@@ -71,12 +77,26 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
         let anchor = match slot.anchor {
             None => None,
             Some(anchor) if anchor.kind == "placeholder" => None,
-            Some(anchor) if anchor.kind == "cell" => Some(anchor.cell),
+            Some(anchor) if anchor.kind == "cell" && anchor.cell.repeat_columns.is_none() => {
+                Some(anchor.cell)
+            }
+            Some(anchor) if anchor.kind == "rows" => {
+                if anchor.cell.repeat_columns.is_none() {
+                    return Err(invalid());
+                }
+                Some(anchor.cell)
+            }
+            Some(anchor) if anchor.kind == "cell" => return Err(invalid()),
             Some(_) => return Err(NEWER.to_string()),
         };
-        let multiline = match slot.kind.as_deref() {
-            None | Some("text" | "choice") => false,
-            Some("multiline") => true,
+        let (multiline, kind) = match slot.kind.as_deref() {
+            None | Some("text" | "choice") => (false, FieldKind::Text),
+            Some("multiline") => (true, FieldKind::Text),
+            Some("number") => (false, FieldKind::Number),
+            Some("date") => (false, FieldKind::Date),
+            Some("time") => (false, FieldKind::Time),
+            Some("checkbox") => (false, FieldKind::Checkbox),
+            Some("computed") => (false, FieldKind::Computed),
             Some(_) => return Err(NEWER.to_string()),
         };
         let start = match slot.source {
@@ -96,6 +116,9 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
             options: slot.options,
             multiline,
             anchor,
+            kind,
+            format: slot.format,
+            compute: slot.compute,
         });
     }
     let mut result = FieldMap::default();
@@ -113,14 +136,21 @@ pub fn parse(value: &Value) -> Result<FieldMap, String> {
 /// cell anchor, otherwise schema 2. An older install reads schema 1 and
 /// lists schema 2 as unsupported, so it never silently skips an anchored cell.
 pub fn to_value(map: &FieldMap) -> Value {
-    if map.fields.iter().all(|field| field.anchor.is_none()) && map.optional_sheets.is_empty() {
+    if map
+        .fields
+        .iter()
+        .all(|field| field.anchor.is_none() && field.kind.is_text())
+        && map.optional_sheets.is_empty()
+    {
         return serde_json::to_value(map).unwrap_or(Value::Null);
     }
     let slots = map
         .fields
         .iter()
         .map(|field| {
-            let kind = if field.multiline {
+            let kind = if !field.kind.is_text() {
+                field.kind.name()
+            } else if field.multiline {
                 "multiline"
             } else if field.options.is_empty() {
                 "text"
@@ -131,7 +161,11 @@ pub fn to_value(map: &FieldMap) -> Value {
                 || json!({"kind": "placeholder"}),
                 |cell| {
                     let mut value = serde_json::to_value(cell).unwrap_or(Value::Null);
-                    value["kind"] = json!("cell");
+                    value["kind"] = json!(if cell.repeat_columns.is_some() {
+                        "rows"
+                    } else {
+                        "cell"
+                    });
                     value
                 },
             );
@@ -153,6 +187,8 @@ pub fn to_value(map: &FieldMap) -> Value {
                 "anchor": anchor,
                 "source": source,
                 "options": field.options,
+                "format": field.format,
+                "compute": field.compute,
             })
         })
         .collect::<Vec<_>>();

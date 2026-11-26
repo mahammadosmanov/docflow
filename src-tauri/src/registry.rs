@@ -159,6 +159,28 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
 }
 
 fn template_document_operation(templates: &[String]) -> OperationDef {
+    let when = |mode: &str| Map::from_iter([("mode".to_string(), json!(mode))]);
+    let mut rfi_numbers = transient_parameter(
+        "rfi_numbers",
+        ParamKind::LongText,
+        "param.templates.rfiNumbers",
+        json!(""),
+        Some("param.templates.rfiNumbers.help"),
+    );
+    rfi_numbers.visible_when = when("rfi");
+    let mut count = parameter(
+        "document_count",
+        ParamKind::Int,
+        "param.templates.documentCount",
+        json!(1),
+        false,
+        Vec::new(),
+        BTreeMap::new(),
+        when("free"),
+        Some("param.templates.documentCount.help"),
+    );
+    count.min = Some(1);
+    count.max = Some(100);
     operation(
         crate::template_documents::OPERATION_ID,
         vec![
@@ -174,23 +196,40 @@ fn template_document_operation(templates: &[String]) -> OperationDef {
                 Some("param.templates.template.help"),
             ),
             parameter(
+                "mode",
+                ParamKind::Choice,
+                "param.templates.mode",
+                json!("rfi"),
+                true,
+                strings(&["rfi", "free"]),
+                prefixed_labels("param.templates.mode", &["rfi", "free"]),
+                Map::new(),
+                Some("param.templates.mode.help"),
+            ),
+            parameter(
                 "rfi_log_workbook",
                 ParamKind::File,
                 "param.templates.rfiLog",
                 Value::Null,
-                true,
+                false,
                 Vec::new(),
                 BTreeMap::new(),
-                Map::new(),
+                when("rfi"),
                 None,
             ),
-            transient_parameter(
-                "rfi_numbers",
-                ParamKind::LongText,
-                "param.templates.rfiNumbers",
-                json!(""),
-                Some("param.templates.rfiNumbers.help"),
+            parameter(
+                "follow_up_workbook",
+                ParamKind::File,
+                "param.templates.followUp",
+                Value::Null,
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                when("rfi"),
+                Some("param.templates.followUp.help"),
             ),
+            rfi_numbers,
+            count,
             parameter(
                 "output_directory",
                 ParamKind::Folder,

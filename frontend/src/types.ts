@@ -285,6 +285,8 @@ export interface TemplateSummary {
   code: string;
   title: string;
   discipline: string;
+  /** Folder path such as `Concrete/Civil`; empty when none is set. */
+  category: string;
   fileKind: "xlsx" | "docx";
   version: number;
   publishedAt: string | null;
@@ -310,6 +312,18 @@ export interface CellAnchor {
   table?: number;
   row?: number;
   cell?: number;
+  /** Word only: this many cells from `cell` repeat once per line. */
+  repeatColumns?: number;
+}
+
+export type ComputeOp = "sum" | "difference" | "offset" | "round" | "copy" | "concat";
+
+export interface FieldCompute {
+  op: ComputeOp;
+  inputs: string[];
+  by?: string;
+  decimals?: number;
+  separator?: string;
 }
 
 export interface TemplateField {
@@ -318,6 +332,12 @@ export interface TemplateField {
   value: string;
   options: string[];
   multiline: boolean;
+  /** How the value is checked and written; text when absent. */
+  kind?: "text" | "number" | "date" | "time" | "checkbox" | "computed";
+  /** Present exactly when `kind` is `computed`. */
+  compute?: FieldCompute;
+  /** Date pattern such as `dd.MM.yyyy`, or checkbox texts such as `Yes|No`. */
+  format?: string;
   /** Set when the field is a cell instead of a `{{placeholder}}`. */
   anchor?: CellAnchor;
 }
@@ -394,6 +414,7 @@ export interface EditableTemplate {
   code: string;
   title: string;
   discipline: string;
+  category: string;
   fileKind: "xlsx" | "docx";
   currentVersion: number | null;
   draftVersion: number | null;
@@ -411,6 +432,7 @@ export interface TemplateDraft {
   code: string;
   title: string;
   discipline: string;
+  category: string;
   fileKind: "xlsx" | "docx";
   fieldMap: TemplateFieldMap;
   placeholders: string[];

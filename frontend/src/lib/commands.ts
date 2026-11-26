@@ -158,7 +158,7 @@ export interface FrontendCommandMap {
   "templates/editable": CommandSpec<NoParams, TemplateEditorState>;
   "templates/openDraft": CommandSpec<{ code: string }, TemplateDraft>;
   "templates/create": CommandSpec<
-    { code: string; title: string; discipline: string },
+    { code: string; title: string; discipline: string; category: string },
     TemplateDraft | null
   >;
   "templates/replaceFile": CommandSpec<{ versionId: string }, TemplateDraft | null>;
@@ -168,6 +168,7 @@ export interface FrontendCommandMap {
       code: string;
       title: string;
       discipline: string;
+      category: string;
       fieldMap: TemplateFieldMap;
     },
     TemplateDraft

@@ -41,6 +41,16 @@ create table if not exists public.doc_templates (
   constraint doc_templates_discipline_ok check (discipline ~ '^[A-Z]{2,8}$')
 );
 
+-- 1.63.0: an operator-defined folder path such as 'Concrete/Civil' (up to three
+-- levels). Empty means none. Older clients ignore the column.
+alter table public.doc_templates
+  add column if not exists category text not null default '';
+
+do $$ begin
+  alter table public.doc_templates add constraint doc_templates_category_ok
+    check (category = '' or category ~ '^[^/\\:*?"<>|[:cntrl:]]{1,40}(/[^/\\:*?"<>|[:cntrl:]]{1,40}){0,2}$');
+exception when duplicate_object then null; end $$;
+
 create unique index if not exists doc_templates_code_key
   on public.doc_templates (upper(code));
 
@@ -131,7 +141,8 @@ select t.id          as template_id,
        v.storage_path,
        v.field_map,
        v.published_at,
-       t.updated_at
+       t.updated_at,
+       t.category
   from public.doc_templates t
   join public.doc_template_versions v
     on v.template_id = t.id and v.version = t.current_version

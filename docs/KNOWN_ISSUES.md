@@ -28,6 +28,39 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   open a generated file with merged cells, a styled empty cell, and a formula
   sheet. Publish a template with marked cells only after every install runs
   1.55.0 or later.
+- Repeating Word rows (ADR 0058, 1.61.0) are verified with synthetic tables only.
+  Windows acceptance: generate a document from a real form with a repeating row
+  and confirm Word opens it, the row formatting survives, and the page breaks
+  sensibly.
+- The Follow-Up source (ADR 0058, 1.67.0) is verified with synthetic workbooks only.
+  It uses the legacy Follow-Up reader, so it matches Civil (CIV) RFIs only. The
+  legacy CON-CIV-010 form puts each batch on every second worksheet row (19, 21,
+  23, ...); a repeating row inserts adjacent rows and refuses vertical merges, so
+  that two-row layout may not fit and needs the real form to decide.
+- Number and time cells (ADR 0058, 1.66.0) are verified with synthetic workbooks
+  only. A time is stored as the fraction of a day with 15 decimals, as the legacy
+  CON-CIV-010 writer does; the cell must already have a time number format, which
+  the writer does not set. Windows Excel acceptance is not claimed.
+- Computed template fields (ADR 0058, 1.65.0) are verified with synthetic files
+  only and are not yet used by CON-CIV-010/011/013/014. The legacy ambient
+  temperature picks a pseudo-random offset per record; a template can only add
+  one fixed number, so it cannot reproduce that exactly. Numbers are computed in
+  floating point and rounded half away from zero to at most 6 decimals.
+- Template field types and free mode (ADR 0058, 1.64.0) are verified with synthetic
+  files only. A Checkbox writes text (☒ or ☐ or your words); it does not tick a
+  Word form-field or content-control checkbox, and Windows Word/Excel acceptance
+  of the written symbols and fonts is not claimed. A choice list still only
+  suggests values. A template that uses a type needs 1.64.0 on every computer.
+- Template categories (ADR 0058, 1.63.0) need the updated
+  `docs/supabase_templates.sql` run once on the live project before the editor can
+  list or save templates; the SQL was not run against a live Supabase project here.
+  The discipline stays required (2 to 8 capital letters) and still drives RFI number
+  shorthand; the category is only for grouping.
+- Repeating Excel rows (ADR 0058, 1.62.0) are verified with synthetic workbooks only.
+  Windows acceptance: generate a CON-CIV-010 style sheet with several rows, check
+  merges, borders, formulas, row heights, print area, and that Excel opens it
+  without a repair prompt. Data validation, hyperlinks, and drawings on the
+  template row are not cloned.
 - Optional Excel sheets (ADR 0058, 1.60.0) are verified with synthetic workbooks only.
   Windows acceptance: generate a damage workbook with a photo sheet left out and
   confirm Excel opens it without a repair prompt; conditional formatting, data

@@ -28,6 +28,7 @@ pub struct EditableTemplate {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    pub category: String,
     pub file_kind: FileKind,
     pub current_version: Option<u32>,
     pub draft_version: Option<u32>,
@@ -43,6 +44,7 @@ pub struct TemplateDraft {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    pub category: String,
     pub file_kind: FileKind,
     pub field_map: FieldMap,
     pub placeholders: Vec<String>,
@@ -85,6 +87,8 @@ pub struct NewTemplate {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    #[serde(default)]
+    pub category: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +99,8 @@ pub struct SaveDraft {
     pub code: String,
     pub title: String,
     pub discipline: String,
+    #[serde(default)]
+    pub category: String,
     pub field_map: Value,
 }
 
@@ -130,6 +136,8 @@ struct TemplateRow {
     code: String,
     title: String,
     discipline: String,
+    #[serde(default)]
+    category: String,
     file_kind: FileKind,
     current_version: Option<u32>,
     #[serde(default)]
@@ -195,6 +203,29 @@ fn check_identity(code: Option<&str>, title: &str, discipline: &str) -> Result<(
     Ok(())
 }
 
+/// A category is a folder path of up to three levels, such as
+/// `Concrete/Civil`. Returns it trimmed, with one `/` between levels.
+pub(super) fn normalize_category(raw: &str) -> Result<String, BackendError> {
+    let invalid = || BackendError::validation("error.templates.categoryInvalid");
+    if raw.trim().is_empty() {
+        return Ok(String::new());
+    }
+    let levels = raw.split('/').map(str::trim).collect::<Vec<_>>();
+    let level_ok = |level: &&str| {
+        let length = level.chars().count();
+        (1..=40).contains(&length)
+            && *level != ".."
+            && *level != "."
+            && !level
+                .chars()
+                .any(|ch| ch.is_control() || "\\:*?\"<>|".contains(ch))
+    };
+    if levels.len() > 3 || !levels.iter().all(level_ok) {
+        return Err(invalid());
+    }
+    Ok(levels.join("/"))
+}
+
 /// The file kind from a picked file's name, checked against its content.
 pub fn file_kind_of(name: &str, bytes: &[u8]) -> Result<FileKind, BackendError> {
     let lower = name.to_ascii_lowercase();
@@ -224,7 +255,7 @@ impl TemplateStore {
     pub fn editable(&self, now: i64) -> Result<Vec<EditableTemplate>, BackendError> {
         let rows: Vec<TemplateRow> = serde_json::from_value(self.remote.rest(
             "GET",
-            "doc_templates?select=id,code,title,discipline,file_kind,current_version,\
+            "doc_templates?select=id,code,title,discipline,category,file_kind,current_version,\
              doc_template_versions(id,version,status)&archived=is.false&order=code.asc&limit=500",
             None,
             now,
@@ -243,6 +274,7 @@ impl TemplateStore {
                 code: row.code,
                 title: row.title,
                 discipline: row.discipline,
+                category: row.category,
                 file_kind: row.file_kind,
                 current_version: row.current_version,
             })
@@ -253,7 +285,7 @@ impl TemplateStore {
         single(self.remote.rest(
             "GET",
             &format!(
-                "doc_templates?select=id,code,title,discipline,file_kind,current_version,\
+                "doc_templates?select=id,code,title,discipline,category,file_kind,current_version,\
                  doc_template_versions(id,version,status)&{filter}&limit=1"
             ),
             None,
@@ -302,10 +334,22 @@ impl TemplateStore {
         version: &VersionRow,
         now: i64,
     ) -> Result<(), BackendError> {
+        // A repeating row is tried with two lines, so cloning it is checked too.
         let anchored = field_map
             .fields
             .iter()
-            .filter_map(|field| field.anchor.as_ref().map(|anchor| (anchor, "")))
+            .filter_map(|field| {
+                field.anchor.as_ref().map(|anchor| {
+                    (
+                        anchor,
+                        if anchor.repeat_columns.is_some() {
+                            "x\nx"
+                        } else {
+                            ""
+                        },
+                    )
+                })
+            })
             .collect::<Vec<_>>();
         if anchored.is_empty() && field_map.optional_sheets.is_empty() {
             return Ok(());
@@ -374,6 +418,7 @@ impl TemplateStore {
                     options: Vec::new(),
                     multiline: false,
                     anchor: None,
+                    ..FieldDef::default()
                 };
                 match field_map.fields.iter_mut().find(|item| item.key == def.key) {
                     Some(existing) => {
@@ -449,6 +494,7 @@ impl TemplateStore {
             code: template.code.clone(),
             title: template.title.clone(),
             discipline: template.discipline.clone(),
+            category: template.category.clone(),
             file_kind: template.file_kind,
             field_map,
             placeholders: found,
@@ -511,6 +557,7 @@ impl TemplateStore {
         now: i64,
     ) -> Result<TemplateDraft, BackendError> {
         check_identity(Some(&request.code), &request.title, &request.discipline)?;
+        let category = normalize_category(&request.category)?;
         let kind = file_kind_of(file_name, bytes)?;
         let template = single::<TemplateRow>(self.remote.rest(
             "POST",
@@ -519,6 +566,7 @@ impl TemplateStore {
                 "code": request.code,
                 "title": request.title.trim(),
                 "discipline": request.discipline,
+                "category": category,
                 "file_kind": kind,
             })),
             now,
@@ -683,6 +731,7 @@ impl TemplateStore {
 
     pub fn save_draft(&self, request: &SaveDraft, now: i64) -> Result<TemplateDraft, BackendError> {
         check_identity(Some(&request.code), &request.title, &request.discipline)?;
+        let category = normalize_category(&request.category)?;
         let field_map = FieldMap::parse(&request.field_map).map_err(invalid)?;
         let version = self.version_row(&request.version_id, now)?;
         if version.status != "draft" {
@@ -696,6 +745,7 @@ impl TemplateStore {
                 "code": request.code,
                 "title": request.title.trim(),
                 "discipline": request.discipline,
+                "category": category,
             })),
             now,
         )?;

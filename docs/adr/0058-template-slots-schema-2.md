@@ -135,6 +135,138 @@ anchors other than placeholders.
 - The picked choice is part of the Preview rows and the journal like every
   other edited value; Undo removes the generated file as usual.
 
+### Repeating Word rows (1.61.0)
+
+- A cell can be marked as the start of a repeating row: anchor kind `rows`
+  with `table`, `row`, `cell`, and `repeatColumns` (1 to 20). Everything else in
+  the row is cloned unchanged. In Preview the field is one multiline value:
+  each line becomes a row, a Tab separates the columns (rows copied from Excel
+  paste as they are). An empty value is one empty row; trailing empty lines are
+  dropped; at most 200 rows; a line with more values than columns is refused.
+- Rendering writes single cells first, then expands repeating rows from the
+  lowest row up, so a row above is not moved by rows added below it. Each cell
+  keeps its cell, paragraph, and first-run formatting; a cell left empty keeps
+  its paragraph properties but holds no run.
+- Refused: a row with any vertically merged cell, a row with fewer cells than
+  `from + count`, a mapped cell with a drawing, control, form field, symbol, or
+  field, and any other marked cell in the same table row. Saving tries the row
+  with two lines on the draft file; publishing checks again.
+- Stored as schema 2 (`rows` is unknown to 1.55.0 to 1.60.0, which refuse the
+  template with the usual message).
+
+### Repeating Excel rows (1.62.0)
+
+- The same `rows` anchor works in Excel with `sheet`, `address` (the first mapped
+  column of the template row), and `repeatColumns`. The value format is the same
+  (a line per row, Tab between columns).
+- `ooxml::repeat_template_rows` writes the first line into the template row, then
+  inserts the other rows with the engine built for Follow Up (rows below,
+  formulas, ranges, conditional formatting, and defined names move as Excel's
+  Insert Row moves them; unmapped cells are cloned and their formulas
+  translated; the calculation chain is dropped). That engine does not clone
+  merged ranges, so the template row's single-row merges are cloned onto each new
+  row afterwards. Rows lower on a sheet are expanded first.
+- Refused: a missing template row, a protected sheet, a row crossed by a
+  vertical merge, a mapped cell that holds a formula or sits inside a merge but is
+  not its first cell, and any other marked cell in the same row.
+- Not handled: data validation, hyperlinks, and drawings anchored to the
+  template row are not cloned; images anchored below the row keep their position.
+
+### Categories (1.63.0)
+
+- `doc_templates.category` is a text column (default empty) holding a folder path:
+  up to three levels, each 1 to 40 characters, no `\ : * ? " < > |` or control
+  characters, no `.` or `..` level. Rust (`normalize_category`) trims the levels,
+  joins them with `/`, and refuses the rest; a SQL check repeats the rule. The
+  manifest view returns it as the last column, so older clients ignore it.
+- `discipline` stays: it is still required and drives RFI number shorthand. The
+  library shows and groups by `category`, falling back to `discipline`. The
+  output file name pattern already exists (`fileName`) and is unchanged.
+- A manifest entry with a category that does not normalize to itself is skipped
+  like any other invalid entry.
+
+### Field types and free mode (1.64.0)
+
+- `FieldDef.kind` (`text` default, `number`, `date`, `checkbox`) and `format`
+  (date pattern, or `checked|unchecked` texts) are stored as slot `type` and
+  `format` in schema 2; a map with any non-text type is stored as schema 2, and
+  older installs list it as needing a newer DocFlow. A type cannot be combined
+  with several lines, choices, or a repeating row.
+- `templates::values::convert` checks and writes each value as text at render
+  time: number `^-?[0-9]+([.,][0-9]+)?$`; date read from `dd.MM.yyyy`,
+  `dd/MM/yyyy`, `dd-MM-yyyy`, or `yyyy-MM-dd` (real calendar dates only) and
+  written with `dd`, `MM`, `yyyy`, `yy` parts; checkbox writes the checked or
+  unchecked text (default U+2612 and U+2610). The Preview checkbox is a boolean
+  column; any other value must stay text.
+- `choice` keeps its 1.55.0 meaning (the options are suggestions, not a limit).
+  Restricting a value to its list is not done in this release.
+- The `templates.generate_document` parameters gain `mode` (`rfi` default or
+  `free`) and `document_count` (1 to 100, shown for `free`). The RFI Log and RFI
+  numbers are shown only for `rfi`; the log is checked in Rust for `rfi` mode
+  because the schema's required flag ignores visibility. In `free` mode no RFI Log
+  is read or granted, every RFI Log token is empty (`{today}` is set), and rows are
+  `document-N`.
+- Not done: tick a checkbox stored as a form field, content control, or symbol
+  that the file already holds; those need their own writers.
+
+### Computed fields (1.65.0)
+
+- Field kind `computed` carries `compute`: `op` (`sum`, `difference`, `offset`,
+  `round`, `copy`, `concat`), `inputs` (1 to 10 other field keys), `by` (offset
+  only), `decimals` (0 to 6; required for `round`), and `separator` (concat only).
+  Stored as slot `type: "computed"` with `compute` in schema 2.
+- `templates::compute` is the whole interpreter: a closed Rust enum, no
+  expression text. Inputs must be non-computed fields (no chains, no cycles);
+  a preset cannot set a computed field; a computed field has no start value.
+- Numbers use `^-?[0-9]+([.,][0-9]+)?$`. The result keeps the largest decimals of
+  its inputs (and of `by`) unless `decimals` is set, uses a comma when an input
+  used one, and is empty when any numeric input is empty. `concat` skips empty
+  parts; `copy` copies the text.
+- At render the typed values are converted first, then computed values are made
+  from them; a submitted computed value is ignored. Preview shows computed
+  columns read-only and refreshes them on every revise; a row that cannot be
+  computed shows an empty value and the error is reported when documents are
+  rendered. A computed value may be used in the output file name.
+- Not done: moving CON-CIV-010/011/013/014 onto templates (one release each), and
+  the legacy per-record pseudo-random ambient offset.
+
+### Number and time cells (1.66.0)
+
+- `FieldKind::Time` (slot type `time`): input `h:mm` or `hh:mm` with hour below 24
+  and minute below 60, written as `hh:mm` text everywhere except a single Excel
+  cell.
+- A single (not repeating) Excel cell anchored to a Number or Time field gets a
+  numeric cell (`<v>`, no `t` attribute, existing style kept): a Number as typed
+  with `,` turned into `.`; a Time as `(hour*60+minute)/1440` with 15 decimals,
+  the format the legacy CON-CIV-010 writer used. An empty value stays an empty
+  text cell. `ooxml::patch_template_cells` now takes `CellUpdate::Text` or
+  `CellUpdate::Number` and refuses any other kind. Word, placeholders, and
+  repeating rows always get text.
+- This changes a 1.64.0 behavior: a Number field in an Excel cell was text.
+- Migration path for CON-CIV-010: this release closes the number/time gap; the
+  Follow-Up data source and the ambient temperature rule are still open.
+
+### Follow-Up source (1.67.0)
+
+- `templates.generate_document` gains the optional file parameter
+  `follow_up_workbook` (shown for `rfi` mode). It is read through the legacy
+  `read_follow_up_records` (header detection, continuation rows, composite RFI
+  cells), then turned into token rows by `template_documents::read_follow_up_batches`.
+- Tokens: `fuDrawing`, `fuPourDate`, `fuConcreteClass`, `fuLocation`,
+  `fuStructure`, `fuSupplier`, `fuBatchTicket`, `fuTruck`, `fuBatchTime`,
+  `fuStartTime`, `fuEndTime`, `fuQuantity`, `fuTotalQuantity`, `fuPlantSlump`,
+  `fuInSituSlump`, `fuPlantTemp`, `fuInSituTemp`, `fuSamples`,
+  `fuWaterCementRatio`, plus `fuBatchNo` and `fuBatchCount`. Dates and times use
+  the RFI Log formats. Every token is empty (`fuBatchCount` is `0`) when there is no
+  workbook or no row, so none stays literal in a document, in free mode too.
+- A field starts from the first batch. A repeating-row field whose start value
+  contains `{fu...}` is expanded once per batch and the lines are joined with
+  newlines (Tab between columns). An RFI present in the RFI Log but absent from
+  the Follow-Up workbook gets the warning `warn.templates.followUpMissing` and
+  empty values; it is kept in the plan, unlike the legacy CON-CIV-010 which skips it.
+- Only Civil RFIs match (legacy reader). Open for the CON-CIV-010 migration: the
+  two-row batch stride and the ambient temperature rule.
+
 ## Consequences
 
 No operator-visible change in 1.55.0. Later releases add cell, range, and row

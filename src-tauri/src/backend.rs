@@ -48,7 +48,7 @@ fn path_dialog_filter(
         ("rfi.generate_concrete_documents", "template_011" | "template_014") => {
             Some(("Word (.docx)", &["docx"]))
         }
-        (crate::template_documents::OPERATION_ID, "rfi_log_workbook") => {
+        (crate::template_documents::OPERATION_ID, "rfi_log_workbook" | "follow_up_workbook") => {
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
         }
         _ => None,
