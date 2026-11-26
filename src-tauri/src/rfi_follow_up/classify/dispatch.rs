@@ -35,6 +35,25 @@ pub fn classify_workbooks(
     target_workbook: &WorkbookData,
     target_has_signature: bool,
 ) -> Result<Value, BackendError> {
+    classify_workbooks_excepting(
+        source_discovery,
+        source_workbook,
+        target_discovery,
+        target_workbook,
+        target_has_signature,
+        &BTreeSet::new(),
+    )
+}
+
+/// Classifies while leaving the `exceptions` RFIs (wrongly recorded in the Log) alone.
+pub fn classify_workbooks_excepting(
+    source_discovery: &OrderedWorkbookDiscovery,
+    source_workbook: &WorkbookData,
+    target_discovery: &OrderedWorkbookDiscovery,
+    target_workbook: &WorkbookData,
+    target_has_signature: bool,
+    exceptions: &BTreeSet<String>,
+) -> Result<Value, BackendError> {
     if supports_full_sync_schema(source_workbook)
         && target_workbook
             .sheets
@@ -47,7 +66,13 @@ pub fn classify_workbooks(
             target_discovery,
             target_workbook,
             target_has_signature,
+            exceptions,
         )
+    } else if !exceptions.is_empty() {
+        // The legacy path cannot honor exceptions; never sync without them.
+        Err(BackendError::validation(
+            "error.rfi.followUp.exceptionsUnsupported",
+        ))
     } else {
         classify_workbooks_legacy(
             source_discovery,

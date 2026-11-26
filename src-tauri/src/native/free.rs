@@ -257,6 +257,9 @@ pub(super) struct RfiFollowUpPreviewValues {
     /// Where the backup copy is written; beside the workbook when absent.
     #[serde(default, rename = "backup_directory")]
     pub(super) backup_directory: Option<PathBuf>,
+    /// RFIs to leave alone (`CODE` adds, `-CODE` removes); merged with the stored list.
+    #[serde(default, rename = "exception_rfis")]
+    pub(super) exception_rfis: Option<String>,
 }
 
 #[derive(Deserialize)]

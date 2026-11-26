@@ -280,6 +280,12 @@ contexts, and the RFI Log fields to verify. These warnings are unselectable; no
 destination row is created or guessed and the source RFI Log is never edited by
 Follow Up sync.
 
+RFIs that the RFI Log records wrongly and that cannot be corrected there can be
+listed as exceptions ([ADR 0059](adr/0059-follow-up-exception-rfis.md)). Sync
+never places, changes, moves or removes an exception RFI. A Follow Up cell with
+only exception RFIs is untouched; in a shared cell the exception codes keep their
+place and the other RFIs sync, with the status taken from the other RFIs.
+
 Scope decisions take precedence over missing-route diagnostics. The confirmed
 exclusions in [ADR 0035](adr/0035-intentional-follow-up-scope-exclusions.md)
 and the unlisted ELE pairs in [ADR 0051](adr/0051-ele-follow-up-sync-existing-entries.md)

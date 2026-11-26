@@ -382,6 +382,29 @@ pub(super) struct SlotWork {
     pub(super) current_status: String,
     pub(super) changed_rfis: BTreeSet<String>,
     pub(super) unsafe_reason: Option<&'static str>,
+    /// Codes the cell held when read, in cell order; used to restore held codes in place.
+    pub(super) original_codes: Vec<String>,
+    /// Exception RFIs in this cell: never changed, removed or reordered by a sync.
+    pub(super) held: Vec<String>,
+}
+
+impl SlotWork {
+    /// The cell's codes after the sync: held exception codes keep their place.
+    pub(super) fn codes_with_held(&self) -> Vec<String> {
+        let mut merged = self
+            .original_codes
+            .iter()
+            .filter(|code| self.held.contains(code) || self.codes.contains(code))
+            .cloned()
+            .collect::<Vec<_>>();
+        merged.extend(
+            self.codes
+                .iter()
+                .filter(|code| !self.original_codes.contains(code))
+                .cloned(),
+        );
+        merged
+    }
 }
 
 pub(super) fn safe_slot(
@@ -428,6 +451,8 @@ pub(super) fn safe_slot(
             current_status: normalize_status(&status_cell.value),
             changed_rfis: BTreeSet::new(),
             unsafe_reason: Some(reason),
+            original_codes: Vec::new(),
+            held: Vec::new(),
         }));
     };
     Ok(Some(SlotWork {
@@ -435,10 +460,12 @@ pub(super) fn safe_slot(
         row,
         rfi_cell: rfi_cell.into(),
         status_cell: status_cell.into(),
+        original_codes: codes.clone(),
         codes,
         current_status: normalize_status(&status_cell.value),
         changed_rfis: BTreeSet::new(),
         unsafe_reason,
+        held: Vec::new(),
     }))
 }
 
@@ -468,10 +495,15 @@ pub(super) fn row_from_slot(
     if slot.changed_rfis.is_empty() || slot.unsafe_reason.is_some() {
         return None;
     }
-    let proposed_rfi = format_rfi_group(&slot.codes).unwrap_or_default();
+    let proposed_rfi = format_rfi_group(&slot.codes_with_held()).unwrap_or_default();
     let proposed_status = if signed {
         if slot.codes.is_empty() {
-            String::new()
+            // Only held exception RFIs remain: their status is not ours to change.
+            if slot.held.is_empty() {
+                String::new()
+            } else {
+                slot.current_status.clone()
+            }
         } else {
             let real_codes = slot
                 .codes
@@ -496,7 +528,11 @@ pub(super) fn row_from_slot(
             }
         }
     } else if slot.codes.is_empty() {
-        String::new()
+        if slot.held.is_empty() {
+            String::new()
+        } else {
+            slot.current_status.clone()
+        }
     } else {
         main_status_for_codes(&slot.codes, records).unwrap_or_else(|| slot.current_status.clone())
     };

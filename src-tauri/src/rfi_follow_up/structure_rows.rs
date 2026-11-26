@@ -70,6 +70,7 @@ pub(super) fn plan_structure(
     source_workbook: &WorkbookData,
     target_workbook: &WorkbookData,
     target_has_signature: bool,
+    exceptions: &BTreeSet<String>,
 ) -> Result<RoadStructure, BackendError> {
     let none = RoadStructure { ops: Vec::new() };
     if target_has_signature || !supports_full_sync_schema(source_workbook) {
@@ -82,7 +83,7 @@ pub(super) fn plan_structure(
     if rows.is_empty() {
         return Ok(none);
     }
-    let records = scan_source_records(source_discovery, source_workbook)?;
+    let records = scan_source_records(source_discovery, source_workbook, exceptions)?;
     // Every planned Road keeps a row even before any RFI names it.
     let mut needs = road_needs(&records);
     for road in PLANNED_ROADS {

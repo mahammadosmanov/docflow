@@ -5,6 +5,12 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.68.0 - 2026-11-26
+
+### Added
+
+- Follow Up sync can leave chosen RFIs alone (ADR 0059). For RFIs that the RFI Log records wrongly and cannot be corrected, write their codes in the new field "RFIs to leave alone", one per line (`CIV-1374` or the full code). Sync then never changes, moves, removes or adds them. If one of them shares a cell with other RFIs, the other RFIs still sync and the exception codes keep their place; that cell's status comes from the other RFIs. A cell with only exception RFIs is not touched. The list is saved on this computer and in the cloud, so you enter each code once. Put `-` before a code (for example `-CIV-1374`) to remove it; removing needs a cloud connection. Run `docs/supabase_follow_up_exceptions.sql` once in Supabase to enable the cloud copy; without it the list stays on this computer.
+
 ## 1.67.0 - 2026-11-25
 
 ### Added

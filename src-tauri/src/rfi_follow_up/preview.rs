@@ -18,6 +18,27 @@ pub fn preview_from_open_files_with_backup(
     rfi_log: &mut File,
     follow_up: &mut File,
 ) -> Result<Plan, BackendError> {
+    preview_from_open_files_with_exceptions(
+        rfi_log_path,
+        follow_up_path,
+        backup_directory,
+        &BTreeSet::new(),
+        rfi_log,
+        follow_up,
+    )
+}
+
+/// `exceptions` are canonical RFI codes the Log records wrongly; the sync leaves
+/// them, and the Road rows they would create, alone. They are kept in the plan
+/// so Apply-time revision classifies identically.
+pub fn preview_from_open_files_with_exceptions(
+    rfi_log_path: &Path,
+    follow_up_path: &Path,
+    backup_directory: Option<&Path>,
+    exceptions: &BTreeSet<String>,
+    rfi_log: &mut File,
+    follow_up: &mut File,
+) -> Result<Plan, BackendError> {
     let rfi_log_display = rfi_log_path.to_str().ok_or_else(|| {
         BackendError::validation(
             "error.rfi.followUp.workbookInvalid: RFI Log path contains invalid UTF-8",
@@ -63,17 +84,19 @@ pub fn preview_from_open_files_with_backup(
         &source_workbook,
         &target_workbook,
         target_has_signature,
+        exceptions,
     )?
     .ops;
     // Classification runs on the workbook as it will look once the Road rows exist, so
     // every reviewed coordinate already refers to the final layout.
     let classification = if structure.is_empty() {
-        classify_workbooks(
+        classify_workbooks_excepting(
             &source_discovery,
             &source_workbook,
             &target_discovery,
             &target_workbook,
             target_has_signature,
+            exceptions,
         )?
     } else {
         follow_up.seek(SeekFrom::Start(0)).map_err(|e| {
@@ -83,12 +106,13 @@ pub fn preview_from_open_files_with_backup(
         })?;
         let (structured_discovery, structured_workbook) =
             parse_baseline(structured_baseline(follow_up, &structure)?)?;
-        let mut classification = classify_workbooks(
+        let mut classification = classify_workbooks_excepting(
             &source_discovery,
             &source_workbook,
             &structured_discovery,
             &structured_workbook,
             target_has_signature,
+            exceptions,
         )?;
         add_structure_rows(&mut classification, &structure)?;
         classification
@@ -126,7 +150,10 @@ pub fn preview_from_open_files_with_backup(
         source_fingerprint,
         target_fingerprint,
         classification,
-        structure,
+        PlanScope {
+            structure,
+            exceptions: exceptions.clone(),
+        },
     )
 }
 
@@ -207,9 +234,11 @@ pub fn revise_from_open_files(
         }
     }
 
-    let fresh = preview_from_open_files(
+    let fresh = preview_from_open_files_with_exceptions(
         Path::new(&authority.rfi_log_workbook),
         Path::new(&authority.follow_up_workbook),
+        None,
+        &authority.exceptions,
         rfi_log,
         follow_up,
     )?;
@@ -282,7 +311,10 @@ pub fn revise_from_open_files(
         fresh_authority.rfi_log_fingerprint,
         fresh_authority.follow_up_fingerprint,
         classification,
-        authority.structure.clone(),
+        PlanScope {
+            structure: authority.structure.clone(),
+            exceptions: authority.exceptions.clone(),
+        },
     )?;
     revised.plan_id.clone_from(&plan.plan_id);
     validate_owned_plan_budget(&revised)?;
@@ -347,6 +379,12 @@ pub(crate) fn fingerprint_open_file(file: &mut File) -> Result<WorkbookFingerpri
     })
 }
 
+/// What a plan covers beyond the reviewed rows.
+pub(super) struct PlanScope {
+    pub(super) structure: Vec<RowOp>,
+    pub(super) exceptions: BTreeSet<String>,
+}
+
 pub(super) fn plan_from_classification(
     rfi_log_workbook: &str,
     follow_up_workbook: &str,
@@ -354,8 +392,12 @@ pub(super) fn plan_from_classification(
     rfi_log_fingerprint: WorkbookFingerprint,
     follow_up_fingerprint: WorkbookFingerprint,
     classification: Value,
-    structure: Vec<RowOp>,
+    scope: PlanScope,
 ) -> Result<Plan, BackendError> {
+    let PlanScope {
+        structure,
+        exceptions,
+    } = scope;
     let object = classification.as_object().ok_or_else(workbook_invalid)?;
     let decode_field = |name: &str| object.get(name).cloned().ok_or_else(workbook_invalid);
     let layout: FollowUpLayout =
@@ -454,6 +496,7 @@ pub(super) fn plan_from_classification(
         layout: layout.clone(),
         layouts: layouts.clone(),
         structure: structure.clone(),
+        exceptions,
     };
     let mut meta = serde_json::Map::new();
     meta.insert("editor".to_string(), editor);

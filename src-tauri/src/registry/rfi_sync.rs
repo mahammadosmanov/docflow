@@ -37,6 +37,17 @@ pub(super) fn rfi_follow_up_operation() -> OperationDef {
                 Map::new(),
                 Some("param.rfi.followUp.backupDirectory.help"),
             ),
+            parameter(
+                "exception_rfis",
+                ParamKind::LongText,
+                "param.rfi.followUp.exceptionRfis",
+                json!(""),
+                false,
+                Vec::new(),
+                BTreeMap::new(),
+                Map::new(),
+                Some("param.rfi.followUp.exceptionRfis.help"),
+            ),
         ],
     )
 }
