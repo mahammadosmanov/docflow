@@ -42,13 +42,17 @@ pub fn parse_exception_text(text: &str) -> Result<ExceptionEdit, BackendError> {
     Ok(edit)
 }
 
-/// `(stored ∪ added) − removed`, bounded.
+/// The list after the edit, bounded. The field shows the whole list, so codes in
+/// it replace the stored list; an empty field changes nothing. `-CODE` removes.
 pub fn apply_exception_edit(
     stored: BTreeSet<String>,
     edit: &ExceptionEdit,
 ) -> Result<BTreeSet<String>, BackendError> {
-    let mut merged = stored;
-    merged.extend(edit.add.iter().cloned());
+    let mut merged = if edit.add.is_empty() {
+        stored
+    } else {
+        edit.add.clone()
+    };
     merged.retain(|code| !edit.remove.contains(code));
     if merged.len() > MAX_EXCEPTIONS {
         return Err(invalid("too many exceptions"));
