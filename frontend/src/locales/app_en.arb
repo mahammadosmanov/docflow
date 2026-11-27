@@ -132,6 +132,7 @@
   "rfi.fastScan.reread.differs": "Differs — check",
   "rfi.fastScan.reread.unavailable": "Not available",
   "rfi.fastScan.coverCrops.title": "RFI No. as scanned",
+  "warn.rfi.fastScan.unmatchedChecklist": "Pile ramming checklist has no matching RFI cover here. Review these pages.",
   "warn.rfi.fastScan.rereadDiffers": "A second read of the RFI number cell differs — check the scanned number",
   "rfi.fastScan.editor.updatePreview": "Update preview",
   "rfi.fastScan.editor.updatingPreview": "Updating preview…",

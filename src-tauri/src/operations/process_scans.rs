@@ -31,6 +31,7 @@ use scan_pdf::{ScanContext, ScanState, scan_one_pdf};
 
 const MIN_CONFIDENCE: f64 = 0.8;
 pub const FAST_COVER_OPERATION_ID: &str = "rfi.process_scans_fast_covers";
+pub(crate) const PILE_RAMMING_ATTACHMENT: &str = "ocr:fast-cover:attachment:pile-ramming";
 const REVIEW_DIR: &str = "_review";
 const MAX_SCAN_PDFS: usize = 10_000;
 const MAX_SCAN_PAGES: usize = 20_000;

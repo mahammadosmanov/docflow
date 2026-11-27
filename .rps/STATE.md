@@ -1,6 +1,18 @@
 # DocFlow project state
 
-Updated: 2026-11-01
+Updated: 2026-11-27
+
+## Fast RFI Scan cover verification (1.68.2)
+
+- Both Fast RFI Scan modes verify visible cover evidence and a matching identity
+  across two render resolutions. A searchable-text conflict vetoes confirmation.
+- Pile ramming checklists are Mechanical attachments. A checklist after a
+  non-MEC cover starts a Review group through the page before the next verified
+  cover. The group remains available for manual reconciliation.
+- A local macOS rerun of a 373-page operator stack removed 11 false cover
+  classifications while retaining all 31 visually verified cover identities.
+  Operator PDFs stay outside Git. Windows package and operator acceptance
+  require separate evidence.
 
 ## Signed in-app updates (1.38.2)
 

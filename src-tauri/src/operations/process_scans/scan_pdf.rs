@@ -1,5 +1,7 @@
 use super::*;
 
+const UNMATCHED_CHECKLIST: &str = "warn.rfi.fastScan.unmatchedChecklist";
+
 pub(super) struct ScanContext<'a, A> {
     pub(super) params: &'a ProcessScansParams,
     pub(super) ocr: &'a A,
@@ -240,7 +242,14 @@ where
                     .copied()
                     .collect();
                 plan.warnings.push(Warning {
-                    key: "warn.no_code".to_string(),
+                    key: if group.reason == UNMATCHED_CHECKLIST {
+                        UNMATCHED_CHECKLIST
+                    } else if group.source.starts_with("ocr:fast-cover:uncertain:") {
+                        "warn.low_confidence"
+                    } else {
+                        "warn.no_code"
+                    }
+                    .to_string(),
                     subject: format!("{} — {}", display_name(pdf), page_range(&group.pages)),
                 });
                 review_pages.push(ReviewPages {
@@ -254,7 +263,12 @@ where
         return Ok(None);
     }
 
-    let read = match ocr.read_page(pdf, 0) {
+    let page_read = if fast_cover_mode {
+        ocr.read_cover_page(pdf, 0)
+    } else {
+        ocr.read_page(pdf, 0)
+    };
+    let read = match page_read {
         Ok(read) => read,
         Err(OcrFailure::EngineMissing) => return Ok(Some(no_ocr_plan(operation_id, ocr))),
         Err(OcrFailure::Document(error)) => {
@@ -266,11 +280,14 @@ where
         || read.matched.confidence < MIN_CONFIDENCE
     {
         plan.warnings.push(Warning {
-            key: if read.matched.ok() {
-                "warn.low_confidence".to_string()
+            key: if read.source == PILE_RAMMING_ATTACHMENT {
+                UNMATCHED_CHECKLIST
+            } else if read.matched.ok() || read.source.starts_with("ocr:fast-cover:uncertain:") {
+                "warn.low_confidence"
             } else {
-                "warn.no_code".to_string()
-            },
+                "warn.no_code"
+            }
+            .to_string(),
             subject: display_name(pdf),
         });
         let mut meta = JsonObject::new();
@@ -355,17 +372,28 @@ where
                 continue;
             }
         };
-        // A strict, high-confidence RFI identity is the only group boundary.
-        // Once a cover starts a group, every page stays with it until another
-        // confirmed cover appears, even when continuation OCR is uncertain.
-        if fast_cover_mode && read.source.starts_with("ocr:fast-cover:uncertain") {
+        // A Mechanical checklist following another discipline may be an
+        // out-of-order attachment. Keep that run in Review until the next cover.
+        let mismatched_attachment = fast_cover_mode
+            && read.source == PILE_RAMMING_ATTACHMENT
+            && active
+                .as_ref()
+                .and_then(|group| group.code.as_deref())
+                .is_some_and(|code| !code.starts_with("AZE-SUN-INT-QMS-RFI-MEC-"));
+        if mismatched_attachment
+            || (fast_cover_mode && read.source.starts_with("ocr:fast-cover:uncertain:"))
+        {
             flush_page_group(&mut active, &mut local_groups);
             active = Some(PageGroup {
                 code: None,
                 pages: vec![page_index],
                 confidence: read.matched.confidence,
                 source: read.source,
-                reason: "possible RFI cover could not be confirmed".to_string(),
+                reason: if mismatched_attachment {
+                    UNMATCHED_CHECKLIST.to_string()
+                } else {
+                    "possible RFI cover could not be confirmed".to_string()
+                },
             });
         } else if is_confirmed_cover(&read) {
             let code = read.matched.code.clone();

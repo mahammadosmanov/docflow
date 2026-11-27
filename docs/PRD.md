@@ -207,10 +207,10 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   and requires its own Preview and Apply.
 - **DF-032 — Ordered batch RFI scan separation:** Fast RFI Scan in Multi-RFI
   mode may inspect one top-level multi-page PDF as a sequential stack. A page
-  with one strict, high-confidence canonical RFI code starts a confirmed cover
-  and the next RFI group. Every page after a confirmed cover belongs to that
-  group until another confirmed cover appears, even when continuation-page OCR
-  is uncertain or unreadable. Pages before the first identified RFI and
+  with a verified cover identity starts the next RFI group. Continuation pages
+  stay in that group until another confirmed cover or a Review boundary. A
+  possible but unverified cover or a pile ramming checklist after a non-MEC
+  cover starts a Review group until the next confirmed cover. Leading pages and
   duplicate RFI starts remain Review output. Each output contains only its
   approved pages, retains existing canonical filenames and duplicate/no-clobber
   rules, and places CIV/MEC/ELE/PRC results beneath matching discipline folders.
@@ -235,11 +235,13 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   rotates it.
 - **DF-036 — Fast RFI Scan cover recognition and correction:** The active
   `rfi.process_scans_fast_covers` operation confirms a group boundary only when
-  one strict RFI identity, the request heading, and a known template mark agree.
-  If direction-zero generic OCR words do not confirm a cover, the detector
-  continues its remaining cardinal searches; no-code or ambiguous boundaries
-  remain in Review. OCR alone may normalize the exact alias `CLV` to `CIV`;
-  filenames, searchable text, and manual input do not receive that repair.
+  two separately rendered OCR reads agree on one strict RFI identity or an
+  approved OCR alias. A known template mark plus the request heading or the
+  cover-specific attention and discipline fields with a labeled identity must be
+  visible. Searchable text can veto an identity. The detector searches cardinal
+  directions when the first direction has no cover evidence. Unverified cover
+  candidates remain in Review. OCR alone may normalize the exact alias `CLV` to
+  `CIV`. Filenames, searchable text, and manual input do not receive that repair.
   Preview permits only complete canonical CIV/MEC/ELE/PRC code edits; Rust
   rederives targets from trusted settings and rejects invalid, duplicate, or
   existing targets before Apply. Missing discipline/RFI folders are created

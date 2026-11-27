@@ -63,15 +63,12 @@
 
 - Generic schema-driven forms, remembered safe values, typed presets, compact
   multi-row editing, all/selection actions, search/filter, and keyboard shortcuts.
-- Fast RFI Scan is the only active scan-separation operation. Multi-RFI requires
-  high-confidence consensus on a Strict or approved OCR-alias identity plus
-  visible cover evidence; its independent cover rescue is limited to unresolved
-  strong-vote candidates and does not override stable text-layer identities or
-  conflicts. Optional rotation continues cardinal cover searches when
-  direction-zero generic OCR words do not confirm a cover, and pins/rechecks
-  source hashes around parallel analysis. Uncertain/no-code pages still go to
-  review. Its preview exposes first-page Single-RFI mode, OCR alias evidence,
-  and safe canonical code correction without allowing path or page edits.
+- Fast RFI Scan requires a visible cover form and matching RFI identities at
+  two render resolutions. Conflicting reads and pile ramming checklists found
+  under a non-MEC cover send the affected pages to Review. Optional rotation
+  continues cardinal searches and pins and rechecks source hashes around
+  parallel analysis. Preview shows OCR evidence and allows canonical code
+  correction without allowing path or page edits.
 - Batch Print always starts without old files or silently restored settings. One
   explicit action can restore the last previewed printer/paper/layout/queue
   settings, while named presets remain available for reusable procedures.
@@ -206,11 +203,11 @@ is rebuilt after restart.
 
 - RFI System replica publication has internal implementation code but is not exposed as an active operation in the application.
 - Fast RFI Scan inspects top-level PDFs. Multi-RFI confirms group boundaries
-  only when one strict RFI identity, `REQUEST FOR INSPECTION`, and a known
-  `SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP` mark agree. Uncertain or
-  unreadable inputs go to `_review`; files whose PDF structure cannot be safely
-  separated are not split. Single-RFI reads page one only and keeps the complete
-  source PDF intact, so it does not separate a combined multi-RFI scan. Only the
+  only when two rendered reads agree on a supported RFI identity and show
+  cover-form evidence with a known project or client mark. Unverified covers
+  and out-of-order pile ramming checklists go to `_review`. Files whose PDF
+  structure prevents safe extraction stay whole. Single-RFI reads page one only
+  and keeps the complete source PDF intact. Only the
   exact OCR alias `CLV` becomes `CIV`; filenames, searchable PDF text, and
   manually entered identifiers do not use that alias. Preview name edits accept
   canonical CIV/MEC/ELE/PRC codes and rederive target paths from trusted settings.

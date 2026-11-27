@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.68.1",
+  "currentVersion": "1.68.2",
   "releases": [
+    {
+      "version": "1.68.2",
+      "tag": "v1.68.2",
+      "date": "2026-11-27",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Fast RFI Scan verifies covers and keeps out-of-order checklists in Review"
+    },
     {
       "version": "1.68.1",
       "tag": "v1.68.1",
       "date": "2026-11-26",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Follow Up exception list is shown and shared by every user"
     },
     {

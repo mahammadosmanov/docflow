@@ -5,6 +5,16 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 1.68.2 - 2026-11-27
+
+### Fixed
+
+- Fast RFI Scan requires visible cover-form evidence and matching RFI identities
+  from two independently rendered resolutions. Conflicting reads go to Review.
+  Pile ramming checklists never start named packets. An out-of-order checklist
+  after a different discipline starts a Review packet until the next confirmed
+  cover.
+
 ## 1.68.1 - 2026-11-26
 
 ### Fixed

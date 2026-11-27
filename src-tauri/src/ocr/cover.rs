@@ -3,9 +3,17 @@ use super::*;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct CoverSignals {
     pub(super) request_heading: bool,
+    cover_fields: bool,
+    pile_ramming_checklist: bool,
     pub(super) template_mark: bool,
     pub(super) strict_identity: bool,
     pub(super) identity_hint: bool,
+}
+
+impl CoverSignals {
+    fn cover_form(self) -> bool {
+        !self.pile_ramming_checklist && (self.request_heading || self.cover_fields)
+    }
 }
 
 pub(super) fn clv_alias_regex() -> &'static Regex {
@@ -143,6 +151,9 @@ pub(super) fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
     let identity_hint = !codes.is_empty() || matched.ok() || damaged;
     CoverSignals {
         request_heading,
+        cover_fields: normalized.contains("FOR THE ATTENTION OF")
+            && normalized.contains("DISCIPLINE"),
+        pile_ramming_checklist: normalized.contains("PILE RAMMING INSTALLATION CHECKLIST"),
         template_mark,
         strict_identity,
         identity_hint,
@@ -151,11 +162,14 @@ pub(super) fn cover_signals(text: &str, allow_ocr_alias: bool) -> CoverSignals {
 
 pub(super) fn confirmed_cover_read(text: &str, source: &str) -> Option<OcrRead> {
     let signals = cover_signals(text, true);
-    // The `RFI No: <code>` line is itself cover evidence when OCR missed the heading.
-    let labeled_cover = labeled_identity(text).is_some() || damaged_identity(text).is_some();
-    if !((signals.request_heading || labeled_cover)
+    // Attachments also print an RFI No. With an unreadable title, require
+    // cover-specific fields and an identity from the labeled cell.
+    if !(signals.cover_form()
         && signals.template_mark
-        && signals.strict_identity)
+        && signals.strict_identity
+        && (signals.request_heading
+            || labeled_identity(text).is_some()
+            || damaged_identity(text).is_some()))
     {
         return None;
     }
@@ -221,34 +235,79 @@ pub(super) fn band_has_text_cues(band: &GrayImage) -> bool {
         >= 100
 }
 
-pub(super) fn read_cover_band_text(
+fn read_cover_at_resolution(
     ocr: &NativeOcr,
     image: &GrayImage,
     page_index: usize,
     direction: i64,
-    attempt: usize,
+    dpi: i32,
     temporary: &Path,
-) -> Result<String, OcrFailure> {
-    let band = cover_top_band(image).map_err(OcrFailure::Document)?;
+) -> Result<(CoverSignals, Option<OcrRead>), OcrFailure> {
+    let oriented = rotate_gray_clockwise(image, direction).map_err(OcrFailure::Document)?;
+    let band = cover_top_band(&oriented).map_err(OcrFailure::Document)?;
     if !band_has_text_cues(&band) {
-        return Ok(String::new());
+        return Ok((CoverSignals::default(), None));
     }
-    let image_path = temporary.join(format!("cover-{page_index}-{direction}.pgm"));
-    write_pgm(&image_path, &band).map_err(OcrFailure::Document)?;
-    run_tesseract_for_cover(
-        ocr.tesseract
-            .as_deref()
-            .expect("cover OCR engine is validated"),
-        &image_path,
-        temporary,
-        ocr.tessdata.as_deref(),
-        11,
-        attempt,
-    )
+    let band_path = temporary.join(format!("cover-{dpi}-{direction}.pgm"));
+    write_pgm(&band_path, &band).map_err(OcrFailure::Document)?;
+    let mut evidence = CoverSignals::default();
+    for psm in [11, 6, 12] {
+        let text = run_tesseract_for_cover(
+            ocr.tesseract
+                .as_deref()
+                .expect("cover OCR engine is validated"),
+            &band_path,
+            temporary,
+            ocr.tessdata.as_deref(),
+            psm,
+            0,
+        )?;
+        let signals = cover_signals(&text, true);
+        if psm == 11 {
+            trace_cover(page_index, direction, &text, signals);
+        }
+        if signals.pile_ramming_checklist {
+            return Ok((signals, None));
+        }
+        if let Some(read) = confirmed_cover_read(&text, &format!("{dpi}dpi")) {
+            return Ok((signals, Some(read)));
+        }
+        evidence.request_heading |= signals.request_heading;
+        evidence.cover_fields |= signals.cover_fields;
+        evidence.template_mark |= signals.template_mark;
+        evidence.identity_hint |= signals.identity_hint;
+        if !evidence.cover_form() {
+            break;
+        }
+    }
+    Ok((evidence, None))
+}
+
+pub(super) fn verify_cover_reads(
+    first: OcrRead,
+    second: OcrRead,
+    text_codes: &BTreeSet<String>,
+) -> OcrRead {
+    if first.matched.code != second.matched.code
+        || (!text_codes.is_empty()
+            && (text_codes.len() != 1 || !text_codes.contains(&first.matched.code)))
+    {
+        return uncertain_cover_read("conflicting-identities".to_string());
+    }
+    // Preserve alias/repair evidence even when only one read needed it.
+    let mut read =
+        if first.source.ends_with(":alias:repair") || second.matched.method == RfiMethod::Strict {
+            first
+        } else {
+            second
+        };
+    read.source = read.source.replacen("confirmed:", "confirmed:verified:", 1);
+    read
 }
 
 static COVER_TRACE: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 const MAX_COVER_TRACE: usize = 40;
+const FAST_COVER_FALLBACK_DPI: i32 = 225;
 
 /// Records why a cover page was not confirmed (cue flags and text length only, never the
 /// text) for the activity log, so an unreadable scan can be diagnosed from one export.
@@ -281,98 +340,80 @@ pub(super) fn read_fast_cover_page(
     source: &Path,
     page_index: usize,
 ) -> Result<OcrRead, OcrFailure> {
-    #[cfg(windows)]
     if ocr.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
         return Err(OcrFailure::EngineMissing);
     }
     let pdf = PdfOcrSession::open(source)?;
     let text_layer = pdf.page_text(source, page_index)?;
-    // Searchable text is only a hint. A cover still needs visible-page OCR evidence.
-    let mut possible_cover = cover_signals(&text_layer, false).request_heading;
-    if ocr.tesseract.as_ref().is_none_or(|path| !path.is_file()) {
-        return Err(OcrFailure::EngineMissing);
-    }
-
+    let mut possible_cover = cover_signals(&text_layer, false).cover_form();
     let temporary = tempfile::tempdir()
         .map_err(|error| OcrFailure::Document(format!("cover OCR temp directory: {error}")))?;
-    let rendered = temporary.path().join(format!("cover-{page_index}-150.png"));
-    pdf.render_page_png(source, &rendered, FAST_COVER_DPI, page_index)
-        .map_err(OcrFailure::Document)?;
-    let image = read_png_gray(&rendered).map_err(OcrFailure::Document)?;
-    let mut rescue_used = false;
-    let mut attempt = 0;
+    let render = |dpi| {
+        let path = temporary.path().join(format!("cover-{dpi}.png"));
+        pdf.render_page_png(source, &path, dpi, page_index)
+            .map_err(OcrFailure::Document)?;
+        read_png_gray(&path).map_err(OcrFailure::Document)
+    };
+    let image = render(FAST_COVER_DPI)?;
+    let mut verification_images = HashMap::new();
 
     for direction in [0_i64, 90, 180, 270] {
-        let oriented = rotate_gray_clockwise(&image, direction).map_err(OcrFailure::Document)?;
-        let mut text = read_cover_band_text(
+        let (signals, first) = read_cover_at_resolution(
             ocr,
-            &oriented,
+            &image,
             page_index,
             direction,
-            attempt,
+            FAST_COVER_DPI,
             temporary.path(),
         )?;
-        attempt += 1;
-        if let Some(read) = confirmed_cover_read(&text, "150dpi") {
-            return Ok(read);
+        if signals.pile_ramming_checklist {
+            return Ok(OcrRead {
+                matched: find(""),
+                source: crate::operations::process_scans::PILE_RAMMING_ATTACHMENT.to_string(),
+            });
         }
-        let mut signals = cover_signals(&text, true);
-        trace_cover(page_index, direction, &text, signals);
-        possible_cover |= signals.request_heading;
-        let promising = u8::from(signals.request_heading)
-            + u8::from(signals.template_mark)
-            + u8::from(signals.identity_hint)
-            >= 2;
-        if promising {
-            for psm in [6_u8, 12] {
-                let band = temporary
-                    .path()
-                    .join(format!("cover-{page_index}-{direction}.pgm"));
-                let retry = run_tesseract_for_cover(
-                    ocr.tesseract
-                        .as_deref()
-                        .expect("cover OCR engine is validated"),
-                    &band,
-                    temporary.path(),
-                    ocr.tessdata.as_deref(),
-                    psm,
-                    attempt,
-                )?;
-                attempt += 1;
-                text.push('\n');
-                text.push_str(&retry);
-                if let Some(read) = confirmed_cover_read(&text, "150dpi-retry") {
-                    return Ok(read);
-                }
-                signals = cover_signals(&text, true);
-                possible_cover |= signals.request_heading;
+        if !signals.cover_form() {
+            continue;
+        }
+        possible_cover = true;
+        let mut confirm = |dpi| {
+            if let std::collections::hash_map::Entry::Vacant(entry) = verification_images.entry(dpi)
+            {
+                entry.insert(render(dpi)?);
             }
-        }
-
-        if !rescue_used && signals.request_heading && signals.template_mark {
-            rescue_used = true;
-            let rescue = temporary.path().join(format!("cover-{page_index}-300.png"));
-            pdf.render_page_png(source, &rescue, FAST_COVER_RESCUE_DPI, page_index)
-                .map_err(OcrFailure::Document)?;
-            let high_resolution = read_png_gray(&rescue).map_err(OcrFailure::Document)?;
-            let oriented =
-                rotate_gray_clockwise(&high_resolution, direction).map_err(OcrFailure::Document)?;
-            let rescue_text = read_cover_band_text(
+            read_cover_at_resolution(
                 ocr,
-                &oriented,
+                &verification_images[&dpi],
                 page_index,
-                direction + 360,
-                attempt,
+                direction,
+                dpi,
                 temporary.path(),
-            )?;
-            attempt += 1;
-            if let Some(read) = confirmed_cover_read(&rescue_text, "300dpi-rescue") {
-                return Ok(read);
+            )
+            .map(|(_, read)| read)
+        };
+        let verify = || {
+            let second = confirm(FAST_COVER_RESCUE_DPI)?;
+            let pair = match (first, second) {
+                (Some(first), Some(second)) => Some((first, second)),
+                (Some(read), None) | (None, Some(read)) => {
+                    confirm(FAST_COVER_FALLBACK_DPI)?.map(|other| (read, other))
+                }
+                (None, None) => None,
+            };
+            Ok(pair.map(|(first, second)| {
+                let text_codes = labeled_identity(&text_layer)
+                    .map(|code| BTreeSet::from([code]))
+                    .unwrap_or_else(|| exact_codes(&text_layer));
+                verify_cover_reads(first, second, &text_codes)
+            }))
+        };
+        match verify() {
+            Ok(Some(read)) => return Ok(read),
+            Ok(None) => {}
+            Err(OcrFailure::Document(_)) => {
+                return Ok(uncertain_cover_read("verification-failed".to_string()));
             }
-            let rescue_signals = cover_signals(&rescue_text, true);
-            if rescue_signals.request_heading && rescue_signals.template_mark {
-                return Ok(uncertain_cover_read("300dpi-rescue".to_string()));
-            }
+            Err(error) => return Err(error),
         }
     }
 

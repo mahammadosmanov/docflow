@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.68.1**. `VERSION` is authoritative.
+Current product version: **1.68.2**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -85,7 +85,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 
 | Capability | User outcome | Safety boundary |
 |---|---|---|
-| Fast RFI Scan | Identify known RFI covers, split confirmed multi-RFI scans, or read only page one for a single RFI while preserving its complete PDF | Multi-RFI requires high-confidence consensus on a Strict or approved OCR-alias identity plus visible cover evidence; a narrow independent rescue may resolve an otherwise unresolved strong-vote candidate but never overrides a stable text-layer identity or conflict. Exact OCR-only `CLV` normalizes to `CIV`. Preview accepts supported full-code candidates with one-to-four ASCII digits and pads the suffix to four; ITP, dates, and other numbers are not normalized. With optional page rotation on, direction-zero generic OCR words alone do not stop later cardinal cover searches; unresolved/no-code pages retain unchanged-copy review handling. That path pins each source SHA-256 before parallel OCR/orientation analysis and rejects source changes before Plan creation. Rust rederives target paths; source/page selections stay fixed and Apply never overwrites |
+| Fast RFI Scan | Identify known RFI covers, split confirmed multi-RFI scans, or read only page one for a single RFI while preserving its complete PDF | Both modes require visible cover-form evidence and matching Strict or approved OCR-alias identities at two render resolutions. Out-of-order pile ramming checklists after a different discipline go to Review through the next confirmed cover. Exact OCR-only `CLV` normalizes to `CIV`. Preview accepts supported full-code candidates with one-to-four ASCII digits and pads the suffix to four; ITP, dates, and other numbers are not normalized. With optional page rotation on, direction-zero generic OCR words alone do not stop later cardinal cover searches; unresolved/no-code pages retain unchanged-copy review handling. That path pins each source SHA-256 before parallel OCR/orientation analysis and rejects source changes before Plan creation. Rust rederives target paths; source/page selections stay fixed and Apply never overwrites |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into `<destination>/<discipline>/<full-code>/<source filename>` | Only CIV/MEC/ELE/PRC; top-level source is read-only; readable EML/MSG evidence is required per RFI; exact multi-RFI fan-out is previewed; no overwrite; unmatched/unreadable files go to root `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
 | RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |

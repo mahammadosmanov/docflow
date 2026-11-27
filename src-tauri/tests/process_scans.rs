@@ -1,6 +1,6 @@
 use docflow_lib::naming::{filename_for, flat_target_for, folder_for, target_for};
 use docflow_lib::ocr::NativeOcr;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use docflow_lib::ocr::{image_pdf_from_png, render_first_page_png};
 use docflow_lib::operations::process_scans::{
     FAST_COVER_OPERATION_ID, OcrAdapter, OcrFailure, OcrRead, ProcessScansParams,
@@ -247,43 +247,58 @@ fn native_image_only_pdf_runs_through_platform_renderer_and_real_tesseract() {
         eprintln!("real OCR fixture skipped: local Tesseract is unavailable");
         return;
     }
-    #[cfg(target_os = "macos")]
-    let image_only = {
-        let fixture = tempfile::TempDir::new().unwrap();
-        let searchable = fixture.path().join("source.pdf");
-        let raster = fixture.path().join("first-page.png");
-        let image_only = fixture.path().join("image-only.pdf");
-        write_text_pdf(
-            &searchable,
-            "AZE-SUN-INT-QMS-RFI-CIV-0064 REQUEST FOR INSPECTION NATIVE OCR FIXTURE",
-        );
-        render_first_page_png(&searchable, &raster, 300).unwrap();
-        image_pdf_from_png(&raster, &image_only).unwrap();
-        (fixture, image_only)
-    };
-    #[cfg(target_os = "macos")]
-    let image_only_path = image_only.1.as_path();
-    #[cfg(target_os = "windows")]
+    let fixture = tempfile::tempdir().unwrap();
     let image_only = std::env::var_os("DOCFLOW_NATIVE_OCR_SMOKE_PDF")
         .map(std::path::PathBuf::from)
-        .filter(|path| path.is_file());
-    #[cfg(target_os = "windows")]
-    let Some(image_only_path) = image_only.as_deref() else {
-        if std::env::var_os("DOCFLOW_REQUIRE_REAL_OCR").is_some() {
-            panic!("required real OCR fixture PDF is unavailable");
-        }
-        eprintln!("real OCR fixture skipped: image-only PDF is unavailable");
-        return;
-    };
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| {
+            let searchable = fixture.path().join("source.pdf");
+            let raster = fixture.path().join("first-page.png");
+            let image_only = fixture.path().join("image-only.pdf");
+            write_text_pdf(
+                &searchable,
+                "AZE-SUN-INT-QMS-RFI-CIV-0064 REQUEST FOR INSPECTION NATIVE OCR FIXTURE",
+            );
+            render_first_page_png(&searchable, &raster, 300).unwrap();
+            image_pdf_from_png(&raster, &image_only).unwrap();
+            image_only
+        });
 
     let adapter = NativeOcr::with_tesseract(tesseract);
     let read = adapter
-        .read(image_only_path)
+        .read(&image_only)
         .expect("image-only PDF should use the real packaged-shape OCR adapter");
 
     assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-CIV-0064");
     assert_eq!(read.matched.method, RfiMethod::Strict);
     assert!(read.source.starts_with("ocr:consensus:"), "{}", read.source);
+
+    for (name, heading, expected) in [
+        ("cover", "REQUEST FOR INSPECTION", "confirmed:verified:"),
+        (
+            "checklist",
+            "PILE RAMMING INSTALLATION CHECKLIST",
+            "attachment:pile-ramming",
+        ),
+    ] {
+        let text = fixture.path().join(format!("{name}-text.pdf"));
+        let raster = fixture.path().join(format!("{name}.png"));
+        let scan = fixture.path().join(format!("{name}.pdf"));
+        write_text_pdf(
+            &text,
+            &format!("SUNRISE PROJECT\n{heading}\nRFI No: AZE-SUN-INT-QMS-RFI-MEC-0102"),
+        );
+        render_first_page_png(&text, &raster, 300).unwrap();
+        image_pdf_from_png(&raster, &scan).unwrap();
+        let read = adapter.read_cover_page(&scan, 0).unwrap();
+        assert!(
+            read.source
+                .starts_with(&format!("ocr:fast-cover:{expected}")),
+            "{name}: {}",
+            read.source
+        );
+        assert_eq!(read.matched.ok(), name == "cover");
+    }
 }
 
 #[test]
@@ -302,13 +317,14 @@ fn operator_process_scan_pdf_matches_the_expected_exact_rfi() {
     assert_eq!(read.matched.code, expected, "source={}", read.source);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn write_text_pdf(path: &std::path::Path, text: &str) {
     let escaped = text
         .replace('\\', "\\\\")
         .replace('(', "\\(")
-        .replace(')', "\\)");
-    let stream = format!("BT /F1 18 Tf 36 700 Td ({escaped}) Tj ET\n");
+        .replace(')', "\\)")
+        .replace('\n', ") Tj T* (");
+    let stream = format!("BT /F1 18 Tf 25 TL 36 700 Td ({escaped}) Tj ET\n");
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
@@ -460,6 +476,7 @@ impl OcrAdapter for FastCoverFixtureOcr {
             .ok_or_else(|| OcrFailure::Document("fixture page index out of range".to_string()))?;
         let source = match *text {
             "[continuation]" => "ocr:fast-cover:no-cover-signal",
+            "[pile-ramming]" => "ocr:fast-cover:attachment:pile-ramming",
             "[uncertain-cover]" => "ocr:fast-cover:uncertain:fixture",
             _ => "ocr:fast-cover:confirmed:fixture",
         };
@@ -912,6 +929,53 @@ fn pages_before_the_first_confirmed_cover_remain_in_review() {
         .unwrap();
     assert!(!cover.dst.as_deref().unwrap().contains("_review"));
     assert!(leading_review.dst.as_deref().unwrap().contains("_review"));
+}
+
+#[test]
+fn fast_cover_reviews_out_of_order_pile_ramming_without_splitting_mec_attachments() {
+    let fixture = tempfile::tempdir().unwrap();
+    let source = fixture.path().join("source");
+    let destination = fixture.path().join("destination");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::create_dir(&destination).unwrap();
+    write_multi_page_pdf(&source.join("stack.pdf"), 6);
+    let plan = preview_fast_covers(
+        &ProcessScansParams {
+            source,
+            destination,
+            organize_into_rfi_folders: true,
+            keep_original: true,
+            scan_mode: Default::default(),
+            correct_orientation: false,
+            trash_root: None,
+        },
+        &FastCoverFixtureOcr(vec![
+            "AZE-SUN-INT-QMS-RFI-CIV-0101",
+            "[continuation]",
+            "[pile-ramming]",
+            "[continuation]",
+            "AZE-SUN-INT-QMS-RFI-MEC-0102",
+            "[pile-ramming]",
+        ]),
+        |_| {},
+        || false,
+    )
+    .unwrap();
+
+    assert!(plan.warnings.iter().any(|warning| {
+        warning.key == "warn.rfi.fastScan.unmatchedChecklist"
+            && warning.subject.ends_with("pages 3-4")
+    }));
+    for (pages, output) in [
+        (json!([0, 1]), "AZE-SUN-INT-QMS-RFI-CIV-0101"),
+        (json!([2, 3]), "_review"),
+        (json!([4, 5]), "AZE-SUN-INT-QMS-RFI-MEC-0102"),
+    ] {
+        assert!(plan.steps.iter().any(|step| {
+            step.meta.get("pageIndexes") == Some(&pages)
+                && step.dst.as_deref().is_some_and(|dst| dst.contains(output))
+        }));
+    }
 }
 
 #[test]

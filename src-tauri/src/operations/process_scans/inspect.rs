@@ -4,10 +4,8 @@ pub(super) fn plan_ocr_tasks(
     pdfs: &[PathBuf],
     inspections: &PdfInspections,
     scan_mode: ScanMode,
-    fast_cover_mode: bool,
-) -> Result<(OcrTasks, BTreeSet<PathBuf>), BackendError> {
+) -> Result<OcrTasks, BackendError> {
     let mut tasks = Vec::new();
-    let mut fast_cover_pdfs = BTreeSet::new();
     let mut total_pages = 0_usize;
     for pdf in pdfs {
         let page_count = inspections
@@ -21,9 +19,6 @@ pub(super) fn plan_ocr_tasks(
             )));
         }
         if inspections.get(pdf).is_none_or(Result::is_ok) && page_count > 0 {
-            if fast_cover_mode && scan_mode == ScanMode::MultiRfi && page_count > 1 {
-                fast_cover_pdfs.insert(pdf.clone());
-            }
             let ocr_page_count = if scan_mode == ScanMode::SingleRfi {
                 1
             } else {
@@ -32,7 +27,7 @@ pub(super) fn plan_ocr_tasks(
             tasks.extend((0..ocr_page_count).map(|page| (pdf.clone(), page)));
         }
     }
-    Ok((tasks, fast_cover_pdfs))
+    Ok(tasks)
 }
 
 pub(super) fn discover_pdfs(source: &Path) -> Result<Vec<PathBuf>, BackendError> {

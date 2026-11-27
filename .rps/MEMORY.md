@@ -1,5 +1,11 @@
 # DocFlow project memory
 
+- A project mark and an `RFI No` label appear on both covers and attachments.
+  Fast RFI Scan requires cover-specific form evidence and identity agreement
+  across two separately rendered resolutions. A Mechanical pile ramming
+  checklist after a non-MEC cover starts a Review group. Avoid inferring the
+  correct grouping of noncontiguous pages from a checklist reference alone.
+
 - Signed updates use the Rust-owned Tauri updater bridge and immutable-tag
   `latest.json` assets; never enable generic updater plugin IPC. See ADR 0052.
   The release signer private key belongs only in GitHub Actions secrets, and

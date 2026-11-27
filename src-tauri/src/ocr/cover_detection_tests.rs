@@ -132,8 +132,7 @@ fn fast_cover_reads_the_windows_o_for_zero_and_missed_heading_cases() {
     assert_eq!(read.matched.method, RfiMethod::OcrAlias);
     assert_eq!(read.matched.confidence, 0.9);
     // Logged on Windows: heading missed, exact labeled identity and template mark present.
-    let no_heading =
-        "INTEC SUNRISE PROJECT\nDate: 14.11.2026 RFI No: AZE-SUN-INT-QMS-RFI-ELE-0067 Rev: 0";
+    let no_heading = "INTEC SUNRISE PROJECT\nDate: 14.11.2026 RFI No: AZE-SUN-INT-QMS-RFI-ELE-0067 Rev: 0\nFor the attention of: Inspector\nDiscipline: Electrical";
     let read = confirmed_cover_read(no_heading, "test").expect("labeled identity confirms");
     assert_eq!(read.matched.code, "AZE-SUN-INT-QMS-RFI-ELE-0067");
     assert_eq!(read.matched.method, RfiMethod::Strict);
@@ -529,4 +528,36 @@ fn identity_tail_reads_only_an_exact_unique_discipline_and_number() {
     assert_eq!(identity_tail("RFI-XYZ-0096"), None);
     assert_eq!(identity_tail("RFI-PRC-00961"), None);
     assert_eq!(identity_tail("RFI-PRC-0096 RFI-ELE-0069"), None);
+}
+
+#[test]
+fn rfi_reference_on_an_attachment_does_not_confirm_a_cover() {
+    for attachment in [
+        "SUNRISE PROJECT\nPILE RAMMING INSTALLATION CHECKLIST\nRFI No. AZE-SUN-INT-QMS-RFI-MEC-0421",
+        "INTEC\nPV MODULE INSTALLATION INSPECTION REPORT\nReport/RFI No. AZE-SUN-INT-QMS-RFI-MEC-0421",
+    ] {
+        assert!(confirmed_cover_read(attachment, "test").is_none());
+    }
+}
+
+#[test]
+fn cover_verification_requires_agreement_on_the_serial() {
+    let first = confirmed_read();
+    let mut other = first.clone();
+    other.matched = find("AZE-SUN-INT-QMS-RFI-CIV-1349");
+    let conflict = verify_cover_reads(first.clone(), other, &BTreeSet::new());
+    assert!(!conflict.matched.ok());
+    assert!(conflict.source.contains("conflicting-identities"));
+
+    let text_conflict = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-1349".to_string()]);
+    assert!(
+        !verify_cover_reads(first.clone(), first.clone(), &text_conflict)
+            .matched
+            .ok()
+    );
+    assert!(is_confirmed_cover(&verify_cover_reads(
+        first.clone(),
+        first,
+        &BTreeSet::new()
+    )));
 }

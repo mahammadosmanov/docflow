@@ -104,6 +104,7 @@
   "rfi.fastScan.reread.differs": "Отличается — проверьте",
   "rfi.fastScan.reread.unavailable": "Недоступно",
   "rfi.fastScan.coverCrops.title": "RFI No. на скане",
+  "warn.rfi.fastScan.unmatchedChecklist": "Для чек-листа забивки свай здесь нет соответствующего титульного листа RFI. Проверьте эти страницы.",
   "warn.rfi.fastScan.rereadDiffers": "Второе чтение ячейки номера RFI отличается — проверьте номер на скане",
   "rfi.fastScan.editor.updatePreview": "Обновить предпросмотр",
   "rfi.fastScan.editor.updatingPreview": "Обновление предпросмотра…",

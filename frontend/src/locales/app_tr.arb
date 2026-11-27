@@ -104,6 +104,7 @@
   "rfi.fastScan.reread.differs": "Farklı — kontrol edin",
   "rfi.fastScan.reread.unavailable": "Yok",
   "rfi.fastScan.coverCrops.title": "Taranan RFI No.",
+  "warn.rfi.fastScan.unmatchedChecklist": "Kazık çakma kontrol listesi için burada eşleşen bir RFI kapak sayfası yok. Bu sayfaları inceleyin.",
   "warn.rfi.fastScan.rereadDiffers": "RFI numara hücresinin ikinci okuması farklı — taranan numarayı kontrol edin",
   "rfi.fastScan.editor.updatePreview": "Önizlemeyi güncelle",
   "rfi.fastScan.editor.updatingPreview": "Önizleme güncelleniyor…",

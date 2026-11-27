@@ -171,8 +171,7 @@ where
     } else {
         (0, BTreeMap::new())
     };
-    let (tasks, fast_cover_pdfs) =
-        plan_ocr_tasks(pdfs, &inspections, params.scan_mode, fast_cover_mode)?;
+    let tasks = plan_ocr_tasks(pdfs, &inspections, params.scan_mode)?;
     let (orientation_workers, orientations) = if params.scan_mode == ScanMode::MultiRfi
         && params.correct_orientation
         && ocr.supports_orientation()
@@ -188,7 +187,7 @@ where
         bounded_map_stream(
             &tasks,
             |(pdf, page)| {
-                if fast_cover_pdfs.contains(pdf) {
+                if fast_cover_mode {
                     ocr.read_cover_page(pdf, *page)
                 } else {
                     ocr.read_page(pdf, *page)

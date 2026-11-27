@@ -37,14 +37,18 @@ identity or secrets.
 
 - `rfi.process_scans_fast_covers` is the only active RFI scan-separation
   operation. It scans top-level PDFs and supports two explicit modes.
-- Multi-RFI checks the upper page band in four right-angle directions at low
-  resolution. A group starts only when one high-confidence, consensus-confirmed
-  strict identity or approved OCR alias, `REQUEST FOR INSPECTION`, and a known
-  project/client mark (`SUNRISE PROJECT`, `INTEC`, or `LIGHTSOURCEBP`) agree.
-  Searchable text alone cannot confirm a cover. The independent cover-confirmed
-  rescue is limited to unresolved strong-vote candidates; it does not override a
-  stable text-layer identity or competing RFI. Uncertain boundaries send the
-  affected pages to `_review` without attaching them to an earlier RFI.
+- Fast RFI Scan checks the upper page band in four right-angle directions.
+  Naming requires matching visible OCR identities from two separately rendered
+  resolutions and a known mark (`SUNRISE PROJECT`, `INTEC`, or
+  `LIGHTSOURCEBP`). Cover evidence is the request heading or both the
+  attention and discipline fields with an identity in the labeled cell.
+  Searchable text can veto an identity. A possible cover with missing or
+  conflicting reads starts a Review group in Multi-RFI.
+- A pile ramming installation checklist is a Mechanical attachment. Its RFI
+  reference cannot start a named group. When that checklist follows a
+  non-MEC group, the pages from the checklist through the next confirmed
+  cover go to Review, excluding the new cover. The split does not join
+  noncontiguous attachments to a prior packet.
 - When safe PDF page extraction is unsupported, the complete source PDF goes to
   `_review` unchanged with an unreadable warning. Page separation preserves
   supported XMP metadata, including indirect stream lengths.

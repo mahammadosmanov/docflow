@@ -104,6 +104,7 @@
   "rfi.fastScan.reread.differs": "Fərqlidir — yoxlayın",
   "rfi.fastScan.reread.unavailable": "Yoxdur",
   "rfi.fastScan.coverCrops.title": "Skan edilmiş RFI No.",
+  "warn.rfi.fastScan.unmatchedChecklist": "Svay vurma yoxlama siyahısı üçün burada uyğun RFI üz səhifəsi yoxdur. Bu səhifələri yoxlayın.",
   "warn.rfi.fastScan.rereadDiffers": "RFI nömrə xanasının ikinci oxunuşu fərqlidir — skan edilmiş nömrəni yoxlayın",
   "rfi.fastScan.editor.updatePreview": "Önizləməni yenilə",
   "rfi.fastScan.editor.updatingPreview": "Önizləmə yenilənir…",
