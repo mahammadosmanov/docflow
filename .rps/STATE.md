@@ -1,6 +1,19 @@
 # DocFlow project state
 
-Updated: 2026-11-27
+Updated: 2026-11-28
+
+## Workflow reliability and retirement (2.0.0)
+
+- Retired six operator workflows at the UI and command boundary. Batch Print,
+  existing journals, and recovery remain supported.
+- Repair enabled Windows startup registration on normal launch. Actual
+  Windows sign-out/sign-in and operator hardware acceptance remain pending.
+- Shared template replacement checks survive reopen and gate publish. Apply
+  the current template SQL to enforce the same guard on older clients.
+- Follow Up Preview does not change shared exclusions. Settings exposes
+  explicit single-code edits. CON-CIV-010/011 require measured temperatures.
+- Preview diagnostics capture stage timing and OCR cache counts. Representative
+  Windows and OneDrive performance baselines remain pending.
 
 ## Fast RFI Scan cover verification (1.68.2)
 

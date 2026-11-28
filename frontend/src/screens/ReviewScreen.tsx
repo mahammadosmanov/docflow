@@ -4,6 +4,7 @@ import {
   Eye,
   FileCheck2,
   FileSearch,
+  Pencil,
   RefreshCw,
   RotateCcw,
   Trash2,
@@ -11,6 +12,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -74,6 +76,12 @@ export function ReviewScreen({
   const [result, setResult] = useState<OperationResult | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const missingCodeRef = useRef<HTMLInputElement>(null);
+  const stageFocusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (plan || result) stageFocusRef.current?.focus();
+  }, [plan, result]);
 
   const scan = useCallback(async () => {
     setBusy(true);
@@ -105,15 +113,18 @@ export function ReviewScreen({
       Object.fromEntries(items.map((it) => [it.selectionId, action(it)])),
     );
 
-  const decisions: ReviewDecision[] = items
-    .filter((item) => actions[item.selectionId] !== "keep")
-    .map((item) => ({
-      itemId: item.selectionId,
-      action: actions[item.selectionId] as ReviewDecision["action"],
-      code: codes[item.selectionId] ?? "",
-    }));
+  const decisions = items.flatMap<ReviewDecision>((item) => {
+    const action = actions[item.selectionId];
+    return action && action !== "keep"
+      ? [{ itemId: item.selectionId, action, code: codes[item.selectionId] ?? "" }]
+      : [];
+  });
+  const missingCode = items.find(
+    (item) => actions[item.selectionId] === "put" && !codes[item.selectionId]?.trim(),
+  );
 
   const preview = async () => {
+    if (missingCode || decisions.length === 0) return;
     setBusy(true);
     setError("");
     try {
@@ -168,6 +179,7 @@ export function ReviewScreen({
       <main className="work-pane review-pane">
         {result ? (
           <ResultView
+            focusRef={stageFocusRef}
             result={result}
             s={s}
             error={error}
@@ -179,6 +191,7 @@ export function ReviewScreen({
           />
         ) : plan ? (
           <PlanView
+            focusRef={stageFocusRef}
             plan={plan}
             s={s}
             error={error}
@@ -220,7 +233,7 @@ export function ReviewScreen({
                         icon={<ArrowRight />}
                         onClick={() =>
                           setAllActions((it) =>
-                            it.code.trim() ? "put" : "keep",
+                            codes[it.selectionId]?.trim() ? "put" : "keep",
                           )
                         }
                       >
@@ -257,7 +270,13 @@ export function ReviewScreen({
                         </span>
                       </button>
                       <input
-                        aria-label={`${item.name} code`}
+                        aria-label={s.t("review.codeFor", { name: item.name })}
+                        aria-invalid={
+                          actions[item.selectionId] === "put" && !codes[item.selectionId]?.trim()
+                            ? true
+                            : undefined
+                        }
+                        ref={missingCode?.selectionId === item.selectionId ? missingCodeRef : undefined}
                         value={codes[item.selectionId] ?? ""}
                         placeholder={s.t("review.noCode")}
                         disabled={actions[item.selectionId] !== "put"}
@@ -304,22 +323,28 @@ export function ReviewScreen({
             </div>
             <ActionBar
               left={
-                <span className="muted">
-                  {decisions.length
-                    ? s.t("review.selected", {
-                        count: decisions.length,
-                      })
-                    : s.t("review.noChanges")}
+                <span className="muted" role="status">
+                  {missingCode
+                    ? s.t("review.codeRequired", { name: missingCode.name })
+                    : decisions.length
+                      ? s.t("review.selected", { count: decisions.length })
+                      : s.t("review.noChanges")}
                 </span>
               }
               right={
-                <Button
-                  icon={<Eye />}
-                  disabled={!decisions.length || busy}
-                  onClick={() => void preview()}
-                >
-                  {s.t("action.preview")}
-                </Button>
+                missingCode ? (
+                  <Button icon={<Pencil />} onClick={() => missingCodeRef.current?.focus()}>
+                    {s.t("review.enterCode")}
+                  </Button>
+                ) : (
+                  <Button
+                    icon={<Eye />}
+                    disabled={!decisions.length || busy}
+                    onClick={() => void preview()}
+                  >
+                    {s.t("action.preview")}
+                  </Button>
+                )
               }
             />
           </div>

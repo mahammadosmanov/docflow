@@ -129,6 +129,8 @@ struct Record {
     intec_type: String,
     location: String,
     subcontractor: String,
+    #[serde(skip)]
+    email_fields: BTreeSet<&'static str>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

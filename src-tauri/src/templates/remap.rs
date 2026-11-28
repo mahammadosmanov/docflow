@@ -7,7 +7,7 @@
 //! somewhere else, exactly once, is moved. Anything else is missing and needs
 //! the operator.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     FileKind,
@@ -15,7 +15,7 @@ use super::{
     copies::{Group, read},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CheckStatus {
     Found,
@@ -23,7 +23,7 @@ pub enum CheckStatus {
     Missing,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorCheck {
     pub key: String,
@@ -107,7 +107,10 @@ pub fn check(
                         && group.writable(target)
                         && (kind == FileKind::Docx || target.1 <= 16_384)
                     {
-                        candidates.push(anchor_at(kind, index, group, target));
+                        candidates.push(CellAnchor {
+                            repeat_columns: anchor.repeat_columns,
+                            ..anchor_at(kind, index, group, target)
+                        });
                     }
                 }
             }

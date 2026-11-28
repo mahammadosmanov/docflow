@@ -46,6 +46,7 @@ import {
 } from "./WorkbookChangePreview";
 import {
   SignedPageComparison,
+  type SignedComparisonLoader,
 } from "./SignedPageComparison";
 import { CoverCropStrip } from "./CoverCropStrip";
 import {
@@ -65,6 +66,7 @@ export function PlanView({
   onUpdatePreview,
   isUpdatingPreview = false,
   scanPreviewUpdated = false,
+  loadSignedComparison,
   focusRef,
 }: {
   plan: Plan;
@@ -78,6 +80,7 @@ export function PlanView({
   onUpdatePreview?: () => void;
   isUpdatingPreview?: boolean;
   scanPreviewUpdated?: boolean;
+  loadSignedComparison?: SignedComparisonLoader;
   focusRef?: RefObject<HTMLDivElement | null>;
 }) {
   const [warningFocusCode, setWarningFocusCode] = useState("");
@@ -142,6 +145,7 @@ export function PlanView({
                   plan={plan}
                   editorRows={editorRows}
                   focusCode={warningFocusCode}
+                  loadComparison={loadSignedComparison}
                   s={s}
                 />
                 <SignedWarningReviewSummary plan={plan} s={s} />

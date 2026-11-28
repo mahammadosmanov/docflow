@@ -73,7 +73,6 @@ export function TemplateCells({
   s,
   versionId,
   fields,
-  reloadKey,
   onMark,
   onRemove,
   optionalSheets,
@@ -83,8 +82,6 @@ export function TemplateCells({
   s: Strings;
   versionId: string;
   fields: TemplateField[];
-  /** Changes when the draft's file changes, so the view reloads. */
-  reloadKey: string;
   onMark: (field: TemplateField) => void;
   onRemove: (key: string) => void;
   optionalSheets: string[];
@@ -116,7 +113,7 @@ export function TemplateCells({
     return () => {
       current = false;
     };
-  }, [bridge, versionId, reloadKey, s]);
+  }, [bridge, versionId, s]);
 
   const marked = useMemo(
     () => fields.flatMap((field) => (field.anchor ? [field.anchor] : [])),

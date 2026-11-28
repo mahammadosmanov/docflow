@@ -10,6 +10,7 @@ import {
 import {
   Notice,
 } from "../components/feedback";
+import { Button } from "../components/ui";
 import {
   Modal,
 } from "../components/Modal";
@@ -37,24 +38,36 @@ export function safePngThumbnail(value: unknown): string | null {
   return value;
 }
 
+type ComparisonImages = { archive: string | null; signed: string | null };
+
+export type SignedComparisonLoader = (
+  planId: string,
+  rowId: string,
+  archiveChoice: string,
+) => Promise<ComparisonImages>;
+
 export function SignedPageComparison({
   plan,
   editorRows,
   focusCode,
   s,
+  loadComparison,
 }: {
   plan: Plan;
   editorRows: Record<string, unknown>[];
   focusCode: string;
   s: Strings;
+  loadComparison?: SignedComparisonLoader;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const raw =
     plan.meta?.pageComparisons && typeof plan.meta.pageComparisons === "object"
       ? (plan.meta.pageComparisons as Record<string, unknown>)
       : {};
+  const onDemand = plan.meta?.pageComparisonOnDemand === true && loadComparison;
   const available = editorRows.filter((row) => {
     const rowId = typeof row._rowId === "string" ? row._rowId : "";
+    if (onDemand) return Boolean(rowId);
     const comparison = raw[rowId];
     if (!comparison || typeof comparison !== "object") return false;
     const record = comparison as Record<string, unknown>;
@@ -69,6 +82,11 @@ export function SignedPageComparison({
   const availableIds = available.map((row) => String(row._rowId));
   const [selectedId, setSelectedId] = useState(availableIds[0] ?? "");
   const [expanded, setExpanded] = useState<"archive" | "signed" | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    images: ComparisonImages | null;
+  } | null>(null);
   const availableSignature = availableIds.join("\u0000");
   useEffect(() => {
     if (!availableIds.includes(selectedId)) {
@@ -93,15 +111,33 @@ export function SignedPageComparison({
   }
   const selected =
     available.find((row) => row._rowId === selectedId) ?? available[0];
-  const comparison = raw[String(selected._rowId)] as Record<string, unknown>;
+  const rowId = String(selected._rowId);
+  const comparison = (raw[rowId] ?? {}) as Record<string, unknown>;
   const archives =
     comparison.archives && typeof comparison.archives === "object"
       ? (comparison.archives as Record<string, unknown>)
       : {};
   const archiveToken =
     typeof selected.archiveFile === "string" ? selected.archiveFile : "";
-  const archivePreview = safePngThumbnail(archives[archiveToken]);
-  const signedPreview = safePngThumbnail(comparison.signed);
+  const comparisonKey = JSON.stringify([plan.planId, rowId, archiveToken]);
+  const current = loaded?.key === comparisonKey ? loaded : null;
+  const archivePreview =
+    safePngThumbnail(archives[archiveToken]) ?? safePngThumbnail(current?.images?.archive);
+  const signedPreview = safePngThumbnail(comparison.signed) ?? safePngThumbnail(current?.images?.signed);
+  const needsLoad = !signedPreview || (Boolean(archiveToken) && !archivePreview);
+  const requestComparison = async () => {
+    if (!onDemand || loading) return;
+    setLoading(true);
+    setLoaded(null);
+    try {
+      const images = await onDemand(plan.planId, rowId, archiveToken);
+      setLoaded({ key: comparisonKey, images });
+    } catch {
+      setLoaded({ key: comparisonKey, images: null });
+    } finally {
+      setLoading(false);
+    }
+  };
   const code = typeof selected.code === "string" ? selected.code : selectedId;
   const signedFile =
     typeof selected.signedFile === "string" ? selected.signedFile : "";
@@ -183,6 +219,18 @@ export function SignedPageComparison({
           <strong>{s.t("rfi.signed.previewSigned")}</strong>
           <small>{s.t("rfi.signed.previewOnlyPageOne")}</small>
         </div>
+        {onDemand && needsLoad && (
+          <div>
+            <Button
+              variant="secondary"
+              disabled={loading}
+              onClick={() => void requestComparison()}
+            >
+              {s.t("rfi.signed.previewLoad")}
+            </Button>
+            {loading && <span role="status">{s.t("rfi.signed.previewLoading")}</span>}
+          </div>
+        )}
         <div className="signed-page-comparison-grid">
           <figure>
             <figcaption>
@@ -206,7 +254,7 @@ export function SignedPageComparison({
             ) : (
               <div className="signed-page-preview-empty">
                 {archiveToken
-                  ? s.t("rfi.signed.previewUnavailable")
+                  ? s.t(onDemand && !current ? "rfi.signed.previewLoadHint" : "rfi.signed.previewUnavailable")
                   : s.t("rfi.signed.previewChooseArchive")}
               </div>
             )}
@@ -232,12 +280,12 @@ export function SignedPageComparison({
               </button>
             ) : (
               <div className="signed-page-preview-empty">
-                {s.t("rfi.signed.previewUnavailable")}
+                {s.t(onDemand && !current ? "rfi.signed.previewLoadHint" : "rfi.signed.previewUnavailable")}
               </div>
             )}
           </figure>
         </div>
-        {omitted > 0 && (
+        {!onDemand && omitted > 0 && (
           <small>{s.t("rfi.signed.previewOmitted", { count: omitted })}</small>
         )}
       </section>

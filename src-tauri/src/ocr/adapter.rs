@@ -1,6 +1,16 @@
 use super::*;
 
 impl OcrAdapter for NativeOcr {
+    fn cache_engine_revision(&self) -> Option<String> {
+        let executable = self.tesseract.as_deref()?;
+        let language_data = self.tessdata.as_deref()?.join("eng.traineddata");
+        Some(format!(
+            "{}-{}",
+            crate::fs_ops::file_sha256(executable).ok()?,
+            crate::fs_ops::file_sha256(&language_data).ok()?,
+        ))
+    }
+
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure> {
         self.read_page(path, 0)
     }

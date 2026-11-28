@@ -32,24 +32,47 @@ fn read_granted_input(
     Ok(bytes)
 }
 
-fn ambient_range(values: &Map<String, Value>) -> Result<(i64, i64), BackendError> {
-    let ambient_min = values
-        .get("ambient_min")
-        .and_then(Value::as_i64)
-        .unwrap_or(19);
-    let ambient_max = values
-        .get("ambient_max")
-        .and_then(Value::as_i64)
-        .unwrap_or(24);
-    if !(0..=100).contains(&ambient_min)
-        || !(0..=100).contains(&ambient_max)
-        || ambient_min > ambient_max
-    {
-        return Err(concrete_documents_error(
-            "Ambient temperature range must be between 0 and 100 °C with minimum no greater than maximum",
-        ));
+fn measured_ambient_by_rfi(
+    value: Option<&Value>,
+    selected_rfis: &[String],
+) -> Result<HashMap<String, Vec<String>>, BackendError> {
+    let invalid = || BackendError::validation("error.rfi.documents.measuredAmbient");
+    let raw = value.map_or(Some(""), Value::as_str).ok_or_else(invalid)?;
+    let mut measurements = HashMap::new();
+    for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let (rfi, readings) = line.split_once('=').ok_or_else(invalid)?;
+        let rfis = requested_rfis(rfi).map_err(|_| invalid())?;
+        if rfis.len() != 1 || !selected_rfis.contains(&rfis[0]) {
+            return Err(invalid());
+        }
+        let readings = readings
+            .split_whitespace()
+            .map(|reading| {
+                let reading = reading.replace(',', ".");
+                let unsigned = reading.strip_prefix('-').unwrap_or(&reading);
+                let (whole, decimal) = unsigned.split_once('.').unwrap_or((unsigned, "0"));
+                if whole.is_empty()
+                    || whole.len() > 3
+                    || decimal.is_empty()
+                    || decimal.len() > 6
+                    || !whole
+                        .bytes()
+                        .chain(decimal.bytes())
+                        .all(|byte| byte.is_ascii_digit())
+                    || !reading
+                        .parse::<f64>()
+                        .is_ok_and(|value| (-100.0..=100.0).contains(&value))
+                {
+                    return Err(invalid());
+                }
+                Ok(reading)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if readings.is_empty() || measurements.insert(rfis[0].clone(), readings).is_some() {
+            return Err(invalid());
+        }
     }
-    Ok((ambient_min, ambient_max))
+    Ok(measurements)
 }
 
 fn input_grant_roots(
@@ -160,6 +183,7 @@ impl NativeBackend {
         let mut plan = preview_fast_covers(&scan_params, &ocr, &mut progress, || {
             cancellation.is_cancelled()
         })?;
+        ocr.attach_stats(&mut plan);
         if let Some(statuses) = &log_statuses {
             crate::operations::process_scans::apply_log_check(&mut plan, statuses);
         }
@@ -234,7 +258,7 @@ impl NativeBackend {
             &caller.owner_id,
             &request.values.source,
         );
-        let plan = preview_rfi_file_group(
+        let mut plan = preview_rfi_file_group(
             &GroupRfiFilesParams {
                 source: request.values.source,
                 destination: request.values.destination,
@@ -243,6 +267,7 @@ impl NativeBackend {
             progress,
             || cancellation.is_cancelled(),
         )?;
+        ocr.attach_stats(&mut plan);
         let grant_ids = provisional
             .grants()
             .iter()
@@ -350,8 +375,10 @@ impl NativeBackend {
                 "Enter RFI numbers for at least one CON-CIV type",
             ));
         }
-        let (ambient_min, ambient_max) = ambient_range(&request.values)?;
-        let ambient_groups = parse_ambient_groups(get_text("ambient_groups"), &rfis_011)?;
+        let measured_ambient_010 =
+            measured_ambient_by_rfi(request.values.get("measured_ambient_010"), &rfis_010)?;
+        let measured_ambient_011 =
+            measured_ambient_by_rfi(request.values.get("measured_ambient_011"), &rfis_011)?;
         let rfi_log = required_selected_path(&request.values, "rfi_log_workbook")?;
         let output_directory = required_selected_path(&request.values, "output_directory")?;
         if !output_directory.is_dir() {
@@ -446,10 +473,6 @@ impl NativeBackend {
             None
         };
         let ratios = parse_water_ratios(get_text("water_cement_ratios"))?;
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos() as u64;
         let mut generated = Vec::new();
         for (document_type, numbers, template_path) in selections {
             let template_bytes = read_selected(&template_path)?;
@@ -491,6 +514,29 @@ impl NativeBackend {
                 } else {
                     Vec::new()
                 };
+                let ambient_input = match document_type {
+                    DocumentType::Civ010 => Some((
+                        &measured_ambient_010,
+                        additional_batches.len() + 1,
+                        "CON-CIV-010",
+                    )),
+                    DocumentType::Civ011 => Some((&measured_ambient_011, 1, "CON-CIV-011")),
+                    _ => None,
+                };
+                let measured_ambient = if let Some((ambient, expected, form)) = ambient_input {
+                    let Some(readings) =
+                        ambient.get(&rfi).filter(|values| values.len() == expected)
+                    else {
+                        warnings.push(Warning {
+                            key: "warn.rfi.documents.measuredAmbientMissing".to_string(),
+                            subject: format!("{rfi} ({form})"),
+                        });
+                        continue;
+                    };
+                    readings.clone()
+                } else {
+                    Vec::new()
+                };
                 records.push(SourceRecord {
                     rfi: rfi.clone(),
                     location,
@@ -515,7 +561,7 @@ impl NativeBackend {
                     in_situ_temp: field("in_situ_temp").to_string(),
                     samples: field("samples").to_string(),
                     water_cement_ratio: ratios.get(&rfi).cloned(),
-                    ambient_range: ambient_groups.get(&rfi).copied(),
+                    measured_ambient,
                     drawing: field("drawing").to_string(),
                     additional_batches,
                 });
@@ -524,14 +570,8 @@ impl NativeBackend {
                 continue;
             }
             generated.extend(
-                concrete_documents::generate(
-                    document_type,
-                    &template_bytes,
-                    &records,
-                    (ambient_min as u8, ambient_max as u8),
-                    seed ^ (generated.len() as u64 + 1),
-                )
-                .map_err(|error| concrete_documents_error(&error))?,
+                concrete_documents::generate(document_type, &template_bytes, &records)
+                    .map_err(|error| concrete_documents_error(&error))?,
             );
         }
 

@@ -10,6 +10,7 @@ const s = makeStrings("en");
 
 const draft = {
   versionId: "v",
+  fileSha256: "initial",
   placeholders: [],
   fieldMap: { schema: 1, fileName: "{{rfiNo}}", fields: [], presets: [] },
 } as unknown as TemplateDraft;

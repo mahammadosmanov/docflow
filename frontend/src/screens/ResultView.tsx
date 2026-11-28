@@ -10,7 +10,6 @@ import {
   FolderOpen,
   History,
   LoaderCircle,
-  Mail,
   Printer,
   RotateCcw,
   TableProperties,
@@ -88,6 +87,11 @@ export function StepRow({
           .filter(Boolean)
           .join(", ")
       : "";
+  const measuredAmbient =
+    step.noteKey === "step.rfi.generatedConcreteDocument" &&
+    Array.isArray(step.meta.measuredAmbientC)
+      ? step.meta.measuredAmbientC.filter((value) => typeof value === "string").join(", ")
+      : "";
   const extractionPages =
     step.kind === "pdf_pages_extract" && Array.isArray(step.meta.pageIndexes)
       ? step.meta.pageIndexes
@@ -144,6 +148,9 @@ export function StepRow({
             {s.t("rfi.orientation.pages")}: {rotationSummary}
           </span>
         )}
+        {measuredAmbient && (
+          <span>{s.t("rfi.documents.measuredAmbientPreview", { values: measuredAmbient })}</span>
+        )}
         {extractionPages && (
           <span>
             {s.t("rfi.extraction.pages")}: {extractionPages}
@@ -166,7 +173,6 @@ export function ResultView({
   copyingSheet = null,
   onCopy,
   onResumePrint,
-  onPrepareRfiReply,
   onOpenDestination,
 }: {
   result: OperationResult;
@@ -180,7 +186,6 @@ export function ResultView({
   copyingSheet?: string | null;
   onCopy?: (sheet?: string) => void;
   onResumePrint?: () => void;
-  onPrepareRfiReply?: () => void;
   onOpenDestination?: () => void;
 }) {
   const effectState =
@@ -295,15 +300,6 @@ export function ResultView({
         </div>
       )}
       <div className="result-actions">
-        {onPrepareRfiReply && (
-          <Button
-            variant="secondary"
-            icon={<Mail />}
-            onClick={onPrepareRfiReply}
-          >
-            {s.t("rfi.action.prepareReply")}
-          </Button>
-        )}
         {onResumePrint && (
           <Button
             variant="secondary"

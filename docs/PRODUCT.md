@@ -6,7 +6,7 @@ DocFlow is a desktop document-automation application for repetitive, high-risk
 RFI, PDF, Excel, and printing workflows. It is designed for operators who need
 speed without allowing silent document loss or misclassification.
 
-Current product version: **1.68.2**. `VERSION` is authoritative.
+Current product version: **2.0.0**. `VERSION` is authoritative.
 
 ## Problem
 
@@ -23,9 +23,6 @@ workbook behavior, print batches kept in order, and every change recoverable.
 ## Product contract
 
 1. Every mutation is preview → explicit approval → apply → journal → undo.
-   A fixed replica profile may receive revocable standing authorization after
-   its first explicit Apply; every later run still plans, verifies, journals,
-   backs up, and fails closed.
 2. Apply executes the approved plan without recalculating it.
 3. Existing destinations are never overwritten.
 4. A missed OCR match is reviewable; a guessed label is forbidden.
@@ -63,21 +60,10 @@ workbook behavior, print batches kept in order, and every change recoverable.
     copies go under `<destination>/<discipline>/<full-code>/<source filename>`.
     Multi-RFI mail fans out to every eligible matching folder while source files
     remain read-only; collisions never overwrite.
-19. Exact completed-RFI PDF filenames anywhere below the read-only RFI System
-    can drive an explicit, reviewable RFI Log `Inspection Status = Completed`
-    update without touching Follow Up or Worley data.
-20. One selected RFI System is the sole source for one-way publication to two
-    targets. Replacements retain verified backups; target-only files are never
-    deleted; unattended publication supports one-minute checks, defers for
-    recently modified source files, and pauses before approved mass-change
-    limits are exceeded.
-21. Repeated replica comparisons reuse only exact fingerprint-scoped local
-    SHA-256 evidence. Completed hash work survives interruption, while Apply
-    always validates live files and never trusts the index as mutation authority.
-22. Local support diagnostics include bounded, pathless printer inventory and
+19. Local support diagnostics include bounded, pathless printer inventory and
     latest-queue evidence so real Windows/EPSON outcomes can be compared without
     exposing document names, contents, paths, credentials, or tokens.
-23. Authenticated users can reach primary tasks and recovery destinations through
+20. Authenticated users can reach primary tasks and recovery destinations through
     persistent, responsive navigation. Fast RFI Scan is prominent without
     removing access to any registered operation.
 
@@ -88,10 +74,7 @@ workbook behavior, print batches kept in order, and every change recoverable.
 | Fast RFI Scan | Identify known RFI covers, split confirmed multi-RFI scans, or read only page one for a single RFI while preserving its complete PDF | Both modes require visible cover-form evidence and matching Strict or approved OCR-alias identities at two render resolutions. Out-of-order pile ramming checklists after a different discipline go to Review through the next confirmed cover. Exact OCR-only `CLV` normalizes to `CIV`. Preview accepts supported full-code candidates with one-to-four ASCII digits and pads the suffix to four; ITP, dates, and other numbers are not normalized. With optional page rotation on, direction-zero generic OCR words alone do not stop later cardinal cover searches; unresolved/no-code pages retain unchanged-copy review handling. That path pins each source SHA-256 before parallel OCR/orientation analysis and rejects source changes before Plan creation. Rust rederives target paths; source/page selections stay fixed and Apply never overwrites |
 | RFI file grouping | Copy PDFs, Office documents, EML, MSG, and other bounded files into `<destination>/<discipline>/<full-code>/<source filename>` | Only CIV/MEC/ELE/PRC; top-level source is read-only; readable EML/MSG evidence is required per RFI; exact multi-RFI fan-out is previewed; no overwrite; unmatched/unreadable files go to root `_review` |
 | RFI Log Add | Prepare and apply multi-sheet register updates | Backup, workbook fingerprint, post-write verification, undo |
-| RFI System/Worley sync | Detect signed first pages and synchronize RFI Log remarks plus CIV/MEC Worley control tables | Bounded parallel discovery/signature analysis with serial per-PDF checkpoints; exact header discovery, literal-cell guards, closed OOXML delta verification, backup, and undo |
 | RFI Follow Up sync | Project uniquely mapped RFI Log statuses into existing Follow Up groups and Worley tables | Exclude CIV source RFIs with `PCS-` Tag No values, including removing them from existing groups; fan comma-separated CIV `Tag No` tags only to distinct, exact prepared rows and show matched/unmatched tags in unselectable partial-coverage diagnostics; match MEC by exact source `Tag No`→target Block and source `Area`→target Section, including comma-separated multi-section fan-out; ignore MEC Inspection Location; support only ELE `ELE-0005` / `ELE-5.1.6` (1.6), `ELE-0005` / `ELE-5.2.6`, and `ELE-0006` / `ELE-6.2.5.3`, and match one exact `PCS-` Tag No to Block (1.6: any exact Block tag); leave other ELE item pairs outside scope; supported zero-match records stay outside template scope; never create rows or sections or change worksheet Remarks; ambiguous matches remain manual review; immutable Plan, guarded Apply, retained backup, and exact-identity failed-Apply Undo |
-| RFI completion-status sync | Detect exact completed RFI PDFs at every nesting depth and mark approved RFI Log rows Completed | Read-only bounded parallel discovery; exact filenames and rows; conflicting/formula/merged targets fail closed; backup, closed OOXML delta verification, journal, and undo |
-| Outlook reply draft | Prepare a Reply All response from the one selected message | Windows-only, exact-selection revalidation, unsent display, no recipient synthesis |
 | Batch Print | Keep mixed-file jobs in an approved order without false failure on normal fast spool release; optionally find exact First Page `.docx` and Sketch `.pdf` documents in the selected RFI System by canonical code, discipline-number input, or four-digit number | Persistent resumable queue, journaled approved steps, recoverable status waiting, no retry of explicit uncertainty, opt-in recall of safe settings without old files; finder is read-only, presents missing types/multiple versions, and requires explicit choice where bare numbers span disciplines |
 | Signed-page staging | Identify individual RFI pages in single or combined Worley scans, search the complete nested RFI System, visually compare old/new first pages, and replace page one in review copies | High-confidence consensus-confirmed Strict or approved OcrAlias identities only; repaired, fuzzy, conflicting, and filename-only identities remain review-only. Archive matching requires the exact case-insensitive RFI PDF basename; one-to-four-digit suffixes canonicalize to four digits, while Sketch/DOCX and folder/other-name matches do not count. Equivalent short/canonical duplicate PDFs remain ambiguous; archive and signed scan stay read-only, and existing review destinations never overwrite |
 | PDF orientation normalization | Make every confidently classifiable PDF page under CIV/MEC/ELE/PRC readable without manual rotation | Shares the canonical `/Rotate` and correction policy with Fast RFI Scan; the exact-header-ID fallback requires one canonical ID and direction at both 250/350 DPI. Source SHA-256 is pinned before analysis and checked after analysis and cache reuse; durable per-PDF checkpoints, bounded multi-core preview, separate no-clobber review tree, structural fidelity verification, and whole-file review for unresolved cases |

@@ -64,7 +64,7 @@ impl TemplateRemote for Scripted {
             .lock()
             .unwrap()
             .push((method.to_string(), path.to_string(), body.clone()));
-        let rows = self.rows.lock().unwrap();
+        let mut rows = self.rows.lock().unwrap();
         let key = format!("{method} {}", path.split('?').next().unwrap_or(path));
         if method == "POST" && path == "doc_template_versions" {
             let mut row = body.expect("body");
@@ -76,7 +76,9 @@ impl TemplateRemote for Scripted {
             for (field, value) in body.expect("body").as_object().expect("object") {
                 row[field] = value.clone();
             }
-            return Ok(json!([row]));
+            let response = json!([row]);
+            rows.insert("GET doc_template_versions".into(), response.clone());
+            return Ok(response);
         }
         rows.get(&key)
             .cloned()
@@ -200,7 +202,7 @@ fn published_versions_and_bad_maps_are_refused() {
                 title: "T".into(),
                 discipline: "ELE".into(),
                 category: String::new(),
-                field_map: json!({"schema": 1, "fields": [{"key": "a"}, {"key": "a"}]}),
+                ..save(json!({"schema": 1, "fields": [{"key": "a"}, {"key": "a"}]}))
             },
             1,
         )
@@ -357,11 +359,10 @@ fn draft_store(bytes: &[u8]) -> (Arc<Scripted>, tempfile::TempDir, TemplateStore
         .lock()
         .unwrap()
         .insert(path.clone(), bytes.to_vec());
-    remote
-        .rows
-        .lock()
-        .unwrap()
-        .insert("GET doc_templates".into(), template_row(json!([])));
+    remote.rows.lock().unwrap().insert(
+        "GET doc_templates".into(),
+        template_row(json!([{"id": VERSION_ID, "version": 2, "status": "draft"}])),
+    );
     remote.rows.lock().unwrap().insert(
         "GET doc_template_versions".into(),
         json!([{"id": VERSION_ID, "template_id": TEMPLATE_ID, "version": 2, "status": "draft",
@@ -385,6 +386,8 @@ fn save(field_map: Value) -> SaveDraft {
         discipline: "ELE".into(),
         category: String::new(),
         field_map,
+        file_sha256: None,
+        replacement_resolutions: Vec::new(),
     }
 }
 
@@ -517,6 +520,12 @@ fn replacing_the_file_reports_where_each_marked_cell_went() {
     );
 
     let gone = rows_docx(&[("Something else:", "x")]);
+    assert!(
+        store
+            .replace_file(VERSION_ID, "new.docx", &gone, 1)
+            .is_err()
+    );
+    let (_remote, _dir, store) = anchored_draft_store(&rows_docx(&[("Pour no:", "P1")]));
     let draft = store
         .replace_file(VERSION_ID, "new.docx", &gone, 1)
         .expect("replaced");
@@ -524,6 +533,99 @@ fn replacing_the_file_reports_where_each_marked_cell_went() {
         draft.checks[0].status,
         crate::templates::remap::CheckStatus::Missing
     );
+}
+
+#[test]
+fn replacement_checks_survive_reopen_and_block_rust_publish() {
+    let (remote, _dir, store) = anchored_draft_store(&rows_docx(&[("Pour no:", "P1")]));
+    let moved = rows_docx(&[("Header", ""), ("Pour no:", "P2")]);
+    store
+        .replace_file(VERSION_ID, "new.docx", &moved, 1)
+        .expect("replaced");
+    let draft = store.open_draft("RFI-ELE", 1).expect("reopened");
+    assert_eq!(draft.checks.len(), 1);
+    assert_eq!(draft.checks[0].status, remap::CheckStatus::Moved);
+    assert_eq!(
+        store.publish(VERSION_ID, 1).expect_err("pending").message,
+        "error.templates.replacementPending"
+    );
+    assert!(
+        remote
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, path, _)| !path.contains("publish_template_version"))
+    );
+
+    let mut map = draft.field_map;
+    map.fields[0].anchor = draft.checks[0].moved_to.clone();
+    let mut request = save(map.to_value());
+    request.file_sha256 = Some(draft.file_sha256);
+    assert!(
+        store.save_draft(&request, 1).is_err(),
+        "a map edit alone cannot settle a check"
+    );
+    request.replacement_resolutions = vec![ReplacementResolution {
+        key: "poured".into(),
+        action: ReplacementAction::Move,
+    }];
+    let actual_file_sha256 = request.file_sha256.replace("0".repeat(64));
+    assert_eq!(
+        store
+            .save_draft(&request, 1)
+            .expect_err("stale file")
+            .message,
+        "error.templates.draftChanged"
+    );
+    request.file_sha256 = actual_file_sha256;
+    assert!(
+        store
+            .save_draft(&request, 1)
+            .expect("approved move")
+            .checks
+            .is_empty()
+    );
+    assert!(
+        store
+            .open_draft("RFI-ELE", 1)
+            .expect("reopened")
+            .checks
+            .is_empty()
+    );
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .insert("POST rpc/publish_template_version".into(), json!(2));
+    assert!(store.publish(VERSION_ID, 1).is_ok());
+}
+
+#[test]
+fn an_incompatible_stored_map_is_never_overwritten() {
+    let (remote, _dir, store) = draft_store(&table_docx());
+    remote
+        .rows
+        .lock()
+        .unwrap()
+        .get_mut("GET doc_template_versions")
+        .unwrap()[0]["field_map"] = json!({"schema": 3, "slots": [{"key": "future"}]});
+    assert!(store.open_draft("RFI-ELE", 1).is_err());
+    assert!(
+        store
+            .replace_file(VERSION_ID, "new.docx", &docx("New"), 1)
+            .is_err()
+    );
+    assert!(store.save_draft(&save(json!({"schema": 1})), 1).is_err());
+    assert!(
+        remote
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(method, _, _)| method == "GET")
+    );
+    assert_eq!(remote.files.lock().unwrap().len(), 1);
 }
 
 #[test]
@@ -729,7 +831,7 @@ fn saving_a_draft_stores_the_normalized_category() {
                 title: "T".into(),
                 discipline: "ELE".into(),
                 category: "Concrete / Civil".into(),
-                field_map: json!({"schema": 1, "fields": [{"key": "rfiNo", "label": "RFI", "value": "{rfiNo}"}]}),
+                ..save(json!({"schema": 1, "fields": [{"key": "rfiNo", "label": "RFI", "value": "{rfiNo}"}]}))
             },
             1,
         )
@@ -746,7 +848,7 @@ fn saving_a_draft_stores_the_normalized_category() {
         title: "T".into(),
         discipline: "ELE".into(),
         category: "A/B/C/D".into(),
-        field_map: json!({"schema": 1}),
+        ..save(json!({"schema": 1}))
     };
     assert_eq!(
         store.save_draft(&bad, 1).expect_err("deep").message,

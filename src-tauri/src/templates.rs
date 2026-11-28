@@ -5,7 +5,7 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io::{Cursor, Write},
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
     sync::{Arc, LazyLock, Mutex, PoisonError},
 };
@@ -373,11 +373,20 @@ impl TemplateStore {
     }
 
     /// A cached file is usable only if it still hashes to its manifest checksum.
-    fn cached_file(&self, entry: &TemplateEntry) -> Option<PathBuf> {
+    fn cached_bytes(&self, entry: &TemplateEntry) -> Option<Vec<u8>> {
         let path = self.file_path(entry);
-        let bytes = fs::read(&path).ok()?;
+        let metadata = fs::symlink_metadata(&path).ok()?;
+        if !metadata.is_file() || metadata.len() != entry.file_size {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        fs::File::open(path)
+            .ok()?
+            .take(entry.file_size + 1)
+            .read_to_end(&mut bytes)
+            .ok()?;
         verify_file(entry, &bytes).ok()?;
-        Some(path)
+        Some(bytes)
     }
 
     fn install(&self, entry: &TemplateEntry, bytes: &[u8]) -> Result<(), BackendError> {
@@ -390,17 +399,22 @@ impl TemplateStore {
         temp.write_all(bytes)
             .and_then(|()| temp.as_file().sync_all())
             .map_err(|_| BackendError::request_failed("template cache is not writable"))?;
-        match temp.persist_noclobber(self.file_path(entry)) {
+        let path = self.file_path(entry);
+        let not_writable = || BackendError::request_failed("template cache is not writable");
+        match temp.persist_noclobber(&path) {
             Ok(_) => Ok(()),
-            // Files are content-addressed: an existing file with this name holds
-            // the same bytes unless it was damaged, which `cached_file` rejects.
-            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => self
-                .cached_file(entry)
-                .map(|_| ())
-                .ok_or_else(|| BackendError::request_failed("cached template file is damaged")),
-            Err(_) => Err(BackendError::request_failed(
-                "template cache is not writable",
-            )),
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if self.cached_bytes(entry).is_some() {
+                    return Ok(());
+                }
+                if !fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_file()) {
+                    return Err(not_writable());
+                }
+                // Only replace a damaged regular file in the app's content-addressed cache.
+                error.file.persist(&path).map_err(|_| not_writable())?;
+                Ok(())
+            }
+            Err(_) => Err(not_writable()),
         }
     }
 
@@ -425,7 +439,7 @@ impl TemplateStore {
                     version: entry.version,
                     published_at: entry.published_at.clone(),
                     field_count: field_count(&entry.field_map),
-                    cached: self.cached_file(entry).is_some(),
+                    cached: self.cached_bytes(entry).is_some(),
                 })
                 .collect(),
         }
@@ -489,7 +503,7 @@ impl TemplateStore {
                 failed.push(entry.code);
                 continue;
             }
-            let ready = self.cached_file(&entry).is_some()
+            let ready = self.cached_bytes(&entry).is_some()
                 || self
                     .remote
                     .download(&entry.storage_path, now)
@@ -500,7 +514,7 @@ impl TemplateStore {
             } else {
                 failed.push(entry.code.clone());
                 if let Some(old) = previous.get(&entry.template_id)
-                    && self.cached_file(old).is_some()
+                    && self.cached_bytes(old).is_some()
                 {
                     entries.push(old.clone());
                 }
@@ -515,9 +529,12 @@ impl TemplateStore {
 
     /// The entry and verified bytes of a cached template, for generation.
     pub fn read_cached(&self, code: &str) -> Option<(TemplateEntry, Vec<u8>)> {
-        let (entry, path) = self.resolve(code)?;
-        let bytes = fs::read(path).ok()?;
-        verify_file(&entry, &bytes).ok()?;
+        let entry = self
+            .read_manifest()
+            .entries
+            .into_iter()
+            .find(|entry| entry.code.eq_ignore_ascii_case(code))?;
+        let bytes = self.cached_bytes(&entry)?;
         Some((entry, bytes))
     }
 
@@ -526,20 +543,9 @@ impl TemplateStore {
         self.read_manifest()
             .entries
             .iter()
-            .filter(|entry| self.cached_file(entry).is_some())
+            .filter(|entry| self.cached_bytes(entry).is_some())
             .map(|entry| entry.code.clone())
             .collect()
-    }
-
-    /// The cached file and entry for a template code, for generation.
-    pub fn resolve(&self, code: &str) -> Option<(TemplateEntry, PathBuf)> {
-        let entry = self
-            .read_manifest()
-            .entries
-            .into_iter()
-            .find(|entry| entry.code.eq_ignore_ascii_case(code))?;
-        let path = self.cached_file(&entry)?;
-        Some((entry, path))
     }
 }
 
@@ -601,7 +607,8 @@ fn validate_entry(entry: &TemplateEntry) -> Result<(), BackendError> {
             .all(|part| segment.is_match(part) && *part != "..")
         && segments[0] == entry.template_id
         && segments[2].starts_with(&entry.file_sha256)
-        && field_list(&entry.field_map).is_some_and(|fields| fields.len() <= MAX_FIELDS);
+        && field_list(&entry.field_map).is_some_and(|fields| fields.len() <= MAX_FIELDS)
+        && editor::ensure_replacement_resolved(&entry.field_map).is_ok();
     valid.then_some(()).ok_or_else(invalid)
 }
 

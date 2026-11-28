@@ -3,7 +3,6 @@ import {
   Files,
   History,
   LibraryBig,
-  ListChecks,
   LoaderCircle,
   RotateCcw,
   Settings,
@@ -11,7 +10,6 @@ import {
 } from "lucide-react";
 import {
   type ReactNode,
-  useEffect,
   useState,
 } from "react";
 import {
@@ -74,28 +72,6 @@ export function AppFrame({
       setOpeningReview(false);
     }
   };
-  const [readyCount, setReadyCount] = useState(0);
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const status = await bridge.call("watch/status");
-        if (active) {
-          setReadyCount(
-            status.items.filter((item) => item.status === "ready").length,
-          );
-        }
-      } catch {
-        if (active) setReadyCount(0);
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => void load(), 60_000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [bridge, routeName]);
   const profileName = user?.display || user?.email || "";
 
   return (
@@ -132,26 +108,6 @@ export function AppFrame({
             >
               <FileCheck2 aria-hidden="true" />
               <span>{s.t("action.review")}</span>
-            </button>
-            <button
-              type="button"
-              className={`app-nav-item ${routeName === "queue" ? "active" : ""}`}
-              aria-label={
-                readyCount > 0
-                  ? `${s.t("queue.title")}, ${s.t("queue.badge", { count: readyCount })}`
-                  : s.t("queue.title")
-              }
-              title={s.t("queue.title")}
-              aria-current={routeName === "queue" ? "page" : undefined}
-              onClick={() => navigate({ name: "queue" })}
-            >
-              <ListChecks aria-hidden="true" />
-              <span>{s.t("queue.title")}</span>
-              {readyCount > 0 && (
-                <span className="app-nav-badge" aria-hidden="true">
-                  {readyCount}
-                </span>
-              )}
             </button>
             <button
               type="button"

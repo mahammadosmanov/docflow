@@ -113,9 +113,9 @@ fn sync_downloads_verifies_and_caches_published_templates() {
     assert_eq!(status.templates.len(), 1);
     assert!(status.templates[0].cached);
     assert_eq!(status.templates[0].field_count, 1);
-    let (entry, path) = store.resolve("qm-frm-001").expect("cached template");
+    let (entry, cached) = store.read_cached("qm-frm-001").expect("cached template");
     assert_eq!(entry.version, 1);
-    assert_eq!(fs::read(path).expect("read cache"), bytes);
+    assert_eq!(cached, bytes);
 
     store.sync(200);
     assert_eq!(
@@ -165,7 +165,7 @@ fn offline_sync_keeps_the_cached_manifest() {
     assert!(!status.online);
     assert_eq!(status.last_error.as_deref(), Some("offline"));
     assert_eq!(status.last_synced_at, Some(100));
-    assert!(store.resolve("QM-FRM-001").is_some());
+    assert!(store.read_cached("QM-FRM-001").is_some());
 }
 
 #[test]
@@ -182,7 +182,11 @@ fn a_failed_download_keeps_the_previous_version() {
     let status = store.sync(200);
     assert_eq!(status.failed_codes, vec!["QM-FRM-001".to_string()]);
     assert_eq!(
-        store.resolve("QM-FRM-001").expect("old version").0.version,
+        store
+            .read_cached("QM-FRM-001")
+            .expect("old version")
+            .0
+            .version,
         1
     );
 }
@@ -198,21 +202,26 @@ fn a_file_that_does_not_match_its_checksum_is_rejected() {
     let status = store.sync(100);
     assert_eq!(status.failed_codes, vec!["QM-FRM-001".to_string()]);
     assert!(status.templates.is_empty());
-    assert!(store.resolve("QM-FRM-001").is_none());
+    assert!(store.read_cached("QM-FRM-001").is_none());
 }
 
 #[test]
-fn a_damaged_cache_file_is_not_used() {
+fn a_damaged_cache_file_is_not_used_and_sync_repairs_it() {
     let (_directory, remote, store) = store();
     let bytes = package(FileKind::Xlsx, "v1");
     let first = row("QM-FRM-001", 1, &bytes);
     remote.serve(vec![first.clone()], &[(&first, &bytes)]);
     store.sync(100);
-    let (_, path) = store.resolve("QM-FRM-001").expect("cached");
+    let (entry, _) = store.read_cached("QM-FRM-001").expect("cached");
+    let path = store.file_path(&entry);
     fs::write(&path, b"damaged").expect("damage cache");
 
-    assert!(store.resolve("QM-FRM-001").is_none());
+    assert!(store.read_cached("QM-FRM-001").is_none());
     assert!(!store.status().templates[0].cached);
+    let status = store.sync(200);
+    assert!(status.failed_codes.is_empty());
+    assert!(status.templates[0].cached);
+    assert_eq!(fs::read(path).expect("repaired cache"), bytes);
 }
 
 #[test]

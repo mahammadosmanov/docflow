@@ -45,9 +45,13 @@ pub(super) fn apply_email_values(
     if !item.is_empty() {
         if let Some(preset) = source.data.presets.get(item) {
             row.item_no = item.to_string();
-            if let Some(resolved) = resolve_itp(itp, item, &source.data.itp_to_items)
-                .or_else(|| unique_itp_for_item(item, &source.data.itp_to_items))
-            {
+            row.email_fields.insert("itemNo");
+            if let Some(resolved) = resolve_itp(itp, item, &source.data.itp_to_items) {
+                row.itp_no = resolved;
+                if !itp.is_empty() {
+                    row.email_fields.insert("itpNo");
+                }
+            } else if let Some(resolved) = unique_itp_for_item(item, &source.data.itp_to_items) {
                 row.itp_no = resolved;
             }
             row.description = preset.description.clone();
@@ -60,6 +64,7 @@ pub(super) fn apply_email_values(
     } else if !itp.is_empty() {
         if let Some(resolved) = resolve_itp(itp, &row.item_no, &source.data.itp_to_items) {
             row.itp_no = resolved.clone();
+            row.email_fields.insert("itpNo");
             let allowed = &source.data.itp_to_items[&resolved];
             if !allowed.contains(&row.item_no) && allowed.len() == 1 {
                 row.item_no = allowed[0].clone();
@@ -73,14 +78,19 @@ pub(super) fn apply_email_values(
             notes.push(format!("Unknown ITP No. ignored: {itp}"));
         }
     }
-    for (target, value) in [
-        (&mut row.tag_no, extracted.tag_no.trim()),
-        (&mut row.area, extracted.area.trim()),
-        (&mut row.location, extracted.location.trim()),
-        (&mut row.subcontractor, extracted.subcontractor.trim()),
+    for (field, target, value) in [
+        ("tagNo", &mut row.tag_no, extracted.tag_no.trim()),
+        ("area", &mut row.area, extracted.area.trim()),
+        ("location", &mut row.location, extracted.location.trim()),
+        (
+            "subcontractor",
+            &mut row.subcontractor,
+            extracted.subcontractor.trim(),
+        ),
     ] {
         if !value.is_empty() {
             *target = value.to_string();
+            row.email_fields.insert(field);
         }
     }
     if row.area.is_empty() {
@@ -122,6 +132,40 @@ pub(super) fn plan_meta(
     }
     let rows_value = serde_json::to_value(rows)
         .map_err(|_| BackendError::protocol("RFI rows could not be encoded"))?;
+    let mut field_origins = Map::new();
+    for (row, value) in rows.iter().zip(rows_value.as_array().into_iter().flatten()) {
+        if row.email_fields.is_empty() {
+            continue;
+        }
+        let origins = value
+            .as_object()
+            .into_iter()
+            .flat_map(|fields| fields.iter())
+            .filter(|(field, value)| {
+                !field.starts_with('_') && value.as_str().is_some_and(|text| !text.is_empty())
+            })
+            .map(|(field, value)| {
+                let source = if row.email_fields.contains(field.as_str()) {
+                    "rfi.origin.request"
+                } else if matches!(
+                    field.as_str(),
+                    "itpNo"
+                        | "itemNo"
+                        | "description"
+                        | "forms"
+                        | "azfenType"
+                        | "intecType"
+                        | "rfiNo"
+                ) {
+                    "rfi.origin.workbook"
+                } else {
+                    "rfi.origin.default"
+                };
+                (field.clone(), json!({"value": value, "labelKey": source}))
+            })
+            .collect::<Map<_, _>>();
+        field_origins.insert(row.row_id.clone(), Value::Object(origins));
+    }
     let columns = columns();
     let sheets = DISCIPLINES
         .iter()
@@ -146,6 +190,7 @@ pub(super) fn plan_meta(
             "selectionGroupFields": ["_sheet", "rfiNo"],
             "columns": columns,
             "rows": rows_value,
+            "fieldOrigins": field_origins,
             "choices": {"itpNo": itp_to_items.keys().collect::<Vec<_>>()},
             "choicesByValue": {"itemNo": {"dependsOn": "itpNo", "values": itp_to_items}},
             "autoFill": {"field": "itemNo", "values": presets},

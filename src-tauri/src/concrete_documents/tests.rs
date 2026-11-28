@@ -32,7 +32,7 @@ fn record(rfi: &str, location: &str) -> SourceRecord {
         in_situ_temp: String::new(),
         samples: String::new(),
         water_cement_ratio: None,
-        ambient_range: None,
+        measured_ambient: Vec::new(),
         drawing: String::new(),
         additional_batches: Vec::new(),
     }
@@ -64,7 +64,7 @@ fn generates_docx_per_record_and_preserves_unrelated_parts() {
     let template = package(&[
         (
             "word/document.xml",
-            "<w:document><w:p><w:t>AZE-SUN-INT-QMS-</w:t><w:t>RFI-CIV-1498</w:t></w:p><w:p><w:t>LOCATION</w:t><w:t>SOUTH SITE PCU-18</w:t></w:p><w:p><w:t>AMBIENT TEMP.</w:t><w:t>27 °C</w:t></w:p></w:document>",
+            "<w:document><w:p><w:t>AZE-SUN-INT-QMS-</w:t><w:t>RFI-CIV-1498</w:t></w:p><w:p><w:t>LOCATION</w:t><w:t>SOUTH SITE PCU-18</w:t></w:p><w:p><w:t>UNRELATED</w:t><w:t>27 °C</w:t></w:p><w:p><w:t>AMBIENT TEMP.</w:t><w:t>27 °C</w:t></w:p></w:document>",
         ),
         (
             "word/styles.xml",
@@ -72,19 +72,15 @@ fn generates_docx_per_record_and_preserves_unrelated_parts() {
         ),
     ]);
     let mut first = record("AZE-SUN-INT-QMS-RFI-CIV-2001", "PCU-1");
-    first.ambient_range = Some((31, 31));
+    first.measured_ambient = vec!["31.4".into()];
     let mut second = record("AZE-SUN-INT-QMS-RFI-CIV-2002", "PCU-2");
-    second.ambient_range = Some((42, 42));
-    let result = generate(
-        DocumentType::Civ011,
-        &template,
-        &[first, second],
-        (20, 30),
-        4,
-    )
-    .unwrap();
+    second.measured_ambient = vec!["42".into()];
+    let result = generate(DocumentType::Civ011, &template, &[first, second]).unwrap();
     assert_eq!(result.len(), 2);
-    assert!(read_member(&result[0].bytes, "word/document.xml").contains("31 °C"));
+    let word = read_member(&result[0].bytes, "word/document.xml");
+    assert!(word.contains("<w:t>AMBIENT TEMP.</w:t><w:t>31.4 °C</w:t>"));
+    assert!(word.contains("<w:t>UNRELATED</w:t><w:t>27 °C</w:t>"));
+    assert_eq!(result[0].measured_ambient, ["31.4"]);
     assert!(read_member(&result[0].bytes, "word/document.xml").contains("PCU-1"));
     assert!(read_member(&result[1].bytes, "word/document.xml").contains("42 °C"));
     assert!(read_member(&result[1].bytes, "word/document.xml").contains("PCU-2"));
@@ -107,22 +103,11 @@ fn generates_xlsx_and_rejects_missing_anchor() {
         DocumentType::Civ013,
         &template,
         &[record("AZE-SUN-INT-QMS-RFI-CIV-2003", "PCU-9")],
-        (0, 0),
-        1,
     )
     .unwrap();
     assert!(read_member(&result[0].bytes, "xl/worksheets/sheet1.xml").contains("PCU-9"));
     let invalid = package(&[("xl/worksheets/sheet1.xml", "<worksheet/>")]);
-    assert!(
-        generate(
-            DocumentType::Civ013,
-            &invalid,
-            &[record("CIV-1", "x")],
-            (0, 0),
-            0
-        )
-        .is_err()
-    );
+    assert!(generate(DocumentType::Civ013, &invalid, &[record("CIV-1", "x")],).is_err());
 }
 
 #[test]
@@ -144,6 +129,7 @@ fn generates_civ010_data_and_civ014_identity() {
     source.plant_temp = "21.3".to_string();
     source.in_situ_temp = "21.4".to_string();
     source.samples = "841-846".to_string();
+    source.measured_ambient = vec!["18.4".into()];
     let mut cells = vec![
         ("A11".to_string(), "DRAWING NO: DRG-1".to_string(), true),
         (
@@ -205,7 +191,7 @@ fn generates_civ010_data_and_civ014_identity() {
         render_row(21)
     );
     let xlsx = package(&[("xl/worksheets/sheet1.xml", &worksheet)]);
-    let output = generate(DocumentType::Civ010, &xlsx, &[source], (0, 0), 2).unwrap();
+    let output = generate(DocumentType::Civ010, &xlsx, &[source]).unwrap();
     let sheet = read_member(&output[0].bytes, "xl/worksheets/sheet1.xml");
     assert!(sheet.contains("CIV-2010"), "{sheet}");
     assert!(sheet.contains("N-5"));
@@ -222,13 +208,8 @@ fn generates_civ010_data_and_civ014_identity() {
     assert!(cell("AI19").contains("<v>5</v>"));
     assert!(cell("AP19").contains("<v>15</v>"));
     assert!(cell("CF19").contains("<v>21.3</v>"));
-    let ambient_value = Regex::new(r"<v>([^<]+)</v>")
-        .unwrap()
-        .captures(&cell("BD19"))
-        .unwrap()[1]
-        .parse::<f64>()
-        .unwrap();
-    assert!((20.6..=20.8).contains(&ambient_value));
+    assert!(cell("BD19").contains("<v>18.4</v>"));
+    assert!(cell("BD21").is_empty());
     assert!(cell("AI21").is_empty());
     let mut multi = record("AZE-SUN-INT-QMS-RFI-CIV-2010", "N-5");
     multi.plant_temp = "21.3".to_string();
@@ -254,7 +235,8 @@ fn generates_civ010_data_and_civ014_identity() {
     third.quantity = "7".to_string();
     third.samples = "853-858".to_string();
     multi.additional_batches.push(third);
-    let multi_output = generate(DocumentType::Civ010, &xlsx, &[multi], (0, 0), 2).unwrap();
+    multi.measured_ambient = vec!["18.4".into(), "19.0".into(), "19.3".into()];
+    let multi_output = generate(DocumentType::Civ010, &xlsx, &[multi]).unwrap();
     let multi_sheet = read_member(&multi_output[0].bytes, "xl/worksheets/sheet1.xml");
     let second_cell = |reference: &str| {
         Regex::new(&format!(r#"(?s)<c\b[^>]*\br="{reference}"[^>]*>(.*?)</c>"#))
@@ -263,6 +245,8 @@ fn generates_civ010_data_and_civ014_identity() {
             .map(|captures| captures[1].to_string())
             .unwrap()
     };
+    assert!(second_cell("BD21").contains("<v>19.0</v>"));
+    assert!(second_cell("BD23").contains("<v>19.3</v>"));
     assert!(second_cell("AI21").contains("<v>6</v>"));
     assert!(second_cell("V21").contains("66818"));
     assert!(second_cell("CS21").contains("847-852"));
@@ -280,8 +264,6 @@ fn generates_civ010_data_and_civ014_identity() {
         DocumentType::Civ014,
         &docx,
         &[record("AZE-SUN-INT-QMS-RFI-CIV-2014", "South Site")],
-        (0, 0),
-        2,
     )
     .unwrap();
     let document = read_member(&output[0].bytes, "word/document.xml");

@@ -18,7 +18,6 @@ export type Route =
     }
   | { name: "review"; destination: PathSelection }
   | { name: "recovery" }
-  | { name: "queue" }
   | { name: "history" }
   | { name: "templates" }
   | { name: "admin" }
@@ -68,11 +67,9 @@ export const BACKEND_MESSAGE_KEYS: Record<string, string> = {
   "review directory does not exist": "error.review.directoryMissing",
   "review source name is invalid": "error.review.sourceNameInvalid",
   "review source cannot be resolved": "error.review.sourceUnresolved",
-  "operation cannot be watched": "error.watch.unsupported",
   "diagnostics bundle encoding failed": "error.support.encodingFailed",
   "granted root identity is unavailable": "error.path.rootUnavailable",
   "invalid print row identity": "error.print.rowInvalid",
-  "No write grant covering RFI Log": "error.rfi.writeGrantMissing",
   "RFI Log workbook has no parent": "error.rfi.workbookNoFolder",
   "gecersiz sheet plani": "error.rfi.sheetPlanInvalid",
   "gecersiz coklu-sheet RFI plani": "error.rfi.multiSheetPlanInvalid",
@@ -81,7 +78,6 @@ export const BACKEND_MESSAGE_KEYS: Record<string, string> = {
   "bu planda kopyalanabilir tablo yok": "error.plan.noCopyableTable",
   "copy source could not be encoded": "error.clipboard.encodeFailed",
   "path has no existing ancestor": "error.path.noAncestor",
-  "watch update task failed": "error.watch.updateFailed",
   "RFI schedule date is out of range": "error.rfi.scheduleDateRange",
   "RFI system entry count overflow": "error.rfi.systemEntryLimit",
   "Follow Up workbook has no parent": "error.rfi.followUp.noParent",

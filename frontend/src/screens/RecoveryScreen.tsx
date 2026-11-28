@@ -142,10 +142,13 @@ export function RecoveryScreen({
                         : "recovery.outcomeUnknown",
                     )}
                   </strong>
+                  {entry.warningKey && <small>{s.t(entry.warningKey)}</small>}
                   <small>{entry.journalId}</small>
                 </div>
                 <span className="resume-queue-actions">
-                  <span className="status-label">{s.t("recovery.manual")}</span>
+                  {entry.disposition === "outcome_unknown" && !entry.restoreOriginalAvailable && (
+                    <span className="status-label">{s.t("recovery.manual")}</span>
+                  )}
                   {entry.restoreOriginalAvailable && (
                     <Button
                       variant="secondary"

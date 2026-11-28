@@ -62,10 +62,13 @@ fn a_cell_whose_label_moved_follows_it() {
         ("Other:", ""),
         ("Pour no:", "P2"),
     ]);
-    let result = run(&old, &new, word(1));
+    let mut field = word(1);
+    field.1.repeat_columns = Some(1);
+    let result = run(&old, &new, field);
     assert_eq!(result.status, CheckStatus::Moved);
     let to = result.moved_to.expect("new place");
     assert_eq!((to.table, to.row, to.cell), (Some(0), Some(3), Some(1)));
+    assert_eq!(to.repeat_columns, Some(1));
 }
 
 #[test]

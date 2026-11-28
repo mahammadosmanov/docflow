@@ -289,6 +289,12 @@ pub fn revise_from_open_files(
         }
     }
     let mut warnings = fresh.warnings;
+    warnings.extend(
+        plan.warnings
+            .iter()
+            .filter(|warning| warning.key == SHARED_EXCEPTIONS_UNAVAILABLE_WARN)
+            .cloned(),
+    );
     warnings.retain(|warning| warning.key != "warn.rfi.followUp.noRowsSelected");
     if revised_rows.iter().all(|row| !row.enabled) {
         warnings.push(Warning {

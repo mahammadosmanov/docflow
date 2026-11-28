@@ -14,6 +14,7 @@ import {
   type AnchorCheck,
   type TemplateDraft,
   type TemplateFieldMap,
+  type TemplateReplacementResolution,
   type TemplateStatus,
   type VersionSummary,
 } from "../types";
@@ -93,12 +94,13 @@ export function TemplateEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [checks, setChecks] = useState<AnchorCheck[]>(initial.checks ?? []);
+  const [resolutions, setResolutions] = useState<TemplateReplacementResolution[]>([]);
   const [versions, setVersions] = useState<VersionSummary[] | null>(null);
   const [versionsOpen, setVersionsOpen] = useState(false);
 
   const load = (next: TemplateDraft) => {
     setDraft(next);
+    setResolutions([]);
     setCode(next.code);
     setTitle(next.title);
     setDiscipline(next.discipline);
@@ -146,6 +148,8 @@ export function TemplateEditor({
       discipline: discipline.trim().toUpperCase(),
       category: category.trim(),
       fieldMap: currentMap(),
+      fileSha256: draft.fileSha256,
+      replacementResolutions: resolutions,
     });
     load(next);
     setSaved(true);
@@ -157,7 +161,16 @@ export function TemplateEditor({
       fields: current.fields.map((field, at) => (at === index ? { ...field, ...patch } : field)),
     }));
 
-  const removeField = (key: string) =>
+  const checks = draft.checks ?? [];
+  const unresolved = checks.filter(
+    (check) => check.status !== "found" && !resolutions.some((resolution) => resolution.key === check.key),
+  );
+  const settle = (key: string, action: TemplateReplacementResolution["action"]) => {
+    setResolutions((current) => [...current.filter((item) => item.key !== key), { key, action }]);
+    setSaved(false);
+  };
+  const removeField = (key: string) => {
+    if (checks.some((check) => check.key === key && check.status !== "found")) settle(key, "remove");
     setMap((current) => ({
       ...current,
       fields: current.fields.filter((field) => field.key !== key),
@@ -166,14 +179,14 @@ export function TemplateEditor({
         return { ...preset, values };
       }),
     }));
+    setSaved(false);
+  };
 
   const toggleSheet = (name: string, optional: boolean) =>
     setMap((current) => {
       const rest = (current.optionalSheets ?? []).filter((item) => item !== name);
       return { ...current, optionalSheets: optional ? [...rest, name] : rest };
     });
-  const settle = (key: string) => setChecks((current) => current.filter((item) => item.key !== key));
-  const unresolved = checks.filter((item) => item.status !== "found");
   const fieldLabel = (key: string) => {
     const field = map.fields.find((item) => item.key === key);
     return field?.label || key;
@@ -185,8 +198,7 @@ export function TemplateEditor({
       ...current,
       fields: current.fields.map((field) => (field.key === check.key ? { ...field, anchor } : field)),
     }));
-    settle(check.key);
-    setSaved(false);
+    settle(check.key, "move");
   };
   const openVersions = () =>
     void run(async () => {
@@ -198,7 +210,6 @@ export function TemplateEditor({
     void run(async () => {
       const next = await bridge.call("templates/restoreVersion", { code: draft.code, versionId });
       load(next);
-      setChecks([]);
       setVersionsOpen(false);
     });
 
@@ -288,16 +299,13 @@ export function TemplateEditor({
             <Button
               variant="secondary"
               icon={<FileUp />}
-              disabled={busy}
+              disabled={busy || checks.some((check) => check.status !== "found")}
               onClick={() =>
                 void run(async () => {
                   const next = await bridge.call("templates/replaceFile", {
                     versionId: draft.versionId,
                   });
-                  if (next) {
-                    load(next);
-                    setChecks(next.checks ?? []);
-                  }
+                  if (next) load(next);
                 })
               }
             >
@@ -337,7 +345,7 @@ export function TemplateEditor({
           {error && <Notice kind="error">{error}</Notice>}
         </section>
 
-        {checks.length > 0 && (
+        {(unresolved.length > 0 || checks.some((item) => item.status === "found")) && (
           <section className="content-card template-editor-section">
             <h2>{s.t("templates.check.title")}</h2>
             <p className="muted">{s.t("templates.check.help")}</p>
@@ -359,20 +367,16 @@ export function TemplateEditor({
                     : s.t("templates.check.missing", { label: fieldLabel(check.key) })}
                 </p>
                 <div className="template-editor-actions">
-                  {check.status === "moved" && check.movedTo ? (
+                  {check.status === "moved" && check.movedTo && (
                     <Button onClick={() => moveCheck(check)}>{s.t("templates.check.move")}</Button>
-                  ) : (
-                    <Button variant="secondary" onClick={() => settle(check.key)}>
-                      {s.t("templates.check.keep")}
-                    </Button>
                   )}
+                  <Button variant="secondary" onClick={() => settle(check.key, "keep")}>
+                    {s.t("templates.check.keep")}
+                  </Button>
                   <Button
                     variant="ghost"
                     icon={<Trash2 />}
-                    onClick={() => {
-                      removeField(check.key);
-                      settle(check.key);
-                    }}
+                    onClick={() => removeField(check.key)}
                   >
                     {s.t("templates.editor.removeField")}
                   </Button>
@@ -383,6 +387,7 @@ export function TemplateEditor({
         )}
 
         <TemplateDocument
+          key={`text-${draft.fileSha256}`}
           bridge={bridge}
           s={s}
           draft={draft}
@@ -395,11 +400,11 @@ export function TemplateEditor({
         />
 
         <TemplateCells
+          key={`cells-${draft.fileSha256}`}
           bridge={bridge}
           s={s}
           versionId={draft.versionId}
           fields={map.fields}
-          reloadKey={draft.placeholders.join("|")}
           onMark={markCell}
           onRemove={removeField}
           optionalSheets={map.optionalSheets ?? []}

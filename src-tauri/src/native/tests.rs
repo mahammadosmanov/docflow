@@ -128,25 +128,6 @@ fn fast_scan_plan_revision_routes_through_trusted_scan_editor() {
 
 pub(super) static WORK_ITEM_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-#[test]
-fn rfi_reply_requires_exact_committed_plan_provenance() {
-    let caller = CallerIdentity::new("owner", "session");
-    let mut journal = crate::journal::JournalRecord::new(
-        "journal",
-        "rfi.log_add",
-        "2026-09-19T00:00:00Z",
-        "owner",
-        "session",
-        "digest",
-    );
-    journal.state = Some(crate::journal::JournalState::Committed);
-
-    assert!(committed_rfi_reply_matches(&journal, &caller, "digest"));
-    assert!(!committed_rfi_reply_matches(&journal, &caller, "other"));
-    journal.state = Some(crate::journal::JournalState::PartialCommitted);
-    assert!(!committed_rfi_reply_matches(&journal, &caller, "digest"));
-}
-
 struct TestCredentials(Mutex<Option<StoredSession>>);
 
 impl CredentialStore for TestCredentials {
@@ -260,7 +241,7 @@ fn concrete_document_preview_skips_missing_follow_up_and_applies_available_rfis(
     let template = input.join("CON-CIV-010.xlsx");
     let template_sheet = concat!(
         r#"<worksheet><dimension ref="A1:CS22"/><sheetData><row r="11"><c r="A11" t="inlineStr"><is><t>DRAWING NO: DRG-1</t></is></c></row><row r="12"><c r="A12" t="inlineStr"><is><t>REPORT (RFI) NUMBER: AZE-SUN-INT-QMS-RFI-CIV-1460</t></is></c></row><row r="13"><c r="A13" t="inlineStr"><is><t>LOCATION: North site area / N-5</t></is></c></row><row r="14"><c r="BB14" t="inlineStr"><is><t>CONCRETE POURING DATE:06.10.2026</t></is></c></row>"#,
-        r#"<row r="19"><c r="A19" t="inlineStr"><is><t>N-5</t></is></c><c r="H19" t="inlineStr"><is><t>C-30/37 XA2</t></is></c><c r="O19" t="inlineStr"><is><t>HOLCIM</t></is></c><c r="V19" t="inlineStr"><is><t>66817</t></is></c><c r="AC19" t="inlineStr"><is><t>TRK-1</t></is></c><c r="CS19" t="inlineStr"><is><t>841-846</t></is></c><c r="AI19"><v>1</v></c></row><row r="20"></row>"#,
+        r#"<row r="19"><c r="A19" t="inlineStr"><is><t>N-5</t></is></c><c r="H19" t="inlineStr"><is><t>C-30/37 XA2</t></is></c><c r="O19" t="inlineStr"><is><t>HOLCIM</t></is></c><c r="V19" t="inlineStr"><is><t>66817</t></is></c><c r="AC19" t="inlineStr"><is><t>TRK-1</t></is></c><c r="CS19" t="inlineStr"><is><t>841-846</t></is></c><c r="AI19"><v>1</v></c><c r="BD19" s="5"/></row><row r="20"></row>"#,
         r#"<row r="21"><c r="A21" t="inlineStr"><is><t></t></is></c><c r="H21" t="inlineStr"><is><t></t></is></c><c r="O21" t="inlineStr"><is><t></t></is></c><c r="V21" t="inlineStr"><is><t></t></is></c><c r="AC21" t="inlineStr"><is><t></t></is></c><c r="CS21" t="inlineStr"><is><t></t></is></c></row><row r="22"><c r="AI22"><v>3</v></c></row></sheetData></worksheet>"#
     );
     std::fs::write(
@@ -276,23 +257,45 @@ fn concrete_document_preview_skips_missing_follow_up_and_applies_available_rfis(
             .issue(&caller, "rfi.generate_concrete_documents", name, path, kind)
             .unwrap()
     };
+    let preview_params = json!({
+        "opId": "rfi.generate_concrete_documents",
+        "values": {
+            "rfis_010": "123,124,125",
+            "rfi_log_workbook": issue("rfi_log_workbook", &rfi_log, SelectionKind::File),
+            "follow_up_workbook": issue("follow_up_workbook", &follow_up, SelectionKind::File),
+            "template_010": issue("template_010", &template, SelectionKind::File),
+            "output_directory": issue("output_directory", &output, SelectionKind::Folder)
+        }
+    });
+    let missing = backend
+        .preview_concrete_documents(preview_params.clone(), |_| {})
+        .unwrap();
+    assert!(missing["steps"].as_array().unwrap().is_empty());
+    assert!(missing["warnings"].as_array().unwrap().contains(&json!({
+        "key": "warn.rfi.documents.measuredAmbientMissing",
+        "subject": "AZE-SUN-INT-QMS-RFI-CIV-0123 (CON-CIV-010)"
+    })));
+
+    let mut invalid = preview_params.clone();
+    invalid["values"]["measured_ambient_010"] = json!("123 = 19-24");
+    assert_eq!(
+        backend
+            .preview_concrete_documents(invalid, |_| {})
+            .unwrap_err()
+            .message,
+        "error.rfi.documents.measuredAmbient"
+    );
+    let mut complete = preview_params;
+    complete["values"]["measured_ambient_010"] = json!("123 = 18,4");
     let result = backend
-        .preview_concrete_documents(
-            json!({
-                "opId": "rfi.generate_concrete_documents",
-                "values": {
-                    "rfis_010": "123,124,125",
-                    "rfi_log_workbook": issue("rfi_log_workbook", &rfi_log, SelectionKind::File),
-                    "follow_up_workbook": issue("follow_up_workbook", &follow_up, SelectionKind::File),
-                    "template_010": issue("template_010", &template, SelectionKind::File),
-                    "output_directory": issue("output_directory", &output, SelectionKind::Folder)
-                }
-            }),
-            |_| {},
-        )
+        .preview_concrete_documents(complete, |_| {})
         .unwrap();
 
     assert_eq!(result["steps"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        result["steps"][0]["meta"]["measuredAmbientC"],
+        json!(["18.4"])
+    );
     let warnings = result["warnings"].as_array().unwrap();
     assert!(warnings.contains(&json!({
         "key": "warn.rfi.documents.followUpMissing",
@@ -504,7 +507,6 @@ fn test_backend_with_responses(
         )),
         app_data_dir: temporary.path().to_path_buf(),
         scan_index: ScanIndex::new(temporary.path().join("scan-index.sqlite3")).unwrap(),
-        watch: crate::watch::WatchQueue::default(),
     }
 }
 
@@ -669,192 +671,6 @@ fn batch_print_audit_result_finds_and_pushes_the_nested_journal_id() {
 }
 
 // This path needs the native PDF page renderer; Linux intentionally lacks it.
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-#[test]
-fn preview_rfi_system_sync_with_nested_workbooks_succeeds_and_applies() {
-    use std::io::{Cursor, Write};
-    use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
-
-    fn create_xlsx(sheets: &[(&str, &str)]) -> Vec<u8> {
-        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-        let mut workbook_sheets = String::new();
-        let mut relationships = String::new();
-        for (index, (name, content)) in sheets.iter().enumerate() {
-            let ordinal = index + 1;
-            workbook_sheets.push_str(&format!(
-                r#"<sheet name="{name}" sheetId="{ordinal}" r:id="rId{ordinal}"/>"#
-            ));
-            relationships.push_str(&format!(
-                r#"<Relationship Id="rId{ordinal}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{ordinal}.xml"/>"#
-            ));
-            writer
-                .start_file(format!("xl/worksheets/sheet{ordinal}.xml"), options)
-                .unwrap();
-            let ws = format!(
-                r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{content}</sheetData></worksheet>"#
-            );
-            writer.write_all(ws.as_bytes()).unwrap();
-        }
-        let pkg_rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
-        let wb = format!(
-            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{workbook_sheets}</sheets></workbook>"#
-        );
-        let rels = format!(
-            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{relationships}</Relationships>"#
-        );
-        for (name, bytes) in [
-            ("[Content_Types].xml", b"content-types".as_slice()),
-            ("_rels/.rels", pkg_rels.as_bytes()),
-            ("xl/workbook.xml", wb.as_bytes()),
-            ("xl/_rels/workbook.xml.rels", rels.as_bytes()),
-        ] {
-            writer.start_file(name, options).unwrap();
-            writer.write_all(bytes).unwrap();
-        }
-        writer.finish().unwrap().into_inner()
-    }
-
-    let temporary = tempfile::tempdir().unwrap();
-    let backend = test_backend(&temporary);
-    let temp_path = fs::canonicalize(temporary.path()).unwrap();
-    let system_root = temp_path.join("RFI_SYSTEM");
-    let civ_dir = system_root.join("CIV");
-    fs::create_dir_all(&civ_dir).unwrap();
-
-    let civ_103_dir = civ_dir.join("AZE-SUN-INT-QMS-RFI-CIV-0103");
-    fs::create_dir_all(&civ_103_dir).unwrap();
-    let civ_103_pdf = civ_103_dir.join("RFI No. AZE-SUN-INT-QMS-RFI-CIV-0103.pdf");
-    {
-        let stream = "BT /F1 18 Tf 470 195 Td (E.Mammadov Signed Worley) Tj ET\n";
-        let objects = [
-            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_string(),
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
-            format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len()),
-        ];
-        let mut bytes = b"%PDF-1.4\n".to_vec();
-        let mut offsets = Vec::new();
-        for (index, object) in objects.iter().enumerate() {
-            offsets.push(bytes.len());
-            bytes
-                .extend_from_slice(format!("{} 0 obj\n{}\nendobj\n", index + 1, object).as_bytes());
-        }
-        let xref = bytes.len();
-        bytes.extend_from_slice(
-            format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
-        );
-        for offset in offsets {
-            bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-        }
-        bytes.extend_from_slice(
-            format!(
-                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
-                objects.len() + 1
-            )
-            .as_bytes(),
-        );
-        fs::write(&civ_103_pdf, bytes).unwrap();
-    }
-
-    // Place workbooks INSIDE system_root to test nested grant handling
-    let rfi_log_path = system_root.join("RFI_Log.xlsx");
-    let follow_up_path = system_root.join("Follow_Up.xlsx");
-
-    let civ_log_row = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="V9" t="inlineStr"><is><t>REMARKS</t></is></c></row><row r="10"><c r="A10" t="inlineStr"><is><t>AZE-SUN-INT-QMS-RFI-CIV-0103</t></is></c><c r="V10" t="inlineStr"><is><t></t></is></c></row>"#;
-    let mec_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="W9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
-    let ele_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="V9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
-    let prc_log_header = r#"<row r="9"><c r="A9" t="inlineStr"><is><t>RFI No.</t></is></c><c r="W9" t="inlineStr"><is><t>REMARKS</t></is></c></row>"#;
-    let rfi_log_bytes = create_xlsx(&[
-        ("CIV", civ_log_row),
-        ("MEC", mec_log_header),
-        ("ELE", ele_log_header),
-        ("PRC", prc_log_header),
-    ]);
-    fs::write(&rfi_log_path, &rfi_log_bytes).unwrap();
-
-    let fu_civ_row = r#"<row r="4"><c r="C4" t="inlineStr"><is><t>RFI No.</t></is></c><c r="D4" t="inlineStr"><is><t>STATUS</t></is></c></row><row r="5"><c r="C5" t="inlineStr"><is><t>CIV-0103</t></is></c><c r="D5" t="inlineStr"><is><t>Not Signed</t></is></c></row>"#;
-    let fu_mec_header = r#"<row r="3"><c r="S3" t="inlineStr"><is><t>RFI No.</t></is></c><c r="T3" t="inlineStr"><is><t>Worley Status</t></is></c></row>"#;
-    let fu_bytes = create_xlsx(&[
-        ("Signed By Worley CIV", fu_civ_row),
-        ("Signed By Worley MEC", fu_mec_header),
-    ]);
-    fs::write(&follow_up_path, &fu_bytes).unwrap();
-
-    let caller = backend.caller_identity().unwrap();
-    let system_root_sel = backend
-        .selections
-        .issue(
-            &caller,
-            "rfi.system_sync",
-            "rfi_system_root",
-            &system_root,
-            SelectionKind::Folder,
-        )
-        .unwrap();
-    let rfi_log_sel = backend
-        .selections
-        .issue(
-            &caller,
-            "rfi.system_sync",
-            "rfi_log_workbook",
-            &rfi_log_path,
-            SelectionKind::File,
-        )
-        .unwrap();
-    let fu_sel = backend
-        .selections
-        .issue(
-            &caller,
-            "rfi.system_sync",
-            "follow_up_workbook",
-            &follow_up_path,
-            SelectionKind::File,
-        )
-        .unwrap();
-
-    let params = json!({
-        "opId": "rfi.system_sync",
-        "values": {
-            "rfi_system_root": system_root_sel,
-            "rfi_log_workbook": rfi_log_sel,
-            "follow_up_workbook": fu_sel,
-        }
-    });
-
-    let preview_result = backend
-        .preview_rfi_system_sync(params, |_| {})
-        .expect("preview must not fail with path grant error");
-    assert_eq!(preview_result["opId"], "rfi.system_sync");
-    assert!(
-        preview_result["steps"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|step| {
-                step["meta"]["syncStep"]["canonicalRfiCodes"]
-                    == json!(["AZE-SUN-INT-QMS-RFI-CIV-0103"])
-            })
-    );
-    let plan_id = preview_result["planId"].as_str().unwrap();
-
-    // Apply
-    let apply_result = backend
-        .filesystem
-        .apply_with_progress(plan_id, &caller, |_| {})
-        .expect("apply must succeed");
-    assert_eq!(apply_result.applied, 2);
-    assert_eq!(apply_result.failed, 0);
-    // Undo
-    let undo_result = backend
-        .filesystem
-        .undo(&apply_result.journal_id, &caller, None)
-        .expect("undo must succeed");
-    assert_eq!(undo_result.applied, 4);
-    assert_eq!(undo_result.failed, 0);
-}
-
 struct OfflineTemplates;
 
 impl crate::templates::TemplateRemote for OfflineTemplates {

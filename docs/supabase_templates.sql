@@ -87,6 +87,32 @@ begin
       raise exception 'published_version_immutable' using errcode = '42501';
     end if;
   end if;
+  -- Older clients omit draft checks when they rewrite a map. They may keep
+  -- editing ordinary drafts, but cannot erase pending checks or publish them.
+  if old.status = 'draft' and old.field_map ? 'replacementChecks'
+     and not (new.field_map ? 'replacementChecks')
+     and old.field_map->'replacementChecks' <> '[]'::jsonb then
+    if jsonb_typeof(old.field_map->'replacementChecks') <> 'array' then
+      raise exception 'invalid_template_replacement_checks' using errcode = '22023';
+    end if;
+    if exists (
+      select 1 from jsonb_array_elements(old.field_map->'replacementChecks') as checks(value)
+      where checks.value->>'status' is distinct from 'found'
+    ) then
+      raise exception 'template_replacement_pending' using errcode = '22023';
+    end if;
+  end if;
+  if new.field_map ? 'replacementChecks' then
+    if jsonb_typeof(new.field_map->'replacementChecks') <> 'array' then
+      raise exception 'invalid_template_replacement_checks' using errcode = '22023';
+    end if;
+    if new.status = 'published' and exists (
+      select 1 from jsonb_array_elements(new.field_map->'replacementChecks') as checks(value)
+      where checks.value->>'status' is distinct from 'found'
+    ) then
+      raise exception 'template_replacement_pending' using errcode = '22023';
+    end if;
+  end if;
   return new;
 end $$;
 

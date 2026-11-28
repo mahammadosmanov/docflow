@@ -42,9 +42,9 @@ import {
 
 import { useSupportDiagnostics } from "./useSupportDiagnostics";
 
-import { useReplicaStatus } from "./useReplicaStatus";
 
 import { ChoiceGrid, SettingsGroup } from "./SettingsParts";
+import { FollowUpExceptionsSettings } from "./FollowUpExceptionsSettings";
 import { UpdateNotice } from "../components/UpdateNotice";
 
 export function SettingsScreen({
@@ -67,7 +67,6 @@ export function SettingsScreen({
   const [username, setUsername] = useState(auth.user?.username ?? "");
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
-  const { replicaStatus, refreshReplicaStatus } = useReplicaStatus(bridge);
   const update = async (patch: Partial<AppPrefs>) => {
     try {
       const next = await bridge.call(
@@ -75,7 +74,6 @@ export function SettingsScreen({
         patch as Record<string, unknown>,
       );
       onPrefs(next);
-      void refreshReplicaStatus();
     } catch (reason) {
       setError(humanError(reason, s));
     }
@@ -229,26 +227,8 @@ export function SettingsScreen({
               onChange={(startWithWindows) => void update({ startWithWindows })}
             />
           </label>
-          <label className="toggle-row">
-            <span>
-              <strong>{s.t("prefs.replicaSyncEnabled")}</strong>
-              <small>{s.t("prefs.replicaSyncEnabled.help")}</small>
-              {replicaStatus && (
-                <small>{s.t(`prefs.replica.status.${replicaStatus.status}`)}</small>
-              )}
-              {replicaStatus?.lastErrorCode && (
-                <small>{s.t(replicaStatus.lastErrorCode)}</small>
-              )}
-            </span>
-            <Switch
-              checked={replicaStatus?.enabled ?? prefs.replicaSyncEnabled}
-              ariaLabel={s.t("prefs.replicaSyncEnabled")}
-              onChange={(replicaSyncEnabled) =>
-                void update({ replicaSyncEnabled })
-              }
-            />
-          </label>
         </SettingsGroup>
+        {auth.allowed && <FollowUpExceptionsSettings bridge={bridge} s={s} />}
         <SettingsGroup title={s.t("prefs.updates")} icon={<Monitor />} help={s.t("prefs.updates.help")}>
           <UpdateNotice bridge={bridge} s={s} inline />
         </SettingsGroup>

@@ -190,6 +190,7 @@ where
                 "enabled": true,
                 "rfiCode": detection.code,
                 "sourceFile": file_name,
+                "target": target.to_string_lossy(),
                 "method": detection.method_key,
                 "confidence": detection.confidence,
             }));
@@ -425,6 +426,7 @@ fn file_group_editor(rows: Vec<Value>) -> Value {
             {"key": "enabled", "labelKey": "rfi.fileGroup.column.enabled", "kind": "bool", "width": 64},
             {"key": "rfiCode", "labelKey": "rfi.fileGroup.column.rfiCode", "kind": "readonly", "width": 260, "bulk": false},
             {"key": "sourceFile", "labelKey": "rfi.fileGroup.column.sourceFile", "kind": "readonly", "width": 300, "bulk": false},
+            {"key": "target", "labelKey": "rfi.fastScan.column.target", "kind": "readonly", "width": 340, "bulk": false},
             {"key": "method", "labelKey": "rfi.fileGroup.column.method", "kind": "readonly", "display": "localizedKey", "width": 120, "bulk": false},
             {"key": "confidence", "labelKey": "ocr.confidence", "kind": "readonly", "display": "percent", "width": 112, "bulk": false}
         ],

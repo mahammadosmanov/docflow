@@ -400,63 +400,26 @@ fn merge_query_budget_fails_at_the_first_comparison_over_limit() {
 }
 
 #[test]
-fn exception_text_reads_codes_in_any_form_and_removals() {
-    let edit =
-        parse_exception_text("CIV-1374, rfi-civ-0099;\nAZE-SUN-INT-QMS-RFI-MEC-0002\n-CIV-0005")
-            .unwrap();
+fn one_run_exception_text_adds_and_cannot_remove_protected_codes() {
+    let existing = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-0005".to_string()]);
+    let merged = extend_exception_codes(
+        existing.clone(),
+        "CIV-1374, rfi-civ-0099;\nAZE-SUN-INT-QMS-RFI-MEC-0002\nCIV-0005",
+    )
+    .unwrap();
     assert_eq!(
-        edit.add.iter().map(String::as_str).collect::<Vec<_>>(),
+        merged.iter().map(String::as_str).collect::<Vec<_>>(),
         [
+            "AZE-SUN-INT-QMS-RFI-CIV-0005",
             "AZE-SUN-INT-QMS-RFI-CIV-0099",
             "AZE-SUN-INT-QMS-RFI-CIV-1374",
-            "AZE-SUN-INT-QMS-RFI-MEC-0002",
+            "AZE-SUN-INT-QMS-RFI-MEC-0002"
         ]
     );
+    assert!(extend_exception_codes(existing.clone(), "-CIV-0005").is_err());
+    assert!(extend_exception_codes(existing.clone(), "CIV-13741461x").is_err());
     assert_eq!(
-        edit.remove.iter().map(String::as_str).collect::<Vec<_>>(),
-        ["AZE-SUN-INT-QMS-RFI-CIV-0005"]
-    );
-}
-
-#[test]
-fn exception_text_rejects_unreadable_and_contradicting_codes() {
-    assert!(parse_exception_text("CIV-13741461x").is_err());
-    assert!(parse_exception_text("CIV-0005 -CIV-0005").is_err());
-    assert_eq!(
-        parse_exception_text("  \n,").unwrap(),
-        ExceptionEdit::default()
-    );
-}
-
-#[test]
-fn an_exception_edit_adds_to_and_removes_from_the_stored_list() {
-    let stored = BTreeSet::from(["AZE-SUN-INT-QMS-RFI-CIV-0005".to_string()]);
-    let edit = parse_exception_text("CIV-0006 -CIV-0005").unwrap();
-    let merged = apply_exception_edit(stored, &edit).unwrap();
-    assert_eq!(
-        merged.into_iter().collect::<Vec<_>>(),
-        ["AZE-SUN-INT-QMS-RFI-CIV-0006"]
-    );
-}
-
-#[test]
-fn codes_in_the_field_replace_the_stored_list_and_an_empty_field_keeps_it() {
-    let stored = BTreeSet::from([
-        "AZE-SUN-INT-QMS-RFI-CIV-0005".to_string(),
-        "AZE-SUN-INT-QMS-RFI-CIV-0006".to_string(),
-    ]);
-    let replaced =
-        apply_exception_edit(stored.clone(), &parse_exception_text("CIV-0006").unwrap()).unwrap();
-    assert_eq!(
-        replaced.into_iter().collect::<Vec<_>>(),
-        ["AZE-SUN-INT-QMS-RFI-CIV-0006"]
-    );
-    let kept = apply_exception_edit(stored.clone(), &parse_exception_text("").unwrap()).unwrap();
-    assert_eq!(kept, stored);
-    let removed =
-        apply_exception_edit(stored, &parse_exception_text("-CIV-0005").unwrap()).unwrap();
-    assert_eq!(
-        removed.into_iter().collect::<Vec<_>>(),
-        ["AZE-SUN-INT-QMS-RFI-CIV-0006"]
+        extend_exception_codes(existing.clone(), " \n,").unwrap(),
+        existing
     );
 }

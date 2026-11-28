@@ -6,8 +6,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 ## Core requirements
 
 - **DF-001 — Preview first:** every document, workbook, queue, or draft
-  mutation is previewed and explicitly approved. DF-025 permits later
-  identical-profile replica runs under one revocable standing authorization.
+  mutation is previewed and explicitly approved.
 - **DF-002 — Immutable apply:** Apply consumes only the cached approved Plan; it
   does not rediscover files, rows, pages, recipients, or print settings.
 - **DF-003 — No clobber:** an existing output is never overwritten. Updates to
@@ -146,7 +145,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   `<destination>/<discipline>/<full-code>/<source filename>` for every related
   RFI; sources remain read-only, collisions never overwrite, and unmatched or
   unreadable files are copied to destination-root `_review` for manual handling.
-- **DF-024 — Exact completion-status synchronization:** a separate operation
+- **DF-024 — Exact completion-status synchronization:** Retired in 2.0.0. Historical contract follows. a separate operation
   recursively scans the selected read-only RFI System for exact canonical
   `RFI No. <RFI>.pdf` filenames and previews every matched PDF, RFI Log row,
   current `Inspection Status`, and proposed `Completed` value. Apply updates
@@ -154,7 +153,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   the guarded workbook backup/delta/journal path. Missing rows/cells, formulas,
   merges, terminal or unknown statuses, malformed names, symlinks, drift, and
   incomplete discovery fail closed; Follow Up and Worley data never change.
-- **DF-025 — Source-authoritative replica publication:** an operator selects
+- **DF-025 — Source-authoritative replica publication:** Retired in 2.0.0. Historical contract follows. an operator selects
   one of three non-overlapping RFI System roots as source, two as targets, and a
   separate retained-backup root. Only CIV/MEC/ELE/PRC trees and explicitly named
   root files are in scope. Preview completes all three scans, hashes independent
@@ -166,7 +165,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   runs only while DocFlow is open, and disables itself after any unsafe failure.
   Backups are never automatically deleted. Windows startup is per-user and needs
   no administrator permission.
-- **DF-026 — Incremental replica comparison:** repeated replica previews reuse
+- **DF-026 — Incremental replica comparison:** Retired in 2.0.0. Historical contract follows. repeated replica previews reuse
   only owner-, root-, algorithm-, relative-path-, identity-, size-, and
   modification-time-matched SHA-256 results from the durable local scan index.
   Cache hits and fresh hashes remain visible. Every changed or unknown file is
@@ -179,7 +178,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   document names, document paths, contents, credentials, and tokens; recursive
   redaction and exact copy validation remain mandatory. This evidence diagnoses
   software handoff but never certifies that paper physically exited a printer.
-- **DF-028 — Guarded near-real-time replica publication:** an approved replica
+- **DF-028 — Guarded near-real-time replica publication:** Retired in 2.0.0. Historical contract follows. an approved replica
   profile may check once per minute while DocFlow is open. Automatic publication
   defers while any scoped source file is newer than the configured settle window.
   Configured file-effect and total-byte brakes pause standing authorization
@@ -192,7 +191,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   storage, validates the compound-file envelope, then creates one journaled
   no-clobber local copy. It never sends, moves, deletes, or changes mailbox data;
   Undo removes only the exact unchanged created copy.
-- **DF-030 — Exact OTHERS-only Worley evidence:** RFI System Sync may classify
+- **DF-030 — Exact OTHERS-only Worley evidence:** Retired in 2.0.0. Historical contract follows. RFI System Sync may classify
   an RFI as Worley-signed only from the exact case-insensitive
   `RFI No. <canonical RFI>.pdf` inside that canonical RFI folder. Page-one
   analysis is restricted to the inner name/signature area of the bottom-right
@@ -200,7 +199,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
   elsewhere are not authority. Missing, unreadable, empty, or insufficient
   evidence remains unsigned and authorizes no workbook change. A detector
   revision invalidates every older cached classification.
-- **DF-031 — Guarded issue-to-reply handoff:** only a fully successful,
+- **DF-031 — Guarded issue-to-reply handoff:** Retired in 2.0.0. Historical contract follows. only a fully successful,
   owner/session-bound `rfi.log_add` Plan may prepare its exact approved rows as
   a separate unsent Outlook Reply All Plan. The handoff preserves escaped table
   formatting, never recalculates RFI numbers, adds no recipients, sends no mail,
@@ -253,7 +252,7 @@ requirement IDs so code, tests, decisions, and releases can be traced.
 
 ## Scope
 
-The ten registered operations and application-level history, recovery, review,
+The nine registered operations and application-level history, recovery, review,
 settings, access control, and diagnostics surfaces are in scope. Paid
 services are optional; no paid dependency is required for core local workflows.
 

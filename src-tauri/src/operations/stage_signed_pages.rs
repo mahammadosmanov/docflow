@@ -478,6 +478,10 @@ where
         Value::Object(page_comparisons),
     );
     plan.meta.insert(
+        "pageComparisonOnDemand".to_string(),
+        Value::Bool(ocr.supports_page_previews()),
+    );
+    plan.meta.insert(
         "pagePreviewOmitted".to_string(),
         Value::from(page_preview_omitted),
     );

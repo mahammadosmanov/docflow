@@ -283,5 +283,6 @@ pub(super) fn record(
         intec_type: preset.intec_type.clone(),
         location: String::new(),
         subcontractor: "AZFEN".to_string(),
+        email_fields: BTreeSet::new(),
     }
 }

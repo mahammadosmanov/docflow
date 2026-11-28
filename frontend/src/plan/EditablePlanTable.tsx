@@ -69,6 +69,9 @@ export function EditablePlanTable({
     editor.choiceLabels && typeof editor.choiceLabels === "object"
       ? (editor.choiceLabels as Record<string, unknown>)
       : {};
+  const fieldOrigins = editor.fieldOrigins as
+    | Record<string, Record<string, { value: string; labelKey: string }>>
+    | undefined;
   const [detailsVisible, setDetailsVisible] = useState(
     editor.detailsDefaultVisible === true,
   );
@@ -89,6 +92,21 @@ export function EditablePlanTable({
     (editor.selectionEnabled === true ? 52 : 0) +
     visibleColumns.reduce((total, column) => total + columnWidth(column), 0) +
     (hasRowActions ? 132 : 0);
+
+  const { groupCounts, scanCodeCounts } = useMemo(() => {
+    const groupCounts = new Map<unknown, number>();
+    const scanCodeCounts = new Map<unknown, number>();
+    for (const row of rows) {
+      if (editor.selectionEnabled === true || hasRowActions) {
+        const group = row[groupField];
+        groupCounts.set(group, (groupCounts.get(group) ?? 0) + 1);
+      }
+      if (editor.kind === "rfiScan") {
+        scanCodeCounts.set(row.code, (scanCodeCounts.get(row.code) ?? 0) + 1);
+      }
+    }
+    return { groupCounts, scanCodeCounts };
+  }, [rows, groupField, editor.kind, editor.selectionEnabled, hasRowActions]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "changes" | "review">(
@@ -312,31 +330,23 @@ export function EditablePlanTable({
             {filteredRowIndices.map((rowIndex) => {
               const row = rows[rowIndex];
               const sheet = String(row._sheet ?? "");
-              const groupCount = rows.filter(
-                (item) => item[groupField] === row[groupField],
-              ).length;
+              const groupCount = groupCounts.get(row[groupField]) ?? 0;
               const id = rowId(row, rowIndex);
+              const canToggleEnabled =
+                editor.selectionEnabled !== true &&
+                typeof row.enabled === "boolean" &&
+                row.selectable !== false;
               return (
                 <tr
                   key={id}
                   className={selectedIds.has(id) ? "selected-row" : ""}
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === " " &&
-                      event.target === event.currentTarget
-                    ) {
+                  tabIndex={canToggleEnabled ? 0 : undefined}
+                  onKeyDown={canToggleEnabled ? (event) => {
+                    if (event.key === " " && event.target === event.currentTarget) {
                       event.preventDefault();
-                      if (editor.selectionEnabled === true) {
-                        toggleRow(id);
-                      } else if (
-                        typeof row.enabled === "boolean" &&
-                        row.selectable !== false
-                      ) {
-                        update(rowIndex, "enabled", !row.enabled);
-                      }
+                      update(rowIndex, "enabled", !row.enabled);
                     }
-                  }}
+                  } : undefined}
                 >
                   {editor.selectionEnabled === true && (
                     <td className="selection-column">
@@ -387,11 +397,7 @@ export function EditablePlanTable({
                     const isScanCode =
                       editor.kind === "rfiScan" && column.key === "code";
                     const duplicateScanCode =
-                      isScanCode &&
-                      rows.some(
-                        (other, index) =>
-                          index !== rowIndex && other.code === row.code,
-                      );
+                      isScanCode && (scanCodeCounts.get(row.code) ?? 0) > 1;
                     const scanCodeErrorKey = isScanCode
                       ? !isRfiCodeCandidate(row.code)
                         ? "error.rfi.fastScan.codeInvalid"
@@ -399,6 +405,7 @@ export function EditablePlanTable({
                           ? "error.rfi.fastScan.targetExists"
                           : undefined
                       : undefined;
+                    const origin = fieldOrigins?.[id]?.[column.key];
                     return (
                       <td
                         key={column.key}
@@ -412,6 +419,7 @@ export function EditablePlanTable({
                           rowIndex={rowIndex}
                           text={text}
                           displayText={displayText}
+                          originLabel={origin?.value === text ? s.t(origin.labelKey) : undefined}
                           choices={choices}
                           choiceLabel={choiceLabel}
                           suggestions={suggestions}

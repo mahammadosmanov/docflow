@@ -86,7 +86,6 @@ export function OperationScreen({
   s,
   onBack,
   onReview,
-  onPrepareRfiReply,
 }: {
   bridge: Bridge;
   operation: OperationDef;
@@ -95,7 +94,6 @@ export function OperationScreen({
   s: Strings;
   onBack: () => void;
   onReview: (destination: PathSelection) => void;
-  onPrepareRfiReply: (plan: Plan) => void;
 }) {
   const defaults = Object.fromEntries(
     operation.schema.map((item) => [item.name, item.default]),
@@ -229,14 +227,12 @@ export function OperationScreen({
     updateScanPreview,
   });
   const { copyingSheet, copyTable } = useCopyTable({ bridge, plan, s, setError });
-  const { prepareRfiReply, undo } = useResultActions({
+  const { undo } = useResultActions({
     bridge,
-    plan,
     result,
     s,
     setError,
     onBack,
-    onPrepareRfiReply,
   });
 
   useOperationShortcuts({
@@ -399,6 +395,9 @@ export function OperationScreen({
             onUpdatePreview={() => void updateScanPreview()}
             isUpdatingPreview={isUpdatingScanPreview}
             scanPreviewUpdated={scanPreviewUpdated}
+            loadSignedComparison={(planId, rowId, archiveChoice) =>
+              bridge.call("engine/signedPageComparison", { planId, rowId, archiveChoice })
+            }
           />
         )}
         {stage === "applying" && (
@@ -442,14 +441,6 @@ export function OperationScreen({
             )}
             copyingSheet={copyingSheet}
             onCopy={(sheet) => void copyTable(sheet)}
-            onPrepareRfiReply={
-              operation.id === "rfi.log_add" &&
-              result.applied > 0 &&
-              result.failed === 0 &&
-              result.meta?.resumeAvailable !== true
-                ? () => void prepareRfiReply()
-                : undefined
-            }
             onOpenDestination={destinationRevealAction(bridge, values)}
           />
         )}

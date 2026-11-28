@@ -77,6 +77,32 @@ describe("frontend authority boundary", () => {
     expect(read("frontend/src/lib/bridge.ts")).not.toContain("method: string");
   });
 
+  it("retires Outlook reply, Action Queue, unattended sync and status operations", () => {
+    const rustCommands = read("src-tauri/src/backend/method.rs");
+    for (const method of [
+      "watch/status",
+      "watch/update",
+      "watch/open",
+      "engine/rfiReplyPreview",
+      "settings/replicaStatus",
+    ]) {
+      expect(FRONTEND_METHODS).not.toContain(method);
+      expect(rustCommands).not.toContain(method);
+    }
+    const dispatch = read("src-tauri/src/backend.rs");
+    for (const id of [
+      "rfi.system_sync",
+      "rfi.complete_status_sync",
+      "rfi.publish_status",
+      "files.replica_publish",
+    ]) {
+      expect(dispatch).not.toContain(`"${id}" =>`);
+      expect(read("frontend/src/lib/demoOperations.ts")).not.toContain(id);
+    }
+    expect(FRONTEND_METHODS).toContain("engine/printQueueResume");
+    expect(FRONTEND_METHODS).toContain("engine/undo");
+  });
+
   it("localizes the Fast RFI Scan mode and correction workflow", () => {
     const requiredKeys = [
       "param.rfi.processScans.scanMode",
@@ -238,7 +264,7 @@ describe("frontend authority boundary", () => {
       }
     }
     const releaseSafety = read("docs/RELEASE_SAFETY.md");
-    expect(releaseSafety).toContain("exact twelve-operation registry");
+    expect(releaseSafety).toContain("exact nine-operation registry");
     expect(releaseSafety).toContain("RFI Follow Up");
   });
 

@@ -12,8 +12,10 @@ pub(crate) enum BackendMethod {
     SettingsUpdate,
     #[serde(rename = "settings/reset")]
     SettingsReset,
-    #[serde(rename = "settings/replicaStatus")]
-    SettingsReplicaStatus,
+    #[serde(rename = "settings/followUpExceptions")]
+    SettingsFollowUpExceptions,
+    #[serde(rename = "settings/changeFollowUpException")]
+    SettingsChangeFollowUpException,
     #[serde(rename = "settings/params")]
     SettingsParams,
     #[serde(rename = "settings/saveParams")]
@@ -62,8 +64,8 @@ pub(crate) enum BackendMethod {
     EngineRevise,
     #[serde(rename = "engine/copyTable")]
     EngineCopyTable,
-    #[serde(rename = "engine/rfiReplyPreview")]
-    EngineRfiReplyPreview,
+    #[serde(rename = "engine/signedPageComparison")]
+    EngineSignedPageComparison,
     #[serde(rename = "engine/reviewScan")]
     EngineReviewScan,
     #[serde(rename = "engine/reviewPreview")]
@@ -80,12 +82,6 @@ pub(crate) enum BackendMethod {
     RecoveryList,
     #[serde(rename = "rfi/printFind")]
     RfiPrintFind,
-    #[serde(rename = "watch/status")]
-    WatchStatus,
-    #[serde(rename = "watch/update")]
-    WatchUpdate,
-    #[serde(rename = "watch/open")]
-    WatchOpen,
     #[serde(rename = "templates/status")]
     TemplatesStatus,
     #[serde(rename = "templates/sync")]
@@ -124,7 +120,7 @@ pub(crate) enum MethodOwner {
 }
 
 impl BackendMethod {
-    pub(crate) const ALL: [Self; 57] = [
+    pub(crate) const ALL: [Self; 55] = [
         Self::AppBootstrap,
         Self::UpdateCheck,
         Self::UpdateInstall,
@@ -138,7 +134,8 @@ impl BackendMethod {
         Self::AuthSetFlags,
         Self::SettingsUpdate,
         Self::SettingsReset,
-        Self::SettingsReplicaStatus,
+        Self::SettingsFollowUpExceptions,
+        Self::SettingsChangeFollowUpException,
         Self::SettingsParams,
         Self::SettingsSaveParams,
         Self::SettingsPresets,
@@ -155,7 +152,7 @@ impl BackendMethod {
         Self::EnginePrintQueueResume,
         Self::EngineRevise,
         Self::EngineCopyTable,
-        Self::EngineRfiReplyPreview,
+        Self::EngineSignedPageComparison,
         Self::EngineReviewScan,
         Self::EngineReviewPreview,
         Self::EngineUndo,
@@ -164,9 +161,6 @@ impl BackendMethod {
         Self::PathsReveal,
         Self::RecoveryList,
         Self::RfiPrintFind,
-        Self::WatchStatus,
-        Self::WatchUpdate,
-        Self::WatchOpen,
         Self::TemplatesStatus,
         Self::TemplatesSync,
         Self::TemplatesEditable,
@@ -195,7 +189,8 @@ impl BackendMethod {
             Self::UpdateInstall => "update/install",
             Self::SettingsUpdate => "settings/update",
             Self::SettingsReset => "settings/reset",
-            Self::SettingsReplicaStatus => "settings/replicaStatus",
+            Self::SettingsFollowUpExceptions => "settings/followUpExceptions",
+            Self::SettingsChangeFollowUpException => "settings/changeFollowUpException",
             Self::SettingsParams => "settings/params",
             Self::SettingsSaveParams => "settings/saveParams",
             Self::SettingsPresets => "settings/presets",
@@ -220,7 +215,7 @@ impl BackendMethod {
             Self::EnginePrintQueueResume => "engine/printQueueResume",
             Self::EngineRevise => "engine/revise",
             Self::EngineCopyTable => "engine/copyTable",
-            Self::EngineRfiReplyPreview => "engine/rfiReplyPreview",
+            Self::EngineSignedPageComparison => "engine/signedPageComparison",
             Self::EngineReviewScan => "engine/reviewScan",
             Self::EngineReviewPreview => "engine/reviewPreview",
             Self::EngineUndo => "engine/undo",
@@ -229,9 +224,6 @@ impl BackendMethod {
             Self::PathsReveal => "paths/reveal",
             Self::RfiPrintFind => "rfi/printFind",
             Self::RecoveryList => "recovery/list",
-            Self::WatchStatus => "watch/status",
-            Self::WatchUpdate => "watch/update",
-            Self::WatchOpen => "watch/open",
             Self::TemplatesStatus => "templates/status",
             Self::TemplatesSync => "templates/sync",
             Self::TemplatesEditable => "templates/editable",
@@ -258,7 +250,6 @@ impl BackendMethod {
                 | Self::UpdateInstall
                 | Self::SettingsUpdate
                 | Self::SettingsReset
-                | Self::SettingsReplicaStatus
                 | Self::SupportDiagnostics
                 | Self::SupportCopyDiagnostics
                 | Self::SupportActivityLog

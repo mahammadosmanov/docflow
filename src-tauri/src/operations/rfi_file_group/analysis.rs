@@ -32,10 +32,12 @@ pub(super) fn discover_files(root: &Path) -> Result<Vec<PathBuf>, BackendError> 
             ));
         }
         // Skips Office owner/lock files (`~$...`), dotfiles, Thumbs.db, desktop.ini.
-        let ignored = entry
-            .file_name()
-            .to_str()
-            .is_some_and(crate::watch::ignored_name);
+        let ignored = entry.file_name().to_str().is_some_and(|name| {
+            name.starts_with('.')
+                || name.starts_with("~$")
+                || name.eq_ignore_ascii_case("thumbs.db")
+                || name.eq_ignore_ascii_case("desktop.ini")
+        });
         if metadata.is_file() && !ignored {
             files.push(entry.path());
             if files.len() > MAX_FILES {

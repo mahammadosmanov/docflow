@@ -135,6 +135,21 @@ pub(crate) fn summarize_plan(plan: &Value) -> Value {
                 .map_or(0, Vec::len)
         ),
     );
+    for (key, fields) in [
+        ("ocrCache", &["reused", "analyzed"][..]),
+        (
+            "scanIndex",
+            &["discovered", "reused", "analyzed", "failed"][..],
+        ),
+    ] {
+        if let Some(counts) = plan.pointer(&format!("/meta/{key}")) {
+            let numeric = fields.iter().filter_map(|field| {
+                let value = counts.get(field)?.as_u64()?;
+                Some((field.to_string(), json!(value)))
+            });
+            out.insert(key.to_string(), Value::Object(numeric.collect()));
+        }
+    }
     let warnings: Vec<Value> = plan
         .get("warnings")
         .and_then(Value::as_array)

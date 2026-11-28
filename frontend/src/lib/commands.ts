@@ -11,19 +11,18 @@ import type {
   PrintQueueSummary,
   ProgressEventHandler,
   RecoveryPayload,
-  ReplicaAutomationStatus,
   ReviewDecision,
   ReviewItem,
   RfiPrintFindResult,
   ActivityLogExport,
   SupportBundlePreview,
-  WatchStatus,
   TemplateDraft,
   TemplateStructure,
   CopySuggestion,
   VersionSummary,
   TemplateEditorState,
   TemplateFieldMap,
+  TemplateReplacementResolution,
   TemplateStatus,
   UpdateCheckResult,
 } from "../types";
@@ -64,7 +63,14 @@ export interface FrontendCommandMap {
   >;
   "settings/update": CommandSpec<Partial<AppPrefs>, AppPrefs>;
   "settings/reset": CommandSpec<NoParams, AppPrefs>;
-  "settings/replicaStatus": CommandSpec<NoParams, ReplicaAutomationStatus>;
+  "settings/followUpExceptions": CommandSpec<
+    NoParams,
+    { shared: string[] | null; local: string[] }
+  >;
+  "settings/changeFollowUpException": CommandSpec<
+    { code: string; change: "addShared" | "removeShared" | "removeLocal" },
+    Ok
+  >;
   "settings/params": CommandSpec<
     { opId: string },
     Record<string, unknown>
@@ -116,9 +122,9 @@ export interface FrontendCommandMap {
     { planId: string; sheet?: string },
     { count: number }
   >;
-  "engine/rfiReplyPreview": CommandSpec<
-    { planId: string; journalId: string },
-    Plan
+  "engine/signedPageComparison": CommandSpec<
+    { planId: string; rowId: string; archiveChoice: string },
+    { archive: string | null; signed: string | null }
   >;
   "engine/reviewScan": CommandSpec<
     { destination: PathSelection },
@@ -152,7 +158,6 @@ export interface FrontendCommandMap {
     },
     RfiPrintFindResult
   >;
-  "watch/status": CommandSpec<NoParams, WatchStatus>;
   "templates/status": CommandSpec<NoParams, TemplateStatus>;
   "templates/sync": CommandSpec<NoParams, TemplateStatus>;
   "templates/editable": CommandSpec<NoParams, TemplateEditorState>;
@@ -170,6 +175,8 @@ export interface FrontendCommandMap {
       discipline: string;
       category: string;
       fieldMap: TemplateFieldMap;
+      fileSha256: string;
+      replacementResolutions: TemplateReplacementResolution[];
     },
     TemplateDraft
   >;
@@ -199,15 +206,6 @@ export interface FrontendCommandMap {
     },
     TemplateDraft
   >;
-  "watch/update": CommandSpec<
-    {
-      opId: string;
-      enabled?: boolean;
-      action?: "checkNow" | "dismiss" | "reprepare";
-    },
-    WatchStatus
-  >;
-  "watch/open": CommandSpec<{ opId: string }, Plan>;
 }
 
 // BEGIN RUST-VERIFIED FRONTEND METHODS
@@ -225,7 +223,8 @@ export const FRONTEND_METHODS = [
   "auth/setFlags",
   "settings/update",
   "settings/reset",
-  "settings/replicaStatus",
+  "settings/followUpExceptions",
+  "settings/changeFollowUpException",
   "settings/params",
   "settings/saveParams",
   "settings/presets",
@@ -242,7 +241,7 @@ export const FRONTEND_METHODS = [
   "engine/printQueueResume",
   "engine/revise",
   "engine/copyTable",
-  "engine/rfiReplyPreview",
+  "engine/signedPageComparison",
   "engine/reviewScan",
   "engine/reviewPreview",
   "engine/undo",
@@ -251,9 +250,6 @@ export const FRONTEND_METHODS = [
   "paths/reveal",
   "rfi/printFind",
   "recovery/list",
-  "watch/status",
-  "watch/update",
-  "watch/open",
   "templates/status",
   "templates/sync",
   "templates/editable",

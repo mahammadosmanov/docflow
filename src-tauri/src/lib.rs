@@ -48,7 +48,6 @@ pub mod smoke;
 pub mod template_documents;
 pub mod templates;
 pub mod undo;
-pub mod watch;
 #[cfg(target_os = "windows")]
 mod windows_pdf;
 
@@ -63,7 +62,6 @@ pub fn run() {
         .setup(|app| {
             let router = backend::BackendRouter::new(app.handle().clone())
                 .map_err(|error| std::io::Error::other(error.message))?;
-            router.start_watch();
             router.start_template_sync();
             app.manage(router);
             Ok(())

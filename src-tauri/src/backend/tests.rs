@@ -25,7 +25,6 @@ fn direct_ipc_requires_an_allowed_authenticated_caller_for_every_protected_metho
         BackendMethod::UpdateInstall,
         BackendMethod::SettingsUpdate,
         BackendMethod::SettingsReset,
-        BackendMethod::SettingsReplicaStatus,
         BackendMethod::SupportDiagnostics,
         BackendMethod::SupportCopyDiagnostics,
         BackendMethod::SupportActivityLog,
@@ -79,6 +78,11 @@ fn frontend_method_allowlist_is_exact_and_rejects_internal_or_legacy_methods() {
         "internal/rfiLogGeminiContext",
         "support/readiness",
         "workItems/list",
+        "watch/status",
+        "watch/open",
+        "watch/update",
+        "settings/replicaStatus",
+        "engine/rfiReplyPreview",
     ] {
         assert!(
             serde_json::from_value::<BackendMethod>(serde_json::json!(rejected)).is_err(),
@@ -193,22 +197,13 @@ fn rfi_log_workbook_picker_offers_macro_enabled_and_standard_excel_files() {
         path_dialog_filter("rfi.follow_up_sync", "rfi_log_workbook"),
         Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
     );
-    assert_eq!(
-        path_dialog_filter("rfi.system_sync", "rfi_log_workbook"),
-        Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
-    );
-    assert_eq!(
-        path_dialog_filter("rfi.system_sync", "follow_up_workbook"),
-        Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
-    );
-    assert_eq!(
-        path_dialog_filter("rfi.complete_status_sync", "rfi_log_workbook"),
-        Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
-    );
-    assert_eq!(
-        path_dialog_filter("rfi.publish_status", "rfi_log_workbook"),
-        Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"][..]))
-    );
+    for retired in [
+        "rfi.system_sync",
+        "rfi.complete_status_sync",
+        "rfi.publish_status",
+    ] {
+        assert_eq!(path_dialog_filter(retired, "rfi_log_workbook"), None);
+    }
     assert_eq!(path_dialog_filter("rfi.process_scans", "source"), None);
 }
 

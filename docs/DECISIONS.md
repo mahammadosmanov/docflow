@@ -24,7 +24,7 @@ and versioned with the code they govern.
 | Shared bounded read-only parallelism with operation-wide progress phases | Accepted | [`adr/0012-bounded-parallel-progress.md`](adr/0012-bounded-parallel-progress.md) |
 | Exact no-clobber grouping of incoming files into multiple RFI folders | Accepted | [`adr/0013-safe-multi-rfi-file-grouping.md`](adr/0013-safe-multi-rfi-file-grouping.md) |
 | Retire RFI work tracking, audit export, and device readiness | Accepted | [`adr/0014-retire-work-tracking-and-device-readiness.md`](adr/0014-retire-work-tracking-and-device-readiness.md) |
-| Exact completed-PDF evidence as a separate guarded RFI Log status operation | Accepted | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
+| Exact completed-PDF evidence as a separate guarded RFI Log status operation | Retired by ADR 0060 | [`adr/0015-exact-completed-pdf-status-sync.md`](adr/0015-exact-completed-pdf-status-sync.md) |
 | Per-RFI mixed-status remarks on CIV and PCU Follow Up sheets | Superseded | [`adr/0026-mixed-rfi-status-remarks.md`](adr/0026-mixed-rfi-status-remarks.md) |
 | Keep Follow Up Sync away from worksheet Remarks cells | Superseded by ADR 0047 | [`adr/0028-remove-follow-up-status-remarks.md`](adr/0028-remove-follow-up-status-remarks.md) |
 | Exact multi-area CIV Follow Up fan-out | Accepted | [`adr/0029-exact-civ-multi-area-follow-up.md`](adr/0029-exact-civ-multi-area-follow-up.md) |
@@ -37,9 +37,9 @@ and versioned with the code they govern.
 | Follow Up context-scope filtering and actionable partial-match diagnostics | Accepted | [`adr/0036-follow-up-context-scope-and-diagnostics.md`](adr/0036-follow-up-context-scope-and-diagnostics.md) |
 | MEC Follow Up Section/Block matching and multi-section fan-out | Accepted | [`adr/0037-mec-follow-up-section-block-matching.md`](adr/0037-mec-follow-up-section-block-matching.md) |
 | CIV Follow Up Tag No token fan-out and partial-coverage diagnostics | Accepted | [`adr/0038-civ-follow-up-tag-token-coverage.md`](adr/0038-civ-follow-up-tag-token-coverage.md) |
-| Background read-only Preview preparation (Action Queue) | Accepted | [`adr/0039-background-read-only-preview-preparation.md`](adr/0039-background-read-only-preview-preparation.md) |
+| Background read-only Preview preparation (Action Queue) | Retired by ADR 0060 | [`adr/0039-background-read-only-preview-preparation.md`](adr/0039-background-read-only-preview-preparation.md) |
 | Cover-first identity reading and OCR page cache | Accepted | [`adr/0040-cover-first-identity-and-ocr-page-cache.md`](adr/0040-cover-first-identity-and-ocr-page-cache.md) |
-| Separate publish-status operation | Accepted | [`adr/0041-separate-publish-status-operation.md`](adr/0041-separate-publish-status-operation.md) |
+| Separate publish-status operation | Retired by ADR 0060 | [`adr/0041-separate-publish-status-operation.md`](adr/0041-separate-publish-status-operation.md) |
 | Follow Up ignores number-only RFI Log rows | Accepted | [`adr/0042-follow-up-ignores-number-only-log-rows.md`](adr/0042-follow-up-ignores-number-only-log-rows.md) |
 | Local activity log for support | Accepted | [`adr/0043-local-activity-log.md`](adr/0043-local-activity-log.md) |
 | Tolerate unsupported directory flush on network shares | Accepted | [`adr/0044-tolerate-unsupported-directory-flush.md`](adr/0044-tolerate-unsupported-directory-flush.md) |
@@ -61,14 +61,15 @@ and versioned with the code they govern.
 | Evidence truthfulness and fail-closed automation | Accepted | [`adr/0024-evidence-truthfulness.md`](adr/0024-evidence-truthfulness.md) |
 | Ordered multi-RFI scan separation and discipline folders | Superseded | [`adr/0025-ordered-batch-rfi-scans.md`](adr/0025-ordered-batch-rfi-scans.md) |
 | Confirmed-cover grouping for batch Process Scans | Accepted | [`adr/0034-confirmed-cover-batch-scan-grouping.md`](adr/0034-confirmed-cover-batch-scan-grouping.md) |
-| One-way backup-first three-root publication with revocable standing authorization | Accepted | [`adr/0016-safe-unattended-replica-publication.md`](adr/0016-safe-unattended-replica-publication.md) |
-| Durable fingerprint-scoped hash reuse for replica comparison | Accepted | [`adr/0017-incremental-replica-hashing.md`](adr/0017-incremental-replica-hashing.md) |
+| One-way backup-first three-root publication with revocable standing authorization | Retired by ADR 0060 | [`adr/0016-safe-unattended-replica-publication.md`](adr/0016-safe-unattended-replica-publication.md) |
+| Durable fingerprint-scoped hash reuse for replica comparison | Retired by ADR 0060 | [`adr/0017-incremental-replica-hashing.md`](adr/0017-incremental-replica-hashing.md) |
 | Local pathless printer evidence in the redacted support bundle | Accepted | [`adr/0018-pathless-printer-diagnostics.md`](adr/0018-pathless-printer-diagnostics.md) |
-| Guarded near-real-time replica publication | Accepted | [`adr/0019-guarded-near-real-time-replica-publication.md`](adr/0019-guarded-near-real-time-replica-publication.md) |
+| Guarded near-real-time replica publication | Retired by ADR 0060 | [`adr/0019-guarded-near-real-time-replica-publication.md`](adr/0019-guarded-near-real-time-replica-publication.md) |
 | Exact selected Outlook message archived as a guarded native Unicode MSG copy | Accepted | [`adr/0020-guarded-selected-outlook-msg-archive.md`](adr/0020-guarded-selected-outlook-msg-archive.md) |
-| Exact canonical PDF and bottom-right OTHERS cell as sole Worley authority | Accepted | [`adr/0021-exact-others-worley-evidence.md`](adr/0021-exact-others-worley-evidence.md) |
+| Exact canonical PDF and bottom-right OTHERS cell as sole Worley authority | Retired by ADR 0060 | [`adr/0021-exact-others-worley-evidence.md`](adr/0021-exact-others-worley-evidence.md) |
 | Existing PCU FINAL RFI as authority for its separate Worley status cell | Accepted | [`adr/0022-pcu-final-worley-projection.md`](adr/0022-pcu-final-worley-projection.md) |
-| Successful guarded RFI Log plan as source for a separate unsent Outlook reply plan | Accepted | [`adr/0023-rfi-log-to-outlook-reply-handoff.md`](adr/0023-rfi-log-to-outlook-reply-handoff.md) |
+| Successful guarded RFI Log plan as source for a separate unsent Outlook reply plan | Retired by ADR 0060 | [`adr/0023-rfi-log-to-outlook-reply-handoff.md`](adr/0023-rfi-log-to-outlook-reply-handoff.md) |
+| Retire selected RFI operations and background automation | Accepted | [`adr/0060-retire-rfi-operations.md`](adr/0060-retire-rfi-operations.md) |
 
 ## Adding a decision
 

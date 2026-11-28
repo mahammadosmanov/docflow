@@ -24,7 +24,7 @@ describe("DocFlow shell: preferences, editor and shortcuts", () => {
     expect(
       screen.getByText("Windows açılışında DocFlow'u başlat"),
     ).toBeVisible();
-    expect(screen.getByText("Onaysız RFI Sistemi eşitleme aktif")).toBeVisible();
+    expect(screen.queryByText("Onaysız RFI Sistemi eşitleme aktif")).not.toBeInTheDocument();
   });
 
   it("previews and explicitly copies a local redacted support bundle without sending it", async () => {

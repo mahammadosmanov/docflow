@@ -16,18 +16,24 @@ that skipped exceptions need no warning.
 
 ## Decision
 
-- `rfi.follow_up_sync` has an optional `exception_rfis` long-text parameter. One
-  code per line, comma or semicolon; full (`AZE-SUN-INT-QMS-RFI-CIV-1374`) or
-  short (`CIV-1374`) form. The field is pre-filled with the stored list
-  (local ∪ cloud), so every user sees the same list. Codes in the field replace
-  the stored list; an empty field changes nothing; `-CODE` also removes a code.
-  (1.68.1: 1.68.0 kept the list but never showed it, because long-text values are
-  not remembered.)
-- The effective list is saved to the
-  settings section `followUpExceptions` and to the Supabase table
-  `follow_up_exceptions` (`docs/supabase_follow_up_exceptions.sql`). Offline, the
-  local list applies; additions reach the cloud on the next online run. A removal
-  needs the cloud, so it cannot come back from there.
+- `rfi.follow_up_sync` has an optional `exception_rfis` long-text parameter.
+  Enter one RFI per line or separate codes with commas or semicolons. The
+  field accepts full and short forms. These codes add protection only to the
+  current plan. Preview reads stored exceptions and makes no changes to the
+  local or shared lists.
+- The protected set combines the current Supabase `follow_up_exceptions` rows,
+  inherited local `followUpExceptions` codes, and codes entered for this run.
+  If the shared list is unavailable, Preview warns that it is using only the
+  local and one-run codes.
+- Approved users manage the shared list in Settings through one explicit add
+  or remove per canonical code. The native command confirms that code's
+  resulting state. Shared edits use the existing table and access policies
+  (`docs/supabase_follow_up_exceptions.sql`) and leave other codes untouched.
+- Older settings may contain a mix of previously shared codes and codes added
+  while offline. Keep them as local protections because their provenance is
+  unknown. Settings displays them separately and can remove them from this
+  computer. Old entries never upload automatically. New shared edits do not
+  create local copies.
 - An exception RFI is removed from the Log records before classification and
   Road row planning. Sync therefore never places, restores, moves, removes or
   reports it, and never counts it as deleted from the Log.
@@ -44,5 +50,5 @@ that skipped exceptions need no warning.
 ## Consequences
 
 - A wrong or forgotten exception hides that RFI from sync. A removal is explicit.
-- The Supabase SQL file must be run once; without it the cloud copy is skipped.
+- Shared edits require the existing Supabase table and a working connection.
 - The status of a shared cell ignores its exception RFIs.

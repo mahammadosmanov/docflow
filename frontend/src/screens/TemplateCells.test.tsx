@@ -67,7 +67,6 @@ function mount(
       s={s}
       versionId="v"
       fields={fields as never}
-      reloadKey=""
       onMark={onMark}
       onRemove={vi.fn()}
       optionalSheets={optionalSheets}

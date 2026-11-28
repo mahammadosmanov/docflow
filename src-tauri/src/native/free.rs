@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use super::*;
 
 pub(super) fn resolve_scoped_rfi_print_file(
@@ -263,37 +265,6 @@ pub(super) struct RfiFollowUpPreviewValues {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct RfiSystemSyncPreviewValues {
-    #[serde(rename = "rfi_system_root")]
-    pub(super) rfi_system_root: PathBuf,
-    #[serde(rename = "rfi_log_workbook")]
-    pub(super) rfi_log_workbook: PathBuf,
-    #[serde(rename = "follow_up_workbook")]
-    pub(super) follow_up_workbook: PathBuf,
-    #[serde(default)]
-    pub(super) force_rescan: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct RfiPublishStatusPreviewValues {
-    #[serde(rename = "staging_folder")]
-    pub(super) staging_folder: PathBuf,
-    #[serde(rename = "rfi_log_workbook")]
-    pub(super) rfi_log_workbook: PathBuf,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct RfiCompleteStatusPreviewValues {
-    #[serde(rename = "rfi_system_root")]
-    pub(super) rfi_system_root: PathBuf,
-    #[serde(rename = "rfi_log_workbook")]
-    pub(super) rfi_log_workbook: PathBuf,
-}
-
-#[derive(Deserialize)]
 // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
 #[allow(dead_code)]
 #[serde(deny_unknown_fields)]
@@ -333,25 +304,6 @@ pub(super) struct TableParams {
     pub(super) plan_id: String,
     #[serde(default)]
     pub(super) sheet: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct RfiReplyPreviewParams {
-    pub(super) plan_id: String,
-    pub(super) journal_id: String,
-}
-
-pub(super) fn committed_rfi_reply_matches(
-    journal: &crate::journal::JournalRecord,
-    caller: &CallerIdentity,
-    plan_digest: &str,
-) -> bool {
-    journal.op_id == "rfi.log_add"
-        && journal.state == Some(crate::journal::JournalState::Committed)
-        && journal.owner_id.as_deref() == Some(caller.owner_id.as_str())
-        && journal.session_id.as_deref() == Some(caller.session_id.as_str())
-        && journal.plan_digest.as_deref() == Some(plan_digest)
 }
 
 #[derive(Deserialize)]
@@ -400,8 +352,6 @@ pub(super) struct SettingsUpdate {
     pub(super) compact: Option<bool>,
     #[serde(default)]
     pub(super) start_with_windows: Option<bool>,
-    #[serde(default)]
-    pub(super) replica_sync_enabled: Option<bool>,
 }
 
 #[derive(Debug, Default, PartialEq)]

@@ -1,5 +1,11 @@
 # DocFlow project memory
 
+- For process scans, preserve the independent two-resolution cover confirmation
+  and exact RFI evidence while tuning speed. OCR page caches are scoped to
+  analysis inputs and OCR resources, plus the existing owner and file identity.
+- DocFlow 2.0 retires background Action Queue and unattended replica publishing.
+  Historical journals remain eligible for their existing validated recovery.
+
 - A project mark and an `RFI No` label appear on both covers and attachments.
   Fast RFI Scan requires cover-specific form evidence and identity agreement
   across two separately rendered resolutions. A Mechanical pile ramming

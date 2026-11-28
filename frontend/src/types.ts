@@ -87,21 +87,6 @@ export interface OperationResult {
   cloudSynced?: boolean;
 }
 
-export interface ReplicaAutomationStatus {
-  enabled: boolean;
-  configured: boolean;
-  status:
-    | "unconfigured"
-    | "disabled"
-    | "idle"
-    | "running"
-    | "waitingForSignIn"
-    | "deferred"
-    | "paused";
-  lastSuccessUnix: number | null;
-  lastErrorCode: string | null;
-}
-
 export interface PrintQueueSummary {
   queueId: string;
   status: string;
@@ -265,16 +250,6 @@ export interface RecoveryPayload {
   printQueue: PrintQueueSummary | null;
 }
 
-export interface WatchItem {
-  opId: string;
-  status: "preparing" | "ready" | "stale" | "failed";
-  planId: string | null;
-  steps: number;
-  warnings: number;
-  errorCode: string | null;
-  preparedAt: number;
-}
-
 export type TemplateSyncError =
   | "offline"
   | "signedOut"
@@ -392,6 +367,11 @@ export interface AnchorCheck {
   movedTo: CellAnchor | null;
 }
 
+export interface TemplateReplacementResolution {
+  key: string;
+  action: "move" | "keep" | "remove";
+}
+
 export interface VersionSummary {
   versionId: string;
   version: number;
@@ -434,17 +414,9 @@ export interface TemplateDraft {
   discipline: string;
   category: string;
   fileKind: "xlsx" | "docx";
+  fileSha256: string;
   fieldMap: TemplateFieldMap;
   placeholders: string[];
-  /** Only after a file replacement. */
+  /** Marked-cell checks from the last file replacement. */
   checks?: AnchorCheck[];
-}
-
-export interface WatchStatus {
-  operations: string[];
-  enabled: string[];
-  configured: string[];
-  pollSeconds: number;
-  paused: boolean;
-  items: WatchItem[];
 }

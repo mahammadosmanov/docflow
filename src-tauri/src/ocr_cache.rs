@@ -17,6 +17,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    contracts::Plan,
     operations::process_scans::{OcrAdapter, OcrFailure, OcrRead},
     rfi_code::{RfiMatch, RfiMethod},
     scan_index::{FileFingerprint, ScanIndex, ScanIndexStats, ScanRun},
@@ -34,14 +35,14 @@ enum Mode {
     Identity,
 }
 
-/// The profile includes the app version so any change to OCR logic starts fresh.
+/// The build fingerprints OCR, PDF, and dependency inputs independently of the release version.
 fn profile(mode: Mode) -> String {
     let name = match mode {
         Mode::Full => "full",
         Mode::Cover => "cover",
         Mode::Identity => "identity",
     };
-    format!("{name}-{}", env!("CARGO_PKG_VERSION"))
+    format!("{name}-{}", env!("DOCFLOW_OCR_REVISION"))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -110,6 +111,7 @@ pub struct CachingOcr<'a, A: OcrAdapter> {
     index: &'a ScanIndex,
     owner_id: String,
     root: PathBuf,
+    engine_revision: Option<String>,
     runs: Mutex<HashMap<Mode, Option<ScanRun<'a>>>>,
     fingerprints: Mutex<HashMap<PathBuf, Option<FileFingerprint>>>,
     reused: AtomicU64,
@@ -129,6 +131,7 @@ impl<'a, A: OcrAdapter> CachingOcr<'a, A> {
             index,
             owner_id: owner_id.to_string(),
             root: std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+            engine_revision: inner.cache_engine_revision(),
             runs: Mutex::new(HashMap::new()),
             fingerprints: Mutex::new(HashMap::new()),
             reused: AtomicU64::new(0),
@@ -142,6 +145,14 @@ impl<'a, A: OcrAdapter> CachingOcr<'a, A> {
             analyzed: self.analyzed.load(Ordering::Relaxed),
             ..ScanIndexStats::default()
         }
+    }
+
+    pub(crate) fn attach_stats(&self, plan: &mut Plan) {
+        let stats = self.stats();
+        plan.meta.insert(
+            "ocrCache".to_string(),
+            serde_json::json!({"reused": stats.reused, "analyzed": stats.analyzed}),
+        );
     }
 
     fn key(&self, path: &Path, page_index: usize) -> Option<PathBuf> {
@@ -168,10 +179,17 @@ impl<'a, A: OcrAdapter> CachingOcr<'a, A> {
     }
 
     fn with_run<T>(&self, mode: Mode, action: impl FnOnce(&ScanRun<'a>) -> Option<T>) -> Option<T> {
+        let engine = self.engine_revision.as_deref()?;
         let mut runs = lock(&self.runs);
         let run = runs.entry(mode).or_insert_with(|| {
             self.index
-                .begin_run(&self.owner_id, OPERATION, &profile(mode), &self.root, false)
+                .begin_run(
+                    &self.owner_id,
+                    OPERATION,
+                    &format!("{}-{engine}", profile(mode)),
+                    &self.root,
+                    false,
+                )
                 .ok()
                 .map(|(run, _)| run)
         });

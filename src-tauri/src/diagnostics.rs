@@ -32,6 +32,17 @@ pub(crate) struct DiagnosticsInput {
     pub ocr_language_data_available: bool,
     pub recent_error_codes: Vec<String>,
     pub printer: PrinterDiagnostic,
+    pub last_preview: Option<PreviewTiming>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PreviewTiming {
+    pub operation: String,
+    pub milliseconds: u64,
+    pub stages: std::collections::BTreeMap<String, u64>,
+    pub ocr_reused: Option<u64>,
+    pub ocr_analyzed: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -133,6 +144,7 @@ pub(crate) fn build_bundle(input: DiagnosticsInput) -> Result<SupportBundlePrevi
             },
             printer: input.printer,
         },
+        last_preview: input.last_preview,
         recent_error_codes: input
             .recent_error_codes
             .into_iter()
@@ -171,6 +183,8 @@ struct BundleDocument {
     platform: PlatformDiagnostic,
     components: ComponentDiagnostics,
     recent_error_codes: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_preview: Option<PreviewTiming>,
     privacy: PrivacyDiagnostic,
 }
 
@@ -226,6 +240,7 @@ mod tests {
             ocr_available: true,
             ocr_language_data_available: true,
             recent_error_codes,
+            last_preview: None,
             printer: PrinterDiagnostic {
                 inventory_status: "available".to_string(),
                 printer_count: 1,
@@ -233,6 +248,23 @@ mod tests {
                 latest_queue: None,
             },
         }
+    }
+
+    #[test]
+    fn bundle_keeps_pathless_preview_timings_and_cache_counts() {
+        let mut input = input(Vec::new());
+        input.last_preview = Some(PreviewTiming {
+            operation: "rfi.group_files".to_string(),
+            milliseconds: 120,
+            stages: std::collections::BTreeMap::from([("file_group_analysis".to_string(), 100)]),
+            ocr_reused: Some(24),
+            ocr_analyzed: Some(1),
+        });
+        let bundle = build_bundle(input).unwrap();
+        validate_bundle_content(&bundle.content).unwrap();
+        let value: Value = serde_json::from_str(&bundle.content).unwrap();
+        assert_eq!(value["lastPreview"]["stages"]["file_group_analysis"], 100);
+        assert_eq!(value["lastPreview"]["ocrReused"], 24);
     }
 
     #[test]

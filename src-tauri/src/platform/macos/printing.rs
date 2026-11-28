@@ -81,14 +81,7 @@ impl PrintAdapter for MacOsPrintAdapter {
             ));
         }
         let args = lp_arguments(job);
-        let output = run_bounded(LP, args.iter().map(OsString::as_os_str), COMMAND_TIMEOUT)
-            .map_err(|error| {
-                if error.kind == crate::print_queue::PrintFailureKind::Uncertain {
-                    error
-                } else {
-                    PrintFailure::failed("CUPS rejected the print job")
-                }
-            })?;
+        let output = run_bounded(LP, args.iter().map(OsString::as_os_str), COMMAND_TIMEOUT)?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let job_id = parse_job_id(&stdout, &job.printer)
             .ok_or_else(|| PrintFailure::uncertain("CUPS accepted a job without a job ID"))?;
@@ -221,14 +214,21 @@ fn wait_for_job(
             COMMAND_TIMEOUT,
         )
         .map_err(|_| PrintFailure::uncertain("CUPS job state could not be read"))?;
-        let active = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .any(|line| line.split_whitespace().next() == Some(job_name.as_str()));
-        if !active {
-            return Ok(());
-        }
+        check_cups_queue(&String::from_utf8_lossy(&output.stdout), &job_name)?;
         thread::sleep(POLL_INTERVAL);
     }
+}
+
+fn check_cups_queue(output: &str, job_name: &str) -> Result<(), PrintFailure> {
+    if output
+        .lines()
+        .any(|line| line.split_whitespace().next() == Some(job_name))
+    {
+        return Ok(());
+    }
+    Err(PrintFailure::submitted_unconfirmed(
+        "The accepted job left the active CUPS queue without a confirmed outcome",
+    ))
 }
 
 fn active_cups_cancellation() -> PrintFailure {
@@ -245,6 +245,7 @@ fn run_bounded<'a>(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .env("LC_ALL", "C")
         .env_remove("LPDEST")
         .env_remove("PRINTER")
         .spawn()
@@ -255,9 +256,14 @@ fn run_bounded<'a>(
             Ok(Some(_)) => {
                 let output = child
                     .wait_with_output()
-                    .map_err(|_| PrintFailure::failed("native CUPS command failed"))?;
+                    .map_err(|_| PrintFailure::uncertain("native CUPS command output was lost"))?;
                 if output.status.success() {
                     return Ok(output);
+                }
+                if program == LP {
+                    return Err(PrintFailure::uncertain(
+                        "CUPS submission exited without a confirmed outcome",
+                    ));
                 }
                 return Err(PrintFailure::failed("native CUPS command failed"));
             }
@@ -270,7 +276,9 @@ fn run_bounded<'a>(
             Err(_) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(PrintFailure::failed("native CUPS command failed"));
+                return Err(PrintFailure::uncertain(
+                    "native CUPS command status was lost",
+                ));
             }
         }
     }
@@ -483,6 +491,18 @@ mod tests {
         );
         assert!(!safe_cups_destination("printer;$(touch /tmp/pwned)"));
         assert!(!safe_cups_destination("printer\nnext"));
+    }
+
+    #[test]
+    fn cups_queue_departure_records_handoff_without_confirming_completion() {
+        use crate::print_queue::PrintFailureKind;
+
+        assert!(check_cups_queue("Printer-42 user 1024 date", "Printer-42").is_ok());
+        for output in ["", "Printer-420 user 1024 date"] {
+            let failure = check_cups_queue(output, "Printer-42").unwrap_err();
+            assert_eq!(failure.kind, PrintFailureKind::SubmittedUnconfirmed);
+            assert!(failure.uncertain);
+        }
     }
 
     #[test]

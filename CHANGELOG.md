@@ -5,6 +5,38 @@ Versioning; `releases.json` is the machine-readable release catalog.
 
 ## Unreleased
 
+## 2.0.0 - 2026-11-28
+
+### Removed
+
+- Retire Outlook Reply All, Analyze RFI System & Sync Worley Signatures, Prepare
+  RFIs for Publishing, Mark Completed RFIs, Action Queue, and unattended RFI
+  System sync. Existing history, journal recovery, Undo, and Batch Print remain
+  available.
+
+### Fixed
+
+- Repair missing or stale Windows startup registration when DocFlow opens with
+  **Start DocFlow with Windows** enabled.
+- Preserve replacement checks on reopened template drafts and reject
+  incompatible mappings. Preserve repeat widths and block repeated rows that
+  would leave Excel table ranges stale or duplicate Word bookmarks. Verify and
+  recover corrupted cached template files.
+- Keep Follow Up Preview read-only for shared exceptions. Save exact individual
+  exception changes through Settings with cloud readback.
+- Require recorded ambient measurements for CON-CIV-010 and CON-CIV-011.
+  Preview shows the values and skips reports whose measurements are incomplete.
+- Keep macOS print outcomes unconfirmed when a job disappears from CUPS, and
+  continue the RFI print search through other readable branches.
+
+### Improved
+
+- Open additional signed-page comparisons on demand from the current Preview.
+- Show exact grouping destinations, the origin of email-populated RFI Log fields,
+  and recovery warnings and failed Undo results.
+- Record stage timings and OCR reuse in local diagnostics. Keep the page OCR
+  cache across releases when analysis inputs and OCR resources match.
+
 ## 1.68.2 - 2026-11-27
 
 ### Fixed

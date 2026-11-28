@@ -74,10 +74,18 @@ pub(crate) fn xlsx(extra_sheet_xml: &str, workbook_extra: &str) -> Vec<u8> {
 
 /// A one-sheet workbook ("Form") whose worksheet part is exactly `sheet`.
 pub(crate) fn workbook_with_sheet(sheet: &str, workbook_extra: &str) -> Vec<u8> {
+    workbook_with_sheet_parts(sheet, workbook_extra, &[])
+}
+
+fn workbook_with_sheet_parts(
+    sheet: &str,
+    workbook_extra: &str,
+    extra_parts: &[(&str, &str)],
+) -> Vec<u8> {
     let workbook = format!(
         r#"<workbook xmlns="{MAIN}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Form" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="1"/>{workbook_extra}</workbook>"#
     );
-    zip(&[
+    let mut parts = vec![
         (
             "[Content_Types].xml",
             r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#,
@@ -92,7 +100,9 @@ pub(crate) fn workbook_with_sheet(sheet: &str, workbook_extra: &str) -> Vec<u8> 
             r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
         ),
         ("xl/worksheets/sheet1.xml", sheet),
-    ])
+    ];
+    parts.extend_from_slice(extra_parts);
+    zip(&parts)
 }
 
 #[test]
@@ -210,6 +220,22 @@ fn repeating(row: u32, columns: u32) -> CellAnchor {
         repeat_columns: Some(columns),
         ..CellAnchor::default()
     }
+}
+
+#[test]
+fn repeating_a_word_row_cannot_duplicate_a_bookmark_in_an_unmapped_cell() {
+    let bookmark = r#"<w:tc><w:p><w:bookmarkStart w:id="1" w:name="Here"/><w:bookmarkEnd w:id="1"/></w:p></w:tc>"#;
+    let row = format!("{}{bookmark}", tc("a"));
+    let input = rows_docx(&row);
+    let anchor = repeating(1, 1);
+    assert!(apply(FileKind::Docx, &input, &[(&anchor, "1\n2")]).is_err());
+    let single = apply(FileKind::Docx, &input, &[(&anchor, "1")]).expect("no row insertion");
+    assert_eq!(
+        part(&single, "word/document.xml")
+            .matches("<w:bookmarkStart")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -357,6 +383,41 @@ fn read_form(bytes: &[u8]) -> crate::ooxml::WorksheetData {
         .sheets
         .remove("Form")
         .expect("sheet")
+}
+
+#[test]
+fn repeating_an_excel_row_refuses_to_shift_or_expand_a_table_below_it() {
+    let sheet = format!(
+        r#"<worksheet xmlns="{MAIN}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Title</t></is></c></row><row r="2"><c r="A2"/></row><row r="4"><c r="A4"/></row></sheetData><tableParts count="1"><tablePart r:id="table1"/></tableParts></worksheet>"#
+    );
+    let table = format!(
+        r#"<table xmlns="{MAIN}" id="1" name="Results" displayName="Results" ref="A1:A2"><autoFilter ref="A1:A2"/><tableColumns count="1"><tableColumn id="1" name="Title"/></tableColumns></table>"#
+    );
+    let workbook = workbook_with_sheet_parts(
+        &sheet,
+        "",
+        &[
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="table1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>"#,
+            ),
+            ("xl/tables/table1.xml", &table),
+        ],
+    );
+    for address in ["A1", "A2"] {
+        let anchor = excel_rows(address, 1);
+        let error = apply(FileKind::Xlsx, &workbook, &[(&anchor, "1\n2")])
+            .expect_err("refuse to shift or expand table");
+        assert!(
+            error.contains("would shift or expand an Excel table"),
+            "{error}"
+        );
+    }
+    assert!(apply(FileKind::Xlsx, &workbook, &[(&excel_rows("A2", 1), "1")]).is_ok());
+    let out = apply(FileKind::Xlsx, &workbook, &[(&excel_rows("A4", 1), "1\n2")])
+        .expect("insertion below the table");
+    assert_eq!(part(&out, "xl/tables/table1.xml"), table);
+    assert_eq!(read_form(&out).value(5, 1), "2");
 }
 
 #[test]

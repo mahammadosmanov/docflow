@@ -568,6 +568,7 @@ pub(crate) fn render(
         GeneratedFile {
             filename: format!("{stem}.{}", kind.extension()),
             bytes,
+            measured_ambient: Vec::new(),
         },
         missing,
     ))

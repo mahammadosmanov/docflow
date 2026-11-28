@@ -275,6 +275,23 @@ impl SettingsStore {
         Ok(())
     }
 
+    pub(crate) fn update_section(
+        &self,
+        name: &str,
+        update: impl FnOnce(&mut JsonObject) -> bool,
+    ) -> io::Result<()> {
+        let mut data = lock_data(&self.data);
+        let mut next = data.clone();
+        let Some(section) = next.get_mut(name).and_then(Value::as_object_mut) else {
+            return Ok(());
+        };
+        if update(section) {
+            (self.writer)(&self.path, &next)?;
+            *data = next;
+        }
+        Ok(())
+    }
+
     pub fn save_session_metadata(
         &self,
         user_id: &str,

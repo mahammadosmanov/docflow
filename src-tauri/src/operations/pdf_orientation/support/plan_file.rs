@@ -35,12 +35,11 @@ pub(in crate::operations::pdf_orientation) fn plan_file(
     totals.verified_pages += verified;
     if !uncertain.is_empty() {
         totals.manual_review_files += 1;
+        let file = truncate(&item.relative.to_string_lossy(), 180);
+        let details = truncate(&uncertain.join(", "), 176);
         plan.warnings.push(warning(
             "warn.rfi.orientationNeedsReview",
-            &truncate(
-                &format!("{} — {}", item.relative.display(), uncertain.join(", ")),
-                360,
-            ),
+            &format!("{file} — {details}"),
         ));
         return Ok(());
     }

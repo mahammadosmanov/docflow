@@ -171,18 +171,6 @@ impl NativeBackend {
                 .map_err(|_| BackendError::settings_write())?;
             preferences.start_with_windows = start_with_windows;
         }
-        if let Some(replica_sync_enabled) = request.replica_sync_enabled {
-            if replica_sync_enabled
-                && self
-                    .settings
-                    .section("replicaAutomation")
-                    .and_then(|section| section.get("profile").cloned())
-                    .is_none()
-            {
-                return Err(BackendError::validation("error.replica.profileMissing"));
-            }
-            preferences.replica_sync_enabled = replica_sync_enabled;
-        }
         if self.settings.save_preferences(preferences).is_err() {
             if request.start_with_windows.is_some() {
                 let _ = platform::set_start_with_windows(previous_startup);

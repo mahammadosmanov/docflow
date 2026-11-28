@@ -12,19 +12,22 @@ arbitrary file/network/process authority never cross into the webview.
 Signed-page Preview reports stable progress phases: `signed_discovery`,
 `signed_inspection`, `signed_ocr`, `signed_classification`, `archive_scan`,
 `comparison_preparation`, and `preview_ready`. These events are presentation-only;
-the final returned Plan remains the sole Apply authority.
+the final returned Plan remains the sole Apply authority. The read-only
+`engine/signedPageComparison` method accepts a cached Plan ID, approved row ID,
+and the approved archive choice. Rust rechecks owner, session, grants, and both
+source hashes before rendering a bounded pair. The caller supplies no paths.
 
-Other stable Preview phases cover scan discovery/OCR/planning, workbook reading
-and RFI-file grouping discovery/analysis/planning,
-and RFI planning, Follow Up analysis, RFI System discovery/signature/workbook/
-mapping stages, PDF-orientation discovery/analysis, printer checks/file
-inspection, Outlook selection, and replica discovery/source-hash/target-hash
-stages. An unattended replica tick uses the same internal Plan and Apply
-contracts without accepting client-authored steps. The webview can only enable
-or pause the already approved stored profile through Settings. Windows startup
-is likewise a bounded boolean preference, not arbitrary command execution. Other
-operations end at
-`preview_ready`. Apply remains ordered and reports approved-step progress.
+Other stable Preview phases cover scan discovery, OCR, workbook reading, Follow
+Up analysis, PDF orientation, print checks, and document generation. Operations
+end at `preview_ready`. Apply remains ordered and reports approved-step progress.
+
+Windows startup remains a bounded boolean preference. Approved users can read
+and explicitly edit Follow Up exceptions through `settings/followUpExceptions`
+and `settings/changeFollowUpException`. Preview never changes the shared list.
+
+Outlook Reply All, the three status-sync workflows, Action Queue, and unattended
+replica publication have no active command routes. Existing journal recovery
+and the independent Batch Print queue remain supported.
 
 Canonical owners are `src-tauri/src/backend.rs`, `src-tauri/src/native.rs`,
 `frontend/src/lib/bridge.ts`, and their roster/golden tests.
@@ -66,7 +69,6 @@ Method families:
 - `auth/*`: sign-in/up/out, approval profile, admin controls
 - `engine/*`: operations, preview, apply, review, undo
 - `history/*`: cloud history with local fallback
-- `watch/*`: Action Queue status, per-operation watch toggle and queue actions, and opening a prepared Preview by operation ID (read-only; no Apply path)
 - `system/*`: ping and diagnostics
 
 Authentication responses expose only user/profile state; Supabase access and

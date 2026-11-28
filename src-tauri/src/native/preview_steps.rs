@@ -73,7 +73,12 @@ pub(super) fn output_steps(
 ) -> Result<Vec<Step>, BackendError> {
     let mut steps = Vec::new();
     let mut destinations = HashSet::new();
-    for GeneratedFile { filename, bytes } in generated {
+    for GeneratedFile {
+        filename,
+        bytes,
+        measured_ambient,
+    } in generated
+    {
         if Path::new(&filename)
             .file_name()
             .and_then(|name| name.to_str())
@@ -99,6 +104,9 @@ pub(super) fn output_steps(
             "contentBase64".to_string(),
             Value::String(base64::engine::general_purpose::STANDARD.encode(bytes)),
         );
+        if !measured_ambient.is_empty() {
+            meta.insert("measuredAmbientC".to_string(), json!(measured_ambient));
+        }
         steps.push(Step {
             kind: StepKind::Write,
             src: None,

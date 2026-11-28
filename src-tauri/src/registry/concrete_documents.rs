@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn concrete_documents_operation() -> OperationDef {
-    let mut concrete_documents = operation(
+    operation(
         "rfi.generate_concrete_documents",
         vec![
             parameter(
@@ -136,44 +136,20 @@ pub(super) fn concrete_documents_operation() -> OperationDef {
                 Map::new(),
                 Some("param.rfi.documents.waterRatios.help"),
             ),
-            parameter(
-                "ambient_min",
-                ParamKind::Int,
-                "param.rfi.documents.ambientMin",
-                json!(19),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                None,
-            ),
-            parameter(
-                "ambient_groups",
+            transient_parameter(
+                "measured_ambient_010",
                 ParamKind::LongText,
-                "param.rfi.documents.ambientGroups",
+                "param.rfi.documents.measuredAmbient010",
                 json!(""),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                Some("param.rfi.documents.ambientGroups.help"),
+                Some("param.rfi.documents.measuredAmbient010.help"),
             ),
-            parameter(
-                "ambient_max",
-                ParamKind::Int,
-                "param.rfi.documents.ambientMax",
-                json!(24),
-                false,
-                Vec::new(),
-                BTreeMap::new(),
-                Map::new(),
-                None,
+            transient_parameter(
+                "measured_ambient_011",
+                ParamKind::LongText,
+                "param.rfi.documents.measuredAmbient011",
+                json!(""),
+                Some("param.rfi.documents.measuredAmbient011.help"),
             ),
         ],
-    );
-    apply_int_ranges(
-        &mut concrete_documents,
-        &[("ambient_min", 0, 100), ("ambient_max", 0, 100)],
-    );
-    concrete_documents
+    )
 }

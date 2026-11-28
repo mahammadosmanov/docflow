@@ -5,7 +5,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,6 @@ use crate::{
     operations::process_scans::{
         FAST_COVER_OPERATION_ID, ProcessScansParams, ScanMode, preview_fast_covers,
     },
-    operations::replica_publish::{self, ReplicaPublishParams},
     operations::rfi_file_group::{self, GroupRfiFilesParams, preview as preview_rfi_file_group},
     operations::rfi_print_find::{self, DocumentType as RfiPrintDocumentType, IncludeTypes},
     operations::stage_signed_pages::{
@@ -58,7 +57,7 @@ use crate::{
     review::{
         ReviewDecision as NativeReviewDecision, preview as preview_review, scan as scan_review,
     },
-    rfi_follow_up, rfi_log, rfi_system_sync,
+    rfi_follow_up, rfi_log,
     scan_index::ScanIndex,
     settings::{PresetStoreError, SettingsStore, default_settings_path},
     template_documents,
@@ -94,46 +93,6 @@ fn optional_requested_rfis(raw: &str) -> Result<Vec<String>, BackendError> {
     } else {
         requested_rfis(raw).map_err(|error| concrete_documents_error(&error))
     }
-}
-
-fn parse_ambient_groups(
-    raw: &str,
-    selected_rfis: &[String],
-) -> Result<HashMap<String, (u8, u8)>, BackendError> {
-    let mut groups = HashMap::new();
-    for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let (rfis, range) = line.split_once('=').ok_or_else(|| {
-            concrete_documents_error("Ambient groups must use `RFI[, RFI...]=MIN-MAX` per line")
-        })?;
-        let (minimum, maximum) = range
-            .trim()
-            .split_once('-')
-            .ok_or_else(|| concrete_documents_error("Ambient ranges must use MIN-MAX"))?;
-        let minimum = minimum.trim().parse::<u8>().map_err(|_| {
-            concrete_documents_error("Ambient range values must be whole degrees from 0 to 100")
-        })?;
-        let maximum = maximum.trim().parse::<u8>().map_err(|_| {
-            concrete_documents_error("Ambient range values must be whole degrees from 0 to 100")
-        })?;
-        if maximum > 100 || minimum > maximum {
-            return Err(concrete_documents_error(
-                "Ambient range must be between 0 and 100 °C with minimum no greater than maximum",
-            ));
-        }
-        for rfi in requested_rfis(rfis).map_err(|error| concrete_documents_error(&error))? {
-            if !selected_rfis.contains(&rfi) {
-                return Err(concrete_documents_error(&format!(
-                    "Ambient group includes an RFI not selected for CON-CIV-011: {rfi}"
-                )));
-            }
-            if groups.insert(rfi.clone(), (minimum, maximum)).is_some() {
-                return Err(concrete_documents_error(&format!(
-                    "Ambient range was specified more than once for {rfi}"
-                )));
-            }
-        }
-    }
-    Ok(groups)
 }
 
 fn add_grant_root(roots: &mut Vec<(PathBuf, GrantAccess)>, root: PathBuf, access: GrantAccess) {
@@ -241,7 +200,6 @@ pub(crate) struct NativeBackend {
     process_session_id: Mutex<String>,
     app_data_dir: PathBuf,
     scan_index: ScanIndex,
-    watch: crate::watch::WatchQueue,
     templates: Arc<crate::templates::TemplateStore>,
 }
 
@@ -376,6 +334,12 @@ impl NativeBackend {
         #[cfg(target_os = "windows")]
         let print =
             print.with_excel_pipeline(platform::windows::excel::production_excel_pipeline());
+        #[cfg(target_os = "windows")]
+        if settings.preferences().start_with_windows
+            && let Err(error) = platform::set_start_with_windows(true)
+        {
+            eprintln!("Could not repair Windows startup registration: {error}");
+        }
         Ok(Self {
             settings,
             auth,
@@ -389,7 +353,6 @@ impl NativeBackend {
             process_session_id: Mutex::new(uuid::Uuid::new_v4().to_string()),
             app_data_dir,
             scan_index,
-            watch: crate::watch::WatchQueue::default(),
             templates,
         })
     }
@@ -414,9 +377,6 @@ impl NativeBackend {
                     operations: operation_registry(self.registry_facts()),
                 })
             }
-            BackendMethod::WatchStatus => self.watch_dispatch_status(params),
-            BackendMethod::WatchUpdate => self.watch_dispatch_update(params),
-            BackendMethod::WatchOpen => self.watch_dispatch_open(params),
             BackendMethod::SettingsUpdate => self.update_settings(params),
             BackendMethod::SettingsReset => {
                 decode_empty(params)?;
@@ -429,31 +389,12 @@ impl NativeBackend {
                 }
                 encode(self.settings.preferences())
             }
-            BackendMethod::SettingsReplicaStatus => {
+            BackendMethod::SettingsFollowUpExceptions => {
                 decode_empty(params)?;
-                let preferences = self.settings.preferences();
-                let section = self.settings.section("replicaAutomation");
-                let configured = section
-                    .as_ref()
-                    .is_some_and(|value| value.contains_key("profile"));
-                let status = if !configured {
-                    "unconfigured"
-                } else if !preferences.replica_sync_enabled {
-                    "disabled"
-                } else {
-                    section
-                        .as_ref()
-                        .and_then(|value| value.get("status"))
-                        .and_then(Value::as_str)
-                        .unwrap_or("idle")
-                };
-                Ok(json!({
-                    "enabled": preferences.replica_sync_enabled,
-                    "configured": configured,
-                    "status": status,
-                    "lastSuccessUnix": section.as_ref().and_then(|value| value.get("lastSuccessUnix")).and_then(Value::as_i64),
-                    "lastErrorCode": section.as_ref().and_then(|value| value.get("lastErrorCode")).and_then(Value::as_str),
-                }))
+                self.follow_up_exceptions()
+            }
+            BackendMethod::SettingsChangeFollowUpException => {
+                self.change_follow_up_exception(params)
             }
             BackendMethod::SettingsParams => {
                 let request: OperationIdParams = decode(params)?;
@@ -573,6 +514,7 @@ impl NativeBackend {
             BackendMethod::EngineReviewScan => self.review_scan(params),
             BackendMethod::RfiPrintFind => self.find_rfi_print_files(params),
             BackendMethod::EngineReviewPreview => self.review_preview(params),
+            BackendMethod::EngineSignedPageComparison => self.signed_page_comparison(params),
             BackendMethod::HistoryList => {
                 let request: HistoryParams = decode(params)?;
                 encode(self.cloud.list(request.limit.unwrap_or(50), now())?)
@@ -673,24 +615,6 @@ impl NativeBackend {
             },
         );
     }
-    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
-    #[allow(dead_code)]
-    fn pause_replica_automation(&self, error_code: &str) {
-        if let Some(mut section) = self.settings.section("replicaAutomation") {
-            section.insert("status".to_string(), Value::String("paused".to_string()));
-            section.insert(
-                "lastErrorCode".to_string(),
-                Value::String(error_code.to_string()),
-            );
-            let _ = self
-                .settings
-                .save_section("replicaAutomation", Some(section));
-        }
-        let mut preferences = self.settings.preferences();
-        preferences.replica_sync_enabled = false;
-        let _ = self.settings.save_preferences(preferences);
-    }
-
     pub(crate) fn mark_undone(&self, cloud_id: &str) {
         self.cloud.mark_undone(cloud_id, now());
     }
@@ -717,10 +641,8 @@ mod preview;
 mod preview_rfi;
 mod preview_steps;
 mod session;
-mod watch;
+mod signed_comparison;
 pub(crate) use free::*;
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod watch_tests;

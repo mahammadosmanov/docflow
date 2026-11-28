@@ -3535,12 +3535,23 @@ fn revise_from_open_files_changes_only_enabled_and_preserves_plan_identity() {
     let mut plan =
         preview_from_open_files(&source_path, &target_path, &mut source, &mut target).unwrap();
     plan.plan_id = "preserved-plan".to_string();
+    let cloud_warning = "warn.rfi.followUp.exceptionCloudUnavailable";
+    plan.warnings.push(docflow_lib::contracts::Warning {
+        key: cloud_warning.to_string(),
+        subject: String::new(),
+    });
     let mut rows = plan.meta["editor"]["rows"].as_array().unwrap().clone();
     rows[0]["enabled"] = Value::Bool(false);
 
     let revised = revise_from_open_files(&plan, &rows, &mut source, &mut target).unwrap();
 
     assert_eq!(revised.plan_id, "preserved-plan");
+    assert!(
+        revised
+            .warnings
+            .iter()
+            .any(|warning| warning.key == cloud_warning)
+    );
     assert!(revised.steps.is_empty());
     assert_eq!(revised.meta["editor"]["rows"][0]["enabled"], false);
     assert_eq!(

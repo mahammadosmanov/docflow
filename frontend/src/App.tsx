@@ -53,9 +53,6 @@ import {
 const ReviewScreen = lazy(() =>
   import("./screens/ReviewScreen").then((module) => ({ default: module.ReviewScreen })),
 );
-const QueueScreen = lazy(() =>
-  import("./screens/QueueScreen").then((module) => ({ default: module.QueueScreen })),
-);
 const TemplatesScreen = lazy(() =>
   import("./screens/TemplatesScreen").then((module) => ({
     default: module.TemplatesScreen,
@@ -189,7 +186,6 @@ export function App() {
             onReview={(destination) =>
               setRoute({ name: "review", destination })
             }
-            onPrepareRfiReply={() => {}}
           />
         );
       case "review":
@@ -199,26 +195,6 @@ export function App() {
             destination={route.destination}
             s={s}
             onBack={() => setRoute({ name: "home" })}
-          />
-        );
-      case "queue":
-        return (
-          <QueueScreen
-            bridge={bridge}
-            operations={bootstrap.operations}
-            s={s}
-            onBack={() => setRoute({ name: "home" })}
-            onOpenOperation={(operation) =>
-              setRoute({ name: "operation", operation })
-            }
-            onOpenPlan={(operation, plan, values) =>
-              setRoute({
-                name: "operation",
-                operation,
-                initialValues: values,
-                initialPlan: plan,
-              })
-            }
           />
         );
       case "templates":

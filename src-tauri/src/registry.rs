@@ -128,12 +128,6 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
     let rfi_follow_up = rfi_follow_up_operation();
     let concrete_documents = concrete_documents_operation();
 
-    let rfi_system_sync = rfi_system_sync_operation();
-
-    let rfi_complete_status_sync = rfi_complete_status_sync_operation();
-
-    let rfi_publish_status = rfi_publish_status_operation();
-
     let batch_print = batch_print_operation(facts);
 
     let stage_signed_pages = stage_signed_pages_operation();
@@ -150,9 +144,6 @@ pub fn operation_registry(facts: RegistryFacts) -> Vec<OperationDef> {
         batch_print,
         stage_signed_pages,
         normalize_pdf_orientation,
-        rfi_system_sync,
-        rfi_complete_status_sync,
-        rfi_publish_status,
         fast_cover_scans,
         template_document,
     ]

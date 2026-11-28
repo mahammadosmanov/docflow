@@ -83,7 +83,7 @@ pub fn discover(
     let mut pending = vec![(root.clone(), 0usize)];
     let mut visited = 0usize;
     let mut truncated = false;
-    while let Some((directory, depth)) = pending.pop() {
+    'scan: while let Some((directory, depth)) = pending.pop() {
         if depth > MAX_DEPTH {
             truncated = true;
             continue;
@@ -97,7 +97,7 @@ pub fn discover(
         for entry in entries {
             if visited >= MAX_ENTRIES {
                 truncated = true;
-                break;
+                break 'scan;
             }
             visited += 1;
             let Ok(entry) = entry else {
@@ -117,9 +117,6 @@ pub fn discover(
             } else if meta.is_file() && path.strip_prefix(&root).is_ok() {
                 files.push(path);
             }
-        }
-        if truncated {
-            break;
         }
     }
     files.sort();

@@ -13,7 +13,7 @@ use super::{
     FileKind, MAX_TEMPLATE_BYTES, TemplateStore, anchors,
     copies::{self, CopySuggestion},
     field_map::{FieldDef, FieldMap, TextBlock, replace_in_block, scan, text_blocks},
-    remap::{self, AnchorCheck},
+    remap::{self, AnchorCheck, CheckStatus},
     sheets,
     structure::{self, Structure},
     verify_package,
@@ -46,6 +46,7 @@ pub struct TemplateDraft {
     pub discipline: String,
     pub category: String,
     pub file_kind: FileKind,
+    pub file_sha256: String,
     pub field_map: FieldMap,
     pub placeholders: Vec<String>,
     /// After a file replacement: where each marked cell is in the new file.
@@ -102,6 +103,25 @@ pub struct SaveDraft {
     #[serde(default)]
     pub category: String,
     pub field_map: Value,
+    #[serde(default)]
+    pub file_sha256: Option<String>,
+    #[serde(default)]
+    pub replacement_resolutions: Vec<ReplacementResolution>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplacementResolution {
+    key: String,
+    action: ReplacementAction,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ReplacementAction {
+    Move,
+    Keep,
+    Remove,
 }
 
 /// A field made from selected text, or plain replacement text.
@@ -165,6 +185,83 @@ struct VersionRow {
 
 fn invalid(detail: impl std::fmt::Display) -> BackendError {
     BackendError::validation(format!("error.templates.invalid: {detail}"))
+}
+
+const REPLACEMENT_CHECKS: &str = "replacementChecks";
+
+fn unresolved_replacement() -> BackendError {
+    BackendError::validation("error.templates.replacementPending")
+}
+
+fn replacement_checks(value: &Value) -> Result<Vec<AnchorCheck>, BackendError> {
+    let Some(stored) = value.get(REPLACEMENT_CHECKS) else {
+        return Ok(Vec::new());
+    };
+    let checks: Vec<AnchorCheck> = serde_json::from_value(stored.clone())
+        .map_err(|_| invalid("Replacement checks are invalid"))?;
+    if checks.len() > super::MAX_FIELDS {
+        return Err(invalid("There are too many replacement checks"));
+    }
+    Ok(checks)
+}
+
+pub(super) fn ensure_replacement_resolved(value: &Value) -> Result<(), BackendError> {
+    if replacement_checks(value)?
+        .iter()
+        .any(|check| check.status != CheckStatus::Found)
+    {
+        return Err(unresolved_replacement());
+    }
+    Ok(())
+}
+
+fn resolve_replacement_checks(
+    mut checks: Vec<AnchorCheck>,
+    existing: &FieldMap,
+    requested: &FieldMap,
+    resolutions: &[ReplacementResolution],
+    matches_file: bool,
+) -> Result<Vec<AnchorCheck>, BackendError> {
+    checks.retain(|check| check.status != CheckStatus::Found);
+    if resolutions.len() > checks.len() || (!resolutions.is_empty() && !matches_file) {
+        return Err(unresolved_replacement());
+    }
+    let anchor = |map: &FieldMap, key: &str| {
+        map.fields
+            .iter()
+            .find(|field| field.key == key)
+            .and_then(|field| field.anchor.clone())
+    };
+    for resolution in resolutions {
+        let index = checks
+            .iter()
+            .position(|check| check.key == resolution.key)
+            .ok_or_else(unresolved_replacement)?;
+        let check = &checks[index];
+        let requested_anchor = anchor(requested, &check.key);
+        let valid = match resolution.action {
+            ReplacementAction::Keep => {
+                requested_anchor.is_some() && requested_anchor == anchor(existing, &check.key)
+            }
+            ReplacementAction::Move => {
+                check.status == CheckStatus::Moved
+                    && check.moved_to.is_some()
+                    && requested_anchor == check.moved_to
+            }
+            ReplacementAction::Remove => requested_anchor.is_none(),
+        };
+        if !valid {
+            return Err(unresolved_replacement());
+        }
+        checks.remove(index);
+    }
+    if checks
+        .iter()
+        .any(|check| anchor(existing, &check.key) != anchor(requested, &check.key))
+    {
+        return Err(unresolved_replacement());
+    }
+    Ok(checks)
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -408,7 +505,8 @@ impl TemplateStore {
         }
         let template =
             self.template_row(&format!("id=eq.{}", uuid_ok(&version.template_id)?), now)?;
-        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
+        ensure_replacement_resolved(&version.field_map)?;
+        let mut field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
         let replacement = match &request.field {
             Some(field) => {
                 let def = FieldDef {
@@ -454,6 +552,9 @@ impl TemplateStore {
         if edited.len() as u64 > MAX_TEMPLATE_BYTES {
             return Err(BackendError::validation("error.templates.fileSize"));
         }
+        let (found, defaults) = scan(template.file_kind, &edited).map_err(invalid)?;
+        field_map.merge_placeholders(&found, &defaults);
+        field_map.validate().map_err(invalid)?;
         let (sha, path) = self.upload_file(
             &template.id,
             version.version,
@@ -461,11 +562,12 @@ impl TemplateStore {
             &edited,
             now,
         )?;
-        let (found, defaults) = scan(template.file_kind, &edited).map_err(invalid)?;
-        field_map.merge_placeholders(&found, &defaults);
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
-            &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
+            &format!(
+                "doc_template_versions?id=eq.{}&status=eq.draft&file_sha256=eq.{}",
+                version.id, version.file_sha256
+            ),
             Some(json!({
                 "file_sha256": sha,
                 "file_size": edited.len(),
@@ -483,9 +585,9 @@ impl TemplateStore {
         version: VersionRow,
         now: i64,
     ) -> Result<TemplateDraft, BackendError> {
+        let mut field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
         let bytes = self.version_bytes(&version, now)?;
         let (found, defaults) = scan(template.file_kind, &bytes).map_err(invalid)?;
-        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
         field_map.merge_placeholders(&found, &defaults);
         Ok(TemplateDraft {
             template_id: template.id.clone(),
@@ -496,9 +598,10 @@ impl TemplateStore {
             discipline: template.discipline.clone(),
             category: template.category.clone(),
             file_kind: template.file_kind,
+            file_sha256: version.file_sha256,
             field_map,
             placeholders: found,
-            checks: Vec::new(),
+            checks: replacement_checks(&version.field_map)?,
         })
     }
 
@@ -517,6 +620,8 @@ impl TemplateStore {
             return self.draft_of(&template, version, now);
         }
         let published = self.version_row(&latest.id, now)?;
+        FieldMap::parse(&published.field_map).map_err(invalid)?;
+        ensure_replacement_resolved(&published.field_map)?;
         let created = single::<VersionRow>(self.remote.rest(
             "POST",
             "doc_template_versions",
@@ -610,7 +715,8 @@ impl TemplateStore {
         if file_kind_of(file_name, bytes)? != template.file_kind {
             return Err(BackendError::validation("error.templates.fileType"));
         }
-        let mut field_map = FieldMap::parse(&version.field_map).unwrap_or_default();
+        ensure_replacement_resolved(&version.field_map)?;
+        let mut field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
         let anchored = field_map
             .fields
             .iter()
@@ -627,6 +733,13 @@ impl TemplateStore {
             let old = self.version_bytes(&version, now)?;
             remap::check(template.file_kind, &old, bytes, &anchored).map_err(invalid)?
         };
+        let (found, defaults) = scan(template.file_kind, bytes).map_err(invalid)?;
+        field_map.merge_placeholders(&found, &defaults);
+        field_map.validate().map_err(invalid)?;
+        let mut stored = field_map.to_value();
+        if !checks.is_empty() {
+            stored[REPLACEMENT_CHECKS] = json!(checks);
+        }
         let (sha, path) = self.upload_file(
             &template.id,
             version.version,
@@ -634,22 +747,21 @@ impl TemplateStore {
             bytes,
             now,
         )?;
-        let (found, defaults) = scan(template.file_kind, bytes).map_err(invalid)?;
-        field_map.merge_placeholders(&found, &defaults);
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
-            &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
+            &format!(
+                "doc_template_versions?id=eq.{}&status=eq.draft&file_sha256=eq.{}",
+                version.id, version.file_sha256
+            ),
             Some(json!({
                 "file_sha256": sha,
                 "file_size": bytes.len(),
                 "storage_path": path,
-                "field_map": field_map.to_value(),
+                "field_map": stored,
             })),
             now,
         )?)?;
-        let mut draft = self.draft_of(&template, updated, now)?;
-        draft.checks = checks;
-        Ok(draft)
+        self.draft_of(&template, updated, now)
     }
 
     /// Every version of the template, newest first.
@@ -701,16 +813,26 @@ impl TemplateStore {
             .iter()
             .max_by_key(|version| version.version)
             .ok_or_else(|| BackendError::validation("error.templates.notFound"))?;
-        let copied = json!({
+        FieldMap::parse(&old.field_map).map_err(invalid)?;
+        ensure_replacement_resolved(&old.field_map)?;
+        let mut copied = json!({
             "file_sha256": old.file_sha256,
             "file_size": old.file_size,
             "storage_path": old.storage_path,
             "field_map": old.field_map,
         });
         let row = if latest.status == "draft" {
+            let draft = self.version_row(&latest.id, now)?;
+            FieldMap::parse(&draft.field_map).map_err(invalid)?;
+            if draft.field_map.get(REPLACEMENT_CHECKS).is_some() {
+                copied["field_map"][REPLACEMENT_CHECKS] = json!([]);
+            }
             single::<VersionRow>(self.remote.rest(
                 "PATCH",
-                &format!("doc_template_versions?id=eq.{}&status=eq.draft", latest.id),
+                &format!(
+                    "doc_template_versions?id=eq.{}&status=eq.draft&file_sha256=eq.{}",
+                    latest.id, draft.file_sha256
+                ),
                 Some(copied),
                 now,
             )?)?
@@ -737,7 +859,30 @@ impl TemplateStore {
         if version.status != "draft" {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
-        self.check_against_file(&field_map, &version, now)?;
+        let existing = FieldMap::parse(&version.field_map).map_err(invalid)?;
+        if request
+            .file_sha256
+            .as_ref()
+            .is_some_and(|sha| sha != &version.file_sha256)
+        {
+            return Err(BackendError::validation("error.templates.draftChanged"));
+        }
+        let pending = resolve_replacement_checks(
+            replacement_checks(&version.field_map)?,
+            &existing,
+            &field_map,
+            &request.replacement_resolutions,
+            request.file_sha256.as_deref() == Some(version.file_sha256.as_str()),
+        )?;
+        let mut resolved_map = field_map.clone();
+        resolved_map
+            .fields
+            .retain(|field| !pending.iter().any(|check| check.key == field.key));
+        self.check_against_file(&resolved_map, &version, now)?;
+        let mut stored = field_map.to_value();
+        if version.field_map.get(REPLACEMENT_CHECKS).is_some() {
+            stored[REPLACEMENT_CHECKS] = json!(pending);
+        }
         self.remote.rest(
             "PATCH",
             &format!("doc_templates?id=eq.{}", uuid_ok(&version.template_id)?),
@@ -751,8 +896,11 @@ impl TemplateStore {
         )?;
         let updated = single::<VersionRow>(self.remote.rest(
             "PATCH",
-            &format!("doc_template_versions?id=eq.{}&status=eq.draft", version.id),
-            Some(json!({"field_map": field_map.to_value()})),
+            &format!(
+                "doc_template_versions?id=eq.{}&status=eq.draft&file_sha256=eq.{}",
+                version.id, version.file_sha256
+            ),
+            Some(json!({"field_map": stored})),
             now,
         )?)?;
         let template = self.template_row(&format!("id=eq.{}", version.template_id), now)?;
@@ -784,6 +932,7 @@ impl TemplateStore {
             return Err(BackendError::validation("error.templates.notDraft"));
         }
         let field_map = FieldMap::parse(&version.field_map).map_err(invalid)?;
+        ensure_replacement_resolved(&version.field_map)?;
         // Last check before everyone gets the version.
         self.check_against_file(&field_map, &version, now)?;
         self.remote.rest(

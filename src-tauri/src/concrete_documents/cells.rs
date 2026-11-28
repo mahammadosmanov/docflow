@@ -17,7 +17,6 @@ static CELL_TYPE_ATTRIBUTE: LazyLock<Regex> =
 pub(super) fn patch_civ010_numeric_cells(
     package: &[u8],
     record: &SourceRecord,
-    ambients: &[String],
 ) -> Result<Vec<u8>, String> {
     let mut batches = vec![ConcreteBatch {
         tag: record.tag.clone(),
@@ -65,12 +64,15 @@ pub(super) fn patch_civ010_numeric_cells(
             xml = expand_civ010_batch_rows(&xml, batches.len())?;
             for (index, batch) in batches.iter().enumerate() {
                 let row = 19 + index * 2;
-                let ambient = ambients.get(index).map_or("", String::as_str);
+                xml = set_measured_ambient_cell(
+                    &xml,
+                    &format!("BD{row}"),
+                    record.measured_ambient.get(index).map(String::as_str),
+                )?;
                 for (column, value) in [
                     ("AI", batch.quantity.as_str()),
                     ("AP", batch.total_quantity.as_str()),
                     ("AW", batch.batch_time.as_str()),
-                    ("BD", ambient),
                     ("BK", batch.start_time.as_str()),
                     ("BR", batch.end_time.as_str()),
                     ("BY", batch.plant_slump.as_str()),
@@ -220,6 +222,48 @@ pub(super) fn shift_coordinate_rows(
             }
         })
         .into_owned()
+}
+
+static FORMULA_ELEMENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"<(?:[A-Za-z_][\w.-]*:)?f(?:\s|/|>)").expect("static formula element regex")
+});
+
+fn set_measured_ambient_cell(
+    xml: &str,
+    reference: &str,
+    reading: Option<&str>,
+) -> Result<String, String> {
+    let pattern = Regex::new(&format!(
+        r#"(?s)<c\b(?P<attributes>[^<>]*\br="{reference}"[^<>]*?)(?:/>|>(?P<value>.*?)</c>)"#
+    ))
+    .map_err(|error| error.to_string())?;
+    let mut matches = pattern.captures_iter(xml);
+    let Some(cell) = matches.next() else {
+        return if reading.is_some() {
+            Err(format!(
+                "CON-CIV-010 template is missing ambient cell {reference}"
+            ))
+        } else {
+            Ok(xml.to_string())
+        };
+    };
+    if matches.next().is_some()
+        || cell
+            .name("value")
+            .is_some_and(|value| FORMULA_ELEMENT.is_match(value.as_str()))
+    {
+        return Err(format!(
+            "CON-CIV-010 template has an invalid ambient cell {reference}"
+        ));
+    }
+    let attributes = CELL_TYPE_ATTRIBUTE.replace_all(&cell["attributes"], "");
+    let value = reading.map_or_else(String::new, |reading| format!("<v>{reading}</v>"));
+    let mut output = xml.to_string();
+    output.replace_range(
+        cell.get(0).expect("matched cell").range(),
+        &format!("<c{attributes}>{value}</c>"),
+    );
+    Ok(output)
 }
 
 pub(super) fn set_numeric_cell(xml: &str, reference: &str, value: &str) -> Result<String, String> {

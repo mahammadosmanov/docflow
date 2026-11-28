@@ -290,6 +290,11 @@ fn native_preview_revise_and_table_payload_match_the_frozen_compatibility_oracle
     assert_eq!(rows[0]["startTime"], "09:00");
     assert_eq!(rows[0]["area"], "North Site");
     assert_eq!(rows[1]["area"], "South Site");
+    let origins = &plan.meta["editor"]["fieldOrigins"][rows[0]["_rowId"].as_str().unwrap()];
+    assert_eq!(origins["tagNo"]["labelKey"], "rfi.origin.request");
+    assert_eq!(origins["forms"]["labelKey"], "rfi.origin.workbook");
+    assert_eq!(origins["inspectionDate"]["labelKey"], "rfi.origin.default");
+
     assert_eq!(progress.first().unwrap().done, 0);
     assert_eq!(progress.last().unwrap().phase, "preview_ready");
     assert_eq!(progress.last().unwrap().done, 1);

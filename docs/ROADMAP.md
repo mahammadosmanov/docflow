@@ -4,7 +4,7 @@ This file describes product outcomes, not day-to-day task status. GitHub Issues
 and pull requests are the free execution tracker; `releases.json` and tags are
 the historical tracker.
 
-## Now — 1.68.2 reliability and Windows certification
+## Now — 2.0.0 reliability and Windows certification
 
 - Keep human-facing current-version markers synchronized with `VERSION` through
   the tested release tool, alongside changelog and release metadata.
@@ -16,29 +16,18 @@ the historical tracker.
   without committing private documents.
 - Calibrate OCR against consented representative scans and retain at least 95%
   exact canonical-RFI recognition.
-- Certify incremental RFI scanning on the real 20 GB OneDrive/network tree,
-  including interruption, resume, file drift, and one-run forced rescans.
-- Certify recursive exact completed-PDF discovery and guarded RFI Log status
-  Apply/Undo on the current Windows/OneDrive/Excel environment.
-- Certify one-way replica publication, retained backups, Undo, unattended pause,
-  settle delays, mass-change brakes, one-minute cadence, and per-user startup on
-  the real Windows/OneDrive/GlobalProtect paths.
-- Certify the guarded RFI Log to selected classic-Outlook Reply All handoff with
-  single- and multi-discipline requests on Windows.
-
+- Benchmark Fast RFI Scan, signed-page staging, and PDF orientation on the same
+  Windows and OneDrive fixtures, with cold and warm caches. Record Preview phase
+  times, exact OCR coverage, incorrect labels, incorrect split boundaries,
+  manual reviews, and recovery after interruption.
 ## Next — deeper RFI automation
 
 - Keep the implemented exact existing-cell workbook comparison aligned with
-  guarded RFI System and Follow Up step metadata as workbook families expand.
+  guarded Follow Up step metadata as workbook families expand.
 - Keep the implemented bounded Worley first-page thumbnails covered by packaged
   Windows and representative combined-scan acceptance evidence.
 - Keep the implemented warning search, type filtering, and exact-RFI page focus
   covered by large combined-scan usability checks.
-- Keep the implemented Outlook Reply All draft covered by classic Outlook
-  acceptance. Add an operator route for the selected-message Unicode MSG archive
-  on its existing scaffolding (`outlook_reply_draft.rs`), then certify it on
-  classic Outlook with destination-collision and Undo checks.
-
 ## Later — document automation breadth
 
 - Printer capability discovery, preflight thumbnails, test-page gates, and

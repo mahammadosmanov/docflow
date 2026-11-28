@@ -15,6 +15,11 @@ pub struct OcrRead {
 }
 
 pub trait OcrAdapter: Sync {
+    /// Identifies the OCR executable and language data used by durable page reads.
+    fn cache_engine_revision(&self) -> Option<String> {
+        Some(String::new())
+    }
+
     fn read(&self, path: &Path) -> Result<OcrRead, OcrFailure>;
     fn read_cover_page(&self, path: &Path, page_index: usize) -> Result<OcrRead, OcrFailure> {
         self.read_page(path, page_index)

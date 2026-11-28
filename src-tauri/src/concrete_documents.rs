@@ -24,7 +24,7 @@ pub(crate) struct SourceRecord {
     pub in_situ_temp: String,
     pub samples: String,
     pub water_cement_ratio: Option<String>,
-    pub ambient_range: Option<(u8, u8)>,
+    pub measured_ambient: Vec<String>,
     pub drawing: String,
     pub additional_batches: Vec<ConcreteBatch>,
 }
@@ -50,6 +50,7 @@ pub(crate) struct ConcreteBatch {
 pub(crate) struct GeneratedFile {
     pub filename: String,
     pub bytes: Vec<u8>,
+    pub measured_ambient: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,14 +76,9 @@ pub(crate) fn generate(
     document_type: DocumentType,
     template: &[u8],
     records: &[SourceRecord],
-    ambient_range: (u8, u8),
-    rng_seed: u64,
 ) -> Result<Vec<GeneratedFile>, String> {
     if records.is_empty() {
         return Err("No concrete source records were provided".to_string());
-    }
-    if ambient_range.0 > ambient_range.1 {
-        return Err("Ambient temperature range is invalid".to_string());
     }
 
     const MAX_ENTRIES: usize = 4096;
@@ -126,7 +122,10 @@ pub(crate) fn generate(
     }
     let valid_package = match document_type {
         DocumentType::Civ011 | DocumentType::Civ014 => has_document_xml,
-        DocumentType::Civ010 | DocumentType::Civ013 => parts
+        DocumentType::Civ010 => parts
+            .iter()
+            .any(|(name, _)| name == "xl/worksheets/sheet1.xml"),
+        DocumentType::Civ013 => parts
             .iter()
             .any(|(name, _)| name.starts_with("xl/worksheets/") && name.ends_with(".xml")),
     };
@@ -150,13 +149,12 @@ pub(crate) fn generate(
     })?;
 
     let rfi_regex: &Regex = &CIV_RFI;
-    let mut rng = rng_seed;
     let mut generated = Vec::with_capacity(records.len());
     for record in records {
         if record.rfi.trim().is_empty() || record.location.trim().is_empty() {
             return Err("A source record is missing its RFI number or location".to_string());
         }
-        let mut replacements = if document_type == DocumentType::Civ010 {
+        let replacements = if document_type == DocumentType::Civ010 {
             Vec::new()
         } else {
             vec![
@@ -164,39 +162,16 @@ pub(crate) fn generate(
                 (sample_location.clone(), record.location.clone()),
             ]
         };
-        if document_type == DocumentType::Civ011 {
-            let ambient_range = record.ambient_range.unwrap_or(ambient_range);
-            rng = xorshift64(rng);
-            let width = u64::from(ambient_range.1 - ambient_range.0) + 1;
-            let ambient = (u64::from(ambient_range.0) + rng % width).to_string();
-            let old = ambient_anchor(&parts).ok_or_else(|| {
-                "CON-CIV-011 template is missing its ambient-temperature value".to_string()
-            })?;
-            let suffix = old
-                .char_indices()
-                .find(|(_, ch)| !ch.is_ascii_digit() && *ch != '.' && *ch != ',' && *ch != '-')
-                .map(|(index, _)| old[index..].to_string())
-                .unwrap_or_default();
-            replacements.push((old, format!("{ambient}{suffix}")));
-        }
-        let mut civ010_ambients = Vec::new();
-        if document_type == DocumentType::Civ010 {
-            let temperatures = std::iter::once(record.plant_temp.as_str()).chain(
-                record
-                    .additional_batches
-                    .iter()
-                    .map(|batch| batch.plant_temp.as_str()),
-            );
-            for temperature in temperatures {
-                rng = xorshift64(rng);
-                let plant_temperature = temperature
-                    .trim()
-                    .replace(',', ".")
-                    .parse::<f64>()
-                    .map_err(|_| format!("CON-CIV-010 source has no numeric in-plant fresh-concrete temperature for {}", record.rfi))?;
-                let offset = 5 + rng % 3;
-                civ010_ambients.push(format!("{:.1}", plant_temperature - offset as f64 / 10.0));
-            }
+        let expected_ambient_count = match document_type {
+            DocumentType::Civ010 => record.additional_batches.len() + 1,
+            DocumentType::Civ011 => 1,
+            _ => 0,
+        };
+        if record.measured_ambient.len() != expected_ambient_count {
+            return Err(format!(
+                "Measured ambient temperature is missing for {}",
+                record.rfi
+            ));
         }
         let mut output = ZipWriter::new(Cursor::new(Vec::new()));
         output
@@ -207,7 +182,12 @@ pub(crate) fn generate(
                 original.clone()
             } else if name.ends_with(".xml") {
                 let xml = String::from_utf8_lossy(original);
-                replace_xml_text(&xml, &replacements, rfi_regex).into_bytes()
+                let rendered = replace_xml_text(&xml, &replacements, rfi_regex);
+                if document_type == DocumentType::Civ011 && name == "word/document.xml" {
+                    replace_civ011_ambient(rendered, &record.measured_ambient[0])?.into_bytes()
+                } else {
+                    rendered.into_bytes()
+                }
             } else {
                 original.clone()
             };
@@ -235,11 +215,12 @@ pub(crate) fn generate(
             .map_err(|error| format!("Could not finish Office package: {error}"))?
             .into_inner();
         if document_type == DocumentType::Civ010 {
-            bytes = patch_civ010_numeric_cells(&bytes, record, &civ010_ambients)?;
+            bytes = patch_civ010_numeric_cells(&bytes, record)?;
         }
         generated.push(GeneratedFile {
             filename: output_filename(document_type, record),
             bytes,
+            measured_ambient: record.measured_ambient.clone(),
         });
     }
     Ok(generated)
@@ -345,30 +326,63 @@ fn inline_value_after_label(text: &str, labels: &[&str]) -> Option<String> {
     None
 }
 
-fn ambient_anchor(parts: &[(String, Vec<u8>)]) -> Option<String> {
-    for (name, bytes) in parts {
-        if name != "word/document.xml" && !name.starts_with("xl/worksheets/") {
-            continue;
-        }
-        let xml = String::from_utf8_lossy(bytes);
-        let texts = xml_text_nodes(&xml);
-        for start in 0..texts.len() {
-            let mut label = String::new();
-            for end in start..texts.len().min(start + 5) {
-                label.push_str(&normalize(&texts[end]));
-                if label.contains("AMBIENTTEMPERATURE") || label.contains("AMBIENTTEMP") {
-                    if let Some(value) = texts.iter().skip(end + 1).take(5).find(|value| {
-                        let number = value.trim().trim_end_matches([' ', 'C', 'c', '°']);
-                        number.parse::<f64>().is_ok()
-                    }) {
-                        return Some(value.trim().to_string());
-                    }
-                    break;
-                }
+static AMBIENT_TEMPLATE_VALUE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\s*[+-]?[0-9]+(?:[.,][0-9]+)?(\s*(?:°\s*)?c?\s*)$")
+        .expect("static ambient template value regex")
+});
+
+fn replace_civ011_ambient(mut xml: String, ambient: &str) -> Result<String, String> {
+    let nodes = TEXT_NODE
+        .find_iter(&xml)
+        .filter_map(|node| {
+            let raw = node.as_str();
+            let range = node.start() + raw.find('>')? + 1..node.start() + raw.rfind("</")?;
+            let text = unescape(&xml[range.clone()]).ok()?.into_owned();
+            Some((range, text))
+        })
+        .collect::<Vec<_>>();
+    let mut target = None;
+    for start in 0..nodes.len() {
+        let mut label = String::new();
+        for end in start..nodes.len().min(start + 5) {
+            label.push_str(&normalize(&nodes[end].1));
+            if !label.contains("AMBIENTTEMP") {
+                continue;
             }
+            if let Some((range, suffix)) = nodes
+                .iter()
+                .skip(end + 1)
+                .take(5)
+                .take_while(|(_, text)| {
+                    let normalized = normalize(text);
+                    !KNOWN_LABELS
+                        .iter()
+                        .any(|label| normalized == normalize(label))
+                })
+                .find_map(|(range, text)| {
+                    let suffix = AMBIENT_TEMPLATE_VALUE.captures(text)?.get(1)?.as_str();
+                    Some((range, suffix))
+                })
+            {
+                if target
+                    .as_ref()
+                    .is_some_and(|(previous, _)| previous != range)
+                {
+                    return Err(
+                        "CON-CIV-011 template has ambiguous ambient-temperature values".to_string(),
+                    );
+                }
+                target = Some((range.clone(), suffix));
+            }
+            break;
         }
     }
-    None
+    let (range, suffix) = target.ok_or_else(|| {
+        "CON-CIV-011 template is missing its ambient-temperature value".to_string()
+    })?;
+    let replacement = format!("{ambient}{suffix}");
+    xml.replace_range(range, &xml_escape(&replacement));
+    Ok(xml)
 }
 
 fn normalize(value: &str) -> String {
@@ -403,11 +417,12 @@ fn xml_text_nodes(xml: &str) -> Vec<String> {
     result
 }
 
+static TEXT_NODE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<([A-Za-z_][\w.-]*:)?t\b[^>]*>.*?</([A-Za-z_][\w.-]*:)?t\s*>")
+        .expect("static OOXML text-node regex")
+});
+
 fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Regex) -> String {
-    static TEXT_NODE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?s)<([A-Za-z_][\w.-]*:)?t\b[^>]*>.*?</([A-Za-z_][\w.-]*:)?t\s*>")
-            .expect("static OOXML text-node regex")
-    });
     let mut output = xml.to_string();
     for (old, new) in replacements {
         if old.is_empty() {
@@ -479,10 +494,6 @@ fn replace_xml_text(xml: &str, replacements: &[(String, String)], rfi_regex: &Re
 }
 
 fn replace_split_text_nodes(xml: &str, old: &str, new: &str) -> String {
-    static TEXT_NODE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?s)<([A-Za-z_][\w.-]*:)?t\b[^>]*>.*?</([A-Za-z_][\w.-]*:)?t\s*>")
-            .expect("static OOXML text-node regex")
-    });
     static TAG: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?s)<[^>]*>").expect("static XML tag regex"));
 
@@ -560,17 +571,6 @@ fn xml_escape(value: &str) -> String {
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
-}
-
-fn xorshift64(state: u64) -> u64 {
-    let mut value = if state == 0 {
-        0x9E37_79B9_7F4A_7C15
-    } else {
-        state
-    };
-    value ^= value << 13;
-    value ^= value >> 7;
-    value ^ (value << 17)
 }
 
 fn output_filename(document_type: DocumentType, record: &SourceRecord) -> String {

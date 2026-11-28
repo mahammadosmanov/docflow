@@ -147,6 +147,21 @@ fn preview_groups_exact_filename_office_email_and_utf16_codes_without_mutating_s
     assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
     let rows = plan.meta["editor"]["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 7);
+    let canonical_destination = destination.canonicalize().unwrap();
+    for row in rows {
+        let code = row["rfiCode"].as_str().unwrap();
+        let file = row["sourceFile"].as_str().unwrap();
+        let discipline = code.split('-').nth(5).unwrap();
+        let expected = canonical_destination.join(discipline).join(code).join(file);
+        assert_eq!(row["target"].as_str(), expected.to_str());
+        assert!(
+            row["method"]
+                .as_str()
+                .unwrap()
+                .starts_with("rfi.fileGroup.method.")
+        );
+    }
+
     let codes = rows
         .iter()
         .map(|row| row["rfiCode"].as_str().unwrap())

@@ -418,7 +418,7 @@ mod structure_rows;
 pub use apply::*;
 pub use classify::*;
 pub use codes::*;
-pub use exceptions::*;
+pub(crate) use exceptions::*;
 use formula_rows::*;
 pub use preview::*;
 use remark::*;

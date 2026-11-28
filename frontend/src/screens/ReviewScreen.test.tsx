@@ -35,6 +35,29 @@ describe("ReviewScreen", () => {
     );
   });
 
+  it("focuses the missing code before asking Rust to preview a move", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === "engine/reviewScan") return [{ ...item, code: "", targetExists: false }];
+      return { planId: "p1", opId: "rfi.review", steps: [], warnings: [], meta: {} };
+    });
+    render(
+      <ReviewScreen bridge={{ call } as unknown as Bridge} destination={destination} s={s} onBack={vi.fn()} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: s.t("review.put") }));
+    expect(screen.queryByRole("button", { name: s.t("action.preview") })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Enter RFI code" }));
+    const code = screen.getByRole("textbox");
+    expect(code).toHaveFocus();
+    expect(call.mock.calls.map(([method]) => method)).toEqual(["engine/reviewScan"]);
+
+    fireEvent.change(code, { target: { value: "AZE-SUN-INT-QMS-RFI-ELE-0001" } });
+    fireEvent.click(screen.getByRole("button", { name: s.t("action.preview") }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("engine/reviewPreview", {
+      destination,
+      decisions: [{ itemId: item.selectionId, action: "put", code: "AZE-SUN-INT-QMS-RFI-ELE-0001" }],
+    }));
+  });
+
   it("shows the error and keeps the result when undo fails", async () => {
     const plan = {
       planId: "p1",

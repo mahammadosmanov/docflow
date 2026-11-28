@@ -22,17 +22,21 @@ pub(crate) fn validate_bundle_content(content: &str) -> Result<(), BackendError>
 }
 
 pub(super) fn is_bundle_shape(value: &Value) -> bool {
-    let Some(root) = exact_object(
-        value,
-        &[
-            "components",
-            "docflow",
-            "platform",
-            "privacy",
-            "recentErrorCodes",
-            "schemaVersion",
-        ],
-    ) else {
+    let mut keys = vec![
+        "components",
+        "docflow",
+        "platform",
+        "privacy",
+        "recentErrorCodes",
+        "schemaVersion",
+    ];
+    if let Some(timing) = value.get("lastPreview") {
+        keys.push("lastPreview");
+        if !is_preview_timing(timing) {
+            return false;
+        }
+    }
+    let Some(root) = exact_object(value, &keys) else {
         return false;
     };
     if root.get("schemaVersion").and_then(Value::as_u64) != Some(1) {
@@ -122,6 +126,44 @@ pub(super) fn is_bundle_shape(value: &Value) -> bool {
     };
     privacy.get("delivery").and_then(Value::as_str) == Some("local-only")
         && privacy.get("redaction").and_then(Value::as_str) == Some("recursive")
+}
+
+fn is_preview_timing(value: &Value) -> bool {
+    let Some(timing) = exact_object(
+        value,
+        &[
+            "operation",
+            "milliseconds",
+            "stages",
+            "ocrReused",
+            "ocrAnalyzed",
+        ],
+    ) else {
+        return false;
+    };
+    let label = |text: &str| {
+        !text.is_empty()
+            && text.len() <= 80
+            && text
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+    };
+    timing
+        .get("operation")
+        .and_then(Value::as_str)
+        .is_some_and(label)
+        && timing.get("milliseconds").and_then(Value::as_u64).is_some()
+        && timing
+            .get("stages")
+            .and_then(Value::as_object)
+            .is_some_and(|stages| {
+                stages.len() <= 32 && stages.iter().all(|(stage, ms)| label(stage) && ms.is_u64())
+            })
+        && ["ocrReused", "ocrAnalyzed"].iter().all(|key| {
+            timing
+                .get(*key)
+                .is_some_and(|count| count.is_u64() || count.is_null())
+        })
 }
 
 pub(super) fn exact_object<'a>(

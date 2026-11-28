@@ -105,8 +105,7 @@ export function TemplateDocument({
 
   useEffect(() => {
     void load();
-    // A replaced or edited file has a new checksum; reload its text.
-  }, [load, draft.placeholders.join("|")]);
+  }, [load, draft.fileSha256]);
 
   const capture = (block: TextBlock, element: HTMLElement) => {
     const selected = window.getSelection();

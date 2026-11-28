@@ -17,6 +17,7 @@ const draft: TemplateDraft = {
   discipline: "ELE",
   category: "Covers",
   fileKind: "docx",
+  fileSha256: "initial",
   placeholders: ["rfiNo", "issuer"],
   fieldMap: {
     schema: 1,
@@ -166,6 +167,24 @@ describe("TemplateEditor", () => {
     },
   };
 
+  it("reloads the marked cell grid when a replacement has identical placeholders", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === "templates/replaceFile") return { ...anchored, fileSha256: "replacement" };
+      return null;
+    });
+    render(
+      <TemplateEditor
+        bridge={{ call } as unknown as Bridge}
+        s={s}
+        draft={{ ...anchored, fileSha256: "original" }}
+        onClose={vi.fn()}
+      />,
+    );
+    await vi.waitFor(() => expect(call.mock.calls.filter(([method]) => method === "templates/cells")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: /Replace file/ }));
+    await vi.waitFor(() => expect(call.mock.calls.filter(([method]) => method === "templates/cells")).toHaveLength(2));
+  });
+
   it("holds publishing until every marked cell is resolved after a file replacement", async () => {
     const replaced: TemplateDraft = {
       ...anchored,
@@ -199,6 +218,13 @@ describe("TemplateEditor", () => {
       fieldMap: TemplateDraft["fieldMap"];
     };
     expect(saved.fieldMap.fields[0].anchor).toEqual({ table: 0, row: 3, cell: 1 });
+    expect(saved).toMatchObject({
+      fileSha256: replaced.fileSha256,
+      replacementResolutions: [
+        { key: "pour", action: "move" },
+        { key: "rfi", action: "keep" },
+      ],
+    });
   });
 
   it("lists versions and restores an old one as the draft", async () => {

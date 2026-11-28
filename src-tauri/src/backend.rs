@@ -1,6 +1,7 @@
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use serde::Deserialize;
@@ -13,7 +14,9 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use crate::{
     clipboard,
     contracts::{AuthState, ProgressEvent},
-    diagnostics::{DiagnosticsInput, RecentErrorCodes, build_bundle, validate_bundle_content},
+    diagnostics::{
+        DiagnosticsInput, PreviewTiming, RecentErrorCodes, build_bundle, validate_bundle_content,
+    },
     errors::BackendError,
     native::{NativeBackend, PathSelectionMode},
     ocr::NativeOcr,
@@ -24,6 +27,7 @@ pub(crate) struct BackendRouter {
     app: AppHandle,
     native: Arc<NativeBackend>,
     recent_error_codes: RecentErrorCodes,
+    last_preview: Arc<Mutex<Option<(String, PreviewTiming)>>>,
     activity_log: std::sync::Arc<crate::activity_log::ActivityLog>,
     pending_update: Mutex<Option<Update>>,
     drop_inbox: paths::DropInbox,
@@ -36,9 +40,6 @@ fn path_dialog_filter(
     match (operation_id, parameter_name) {
         ("rfi.log_add", "workbook")
         | ("rfi.follow_up_sync", "rfi_log_workbook" | "follow_up_workbook")
-        | ("rfi.system_sync", "rfi_log_workbook" | "follow_up_workbook")
-        | ("rfi.complete_status_sync", "rfi_log_workbook")
-        | ("rfi.publish_status", "rfi_log_workbook")
         | ("rfi.generate_concrete_documents", "rfi_log_workbook" | "follow_up_workbook") => {
             Some(("Excel (.xlsm, .xlsx)", &["xlsm", "xlsx"]))
         }
@@ -56,18 +57,6 @@ fn path_dialog_filter(
 }
 
 impl BackendRouter {
-    /// Starts the read-only inbox check loop. It only prepares Previews.
-    pub(crate) fn start_watch(&self) {
-        let native = Arc::clone(&self.native);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(30));
-            loop {
-                native.watch_tick();
-                std::thread::sleep(native.watch_poll_interval());
-            }
-        });
-    }
-
     /// Pulls shared templates shortly after start and every 30 minutes (ADR 0055).
     pub(crate) fn start_template_sync(&self) {
         let native = Arc::clone(&self.native);
@@ -90,6 +79,7 @@ impl BackendRouter {
             app,
             native,
             recent_error_codes: RecentErrorCodes::default(),
+            last_preview: Arc::default(),
             activity_log,
             pending_update: Mutex::new(None),
             drop_inbox: paths::DropInbox::default(),
@@ -109,31 +99,9 @@ impl BackendRouter {
         progress: Channel<ProgressEvent>,
     ) -> Result<Value, BackendError> {
         method.authorize(&self.native.auth_state())?;
-        let _operator = matches!(
-            method,
-            BackendMethod::EnginePreview
-                | BackendMethod::EngineApply
-                | BackendMethod::EngineUndo
-                | BackendMethod::EngineReviewScan
-                | BackendMethod::EngineReviewPreview
-        )
-        .then(|| self.native.watch_operator_guard());
         match method {
             BackendMethod::UpdateCheck => self.check_update(params).await,
             BackendMethod::UpdateInstall => self.install_update(params, progress).await,
-            BackendMethod::WatchUpdate => {
-                let native = Arc::clone(&self.native);
-                tauri::async_runtime::spawn_blocking(move || {
-                    let status = native.dispatch(BackendMethod::WatchUpdate, params);
-                    if status.is_ok() {
-                        let background = Arc::clone(&native);
-                        std::thread::spawn(move || background.watch_tick());
-                    }
-                    status
-                })
-                .await
-                .map_err(|_| BackendError::request_failed("watch update task failed"))?
-            }
             BackendMethod::SupportDiagnostics => self.support_diagnostics(params).await,
             BackendMethod::SupportCopyDiagnostics => self.copy_diagnostics(params).await,
             BackendMethod::SupportActivityLog => {
@@ -147,13 +115,10 @@ impl BackendRouter {
             BackendMethod::EnginePreview => self.preview(params, progress).await,
             BackendMethod::EngineApply => self.apply(params, progress).await,
             BackendMethod::EngineCancel => self.cancel(params).await,
-            BackendMethod::EngineRevise
-            | BackendMethod::EngineCopyTable
-            | BackendMethod::EngineRfiReplyPreview => {
+            BackendMethod::EngineRevise | BackendMethod::EngineCopyTable => {
                 self.run_native("native plan task failed", move |native| match method {
                     BackendMethod::EngineRevise => native.revise_native_plan(params),
                     BackendMethod::EngineCopyTable => native.copy_native_table(params),
-                    BackendMethod::EngineRfiReplyPreview => native.preview_rfi_reply(params),
                     _ => unreachable!("native plan method checked by caller"),
                 })
                 .await
@@ -279,6 +244,16 @@ impl BackendRouter {
     async fn support_diagnostics(&self, params: Value) -> Result<Value, BackendError> {
         validate_empty_params(&params)?;
         let recent_error_codes = self.recent_error_codes.snapshot();
+        let auth = self.native.auth_state();
+        let last_preview = self
+            .last_preview
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .filter(|(owner, _)| {
+                auth.allowed && auth.user.as_ref().is_some_and(|user| &user.id == owner)
+            })
+            .map(|(_, timing)| timing.clone());
         let printer = self.native.printer_diagnostics();
         tauri::async_runtime::spawn_blocking(move || {
             let ocr = NativeOcr::discover();
@@ -291,6 +266,7 @@ impl BackendRouter {
                 ocr_language_data_available,
                 recent_error_codes,
                 printer,
+                last_preview,
             })?)
             .map_err(|_| BackendError::protocol("diagnostics preview encoding failed"))
         })
@@ -316,7 +292,6 @@ impl BackendRouter {
         let (plan_id, op_id) = validate_apply_envelope(&params)?;
         let native = Arc::clone(&self.native);
         let plan_id = plan_id.to_string();
-        let params_plan_id = Some(plan_id.clone());
         let op_id = op_id.map(str::to_string);
         let progress_channel = progress.clone();
         let (mut result, approved_op_id) = tauri::async_runtime::spawn_blocking(move || {
@@ -326,9 +301,6 @@ impl BackendRouter {
         })
         .await
         .map_err(|_| BackendError::request_failed("native apply task failed"))??;
-        if let Some(plan_id) = params_plan_id.as_deref() {
-            self.native.watch_forget_plan(plan_id);
-        }
         let native = Arc::clone(&self.native);
         tauri::async_runtime::spawn_blocking(move || {
             native.sync_result(&approved_op_id, &mut result);
@@ -402,12 +374,40 @@ impl BackendRouter {
             return Err(BackendError::validation(missing));
         }
         let native = Arc::clone(&self.native);
-        let progress_channel = progress.clone();
+        let last_preview = Arc::clone(&self.last_preview);
+        let owner = native.auth_state().user.map(|user| user.id);
         tauri::async_runtime::spawn_blocking(move || {
-            let send = |event| {
-                let _ = progress_channel.send(event);
+            let started = Instant::now();
+            let mut stage_started = started;
+            let mut phase = String::from("preparing");
+            let mut stages = std::collections::BTreeMap::new();
+            let plan = route_preview(&native, &operation_id, params, |event| {
+                if event.phase != phase {
+                    *stages.entry(phase.clone()).or_insert(0) +=
+                        stage_started.elapsed().as_millis() as u64;
+                    phase.clone_from(&event.phase);
+                    stage_started = Instant::now();
+                }
+                let _ = progress.send(event);
+            })?;
+            *stages.entry(phase).or_insert(0) += stage_started.elapsed().as_millis() as u64;
+            let timing = PreviewTiming {
+                operation: operation_id,
+                milliseconds: started.elapsed().as_millis() as u64,
+                stages,
+                ocr_reused: plan
+                    .pointer("/meta/ocrCache/reused")
+                    .and_then(Value::as_u64),
+                ocr_analyzed: plan
+                    .pointer("/meta/ocrCache/analyzed")
+                    .and_then(Value::as_u64),
             };
-            route_preview(&native, &operation_id, params, send)
+            if let Some(owner) = owner {
+                *last_preview
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((owner, timing));
+            }
+            Ok(plan)
         })
         .await
         .map_err(|_| BackendError::request_failed("native preview task failed"))?
@@ -431,9 +431,6 @@ where
         "rfi.follow_up_sync" => native.preview_rfi_follow_up(params, send),
         "rfi.generate_concrete_documents" => native.preview_concrete_documents(params, send),
         crate::template_documents::OPERATION_ID => native.preview_template_document(params, send),
-        "rfi.system_sync" => native.preview_rfi_system_sync(params, send),
-        "rfi.complete_status_sync" => native.preview_rfi_complete_status_sync(params, send),
-        "rfi.publish_status" => native.preview_rfi_publish_status(params, send),
         "rfi.stage_signed_first_pages" => native.preview_stage_signed_pages(params, send),
         "rfi.normalize_pdf_orientation" => native.preview_pdf_orientation(params, send),
         "files.batch_print" => native.preview_batch_print(params, send),

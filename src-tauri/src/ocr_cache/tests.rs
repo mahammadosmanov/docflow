@@ -156,22 +156,15 @@ fn a_corrupt_entry_falls_back_to_a_fresh_read() {
     let path = f.root.join("a.pdf");
     let cache = CachingOcr::new(&inner, &f.index, "owner", &f.root);
     cache.read_identity_page(&path, 0).unwrap();
-    drop(cache);
-    // Same key, wrong shape: it must be ignored, not trusted.
+    // Same key and engine profile, wrong shape.
     let fingerprint = FileFingerprint::read(&path).unwrap();
-    let (run, _) = f
-        .index
-        .begin_run(
-            "owner",
-            OPERATION,
-            &profile(Mode::Identity),
-            &fs::canonicalize(&f.root).unwrap(),
-            false,
-        )
+    cache
+        .with_run(Mode::Identity, |run| {
+            run.record_success(Path::new("a.pdf#p0"), &fingerprint, &"garbage")
+                .ok()
+        })
         .unwrap();
-    run.record_success(Path::new("a.pdf#p0"), &fingerprint, &"garbage")
-        .unwrap();
-    drop(run);
+    drop(cache);
     let again = CachingOcr::new(&inner, &f.index, "owner", &f.root);
     assert!(again.read_identity_page(&path, 0).is_ok());
     assert_eq!(inner.identity.load(Ordering::SeqCst), 2);
@@ -185,4 +178,18 @@ fn an_unreadable_index_never_blocks_reading() {
     assert!(cache.read_identity_page(&f.root.join("a.pdf"), 0).is_ok());
     assert!(cache.read_identity_page(&f.root.join("a.pdf"), 0).is_ok());
     assert_eq!(inner.identity.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn page_cache_profiles_use_analysis_revision_instead_of_release_version() {
+    let profiles = [
+        profile(Mode::Full),
+        profile(Mode::Cover),
+        profile(Mode::Identity),
+    ];
+    let suffix = profiles[0].strip_prefix("full-").unwrap();
+    assert_eq!(suffix.len(), 16);
+    assert!(suffix.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(profiles[1], format!("cover-{suffix}"));
+    assert_eq!(profiles[2], format!("identity-{suffix}"));
 }

@@ -117,7 +117,7 @@ document analysis are local-only.
 
 The same bounded analysis pool is used by Fast RFI Scan OCR, incoming RFI file
 name/content inspection, combined Worley page recognition, signed-input and
-archive discovery, RFI System discovery and first-page signature detection,
+archive discovery,
 PDF-orientation discovery, and page analysis. Completed indexed PDF analyses
 return to one coordinator, which writes each SQLite checkpoint immediately.
 The pool preserves deterministic input/result order and is never used for
@@ -148,30 +148,10 @@ cached Plan contains the exact source/destination copies. Apply performs those
 copies serially through the shared filesystem authority and journal, so parallel
 analysis cannot create races or bypass no-clobber checks.
 
-RFI completion-status synchronization is a separate native Rust operation.
-It performs a breadth-by-depth bounded parallel walk of the selected RFI System,
-accepts only exact canonical `RFI No. <RFI>.pdf` filenames, and never opens or
-mutates those PDFs. The coordinator deterministically groups duplicate paths by
-RFI and maps them to existing literal `Inspection Status` cells. Apply reuses
-the guarded System Sync workbook replacement path, but its typed step kind
-permits only `Completed` replacements and has no Follow Up or Worley authority.
-
-RFI System replica publication is one-way and source-authoritative. Preview
-fully scans only CIV/MEC/ELE/PRC plus explicitly named root files, rejects
-symlinks and overlapping roots, and hashes independent reads in the bounded
-worker pool. Apply remains serial and fail-fast. Every replacement first creates
-and verifies a retained no-clobber backup, stages a private sibling copy, then
-atomically publishes and verifies the approved source hash. Target-only files
-are warnings and are never deleted.
-
-The first unattended replica run is still an ordinary explicit Preview and
-Apply. A successful Apply stores the exact profile as revocable standing
-authorization. While DocFlow is open, a native scheduler creates a fresh cached
-Plan at the configured interval and uses the same grants, preflight, backup,
-journal, and Undo authority. Recently modified source files defer a run until
-the approved settle window passes. Approved per-run file and byte limits stop a
-mass change before Apply; other unsafe discovery or Apply results disable the
-profile. Windows startup is a separate per-user HKCU Run setting; it grants no
+DocFlow 2.0.0 retires the three RFI status operations, Outlook Reply All,
+Action Queue, and unattended replica publishing. The command router cannot
+start those workflows. Existing journals can still be read and validated for
+Undo. Windows startup is a separate per-user HKCU Run setting. It grants no
 additional filesystem authority.
 
 ## Operation contract
@@ -189,7 +169,7 @@ through Serde/TypeScript golden fixtures.
 
 The shared Plan view derives a compact effect summary only from the immutable
 steps already returned by Rust. It counts created outputs, existing-file updates,
-moves/renames, print submissions, Outlook drafts, cleanup effects, and warnings.
+moves/renames, print submissions, cleanup effects, and warnings.
 This is presentation only: it cannot add, remove, or authorize a step, and it is
 shown for both record-editor and ordinary previews.
 
@@ -232,11 +212,6 @@ metadata first, so a revised Plan cannot display a disabled cell as executable.
 - Preview never mutates filesystem, cloud, Office, or printer state.
 - Diagnostics preview is local and side-effect-free; there is no telemetry or
   hosted logging path.
-- Outlook reply apply revalidates the exact selected MailItem, calls ReplyAll, prepends bounded escaped content, and displays only an unsent draft; it never sends or synthesizes recipients.
-- Outlook archive apply consumes owner/session-bound native authority, revalidates
-  the exact selected MailItem fingerprint, validates Outlook's Unicode MSG
-  export in private temporary storage, and passes only verified bytes to the
-  generic capability-scoped no-clobber writer and journal.
 - Apply executes only the cached approved plan; it never recalculates.
 - Every step is durably journaled as pending before execution.
 - Existing destinations are never overwritten, including race-time collisions.

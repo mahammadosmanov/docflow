@@ -534,6 +534,56 @@ fn shift_sheet_attributes(nodes: &mut [XmlNode], sheet: &str, shift: &RowShift) 
     });
 }
 
+/// Table definitions are separate parts and are not shifted by this row editor.
+fn check_table_ranges(
+    editor: &mut Editor<'_, impl Read + Seek>,
+    worksheet_path: &str,
+    document: &mut XmlDocument,
+    first_shifted_row: u32,
+) -> Result<(), OoxmlError> {
+    let Some(table_parts) = find_element_mut(&mut document.nodes, b"tableParts") else {
+        return Ok(());
+    };
+    let table_ids: Vec<_> = child_elements(table_parts, b"tablePart")
+        .map(|part| attribute(part, b"id"))
+        .collect();
+    if table_ids.is_empty() {
+        return Ok(());
+    }
+    let relationships = parse_document(&editor.read(&relationship_part_path(worksheet_path)?)?)?;
+    let targets = relationship_targets(&relationships)?;
+    for id in table_ids {
+        let invalid = || OoxmlError::invalid("worksheet table relationship or range is invalid");
+        let id = id.ok_or_else(invalid)?;
+        let target = targets.get(&id).ok_or_else(invalid)?;
+        if relationship_attribute(&relationships, &id, b"Type")?
+            .as_deref()
+            .and_then(ooxml_relationship_class)
+            != Some("table")
+            || relationship_target_is_external(&relationships, &id)?
+        {
+            return Err(invalid());
+        }
+        let path = normalize_relationship_target(worksheet_path, target)?;
+        let table = parse_document(&editor.read(&path)?)?;
+        let root = document_root_local(&table, b"table", "worksheet table root is invalid")?;
+        let (first, last) = attribute(root, b"ref")
+            .as_deref()
+            .and_then(|range| range.split_once(':'))
+            .and_then(|(first, last)| Some((parse_reference(first)?, parse_reference(last)?)))
+            .ok_or_else(invalid)?;
+        if first.0 > last.0 || first.1 > last.1 {
+            return Err(invalid());
+        }
+        if last.0 >= first_shifted_row - 1 {
+            return Err(OoxmlError::invalid(
+                "inserting a worksheet row would shift or expand an Excel table",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn insert_row(
     editor: &mut Editor<'_, impl Read + Seek>,
     sheets: &BTreeMap<String, SheetInfo>,
@@ -554,6 +604,7 @@ fn insert_row(
     };
     let path = sheet_path(sheets, sheet)?;
     let mut document = parse_document(&editor.read(&path)?)?;
+    check_table_ranges(editor, &path, &mut document, at)?;
     unshare_formulas(&mut document)?;
     rewrite_formulas(&mut document.nodes, sheet, &shift, false)?;
     shift_sheet_attributes(&mut document.nodes, sheet, &shift);

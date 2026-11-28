@@ -1,61 +1,42 @@
 //! RFIs the RFI Log records wrongly and that cannot be corrected there. Follow Up
-//! sync leaves them alone (ADR 0059). The list is a preference kept locally and in
-//! the cloud; it never authorizes a mutation or an Undo.
+//! sync leaves them alone (ADR 0059).
 
 use super::*;
 
 const MAX_EXCEPTION_TEXT_CHARS: usize = 20_000;
-const MAX_EXCEPTIONS: usize = 2_000;
+pub(crate) const MAX_EXCEPTIONS: usize = 2_000;
+pub(crate) const SHARED_EXCEPTIONS_UNAVAILABLE_WARN: &str =
+    "warn.rfi.followUp.exceptionCloudUnavailable";
 
-/// One edit of the exception list: `CODE` adds, `-CODE` removes.
-#[derive(Debug, Default, Eq, PartialEq)]
-pub struct ExceptionEdit {
-    pub add: BTreeSet<String>,
-    pub remove: BTreeSet<String>,
+pub(crate) fn parse_exception_code(value: &str) -> Result<String, BackendError> {
+    if value.len() <= 64
+        && let Some((code, _)) = canonical_follow_up_rfi(value)
+    {
+        return Ok(code);
+    }
+    Err(BackendError::validation(
+        "error.rfi.followUp.exceptionInvalid",
+    ))
 }
 
-fn invalid(token: &str) -> BackendError {
-    BackendError::validation(format!("error.rfi.followUp.exceptionInvalid: {token}"))
-}
-
-/// Reads the operator's exception text. Codes may be full or short
-/// (`CIV-1374`) and are stored in the canonical full form.
-pub fn parse_exception_text(text: &str) -> Result<ExceptionEdit, BackendError> {
-    if text.chars().count() > MAX_EXCEPTION_TEXT_CHARS {
-        return Err(invalid("text too long"));
-    }
-    let mut edit = ExceptionEdit::default();
-    for token in text.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
-        if token.is_empty() {
-            continue;
-        }
-        let (target, code) = match token.strip_prefix('-') {
-            Some(rest) => (&mut edit.remove, rest),
-            None => (&mut edit.add, token),
-        };
-        let (canonical, _) = canonical_follow_up_rfi(code).ok_or_else(|| invalid(token))?;
-        target.insert(canonical);
-    }
-    if let Some(code) = edit.add.intersection(&edit.remove).next() {
-        return Err(invalid(code));
-    }
-    Ok(edit)
-}
-
-/// The list after the edit, bounded. The field shows the whole list, so codes in
-/// it replace the stored list; an empty field changes nothing. `-CODE` removes.
-pub fn apply_exception_edit(
-    stored: BTreeSet<String>,
-    edit: &ExceptionEdit,
+pub(crate) fn extend_exception_codes(
+    mut codes: BTreeSet<String>,
+    text: &str,
 ) -> Result<BTreeSet<String>, BackendError> {
-    let mut merged = if edit.add.is_empty() {
-        stored
-    } else {
-        edit.add.clone()
-    };
-    merged.retain(|code| !edit.remove.contains(code));
-    if merged.len() > MAX_EXCEPTIONS {
-        return Err(invalid("too many exceptions"));
+    if text.chars().count() > MAX_EXCEPTION_TEXT_CHARS {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.exceptionInvalid",
+        ));
     }
-    Ok(merged)
+    for token in text.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
+        if !token.is_empty() {
+            codes.insert(parse_exception_code(token)?);
+        }
+    }
+    if codes.len() > MAX_EXCEPTIONS {
+        return Err(BackendError::validation(
+            "error.rfi.followUp.exceptionLimit",
+        ));
+    }
+    Ok(codes)
 }

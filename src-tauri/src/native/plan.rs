@@ -104,91 +104,6 @@ impl NativeBackend {
                 .preview(&self.caller_identity()?, request.values, progress)?,
         )
     }
-    // Unattended replica publication is accepted design but not an active operation (docs/KNOWN_ISSUES.md); keep until enabled or retired.
-    #[allow(dead_code)]
-    pub(super) fn cache_replica_plan<F>(
-        &self,
-        values: ReplicaPublishParams,
-        caller: &CallerIdentity,
-        automatic: bool,
-        progress: F,
-    ) -> Result<crate::contracts::Plan, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let roots = [
-            fs::canonicalize(&values.root_a),
-            fs::canonicalize(&values.root_b),
-            fs::canonicalize(&values.root_c),
-        ];
-        let roots = roots
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| BackendError::path_invalid("error.replica.rootInvalid"))?;
-        let backup = fs::canonicalize(&values.backup_root)
-            .map_err(|_| BackendError::path_invalid("error.replica.backupInvalid"))?;
-        let source_index = match values.source_root.as_str() {
-            "a" => 0,
-            "b" => 1,
-            "c" => 2,
-            _ => return Err(BackendError::validation("error.replica.sourceInvalid")),
-        };
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            replica_publish::OPERATION_ID,
-        );
-        let mut grants = roots
-            .iter()
-            .enumerate()
-            .map(|(index, root)| {
-                (
-                    root.clone(),
-                    if index == source_index {
-                        GrantAccess::Read
-                    } else {
-                        GrantAccess::ReadWrite
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-        grants.push((backup, GrantAccess::ReadWrite));
-        let provisional = self.filesystem.issue_provisional_grants(&scope, &grants)?;
-        let plan = if automatic {
-            replica_publish::preview_automatic_with_index(
-                &values,
-                &caller.owner_id,
-                &self.scan_index,
-                progress,
-            )?
-        } else {
-            replica_publish::preview_with_index(
-                &values,
-                &caller.owner_id,
-                &self.scan_index,
-                progress,
-            )?
-        };
-        let grant_ids = provisional
-            .grants()
-            .iter()
-            .map(|grant| grant.grant_id.clone())
-            .collect();
-        let cached = self.filesystem.cache_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                &caller.owner_id,
-                &caller.session_id,
-                replica_publish::OPERATION_ID,
-                grant_ids,
-            ),
-            plan,
-        )?;
-        provisional.commit();
-        Ok(cached)
-    }
-
     pub(crate) fn revise_native_plan(&self, params: Value) -> Result<Value, BackendError> {
         let request: ReviseParams = decode(params)?;
         let caller = self.caller_identity()?;
@@ -243,19 +158,6 @@ impl NativeBackend {
             FAST_COVER_OPERATION_ID => {
                 crate::operations::process_scans::revise(&claimed.plan, &payload)?
             }
-            rfi_system_sync::OPERATION_ID => rfi_system_sync::revise(
-                &claimed.plan,
-                payload["rows"]
-                    .as_array()
-                    .ok_or_else(BackendError::invalid_params)?,
-            )?,
-            rfi_system_sync::COMPLETE_STATUS_OPERATION_ID
-            | rfi_system_sync::PUBLISH_STATUS_OPERATION_ID => rfi_system_sync::revise(
-                &claimed.plan,
-                payload["rows"]
-                    .as_array()
-                    .ok_or_else(BackendError::invalid_params)?,
-            )?,
             "rfi.stage_signed_first_pages" => revise_stage_signed_pages(&claimed.plan, &payload)?,
             template_documents::OPERATION_ID => {
                 self.revise_template_document(&claimed.plan, &payload)?
@@ -287,31 +189,6 @@ impl NativeBackend {
         Ok(json!({"count": payload.count}))
     }
 
-    pub(crate) fn preview_rfi_reply(&self, params: Value) -> Result<Value, BackendError> {
-        let request: RfiReplyPreviewParams = decode(params)?;
-        let caller = self.caller_identity()?;
-        let claimed = self
-            .filesystem
-            .resolve_native_plan(&request.plan_id, &caller)?;
-        if claimed.plan.op_id != "rfi.log_add" {
-            return Err(BackendError::validation(
-                "native plan does not contain an RFI table",
-            ));
-        }
-        let journal = self.filesystem.journals().read(&request.journal_id)?;
-        if !committed_rfi_reply_matches(&journal, &caller, &claimed.digest) {
-            return Err(BackendError::validation(
-                "error.rfi.outlookDraft.rfiLogNotCommitted",
-            ));
-        }
-        let payload = rfi_log::reply_payload(&claimed.plan)?;
-        let content = outlook_reply_draft::ReplyContent {
-            plain_text: payload.plain,
-            html: payload.html,
-        };
-        encode(self.outlook.preview_content(&caller, content)?)
-    }
-
     pub(crate) fn apply_native_plan<F>(
         &self,
         plan_id: &str,
@@ -322,15 +199,6 @@ impl NativeBackend {
         F: FnMut(ProgressEvent),
     {
         let caller = self.caller_identity()?;
-        if self.outlook.contains_plan(plan_id) {
-            let result = self
-                .outlook
-                .apply(plan_id, operation_id, &caller, &mut progress)?;
-            return Ok((
-                encode(result)?,
-                outlook_reply_draft::OPERATION_ID.to_string(),
-            ));
-        }
         if self.print.contains_plan(plan_id) {
             if operation_id.is_some_and(|operation_id| operation_id != "files.batch_print") {
                 return Err(BackendError::validation(
@@ -373,53 +241,21 @@ impl NativeBackend {
         let approved_op_id =
             self.filesystem
                 .validate_plan_operation(plan_id, &caller, operation_id)?;
-        let automation_profile = if approved_op_id == replica_publish::OPERATION_ID {
-            self.filesystem
-                .resolve_native_plan(plan_id, &caller)?
-                .plan
-                .meta
-                .get("automationProfile")
-                .cloned()
-        } else {
-            None
-        };
-        let mut result = self
+        if !crate::registry::operation_registry(RegistryFacts::default())
+            .iter()
+            .any(|operation| operation.id == approved_op_id)
+            && approved_op_id != "rfi.review"
+        {
+            return Err(BackendError::validation("unknown operation ID"));
+        }
+        let result = self
             .filesystem
             .apply_with_progress(plan_id, &caller, &mut progress)?;
-        if result.failed == 0
-            && let Some(profile) = automation_profile
-        {
-            let mut section = JsonObject::new();
-            section.insert("profile".to_string(), profile);
-            section.insert("lastAttemptUnix".to_string(), Value::from(0));
-            let activated = self
-                .settings
-                .save_section("replicaAutomation", Some(section));
-            if activated.is_ok() {
-                let mut preferences = self.settings.preferences();
-                preferences.replica_sync_enabled = true;
-                if self.settings.save_preferences(preferences).is_err() {
-                    result.failed += 1;
-                    result.errors.push(crate::contracts::Warning {
-                        key: "error.replica.activationFailed".to_string(),
-                        subject: String::new(),
-                    });
-                }
-            } else {
-                result.failed += 1;
-                result.errors.push(crate::contracts::Warning {
-                    key: "error.replica.activationFailed".to_string(),
-                    subject: String::new(),
-                });
-            }
-        }
         Ok((encode(result)?, approved_op_id))
     }
 
     pub(crate) fn cancel_native_plan(&self, plan_id: &str) -> bool {
-        self.outlook.cancel(plan_id)
-            || self.print.cancel(plan_id)
-            || self.filesystem.cancel(plan_id)
+        self.print.cancel(plan_id) || self.filesystem.cancel(plan_id)
     }
 
     pub(crate) fn cancel_native_operation(&self, op_id: &str) -> bool {

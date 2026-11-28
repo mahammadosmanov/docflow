@@ -45,6 +45,14 @@ import {
   humanError,
 } from "../helpers";
 
+function historyTitle(opId: string, operations: OperationDef[], s: Strings): string {
+  if (opId === "rfi.review") return s.t("review.title");
+  const key = operations.find((operation) => operation.id === opId)?.titleKey
+    ?? `op.${opId}.title`;
+  const title = s.t(key);
+  return title === key ? s.t("history.unknownOperation") : title;
+}
+
 export function HistoryScreen({
   bridge,
   s,
@@ -76,14 +84,21 @@ export function HistoryScreen({
 
   const undo = async (row: HistoryRow, destination?: PathSelection) => {
     setUndoRow(null);
+    setError("");
     setBusy(true);
     try {
-      await bridge.call("engine/undo", {
+      const result = await bridge.call("engine/undo", {
         journalId: row.journalId,
         cloudId: row.cloudId,
         ...(destination ? { destination } : {}),
       });
       await load();
+      if (result.failed > 0) {
+        setError(
+          result.errors.map(({ key, subject }) => [s.t(key), subject].filter(Boolean).join(" · ")).join("\n")
+          || s.t("recovery.outcomeUnknown"),
+        );
+      }
     } catch (reason) {
       setError(humanError(reason, s));
     } finally {
@@ -130,15 +145,7 @@ export function HistoryScreen({
                 </span>
                 <div className="history-copy">
                   <strong>
-                    {s.t(
-                      row.opId === "rfi.review"
-                        ? "review.title"
-                        : row.opId === "rfi.process_scans"
-                          ? "op.rfi.process_scans.title"
-                          : (operations.find(
-                                (operation) => operation.id === row.opId,
-                              )?.titleKey ?? "history.unknownOperation"),
-                    )}
+                    {historyTitle(row.opId, operations, s)}
                   </strong>
                   <small>
                     {formatDate(row.when, s.locale)} ·{" "}

@@ -10,6 +10,7 @@ export function PlanCell({
   rowIndex,
   text,
   displayText,
+  originLabel,
   choices,
   choiceLabel,
   suggestions,
@@ -24,6 +25,7 @@ export function PlanCell({
   rowIndex: number;
   text: string;
   displayText: string;
+  originLabel?: string;
   choices: string[];
   choiceLabel: (field: string, value: string, column: EditorColumn) => string;
   suggestions: string[];
@@ -38,7 +40,7 @@ export function PlanCell({
         {column.kind === "readonly" ? (
           <span
             className="readonly-cell"
-            title={displayText || text}
+            title={originLabel ?? (displayText || text)}
           >
             {displayText}
           </span>
@@ -59,7 +61,8 @@ export function PlanCell({
         ) : column.kind === "choice" ? (
           <select
             aria-label={s.t(column.labelKey)}
-            title={text}
+            title={originLabel ?? text}
+            aria-description={originLabel}
             value={text}
             onChange={(event) =>
               onChange(event.target.value)
@@ -83,6 +86,8 @@ export function PlanCell({
         ) : column.kind === "multiline" ? (
           <textarea
             rows={2}
+            title={originLabel}
+            aria-description={originLabel}
             aria-label={s.t(column.labelKey)}
             value={text}
             onChange={(event) =>
@@ -93,6 +98,8 @@ export function PlanCell({
           <>
             <input
               aria-label={s.t(column.labelKey)}
+              title={originLabel}
+              aria-description={originLabel}
               aria-invalid={
                 scanCodeErrorKey ? true : undefined
               }

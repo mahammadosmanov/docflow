@@ -5,10 +5,8 @@ import {
   demoFastCoverOperation,
   demoFileGroupOperation,
   demoPdfOrientationOperation,
-  demoRfiCompleteStatusOperation,
   demoRfiFollowUpOperation,
   demoRfiOperation,
-  demoRfiSystemSyncOperation,
   demoSignedPagesOperation,
 } from "./demoOperations";
 import { demoPrintOperation } from "./demoPrintOperation";
@@ -71,8 +69,6 @@ export const demoOperationList: OperationDef[] = [
   demoPrintOperation,
   demoSignedPagesOperation,
   demoPdfOrientationOperation,
-  demoRfiSystemSyncOperation,
-  demoRfiCompleteStatusOperation,
   demoTemplateDocumentOperation,
 ];
 

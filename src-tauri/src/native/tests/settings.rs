@@ -307,34 +307,177 @@ fn saved_operation_params_preserve_paths_and_reissue_active_selections_for_calle
 }
 
 #[test]
-fn follow_up_exception_list_is_shown_in_the_field_and_replaced_by_it() {
+fn follow_up_exception_preview_keeps_legacy_codes_and_never_saves_temporary_codes() {
     let temporary = tempfile::tempdir().unwrap();
     let backend = test_backend(&temporary);
+    let legacy = serde_json::from_value(json!({
+        "codes": ["AZE-SUN-INT-QMS-RFI-CIV-0346"]
+    }))
+    .unwrap();
+    backend
+        .settings
+        .save_section("followUpExceptions", Some(legacy))
+        .unwrap();
+    let settings_path = temporary.path().join("settings.json");
+    let before = std::fs::read(&settings_path).unwrap();
+
+    let (exceptions, shared_available) = backend
+        .resolve_follow_up_exceptions(Some("CIV-0267"))
+        .unwrap();
+    assert!(!shared_available);
+    assert_eq!(exceptions.len(), 2);
+    assert!(exceptions.contains("AZE-SUN-INT-QMS-RFI-CIV-0346"));
+    assert!(exceptions.contains("AZE-SUN-INT-QMS-RFI-CIV-0267"));
+    assert!(
+        backend
+            .resolve_follow_up_exceptions(Some("-CIV-0346"))
+            .is_err()
+    );
     assert!(
         !backend
             .selected_params("rfi.follow_up_sync")
             .unwrap()
             .contains_key("exception_rfis")
     );
+    assert_eq!(std::fs::read(settings_path).unwrap(), before);
+}
 
-    let exceptions = backend
-        .resolve_follow_up_exceptions(Some("CIV-0346\nCIV-0267"))
+#[test]
+fn follow_up_shared_edits_are_single_code_idempotent_and_leave_local_protections() {
+    use std::collections::BTreeSet;
+
+    type RemoteState = (BTreeSet<String>, Vec<(String, String)>);
+    struct ExceptionRemote(Mutex<RemoteState>);
+
+    impl crate::templates::TemplateRemote for ExceptionRemote {
+        fn manifest(&self, _now: i64) -> Result<Value, BackendError> {
+            Err(BackendError::offline())
+        }
+
+        fn download(&self, _path: &str, _now: i64) -> Result<Vec<u8>, BackendError> {
+            Err(BackendError::offline())
+        }
+
+        fn rest(
+            &self,
+            method: &str,
+            path: &str,
+            body: Option<Value>,
+            _now: i64,
+        ) -> Result<Value, BackendError> {
+            let mut state = self.0.lock().unwrap();
+            let equals = path
+                .split("code=eq.")
+                .nth(1)
+                .map(|s| s.split('&').next().unwrap());
+            match method {
+                "GET" => {
+                    let after = path.split("code=gt.").nth(1);
+                    Ok(json!(
+                        state
+                            .0
+                            .iter()
+                            .filter(|code| {
+                                equals.is_none_or(|selected| code.as_str() == selected)
+                                    && after.is_none_or(|last| code.as_str() > last)
+                            })
+                            .map(|code| json!({"code": code}))
+                            .collect::<Vec<_>>()
+                    ))
+                }
+                "POST" => {
+                    assert_eq!(path, "follow_up_exceptions");
+                    let body = body.unwrap();
+                    let code = body["code"].as_str().unwrap();
+                    state.0.insert(code.to_string());
+                    state.1.push(("POST".to_string(), code.to_string()));
+                    // Server committed the row, but the response was lost.
+                    Err(BackendError::network_timeout())
+                }
+                "DELETE" => {
+                    let code = equals.unwrap();
+                    state.0.remove(code);
+                    state.1.push(("DELETE".to_string(), code.to_string()));
+                    Ok(Value::Null)
+                }
+                _ => panic!("unexpected mutation method"),
+            }
+        }
+    }
+
+    let temporary = tempfile::tempdir().unwrap();
+    let mut backend = test_backend(&temporary);
+    let retained = "AZE-SUN-INT-QMS-RFI-ELE-0099".to_string();
+    let selected = "AZE-SUN-INT-QMS-RFI-CIV-0267".to_string();
+    let remote = Arc::new(ExceptionRemote(Mutex::new((
+        BTreeSet::from([retained.clone()]),
+        Vec::new(),
+    ))));
+    backend.templates = Arc::new(crate::templates::TemplateStore::new(
+        temporary.path().join("mock-templates"),
+        remote.clone(),
+    ));
+    backend
+        .settings
+        .save_section(
+            "followUpExceptions",
+            Some(
+                serde_json::from_value(
+                    json!({"codes": ["MEC-0346", "invalid legacy"], "keep": true}),
+                )
+                .unwrap(),
+            ),
+        )
         .unwrap();
-    assert_eq!(exceptions.len(), 2);
 
-    let shown = backend.selected_params("rfi.follow_up_sync").unwrap();
-    assert_eq!(shown["exception_rfis"], json!("CIV-0267\nCIV-0346"));
-    // An empty field keeps the list; removing needs the cloud, which is offline here.
+    let (codes, shared_available) = backend
+        .resolve_follow_up_exceptions(Some("PRC-0004"))
+        .unwrap();
+    assert!(shared_available);
     assert_eq!(
-        backend.resolve_follow_up_exceptions(None).unwrap(),
-        exceptions
+        codes,
+        BTreeSet::from([
+            retained.clone(),
+            "AZE-SUN-INT-QMS-RFI-MEC-0346".to_string(),
+            "AZE-SUN-INT-QMS-RFI-PRC-0004".to_string(),
+        ])
     );
-    let offline = backend
-        .resolve_follow_up_exceptions(Some("CIV-0346"))
-        .unwrap_err();
-    assert!(offline.message.contains("exceptionCloudUnavailable"));
+    assert!(remote.0.lock().unwrap().1.is_empty());
+
+    for change in ["addShared", "addShared", "removeShared", "removeShared"] {
+        backend
+            .dispatch(
+                BackendMethod::SettingsChangeFollowUpException,
+                json!({"code": "CIV-0267", "change": change}),
+            )
+            .unwrap();
+    }
+    {
+        let state = remote.0.lock().unwrap();
+        assert_eq!(state.0, BTreeSet::from([retained]));
+        assert_eq!(
+            state.1,
+            [
+                ("POST".to_string(), selected.clone()),
+                ("DELETE".to_string(), selected),
+            ]
+        );
+    }
+    let listed = backend
+        .dispatch(BackendMethod::SettingsFollowUpExceptions, json!({}))
+        .unwrap();
     assert_eq!(
-        backend.resolve_follow_up_exceptions(None).unwrap(),
-        exceptions
+        listed,
+        json!({"shared": ["ELE-0099"], "local": ["MEC-0346"]})
     );
+
+    backend
+        .dispatch(
+            BackendMethod::SettingsChangeFollowUpException,
+            json!({"code": "MEC-0346", "change": "removeLocal"}),
+        )
+        .unwrap();
+    let section = backend.settings.section("followUpExceptions").unwrap();
+    assert_eq!(section["codes"], json!(["invalid legacy"]));
+    assert_eq!(section["keep"], json!(true));
 }

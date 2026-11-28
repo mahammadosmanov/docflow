@@ -68,6 +68,52 @@ fn rfi_print_finder_issues_exact_batch_print_file_selections() {
 }
 
 #[test]
+fn incomplete_rfi_print_finder_keeps_searching_and_requires_explicit_selection() {
+    let temporary = tempfile::tempdir().unwrap();
+    let backend = test_backend(&temporary);
+    let root = temporary.path().join("RFI System");
+    let code = "AZE-SUN-INT-QMS-RFI-CIV-1319";
+    for (branch, filename) in [
+        ("active", format!("{code}.docx")),
+        ("backup", format!("{code} Sketch.pdf")),
+    ] {
+        let mut directory = root.join(branch);
+        for _ in 1..rfi_print_find::MAX_DEPTH {
+            directory.push("x");
+        }
+        fs::create_dir_all(directory.join("past-limit")).unwrap();
+        fs::write(directory.join(filename), b"").unwrap();
+    }
+    let caller = backend.caller_identity().unwrap();
+    let root_selection = backend
+        .selections
+        .issue(
+            &caller,
+            "files.batch_print",
+            "rfi_system_root",
+            &root,
+            SelectionKind::Folder,
+        )
+        .unwrap();
+    let result = backend
+        .find_rfi_print_files(json!({
+            "root": root_selection,
+            "numbers": ["CIV-1319"],
+            "firstPage": true,
+            "sketch": true,
+        }))
+        .unwrap();
+    assert_eq!(result["truncated"], true);
+    let candidates = result["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 2);
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| candidate["selected"] == false)
+    );
+}
+
+#[test]
 fn finder_revokes_an_issued_selection_outside_the_selected_root() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("selected-root");

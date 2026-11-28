@@ -8,6 +8,7 @@ import { makeStrings } from "./i18n";
 import { humanError } from "./helpers";
 import { isPlanEditorReady } from "./plan/EditablePlanTable";
 import { PlanView } from "./plan/PlanView";
+import { StepRow } from "./screens/ResultView";
 import {
   canonicalRfiInText,
   summarizeWorkbookCellChanges,
@@ -21,6 +22,22 @@ import { registerAppTestCleanup } from "./test/appTestSupport";
 registerAppTestCleanup();
 
 describe("DocFlow shell: localization and scan preview", () => {
+  it("shows exact measured temperatures on the concrete output step", () => {
+    render(
+      <StepRow
+        s={makeStrings("en")}
+        step={{
+          kind: "write",
+          src: null,
+          dst: "CON-CIV-010_CIV-0123.xlsx",
+          noteKey: "step.rfi.generatedConcreteDocument",
+          meta: { measuredAmbientC: ["18.4", "19.0"] },
+        }}
+      />,
+    );
+    expect(screen.getByText("Measured ambient temperature (°C) 18.4, 19.0")).toBeVisible();
+  });
+
   it("localizes the invalid RFI workbook error in every supported language", () => {
     const expected = {
       tr: "Geçerli bir makro etkin .xlsm veya standart .xlsx RFI Log dosyası seçin.",

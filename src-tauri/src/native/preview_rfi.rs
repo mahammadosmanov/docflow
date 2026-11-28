@@ -1,12 +1,5 @@
 use super::*;
 
-fn canonicalize_or_validation(
-    path: impl AsRef<Path>,
-    context: &str,
-) -> Result<PathBuf, BackendError> {
-    fs::canonicalize(path).map_err(|error| BackendError::validation(format!("{context}: {error}")))
-}
-
 impl NativeBackend {
     pub(crate) fn preview_rfi_follow_up<F>(
         &self,
@@ -83,6 +76,8 @@ impl NativeBackend {
                 "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
             ));
         }
+        let (exceptions, shared_available) =
+            self.resolve_follow_up_exceptions(request.values.exception_rfis.as_deref())?;
         let mut source = source_anchor.open_read().map_err(|e| {
             BackendError::validation(format!(
                 "error.rfi.followUp.workbookInvalid: cannot open RFI Log: {e}"
@@ -101,8 +96,6 @@ impl NativeBackend {
                 .to_string_lossy()
                 .into_owned(),
         });
-        let exceptions =
-            self.resolve_follow_up_exceptions(request.values.exception_rfis.as_deref())?;
         let mut plan = rfi_follow_up::preview_from_open_files_with_exceptions(
             &request.values.rfi_log_workbook,
             &request.values.follow_up_workbook,
@@ -111,6 +104,12 @@ impl NativeBackend {
             &mut source,
             &mut target,
         )?;
+        if !shared_available {
+            plan.warnings.push(Warning {
+                key: rfi_follow_up::SHARED_EXCEPTIONS_UNAVAILABLE_WARN.to_string(),
+                subject: String::new(),
+            });
+        }
         let reservation = self.filesystem.reserve_plan_id();
         reservation.assign_to_empty(&mut plan)?;
         rfi_follow_up::validate_owned_plan_budget(&plan)?;
@@ -140,335 +139,6 @@ impl NativeBackend {
         encode(cached)
     }
 
-    pub(crate) fn preview_rfi_system_sync<F>(
-        &self,
-        params: Value,
-        mut progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<RfiSystemSyncPreviewValues> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != rfi_system_sync::OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust RFI System Sync backend",
-            ));
-        }
-        let system_root = canonicalize_or_validation(
-            &request.values.rfi_system_root,
-            "error.rfi.systemSync.systemRootInvalid: cannot resolve root",
-        )?;
-        let source_path = canonicalize_or_validation(
-            &request.values.rfi_log_workbook,
-            "error.rfi.systemSync.workbookInvalid: cannot resolve RFI Log",
-        )?;
-        let target_path = canonicalize_or_validation(
-            &request.values.follow_up_workbook,
-            "error.rfi.systemSync.workbookInvalid: cannot resolve Follow Up",
-        )?;
-        let source_root = source_path
-            .parent()
-            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
-            .to_path_buf();
-        let target_root = target_path
-            .parent()
-            .ok_or_else(|| BackendError::path_invalid("Follow Up workbook has no parent"))?
-            .to_path_buf();
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-
-        let system_needs_write =
-            source_path.starts_with(&system_root) || target_path.starts_with(&system_root);
-        let system_access = if system_needs_write {
-            GrantAccess::ReadWrite
-        } else {
-            GrantAccess::Read
-        };
-
-        let mut grant_requests: Vec<(PathBuf, GrantAccess)> =
-            vec![(system_root.clone(), system_access)];
-
-        let source_covered = system_needs_write && source_path.starts_with(&system_root);
-        if !source_covered {
-            grant_requests.push((source_root.clone(), GrantAccess::ReadWrite));
-        }
-
-        let target_covered = (system_needs_write && target_path.starts_with(&system_root))
-            || (!source_covered && target_path.starts_with(&source_root));
-        if !target_covered {
-            grant_requests.push((target_root, GrantAccess::ReadWrite));
-        }
-
-        let provisional = self
-            .filesystem
-            .issue_provisional_grants(&scope, &grant_requests)?;
-
-        let source_grant = provisional
-            .grants()
-            .iter()
-            .find(|g| g.access.allows(PathIntent::Write) && source_path.starts_with(&g.root))
-            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
-        let target_grant = provisional
-            .grants()
-            .iter()
-            .find(|g| g.access.allows(PathIntent::Write) && target_path.starts_with(&g.root))
-            .ok_or_else(|| BackendError::path_invalid("No write grant covering Follow Up"))?;
-
-        let source_anchor =
-            self.filesystem
-                .anchor_granted_path(source_grant, &source_path, PathIntent::Write)?;
-        let target_anchor =
-            self.filesystem
-                .anchor_granted_path(target_grant, &target_path, PathIntent::Write)?;
-        if source_anchor.same_file_as(&target_anchor).map_err(|e| {
-            BackendError::validation(format!(
-                "error.rfi.systemSync.workbookInvalid: file check failed: {e}"
-            ))
-        })? {
-            return Err(BackendError::validation(
-                "error.rfi.followUp.workbookInvalid: RFI Log and Follow Up workbooks must be different files (the filesystem may report the same file identity for both)",
-            ));
-        }
-        let mut source = source_anchor.open_mutable().map_err(|e| {
-            BackendError::validation(format!(
-                "error.rfi.systemSync.workbookLocked: cannot open RFI Log: {e}"
-            ))
-        })?;
-        let mut target = target_anchor
-            .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.systemSync.workbookLocked"))?;
-        let mut plan = rfi_system_sync::preview_system_sync_indexed(
-            &system_root,
-            &source_path,
-            &target_path,
-            &mut source,
-            &mut target,
-            rfi_system_sync::SystemSyncScan {
-                index: Some(&self.scan_index),
-                owner_id: &caller.owner_id,
-                force_rescan: request.values.force_rescan,
-            },
-            &mut progress,
-        )?;
-        drop(source);
-        drop(target);
-        let reservation = self.filesystem.reserve_plan_id();
-        reservation.assign_to_empty(&mut plan)?;
-        let grant_ids = provisional
-            .grants()
-            .iter()
-            .map(|grant| grant.grant_id.clone())
-            .collect();
-        let cached = self.filesystem.cache_reserved_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                caller.owner_id.clone(),
-                caller.session_id.clone(),
-                request.op_id,
-                grant_ids,
-            ),
-            reservation,
-            plan,
-        )?;
-        provisional.commit();
-        encode(cached)
-    }
-
-    pub(crate) fn preview_rfi_complete_status_sync<F>(
-        &self,
-        params: Value,
-        progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<RfiCompleteStatusPreviewValues> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != rfi_system_sync::COMPLETE_STATUS_OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust RFI completion-status backend",
-            ));
-        }
-        let system_root = canonicalize_or_validation(
-            &request.values.rfi_system_root,
-            "error.rfi.completeStatus.systemRootInvalid: cannot resolve root",
-        )?;
-        let workbook_path = canonicalize_or_validation(
-            &request.values.rfi_log_workbook,
-            "error.rfi.completeStatus.workbookInvalid: cannot resolve RFI Log",
-        )?;
-        let workbook_root = workbook_path
-            .parent()
-            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
-            .to_path_buf();
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-        let workbook_in_system = workbook_path.starts_with(&system_root);
-        let mut grant_requests = vec![(
-            system_root.clone(),
-            if workbook_in_system {
-                GrantAccess::ReadWrite
-            } else {
-                GrantAccess::Read
-            },
-        )];
-        if !workbook_in_system {
-            grant_requests.push((workbook_root, GrantAccess::ReadWrite));
-        }
-        let provisional = self
-            .filesystem
-            .issue_provisional_grants(&scope, &grant_requests)?;
-        let workbook_grant = provisional
-            .grants()
-            .iter()
-            .find(|grant| {
-                grant.access.allows(PathIntent::Write) && workbook_path.starts_with(&grant.root)
-            })
-            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
-        let workbook_anchor = self.filesystem.anchor_granted_path(
-            workbook_grant,
-            &workbook_path,
-            PathIntent::Write,
-        )?;
-        let mut workbook = workbook_anchor
-            .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.completeStatus.workbookLocked"))?;
-        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
-        let mut plan = rfi_system_sync::preview_complete_status_sync(
-            &system_root,
-            &workbook_path,
-            &mut workbook,
-            progress,
-            || cancellation.is_cancelled(),
-        )?;
-        drop(workbook);
-        let reservation = self.filesystem.reserve_plan_id();
-        reservation.assign_to_empty(&mut plan)?;
-        let grant_ids = provisional
-            .grants()
-            .iter()
-            .map(|grant| grant.grant_id.clone())
-            .collect();
-        let cached = self.filesystem.cache_reserved_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                caller.owner_id,
-                caller.session_id,
-                request.op_id.clone(),
-                grant_ids,
-            ),
-            reservation,
-            plan,
-        )?;
-        provisional.commit();
-        encode(cached)
-    }
-    pub(crate) fn preview_rfi_publish_status<F>(
-        &self,
-        params: Value,
-        progress: F,
-    ) -> Result<Value, BackendError>
-    where
-        F: FnMut(ProgressEvent),
-    {
-        let request: PreviewEnvelope<RfiPublishStatusPreviewValues> =
-            decode(self.materialize_preview(params)?)?;
-        if request.op_id != rfi_system_sync::PUBLISH_STATUS_OPERATION_ID {
-            return Err(BackendError::validation(
-                "operation is not owned by the Rust RFI publish-status backend",
-            ));
-        }
-        let staging_root = canonicalize_or_validation(
-            &request.values.staging_folder,
-            "error.rfi.publishStatus.stagingInvalid: cannot resolve root",
-        )?;
-        let workbook_path = canonicalize_or_validation(
-            &request.values.rfi_log_workbook,
-            "error.rfi.publishStatus.workbookInvalid: cannot resolve RFI Log",
-        )?;
-        let workbook_root = workbook_path
-            .parent()
-            .ok_or_else(|| BackendError::path_invalid("RFI Log workbook has no parent"))?
-            .to_path_buf();
-        let caller = self.caller_identity()?;
-        let scope = GrantScope::new(
-            &caller.owner_id,
-            &caller.session_id,
-            uuid::Uuid::new_v4().to_string(),
-            &request.op_id,
-        );
-        let workbook_in_staging = workbook_path.starts_with(&staging_root);
-        let mut grant_requests = vec![(
-            staging_root.clone(),
-            if workbook_in_staging {
-                GrantAccess::ReadWrite
-            } else {
-                GrantAccess::Read
-            },
-        )];
-        if !workbook_in_staging {
-            grant_requests.push((workbook_root, GrantAccess::ReadWrite));
-        }
-        let provisional = self
-            .filesystem
-            .issue_provisional_grants(&scope, &grant_requests)?;
-        let workbook_grant = provisional
-            .grants()
-            .iter()
-            .find(|grant| {
-                grant.access.allows(PathIntent::Write) && workbook_path.starts_with(&grant.root)
-            })
-            .ok_or_else(|| BackendError::path_invalid("No write grant covering RFI Log"))?;
-        let workbook_anchor = self.filesystem.anchor_granted_path(
-            workbook_grant,
-            &workbook_path,
-            PathIntent::Write,
-        )?;
-        let mut workbook = workbook_anchor
-            .open_mutable()
-            .map_err(|_| BackendError::validation("error.rfi.publishStatus.workbookLocked"))?;
-        let (cancellation, _registration) = self.filesystem.register_cancellation(&request.op_id);
-        let mut plan = rfi_system_sync::preview_publish_status(
-            &staging_root,
-            &workbook_path,
-            &mut workbook,
-            progress,
-            || cancellation.is_cancelled(),
-        )?;
-        drop(workbook);
-        let reservation = self.filesystem.reserve_plan_id();
-        reservation.assign_to_empty(&mut plan)?;
-        let grant_ids = provisional
-            .grants()
-            .iter()
-            .map(|grant| grant.grant_id.clone())
-            .collect();
-        let cached = self.filesystem.cache_reserved_plan(
-            BackendOrigin::Rust,
-            PlanBinding::new(
-                caller.owner_id,
-                caller.session_id,
-                request.op_id.clone(),
-                grant_ids,
-            ),
-            reservation,
-            plan,
-        )?;
-        provisional.commit();
-        encode(cached)
-    }
-    // Outlook archive preview has no dispatch route yet; kept for the roadmap's classic-Outlook acceptance (docs/ROADMAP.md).
     pub(crate) fn preview_stage_signed_pages<F>(
         &self,
         params: Value,
@@ -510,7 +180,7 @@ impl NativeBackend {
             &caller.owner_id,
             &request.values.signed_scans,
         );
-        let plan = preview_stage_signed_pages(
+        let mut plan = preview_stage_signed_pages(
             &StageSignedPagesParams {
                 signed_scans: request.values.signed_scans,
                 archive_root: request.values.archive_root,
@@ -521,6 +191,7 @@ impl NativeBackend {
             progress,
             || cancellation.is_cancelled(),
         )?;
+        ocr.attach_stats(&mut plan);
         encode(self.filesystem.cache_plan(
             BackendOrigin::Rust,
             PlanBinding::new(
@@ -605,27 +276,5 @@ impl NativeBackend {
             ),
             plan,
         )?)
-    }
-}
-
-#[cfg(test)]
-mod canonicalize_helper_tests {
-    use super::canonicalize_or_validation;
-
-    #[test]
-    fn missing_path_reports_error_key_and_subject() {
-        let dir = tempfile::tempdir().unwrap();
-        let missing = dir.path().join("absent.xlsx");
-        let error = canonicalize_or_validation(&missing, "error.test.key: cannot resolve RFI Log")
-            .unwrap_err();
-        let message = format!("{error:?}");
-        assert!(message.contains("error.test.key: cannot resolve RFI Log: "));
-    }
-
-    #[test]
-    fn existing_path_is_canonicalized() {
-        let dir = tempfile::tempdir().unwrap();
-        let resolved = canonicalize_or_validation(dir.path(), "error.test.key").unwrap();
-        assert_eq!(resolved, std::fs::canonicalize(dir.path()).unwrap());
     }
 }

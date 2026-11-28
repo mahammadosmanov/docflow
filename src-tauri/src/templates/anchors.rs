@@ -41,6 +41,10 @@ static VERTICAL_CONTINUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"<w:vMerge\s*/>|<w:vMerge\s+w:val="continue""#).expect("static vMerge")
 });
 
+static BOOKMARK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"<(?:[\w.-]+:)?bookmark(?:Start|End)[\s/>]").expect("static bookmark tag")
+});
+
 /// Cell content this writer cannot rewrite without losing it.
 const UNSAFE_CONTENT: [&str; 9] = [
     "<w:drawing",
@@ -69,7 +73,7 @@ pub struct CellAnchor {
     pub row: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cell: Option<u32>,
-    /// Word only: this many cells from `cell` repeat once per line.
+    /// This many cells from the anchor repeat once per line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repeat_columns: Option<u32>,
 }
@@ -288,6 +292,9 @@ fn repeat_word_row(xml: &str, anchor: &CellAnchor, value: &str) -> Result<String
         return Err(missing());
     }
     let data = rows_of(value, columns)?;
+    if data.len() > 1 && BOOKMARK.is_match(row_xml) {
+        return Err("The Word row has bookmarks and cannot repeat".to_string());
+    }
     let mut copies = String::with_capacity(row_xml.len() * data.len());
     for line in &data {
         let mut copy = row_xml.to_string();
@@ -385,9 +392,10 @@ fn split_cell(cell: &str) -> Result<CellParts<'_>, String> {
 fn cell_problem(parts: &CellParts<'_>) -> Option<&'static str> {
     if VERTICAL_CONTINUE.is_match(parts.properties) {
         Some("verticalMerge")
-    } else if UNSAFE_CONTENT
-        .iter()
-        .any(|marker| parts.inner.contains(marker))
+    } else if BOOKMARK.is_match(parts.inner)
+        || UNSAFE_CONTENT
+            .iter()
+            .any(|marker| parts.inner.contains(marker))
     {
         Some("content")
     } else {

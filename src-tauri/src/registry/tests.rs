@@ -58,7 +58,7 @@ fn param_schema_validation_matches_frozen_required_value_rules() {
 #[test]
 fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
     let operations = operation_registry(RegistryFacts::default());
-    assert_eq!(operations.len(), 12);
+    assert_eq!(operations.len(), 9);
     let operation = operations
         .iter()
         .find(|operation| operation.id == "rfi.generate_concrete_documents")
@@ -77,22 +77,6 @@ fn concrete_documents_require_log_and_output_but_not_follow_up_by_default() {
         .find(|parameter| parameter.name == "follow_up_workbook")
         .expect("optional Follow-Up source is registered");
     assert!(!follow_up.required);
-}
-
-#[test]
-fn publish_status_requires_staging_folder_and_log_workbook() {
-    let operations = operation_registry(RegistryFacts::default());
-    let operation = operations
-        .iter()
-        .find(|operation| operation.id == "rfi.publish_status")
-        .expect("publish status is registered");
-    assert_eq!(
-        operation.schema.validate(&Map::new()),
-        vec![
-            "error.param.required.staging_folder".to_string(),
-            "error.param.required.rfi_log_workbook".to_string(),
-        ]
-    );
 }
 
 #[test]
@@ -157,26 +141,29 @@ fn batch_print_numeric_fields_carry_the_backend_bounds() {
 }
 
 #[test]
-fn concrete_document_ambient_temperatures_are_bounded_to_zero_through_one_hundred() {
+fn concrete_documents_offer_measured_ambient_inputs_without_defaults() {
     let operations = operation_registry(RegistryFacts::default());
     let concrete = operations
         .iter()
         .find(|operation| operation.id == "rfi.generate_concrete_documents")
         .expect("concrete documents are registered");
-    let range = |name: &str| {
+    for name in ["measured_ambient_010", "measured_ambient_011"] {
         let param = concrete
             .schema
             .params
             .iter()
             .find(|param| param.name == name)
-            .expect("parameter exists");
-        (param.min, param.max)
-    };
-    assert_eq!(range("ambient_min"), (Some(0), Some(100)));
-    assert_eq!(range("ambient_max"), (Some(0), Some(100)));
-    assert_eq!(
-        (concrete.schema.params[0].min, concrete.schema.params[0].max),
-        (None, None)
+            .expect("measured ambient input is present");
+        assert_eq!(param.kind, ParamKind::LongText);
+        assert_eq!(param.default, json!(""));
+        assert!(!param.remember);
+    }
+    assert!(
+        concrete
+            .schema
+            .params
+            .iter()
+            .all(|param| !param.name.starts_with("ambient_"))
     );
 }
 
@@ -217,4 +204,23 @@ fn template_generation_has_a_mode_and_only_shows_what_the_mode_needs() {
         first_missing_required("templates.generate_document", &values),
         None
     );
+}
+
+#[test]
+fn registry_excludes_retired_workflows() {
+    let ids = operation_registry(RegistryFacts::default())
+        .into_iter()
+        .map(|operation| operation.id)
+        .collect::<Vec<_>>();
+    assert_eq!(ids.len(), 9);
+    for id in [
+        "rfi.system_sync",
+        "rfi.complete_status_sync",
+        "rfi.publish_status",
+        "rfi.outlook_reply_draft",
+        "files.replica_publish",
+    ] {
+        assert!(!ids.iter().any(|registered| registered == id), "{id}");
+    }
+    assert!(ids.iter().any(|id| id == "files.batch_print"));
 }

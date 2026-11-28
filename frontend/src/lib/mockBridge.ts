@@ -34,9 +34,7 @@ import type {
   PathSelection,
   Plan,
   RecoveryPayload,
-  ReplicaAutomationStatus,
   ReviewItem,
-  WatchStatus,
 } from "../types";
 
 /** Browser-only bridge used by component tests and visual development. */
@@ -51,7 +49,6 @@ export class MockBridge implements Bridge {
     completeStatusPlan: null,
     fastScanPlan: null,
   };
-  private watchEnabled: string[] = [];
 
   private templateDraft(params: Record<string, unknown>): TemplateDraft {
     const saved = (params.fieldMap ?? null) as TemplateDraft["fieldMap"] | null;
@@ -64,6 +61,7 @@ export class MockBridge implements Bridge {
       discipline: "ELE",
       category: typeof params.category === "string" ? params.category : "",
       fileKind: "docx",
+      fileSha256: "demo-template",
       placeholders: ["rfiNo", "dateOfIssue", "stage", "activity", "issuer"],
       fieldMap: saved ?? {
         schema: 1,
@@ -94,21 +92,7 @@ export class MockBridge implements Bridge {
     };
   }
 
-  private watchStatus(): WatchStatus {
-    return {
-      operations: [
-        "rfi.process_scans_fast_covers",
-        "rfi.group_files",
-        "rfi.stage_signed_first_pages",
-        "rfi.complete_status_sync",
-      ],
-      enabled: this.watchEnabled,
-      configured: [],
-      pollSeconds: 300,
-      paused: false,
-      items: [],
-    };
-  }
+  private readonly followUpExceptions = new Set<string>();
 
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
@@ -192,15 +176,16 @@ export class MockBridge implements Bridge {
         this.prefs = { ...defaultPrefs };
         result = this.prefs;
         break;
-      case "settings/replicaStatus":
-        result = {
-          enabled: this.prefs.replicaSyncEnabled,
-          configured: false,
-          status: "idle",
-          lastSuccessUnix: null,
-          lastErrorCode: null,
-        } satisfies ReplicaAutomationStatus;
+      case "settings/followUpExceptions":
+        result = { shared: [...this.followUpExceptions].sort(), local: [] };
         break;
+      case "settings/changeFollowUpException": {
+        const code = String(params.code).trim().toUpperCase();
+        if (params.change === "addShared") this.followUpExceptions.add(code);
+        if (params.change === "removeShared") this.followUpExceptions.delete(code);
+        result = { ok: true };
+        break;
+      }
       case "settings/params":
         result = this.params;
         break;
@@ -250,30 +235,6 @@ export class MockBridge implements Bridge {
         break;
       case "engine/revise":
         result = reviseOperation(this.plans, params, onProgress);
-        break;
-      case "engine/rfiReplyPreview":
-        result = {
-          planId: "demo-rfi-reply-plan",
-          opId: "rfi.outlook_reply_draft",
-          steps: [
-            {
-              kind: "outlook_reply_draft",
-              src: "RFI number request",
-              dst: null,
-              noteKey: "step.rfi.outlookReplyDraft",
-              meta: { displayOnly: true, sendAllowed: false },
-            },
-          ],
-          warnings: [],
-          meta: {
-            replyPreview: {
-              subject: "RFI number request",
-              plainText:
-                "RFI No.\tITP No.\r\nAZE-SUN-INT-QMS-RFI-CIV-0008\tCIV-0005",
-              html: "<table><tr><td>AZE-SUN-INT-QMS-RFI-CIV-0008</td></tr></table><br><br>",
-            },
-          },
-        } satisfies Plan;
         break;
       case "engine/apply":
         onProgress?.({ phase: "apply", done: 1, total: 1 });
@@ -416,9 +377,6 @@ export class MockBridge implements Bridge {
           },
         } satisfies RecoveryPayload;
         break;
-      case "watch/status":
-        result = this.watchStatus();
-        break;
       case "templates/status":
       case "templates/sync":
         result = {
@@ -546,18 +504,6 @@ export class MockBridge implements Bridge {
       case "templates/publish":
         result = await this.call("templates/sync");
         break;
-      case "watch/update": {
-        const opId = String(params.opId);
-        if (typeof params.enabled === "boolean") {
-          this.watchEnabled = params.enabled
-            ? [...new Set([...this.watchEnabled, opId])]
-            : this.watchEnabled.filter((id) => id !== opId);
-        }
-        result = this.watchStatus();
-        break;
-      }
-      case "watch/open":
-        throw new Error("error.watch.notReady");
       default:
         throw new Error(`Mock method not implemented: ${String(method)}`);
     }

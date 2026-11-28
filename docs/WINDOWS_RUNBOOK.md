@@ -5,7 +5,7 @@
 - Windows x64 with PowerShell and WebView2
 - Rust/toolchain and Node versions used by the repository workflow
 - No administrator permission is required to run the per-user installer
-- Excel/Outlook/printers are required only for their native acceptance sections
+- Desktop Excel and printers are required for their native acceptance sections
 
 ## Canonical build
 
@@ -27,7 +27,7 @@ On a clean test account or runner:
 ./tools/smoke_windows_installer.ps1 -Installer <exact-installer-path>
 ```
 
-Confirm install, normal GUI launch, version, twelve-operation registry, OCR,
+Confirm install, normal GUI launch, version, nine-operation registry, OCR,
 preview/apply/journal/undo package smoke, installed-tree audit, and uninstall.
 Record the exact commit, installer SHA-256, report, and failures. Do not infer a
 pass from a macOS build or Windows cross-compile.
@@ -40,19 +40,7 @@ pass from a macOS build or Windows cross-compile.
    macros/formulas/styles/links remain, expected cells alone changed, and backup exists.
 4. Undo and compare hashes/behavior with the test copy.
 5. Repeat with OneDrive paths, open-file locks, destination collisions, and cancellation.
-6. For Completion Status Sync, place exact and malformed `RFI No.` PDF names at
-   several nesting depths. Confirm exact PDFs map to the correct existing RFI
-   Log rows, blank/Ongoing cells preview as Completed, Completed stays unchanged,
-   Cancelled/Rejected/formula/merged targets remain manual review, the RFI
-   System hashes do not change, and Apply/Undo passes Excel's repair check.
-7. For Outlook, select one non-sensitive test message, preview, Apply, confirm an
-   unsent Reply All draft, then exercise unchanged and edited-draft undo paths.
-   Separately preview Archive Selected Outlook Mail into an isolated folder.
-   Confirm Apply creates one readable Unicode MSG without changing the mailbox,
-   changing selection after Preview is refused, an existing destination is never
-   overwritten, and Undo removes only the unchanged created copy. Repeat with
-   classic Outlook on the supported work machine; new Outlook is not COM-compatible.
-8. For printing, use at least three non-sensitive mixed fixtures in one Apply.
+6. For printing, use at least three non-sensitive mixed fixtures in one Apply.
    Verify ordering, worksheets, ranges, A4/A3, orientation, duplex/color,
    cancellation, restart, and uncertain-job operator decisions. A job accepted
    without a final spool receipt must show sent-unconfirmed and advance without
@@ -65,27 +53,20 @@ pass from a macOS build or Windows cross-compile.
    diagnostics and record the pathless COM stage/HRESULT or native PDF stage.
    Use Retry unprinted only for a saved incomplete queue; a new Preview is new
    authority and may print completed files again. Never auto-retry uncertainty.
-9. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
+7. For RFI file grouping, use filename-only PDF, content-only DOCX/PDF, UTF-16
    MSG, EML with several RFIs, unmatched input, and a destination collision.
    Confirm source hashes do not change, multi-RFI mail fans out correctly,
    `_review` receives exceptions, Undo removes only created copies/folders, and
    an existing subfolder beneath the source is ignored.
-10. For PDF orientation, use synthetic copies containing upright, sideways,
+8. For PDF orientation, use synthetic copies containing upright, sideways,
    upside-down, portrait, landscape, sparse-text, encrypted, and signed pages.
    Confirm only CIV/MEC/ELE/PRC are scanned, uncertain PDFs stay unapplied, source
    hashes never change, review layout is preserved, and Undo is hash-guarded.
-11. For incremental scanning, run RFI System Sync and PDF orientation twice over
-   the same non-sensitive tree. Confirm the second Preview reports unchanged
-   files as reused without reopening them for OCR. Interrupt a larger run, add
-   and modify files, then confirm only completed unchanged entries resume while
-   new/changed/failed items scan again. Finally use Force full rescan and confirm
-   it bypasses the cache once and is off on the next visit.
-   For Worley classification, include one exact canonical RFI PDF with a real
-   signature in the bottom-right OTHERS cell, one with OTHERS empty but other
-   signatures present, and one RFI folder without its exact canonical PDF.
-   Confirm only the first is signed, the latter two authorize no workbook
-   change, and the first run after upgrading does not reuse older detector data.
-12. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
+9. Run PDF orientation twice over the same test tree. Check that unchanged
+    files are reused on the second Preview. Interrupt a larger run, change some
+    inputs, then check that only completed unchanged results are reused. Run
+    Force full rescan once and confirm it resets on the next visit.
+10. For signed-page staging, select the RFI System root above CIV/MEC/ELE/PRC,
     place exact test archives at several nesting depths, and use nested single-
     and multi-page signed scans. Confirm every exact archive is found, duplicates
     remain selectable/ambiguous, unreadable or reparse-linked folders fail closed,
@@ -99,20 +80,25 @@ pass from a macOS build or Windows cross-compile.
     affected source PDF once beneath `_review` with its input subfolder layout,
     never overwrite an existing Review file, and reject a source changed after
     Preview.
-13. For replica publication, use three isolated roots and a fourth backup root.
-    Put CIV/MEC/ELE/PRC beneath each root, then exercise missing, identical,
-    changed, target-only, locked, unstable, long-path, offline, and reconnect
-    cases. Confirm changed targets are backed up and hash-verified before atomic
-    replacement; target-only files are never deleted; failure stops later effects;
-    Undo restores only unchanged published targets; backups remain after Undo.
-    Enable unattended mode with one explicit Apply, restart DocFlow, and confirm
-    one-minute due runs need no click. Modify a source during a due run and confirm
-    the approved settle delay defers without disabling the profile. Set low file
-    and MiB brakes separately and confirm each pauses before Apply; inspect the
-    same change manually before approving a revised profile. Inject another
-    failure and confirm it pauses. Disable and re-enable the profile in Settings.
-    Enable Windows startup, sign out/in, confirm the GUI starts without a console
-    window, then disable it and confirm the per-user startup entry is removed.
-
 Never test against the only production workbook or auto-send mail. Attach only
 redacted/synthetic evidence to Git; keep private documents outside the repository.
+
+
+## Windows startup
+
+1. Enable **Start DocFlow with Windows** on an isolated profile. Close DocFlow,
+   sign out of Windows, and sign back in. Check that the window opens.
+2. In the test profile, remove or change the per-user DocFlow Run value while
+   the preference is enabled. Open DocFlow once and verify that the quoted
+   installed executable path is restored.
+3. Disable the setting, sign out and back in again, and verify Windows skips
+   DocFlow. Confirm the setting and registry state belong to the test user.
+
+## OCR baseline
+
+Use the same reference packets, Windows machine, and DocFlow versions for each
+comparison. Include clean, faint, stamped, rotated, and out-of-order scans.
+Run Preview with a cold cache, then repeat with the same inputs. Compare the
+operator-reviewed IDs and page boundaries against the Plan. Record exact ID
+coverage, wrong IDs and boundaries, manual review count, and elapsed stage time.
+Use **Settings → Support** for the latest pathless timing and cache counts.

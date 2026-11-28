@@ -11,11 +11,8 @@
 | `files.batch_print` | Print ordered mixed-file jobs with recovery and existing printer settings; its optional read-only RFI finder selects exact First Page `.docx` and Sketch `.pdf` documents by canonical code, `CIV-1319`-style input, or one-to-four-digit number, showing missing types/versions and requiring explicit choice for cross-discipline bare numbers |
 | `rfi.stage_signed_first_pages` | Identify nested single/combined Worley scans using high-confidence consensus-confirmed Strict or approved OcrAlias identities, search the full RFI System by exact RFI PDF basename with one-to-four-digit suffix normalization, and create no-clobber review copies with exact page-one replacement |
 | `rfi.normalize_pdf_orientation` | Searchable standalone normalization uses rendered-content OSD and directional OCR, plus unique exact canonical header-ID evidence only when the same ID and direction agree at both 250/350 DPI. Source hashes bind analysis/cache and Apply; unresolved files remain unchanged for review-copy handling. |
-| `rfi.system_sync` | Scan exact canonical RFI PDFs and guard RFI Log plus Follow Up updates using only bottom-right OTHERS-cell Worley evidence |
-| `rfi.complete_status_sync` | Recursively find exact completed RFI PDFs and preview guarded RFI Log Inspection Status updates to Completed |
-| `rfi.publish_status` | Read-only match of PDF+DOCX pairs saved from a requester's mail (top-level of one folder, exact RFI code in the file name) to the RFI Log; Preview proposes `Ongoing` only for literal blank Inspection Status cells (never overwrites a filled status), with guarded Apply and Undo (ADR 0041). Outlook attachment save and the publish mail draft are not part of this release |
 | `rfi.generate_concrete_documents` | Batch-generate CON-CIV-010/011/013/014 from RFI Log data; require Concrete Specimen Test Follow-Up only when Civil Forms includes CON-CIV-010, with configurable template values and no-overwrite safeguards |
-
+| `templates.generate_document` | Create DOCX/XLSX files from an approved shared template and an optional RFI Log or Concrete Specimen Test Follow-Up workbook |
 
 ## Application features
 
@@ -35,11 +32,13 @@
   an RFI cell is suggested first, and "Suggest from other copies" lists the cells
   that differ between filled copies of the form (read locally, never uploaded).
   Replacing the file checks every marked cell against it (found, moved with
-  its label, or missing) and holds Publish until each is resolved; Version
-  history restores an earlier version as the draft. In an Excel template with
+  its label, or missing) and keeps unresolved checks when the draft reopens. Publish requires resolving
+  those checks. Apply the current template SQL to enforce the same guard for
+  older clients. Version history restores an earlier version as the draft. In an Excel template with
   several sheets, editors can mark sheets optional; each document then has a
-  checkbox per optional sheet in Preview. A Word table row or an Excel row can repeat:
-  each line typed or pasted in Preview becomes a row, Tab separating columns.
+  checkbox per optional sheet in Preview. A Word table row or an Excel row can repeat.
+  Each tab-separated line becomes a row. Word rows with bookmarks and insertions
+  that would alter an Excel structured table are refused.
   Editors pick the discipline (ELE, MEC, CIV,
   PRC), which prefixes the code and name, can rename the code, and can delete
   a template for everyone. **Create documents from a template**
@@ -87,7 +86,8 @@
 - Settings support diagnostics includes a pathless snapshot of the latest owned
   print queue: printer inventory availability, selected printer, file formats,
   native/controlled routes, requested options, attempts, outcomes, counts, and
-  bounded error details. Preview, copy, and download remain local and redacted.
+  bounded error details. It also shows the current user's latest Preview stage
+  timings and OCR cache counts. Preview, copy, and download remain local and redacted.
 - Batch Print's queue mode is `Wait for each job` (default) or `Fast`. Wait
   sends the next file only after the printer queue releases the current job.
   Fast sends the next file once the Windows spooler or CUPS accepted the
@@ -99,7 +99,7 @@
 - Preview impact counts, exact effect paths, approved workbook cell comparisons,
   and warning focus/filtering. Signed-page Preview adds an ordered live stage
   trail, in-flow section navigator, approved rows first, higher-resolution
-  before/after page comparison with source filenames and zoom, and a structured
+  before/after page comparison with source filenames and zoom, on-demand comparison for later rows, and a structured
   per-PDF warning/Review-copy summary.
 - OCR-backed preview effects, signed-page rows, orientation decisions, and
   manual-review items display their recognition score out of 100. The score is
@@ -135,7 +135,7 @@
 - Every registered operation reports localized preparation, discovery, analysis,
   planning, waiting, or ready stages with bounded item counters and the current
   file where available.
-- Durable local incremental scanning for RFI System Sync and PDF orientation.
+- Durable local incremental scanning for PDF orientation.
   Completed files survive interruption, unchanged files are reused, transient
   failures retry, scan counts are visible in Preview, and full rescan is an
   explicit task-local option.
@@ -143,15 +143,23 @@
   localized page-rotation wording. Fast RFI Scan uses the same canonical
   rotation decision; its named correction switch defaults off and appears only
   in Multi-RFI mode. Single-RFI keeps the full PDF without rotation.
-- Completion Status Sync uses bounded multi-core, read-only filename discovery
-  at every depth. It shows the exact PDF evidence and workbook-cell changes,
-  permits row/all selection, leaves conflicting status values for review, and
-  applies through the same backup, OOXML verification, journal, and Undo path.
 - Signed-page warnings identify the source PDF and affected page/RFI where known.
   Apply copies each affected input PDF once to `_review` with the relative input
   folder layout preserved; it never overwrites, mutates the signed input, or
   repeats a combined source PDF for each warned page.
-- Concrete document generation batches selected CON-CIV-010/011/013/014 RFIs from the Civil RFI Log and supplied templates. CON-CIV-010 maps concrete-pour fields from Concrete Specimen Test Follow-Up, calculates ambient temperature from plant temperature, and accepts optional water/cement ratios; CON-CIV-011 uses a configurable ambient-temperature range; 013/014 update only report number and location. Missing Follow-Up rows for 010 are warned by RFI and skipped without blocking available documents. Existing outputs are never overwritten.
+- Concrete document generation batches CON-CIV-010/011/013/014 from the Civil
+  RFI Log and supplied templates. For 010, enter each RFI's measured ambient
+  temperatures in the order of its Concrete Specimen Test Follow-Up batches.
+  For 011, enter one measured ambient temperature per RFI. Preview shows the
+  exact values and skips reports with missing evidence. 013/014 write the report
+  number and location. Existing outputs are never overwritten.
+- RFI File Grouping Preview shows each approved destination and the evidence
+  source. RFI Log Add labels proposed values from the request, workbook, or app
+  default when email extraction supplies fields.
+- Follow Up supports one-run exclusions in Preview. Approved users manage
+  shared or legacy local exceptions separately in Settings.
+- On Windows, an enabled startup preference repairs missing or stale startup
+  registration the next time DocFlow opens.
 
 ## RFI print integration smoke
 
@@ -187,21 +195,9 @@ page reads for unchanged files (including after restart), so a repeated or
 queue-prepared Preview reads only new or changed files. Combined multi-page
 scans and separate single-page PDFs are both handled page by page.
 
-## Action Queue (inbox watcher)
-
-Off by default. In Action Queue, turn on checks for Fast RFI Scan, Group Files,
-Stage signed first pages, or Completion Status Sync. DocFlow reuses each
-operation's remembered folders, checks them every 5 minutes after files finish
-copying (60-second settle), and prepares the normal Preview in the background.
-Ready previews appear in the queue and as a count on the navigation item. Open
-Preview loads the same review screen; nothing changes until you apply it, and
-Apply and Undo behave exactly as before. Out-of-date previews can be prepared
-again or dismissed. Checks pause while any operation is running, and the queue
-is rebuilt after restart.
-
 ## Intentional limits
 
-- RFI System replica publication has internal implementation code but is not exposed as an active operation in the application.
+- Outlook Reply All, Worley signature sync, completion-status sync, publish-status preparation, Action Queue, and unattended replica publication are retired. Existing history, recovery, and authorized Undo remain readable. The separate Batch Print queue remains available.
 - Fast RFI Scan inspects top-level PDFs. Multi-RFI confirms group boundaries
   only when two rendered reads agree on a supported RFI identity and show
   cover-form evidence with a known project or client mark. Unverified covers

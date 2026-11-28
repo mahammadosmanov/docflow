@@ -1,13 +1,21 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "1.68.2",
+  "currentVersion": "2.0.0",
   "releases": [
+    {
+      "version": "2.0.0",
+      "tag": "v2.0.0",
+      "date": "2026-11-28",
+      "channel": "stable",
+      "status": "current",
+      "summary": "Retire RFI background workflows and improve startup, templates, printing, and preview accuracy"
+    },
     {
       "version": "1.68.2",
       "tag": "v1.68.2",
       "date": "2026-11-27",
       "channel": "stable",
-      "status": "current",
+      "status": "superseded",
       "summary": "Fast RFI Scan verifies covers and keeps out-of-order checklists in Review"
     },
     {

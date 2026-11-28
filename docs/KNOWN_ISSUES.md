@@ -5,15 +5,6 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 
 ## External acceptance still required
 
-- Replica publication is not exposed as an active operation; its internal implementation is unavailable to operators. The accepted design documents do not mean the feature is shipped. If it is enabled in a future release, require native Windows acceptance on isolated non-sensitive copies of the actual SharePoint/OneDrive, GlobalProtect/network, and local roots. Verify long paths, locks, offline/reconnect states, interruption, retained backups, target-only warnings, cadence, settle behavior, circuit breakers, Apply, restart, and Undo. macOS tests and Windows cross-compile do not certify these external systems.
-
-- The Action Queue inbox watcher (ADR 0039) requires native Windows/OneDrive
-  acceptance on a copy of the real folders: metadata listing speed on the
-  mapped drive, the 60-second settle delay against in-progress OneDrive and
-  scanner writes, Office lock files, pause while an operator task runs, stale
-  marking after a source change, and source-tree immutability across a full
-  cycle. macOS tests do not certify these.
-
 - Cover-first identity reading and the OCR page cache (ADR 0040) need
   measurement on real signed cover scans on Windows: the share of pages the
   fast read confirms, per-page time against 1.21.x, correct fallback for stamped
@@ -75,13 +66,6 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   accepted a job. macOS code was not compiled in the Linux source gates.
 - Windows startup requires native Windows acceptance on an isolated, non-sensitive test profile. Verify enable/disable, restart behavior, and per-user scope.
 
-- Completion Status Sync requires native Windows/OneDrive acceptance on a copy
-  of the current RFI Log and the real nested RFI System. Verify traversal speed,
-  exact/malformed/duplicate filenames, locks and drift, Excel repair-free open,
-  source-tree immutability, Apply, and Undo. The local current-workbook test used
-  an available prior copy because the latest removable-volume source was not
-  readable during this build session.
-
 - RFI file grouping still requires native Windows/OneDrive acceptance with real
   Outlook MSG/EML, content-only Office/PDF fixtures, wrapped OCR identifiers,
   per-RFI missing-mail refusal, multi-RFI mail fan-out, destination collisions,
@@ -96,8 +80,6 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   OneDrive-backed path behavior for the exact candidate.
 - Excel open/recalculate/repair-dialog inspection of consented current RFI Log
   and Inspection Status Follow Up copies.
-- Outlook selection, Reply All, signature/quote preservation, auto-save, and
-  guarded unchanged-draft undo on the operator's desktop Outlook variants.
 - Selected-mail Unicode MSG archive requires classic Outlook COM acceptance on
   Windows: exact-selection drift, readable saved MSG, destination collision,
   OneDrive locks, mailbox immutability, and hash-guarded Undo. New Outlook does
@@ -116,11 +98,6 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 - Incremental scan performance and fingerprint behavior still require native
   Windows acceptance on the operator's actual OneDrive/network-backed 20 GB RFI
   tree, including interruption, resume, changed files, and forced full rescan.
-- Worley OTHERS-only detection still requires native Windows acceptance across
-  representative CIV/MEC form revisions, scan resolutions, faint signatures,
-  OneDrive files, an exact missing-PDF case, and signatures placed only outside
-  OTHERS. Source regression evidence is fail-closed but cannot certify every
-  physical form or scanner variation.
 - OCR score labels still require native Windows acceptance at the operator's
   actual display scaling. Responsive workspace layout and adjustment passed a
   browser MockBridge UI smoke, but native Windows acceptance at representative
@@ -133,11 +110,6 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
 - Signed-page 0.26.0 progress stages, in-flow preview navigation, enlarged
   comparisons, and hash-pinned warning copies still require native Windows/
   WebView2 acceptance with representative OneDrive input and Review roots.
-- Version 0.27.0 bounded RFI System/signature analysis, parallel recursive
-  discovery, and operation-wide progress stages require native Windows/WebView2
-  acceptance on the operator's actual OneDrive-backed tree. Verify throughput,
-  readable current-file subjects, monotonic counters, cancellation boundaries,
-  deterministic plans, and checkpoint reuse under interruption.
 - RFI Log to Follow Up 1.8.0 still requires Excel-on-Windows open/recalculate/
   save verification on consented copies, including prepared missing FINAL rows
   and `Signed`/`Not Signed` recalculation in Signed By and PCU FINAL cells. The
@@ -150,8 +122,8 @@ status and evidence in [`ACCEPTANCE.md`](ACCEPTANCE.md).
   cover template and sends ambiguous or structurally unsupported input to
   `_review`; Single-RFI reads page one only and preserves the whole PDF. A
   single-RFI scan must not be used for a combined multi-RFI document.
-- Signed-page preview thumbnails are capped at 20 accepted rows and 12 MiB of
-  encoded preview data; open the PDFs manually beyond either bound.
+- Signed-page Preview embeds up to 20 initial thumbnail pairs and 12 MiB of
+  encoded data. Later comparisons render on demand from the current Plan.
 - The frontend bundle is split by screen: Review, Queue, History, Recovery and
   Admin load on demand. The production build emits no size advisory; the entry
   chunk measures 332 kB (99 kB gzip) and each locale 88-131 kB. Startup and
